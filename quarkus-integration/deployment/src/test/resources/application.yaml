@@ -1,0 +1,4 @@
+vanillabp:
+  default-adapter:
+    - c
+    - d
