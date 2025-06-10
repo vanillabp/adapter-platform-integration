@@ -1,4 +1,4 @@
-package io.vanillabp.integration.deployment.config;
+package io.vanillabp.adapter.dummy.deployment.config;
 
 import java.util.List;
 import java.util.Optional;
@@ -12,7 +12,7 @@ import io.smallrye.config.ConfigMapping;
  */
 @ConfigRoot(phase = ConfigPhase.BUILD_TIME)
 @ConfigMapping(prefix = "vanillabp")
-public interface VanillaBpProperties {
+public interface DummyProperties {
 
   /**
    * Return the list of adapters, ordered by priority. New workflows will be started

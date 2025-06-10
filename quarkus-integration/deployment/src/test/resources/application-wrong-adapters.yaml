@@ -1,11 +1,8 @@
-smallrye:
-  config:
-    mapping:
-      validate-unknown: false
 vanillabp:
   default-adapter:
     - c
     - d
   adapters:
     dummy:
+      type: unknown
       test: 1

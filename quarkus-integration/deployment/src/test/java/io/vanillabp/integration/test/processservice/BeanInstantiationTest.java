@@ -21,7 +21,7 @@ public class BeanInstantiationTest {
           .create(JavaArchive.class)
           .addPackage("io.vanillabp.integration.test.sample")  // load sample application classes
           .addPackage("io.vanillabp.integration.test.sample2") // load sample application classes
-          .addAsResource("application.properties"));           // load sample application properties
+          .addAsResource("application.yaml"));                 // load sample application properties
 
   @Inject
   SampleWorkflowService sampleWorkflowService;

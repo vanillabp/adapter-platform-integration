@@ -45,6 +45,7 @@
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <vanillabp.version>1.0.2</vanillabp.version>
     <version.java>21</version.java>
     <lombok.version>1.18.34</lombok.version>

@@ -3,6 +3,7 @@ package io.vanillabp.integration.test.processservice;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import io.vanillabp.integration.deployment.VanillabpIntegrationProcessor;
 import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.WorkflowService;
 
@@ -18,9 +19,11 @@ public class WorkflowServiceAnnotationTest {
   static final String SECONDARY_BPMN_PROCESS_ID = "secondary";
 
   @Test
-  public void testForAttributeWorkflowAggregateClass() {
+  public void testForAttributeWorkflowAggregateClass() throws NoSuchMethodException {
 
     final var testAnnotation = getClass().getAnnotation(WorkflowService.class);
+    Assertions.assertNotNull(testAnnotation.getClass()
+        .getDeclaredMethod(VanillabpIntegrationProcessor.ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_AGGREGATECLASS));
     Assertions.assertNotNull(testAnnotation);
     Assertions.assertEquals(WorkflowServiceAnnotationTest.class, testAnnotation.workflowAggregateClass());
 

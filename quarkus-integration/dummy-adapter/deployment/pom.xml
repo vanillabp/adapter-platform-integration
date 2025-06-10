@@ -3,12 +3,12 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>io.vanillabp</groupId>
-    <artifactId>quarkus-integration-parent</artifactId>
+    <groupId>io.vanillabp.adapter</groupId>
+    <artifactId>quarkus-dummy-adapter-parent</artifactId>
     <version>0.0.1-SNAPSHOT</version>
   </parent>
-  <artifactId>vanillabp-integration-deployment</artifactId>
-  <name>VanillaBP SPI integration - Deployment</name>
+  <artifactId>dummy-adapter-deployment</artifactId>
+  <name>VanillaBP Dummy Adapter - Deployment</name>
 
   <dependencies>
     <dependency>
@@ -16,8 +16,8 @@
       <artifactId>quarkus-arc-deployment</artifactId>
     </dependency>
     <dependency>
-      <groupId>io.vanillabp</groupId>
-      <artifactId>vanillabp-integration</artifactId>
+      <groupId>${project.groupId}</groupId>
+      <artifactId>dummy-adapter</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
@@ -28,12 +28,6 @@
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-config-yaml</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.vanillabp.adapter</groupId>
-      <artifactId>dummy-adapter</artifactId>
-      <version>${project.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
