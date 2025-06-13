@@ -11,7 +11,7 @@ public class WorkflowModuleAdapterProperties extends AdapterProperties {
 
   String workflowModuleId;
 
-  VanillaBpProperties defaultProperties;
+  MigrationAdapterProperties defaultProperties;
 
   private Map<String, AdapterConfiguration> adapters = Map.of();
 

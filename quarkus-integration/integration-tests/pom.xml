@@ -7,11 +7,12 @@
     <artifactId>quarkus-integration-parent</artifactId>
     <version>0.0.1-SNAPSHOT</version>
   </parent>
-  <artifactId>vanillabp-integration-integration-tests</artifactId>
+  <artifactId>vanillabp-quarkus-integration-tests</artifactId>
   <name>VanillaBP SPI integration - Integration Tests</name>
 
   <properties>
     <skipITs>true</skipITs>
+    <native.surefire.skip>false</native.surefire.skip>
   </properties>
 
   <dependencies>

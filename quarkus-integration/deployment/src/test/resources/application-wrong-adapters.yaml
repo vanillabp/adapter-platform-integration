@@ -1,8 +1,5 @@
 vanillabp:
-  default-adapter:
-    - c
-    - d
   adapters:
-    dummy:
+    test:
       type: unknown
       test: 1

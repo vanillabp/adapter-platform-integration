@@ -7,7 +7,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
-import io.vanillabp.integration.test.sample.SampleWorkflowService;
+import io.vanillabp.integration.adapter.migration.processervice.MigrationProcessService;
+import io.vanillabp.integration.test.sample.Aggregate;
+import io.vanillabp.spi.process.ProcessService;
 import jakarta.inject.Inject;
 
 public class AdapterConfigurationTest {
@@ -21,15 +23,40 @@ public class AdapterConfigurationTest {
           .addAsResource("application.yaml"));                 // load sample application properties
 
   @Inject
-  SampleWorkflowService sampleWorkflowService;
+  ProcessService<Aggregate> sampleProcessService;
 
   /**
-   * WorkflowService should be created using dummy adapter configured in application.yaml
+   * ProcessService<Aggregate> should be created using dummy adapter configured in application.yaml
    */
   @Test
   public void testAdapterConfiguration() {
 
-    Assertions.assertNotNull(sampleWorkflowService);
+    Assertions.assertNotNull(sampleProcessService);
+    Assertions.assertInstanceOf(MigrationProcessService.class, sampleProcessService);
+
+    final var migrationProcessService = (MigrationProcessService<Aggregate>) sampleProcessService;
+    final var workflowAggregateClass = migrationProcessService.getWorkflowAggregateClass();
+    Assertions.assertNotNull(workflowAggregateClass);
+    Assertions.assertEquals(Aggregate.class, workflowAggregateClass);
+
+    final var adaptersConfigured = migrationProcessService.getAdapters();
+    Assertions.assertNotNull(adaptersConfigured);
+    Assertions.assertEquals(1, adaptersConfigured.size());
+
+    final var adapter = adaptersConfigured.keySet().iterator().next();
+    Assertions.assertNotNull(adapter);
+    Assertions.assertEquals("test", adapter);
+
+    final var adapterType = adaptersConfigured.get(adapter);
+    Assertions.assertNotNull(adapterType);
+    Assertions.assertEquals("dummy", adapterType);
+
+    final var prioritizedAdapters = migrationProcessService.getPrioritizedAdapters();
+    Assertions.assertNotNull(prioritizedAdapters);
+    Assertions.assertEquals(1, prioritizedAdapters.size());
+    final var defaultAdapter = prioritizedAdapters.getFirst();
+    Assertions.assertNotNull(defaultAdapter);
+    Assertions.assertEquals("test", defaultAdapter);
 
   }
 

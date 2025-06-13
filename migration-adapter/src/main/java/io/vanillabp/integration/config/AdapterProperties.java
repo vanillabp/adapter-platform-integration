@@ -9,6 +9,6 @@ import lombok.Setter;
 @Setter
 public class AdapterProperties {
 
-  private List<String> defaultAdapter = List.of();
+  private List<String> prioritizedAdapters = List.of();
 
 }

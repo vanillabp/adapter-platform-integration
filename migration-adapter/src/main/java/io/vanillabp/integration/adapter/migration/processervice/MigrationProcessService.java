@@ -1,13 +1,32 @@
 package io.vanillabp.integration.adapter.migration.processervice;
 
-import lombok.RequiredArgsConstructor;
+import java.util.List;
+import java.util.Map;
+
+import io.vanillabp.integration.config.MigrationAdapterProperties;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-@RequiredArgsConstructor
+@Getter
 public class MigrationProcessService<A> implements io.vanillabp.spi.process.ProcessService<A> {
 
   private final Class<A> workflowAggregateClass;
+
+  private final Map<String, String> adapters;
+
+  private final List<String> prioritizedAdapters;
+
+  public MigrationProcessService(
+      final Class<A> workflowAggregateClass,
+      final MigrationAdapterProperties properties) {
+
+    this.workflowAggregateClass = workflowAggregateClass;
+    this.adapters = properties.getAdapters();
+    // TODO pass workflowModuleId and bpmnProcessId
+    this.prioritizedAdapters = properties.getPrioritizedAdaptersFor("test", "test");
+
+  }
 
   @Override
   public A startWorkflow(
