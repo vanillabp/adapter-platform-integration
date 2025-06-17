@@ -76,17 +76,11 @@ public class MigrationAdapterProperties extends AdapterProperties {
     }
     if (resourcesLocation == null) {
       throw new RuntimeException(
-          "Property '"
-              + MigrationAdapterProperties.PREFIX
-              + ".workflow-modules."
-              + workflowModuleId
-              + ".adapters."
-              + adapterId
-              + ".resources-location' not set!\nIt has to point to a location specific to the adapter in order "
-              + "to avoid future problems once you wish to migrate to another adapter.\nSample: '"
-              + "classpath*:/workflow-resources/"
-              + adapterId
-              + "'");
+          """
+              Property '%s.workflow-modules.%s.adapters.%s.resources-location' not set!
+              It has to point to a location specific to the adapter in order to avoid future problems once you wish to migrate to another adapter.
+              Sample: 'classpath*:/workflow-resources/%s'"""
+              .formatted(PREFIX, workflowModuleId, adapterId, adapterId));
     }
     return resourcesLocation;
   }
@@ -99,22 +93,14 @@ public class MigrationAdapterProperties extends AdapterProperties {
     final var prioritizedAdapters = getPrioritizedAdaptersFor(workflowModuleId, bpmnProcessId);
     if (prioritizedAdapters.isEmpty()) {
       throw new RuntimeException(
-          "More than one VanillaBP adapter was found in classpath, but no default adapter is configured at\n  "
-              + PREFIX
-              + ".workflow-modules."
-              + workflowModuleId
-              + ".workflows."
-              + bpmnProcessId
-              + ".prioritized-adapters or \n  "
-              + PREFIX
-              + ".workflow-modules."
-              + workflowModuleId
-              + ".prioritized-adapters or \n  "
-              + PREFIX
-              + ".prioritized-adapters\nAvailable adapters are '"
-              + String
-                  .join("', '", adapterIds)
-              + "'.");
+          """
+              More than one VanillaBP adapter was found in classpath, but no default adapter is configured at
+                %s.workflow-modules.%s.workflows.%s.prioritized-adapters or
+                %s.workflow-modules.%s..prioritized-adapters or
+                %s.prioritized-adapters
+              Available adapters are '%s'."""
+              .formatted(PREFIX, workflowModuleId, bpmnProcessId, PREFIX, workflowModuleId, PREFIX, String
+                  .join("', '", adapterIds)));
     }
 
     final var listOfAdapters = String.join("', '", adapterIds);
@@ -123,15 +109,11 @@ public class MigrationAdapterProperties extends AdapterProperties {
         .collect(Collectors.joining("', '"));
     if (!missingAdapters.isEmpty()) {
       throw new RuntimeException(
-          "Property 'prioritized-adapters' of workflow-module '"
-              + workflowModuleId
-              + "' and bpmn-process-id '"
-              + bpmnProcessId
-              + "' contains adapters not available in classpath:\n'  "
-              + missingAdapters
-              + "'!\nAvailable adapters are: '"
-              + listOfAdapters
-              + "'.");
+          """
+              Property 'prioritized-adapters' of workflow-module '%s' and bpmn-process-id '%s' contains adapters not available in classpath:
+                %s
+              Available adapters are: '%s'!"""
+              .formatted(workflowModuleId, bpmnProcessId, missingAdapters, listOfAdapters));
     }
   }
 
@@ -147,47 +129,38 @@ public class MigrationAdapterProperties extends AdapterProperties {
         .collect(Collectors.joining(",\n  "));
     if (!adaptersNotInClasspath.isEmpty()) {
       throw new IllegalStateException(
-          "The following adapters were configured in properties section 'vanillabp.adapters' but the is no "
-              + "adapter in classpath is matching the given type:\n  %s\nAvailable adapters in classpath: %s"
-                  .formatted(adaptersNotInClasspath, adaptersLoaded));
+          """
+              The following adapters were configured in properties section 'vanillabp.adapters' but the is no adapter in classpath is matching the given type:
+                 %s
+              Available adapters in classpath: %s"""
+              .formatted(adaptersNotInClasspath, adaptersLoaded));
     }
 
     // unknown workflow-module properties
     final var configAvailableButNotInClasspath = new LinkedList<>(getWorkflowModules().keySet());
     configAvailableButNotInClasspath.removeAll(knownWorkflowModuleIds);
     if (!configAvailableButNotInClasspath.isEmpty()) {
+      final var propPrefix = "\n  %s.workflow-modules.".formatted(PREFIX);
       logger.warn(
-          "Found properties for workflow-modules\n"
-              + PREFIX
-              + ".workflow-modules."
-              + String.join(
-                  "\n"
-                      + PREFIX
-                      + ".workflow-modules.",
-                  configAvailableButNotInClasspath
-              )
-              + "\nwhich were not found in the class-path!");
+          """
+              Found properties for
+                {}.workflow-modules.{}
+              which were not found in the class-path!""",
+          PREFIX, String.join(propPrefix, configAvailableButNotInClasspath));
     }
 
     // adapter configured
     if (adaptersLoaded.size() == 1) {
+      final var propPrefix = "%s.workflow-modules.".formatted(PREFIX);
+      final var propInfix = ".adapters.%s.resources-location\n  %s".formatted(adaptersLoaded.getFirst(), propPrefix);
+      final var propPostfix = "adapters.%s.resources-location".formatted(adaptersLoaded.getFirst());
       logger.info(
-          "Found only one VanillaBP adapter '"
-              + adaptersLoaded.getFirst()
-              + "' in classpath. Please ensure the properties\n  "
-              + PREFIX
-              + ".workflow-modules"
-              + String
-                  .join(
-                      ".adapters.*.resources-location\n"
-                          + PREFIX
-                          + ".workflow-modules",
-                      configAvailableButNotInClasspath
-                  )
-              + ".adapters."
-              + adaptersLoaded.getFirst()
-              + ".resources-location\nare specific to this adapter in "
-              + "order to avoid future-problems once you wish to migrate to another adapter.");
+          """
+              Found only one VanillaBP adapter '%s' in classpath. Please ensure the properties
+                %s%s%s
+              are specific to this adapter in order to avoid future-problems once you wish to migrate to another adapter."""
+              .formatted(adaptersLoaded.getFirst(), propPrefix, String.join(propInfix, workflowModules.keySet()),
+                  propPostfix));
     }
 
     // adapters in class-path not used
@@ -208,8 +181,7 @@ public class MigrationAdapterProperties extends AdapterProperties {
         .filter(adapterId -> !adapters.containsKey(adapterId))
         .forEach(
             adapterId -> notConfiguredAdapters
-                .get(MigrationAdapterProperties.PREFIX
-                    + ".prioritized-adapters")
+                .get("%s.prioritized-adapters".formatted(MigrationAdapterProperties.PREFIX))
                 .add(adapterId));
     getWorkflowModules()
         .values()
@@ -219,11 +191,8 @@ public class MigrationAdapterProperties extends AdapterProperties {
                   .filter(adapterId -> !adapters.containsKey(adapterId))
                   .forEach(
                       adapterId -> notConfiguredAdapters
-                          .get(
-                              MigrationAdapterProperties.PREFIX
-                                  + ".workflow-modules."
-                                  + workflowModule.workflowModuleId
-                                  + ".prioritized-adapters")
+                          .get("%s.workflow-modules.%s.prioritized-adapters".formatted(PREFIX,
+                              workflowModule.workflowModuleId))
                           .add(adapterId));
               workflowModule
                   .getWorkflows()
@@ -235,56 +204,42 @@ public class MigrationAdapterProperties extends AdapterProperties {
                           .filter(adapterId -> !adapters.containsKey(adapterId))
                           .forEach(
                               adapterId -> notConfiguredAdapters
-                                  .get(
-                                      MigrationAdapterProperties.PREFIX
-                                          + ".workflow-modules."
-                                          + workflowModule.workflowModuleId
-                                          + ".workflows."
-                                          + workflow
-                                              .getBpmnProcessId()
-                                          + ".prioritized-adapters")
+                                  .get("%s.workflow-modules.%s.workflows.%s.prioritized-adapters".formatted(PREFIX,
+                                      workflowModule.workflowModuleId, workflow.getBpmnProcessId()))
                                   .add(adapterId)));
             });
     if (!notConfiguredAdapters.isEmpty()) {
       throw new RuntimeException(
-          "There are VanillaBP adapters references not found in properties section 'vanillabp.adapters.*':\n"
-              + notConfiguredAdapters
-                  .entrySet().stream()
-                  .map(
-                      entry -> "  "
-                          + entry.getKey()
-                          + "="
-                          + String.join(",", entry.getValue()))
-                  .collect(Collectors.joining("\n")));
+          """
+              There are VanillaBP adapters referenced not found in any property section 'vanillabp.adapters.*':
+                %s
+              """
+              .formatted(notConfiguredAdapters
+                  .entrySet()
+                  .stream()
+                  .map(entry -> "%s => %s".formatted(entry.getKey(), String.join(",", entry.getValue())))
+                  .collect(Collectors.joining("\n  "))));
     }
 
     // resources-location
     knownWorkflowModuleIds.forEach(
         workflowModuleId -> {
           final var prioritizedAdaptersOfModule = getPrioritizedAdaptersFor(workflowModuleId, null);
-          final var resourcesLocationOfModule = (prioritizedAdaptersOfModule.isEmpty() ? getPrioritizedAdapters()
+          final var missingResourcesLocationOfModule = (prioritizedAdaptersOfModule.isEmpty() ? getPrioritizedAdapters()
               : prioritizedAdaptersOfModule)
               .stream()
               .filter(
                   adapterId -> getAdapterResourcesLocationFor(workflowModuleId, adapterId) == null)
               .toList();
-          if (!resourcesLocationOfModule.isEmpty()) {
+          if (!missingResourcesLocationOfModule.isEmpty()) {
+            final var propPrefix = "%s.workflow-modules.%s.adapters.".formatted(PREFIX, workflowModuleId);
+            final var propInfix = ".resources-location\n  %s".formatted(propPrefix);
+            final var propPostfix = ".resources-location";
             throw new RuntimeException(
-                "You need to define properties '"
-                    + PREFIX
-                    + ".workflow-modules."
-                    + workflowModuleId
-                    + ".adapters."
-                    + String
-                        .join(
-                            ".resources-location\n"
-                                + PREFIX
-                                + ".workflow-modules."
-                                + workflowModuleId
-                                + ".adapters.",
-                            getPrioritizedAdapters()
-                        )
-                    + ".resources-location");
+                """
+                    You need to define properties
+                      %s%s%s
+                    """.formatted(propPrefix, String.join(propInfix, missingResourcesLocationOfModule), propPostfix));
           }
           getBpmnProcessIdsForWorkflowModule(workflowModuleId)
               .forEach(
@@ -293,30 +248,24 @@ public class MigrationAdapterProperties extends AdapterProperties {
                         workflowModuleId,
                         bpmnProcessId
                     );
-                    final var resourcesLocation = prioritizedAdapters.stream()
+                    final var missingResourcesLocation = prioritizedAdapters.stream()
                         .filter(
                             adapterId -> getAdapterResourcesLocationFor(
                                 workflowModuleId,
                                 adapterId
                             ) == null)
                         .toList();
-                    if (!resourcesLocation.isEmpty()) {
+                    if (!missingResourcesLocation.isEmpty()) {
+                      final var propPrefix = "%s.workflow-modules.%s.workflows.%s.adapters.".formatted(PREFIX,
+                          workflowModuleId, bpmnProcessId);
+                      final var propInfix = ".resources-location\n  %s".formatted(propPrefix);
+                      final var propPostfix = ".resources-location";
                       throw new RuntimeException(
-                          "You need to define properties '"
-                              + PREFIX
-                              + ".workflow-modules."
-                              + workflowModuleId
-                              + ".adapters."
-                              + String
-                                  .join(
-                                      ".resources-location\n"
-                                          + PREFIX
-                                          + ".workflow-modules."
-                                          + workflowModuleId
-                                          + ".adapters.",
-                                      prioritizedAdapters
-                                  )
-                              + ".resources-location");
+                          """
+                              You need to define properties
+                                %s%s%s
+                              """.formatted(propPrefix, String.join(propInfix, missingResourcesLocationOfModule),
+                              propPostfix));
                     }
                   });
         });

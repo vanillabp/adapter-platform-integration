@@ -10,6 +10,7 @@ import io.quarkus.deployment.Capabilities;
 import io.vanillabp.integration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.config.WorkflowModuleAdapterProperties;
 import io.vanillabp.integration.deployment.VanillaBpIntegrationProcessor;
+import io.vanillabp.integration.deployment.processservice.VanillaBpMigratableProcessServiceBuildItem;
 import lombok.Builder;
 
 /**
@@ -30,10 +31,12 @@ public class QuarkusMigrationAdapterTransformer {
    * Transforms {@link QuarkusMigrationAdapterTransformer} into
    * {@link MigrationAdapterProperties}.
    *
+   * @param processServiceBuildItems Build items provided by other VanillaBP adapter extensions
    * @return The {@link MigrationAdapterProperties}
    * @throws IllegalStateException If validation fails
    */
-  public MigrationAdapterProperties getAndValidatePropertiesConfigured() throws IllegalStateException {
+  public MigrationAdapterProperties getAndValidatePropertiesConfigured(
+      final List<VanillaBpMigratableProcessServiceBuildItem> processServiceBuildItems) throws IllegalStateException {
 
     final var result = new MigrationAdapterProperties();
 
@@ -46,6 +49,42 @@ public class QuarkusMigrationAdapterTransformer {
 
     final var workflowModulesConfigured = getAndValidateWorkflowModulesConfigured();
     result.setWorkflowModules(workflowModulesConfigured);
+
+    final var buildItemsNotConfigured = processServiceBuildItems
+        .stream()
+        .map(VanillaBpMigratableProcessServiceBuildItem::getAdapterName)
+        .filter(adaptersConfigured::containsValue)
+        .collect(Collectors.joining(", "));
+
+    final var buildItemsAdapters = processServiceBuildItems
+        .stream()
+        .map(VanillaBpMigratableProcessServiceBuildItem::getAdapterName)
+        .toList();
+    final var missingBuildItems = adaptersConfigured
+        .values()
+        .stream()
+        .filter(type -> !buildItemsAdapters.contains(type))
+        .collect(Collectors.joining("',\n  '"));
+    if (!missingBuildItems.isEmpty()) {
+      throw new IllegalStateException(
+          """
+              Illegal VanillaBP adapter extensions
+                '%s'
+              missing VanillaBpMigratableProcessServiceBuildItem!"""
+              .formatted(missingBuildItems));
+    }
+    final var buildItemsWithoutCapability = buildItemsAdapters
+        .stream()
+        .filter(adapter -> !adaptersConfigured.containsValue(adapter))
+        .collect(Collectors.joining("',\n  '"));
+    if (!buildItemsWithoutCapability.isEmpty()) {
+      throw new IllegalStateException(
+          """
+              Illegal VanillaBP adapter extensions
+                '%s'
+              not matching their extension capabilities!"""
+              .formatted(missingBuildItems));
+    }
 
     return result;
 
@@ -73,7 +112,8 @@ public class QuarkusMigrationAdapterTransformer {
         .toList();
     if (adapterPackagesProvidedByOtherExtensions.isEmpty()) {
       throw new IllegalStateException(
-          "No adapters found! Add Quarkus extensions providing VanillaBP adapters.");
+          "No extensions found with capabilities '%s*'! Add Quarkus extensions providing VanillaBP adapters."
+              .formatted(VanillaBpIntegrationProcessor.PREFIX_ADAPTER_PACKAGE));
     }
 
     // build result map (key = adapter name, value = adapter type)
@@ -101,11 +141,22 @@ public class QuarkusMigrationAdapterTransformer {
         .collect(Collectors.joining(", "));
     if (!unknownAdapters.isEmpty()) {
       throw new IllegalStateException(
-          "Properties '%s.adapters.*.type' must contain VanillaBP adapters "
-              + "added as Quarkus extension!\nThese adapters are unknown: %s.\n"
-              + "Available adapter types provided by Quarkus extensions currently loaded: %s."
-                  .formatted(PREFIX, unknownAdapters,
-                      String.join(", ", adapterNamesProvidedByOtherExtensions)));
+          """
+              Properties '%s.adapters.*.type' must contain VanillaBP adapters added as Quarkus extension!
+              These adapters are unknown: %s.
+              Available adapter types provided by Quarkus extensions currently loaded: %s."""
+              .formatted(PREFIX, unknownAdapters,
+                  String.join(", ", adapterNamesProvidedByOtherExtensions)));
+    }
+
+    final var unconfiguredAdapters = adapterNamesProvidedByOtherExtensions
+        .stream()
+        .filter(adapter -> !result.containsValue(adapter))
+        .collect(Collectors.joining(", "));
+    if (!unconfiguredAdapters.isEmpty()) {
+      throw new IllegalStateException(
+          "No '%s.adapters.*' config section having types provided by Quarkus extension! Add section section if intended or remove extensions: %s."
+              .formatted(PREFIX, unconfiguredAdapters));
     }
 
     return result;
@@ -124,28 +175,27 @@ public class QuarkusMigrationAdapterTransformer {
     // if more than one adapter is configured then the
     // property vanillabp.prioritized-adapters has to list each adapter
     // configured:
-    final var adapterNamesConfigured = String.join(", ", adapters.keySet());
     if (properties.prioritizedAdapters()
         .isEmpty() || (adapters.size() != properties.prioritizedAdapters().get().size())) {
       throw new IllegalStateException(
-          "The property '%s.prioritized-adapters' must list all the adapters "
-              + "configured in '%s.adapters.*' to define the order in which "
-              + "adapters are addressed to find workflows running.\n"
-              + "These are: %s."
-                  .formatted(PREFIX, PREFIX, adapterNamesConfigured));
+          """
+              The property '%s.prioritized-adapters' must list all the adapters configured in '%s.adapters.*' to define
+              the order in which adapters are addressed to find workflows running. These are: %s."""
+              .formatted(PREFIX, PREFIX, String.join(", ", adapters.keySet())));
     }
 
     final var unknownAdapters = properties
         .prioritizedAdapters()
         .get()
         .stream()
-        .filter(adapter -> !adapterNamesConfigured.contains(adapter))
+        .filter(adapter -> !adapters.containsKey(adapter))
         .collect(Collectors.joining(", "));
     if (!unknownAdapters.isEmpty()) {
       throw new IllegalStateException(
-          "The property '%s.prioritized-adapters' lists these adapters for which "
-              + "no properties '%s.adapters.*' were found: %s!"
-                  .formatted(PREFIX, PREFIX, unknownAdapters));
+          """
+              The property '%s.prioritized-adapters' lists these adapters for which no properties '%s.adapters.*'
+              were found: %s!"""
+              .formatted(PREFIX, PREFIX, unknownAdapters));
     }
 
     return properties.prioritizedAdapters().get();

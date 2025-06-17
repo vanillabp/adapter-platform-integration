@@ -19,7 +19,8 @@ import jakarta.interceptor.InvocationContext;
 public class TransactionInterceptor {
 
   @AroundInvoke
-  public Object aroundInvokecheckForTransaction(
+  @SuppressWarnings("unused")
+  public Object aroundInvokeCheckForTransaction(
       final InvocationContext invocationContext) throws Exception {
 
     LoggerFactory.getLogger(this.getClass()).info("Before {}", invocationContext.getMethod().getName());

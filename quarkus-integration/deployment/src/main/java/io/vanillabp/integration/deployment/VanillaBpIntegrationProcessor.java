@@ -26,6 +26,7 @@ import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.StaticInitConfigBuilderBuildItem;
 import io.vanillabp.integration.deployment.config.QuarkusMigrationAdapterProperties;
 import io.vanillabp.integration.deployment.config.QuarkusMigrationAdapterTransformer;
+import io.vanillabp.integration.deployment.processservice.VanillaBpMigratableProcessServiceBuildItem;
 import io.vanillabp.integration.runtime.processservice.ProcessServiceCdiBeanRecorder;
 import io.vanillabp.integration.runtime.processservice.TransactionInterceptor;
 import io.vanillabp.integration.runtime.processservice.config.QuarkusMigrationAdapterPropertiesBuilder;
@@ -115,16 +116,19 @@ public class VanillaBpIntegrationProcessor {
       final BeanArchiveIndexBuildItem indexBuildItem,
       final BuildProducer<FeatureBuildItem> featureProducer,
       final ProcessServiceCdiBeanRecorder processServiceRecorder,
-      final BuildProducer<SyntheticBeanBuildItem> syntheticBeanProducer) {
+      final List<VanillaBpMigratableProcessServiceBuildItem> processServiceBuildItems,
+      final BuildProducer<SyntheticBeanBuildItem> syntheticBeanProducer/* ,
+                                                                       final BeanContainer beanContainer */) {
 
     featureProducer.produce(new FeatureBuildItem(FEATURE));
 
+    // check for consistent configuration and required VanillaBpMigratableProcessServiceBuildItems
     final var adapterProperties = QuarkusMigrationAdapterTransformer
         .builder()
         .properties(properties)
         .capabilities(capabilities)
         .build()
-        .getAndValidatePropertiesConfigured();
+        .getAndValidatePropertiesConfigured(processServiceBuildItems);
 
     // scan for bean annotated by @WorkflowService
     final Set<Class<?>> processServicesBuilt = new HashSet<>();
@@ -148,7 +152,9 @@ public class VanillaBpIntegrationProcessor {
                 .scope(Singleton.class)
                 .supplier(processServiceRecorder.processServiceSupplier(
                     workflowAggregateClass,
-                    adapterProperties))
+                    adapterProperties,
+                    // TODO Fill services argument
+                    List.of()))
                 .done());
             processServicesBuilt.add(workflowAggregateClass);
           } catch (ClassNotFoundException e) {

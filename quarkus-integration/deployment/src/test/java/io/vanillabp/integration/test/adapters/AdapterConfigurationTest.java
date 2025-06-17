@@ -1,5 +1,6 @@
 package io.vanillabp.integration.test.adapters;
 
+
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Assertions;
@@ -20,9 +21,12 @@ public class AdapterConfigurationTest {
       .setArchiveProducer(() -> ShrinkWrap
           .create(JavaArchive.class)
           .addPackage("io.vanillabp.integration.test.sample")  // load sample application classes
-          .addAsResource("application.yaml"));                 // load sample application properties
+          .addAsResource("application.yaml")                   // load sample application properties
+          .addClass(DummyAdapters.class))                           // necessary due to anonymous class in DummyAdapters
+      .addBuildChainCustomizer(DummyAdapters.singleDummyAdapter()); // add mocked adapter
 
   @Inject
+  @SuppressWarnings("CdiUnsatisfiedInjection")
   ProcessService<Aggregate> sampleProcessService;
 
   /**

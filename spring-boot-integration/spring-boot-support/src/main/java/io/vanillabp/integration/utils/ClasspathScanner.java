@@ -67,9 +67,9 @@ public class ClasspathScanner {
       final String basePath,
       final Predicate<Resource>... filters) throws Exception {
 
-    final var searchPath = ResourcePatternResolver.CLASSPATH_ALL_URL_PREFIX
-        + (basePath == null ? "" : basePath)
-        + "/**/*";
+    final var searchPath = "%s%s/**/*".formatted(
+        ResourcePatternResolver.CLASSPATH_ALL_URL_PREFIX,
+        basePath == null ? "" : basePath);
 
     final Resource[] resources;
     synchronized (cache) {
@@ -118,9 +118,9 @@ public class ClasspathScanner {
       final String basePackage,
       final Predicate<MetadataReader>... filters) throws Exception {
 
-    final var packageSearchPath = ResourcePatternResolver.CLASSPATH_ALL_URL_PREFIX
-        + resolveBasePackage(basePackage)
-        + "/**/*.class";
+    final var packageSearchPath = "%s%s/**/*.class".formatted(
+        ResourcePatternResolver.CLASSPATH_ALL_URL_PREFIX,
+        resolveBasePackage(basePackage));
 
     final List<Class<?>> classes = new LinkedList<>();
 

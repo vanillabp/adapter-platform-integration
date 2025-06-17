@@ -8,7 +8,7 @@
     <version>0.0.1-SNAPSHOT</version>
   </parent>
   <artifactId>vanillabp-quarkus-integration-deployment</artifactId>
-  <name>VanillaBP SPI integration - Deployment</name>
+  <name>VanillaBP Quarkus integration - Deployment</name>
 
   <dependencies>
     <dependency>
@@ -30,10 +30,16 @@
       <artifactId>quarkus-config-yaml</artifactId>
       <scope>test</scope>
     </dependency>
+    <!--
     <dependency>
-      <groupId>io.vanillabp.adapter</groupId>
-      <artifactId>quarkus-dummy-adapter</artifactId>
-      <version>${project.version}</version>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-jdbc-h2</artifactId>
+      <scope>test</scope>
+    </dependency>
+    -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-narayana-jta</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

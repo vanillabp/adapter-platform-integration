@@ -76,10 +76,11 @@ public class SpringBootMigrationAdapterTransformer {
         .collect(Collectors.joining(", "));
     if (!unknownAdapters.isEmpty()) {
       throw new IllegalStateException(
-          "Properties '%s.adapters.*.type' must contain VanillaBP adapters "
-              + "added as Quarkus extension!\nThese adapters are unknown: %s.\n"
-              + "Available adapter types provided by Quarkus extensions currently loaded: %s."
-                  .formatted(PREFIX, unknownAdapters, String.join(", ", adaptersLoaded)));
+          """
+              Properties '%s.adapters.*.type' must contain VanillaBP adapters added as Quarkus extension!
+              These adapters are unknown: %s.
+              Available adapter types provided by Quarkus extensions currently loaded: %s."""
+              .formatted(PREFIX, unknownAdapters, String.join(", ", adaptersLoaded)));
     }
 
     return result;
@@ -102,11 +103,10 @@ public class SpringBootMigrationAdapterTransformer {
     if (properties.getPrioritizedAdapters()
         .isEmpty() || (adapters.size() != properties.getPrioritizedAdapters().size())) {
       throw new IllegalStateException(
-          "The property '%s.prioritized-adapters' must list all the adapters "
-              + "configured in '%s.adapters.*' to define the order in which "
-              + "adapters are addressed to find workflows running.\n"
-              + "These are: %s."
-                  .formatted(PREFIX, PREFIX, adapterNamesConfigured));
+          """
+              The property '%s.prioritized-adapters' must list all the adapters configured in '%s.adapters.*' to define the order in which adapters are addressed to find workflows running.
+              These are: %s."""
+              .formatted(PREFIX, PREFIX, adapterNamesConfigured));
     }
 
     final var unknownAdapters = properties
@@ -116,9 +116,8 @@ public class SpringBootMigrationAdapterTransformer {
         .collect(Collectors.joining(", "));
     if (!unknownAdapters.isEmpty()) {
       throw new IllegalStateException(
-          "The property '%s.prioritized-adapters' lists these adapters for which "
-              + "no properties '%s.adapters.*' were found: %s!"
-                  .formatted(PREFIX, PREFIX, unknownAdapters));
+          "The property '%s.prioritized-adapters' lists these adapters for which no properties '%s.adapters.*' were found: %s!"
+              .formatted(PREFIX, PREFIX, unknownAdapters));
     }
 
     return properties.getPrioritizedAdapters();

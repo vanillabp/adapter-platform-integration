@@ -8,7 +8,7 @@
     <version>0.0.1-SNAPSHOT</version>
   </parent>
 
-  <artifactId>vanillabp-spring-boot-integration</artifactId>
+  <artifactId>vanillabp-spring-boot-support</artifactId>
   <name>VanillaBP Spring Boot Support</name>
 
   <licenses>
@@ -56,7 +56,7 @@
     </dependency>
 
     <dependency>
-      <groupId>${project.groupId}</groupId>
+      <groupId>io.vanillabp.adapter</groupId>
       <artifactId>migration-adapter</artifactId>
       <version>${project.version}</version>
     </dependency>

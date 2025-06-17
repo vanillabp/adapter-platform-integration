@@ -10,7 +10,6 @@
 
   <groupId>io.vanillabp.adapter</groupId>
   <artifactId>spring-boot-dummy-adapter</artifactId>
-  <version>0.0.1-SNAPSHOT</version>
   <name>VanillaBP Spring Boot Dummy Adapter</name>
 
   <licenses>
@@ -42,7 +41,7 @@
 
     <dependency>
       <groupId>io.vanillabp</groupId>
-      <artifactId>vanillabp-spring-boot-integration</artifactId>
+      <artifactId>vanillabp-spring-boot-support</artifactId>
       <version>${project.version}</version>
     </dependency>
   </dependencies>

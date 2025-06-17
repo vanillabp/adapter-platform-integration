@@ -1,9 +1,11 @@
 package io.vanillabp.integration.runtime.processservice;
 
+import java.util.List;
 import java.util.function.Supplier;
 
 import io.quarkus.runtime.annotations.Recorder;
 import io.vanillabp.integration.config.MigrationAdapterProperties;
+import io.vanillabp.intergration.adapter.migration.spi.MigratableProcessService;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
@@ -23,11 +25,12 @@ public class ProcessServiceCdiBeanRecorder {
    * @param properties Properties needed to handle migration between adapters
    * @return The {@link ProcessService} bean
    */
-  public Supplier<ProcessService<?>> processServiceSupplier(
-      final Class<?> workflowAggregateClass,
-      final MigrationAdapterProperties properties) {
+  public <A> Supplier<ProcessService<A>> processServiceSupplier(
+      final Class<A> workflowAggregateClass,
+      final MigrationAdapterProperties properties,
+      final List<MigratableProcessService<A>> processServices) {
 
-    return () -> new ProcessServiceCdiBean<>(workflowAggregateClass, properties);
+    return () -> new ProcessServiceCdiBean<>(workflowAggregateClass, properties, processServices);
 
   }
 

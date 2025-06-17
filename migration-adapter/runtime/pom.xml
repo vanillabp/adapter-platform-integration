@@ -3,15 +3,15 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>io.vanillabp</groupId>
-    <artifactId>adapters-common</artifactId>
+    <groupId>io.vanillabp.adapter</groupId>
+    <artifactId>migration-adapter-parent</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
 
-  <artifactId>test-adapter</artifactId>
-  <name>Managing Adapter</name>
-  <description>An adapter aware of other adapters managing BPMS election of a workflow basis</description>
+  <artifactId>migration-adapter</artifactId>
+  <name>Migration Adapter</name>
+  <description>An adapter aware of other adapters managing BPMS election on a workflow basis</description>
 
   <licenses>
     <license>
@@ -42,6 +42,11 @@
       <groupId>io.vanillabp</groupId>
       <artifactId>spi-for-java</artifactId>
       <version>1.0.2</version>
+    </dependency>
+    <dependency>
+      <groupId>io.vanillabp.adapter</groupId>
+      <artifactId>migration-adapter-spi</artifactId>
+      <version>${project.version}</version>
     </dependency>
   </dependencies>
 

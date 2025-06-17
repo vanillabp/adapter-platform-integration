@@ -3,13 +3,15 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>io.vanillabp</groupId>
-    <artifactId>spring-boot-integration-parent</artifactId>
+    <groupId>io.vanillabp.adapter</groupId>
+    <artifactId>migration-adapter-parent</artifactId>
     <version>0.0.1-SNAPSHOT</version>
+    <relativePath>../pom.xml</relativePath>
   </parent>
 
-  <artifactId>vanillabp-spring-boot-integration-tests</artifactId>
-  <name>VanillaBP Spring Boot Support Integration Tests</name>
+  <artifactId>migration-adapter-spi</artifactId>
+  <name>Migration Adapter SPI</name>
+  <description>SPI used by migratable adapters</description>
 
   <licenses>
     <license>
@@ -29,32 +31,26 @@
 
   <dependencies>
     <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot</artifactId>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
     </dependency>
-
     <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-test</artifactId>
-      <scope>test</scope>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
     </dependency>
-
     <dependency>
-      <groupId>org.yaml</groupId>
-      <artifactId>snakeyaml</artifactId>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>${project.groupId}</groupId>
-      <artifactId>vanillabp-spring-boot-support</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>io.vanillabp.adapter</groupId>
-      <artifactId>spring-boot-dummy-adapter</artifactId>
-      <version>${project.version}</version>
+      <groupId>io.vanillabp</groupId>
+      <artifactId>spi-for-java</artifactId>
+      <version>1.0.2</version>
     </dependency>
   </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>com.diffplug.spotless</groupId>
+        <artifactId>spotless-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
 </project>

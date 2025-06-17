@@ -16,8 +16,13 @@
       <artifactId>quarkus-arc</artifactId>
     </dependency>
     <dependency>
-      <groupId>io.vanillabp</groupId>
+      <groupId>io.vanillabp.adapter</groupId>
       <artifactId>migration-adapter</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.vanillabp</groupId>
+      <artifactId>vanillabp-quarkus-integration</artifactId>
       <version>${project.version}</version>
     </dependency>
   </dependencies>

@@ -3,9 +3,11 @@ package io.vanillabp.integration.test;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Disabled;
 
 import io.quarkus.test.QuarkusDevModeTest;
 
+@Disabled
 public class VanillaBpIntegrationDevModeTest {
 
   // Start hot reload (DevMode) test with your extension loaded

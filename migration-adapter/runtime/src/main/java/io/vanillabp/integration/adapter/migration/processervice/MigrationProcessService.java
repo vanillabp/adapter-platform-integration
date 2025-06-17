@@ -4,12 +4,14 @@ import java.util.List;
 import java.util.Map;
 
 import io.vanillabp.integration.config.MigrationAdapterProperties;
+import io.vanillabp.intergration.adapter.migration.spi.MigratableProcessService;
+import io.vanillabp.spi.process.ProcessService;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Getter
-public class MigrationProcessService<A> implements io.vanillabp.spi.process.ProcessService<A> {
+public class MigrationProcessService<A> implements MigratableProcessService<A>, ProcessService<A> {
 
   private final Class<A> workflowAggregateClass;
 
@@ -17,14 +19,18 @@ public class MigrationProcessService<A> implements io.vanillabp.spi.process.Proc
 
   private final List<String> prioritizedAdapters;
 
+  private final List<MigratableProcessService<A>> processServices;
+
   public MigrationProcessService(
       final Class<A> workflowAggregateClass,
-      final MigrationAdapterProperties properties) {
+      final MigrationAdapterProperties properties,
+      final List<MigratableProcessService<A>> processServices) {
 
     this.workflowAggregateClass = workflowAggregateClass;
     this.adapters = properties.getAdapters();
     // TODO pass workflowModuleId and bpmnProcessId
     this.prioritizedAdapters = properties.getPrioritizedAdaptersFor("test", "test");
+    this.processServices = processServices;
 
   }
 
@@ -95,4 +101,9 @@ public class MigrationProcessService<A> implements io.vanillabp.spi.process.Proc
     return null;
   }
 
+  @Override
+  public Boolean isTaskActive(
+      String taskId) {
+    return null;
+  }
 }
