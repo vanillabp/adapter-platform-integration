@@ -7,8 +7,10 @@
     <artifactId>adapters-common</artifactId>
     <version>0.0.1-SNAPSHOT</version>
   </parent>
+
   <groupId>io.vanillabp.adapter</groupId>
   <artifactId>migration-adapter-parent</artifactId>
+  <version>0.0.1-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>VanillaBP Migration Adapter parent</name>
 

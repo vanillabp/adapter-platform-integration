@@ -12,10 +12,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.experimental.SuperBuilder;
 
 @Getter
 @Setter
+@NoArgsConstructor
+@SuperBuilder
 public class MigrationAdapterProperties extends AdapterProperties {
 
   private static final Logger logger = LoggerFactory.getLogger(MigrationAdapterProperties.class);
@@ -75,7 +79,7 @@ public class MigrationAdapterProperties extends AdapterProperties {
       }
     }
     if (resourcesLocation == null) {
-      throw new RuntimeException(
+      throw new IllegalStateException(
           """
               Property '%s.workflow-modules.%s.adapters.%s.resources-location' not set!
               It has to point to a location specific to the adapter in order to avoid future problems once you wish to migrate to another adapter.
@@ -92,7 +96,7 @@ public class MigrationAdapterProperties extends AdapterProperties {
 
     final var prioritizedAdapters = getPrioritizedAdaptersFor(workflowModuleId, bpmnProcessId);
     if (prioritizedAdapters.isEmpty()) {
-      throw new RuntimeException(
+      throw new IllegalStateException(
           """
               More than one VanillaBP adapter was found in classpath, but no default adapter is configured at
                 %s.workflow-modules.%s.workflows.%s.prioritized-adapters or
@@ -108,7 +112,7 @@ public class MigrationAdapterProperties extends AdapterProperties {
         .filter(prioritizedAdapter -> !adapterIds.contains(prioritizedAdapter))
         .collect(Collectors.joining("', '"));
     if (!missingAdapters.isEmpty()) {
-      throw new RuntimeException(
+      throw new IllegalStateException(
           """
               Property 'prioritized-adapters' of workflow-module '%s' and bpmn-process-id '%s' contains adapters not available in classpath:
                 %s
@@ -121,39 +125,39 @@ public class MigrationAdapterProperties extends AdapterProperties {
       final List<String> adaptersLoaded,
       final List<String> knownWorkflowModuleIds) {
 
-    final var adaptersNotInClasspath = adapters
+    final var adapterTypesNotInClasspath = adapters
         .entrySet()
         .stream()
         .filter(entry -> !adaptersLoaded.contains(entry.getValue()))
         .map(entry -> "%s of type %s".formatted(entry.getKey(), entry.getValue()))
         .collect(Collectors.joining(",\n  "));
-    if (!adaptersNotInClasspath.isEmpty()) {
+    if (!adapterTypesNotInClasspath.isEmpty()) {
       throw new IllegalStateException(
           """
-              The following adapters were configured in properties section 'vanillabp.adapters' but the is no adapter in classpath is matching the given type:
+              The following adapters were configured in properties section 'vanillabp.adapters' but there is no adapter in classpath matching the given type:
                  %s
-              Available adapters in classpath: %s"""
-              .formatted(adaptersNotInClasspath, adaptersLoaded));
+              Available adapter types in classpath: %s"""
+              .formatted(adapterTypesNotInClasspath, adaptersLoaded));
     }
 
     // unknown workflow-module properties
-    final var configAvailableButNotInClasspath = new LinkedList<>(getWorkflowModules().keySet());
-    configAvailableButNotInClasspath.removeAll(knownWorkflowModuleIds);
-    if (!configAvailableButNotInClasspath.isEmpty()) {
+    final var workflowModulesConfiguredButNotInClasspath = new LinkedList<>(getWorkflowModules().keySet());
+    workflowModulesConfiguredButNotInClasspath.removeAll(knownWorkflowModuleIds);
+    if (!workflowModulesConfiguredButNotInClasspath.isEmpty()) {
       final var propPrefix = "\n  %s.workflow-modules.".formatted(PREFIX);
       logger.warn(
           """
-              Found properties for
+              Found properties for workflow modules
                 {}.workflow-modules.{}
               which were not found in the class-path!""",
-          PREFIX, String.join(propPrefix, configAvailableButNotInClasspath));
+          PREFIX, String.join(propPrefix, workflowModulesConfiguredButNotInClasspath));
     }
 
     // adapter configured
     if (adaptersLoaded.size() == 1) {
       final var propPrefix = "%s.workflow-modules.".formatted(PREFIX);
       final var propInfix = ".adapters.%s.resources-location\n  %s".formatted(adaptersLoaded.getFirst(), propPrefix);
-      final var propPostfix = "adapters.%s.resources-location".formatted(adaptersLoaded.getFirst());
+      final var propPostfix = ".adapters.%s.resources-location".formatted(adaptersLoaded.getFirst());
       logger.info(
           """
               Found only one VanillaBP adapter '%s' in classpath. Please ensure the properties
@@ -209,7 +213,7 @@ public class MigrationAdapterProperties extends AdapterProperties {
                                   .add(adapterId)));
             });
     if (!notConfiguredAdapters.isEmpty()) {
-      throw new RuntimeException(
+      throw new IllegalStateException(
           """
               There are VanillaBP adapters referenced not found in any property section 'vanillabp.adapters.*':
                 %s
@@ -235,7 +239,7 @@ public class MigrationAdapterProperties extends AdapterProperties {
             final var propPrefix = "%s.workflow-modules.%s.adapters.".formatted(PREFIX, workflowModuleId);
             final var propInfix = ".resources-location\n  %s".formatted(propPrefix);
             final var propPostfix = ".resources-location";
-            throw new RuntimeException(
+            throw new IllegalStateException(
                 """
                     You need to define properties
                       %s%s%s
@@ -260,7 +264,7 @@ public class MigrationAdapterProperties extends AdapterProperties {
                           workflowModuleId, bpmnProcessId);
                       final var propInfix = ".resources-location\n  %s".formatted(propPrefix);
                       final var propPostfix = ".resources-location";
-                      throw new RuntimeException(
+                      throw new IllegalStateException(
                           """
                               You need to define properties
                                 %s%s%s

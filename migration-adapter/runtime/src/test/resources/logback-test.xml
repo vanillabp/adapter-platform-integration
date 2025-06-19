@@ -1,0 +1,5 @@
+<configuration>
+    <!-- no appander configured because "normal" logging is disabled during tests and each test checks for important log messages -->
+    <root level="INFO">
+    </root>
+</configuration>

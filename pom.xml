@@ -33,6 +33,7 @@
     <module>migration-adapter</module>
     <module>spring-boot-integration</module>
     <module>quarkus-integration</module>
+    <module>jacoco-report</module>
   </modules>
 
   <distributionManagement>
@@ -44,11 +45,13 @@
   </distributionManagement>
 
   <properties>
+    <root.project.version>0.0.1-SNAPSHOT</root.project.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <vanillabp.version>1.0.2</vanillabp.version>
     <version.java>21</version.java>
     <lombok.version>1.18.34</lombok.version>
+    <jacoco.version>0.8.12</jacoco.version>
     <surefire-plugin.version>3.5.2</surefire-plugin.version>
     <failsafe-plugin.version>3.5.2</failsafe-plugin.version>
   </properties>
@@ -154,9 +157,17 @@
             </execution>
           </executions>
         </plugin>
+        <plugin>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>${surefire-plugin.version}</version>
+        </plugin>
       </plugins>
     </pluginManagement>
     <plugins>
+      <plugin>
+        <groupId>com.diffplug.spotless</groupId>
+        <artifactId>spotless-maven-plugin</artifactId>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-source-plugin</artifactId>
@@ -170,8 +181,16 @@
         </executions>
       </plugin>
       <plugin>
-        <groupId>com.diffplug.spotless</groupId>
-        <artifactId>spotless-maven-plugin</artifactId>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <version>${jacoco.version}</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>prepare-agent</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>
