@@ -19,6 +19,7 @@ import io.vanillabp.integration.adapters.AdapterConfigurationBase;
 import io.vanillabp.integration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.config.SpringBootMigrationAdapterProperties;
 import io.vanillabp.integration.config.SpringBootMigrationAdapterTransformer;
+import io.vanillabp.integration.modules.WorkflowModuleProperties;
 import io.vanillabp.integration.utils.ClasspathScanner;
 import io.vanillabp.spi.service.WorkflowService;
 
@@ -31,6 +32,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   @Bean("VanillaBpMigrationAdapterProperties")
   public static MigrationAdapterProperties migrationAdapterProperties(
       final SpringBootMigrationAdapterProperties properties,
+      final List<WorkflowModuleProperties> workflowModules,
       final List<AdapterConfigurationBase> adapterConfigurations) {
 
     final var adaptersLoaded = Optional
@@ -40,10 +42,18 @@ public class SpringBootMigrationAdapterAutoConfiguration {
         .map(AdapterConfigurationBase::getAdapterId)
         .toList();
 
+    final var workflowModulesLoaded = Optional
+        .ofNullable(workflowModules)
+        .orElse(List.of())
+        .stream()
+        .map(WorkflowModuleProperties::getWorkflowModuleId)
+        .toList();
+
     return SpringBootMigrationAdapterTransformer
         .builder()
         .properties(properties)
         .adaptersLoaded(adaptersLoaded)
+        .workflowModulesLoaded(workflowModulesLoaded)
         .build()
         .getAndValidatePropertiesConfigured();
 

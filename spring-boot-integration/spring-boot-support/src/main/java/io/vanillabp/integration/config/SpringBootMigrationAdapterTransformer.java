@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import io.vanillabp.integration.modules.WorkflowModuleProperties;
 import lombok.Builder;
 
 @Builder
@@ -15,6 +16,8 @@ public class SpringBootMigrationAdapterTransformer {
   private SpringBootMigrationAdapterProperties properties;
 
   private List<String> adaptersLoaded;
+
+  private List<String> workflowModulesLoaded;
 
   public MigrationAdapterProperties getAndValidatePropertiesConfigured() {
 
@@ -30,8 +33,7 @@ public class SpringBootMigrationAdapterTransformer {
     final var workflowModulesConfigured = getAndValidateWorkflowModulesConfigured();
     result.setWorkflowModules(workflowModulesConfigured);
 
-    // TODO add knownWorkflowModules
-    result.validateProperties(adaptersLoaded, List.of());
+    result.validateProperties(adaptersLoaded, workflowModulesLoaded);
 
     return result;
 
@@ -39,7 +41,64 @@ public class SpringBootMigrationAdapterTransformer {
 
   private Map<String, WorkflowModuleAdapterProperties> getAndValidateWorkflowModulesConfigured() {
 
-    return Map.of();
+    if (workflowModulesLoaded.isEmpty()) {
+      throw new IllegalStateException(
+          "No workflow-modules found! Add dependencies providing static beans of type '%s'."
+              .formatted(WorkflowModuleProperties.class));
+    }
+
+    final var result = properties
+        .getWorkflowModules()
+        .entrySet()
+        .stream()
+        .map(config -> Map.entry(
+            config.getKey(),
+            (WorkflowModuleAdapterProperties) WorkflowModuleAdapterProperties
+                .builder()
+                .workflowModuleId(config.getKey())
+                .workflows(Map.of()) // TODO fill workflows
+                .adapters(config
+                    .getValue()
+                    .getAdapters()
+                    .entrySet()
+                    .stream()
+                    .map(adapter -> Map.entry(
+                        adapter.getKey(),
+                        AdapterConfiguration
+                            .builder()
+                            .resourcesLocation(adapter.getValue().getResourcesLocation())
+                            .build()))
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)))
+                .build()))
+        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    if (result.isEmpty()) {
+      final var missingConfigSections = workflowModulesLoaded
+          .stream()
+          .map(module -> "%s.workflow-modules.%s".formatted(PREFIX, module))
+          .collect(Collectors.joining(", "));
+      throw new IllegalStateException(
+          "No workflow-modules configured! Add config sections %s".formatted(missingConfigSections));
+    }
+
+    // check for unknown adapters
+    final var unknownModules = result
+        .keySet()
+        .stream()
+        .filter(workflowModuleAdapterProperties -> !workflowModulesLoaded.contains(workflowModuleAdapterProperties))
+        .map(workflowModuleAdapterProperties -> "%s.workflow-module.%s".formatted(PREFIX,
+            workflowModuleAdapterProperties))
+        .collect(Collectors.joining("\n, "));
+    if (!unknownModules.isEmpty()) {
+      throw new IllegalStateException(
+          """
+              Properties '%s.workflow-modules.*' must contain VanillaBP workflow modules available in classpath!
+              These workflow modules are unknown:
+                %s
+              Available workflow modules currently loaded in classpath: %s."""
+              .formatted(PREFIX, unknownModules, String.join(", ", workflowModulesLoaded)));
+    }
+
+    return result;
 
   }
 
@@ -77,9 +136,9 @@ public class SpringBootMigrationAdapterTransformer {
     if (!unknownAdapters.isEmpty()) {
       throw new IllegalStateException(
           """
-              Properties '%s.adapters.*.type' must contain VanillaBP adapters added as Quarkus extension!
+              Properties '%s.adapters.*.type' must contain VanillaBP adapters available in classpath!
               These adapters are unknown: %s.
-              Available adapter types provided by Quarkus extensions currently loaded: %s."""
+              Available adapter types currently loaded in classpath: %s."""
               .formatted(PREFIX, unknownAdapters, String.join(", ", adaptersLoaded)));
     }
 

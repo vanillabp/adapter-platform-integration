@@ -3,3 +3,10 @@ vanillabp:
     test:
       type: dummy
       test: 1
+  workflow-modules:
+    test-module:
+      adapters:
+        test:
+          resources-location: classpath*:test-modules/processes/dummy
+test-module:
+  nothing: there

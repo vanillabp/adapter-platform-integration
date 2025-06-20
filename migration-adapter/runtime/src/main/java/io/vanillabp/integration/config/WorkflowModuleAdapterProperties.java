@@ -2,6 +2,7 @@ package io.vanillabp.integration.config;
 
 import java.util.Map;
 
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -15,10 +16,10 @@ public class WorkflowModuleAdapterProperties extends AdapterProperties {
 
   String workflowModuleId;
 
-  MigrationAdapterProperties defaultProperties;
-
+  @Builder.Default
   private Map<String, AdapterConfiguration> adapters = Map.of();
 
+  @Builder.Default
   private Map<String, WorkflowAdapterProperties> workflows = Map.of();
 
   public void setWorkflows(

@@ -11,6 +11,7 @@ import org.springframework.core.ResolvableType;
 import io.vanillabp.adapters.dummy.springboot.DummyAdapterConfiguration;
 import io.vanillabp.integration.adapter.migration.processervice.MigrationProcessService;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
+import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.sample.Aggregate;
 import io.vanillabp.spi.process.ProcessService;
 
@@ -42,6 +43,7 @@ public class AdapterConfigurationTest {
     this.contextRunner
         .withPropertyValues("spring.config.location=classpath:application.yaml")
         .withInitializer(new ConfigDataApplicationContextInitializer())
+        .withUserConfiguration(WorkflowModuleConfiguration.class)
         .withConfiguration(
             AutoConfigurations.of(DummyAdapterConfiguration.class, SpringBootMigrationAdapterAutoConfiguration.class))
         .run(context -> {

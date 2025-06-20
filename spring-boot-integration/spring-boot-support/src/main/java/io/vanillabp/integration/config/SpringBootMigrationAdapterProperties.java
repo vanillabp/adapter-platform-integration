@@ -5,6 +5,7 @@ import java.util.Map;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import io.vanillabp.integration.modules.WorkflowModuleProperties;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -36,6 +37,11 @@ public class SpringBootMigrationAdapterProperties {
   private Map<String, AdapterConfiguration> adapters = Map.of();
 
   /**
+   * The properties of all workflow modules. The key is the workflow module's id.
+   */
+  private Map<String, WorkflowModuleProperties> workflowModules = Map.of();
+
+  /**
    * The adapter configuration. The properties in detail are defined by the adapter's
    * Spring-Boot extension.
    */
@@ -48,4 +54,26 @@ public class SpringBootMigrationAdapterProperties {
      */
     private String type;
   }
+
+  /**
+   * The adapter properties.
+   */
+  @Getter
+  @Setter
+  public static class AdapterProperties {
+    /**
+     * Where to load BPMN files from, which are specific to the adapter
+     */
+    private String resourcesLocation;
+  }
+
+  @Getter
+  @Setter
+  public static class WorkflowModuleProperties {
+    /**
+     * Adapter properties.
+     */
+    private Map<String, AdapterProperties> adapters = Map.of();
+  }
+
 }
