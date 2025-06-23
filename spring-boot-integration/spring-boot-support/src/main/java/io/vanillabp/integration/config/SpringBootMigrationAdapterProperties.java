@@ -5,9 +5,11 @@ import java.util.Map;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-import io.vanillabp.integration.modules.WorkflowModuleProperties;
+import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.experimental.SuperBuilder;
 
 /**
  * Properties common to all adapters.
@@ -15,6 +17,8 @@ import lombok.Setter;
 @ConfigurationProperties(prefix = SpringBootMigrationAdapterProperties.PREFIX)
 @Getter
 @Setter
+@SuperBuilder(toBuilder = true)
+@NoArgsConstructor
 public class SpringBootMigrationAdapterProperties {
 
   public static final String PREFIX = "vanillabp";
@@ -25,6 +29,7 @@ public class SpringBootMigrationAdapterProperties {
    * <p>
    * Each item has to be a key in the map of {@link SpringBootMigrationAdapterProperties#adapters}.
    */
+  @Builder.Default
   private List<String> prioritizedAdapters = List.of();
 
   /**
@@ -34,11 +39,13 @@ public class SpringBootMigrationAdapterProperties {
    * In case of a non-custom adapter identifier the {@link AdapterConfiguration#type}
    * property has to be undefined.
    */
+  @Builder.Default
   private Map<String, AdapterConfiguration> adapters = Map.of();
 
   /**
    * The properties of all workflow modules. The key is the workflow module's id.
    */
+  @Builder.Default
   private Map<String, WorkflowModuleProperties> workflowModules = Map.of();
 
   /**
@@ -47,6 +54,8 @@ public class SpringBootMigrationAdapterProperties {
    */
   @Getter
   @Setter
+  @SuperBuilder(toBuilder = true)
+  @NoArgsConstructor
   public static class AdapterConfiguration {
     /**
      * The adapter's type in case of a custom adapter identifier or null in case
@@ -60,6 +69,8 @@ public class SpringBootMigrationAdapterProperties {
    */
   @Getter
   @Setter
+  @SuperBuilder(toBuilder = true)
+  @NoArgsConstructor
   public static class AdapterProperties {
     /**
      * Where to load BPMN files from, which are specific to the adapter
@@ -69,10 +80,13 @@ public class SpringBootMigrationAdapterProperties {
 
   @Getter
   @Setter
+  @SuperBuilder(toBuilder = true)
+  @NoArgsConstructor
   public static class WorkflowModuleProperties {
     /**
      * Adapter properties.
      */
+    @Builder.Default
     private Map<String, AdapterProperties> adapters = Map.of();
   }
 

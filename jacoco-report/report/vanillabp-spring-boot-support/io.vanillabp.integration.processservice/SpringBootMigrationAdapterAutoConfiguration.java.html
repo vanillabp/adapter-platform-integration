@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="de"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SpringBootMigrationAdapterAutoConfiguration.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">JaCoCo Report</a> &gt; <a href="../index.html" class="el_bundle">vanillabp-spring-boot-support</a> &gt; <a href="index.source.html" class="el_package">io.vanillabp.integration.processservice</a> &gt; <span class="el_source">SpringBootMigrationAdapterAutoConfiguration.java</span></div><h1>SpringBootMigrationAdapterAutoConfiguration.java</h1><pre class="source lang-java linenums">package io.vanillabp.integration.processservice;
+
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import org.springframework.beans.factory.support.BeanDefinitionBuilder;
+import org.springframework.beans.factory.support.BeanDefinitionRegistryPostProcessor;
+import org.springframework.beans.factory.support.RootBeanDefinition;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.ResolvableType;
+
+import io.vanillabp.integration.adapter.migration.processervice.MigrationProcessService;
+import io.vanillabp.integration.adapters.AdapterConfigurationBase;
+import io.vanillabp.integration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.config.SpringBootMigrationAdapterProperties;
+import io.vanillabp.integration.config.SpringBootMigrationAdapterTransformer;
+import io.vanillabp.integration.modules.WorkflowModuleProperties;
+import io.vanillabp.integration.utils.ClasspathScanner;
+import io.vanillabp.spi.service.WorkflowService;
+
+@Configuration
+@EnableConfigurationProperties(SpringBootMigrationAdapterProperties.class)
+<span class="fc" id="L28">public class SpringBootMigrationAdapterAutoConfiguration {</span>
+
+<span class="fc" id="L30">  private final Map&lt;Class&lt;?&gt;, MigrationProcessService&lt;?&gt;&gt; connectableServices = new HashMap&lt;&gt;();</span>
+
+  @Bean(&quot;VanillaBpMigrationAdapterProperties&quot;)
+  public static MigrationAdapterProperties migrationAdapterProperties(
+      final SpringBootMigrationAdapterProperties properties,
+      final List&lt;WorkflowModuleProperties&gt; workflowModules,
+      final List&lt;AdapterConfigurationBase&gt; adapterConfigurations) {
+
+<span class="fc" id="L38">    final var adaptersLoaded = Optional</span>
+<span class="fc" id="L39">        .ofNullable(adapterConfigurations)</span>
+<span class="fc" id="L40">        .orElse(List.of())</span>
+<span class="fc" id="L41">        .stream()</span>
+<span class="fc" id="L42">        .map(AdapterConfigurationBase::getAdapterId)</span>
+<span class="fc" id="L43">        .toList();</span>
+
+<span class="fc" id="L45">    final var workflowModulesLoaded = Optional</span>
+<span class="fc" id="L46">        .ofNullable(workflowModules)</span>
+<span class="fc" id="L47">        .orElse(List.of())</span>
+<span class="fc" id="L48">        .stream()</span>
+<span class="fc" id="L49">        .map(WorkflowModuleProperties::getWorkflowModuleId)</span>
+<span class="fc" id="L50">        .toList();</span>
+
+<span class="fc" id="L52">    return SpringBootMigrationAdapterTransformer</span>
+<span class="fc" id="L53">        .builder()</span>
+<span class="fc" id="L54">        .properties(properties)</span>
+<span class="fc" id="L55">        .adaptersLoaded(adaptersLoaded)</span>
+<span class="fc" id="L56">        .workflowModulesLoaded(workflowModulesLoaded)</span>
+<span class="fc" id="L57">        .build()</span>
+<span class="fc" id="L58">        .getAndValidatePropertiesConfigured();</span>
+
+  }
+
+  /*
+  @Bean
+  @Primary
+  @Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
+  public &lt;DE&gt; ProcessService&lt;?&gt; migrationProcessService(
+      final InjectionPoint injectionPoint,
+      final MigrationAdapterProperties properties) {
+  
+    final ParameterizedType processServiceGenericType;
+    if (injectionPoint.getMethodParameter() != null) {
+      processServiceGenericType = (ParameterizedType) injectionPoint
+          .getMethodParameter()
+          .getGenericParameterType();
+    } else if (injectionPoint.getField() != null) {
+      processServiceGenericType = (ParameterizedType) injectionPoint
+          .getField()
+          .getGenericType();
+    } else {
+      throw new RuntimeException(
+          &quot;Unsupported injection of ProcessService, only field-, constructor- and method-parameter-injection allowed!&quot;);
+    }
+    @SuppressWarnings(&quot;unchecked&quot;)
+    final Class&lt;DE&gt; workflowAggregateClass = (Class&lt;DE&gt;) processServiceGenericType.getActualTypeArguments()[0];
+  
+    final var existingService = connectableServices.get(workflowAggregateClass);
+    if (existingService != null) {
+      return existingService;
+    }
+  
+    final var result = new MigrationProcessService&lt;&gt;(
+        workflowAggregateClass, properties.getAdapters(),
+        // TODO pass workflowModuleId and bpmnProcessId
+        properties.getPrioritizedAdaptersFor(&quot;test&quot;, &quot;test&quot;));
+  
+    connectableServices.put(workflowAggregateClass, result);
+  
+    return result;
+  
+  }
+  */
+
+  @Bean
+  public static BeanDefinitionRegistryPostProcessor buildProcessServices() {
+
+<span class="fc" id="L106">    return registry -&gt; {</span>
+
+      try {
+<span class="fc" id="L109">        ClasspathScanner</span>
+            // find classes annotated with @WorkflowService
+<span class="fc" id="L111">            .allClasses(</span>
+                &quot;&quot;,
+                metadataReader -&gt; {
+                  try {
+<span class="fc" id="L115">                    return metadataReader.getAnnotationMetadata().hasAnnotation(WorkflowService.class.getName());</span>
+<span class="nc" id="L116">                  } catch (Exception e) {</span>
+<span class="nc" id="L117">                    return false;</span>
+                  }
+                }
+            )
+<span class="fc" id="L121">            .stream()</span>
+            // determine aggregate class
+<span class="fc" id="L123">            .map(clasz -&gt; clasz.getAnnotation(WorkflowService.class))</span>
+<span class="fc" id="L124">            .map(WorkflowService::workflowAggregateClass)</span>
+            // build ProcessService&lt;A&gt; beans
+<span class="fc" id="L126">            .forEach(workflowAggregateClass -&gt; {</span>
+              // TODO pass workflowModuleId and bpmnProcessId
+<span class="fc" id="L128">              final var processServiceBeanDefinition = (RootBeanDefinition) BeanDefinitionBuilder</span>
+<span class="fc" id="L129">                  .rootBeanDefinition(MigrationProcessService.class)</span>
+<span class="fc" id="L130">                  .addConstructorArgValue(workflowAggregateClass)</span>
+<span class="fc" id="L131">                  .addConstructorArgReference(&quot;VanillaBpMigrationAdapterProperties&quot;)</span>
+<span class="fc" id="L132">                  .getBeanDefinition();</span>
+<span class="fc" id="L133">              processServiceBeanDefinition.setTargetType(</span>
+<span class="fc" id="L134">                  ResolvableType.forClassWithGenerics(io.vanillabp.spi.process.ProcessService.class,</span>
+                      workflowAggregateClass));
+<span class="fc" id="L136">              registry.registerBeanDefinition(</span>
+                  &quot;VanillaBP_ProcessService_&quot;
+<span class="fc" id="L138">                      + workflowAggregateClass.getName(),</span>
+                  processServiceBeanDefinition
+              );
+<span class="fc" id="L141">            });</span>
+<span class="nc" id="L142">      } catch (Exception e) {</span>
+<span class="nc" id="L143">        throw new RuntimeException(&quot;Could not register ProcessService beans&quot;, e);</span>
+<span class="fc" id="L144">      }</span>
+
+<span class="fc" id="L146">    };</span>
+
+  }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

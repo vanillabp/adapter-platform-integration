@@ -32,75 +32,47 @@
       <version>${project.version}</version>
       <scope>compile</scope>
     </dependency>
+    -->
     <dependency>
       <groupId>io.vanillabp</groupId>
       <artifactId>vanillabp-spring-boot-support</artifactId>
-      <version>${project.version}</version>
+      <version>2.0.0-SNAPSHOT</version>
       <scope>compile</scope>
     </dependency>
-    -->
+    <dependency>
+      <groupId>io.vanillabp</groupId>
+      <artifactId>vanillabp-spring-boot-integration-tests</artifactId>
+      <version>2.0.0-SNAPSHOT</version>
+      <scope>compile</scope>
+    </dependency>
   </dependencies>
 
-  <profiles>
-    <profile>
-      <id>jacoco</id>
-      <activation>
-        <activeByDefault>false</activeByDefault>
-      </activation>
-      <build>
-        <plugins>
-
-          <plugin>
-            <groupId>org.jacoco</groupId>
-            <artifactId>jacoco-maven-plugin</artifactId>
-            <executions>
-              <execution>
-                <goals>
-                  <goal>report-aggregate</goal>
-                </goals>
-                <phase>verify</phase>
-                <configuration>
-                  <dataFileIncludes>
-                    <dataFileInclude>**/jacoco.exec</dataFileInclude>
-                  </dataFileIncludes>
-                  <outputDirectory>${project.reporting.outputDirectory}/jacoco-aggregate</outputDirectory>
-                </configuration>
-              </execution>
-            </executions>
-          </plugin>
-          <plugin>
-            <artifactId>maven-antrun-plugin</artifactId>
-            <executions>
-              <execution>
-                <goals>
-                  <goal>run</goal>
-                </goals>
-                <phase>verify</phase>
-                <configuration>
-                  <target>
-                    <echo message="compile classpath"></echo>
-                    <property name="target.dir" value="target/site/jacoco-aggregate"></property>
-                    <fileset dir="${target.dir}" id="src.file">
-                      <include name="index.html"></include>
-                    </fileset>
-                    <copy id="result.file" tofile="${target.dir}/shields-io.json">
-                      <fileset refid="src.file"></fileset>
-                    </copy>
-                    <!--
-										<replaceregexp match="^.*Total.*?ctr2&quot;&gt;" replace="">
-											<fileset refid="result.file" />
-										</replaceregexp>
-										<replaceregexp match="%.*$" replace="%">
-											<fileset refid="result.file" />
-										</replaceregexp>
--->
-                  </target>
-                </configuration>
-              </execution>
-            </executions>
-          </plugin>
-        </plugins>
-      </build>
-    </profile>
-  </profiles>
+  <build>
+    <plugins>
+      <plugin>
+        <artifactId>maven-deploy-plugin</artifactId>
+        <configuration>
+          <skip>true</skip>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>report-aggregate</goal>
+            </goals>
+            <phase>verify</phase>
+            <configuration>
+              <dataFileIncludes>
+                <dataFileInclude>**/jacoco.exec</dataFileInclude>
+              </dataFileIncludes>
+              <outputDirectory>${project.basedir}/report</outputDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
 </project>

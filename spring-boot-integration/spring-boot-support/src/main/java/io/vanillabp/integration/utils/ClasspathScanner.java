@@ -124,8 +124,7 @@ public class ClasspathScanner {
 
     final List<Class<?>> classes = new LinkedList<>();
 
-    final var resourcePatternResolver = getResourcePatternResolver(null);
-    final var metadataReaderFactory = new CachingMetadataReaderFactory(resourcePatternResolver);
+    final var resourcePatternResolver = getResourcePatternResolver(resourceLoader);
 
     final Resource[] resources;
     synchronized (cache) {
@@ -138,6 +137,7 @@ public class ClasspathScanner {
       }
     }
 
+    final var metadataReaderFactory = new CachingMetadataReaderFactory(resourcePatternResolver);
     for (Resource resource : resources) {
       if (resource.isReadable()) {
         try {
@@ -150,8 +150,12 @@ public class ClasspathScanner {
             }
           }
           if (complies) {
-            final var c = Class.forName(metadataReader.getClassMetadata().getClassName());
-            classes.add(c);
+            try {
+              final var c = Class.forName(metadataReader.getClassMetadata().getClassName());
+              classes.add(c);
+            } catch (Throwable e) {
+              log.trace("Class not found: {}", metadataReader.getClassMetadata().getClassName());
+            }
           }
         } catch (NoClassDefFoundError e) {
           log.debug("NoClassDefFoundError: it might be an optional dependency", e);

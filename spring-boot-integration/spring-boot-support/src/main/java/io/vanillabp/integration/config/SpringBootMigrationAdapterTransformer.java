@@ -10,7 +10,7 @@ import java.util.stream.Collectors;
 import io.vanillabp.integration.modules.WorkflowModuleProperties;
 import lombok.Builder;
 
-@Builder
+@Builder(toBuilder = true)
 public class SpringBootMigrationAdapterTransformer {
 
   private SpringBootMigrationAdapterProperties properties;
@@ -43,7 +43,7 @@ public class SpringBootMigrationAdapterTransformer {
 
     if (workflowModulesLoaded.isEmpty()) {
       throw new IllegalStateException(
-          "No workflow-modules found! Add dependencies providing static beans of type '%s'."
+          "No workflow-modules found in classpath! Add dependencies providing static beans of type '%s'."
               .formatted(WorkflowModuleProperties.class));
     }
 
@@ -75,9 +75,9 @@ public class SpringBootMigrationAdapterTransformer {
       final var missingConfigSections = workflowModulesLoaded
           .stream()
           .map(module -> "%s.workflow-modules.%s".formatted(PREFIX, module))
-          .collect(Collectors.joining(", "));
+          .collect(Collectors.joining("', '"));
       throw new IllegalStateException(
-          "No workflow-modules configured! Add config sections %s".formatted(missingConfigSections));
+          "No workflow-modules configured! Add properties sections '%s'.".formatted(missingConfigSections));
     }
 
     // check for unknown adapters
@@ -85,7 +85,7 @@ public class SpringBootMigrationAdapterTransformer {
         .keySet()
         .stream()
         .filter(workflowModuleAdapterProperties -> !workflowModulesLoaded.contains(workflowModuleAdapterProperties))
-        .map(workflowModuleAdapterProperties -> "%s.workflow-module.%s".formatted(PREFIX,
+        .map(workflowModuleAdapterProperties -> "%s.workflow-modules.%s".formatted(PREFIX,
             workflowModuleAdapterProperties))
         .collect(Collectors.joining("\n, "));
     if (!unknownModules.isEmpty()) {
@@ -94,8 +94,8 @@ public class SpringBootMigrationAdapterTransformer {
               Properties '%s.workflow-modules.*' must contain VanillaBP workflow modules available in classpath!
               These workflow modules are unknown:
                 %s
-              Available workflow modules currently loaded in classpath: %s."""
-              .formatted(PREFIX, unknownModules, String.join(", ", workflowModulesLoaded)));
+              Available workflow modules currently loaded in classpath: '%s'."""
+              .formatted(PREFIX, unknownModules, String.join("', '", workflowModulesLoaded)));
     }
 
     return result;
@@ -106,7 +106,7 @@ public class SpringBootMigrationAdapterTransformer {
 
     if (adaptersLoaded.isEmpty()) {
       throw new IllegalStateException(
-          "No adapters found! Add dependencies providing VanillaBP adapters.");
+          "No adapters found in classpath! Add dependencies providing VanillaBP adapters.");
     }
 
     // build result map (key = adapter name, value = adapter type)
@@ -121,9 +121,12 @@ public class SpringBootMigrationAdapterTransformer {
       final var missingConfigSections = adaptersLoaded
           .stream()
           .map(adapter -> "%s.adapters.%s".formatted(PREFIX, adapter))
-          .collect(Collectors.joining(", "));
+          .collect(Collectors.joining("\n"));
       throw new IllegalStateException(
-          "No adapters configured! Add config sections %s".formatted(missingConfigSections));
+          """
+              No adapters configured! Add properties sections
+                %s"""
+              .formatted(missingConfigSections));
     }
 
     // check for unknown adapters
@@ -131,15 +134,15 @@ public class SpringBootMigrationAdapterTransformer {
         .entrySet()
         .stream()
         .filter(adapter -> !adaptersLoaded.contains(adapter.getValue()))
-        .map(adapter -> "%s found in %s.adapters.%s".formatted(adapter.getValue(), PREFIX, adapter.getKey()))
+        .map(adapter -> "'%s' found in '%s.adapters.%s.type'".formatted(adapter.getValue(), PREFIX, adapter.getKey()))
         .collect(Collectors.joining(", "));
     if (!unknownAdapters.isEmpty()) {
       throw new IllegalStateException(
           """
               Properties '%s.adapters.*.type' must contain VanillaBP adapters available in classpath!
               These adapters are unknown: %s.
-              Available adapter types currently loaded in classpath: %s."""
-              .formatted(PREFIX, unknownAdapters, String.join(", ", adaptersLoaded)));
+              Available adapter types currently loaded in classpath: '%s'."""
+              .formatted(PREFIX, unknownAdapters, String.join("', '", adaptersLoaded)));
     }
 
     return result;

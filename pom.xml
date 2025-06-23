@@ -184,6 +184,9 @@
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
         <version>${jacoco.version}</version>
+        <configuration>
+          <sessionId>anonymous-session-id</sessionId>
+        </configuration>
         <executions>
           <execution>
             <goals>

@@ -2,6 +2,10 @@
 
 # Adapter commons
 
+[![Coverage](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fgithub.com%2Fvanillabp%2Fadapters-common%2Fblob%2Finitial-implemenation%2Fjacoco-report%2Freport%2Findex.html&search=Total.*%3F.(%5B0-9%5D%2B)%5B%5E0-9%5D*%3F%25&replace=%241%25&flags=m&label=Coverage&color=green&cacheSeconds=60)](https://vanillabp.github.io/adapters-common/jacoco-report/report/)
+[![](https://img.shields.io/badge/Lifecycle-Incubating-blue)](https://github.com/Camunda-Community-Hub/community/blob/main/extension-lifecycle.md#incubating-)
+[![Apache License V.2](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE)
+
 Adapters for different BPM systems have a common code base to ensure the same behavior when migrating from one to
 another. In addition, there is common code for the supported platforms, such as Spring Boot and Quarkus, to ensure
 optimal developer expirience. This repository is about this common code.
@@ -9,7 +13,8 @@ optimal developer expirience. This repository is about this common code.
 ## Content
 
 1. [Noteworthy & Contributors](#noteworthy--contributors)
-2. [License](#license)
+2. [Coverage Report](https://vanillabp.github.io/adapters-common/jacoco-report/report/)
+3. [License](#license)
 
 ## Noteworthy & Contributors
 
