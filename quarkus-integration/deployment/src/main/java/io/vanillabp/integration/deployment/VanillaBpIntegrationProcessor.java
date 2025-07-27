@@ -39,6 +39,10 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class VanillaBpIntegrationProcessor {
 
+  /**
+   * Each VanillaBP adapter is a Quarkus extension publishing a Quarkus extension
+   * capability with its name prefix by this prefix. e.g. io.vanillabp.adapter.dummy
+   */
   public static final String PREFIX_ADAPTER_PACKAGE = "io.vanillabp.adapter.";
 
   private static final String FEATURE = "vanillabp";

@@ -33,7 +33,7 @@ public class TransactionalObserversTest {
               .addAsResource("application.yaml")
               .addClasses(ObservingBean.class, Actions.class)
               .addClass(DummyAdapters.class))                       // necessary due to anonymous class in DummyAdapters
-      .addBuildChainCustomizer(DummyAdapters.singleDummyAdapter()); // add mocked adapter
+      .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter()); // add mocked adapter
 
   public static String AFTER_SUCCESS = "AFTER_SUCCESS";
   public static String AFTER_COMPLETION = "AFTER_COMPLETION";

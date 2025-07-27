@@ -9,7 +9,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
 import io.vanillabp.integration.adapter.migration.processervice.MigrationProcessService;
-import io.vanillabp.integration.test.sample.Aggregate;
+import io.vanillabp.integration.test.samples.sample.Aggregate;
 import io.vanillabp.spi.process.ProcessService;
 import jakarta.inject.Inject;
 
@@ -20,10 +20,10 @@ public class AdapterConfigurationTest {
   static final QuarkusUnitTest unitTest = new QuarkusUnitTest()
       .setArchiveProducer(() -> ShrinkWrap
           .create(JavaArchive.class)
-          .addPackage("io.vanillabp.integration.test.sample")  // load sample application classes
+          .addPackage("io.vanillabp.integration.test.samples.sample")  // load sample application classes
           .addAsResource("application.yaml")                   // load sample application properties
           .addClass(DummyAdapters.class))                           // necessary due to anonymous class in DummyAdapters
-      .addBuildChainCustomizer(DummyAdapters.singleDummyAdapter()); // add mocked adapter
+      .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter()); // add mocked adapter
 
   @Inject
   @SuppressWarnings("CdiUnsatisfiedInjection")

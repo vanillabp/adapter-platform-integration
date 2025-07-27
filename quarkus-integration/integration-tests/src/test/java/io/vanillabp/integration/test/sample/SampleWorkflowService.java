@@ -3,13 +3,15 @@ package io.vanillabp.integration.test.sample;
 import org.slf4j.LoggerFactory;
 
 import io.vanillabp.spi.process.ProcessService;
+import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
 @Singleton
-@WorkflowService(workflowAggregateClass = Aggregate.class)
+@WorkflowService(workflowAggregateClass = Aggregate.class,
+    bpmnProcess = @BpmnProcess(bpmnProcessId = "SampleWorkflow"))
 public class SampleWorkflowService {
 
   @Inject

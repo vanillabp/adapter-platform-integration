@@ -8,8 +8,8 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
 import io.vanillabp.integration.test.adapters.DummyAdapters;
-import io.vanillabp.integration.test.sample.Aggregate;
-import io.vanillabp.integration.test.sample.SampleWorkflowService;
+import io.vanillabp.integration.test.samples.sample2.Aggregate;
+import io.vanillabp.integration.test.samples.sample2.SampleWorkflowService;
 import io.vanillabp.spi.process.ProcessService;
 import jakarta.inject.Inject;
 
@@ -20,23 +20,23 @@ public class BeanInstantiationTest {
   static final QuarkusUnitTest unitTest = new QuarkusUnitTest()
       .setArchiveProducer(() -> ShrinkWrap
           .create(JavaArchive.class)
-          .addPackage("io.vanillabp.integration.test.sample")  // load sample application classes
-          .addPackage("io.vanillabp.integration.test.sample2") // load sample application classes
+          .addPackage("io.vanillabp.integration.test.samples.sample")  // load sample application classes
+          .addPackage("io.vanillabp.integration.test.samples.sample2") // load sample application classes
           .addAsResource("application.yaml")                   // load sample application properties
           .addClass(DummyAdapters.class))                          // necessary due to anonymous class in DummyAdapters
-      .addBuildChainCustomizer(DummyAdapters.singleDummyAdapter()); // add mocked adapter
+      .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter()); // add mocked adapter
 
   @Inject
-  SampleWorkflowService sampleWorkflowService;
+  io.vanillabp.integration.test.samples.sample.SampleWorkflowService sampleWorkflowService;
 
   @Inject
-  ProcessService<Aggregate> sampleProcessService;
+  ProcessService<io.vanillabp.integration.test.samples.sample.Aggregate> sampleProcessService;
 
   @Inject
-  io.vanillabp.integration.test.sample2.SampleWorkflowService sampleWorkflowService2;
+  SampleWorkflowService sampleWorkflowService2;
 
   @Inject
-  ProcessService<io.vanillabp.integration.test.sample2.Aggregate> sampleProcessService2;
+  ProcessService<Aggregate> sampleProcessService2;
 
   @Test
   public void testBeanInstantiation() {

@@ -19,7 +19,6 @@
       <version>${project.version}</version>
       <scope>compile</scope>
     </dependency>
-    <!--
     <dependency>
       <groupId>io.vanillabp</groupId>
       <artifactId>vanillabp-quarkus-integration</artifactId>
@@ -32,7 +31,12 @@
       <version>${project.version}</version>
       <scope>compile</scope>
     </dependency>
-    -->
+    <dependency>
+      <groupId>io.vanillabp</groupId>
+      <artifactId>vanillabp-quarkus-integration-tests</artifactId>
+      <version>${project.version}</version>
+      <scope>compile</scope>
+    </dependency>
     <dependency>
       <groupId>io.vanillabp</groupId>
       <artifactId>vanillabp-spring-boot-support</artifactId>

@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="de"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>VanillaBpIntegrationProcessor.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">JaCoCo Report</a> &gt; <a href="../index.html" class="el_bundle">vanillabp-quarkus-integration-deployment</a> &gt; <a href="index.source.html" class="el_package">io.vanillabp.integration.deployment</a> &gt; <span class="el_source">VanillaBpIntegrationProcessor.java</span></div><h1>VanillaBpIntegrationProcessor.java</h1><pre class="source lang-java linenums">package io.vanillabp.integration.deployment;
+
+import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.jboss.jandex.AnnotationTransformation;
+import org.jboss.jandex.DotName;
+import org.jboss.jandex.ParameterizedType;
+
+import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
+import io.quarkus.arc.deployment.AnnotationsTransformerBuildItem;
+import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
+import io.quarkus.arc.deployment.InterceptorBindingRegistrarBuildItem;
+import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
+import io.quarkus.arc.processor.InterceptorBindingRegistrar;
+import io.quarkus.deployment.Capabilities;
+import io.quarkus.deployment.annotations.BuildProducer;
+import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.annotations.ExecutionTime;
+import io.quarkus.deployment.annotations.Record;
+import io.quarkus.deployment.builditem.FeatureBuildItem;
+import io.quarkus.deployment.builditem.StaticInitConfigBuilderBuildItem;
+import io.vanillabp.integration.deployment.config.QuarkusMigrationAdapterProperties;
+import io.vanillabp.integration.deployment.config.QuarkusMigrationAdapterTransformer;
+import io.vanillabp.integration.deployment.processservice.VanillaBpMigratableProcessServiceBuildItem;
+import io.vanillabp.integration.runtime.processservice.ProcessServiceCdiBeanRecorder;
+import io.vanillabp.integration.runtime.processservice.TransactionInterceptor;
+import io.vanillabp.integration.runtime.processservice.config.QuarkusMigrationAdapterPropertiesBuilder;
+import io.vanillabp.spi.process.ProcessService;
+import io.vanillabp.spi.service.WorkflowService;
+import io.vanillabp.spi.service.WorkflowTask;
+import jakarta.inject.Singleton;
+import lombok.extern.slf4j.Slf4j;
+
+<span class="fc" id="L39">@Slf4j</span>
+<span class="fc" id="L40">public class VanillaBpIntegrationProcessor {</span>
+
+  /**
+   * Each VanillaBP adapter is a Quarkus extension publishing a Quarkus extension
+   * capability with its name prefix by this prefix. e.g. io.vanillabp.adapter.dummy
+   */
+  public static final String PREFIX_ADAPTER_PACKAGE = &quot;io.vanillabp.adapter.&quot;;
+
+  private static final String FEATURE = &quot;vanillabp&quot;;
+
+<span class="fc" id="L50">  public static String ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_AGGREGATECLASS = &quot;workflowAggregateClass&quot;;</span>
+
+  /**
+   * Use customized builder for migration adapter properties.
+   *
+   * @return Build item for migration adapter properties
+   */
+  @BuildStep
+  StaticInitConfigBuilderBuildItem buildMigrationAdapterProperties() {
+
+<span class="fc" id="L60">    return new StaticInitConfigBuilderBuildItem(QuarkusMigrationAdapterPropertiesBuilder.class);</span>
+
+  }
+
+  /**
+   * Build step for introducing {@link TransactionInterceptor} for all method's
+   * annotated by @{@link WorkflowTask}.
+   *
+   * @param annotationsTransformer {@link TransactionInterceptor}'s annotations need be transformed
+   * @param interceptorBindingRegistrarProducer @{@link WorkflowTask} needs to be registered manually
+   * @return The additional {@link TransactionInterceptor} bean
+   */
+  @BuildStep
+  AdditionalBeanBuildItem buildTransactionInterceptors(
+      final BuildProducer&lt;AnnotationsTransformerBuildItem&gt; annotationsTransformer,
+      final BuildProducer&lt;InterceptorBindingRegistrarBuildItem&gt; interceptorBindingRegistrarProducer) {
+
+    // Typically an Interceptor needs an Annotation for interceptor binding. Since the
+    // annotation @WorkflowTask it is used for is not an interceptor binding annotation
+    // it needs to be added programmatically:
+<span class="fc" id="L80">    annotationsTransformer.produce(new AnnotationsTransformerBuildItem(AnnotationTransformation</span>
+<span class="fc" id="L81">        .forClasses()</span>
+<span class="fc" id="L82">        .whenClass(DotName.createSimple(TransactionInterceptor.class.getName()))</span>
+<span class="fc" id="L83">        .transform(t -&gt; t.add(WorkflowTask.class))));</span>
+
+<span class="fc" id="L85">    final var annotationMethods = Arrays</span>
+<span class="fc" id="L86">        .stream(WorkflowTask.class.getDeclaredMethods())</span>
+<span class="fc" id="L87">        .map(Method::getName)</span>
+<span class="fc" id="L88">        .collect(Collectors.toSet());</span>
+    // Typically an Interceptor needs an Annotation for interceptor binding. Since the
+    // annotation @WorkflowTask it is used for is not an interceptor binding annotation
+    // the interceptor binding needs to be added programmatically:
+<span class="fc" id="L92">    interceptorBindingRegistrarProducer.produce(new InterceptorBindingRegistrarBuildItem(</span>
+<span class="fc" id="L93">        new InterceptorBindingRegistrar() {</span>
+          @Override
+          public List&lt;InterceptorBinding&gt; getAdditionalBindings() {
+<span class="fc" id="L96">            return List.of(InterceptorBinding.of(</span>
+                WorkflowTask.class,
+                // all annotation-values need to be ignored to run the interceptor
+                // regardless the value of the annotation
+                annotationMethods
+            ));
+          }
+        }
+    ));
+
+    // Beans of runtime package need to be registered as additional bean to the index:
+<span class="fc" id="L107">    return AdditionalBeanBuildItem</span>
+<span class="fc" id="L108">        .builder()</span>
+<span class="fc" id="L109">        .addBeanClass(TransactionInterceptor.class)</span>
+<span class="fc" id="L110">        .setUnremovable() // don't remove, since it is used under the hoods</span>
+<span class="fc" id="L111">        .build();</span>
+
+  }
+
+  @Record(ExecutionTime.STATIC_INIT)
+  @BuildStep
+  void buildProcessServices(
+      final QuarkusMigrationAdapterProperties properties,
+      final Capabilities capabilities,
+      final BeanArchiveIndexBuildItem indexBuildItem,
+      final BuildProducer&lt;FeatureBuildItem&gt; featureProducer,
+      final ProcessServiceCdiBeanRecorder processServiceRecorder,
+      final List&lt;VanillaBpMigratableProcessServiceBuildItem&gt; processServiceBuildItems,
+      final BuildProducer&lt;SyntheticBeanBuildItem&gt; syntheticBeanProducer/* ,
+                                                                       final BeanContainer beanContainer */) {
+
+<span class="fc" id="L127">    featureProducer.produce(new FeatureBuildItem(FEATURE));</span>
+
+    // check for consistent configuration and required VanillaBpMigratableProcessServiceBuildItems
+    final var adapterProperties = QuarkusMigrationAdapterTransformer
+<span class="fc" id="L131">        .builder()</span>
+<span class="fc" id="L132">        .properties(properties)</span>
+<span class="fc" id="L133">        .capabilities(capabilities)</span>
+<span class="fc" id="L134">        .build()</span>
+<span class="fc" id="L135">        .getAndValidatePropertiesConfigured(processServiceBuildItems);</span>
+
+    // scan for bean annotated by @WorkflowService
+<span class="fc" id="L138">    final Set&lt;Class&lt;?&gt;&gt; processServicesBuilt = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L139">    indexBuildItem</span>
+<span class="fc" id="L140">        .getIndex()</span>
+<span class="fc" id="L141">        .getAnnotations(WorkflowService.class)</span>
+        // and build an adapter aware process service for each of them
+<span class="fc" id="L143">        .forEach(annotation -&gt; {</span>
+          try {
+<span class="fc" id="L145">            final var serviceClass = annotation.target();</span>
+<span class="fc" id="L146">            final var workflowAggregateType = annotation.value(ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_AGGREGATECLASS)</span>
+<span class="fc" id="L147">                .asClass();</span>
+<span class="fc" id="L148">            final var workflowAggregateClass = getClass().getClassLoader()</span>
+<span class="fc" id="L149">                .loadClass(workflowAggregateType.name().toString());</span>
+<span class="fc bfc" id="L150" title="All 2 branches covered.">            if (processServicesBuilt.contains(workflowAggregateClass)) {</span>
+<span class="fc" id="L151">              return;</span>
+            }
+<span class="fc" id="L153">            syntheticBeanProducer.produce(SyntheticBeanBuildItem</span>
+<span class="fc" id="L154">                .configure(ProcessService.class)</span>
+<span class="fc" id="L155">                .types(ParameterizedType.create(ProcessService.class, workflowAggregateType))</span>
+<span class="fc" id="L156">                .scope(Singleton.class)</span>
+<span class="fc" id="L157">                .supplier(processServiceRecorder.processServiceSupplier(</span>
+                    workflowAggregateClass,
+                    adapterProperties,
+                    // TODO Fill services argument
+<span class="fc" id="L161">                    List.of()))</span>
+<span class="fc" id="L162">                .done());</span>
+<span class="fc" id="L163">            processServicesBuilt.add(workflowAggregateClass);</span>
+<span class="nc" id="L164">          } catch (ClassNotFoundException e) {</span>
+<span class="nc" id="L165">            log.debug(&quot;NoClassDefFoundError: it might be an optional dependency&quot;, e);</span>
+<span class="fc" id="L166">          }</span>
+<span class="fc" id="L167">        });</span>
+
+<span class="fc" id="L169">  }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

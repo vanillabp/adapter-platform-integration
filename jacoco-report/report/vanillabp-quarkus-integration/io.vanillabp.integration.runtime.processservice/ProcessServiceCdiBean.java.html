@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="de"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ProcessServiceCdiBean.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">JaCoCo Report</a> &gt; <a href="../index.html" class="el_bundle">vanillabp-quarkus-integration</a> &gt; <a href="index.source.html" class="el_package">io.vanillabp.integration.runtime.processservice</a> &gt; <span class="el_source">ProcessServiceCdiBean.java</span></div><h1>ProcessServiceCdiBean.java</h1><pre class="source lang-java linenums">package io.vanillabp.integration.runtime.processservice;
+
+import java.util.List;
+
+import io.vanillabp.integration.adapter.migration.processervice.MigrationProcessService;
+import io.vanillabp.integration.config.MigrationAdapterProperties;
+import io.vanillabp.intergration.adapter.migration.spi.MigratableProcessService;
+import io.vanillabp.spi.process.ProcessService;
+import lombok.extern.slf4j.Slf4j;
+
+/**
+ * A {@link ProcessService} bean aware of adapter migration.
+ */
+<span class="fc" id="L14">@Slf4j</span>
+public class ProcessServiceCdiBean&lt;A&gt; extends MigrationProcessService&lt;A&gt; {
+
+  /**
+   * Wrapper for
+   * {@link MigrationProcessService#MigrationProcessService(Class, MigrationAdapterProperties, List)}.
+   *
+   * @param workflowAggregateClass The workflow's aggregate class
+   * @param properties Properties needed to handle migration between adapters
+   */
+  public ProcessServiceCdiBean(
+      final Class&lt;A&gt; workflowAggregateClass,
+      final MigrationAdapterProperties properties,
+      final List&lt;MigratableProcessService&lt;A&gt;&gt; processServices) {
+
+<span class="fc" id="L29">    super(workflowAggregateClass, properties, processServices);</span>
+
+<span class="fc" id="L31">  }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

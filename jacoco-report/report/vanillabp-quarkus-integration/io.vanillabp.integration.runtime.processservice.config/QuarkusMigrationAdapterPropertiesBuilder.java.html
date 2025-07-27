@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="de"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>QuarkusMigrationAdapterPropertiesBuilder.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">JaCoCo Report</a> &gt; <a href="../index.html" class="el_bundle">vanillabp-quarkus-integration</a> &gt; <a href="index.source.html" class="el_package">io.vanillabp.integration.runtime.processservice.config</a> &gt; <span class="el_source">QuarkusMigrationAdapterPropertiesBuilder.java</span></div><h1>QuarkusMigrationAdapterPropertiesBuilder.java</h1><pre class="source lang-java linenums">package io.vanillabp.integration.runtime.processservice.config;
+
+import io.quarkus.runtime.configuration.ConfigBuilder;
+import io.smallrye.config.SmallRyeConfigBuilder;
+
+/**
+ * Migration adapter properties need some customization of SmallRye config.
+ * For details checkout source code of
+ * {@link #configBuilder(SmallRyeConfigBuilder)}.
+ */
+<span class="fc" id="L11">public class QuarkusMigrationAdapterPropertiesBuilder implements ConfigBuilder {</span>
+
+  /**
+   * Adopt builder according to needs of migration adapters.
+   * For details checkout source code of
+   * {@link ConfigBuilder#configBuilder(SmallRyeConfigBuilder)}.
+   *
+   * @param builder SmallRye builder provided by Quarkus
+   * @return Adapted builder.
+   */
+  @Override
+  public SmallRyeConfigBuilder configBuilder(
+      final SmallRyeConfigBuilder builder) {
+
+    // In Quarkus properties defined by Java interfaces are mandatory. They
+    // can be turned into optional values by using an Optional&lt;..&gt; wrapper
+    // on a value base. In the case of VanillaBP properties, the sub-sections and
+    // properties valid depend on the adapters used. Therefor
+    // missing-property-validation has to be turned off for the entire section:
+<span class="fc" id="L30">    return builder.withMappingIgnore(&quot;vanillabp.**&quot;);</span>
+
+  }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

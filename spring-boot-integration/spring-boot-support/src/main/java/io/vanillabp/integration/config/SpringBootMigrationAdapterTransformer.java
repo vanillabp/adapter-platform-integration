@@ -120,11 +120,11 @@ public class SpringBootMigrationAdapterTransformer {
     if (result.isEmpty()) {
       final var missingConfigSections = adaptersLoaded
           .stream()
-          .map(adapter -> "%s.adapters.%s".formatted(PREFIX, adapter))
+          .map(adapter -> "%s.adapters.xxx.type=%s".formatted(PREFIX, adapter))
           .collect(Collectors.joining("\n"));
       throw new IllegalStateException(
           """
-              No adapters configured! Add properties sections
+              No adapters configured! Add properties sections for your BPMS (e.g. xxx) having type set to adapters found in classpath:
                 %s"""
               .formatted(missingConfigSections));
     }
@@ -166,20 +166,24 @@ public class SpringBootMigrationAdapterTransformer {
         .isEmpty() || (adapters.size() != properties.getPrioritizedAdapters().size())) {
       throw new IllegalStateException(
           """
-              The property '%s.prioritized-adapters' must list all the adapters configured in '%s.adapters.*' to define the order in which adapters are addressed to find workflows running.
-              These are: %s."""
+              The property '%s.prioritized-adapters' must list all the adapters configured in '%s.adapters.*' to define
+              the order in which adapters are addressed to find workflows running.
+              Configured adapters are: %s."""
               .formatted(PREFIX, PREFIX, adapterNamesConfigured));
     }
 
     final var unknownAdapters = properties
         .getPrioritizedAdapters()
         .stream()
-        .filter(adapter -> !adapterNamesConfigured.contains(adapter))
-        .collect(Collectors.joining(", "));
+        .filter(adapter -> !adapters.containsKey(adapter))
+        .map(adapter -> "%s -> '%s.adapters.%s'".formatted(adapter, PREFIX, adapter))
+        .collect(Collectors.joining("\n  "));
     if (!unknownAdapters.isEmpty()) {
       throw new IllegalStateException(
-          "The property '%s.prioritized-adapters' lists these adapters for which no properties '%s.adapters.*' were found: %s!"
-              .formatted(PREFIX, PREFIX, unknownAdapters));
+          """
+              The property '%s.prioritized-adapters' lists these adapters for which no property sections were found:
+                %s"""
+              .formatted(PREFIX, unknownAdapters));
     }
 
     return properties.getPrioritizedAdapters();

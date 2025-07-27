@@ -1,4 +1,4 @@
-package io.vanillabp.integration.test.sample2;
+package io.vanillabp.integration.test.samples.sample2;
 
 import org.slf4j.LoggerFactory;
 

@@ -49,9 +49,10 @@ public class SpringBootMigrationAdapterTransformerTest {
             .properties(propsBuilder.build())
             .build()
             .getAndValidatePropertiesConfigured());
-    assertEquals("""
-        No adapters configured! Add properties sections
-          vanillabp.adapters.test-adapter""",
+    assertEquals(
+        """
+            No adapters configured! Add properties sections for your BPMS (e.g. xxx) having type set to adapters found in classpath:
+              vanillabp.adapters.xxx.type=test-adapter""",
         exception.getMessage());
 
   }
@@ -166,6 +167,76 @@ public class SpringBootMigrationAdapterTransformerTest {
             These workflow modules are unknown:
               vanillabp.workflow-modules.unknown-module
             Available workflow modules currently loaded in classpath: 'test-module'.""",
+        exception.getMessage());
+
+  }
+
+  @Test
+  @Order(6)
+  public void testMissingPrioritizedAdapters() {
+
+    final var props = propsBuilder
+        .prioritizedAdapters(List.of("test-adapter"))
+        .adapters(Map.of(
+            "test-adapter",
+            SpringBootMigrationAdapterProperties.AdapterConfiguration
+                .builder()
+                .type("test-type")
+                .build(),
+            "test2-adapter",
+            SpringBootMigrationAdapterProperties.AdapterConfiguration
+                .builder()
+                .type("test-type")
+                .build()))
+        .build();
+
+    final var transformer = transformerBuilder
+        .adaptersLoaded(List.of("test-type"))
+        .properties(props)
+        .build();
+    transformerBuilder = transformer.toBuilder(); // save for next test method
+
+    final var exception = assertThrowsExactly(
+        IllegalStateException.class,
+        transformer::getAndValidatePropertiesConfigured
+    );
+    assertEquals(
+        """
+            The property 'vanillabp.prioritized-adapters' must list all the adapters configured in 'vanillabp.adapters.*' to define
+            the order in which adapters are addressed to find workflows running.
+            Configured adapters are: test2-adapter, test-adapter.""",
+        exception.getMessage());
+
+  }
+
+  @Test
+  @Order(7)
+  public void testMissingAdaptersPrioritized() {
+
+    final var props = propsBuilder
+        .prioritizedAdapters(List.of("test2-adapter"))
+        .adapters(Map.of(
+            "test-adapter",
+            SpringBootMigrationAdapterProperties.AdapterConfiguration
+                .builder()
+                .type("test-type")
+                .build()))
+        .build();
+
+    final var transformer = transformerBuilder
+        .adaptersLoaded(List.of("test-type"))
+        .properties(props)
+        .build();
+    transformerBuilder = transformer.toBuilder(); // save for next test method
+
+    final var exception = assertThrowsExactly(
+        IllegalStateException.class,
+        transformer::getAndValidatePropertiesConfigured
+    );
+    assertEquals(
+        """
+            The property 'vanillabp.prioritized-adapters' lists these adapters for which no property sections were found:
+              test2-adapter -> 'vanillabp.adapters.test2-adapter'""",
         exception.getMessage());
 
   }

@@ -1,0 +1,10 @@
+vanillabp:
+  prioritized-adapters:
+    - test2
+    - test
+  adapters:
+    test:
+      type: dummy
+      test: 1
+    test2:
+      type: dummy

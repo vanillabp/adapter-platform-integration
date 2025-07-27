@@ -120,11 +120,11 @@ public class SpringBootMigrationAdapterTransformer {
 <span class="fc bfc" id="L120" title="All 2 branches covered.">    if (result.isEmpty()) {</span>
 <span class="fc" id="L121">      final var missingConfigSections = adaptersLoaded</span>
 <span class="fc" id="L122">          .stream()</span>
-<span class="fc" id="L123">          .map(adapter -&gt; &quot;%s.adapters.%s&quot;.formatted(PREFIX, adapter))</span>
+<span class="fc" id="L123">          .map(adapter -&gt; &quot;%s.adapters.xxx.type=%s&quot;.formatted(PREFIX, adapter))</span>
 <span class="fc" id="L124">          .collect(Collectors.joining(&quot;\n&quot;));</span>
 <span class="fc" id="L125">      throw new IllegalStateException(</span>
           &quot;&quot;&quot;
-              No adapters configured! Add properties sections
+              No adapters configured! Add properties sections for your BPMS (e.g. xxx) having type set to adapters found in classpath:
                 %s&quot;&quot;&quot;
 <span class="fc" id="L129">              .formatted(missingConfigSections));</span>
     }
@@ -163,26 +163,30 @@ public class SpringBootMigrationAdapterTransformer {
     // configured:
 <span class="fc" id="L164">    final var adapterNamesConfigured = String.join(&quot;, &quot;, adapters.keySet());</span>
 <span class="fc" id="L165">    if (properties.getPrioritizedAdapters()</span>
-<span class="pc bpc" id="L166" title="2 of 4 branches missed.">        .isEmpty() || (adapters.size() != properties.getPrioritizedAdapters().size())) {</span>
-<span class="nc" id="L167">      throw new IllegalStateException(</span>
+<span class="pc bpc" id="L166" title="1 of 4 branches missed.">        .isEmpty() || (adapters.size() != properties.getPrioritizedAdapters().size())) {</span>
+<span class="fc" id="L167">      throw new IllegalStateException(</span>
           &quot;&quot;&quot;
-              The property '%s.prioritized-adapters' must list all the adapters configured in '%s.adapters.*' to define the order in which adapters are addressed to find workflows running.
-              These are: %s.&quot;&quot;&quot;
-<span class="nc" id="L171">              .formatted(PREFIX, PREFIX, adapterNamesConfigured));</span>
+              The property '%s.prioritized-adapters' must list all the adapters configured in '%s.adapters.*' to define
+              the order in which adapters are addressed to find workflows running.
+              Configured adapters are: %s.&quot;&quot;&quot;
+<span class="fc" id="L172">              .formatted(PREFIX, PREFIX, adapterNamesConfigured));</span>
     }
 
-<span class="fc" id="L174">    final var unknownAdapters = properties</span>
-<span class="fc" id="L175">        .getPrioritizedAdapters()</span>
-<span class="fc" id="L176">        .stream()</span>
-<span class="pc bpc" id="L177" title="1 of 2 branches missed.">        .filter(adapter -&gt; !adapterNamesConfigured.contains(adapter))</span>
-<span class="fc" id="L178">        .collect(Collectors.joining(&quot;, &quot;));</span>
-<span class="pc bpc" id="L179" title="1 of 2 branches missed.">    if (!unknownAdapters.isEmpty()) {</span>
-<span class="nc" id="L180">      throw new IllegalStateException(</span>
-          &quot;The property '%s.prioritized-adapters' lists these adapters for which no properties '%s.adapters.*' were found: %s!&quot;
-<span class="nc" id="L182">              .formatted(PREFIX, PREFIX, unknownAdapters));</span>
+<span class="fc" id="L175">    final var unknownAdapters = properties</span>
+<span class="fc" id="L176">        .getPrioritizedAdapters()</span>
+<span class="fc" id="L177">        .stream()</span>
+<span class="fc bfc" id="L178" title="All 2 branches covered.">        .filter(adapter -&gt; !adapters.containsKey(adapter))</span>
+<span class="fc" id="L179">        .map(adapter -&gt; &quot;%s -&gt; '%s.adapters.%s'&quot;.formatted(adapter, PREFIX, adapter))</span>
+<span class="fc" id="L180">        .collect(Collectors.joining(&quot;\n  &quot;));</span>
+<span class="fc bfc" id="L181" title="All 2 branches covered.">    if (!unknownAdapters.isEmpty()) {</span>
+<span class="fc" id="L182">      throw new IllegalStateException(</span>
+          &quot;&quot;&quot;
+              The property '%s.prioritized-adapters' lists these adapters for which no property sections were found:
+                %s&quot;&quot;&quot;
+<span class="fc" id="L186">              .formatted(PREFIX, unknownAdapters));</span>
     }
 
-<span class="fc" id="L185">    return properties.getPrioritizedAdapters();</span>
+<span class="fc" id="L189">    return properties.getPrioritizedAdapters();</span>
 
   }
 
