@@ -8,7 +8,7 @@
     <version>1.1.0</version>
   </parent>
 
-  <artifactId>adapters-common</artifactId>
+  <artifactId>adapter-platform-integration</artifactId>
   <version>0.0.1-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>Common stuff used by all VanillaBP adapters</name>
@@ -40,7 +40,7 @@
     <snapshotRepository>
       <id>github</id>
       <name>Github Packages</name>
-      <url>https://maven.pkg.github.com/vanillabp/adapters-common</url>
+      <url>https://maven.pkg.github.com/vanillabp/adapter-platform-integration</url>
     </snapshotRepository>
   </distributionManagement>
 
