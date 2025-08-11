@@ -9,7 +9,7 @@
   </parent>
 
   <artifactId>vanillabp-spring-boot-support</artifactId>
-  <name>VanillaBP Spring Boot Support</name>
+  <name>VanillaBP Spring Boot support</name>
 
   <licenses>
     <license>
@@ -27,46 +27,37 @@
     </developer>
   </developers>
 
-  <dependencyManagement>
-    <dependencies>
-      <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-dependencies</artifactId>
-        <version>3.4.2</version>
-        <type>pom</type>
-        <scope>import</scope>
-      </dependency>
-    </dependencies>
-  </dependencyManagement>
-
   <dependencies>
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot</artifactId>
     </dependency>
-
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-autoconfigure</artifactId>
+    </dependency>
     <dependency>
       <groupId>org.springframework</groupId>
       <artifactId>spring-beans</artifactId>
     </dependency>
-
     <dependency>
       <groupId>jakarta.annotation</groupId>
       <artifactId>jakarta.annotation-api</artifactId>
     </dependency>
-
     <dependency>
       <groupId>io.vanillabp.adapter</groupId>
       <artifactId>migration-adapter</artifactId>
       <version>${root.project.version}</version>
     </dependency>
-
+    <dependency>
+      <groupId>io.vanillabp</groupId>
+      <artifactId>spi-for-java</artifactId>
+    </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
       <scope>test</scope>
     </dependency>
-
     <dependency>
       <groupId>com.h2database</groupId>
       <artifactId>h2</artifactId>

@@ -9,8 +9,7 @@
   </parent>
 
   <artifactId>vanillabp-quarkus-integration</artifactId>
-  <name>VanillaBP Quarkus integration - Runtime</name>
-  <description>Enables projects using the VanillaBP SPI (see www.vanillabp.io)</description>
+  <name>Quarkus integration - Extension runtime</name>
 
   <dependencies>
     <dependency>
@@ -20,6 +19,11 @@
     <dependency>
       <groupId>io.vanillabp.adapter</groupId>
       <artifactId>migration-adapter</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>${project.groupId}</groupId>
+      <artifactId>vanillabp-quarkus-support</artifactId>
       <version>${project.version}</version>
     </dependency>
   </dependencies>

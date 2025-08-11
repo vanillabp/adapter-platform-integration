@@ -20,10 +20,11 @@ public class BeanInstantiationTest {
   static final QuarkusUnitTest unitTest = new QuarkusUnitTest()
       .setArchiveProducer(() -> ShrinkWrap
           .create(JavaArchive.class)
+          .addClass(DummyAdapters.class)                          // necessary due to anonymous class in DummyAdapters
           .addPackage("io.vanillabp.integration.test.samples.sample")  // load sample application classes
           .addPackage("io.vanillabp.integration.test.samples.sample2") // load sample application classes
           .addAsResource("application.yaml")                   // load sample application properties
-          .addClass(DummyAdapters.class))                          // necessary due to anonymous class in DummyAdapters
+          .addAsResource("META-INF/workflow-module"))          // define workflow module at global classpath
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter()); // add mocked adapter
 
   @Inject

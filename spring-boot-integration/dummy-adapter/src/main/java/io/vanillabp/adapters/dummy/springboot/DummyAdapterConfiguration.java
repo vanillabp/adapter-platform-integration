@@ -5,7 +5,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import io.vanillabp.integration.adapters.AdapterConfigurationBase;
+import io.vanillabp.integration.adapter.AdapterConfigurationBase;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 
 @Configuration

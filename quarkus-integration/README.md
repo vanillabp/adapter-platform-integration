@@ -2,30 +2,54 @@
 
 # Quarkus integration
 
-To learn about how to bring VanillaBP into your projects checkout the [Wiki](../../wiki) for documentation. Chapters of
-the Wiki documentation will link to the respective chapter below.
+In Quarkus one has to use Quarkus extensions to bring new functionality into a
+Quarkus project (see https://quarkus.io/extensions/). As this is the best developer
+experience also Quarkus platform integration of VanillaBP is done leveraging
+Quarkus' extensions mechanism.
 
-## Workflow Modules
+There is one main extension `vanillabp` (implemented
+by this module) which is primarily responsible for two things:
 
-Each workflow module has its own ID. This identifier is used to define scopes of visibility and to avoid name-clashes
-(see [Wiki](../../wiki/Workflow-modules)). BPMS configuration specific to a workflow module is loaded based on this ID.
+1. Bringing the [VanillaBP SPI](https://github.com/vanillabp/spi-for-java) in Quarkus to life.
+2. Managing of VanillaBP adapters at build and runtime connecting to BPMSs.
 
-In addition, to underline separation of workflow modules, each workflow module may have
-[its own configuration files](#separating-workflow-module-properties-from-application-properties) next the
-main files `application.yaml` or `application.properties`, to load Spring Boot properties from.
+Additionally, there are VanillaBP adapter extensions which need be added next to the
+`vanillabp` extension to provide runtime connectivity to supported BPMSs. There is one
+[dummy adapter](./dummy-adapter) as a template for new adapters also providing the
+documentation what needs to be considered on providing a new VanillaBP
+adapter extension. For ready-to-use adapter extensions checkout
+[https://www.vanillabp.io](https://www.vanillabp.io).
 
-### Define a workflow module
+## Modules
 
-...
+To understand subsequent documentation read the Quarkus guide
+"[Writing your own extension](https://quarkus.io/guides/writing-extensions)"
+to learn about concepts of Quarkus extensions.
 
-#### Standalone applications
+1. **[deployment](./deployment):**<br>
+   The deployment module of the extension. It is responsible for code analysis,
+   loading configuration and preparing runtime CDI beans.
+2. **[runtime](./runtime):**<br>
+   The runtime module of the extension. It is responsible for bridging to
+   [VanillaBP migration adapter](../migration-adapter) at runtime.
+3. **[dummy-adapter](./dummy-adapter):**<br>
+   This adapter is a template for new adapters and is used as a adapter
+   by the integration tests.
+4. **[quarkus-support](./quarkus-support):**<br>
+   A tiny collection of useful things in the context of Quarkus to be used as
+   a dependency instead of `io.vanillabp:spi-for-java`.
+5. **[integration-tests](./integration-tests):**<br>
+   Modules which ensure the VanillaBP Quarkus extension works as documented.
 
-...
+## Noteworthy & Contributors
 
-#### Multiple workflow modules in one application
+[VanillaBP](https://www.github.com/vanillabp/spi-for-java) was developed by [Phactum](https://www.phactum.at) with the
+intention of giving back to the community as it has benefited the community in the past.
 
-...
+![Phactum](../readme/phactum.png)
 
-### Separating workflow module properties from application properties
+## License
 
-...
+Copyright 2025 Phactum Softwareentwicklung GmbH
+
+Licensed under the Apache License, Version 2.0

@@ -19,6 +19,7 @@ public class NoAdapterConfigurationTest {
           .addPackage("io.vanillabp.integration.test.samples.sample")  // load sample application classes
           // load sample application properties
           .addAsResource("no-adapter/application.yaml", "application.yaml")
+          .addAsResource("META-INF/workflow-module")           // define workflow module at global classpath
           .addClass(DummyAdapters.class))                              // necessary due to anonymous class in DummyAdapters
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter())     // add mocked adapter
       .assertException(exceptionHavingMessage(IllegalStateException.class,

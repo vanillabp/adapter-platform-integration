@@ -24,7 +24,7 @@ public class QuarkusMigrationAdapterPropertiesBuilder implements ConfigBuilder {
 
     // In Quarkus properties defined by Java interfaces are mandatory. They
     // can be turned into optional values by using an Optional<..> wrapper
-    // on a value base. In the case of VanillaBP properties, the sub-sections and
+    // on a value base. In the case of VanillaBP properties, the subsections and
     // properties valid depend on the adapters used. Therefor
     // missing-property-validation has to be turned off for the entire section:
     return builder.withMappingIgnore("vanillabp.**");

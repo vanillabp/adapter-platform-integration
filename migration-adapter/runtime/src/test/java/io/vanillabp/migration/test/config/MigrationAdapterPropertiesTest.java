@@ -15,10 +15,10 @@ import org.slf4j.LoggerFactory;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import io.vanillabp.integration.config.AdapterConfiguration;
-import io.vanillabp.integration.config.MigrationAdapterProperties;
-import io.vanillabp.integration.config.WorkflowAdapterProperties;
-import io.vanillabp.integration.config.WorkflowModuleAdapterProperties;
+import io.vanillabp.integration.adapter.migration.config.AdapterConfiguration;
+import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.config.WorkflowAdapterProperties;
+import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j

@@ -12,7 +12,7 @@
   <artifactId>migration-adapter-parent</artifactId>
   <version>0.0.1-SNAPSHOT</version>
   <packaging>pom</packaging>
-  <name>VanillaBP Migration Adapter parent</name>
+  <name>Migration adapter</name>
 
   <modules>
     <module>spi</module>

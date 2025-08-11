@@ -91,7 +91,7 @@ public class SpringBootMigrationAdapterTransformerTest {
 
   @Test
   @Order(3)
-  public void testNoWorkflowModulesInClasspath() {
+  public void testNoWorkflowModulesConfigured() {
 
     final var props = propsBuilder
         .adapters(Map.of(
@@ -106,26 +106,6 @@ public class SpringBootMigrationAdapterTransformerTest {
 
     final var transformer = transformerBuilder
         .properties(props)
-        .workflowModulesLoaded(List.of())
-        .build();
-    transformerBuilder = transformer.toBuilder(); // save for next test method
-
-    final var exception = assertThrowsExactly(
-        IllegalStateException.class,
-        transformer::getAndValidatePropertiesConfigured
-    );
-    assertEquals(
-        "No workflow-modules found in classpath! Add dependencies providing static beans of type 'class io.vanillabp.integration.modules.WorkflowModuleProperties'.",
-        exception.getMessage());
-
-  }
-
-  @Test
-  @Order(4)
-  public void testNoWorkflowModulesConfigured() {
-
-    final var transformer = transformerBuilder
-        .properties(propsBuilder.build())
         .workflowModulesLoaded(List.of("test-module"))
         .build();
     transformerBuilder = transformer.toBuilder(); // save for next test method
@@ -141,7 +121,7 @@ public class SpringBootMigrationAdapterTransformerTest {
   }
 
   @Test
-  @Order(5)
+  @Order(4)
   public void testWorkflowModulesConfigMissing() {
 
     final var props = propsBuilder
@@ -172,7 +152,7 @@ public class SpringBootMigrationAdapterTransformerTest {
   }
 
   @Test
-  @Order(6)
+  @Order(5)
   public void testMissingPrioritizedAdapters() {
 
     final var props = propsBuilder
@@ -210,7 +190,7 @@ public class SpringBootMigrationAdapterTransformerTest {
   }
 
   @Test
-  @Order(7)
+  @Order(6)
   public void testMissingAdaptersPrioritized() {
 
     final var props = propsBuilder

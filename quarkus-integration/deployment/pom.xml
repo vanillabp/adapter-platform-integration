@@ -9,7 +9,7 @@
   </parent>
 
   <artifactId>vanillabp-quarkus-integration-deployment</artifactId>
-  <name>VanillaBP Quarkus integration - Deployment</name>
+  <name>Quarkus integration - Extension deployment</name>
 
   <dependencies>
     <dependency>

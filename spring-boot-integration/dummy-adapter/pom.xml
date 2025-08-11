@@ -8,9 +8,9 @@
     <version>2.0.0-SNAPSHOT</version>
   </parent>
 
-  <groupId>io.vanillabp.adapter</groupId>
-  <artifactId>spring-boot-dummy-adapter</artifactId>
-  <name>VanillaBP Spring Boot Dummy Adapter</name>
+  <groupId>io.vanillabp.springboot.adapter</groupId>
+  <artifactId>dummy-adapter</artifactId>
+  <name>Spring Boot integration - Dummy Adapter</name>
 
   <licenses>
     <license>
@@ -33,12 +33,10 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot</artifactId>
     </dependency>
-
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-autoconfigure</artifactId>
     </dependency>
-
     <dependency>
       <groupId>io.vanillabp</groupId>
       <artifactId>vanillabp-spring-boot-support</artifactId>

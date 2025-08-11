@@ -23,15 +23,24 @@ jobs:
           distribution: adopt
           cache: maven
       - name: Publish package
-        run: mvn --batch-mode deploy
+        run:
+          mvn -s $GITHUB_WORKSPACE/.github/workflows/github-packages-settings.xml
+          --batch-mode --no-transfer-progress deploy
         env:
+          USER_NAME: "${{ secrets.VANILLABP_USER_NAME }}"
+          USER_TOKEN: "${{ secrets.VANILLABP_USER_TOKEN }}"
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           CI: false
+      - name: Merge coverage reports
+        run: |
+          mkdir -p coverage
+          cp -r test-coverage-report/spring-boot/report coverage/spring-boot-report
+          cp -r test-coverage-report/quarkus/report coverage/quarkus-report
       - name: Upload coverage report files as artifact
         id: deployment
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
-          path: jacoco-report/report
+          path: coverage
   deploy-coverage-report:
     if: "${{ github.ref_name == github.event.repository.default_branch }}"
     environment:

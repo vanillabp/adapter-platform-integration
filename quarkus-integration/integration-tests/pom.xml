@@ -8,116 +8,75 @@
     <version>0.0.1-SNAPSHOT</version>
   </parent>
 
-  <artifactId>vanillabp-quarkus-integration-tests</artifactId>
-  <name>VanillaBP Quarkus integration - Integration Tests</name>
+  <groupId>io.vanillabp.quarkus</groupId>
+  <artifactId>integration-tests-parent</artifactId>
+  <packaging>pom</packaging>
+  <name>Quarkus integration - Integration tests parent</name>
 
-  <properties>
-    <skipITs>true</skipITs>
-    <native.surefire.skip>false</native.surefire.skip>
-  </properties>
+  <modules>
+    <module>test-applications</module>
+    <module>main-integration-test</module>
+    <module>workflowmodule-integration-tests</module>
+  </modules>
 
-  <dependencies>
-    <dependency>
-      <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-rest</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-junit5</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-junit5-internal</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.vanillabp</groupId>
-      <artifactId>vanillabp-quarkus-integration</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>io.vanillabp.adapter</groupId>
-      <artifactId>quarkus-dummy-adapter</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-config-yaml</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>io.rest-assured</groupId>
-      <artifactId>rest-assured</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.vanillabp</groupId>
-      <artifactId>spi-for-java</artifactId>
-      <version>1.0.2</version>
-    </dependency>
-    <dependency>
-      <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-jacoco</artifactId>
-      <scope>test</scope>
-    </dependency>
-  </dependencies>
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>io.vanillabp</groupId>
+        <artifactId>test-utils</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+        <scope>test</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 
   <build>
+    <pluginManagement>
+      <plugins>
+        <!-- configure JaCoCo for all sub-modules -->
+        <plugin>
+          <groupId>org.jacoco</groupId>
+          <artifactId>jacoco-maven-plugin</artifactId>
+          <executions>
+            <execution>
+              <id>prepare-agent-integration</id>
+              <goals>
+                <goal>prepare-agent-integration</goal>
+              </goals>
+              <configuration>
+                <excludes>
+                  <!-- exclude tests and sample code by explicitly only including code to be tested -->
+                  <exclude>io/vanillabp/integration/test</exclude>
+                  <exclude>io/vanillabp/integration/it</exclude>
+                </excludes>
+                <append>true</append>
+              </configuration>
+            </execution>
+          </executions>
+        </plugin>
+      </plugins>
+    </pluginManagement>
     <plugins>
-      <plugin>
-        <groupId>io.quarkus</groupId>
-        <artifactId>quarkus-maven-plugin</artifactId>
-        <executions>
-          <execution>
-            <goals>
-              <goal>build</goal>
-            </goals>
-          </execution>
-        </executions>
-      </plugin>
+      <!-- run integration tests in every sub-module -->
       <plugin>
         <artifactId>maven-failsafe-plugin</artifactId>
-        <configuration>
-          <systemPropertyVariables>
-            <native.image.path>${project.build.directory}/${project.build.finalName}-runner</native.image.path>
-            <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
-            <maven.home>${maven.home}</maven.home>
-          </systemPropertyVariables>
-        </configuration>
         <executions>
           <execution>
             <goals>
               <goal>integration-test</goal>
               <goal>verify</goal>
             </goals>
+            <configuration>
+              <!-- show LOG only in case of errors (last line of file will be printed) -->
+              <redirectTestOutputToFile>true</redirectTestOutputToFile>
+              <reportsDirectory>${project.build.directory}/failsafe-reports</reportsDirectory>
+              <systemPropertyVariables>
+                <quarkus.log.level>ERROR</quarkus.log.level>
+              </systemPropertyVariables>
+            </configuration>
           </execution>
         </executions>
       </plugin>
     </plugins>
   </build>
-
-  <profiles>
-    <profile>
-      <id>native-image</id>
-      <activation>
-        <property>
-          <name>native</name>
-        </property>
-      </activation>
-      <properties>
-        <skipITs>false</skipITs>
-        <quarkus.native.enabled>true</quarkus.native.enabled>
-      </properties>
-      <build>
-        <plugins>
-          <plugin>
-            <artifactId>maven-surefire-plugin</artifactId>
-            <configuration>
-              <skipTests>${native.surefire.skip}</skipTests>
-            </configuration>
-          </plugin>
-        </plugins>
-      </build>
-    </profile>
-  </profiles>
 </project>

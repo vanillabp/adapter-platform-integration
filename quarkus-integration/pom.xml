@@ -10,9 +10,10 @@
 
   <artifactId>quarkus-integration-parent</artifactId>
   <packaging>pom</packaging>
-  <name>VanillaBP Quarkus Integration</name>
+  <name>Quarkus Integration</name>
 
   <modules>
+    <module>quarkus-support</module>
     <module>deployment</module>
     <module>runtime</module>
     <module>dummy-adapter</module>
@@ -20,7 +21,7 @@
   </modules>
 
   <properties>
-    <quarkus.version>3.22.3</quarkus.version>
+    <quarkus.version>3.25.3</quarkus.version>
   </properties>
 
   <dependencyManagement>
@@ -45,23 +46,27 @@
         </plugin>
         <plugin>
           <artifactId>maven-surefire-plugin</artifactId>
-          <version>${surefire-plugin.version}</version>
           <configuration>
             <systemPropertyVariables>
               <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
               <maven.home>${maven.home}</maven.home>
               <maven.repo>${settings.localRepository}</maven.repo>
+              <!-- passed to quarkus prod tests for tracking of coverage -->
+              <jacoco.agent>${settings.localRepository}/org/jacoco/org.jacoco.agent/${jacoco.version}/org.jacoco.agent-${jacoco.version}-runtime.jar=destfile=${project.build.directory}/jacoco-it.exec,append=true,includes=io/vanillabp/integration/deployment/**:io/vanillabp/integration/adapter/migration/**:io/vanillabp/integration/runtime/**,sessionid=anonymous-session-id</jacoco.agent>
+              <maven.project.version>${project.version}</maven.project.version>
             </systemPropertyVariables>
           </configuration>
         </plugin>
         <plugin>
           <artifactId>maven-failsafe-plugin</artifactId>
-          <version>${failsafe-plugin.version}</version>
           <configuration>
             <systemPropertyVariables>
               <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
               <maven.home>${maven.home}</maven.home>
               <maven.repo>${settings.localRepository}</maven.repo>
+              <!-- passed to quarkus prod tests for tracking of coverage -->
+              <jacoco.agent>${settings.localRepository}/org/jacoco/org.jacoco.agent/${jacoco.version}/org.jacoco.agent-${jacoco.version}-runtime.jar=destfile=${project.build.directory}/jacoco-it.exec,append=true,includes=io/vanillabp/integration/deployment/**:io/vanillabp/integration/adapter/migration/**:io/vanillabp/integration/runtime/**,sessionid=anonymous-session-id</jacoco.agent>
+              <maven.project.version>${project.version}</maven.project.version>
             </systemPropertyVariables>
           </configuration>
         </plugin>

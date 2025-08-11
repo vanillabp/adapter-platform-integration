@@ -1,7 +1,9 @@
 package io.vanillabp.intergration.adapter.migration.spi;
 
 
-public interface MigratableProcessService<A> {
+import io.vanillabp.spi.process.ProcessService;
+
+public interface MigratableProcessService<A> extends ProcessService<A> {
 
   /**
    * Determine whether the given task is active in the target BPMS.

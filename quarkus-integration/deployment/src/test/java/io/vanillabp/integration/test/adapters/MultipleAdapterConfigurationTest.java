@@ -9,6 +9,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
 import io.vanillabp.integration.adapter.migration.processervice.MigrationProcessService;
+import io.vanillabp.integration.runtime.processservice.ProcessServiceCdiBean;
 import io.vanillabp.integration.test.samples.sample.Aggregate;
 import io.vanillabp.spi.process.ProcessService;
 import jakarta.inject.Inject;
@@ -22,6 +23,7 @@ public class MultipleAdapterConfigurationTest {
           .create(JavaArchive.class)
           .addPackage("io.vanillabp.integration.test.samples.sample")  // load sample application classes
           .addAsResource("multiple-adapters/application.yaml", "application.yaml")
+          .addAsResource("META-INF/workflow-module")           // define workflow module at global classpath
           .addClass(DummyAdapters.class))                           // necessary due to anonymous class in DummyAdapters
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter()); // add mocked adapter
 
@@ -36,9 +38,9 @@ public class MultipleAdapterConfigurationTest {
   public void testAdapterConfiguration() {
 
     Assertions.assertNotNull(sampleProcessService);
-    Assertions.assertInstanceOf(MigrationProcessService.class, sampleProcessService);
+    Assertions.assertInstanceOf(ProcessServiceCdiBean.class, sampleProcessService);
 
-    final var migrationProcessService = (MigrationProcessService<Aggregate>) sampleProcessService;
+    final var migrationProcessService = ((MigrationProcessService<Aggregate>) sampleProcessService);
     final var workflowAggregateClass = migrationProcessService.getWorkflowAggregateClass();
     Assertions.assertNotNull(workflowAggregateClass);
     Assertions.assertEquals(Aggregate.class, workflowAggregateClass);

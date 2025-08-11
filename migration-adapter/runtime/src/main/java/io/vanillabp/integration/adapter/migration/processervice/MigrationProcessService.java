@@ -3,35 +3,53 @@ package io.vanillabp.integration.adapter.migration.processervice;
 import java.util.List;
 import java.util.Map;
 
-import io.vanillabp.integration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.intergration.adapter.migration.spi.MigratableProcessService;
-import io.vanillabp.spi.process.ProcessService;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Getter
-public class MigrationProcessService<A> implements MigratableProcessService<A>, ProcessService<A> {
+public class MigrationProcessService<A> implements MigratableProcessService<A> {
 
-  private final Class<A> workflowAggregateClass;
+  protected String workflowModuleId;
 
-  private final Map<String, String> adapters;
+  protected String bpmnProcessId;
 
-  private final List<String> prioritizedAdapters;
+  protected Class<A> workflowAggregateClass;
 
-  private final List<MigratableProcessService<A>> processServices;
+  protected Map<String, String> adapters;
+
+  protected List<String> prioritizedAdapters;
+
+  protected List<MigratableProcessService<A>> processServices;
 
   public MigrationProcessService(
+      final String workflowModuleId,
+      final String bpmnProcessId,
       final Class<A> workflowAggregateClass,
       final MigrationAdapterProperties properties,
       final List<MigratableProcessService<A>> processServices) {
 
+    this.workflowModuleId = workflowModuleId;
+    this.bpmnProcessId = bpmnProcessId;
     this.workflowAggregateClass = workflowAggregateClass;
     this.adapters = properties.getAdapters();
-    // TODO pass workflowModuleId and bpmnProcessId
-    this.prioritizedAdapters = properties.getPrioritizedAdaptersFor("test", "test");
+    this.prioritizedAdapters = properties.getPrioritizedAdaptersFor(workflowModuleId, bpmnProcessId);
     this.processServices = processServices;
 
+  }
+
+  /**
+   * Connect to BPMS after bean creation
+   */
+  protected void initialize() {
+
+  }
+
+  @Override
+  public String getWorkflowModuleId() {
+    return workflowModuleId;
   }
 
   @Override

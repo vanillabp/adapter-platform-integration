@@ -9,7 +9,7 @@
   </parent>
 
   <artifactId>migration-adapter</artifactId>
-  <name>Migration Adapter</name>
+  <name>Migration adapter runtime</name>
   <description>An adapter aware of other adapters managing BPMS election on a workflow basis</description>
 
   <licenses>

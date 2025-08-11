@@ -1,6 +1,6 @@
 package io.vanillabp.integration.deployment.config;
 
-import static io.vanillabp.integration.deployment.VanillaBpIntegrationProcessor.PREFIX_ADAPTER_PACKAGE;
+import static io.vanillabp.integration.deployment.VanillaBpBuildStepProcessor.PREFIX_ADAPTER_PACKAGE;
 import static io.vanillabp.integration.deployment.config.QuarkusMigrationAdapterProperties.PREFIX;
 
 import java.util.List;
@@ -9,9 +9,8 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import io.quarkus.deployment.Capabilities;
-import io.vanillabp.integration.config.MigrationAdapterProperties;
-import io.vanillabp.integration.config.WorkflowModuleAdapterProperties;
-import io.vanillabp.integration.deployment.VanillaBpIntegrationProcessor;
+import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
 import io.vanillabp.integration.deployment.processservice.VanillaBpMigratableProcessServiceBuildItem;
 import lombok.Builder;
 
@@ -113,18 +112,16 @@ public class QuarkusMigrationAdapterTransformer {
     final var adapterPackagesProvidedByOtherExtensions = capabilities
         .getCapabilities()
         .stream()
-        .filter(capability -> capability.startsWith(
-            VanillaBpIntegrationProcessor.PREFIX_ADAPTER_PACKAGE))
+        .filter(capability -> capability.startsWith(PREFIX_ADAPTER_PACKAGE))
         .toList();
     final var adapterNamesProvidedByOtherExtensions = adapterPackagesProvidedByOtherExtensions
         .stream()
-        .map(pkg -> pkg.substring(
-            VanillaBpIntegrationProcessor.PREFIX_ADAPTER_PACKAGE.length()))
+        .map(pkg -> pkg.substring(PREFIX_ADAPTER_PACKAGE.length()))
         .toList();
     if (adapterPackagesProvidedByOtherExtensions.isEmpty()) {
       throw new IllegalStateException(
           "No extensions found with capabilities '%s*'! Add Quarkus extensions providing VanillaBP adapters."
-              .formatted(VanillaBpIntegrationProcessor.PREFIX_ADAPTER_PACKAGE));
+              .formatted(PREFIX_ADAPTER_PACKAGE));
     }
 
     // build result map (key = adapter name, value = adapter type)

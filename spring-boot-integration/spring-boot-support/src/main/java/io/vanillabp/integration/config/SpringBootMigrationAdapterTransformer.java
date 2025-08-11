@@ -7,7 +7,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import io.vanillabp.integration.modules.WorkflowModuleProperties;
+import io.vanillabp.integration.adapter.migration.config.AdapterConfiguration;
+import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
 import lombok.Builder;
 
 @Builder(toBuilder = true)
@@ -41,12 +43,6 @@ public class SpringBootMigrationAdapterTransformer {
 
   private Map<String, WorkflowModuleAdapterProperties> getAndValidateWorkflowModulesConfigured() {
 
-    if (workflowModulesLoaded.isEmpty()) {
-      throw new IllegalStateException(
-          "No workflow-modules found in classpath! Add dependencies providing static beans of type '%s'."
-              .formatted(WorkflowModuleProperties.class));
-    }
-
     final var result = properties
         .getWorkflowModules()
         .entrySet()
@@ -71,7 +67,7 @@ public class SpringBootMigrationAdapterTransformer {
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)))
                 .build()))
         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-    if (result.isEmpty()) {
+    if (result.isEmpty() && !workflowModulesLoaded.isEmpty()) {
       final var missingConfigSections = workflowModulesLoaded
           .stream()
           .map(module -> "%s.workflow-modules.%s".formatted(PREFIX, module))

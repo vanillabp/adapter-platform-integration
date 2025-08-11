@@ -9,7 +9,7 @@
   </parent>
 
   <artifactId>migration-adapter-spi</artifactId>
-  <name>Migration Adapter SPI</name>
+  <name>Migration adapter SPI</name>
   <description>SPI used by migratable adapters</description>
 
   <licenses>
@@ -30,16 +30,16 @@
 
   <dependencies>
     <dependency>
+      <groupId>io.vanillabp</groupId>
+      <artifactId>spi-for-java</artifactId>
+    </dependency>
+    <dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-api</artifactId>
     </dependency>
     <dependency>
       <groupId>org.projectlombok</groupId>
       <artifactId>lombok</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>io.vanillabp</groupId>
-      <artifactId>spi-for-java</artifactId>
     </dependency>
   </dependencies>
 

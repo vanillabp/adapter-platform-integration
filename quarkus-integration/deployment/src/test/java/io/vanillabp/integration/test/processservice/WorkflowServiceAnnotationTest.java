@@ -3,13 +3,13 @@ package io.vanillabp.integration.test.processservice;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import io.vanillabp.integration.deployment.VanillaBpIntegrationProcessor;
+import io.vanillabp.integration.deployment.processservice.ProcessServiceBuildStepProcessor;
 import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.WorkflowService;
 
 /**
  * This test is mainly to ensure {@link WorkflowService} annotations processed by
- * {@link VanillaBpIntegrationProcessor} have the
+ * {@link ProcessServiceBuildStepProcessor} have the
  * attributes expected since accessing attribute values using Quarkus framework
  * is done by name and therefor does not show up if the annotation changed.
  */
@@ -23,7 +23,7 @@ public class WorkflowServiceAnnotationTest {
 
     final var testAnnotation = getClass().getAnnotation(WorkflowService.class);
     Assertions.assertNotNull(testAnnotation.getClass()
-        .getDeclaredMethod(VanillaBpIntegrationProcessor.ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_AGGREGATECLASS));
+        .getDeclaredMethod(ProcessServiceBuildStepProcessor.ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_AGGREGATECLASS));
     Assertions.assertNotNull(testAnnotation);
     Assertions.assertEquals(WorkflowServiceAnnotationTest.class, testAnnotation.workflowAggregateClass());
 

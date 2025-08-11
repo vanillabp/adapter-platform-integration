@@ -19,6 +19,7 @@ public class UnusedAdapterExtensionTest {
           .addPackage("io.vanillabp.integration.test.samples.sample")  // load sample application classes
           // load sample application properties
           .addAsResource("application.yaml")
+          .addAsResource("META-INF/workflow-module")           // define workflow module at global classpath
           .addClass(DummyAdapters.class))                              // necessary due to anonymous class in DummyAdapters
       .addBuildChainCustomizer(DummyAdapters.twoDummyAdapters())       // add mocked adapter
       .assertException(exceptionHavingMessage(IllegalStateException.class, """

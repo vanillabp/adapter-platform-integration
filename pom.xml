@@ -11,7 +11,7 @@
   <artifactId>adapter-platform-integration</artifactId>
   <version>0.0.1-SNAPSHOT</version>
   <packaging>pom</packaging>
-  <name>Common stuff used by all VanillaBP adapters</name>
+  <name>VanillaBP adapter platform integration</name>
 
   <licenses>
     <license>
@@ -30,10 +30,11 @@
   </developers>
 
   <modules>
+    <module>test-utils</module>
     <module>migration-adapter</module>
     <module>spring-boot-integration</module>
     <module>quarkus-integration</module>
-    <module>jacoco-report</module>
+    <module>test-coverage-report</module>
   </modules>
 
   <distributionManagement>
@@ -48,10 +49,11 @@
     <root.project.version>0.0.1-SNAPSHOT</root.project.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-    <vanillabp.version>1.0.2</vanillabp.version>
+    <vanillabp.version>1.1.0-SNAPSHOT</vanillabp.version>
     <version.java>21</version.java>
     <lombok.version>1.18.34</lombok.version>
-    <jacoco.version>0.8.12</jacoco.version>
+    <jacoco.version>0.8.13</jacoco.version>
+    <mockito.version>5.17.0</mockito.version>
     <surefire-plugin.version>3.5.2</surefire-plugin.version>
     <failsafe-plugin.version>3.5.2</failsafe-plugin.version>
   </properties>
@@ -94,6 +96,10 @@
               </path>
             </annotationProcessorPaths>
           </configuration>
+        </plugin>
+        <plugin>
+          <artifactId>maven-failsafe-plugin</artifactId>
+          <version>${failsafe-plugin.version}</version>
         </plugin>
         <plugin>
           <groupId>com.diffplug.spotless</groupId>
@@ -160,6 +166,17 @@
         <plugin>
           <artifactId>maven-surefire-plugin</artifactId>
           <version>${surefire-plugin.version}</version>
+          <configuration>
+            <!-- see https://javadoc.io/doc/org.mockito/mockito-core/latest/org.mockito/org/mockito/Mockito.html#mockito-instrumentation -->
+            <argLine>@{argLine} -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
+          </configuration>
+          <dependencies>
+            <dependency>
+              <groupId>org.mockito</groupId>
+              <artifactId>mockito-core</artifactId>
+              <version>${mockito.version}</version>
+            </dependency>
+          </dependencies>
         </plugin>
       </plugins>
     </pluginManagement>

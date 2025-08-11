@@ -3,13 +3,13 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>io.vanillabp.adapter</groupId>
-    <artifactId>quarkus-dummy-adapter-parent</artifactId>
+    <groupId>io.vanillabp.quarkus.adapter</groupId>
+    <artifactId>dummy-adapter-parent</artifactId>
     <version>0.0.1-SNAPSHOT</version>
   </parent>
 
-  <artifactId>quarkus-dummy-adapter-deployment</artifactId>
-  <name>VanillaBP Dummy Adapter - Deployment</name>
+  <artifactId>dummy-adapter-deployment</artifactId>
+  <name>Quarkus integration - Dummy Adapter extension - Deployment</name>
 
   <dependencies>
     <dependency>
@@ -23,7 +23,7 @@
     </dependency>
     <dependency>
       <groupId>${project.groupId}</groupId>
-      <artifactId>quarkus-dummy-adapter</artifactId>
+      <artifactId>dummy-adapter</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>

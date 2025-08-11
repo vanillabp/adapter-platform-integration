@@ -8,10 +8,10 @@
     <version>0.0.1-SNAPSHOT</version>
   </parent>
 
-  <groupId>io.vanillabp.adapter</groupId>
-  <artifactId>quarkus-dummy-adapter-parent</artifactId>
+  <groupId>io.vanillabp.quarkus.adapter</groupId>
+  <artifactId>dummy-adapter-parent</artifactId>
   <packaging>pom</packaging>
-  <name>VanillaBP Dummy Adapter parent</name>
+  <name>Quarkus integration - Dummy Adapter</name>
 
   <modules>
     <module>deployment</module>
