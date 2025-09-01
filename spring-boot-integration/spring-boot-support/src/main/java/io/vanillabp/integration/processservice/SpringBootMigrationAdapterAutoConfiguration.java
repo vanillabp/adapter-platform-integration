@@ -29,6 +29,9 @@ import io.vanillabp.integration.workflowmodule.WorkflowModules;
 import io.vanillabp.spi.service.WorkflowService;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * Autoconfiguration of VanillaBP adapters.
+ */
 @Slf4j
 @Configuration
 @AutoConfigureAfter({
@@ -39,6 +42,16 @@ public class SpringBootMigrationAdapterAutoConfiguration {
 
   private final Map<Class<?>, MigrationProcessService<?>> connectableServices = new HashMap<>();
 
+  /**
+   * Maps and validates VanillaBP properties (specific to Spring Boot) to
+   * {@link MigrationAdapterProperties} bean. It is used by common adapter
+   * implementation of module "migration-adapter".
+   *
+   * @param properties The Spring Boot specific properties
+   * @param allWorkflowModules All workflow modules found in classpath
+   * @param adapterConfigurations Configuration beans of adapters found in classpath
+   * @return The properties bean not specific to Spring Boot
+   */
   @Bean("VanillaBpMigrationAdapterProperties")
   public static MigrationAdapterProperties migrationAdapterProperties(
       final SpringBootMigrationAdapterProperties properties,
@@ -52,22 +65,29 @@ public class SpringBootMigrationAdapterAutoConfiguration {
         .map(AdapterConfigurationBase::getAdapterId)
         .toList();
 
-    final var workflowModulesLoaded = allWorkflowModules
+    final var workflowModuleIds = allWorkflowModules
         .getWorkflowModules()
         .stream()
-        .map(WorkflowModule::getWorkflowModuleId)
+        .map(WorkflowModule::getId)
         .toList();
 
     return SpringBootMigrationAdapterTransformer
         .builder()
         .properties(properties)
-        .adaptersLoaded(adaptersLoaded)
-        .workflowModulesLoaded(workflowModulesLoaded)
+        .adaptersFound(adaptersLoaded)
+        .workflowModulesFound(workflowModuleIds)
         .build()
         .getAndValidatePropertiesConfigured();
 
   }
 
+  /**
+   * Builds {@link io.vanillabp.spi.process.ProcessService} beans for each
+   * aggregate type of workflow services found in classpath.
+   *
+   * @param allWorkflowModules All workflow modules found in classpath
+   * @return A {@link BeanDefinitionRegistryPostProcessor} adding all {@link io.vanillabp.spi.process.ProcessService} beans necessary
+   */
   @Bean
   public static BeanDefinitionRegistryPostProcessor buildProcessServices(
       final WorkflowModules allWorkflowModules) {
@@ -114,7 +134,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
                   .stream()
                   .filter(workflowModule -> workflowModule.isWorkflowServiceKnown(serviceClass))
                   .findFirst()
-                  .map(WorkflowModule::getWorkflowModuleId)
+                  .map(WorkflowModule::getId)
                   .orElseThrow();
               final var bpmProcessId = Optional.of(annotation
                   .bpmnProcess()
@@ -140,7 +160,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
               processServicesBuilt.add(workflowAggregateType);
             });
       } catch (Exception e) {
-        throw new RuntimeException("Could not register ProcessService beans", e);
+        throw new IllegalStateException("Could not register ProcessService beans", e);
       }
 
     };

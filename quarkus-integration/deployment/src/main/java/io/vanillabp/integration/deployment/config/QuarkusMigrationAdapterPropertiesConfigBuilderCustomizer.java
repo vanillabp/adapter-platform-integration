@@ -1,7 +1,9 @@
 package io.vanillabp.integration.deployment.config;
 
+
 import io.smallrye.config.SmallRyeConfigBuilder;
 import io.smallrye.config.SmallRyeConfigBuilderCustomizer;
+import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
 
 /**
  * This class is used by Quarkus {@link io.quarkus.deployment.configuration.BuildTimeConfigurationReader},

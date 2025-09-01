@@ -1,7 +1,8 @@
 package io.vanillabp.integration.it;
 
 
-import java.util.List;
+import static io.vanillabp.intergration.test.utils.TestCoverageUtils.quarkusProdModeTestDefaults;
+import static io.vanillabp.intergration.test.utils.TestCoverageUtils.testCoverageJavaAgent;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,7 +19,7 @@ public class WorkflowModuleFileInSubModuleTest {
       .withApplicationRoot(jar -> jar
           .addAsResource("application.yaml"))
       // JVM args needed for tracking coverage. Check pom.xml for systemPropertyVariables
-      .setJVMArgs(List.of(System.getProperty("jacoco.agent"))); // needed for tracking coverage
+      .setJVMArgs(testCoverageJavaAgent(quarkusProdModeTestDefaults()));
 
   @Test
   public void testBuildCompletedWithoutError() {

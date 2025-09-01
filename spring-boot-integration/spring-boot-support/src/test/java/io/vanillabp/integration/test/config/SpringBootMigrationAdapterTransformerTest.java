@@ -30,7 +30,7 @@ public class SpringBootMigrationAdapterTransformerTest {
     final var exception = assertThrowsExactly(
         IllegalStateException.class,
         () -> transformerBuilder
-            .adaptersLoaded(List.of())
+            .adaptersFound(List.of())
             .build()
             .getAndValidatePropertiesConfigured());
     assertEquals("No adapters found in classpath! Add dependencies providing VanillaBP adapters.",
@@ -45,7 +45,7 @@ public class SpringBootMigrationAdapterTransformerTest {
     final var exception = assertThrowsExactly(
         IllegalStateException.class,
         () -> transformerBuilder
-            .adaptersLoaded(List.of("test-adapter"))
+            .adaptersFound(List.of("test-adapter"))
             .properties(propsBuilder.build())
             .build()
             .getAndValidatePropertiesConfigured());
@@ -71,7 +71,7 @@ public class SpringBootMigrationAdapterTransformerTest {
         .build();
 
     final var transformer = transformerBuilder
-        .adaptersLoaded(List.of("test-type"))
+        .adaptersFound(List.of("test-type"))
         .properties(props)
         .build();
     transformerBuilder = transformer.toBuilder(); // save for next test method
@@ -106,7 +106,7 @@ public class SpringBootMigrationAdapterTransformerTest {
 
     final var transformer = transformerBuilder
         .properties(props)
-        .workflowModulesLoaded(List.of("test-module"))
+        .workflowModulesFound(List.of("test-module"))
         .build();
     transformerBuilder = transformer.toBuilder(); // save for next test method
 
@@ -122,7 +122,7 @@ public class SpringBootMigrationAdapterTransformerTest {
 
   @Test
   @Order(4)
-  public void testWorkflowModulesConfigMissing() {
+  public void testUnconfiguredWorkflowModulesFound() {
 
     final var props = propsBuilder
         .workflowModules(Map.of(
@@ -143,16 +143,50 @@ public class SpringBootMigrationAdapterTransformerTest {
     );
     assertEquals(
         """
-            Properties 'vanillabp.workflow-modules.*' must contain VanillaBP workflow modules available in classpath!
-            These workflow modules are unknown:
-              vanillabp.workflow-modules.unknown-module
-            Available workflow modules currently loaded in classpath: 'test-module'.""",
+            Unconfigured VanillaBP workflow modules were found in classpath:
+              test-module
+            Add property keys 'vanillabp.workflow-modules.*' to configure them.""",
         exception.getMessage());
 
   }
 
   @Test
   @Order(5)
+  public void testWorkflowModuleConfigWithoutWorkflowModule() {
+
+    final var props = propsBuilder
+        .workflowModules(Map.of(
+            "test-module",
+            SpringBootMigrationAdapterProperties.WorkflowModuleProperties
+                .builder()
+                .build(),
+            "my-module",
+            SpringBootMigrationAdapterProperties.WorkflowModuleProperties
+                .builder()
+                .build()))
+        .build();
+
+    final var transformer = transformerBuilder
+        .properties(props)
+        .build();
+    transformerBuilder = transformer.toBuilder(); // save for next test method
+
+    final var exception = assertThrowsExactly(
+        IllegalStateException.class,
+        transformer::getAndValidatePropertiesConfigured
+    );
+    assertEquals(
+        """
+            Property keys 'vanillabp.workflow-modules.*' must name VanillaBP workflow modules available in classpath!
+            These unknown workflow modules were found in properties:
+              vanillabp.workflow-modules.my-module
+            Available workflow modules currently loaded in classpath: 'test-module'.""",
+        exception.getMessage());
+
+  }
+
+  @Test
+  @Order(6)
   public void testMissingPrioritizedAdapters() {
 
     final var props = propsBuilder
@@ -171,7 +205,7 @@ public class SpringBootMigrationAdapterTransformerTest {
         .build();
 
     final var transformer = transformerBuilder
-        .adaptersLoaded(List.of("test-type"))
+        .adaptersFound(List.of("test-type"))
         .properties(props)
         .build();
     transformerBuilder = transformer.toBuilder(); // save for next test method
@@ -190,7 +224,7 @@ public class SpringBootMigrationAdapterTransformerTest {
   }
 
   @Test
-  @Order(6)
+  @Order(7)
   public void testMissingAdaptersPrioritized() {
 
     final var props = propsBuilder
@@ -204,7 +238,7 @@ public class SpringBootMigrationAdapterTransformerTest {
         .build();
 
     final var transformer = transformerBuilder
-        .adaptersLoaded(List.of("test-type"))
+        .adaptersFound(List.of("test-type"))
         .properties(props)
         .build();
     transformerBuilder = transformer.toBuilder(); // save for next test method

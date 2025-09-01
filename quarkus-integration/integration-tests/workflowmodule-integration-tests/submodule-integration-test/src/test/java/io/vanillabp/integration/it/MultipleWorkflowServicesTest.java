@@ -1,6 +1,8 @@
 package io.vanillabp.integration.it;
 
-import java.util.List;
+import static io.vanillabp.intergration.test.utils.TestCoverageUtils.quarkusProdModeTestDefaults;
+import static io.vanillabp.intergration.test.utils.TestCoverageUtils.testCoverageJavaAgent;
+
 import java.util.Map;
 
 import org.junit.jupiter.api.Assertions;
@@ -22,7 +24,7 @@ public class MultipleWorkflowServicesTest {
           .addAsResource("application.yaml")
           .addPackage("io.vanillabp.integration.test"))
       // JVM args needed for tracking coverage. Check pom.xml for systemPropertyVariables
-      .setJVMArgs(List.of(System.getProperty("jacoco.agent"))) // needed for tracking coverage
+      .setJVMArgs(testCoverageJavaAgent(quarkusProdModeTestDefaults()))
       .setRun(true)
       .setRuntimeProperties(Map.of("quarkus.http.port", Integer.toString(FreePortUtil.getFreePort())));
 

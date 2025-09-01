@@ -16,6 +16,15 @@ class DummyIntegrationProcessor {
 
   private static final String FEATURE = "vanillabp-dummy";
 
+  /**
+   * Builds the {@link VanillaBpMigratableProcessServiceBuildItem} build item
+   * used by VanillaBP Quarkus integration to determine process service classes
+   * to be used by the migration adapter.
+   *
+   * @param properties Dummy properties
+   * @param featureProducer Feature build item producer used to register the dummy adapter extension
+   * @return The {@link VanillaBpMigratableProcessServiceBuildItem} build item
+   */
   @BuildStep
   VanillaBpMigratableProcessServiceBuildItem buildProcessServices(
       final DummyProperties properties,

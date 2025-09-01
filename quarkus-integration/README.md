@@ -41,6 +41,23 @@ to learn about concepts of Quarkus extensions.
 5. **[integration-tests](./integration-tests):**<br>
    Modules which ensure the VanillaBP Quarkus extension works as documented.
 
+## Hints
+
+### Logging during tests
+
+To minimize build output three actions were taken:
+
+1. Logs are redirected to file using `maven-surefire-plugin` configuration
+   `redirectTestOutputToFile`.
+2. Logs of Quarkus builds are set to log-level `ERROR` using
+   `systemPropertyVariables` of `maven-surefire-plugin` with
+   `<quarkus.log.level>ERROR</quarkus.log.level>`.
+3. In tests the logging is captured and printed only in case of failures
+   by adding `@ExtendWith(SuppressOutputExtension.class)`.
+
+In case of errors one might disable one or all of them for finding
+the root cause of the problem.
+
 ## Noteworthy & Contributors
 
 [VanillaBP](https://www.github.com/vanillabp/spi-for-java) was developed by [Phactum](https://www.phactum.at) with the

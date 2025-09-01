@@ -16,7 +16,7 @@ public class FreePortUtil {
       socket.setReuseAddress(true);
       return socket.getLocalPort();
     } catch (IOException e) {
-      throw new RuntimeException("Could not find a free port", e);
+      throw new IllegalStateException("Could not find a free port", e);
     }
   }
 

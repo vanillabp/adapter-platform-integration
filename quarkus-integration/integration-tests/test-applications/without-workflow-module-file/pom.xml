@@ -31,6 +31,7 @@
         <version>3.3.0</version>
         <executions>
           <execution>
+            <!-- every sub-module has to build its own index -->
             <id>make-index-to-be-processed-by-quarkus-in-main-module</id>
             <goals>
               <goal>jandex</goal>

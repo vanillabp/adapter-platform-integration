@@ -12,7 +12,6 @@
   <name>Quarkus integration - Integration tests - Workflow module as submodule</name>
 
   <properties>
-    <skipITs>false</skipITs>
     <native.surefire.skip>false</native.surefire.skip>
   </properties>
 
@@ -100,7 +99,6 @@
         </property>
       </activation>
       <properties>
-        <skipITs>false</skipITs>
         <quarkus.native.enabled>true</quarkus.native.enabled>
       </properties>
       <build>

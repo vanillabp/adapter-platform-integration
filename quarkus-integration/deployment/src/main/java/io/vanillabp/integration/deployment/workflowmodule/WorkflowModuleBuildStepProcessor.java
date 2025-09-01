@@ -1,14 +1,39 @@
 package io.vanillabp.integration.deployment.workflowmodule;
 
 import java.io.IOException;
+import java.lang.reflect.Modifier;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.jboss.jandex.ClassInfo;
 
-import io.quarkus.deployment.ApplicationArchive;
+import io.quarkus.deployment.GeneratedClassGizmoAdaptor;
+import io.quarkus.deployment.annotations.BuildProducer;
+import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
+import io.quarkus.deployment.builditem.FeatureBuildItem;
+import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
+import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
+import io.quarkus.deployment.builditem.RunTimeConfigBuilderBuildItem;
+import io.quarkus.deployment.builditem.StaticInitConfigBuilderBuildItem;
+import io.quarkus.gizmo.ClassCreator;
+import io.quarkus.gizmo.MethodDescriptor;
+import io.quarkus.runtime.configuration.ConfigBuilder;
+import io.vanillabp.integration.runtime.config.WorkflowModuleSpecificPropertiesConfigBuilder;
+import io.vanillabp.integration.runtime.config.WorkflowModuleSpecificPropertiesConfigSourceProvider;
+import io.vanillabp.integration.runtime.config.WorkflowModuleSpecificYamlConfigBuilder;
+import io.vanillabp.integration.runtime.config.WorkflowModuleSpecificYamlConfigSourceProvider;
+import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -18,14 +43,361 @@ import lombok.extern.slf4j.Slf4j;
 public class WorkflowModuleBuildStepProcessor {
 
   /**
-   * The location of workflow module definition files.
+   * Priority of workflow module specific YAML config files. A tick more important than original "application.yaml".
+   *
+   * @see WorkflowModuleBuildStepProcessor#buildWorkflowModuleSpecificConfigFilesConfigBuilder(List, VanillaBpWorkflowModulesBuildItem, BuildProducer)
    */
-  private static final String METAINF_WORKFLOWMODULE = "META-INF/workflow-module";
+  public static final int YAML_CONFIGFILE_ORDINAL = 256;
+
+  /**
+   * Priority of workflow module specific Properties config files. A tick more important than original "application.properties".
+   *
+   * @see WorkflowModuleBuildStepProcessor#buildWorkflowModuleSpecificConfigFilesConfigBuilder(List, VanillaBpWorkflowModulesBuildItem, BuildProducer)
+   */
+  public static final int PROPERTIES_CONFIGFILE_ORDINAL = 251;
 
   /**
    * Cache to accelerate augmentation phase.
    */
-  private static final Map<ClassInfo, String> resolvedWorkflowModuleIds = new HashMap<>();
+  private static final Map<ClassInfo, WorkflowModule> resolvedWorkflowModuleIds = new HashMap<>();
+
+  /**
+   * Finds all workflow modules specified by <code>META-INF/workflow-module</code> files in their
+   * Maven/Gradle module.
+   *
+   * @param applicationArchivesBuildItem The archives part of this Quarkus build
+   * @return A build item holding meta-information of all workflow modules
+   */
+  @BuildStep
+  VanillaBpWorkflowModulesBuildItem findAllWorkflowModules(
+      final ApplicationArchivesBuildItem applicationArchivesBuildItem) {
+
+    final var workflowModules = applicationArchivesBuildItem
+        // search all archives of the project
+        .getAllApplicationArchives()
+        .stream()
+        .flatMap(archive -> Optional
+            // for META-INF/workflow-module files
+            .ofNullable(archive.getChildPath(WorkflowModule.METAINF_WORKFLOWMODULE))
+            .map(Path::toUri)
+            .flatMap(sourceUri -> WorkflowModuleBuildStepProcessor
+                // and read them
+                .readWorkflowModuleDescriptor(sourceUri)
+                // to build a WorkflowModule object
+                .map(id -> Map.entry(WorkflowModule
+                    .builder()
+                    .id(id)
+                    .sourceUri(sourceUri)
+                    .global(archive.equals(applicationArchivesBuildItem.getRootArchive()))
+                    .build(), archive)))
+            .stream())
+        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+    return VanillaBpWorkflowModulesBuildItem
+        .builder()
+        .workflowModules(workflowModules)
+        .build();
+
+  }
+
+  /**
+   * Builds {@link ConfigBuilder} classes responsible for loading properties from files specific to a workflow
+   * module by using the workflow module's ID as a filename instead of <code>application.properties</code>.
+   * Those files support modularization of workflow modules because next to code and BPMS resources (e.g.
+   * BPMN files) also configuration can be placed in the same Maven/Gradle module.
+   *
+   * <table>
+   *   <caption>Default ConfigSource ordinals (Quarkus / SmallRye) and ordinals of workflow module config sources</caption>
+   *   <thead>
+   *     <tr>
+   *       <th>Config Source</th>
+   *       <th style="min-width:120px;">Ordinal</th>
+   *       <th>Notes</th>
+   *     </tr>
+   *   </thead>
+   *   <tbody>
+   *     <tr>
+   *       <td>System properties (e.g. <code>-Dfoo=bar</code>)</td>
+   *       <td><nobr>400</nobr></td>
+   *       <td>Highest priority (MicroProfile / SmallRye standard)</td>
+   *     </tr>
+   *     <tr>
+   *       <td>Environment variables</td>
+   *       <td><nobr>300</nobr></td>
+   *       <td>Typical OS / container environment variables</td>
+   *     </tr>
+   *     <tr>
+   *       <td><code>.env</code> file in the current working directory</td>
+   *       <td><nobr>295</nobr></td>
+   *       <td>Optional, if present Quarkus loads it automatically</td>
+   *     </tr>
+   *     <tr>
+   *       <td><code>$PWD/config/application.yaml</code> (config directory, if <code>quarkus-config-yaml</code> is enabled)</td>
+   *       <td><nobr>265</nobr></td>
+   *       <td>Filesystem YAML has higher priority than classpath YAML</td>
+   *     </tr>
+   *     <tr>
+   *       <td><code>$PWD/config/application.properties</code> (config directory next to runner)</td>
+   *       <td><nobr>260</nobr></td>
+   *       <td>External configuration file outside of the JAR</td>
+   *     </tr>
+   *     <tr>
+   *       <td><b><code>XXX.yaml</code> (classpath, if <code>quarkus-config-yaml</code> is enabled)</b></td>
+   *       <td><nobr><b>256</b></nobr></td>
+   *       <td><b>YAML on classpath specific to a certain workflow module having ID &quot;XXX&quot;.
+   *       Lower priority than filesystem <i>application.yaml</i> since external files may be used to
+   *       override values without the need for rebuilding and deploying the application.</b></td>
+   *     </tr>
+   *     <tr>
+   *       <td><code>application.yaml</code> (classpath, if <code>quarkus-config-yaml</code> is enabled)</td>
+   *       <td><nobr>255</nobr></td>
+   *       <td>YAML on classpath; Quarkus gives YAML higher priority than classpath properties</td>
+   *     </tr>
+   *     <tr>
+   *       <td><b><code>XXX.properties</code> (classpath, e.g. <code>src/main/resources</code>)</b></td>
+   *       <td><nobr><b>251</b></nobr></td>
+   *       <td><b>Properties on classpath specific to a certain workflow module having ID &quot;XXX&quot;.
+   *       Lower priority than filesystem <i>application.properties</i> since external files may be used to
+   *       override values without the need for rebuilding and deploying the application.</b></td>
+   *     </tr>
+   *     <tr>
+   *       <td><code>application.properties</code> (classpath, e.g. <code>src/main/resources</code>)</td>
+   *       <td><nobr>250</nobr></td>
+   *       <td>Default classpath application.properties</td>
+   *     </tr>
+   *     <tr>
+   *       <td><code>META-INF/microprofile-config.properties</code> (classpath)</td>
+   *       <td><nobr>100</nobr></td>
+   *       <td>MicroProfile standard source (lowest practical priority)</td>
+   *     </tr>
+   *   </tbody>
+   * </table>
+   *
+   * @param features All features provided by extensions
+   * @param workflowModules All workflow modules found
+   * @param generatedClassesProducer Producer to build new classes
+   * @return The build item holding the names of all {@link ConfigBuilder} classes
+   */
+  @BuildStep
+  GeneratedConfigBuilderClassesBuildItem buildWorkflowModuleSpecificConfigFilesConfigBuilder(
+      final List<FeatureBuildItem> features,
+      final VanillaBpWorkflowModulesBuildItem workflowModules,
+      final BuildProducer<GeneratedClassBuildItem> generatedClassesProducer) {
+
+    final var configBuilderClassnames = new LinkedList<String>();
+
+    // add xxx.properties files
+
+    configBuilderClassnames.add(
+        // get ConfigBuilder class generated to load files for all workflow modules
+        addWorkflowModuleSpecificConfigBuilder(
+            PROPERTIES_CONFIGFILE_ORDINAL,
+            WorkflowModuleSpecificPropertiesConfigBuilder.class,
+            workflowModules,
+            generatedClassesProducer));
+
+    // add xxx.yaml files
+
+    final var yamlConfigExtensionAvailable = features
+        .stream()
+        .anyMatch(feature -> feature.getName().equals("config-yaml"));
+    if (yamlConfigExtensionAvailable) {
+      configBuilderClassnames.add(
+          // get ConfigBuilder class generated to load files for all workflow modules
+          addWorkflowModuleSpecificConfigBuilder(
+              YAML_CONFIGFILE_ORDINAL,
+              WorkflowModuleSpecificYamlConfigBuilder.class,
+              workflowModules,
+              generatedClassesProducer));
+    }
+
+    return GeneratedConfigBuilderClassesBuildItem
+        .builder()
+        .configBuilderClassnames(configBuilderClassnames)
+        .build();
+
+  }
+
+  /**
+   * Activate {@link ConfigBuilder} classes generated for workflow module specific files. This is
+   * only done for custom workflow module properties because VanillaBP properties are needed already
+   * during augmentation (see
+   * {@link io.vanillabp.integration.deployment.config.QuarkusMigrationAdapterPropertiesConfigBuilderCustomizer}).
+   * <p>
+   * This is done in a separate step to ensure generated classes are available. If this had been done in
+   * one build step, then there would have been no guarantees that the classes are available
+   * when building the configuration. based on the {@link ConfigBuilder}.
+   *
+   * @param generatedConfigLoaders The build item holding the names of all {@link ConfigBuilder} classes
+   * @param staticInitConfigProducer Producer for static initialization config builders
+   * @param runTimeConfigProducer Producer for static runtime config builders
+   */
+  @BuildStep
+  WorkflowModuleSpecificConfigBuilderBuildItem addWorkflowModuleSpecificConfigFiles(
+      final GeneratedConfigBuilderClassesBuildItem generatedConfigLoaders,
+      final BuildProducer<StaticInitConfigBuilderBuildItem> staticInitConfigProducer,
+      final BuildProducer<RunTimeConfigBuilderBuildItem> runTimeConfigProducer) {
+
+    generatedConfigLoaders
+        .getConfigBuilderClassnames()
+        .forEach(className -> {
+          staticInitConfigProducer.produce(new StaticInitConfigBuilderBuildItem(className));
+          runTimeConfigProducer.produce(new RunTimeConfigBuilderBuildItem(className));
+        });
+
+    return new WorkflowModuleSpecificConfigBuilderBuildItem();
+
+  }
+
+  /**
+   * Adds a {@link ConfigBuilder} class holding the workflow module IDs used to load files
+   * next to the ordinal used to prioritize the builder next to other builders.
+   * <pre>
+   * package of.abstract.config.builder.class;
+   * import java.util.List;
+   * public class ActualNameOfAbstractConfigBuilderClass extends NameOfAbstractConfigBuilderClass {
+   *     protected int getOrdinal() {
+   *          return 4711;
+   *     }
+   *     protected List<String> getWorkflowModuleIds() {
+   *          return List.of("id1", "id2", ...);
+   *     }
+   * }
+   * </pre>
+   *
+   * @param ordinal The ordinal to prioritize
+   * @param abstractConfigBuilderClass The abstract class used as a super class for the {@link ConfigBuilder} class generated
+   * @param workflowModules All workflow modules found
+   * @param generatedClassesProducer Producer for new classes
+   * @return The name of the class generated
+   */
+  private String addWorkflowModuleSpecificConfigBuilder(
+      final int ordinal,
+      final Class<? extends ConfigBuilder> abstractConfigBuilderClass,
+      final VanillaBpWorkflowModulesBuildItem workflowModules,
+      final BuildProducer<GeneratedClassBuildItem> generatedClassesProducer) {
+
+    // the classname
+
+    final var configBuilderClassname = "%s.Actual%s".formatted(
+        abstractConfigBuilderClass.getPackageName(),
+        abstractConfigBuilderClass.getSimpleName());
+
+    // the class
+
+    try (final var configBuilderClassCreator = ClassCreator
+        .builder()
+        .className(configBuilderClassname)
+        .superClass(abstractConfigBuilderClass)
+        /*
+        .classOutput((
+            className,
+            data) -> {
+          if (log.isDebugEnabled()) {
+            log.debug("=== Gizmo generated: {} ===", className);
+            final var reader = new ClassReader(data);
+            final var writer = new StringWriter();
+            final var traceClassVisitor = new TraceClassVisitor(new PrintWriter(writer));
+            reader.accept(traceClassVisitor, 0);
+            log.debug(writer.toString());
+            log.debug("=== END {}  ===", className);
+          }
+        })
+         */
+        .classOutput(new GeneratedClassGizmoAdaptor(generatedClassesProducer, true))
+        .build()) {
+
+      // the method "getWorkflowModuleIds"
+
+      try (final var methodCreator = configBuilderClassCreator
+          .getMethodCreator("getWorkflowModuleIds", List.class)
+          .setModifiers(Modifier.PROTECTED)) {
+
+        final var workflowModuleIds = workflowModules
+            .getWorkflowModules()
+            .keySet()
+            .stream()
+            .map(WorkflowModule::getId)
+            .toList();
+
+        final var array = methodCreator.newArray(String.class, workflowModuleIds.size());
+        for (int i = 0; i < workflowModuleIds.size(); i++) {
+          methodCreator.writeArrayValue(array, i, methodCreator.load(workflowModuleIds.get(i)));
+        }
+
+        final var list = methodCreator.invokeStaticMethod(
+            MethodDescriptor.ofMethod(Arrays.class, "asList", List.class, Object[].class),
+            array);
+
+        methodCreator.returnValue(list);
+
+      }
+
+      // the method "getOrdinal"
+
+      try (final var methodCreator = configBuilderClassCreator
+          .getMethodCreator("getOrdinal", int.class)
+          .setModifiers(Modifier.PROTECTED)) {
+
+        methodCreator.returnInt(ordinal);
+
+      }
+
+    }
+
+    return configBuilderClassname;
+
+  }
+
+  @BuildStep
+  void watchWorkflowModuleSpecificConfigFiles(
+      final VanillaBpWorkflowModulesBuildItem allWorkflowModules,
+      final ApplicationArchivesBuildItem applicationArchives,
+      final BuildProducer<HotDeploymentWatchedFileBuildItem> watchedFiles) {
+
+    // determine all filenames possible
+
+    final var propertiesFileExtensions = new WorkflowModuleSpecificPropertiesConfigSourceProvider(
+        "any", -1)
+        .getFileExtensions();
+    final var yamlFileExtensions = new WorkflowModuleSpecificYamlConfigSourceProvider(
+        "any", -1)
+        .getFileExtensions();
+
+    final var extensionPattern = Stream
+        // combine each file extension possible for later use as or-expression
+        .concat(
+            Arrays.stream(propertiesFileExtensions),
+            Arrays.stream(yamlFileExtensions))
+        .collect(Collectors.joining("|"));
+    final var filenamePatterns = allWorkflowModules
+        .getWorkflowModules()
+        .keySet()
+        .stream()
+        .map(WorkflowModule::getId)
+        // to build a regex pattern "id*.(?:extension1|extension2)"
+        .map(id -> "%s.*\\.(?:%s)".formatted(id, extensionPattern))
+        .map(Pattern::compile)
+        .toList();
+
+    // search archives for config files
+
+    applicationArchives
+        .getAllApplicationArchives()
+        // traverse all archives
+        .forEach(archive -> archive
+            .accept(openPathTree -> openPathTree
+                .walk(visit -> filenamePatterns.
+                // and check each file to match one of the patterns
+                    forEach(pattern -> Optional
+                        .ofNullable(visit.getPath())
+                        .map(Path::getFileName)
+                        .map(Path::toString)
+                        .filter(filename -> pattern.matcher(filename).matches())
+                        .map(HotDeploymentWatchedFileBuildItem::new)
+                        .ifPresent(watchedFiles::produce)))));
+
+  }
 
   /**
    * Determines the workflow module ID for a given {@link io.vanillabp.spi.process.ProcessService} class.
@@ -35,24 +407,30 @@ public class WorkflowModuleBuildStepProcessor {
    * @return The workflow module ID
    */
   public static String getWorkflowModuleId(
+      final VanillaBpWorkflowModulesBuildItem workflowModulesFound,
       final ApplicationArchivesBuildItem applicationArchivesBuildItem,
       final ClassInfo serviceClass) {
 
-    final var knownWorkflowModuleId = resolvedWorkflowModuleIds.get(serviceClass);
-    if (knownWorkflowModuleId != null) {
-      return knownWorkflowModuleId;
+    final var knownWorkflowModule = resolvedWorkflowModuleIds.get(serviceClass);
+    if (knownWorkflowModule != null) {
+      return knownWorkflowModule.getId();
     }
 
     // load workflow module ID from META-INF/workflow-module of the same JAR
     // the workflow service class belongs to
-    loadWorkflowModuleIdFromApplicationArchive(
-        serviceClass,
-        applicationArchivesBuildItem.containingArchive(serviceClass.name()));
-    final var jarWorkflowModuleId = resolvedWorkflowModuleIds.get(serviceClass);
-    if (jarWorkflowModuleId != null) {
-      log.info("Found VanillaBP workflow module with id '{}' in module containing class '{}'",
-          jarWorkflowModuleId, serviceClass.name());
-      return jarWorkflowModuleId;
+
+    final var containingArchive = applicationArchivesBuildItem.containingArchive(serviceClass.name());
+    final var workflowModuleInSameArchive = workflowModulesFound
+        .getWorkflowModules()
+        .entrySet()
+        .stream()
+        .filter(entry -> entry.getValue().equals(containingArchive))
+        .findFirst()
+        .map(Map.Entry::getKey);
+    if (workflowModuleInSameArchive.isPresent()) {
+      final var workflowModule = workflowModuleInSameArchive.get();
+      resolvedWorkflowModuleIds.put(serviceClass, workflowModule);
+      return workflowModule.getId();
     }
 
     // load workflow module ID from META-INF/workflow-module of the Java module JAR
@@ -60,28 +438,26 @@ public class WorkflowModuleBuildStepProcessor {
     // ==== NOT YET SUPPORTED ====
     /*
     if (serviceClass.module() != null) {
-      loadWorkflowModuleIdFromApplicationArchive(
-          serviceClass,
-          applicationArchivesBuildItem.containingArchive(serviceClass.module().moduleInfoClass().name()));
-    }
-    final var moduleWorkflowModuleId = resolvedWorkflowModuleIds.get(serviceClass);
-    if (moduleWorkflowModuleId != null) {
-      log.info("Found VanillaBP workflow module with id '{}' in Java-module of class '{}'",
-          moduleWorkflowModuleId, serviceClass.name());
-      return moduleWorkflowModuleId;
+      serviceClass.module().moduleInfoClass()
+      ....
     }
      */
 
     // load workflow module ID from META-INF/workflow-module in classpath
     // (this is suitable if the entire application is one workflow module):
-    loadWorkflowModuleIdFromApplicationArchive(
-        serviceClass,
-        applicationArchivesBuildItem.getRootArchive());
-    final var rootWorkflowModuleId = resolvedWorkflowModuleIds.get(serviceClass);
-    if (rootWorkflowModuleId != null) {
-      log.info("Found VanillaBP workflow module with id '{}' in Quarkus root module",
-          rootWorkflowModuleId);
-      return rootWorkflowModuleId;
+
+    final var rootArchive = applicationArchivesBuildItem.getRootArchive();
+    final var workflowModuleInRootArchive = workflowModulesFound
+        .getWorkflowModules()
+        .entrySet()
+        .stream()
+        .filter(entry -> entry.getValue().equals(rootArchive))
+        .findFirst()
+        .map(Map.Entry::getKey);
+    if (workflowModuleInRootArchive.isPresent()) {
+      final var workflowModule = workflowModuleInRootArchive.get();
+      resolvedWorkflowModuleIds.put(serviceClass, workflowModule);
+      return workflowModule.getId();
     }
 
     throw new IllegalStateException(
@@ -91,37 +467,29 @@ public class WorkflowModuleBuildStepProcessor {
               - in JAR/directory of Java module (%s) of class '%s'
               - in global classpath"""
             .formatted(
-                METAINF_WORKFLOWMODULE,
+                WorkflowModule.METAINF_WORKFLOWMODULE,
                 serviceClass.name(),
                 serviceClass.module() == null ? "if defined" : serviceClass.module().name(),
                 serviceClass.name()));
 
   }
 
-  private static void loadWorkflowModuleIdFromApplicationArchive(
-      final ClassInfo serviceClass,
-      final ApplicationArchive applicationArchive) {
+  public static Optional<String> readWorkflowModuleDescriptor(
+      final URI descriptorInJar) {
 
-    final var descriptorInJar = applicationArchive
-        .getChildPath("META-INF/workflow-module");
-    if (descriptorInJar == null) {
-      return;
-    }
     try (final var descriptor = descriptorInJar
-        .toUri()
         .toURL()
         .openStream()) {
       final var workflowModuleId = new String(descriptor.readAllBytes(), StandardCharsets.UTF_8);
       final var trimmedWorkflowModuleId = workflowModuleId.trim();
       if (trimmedWorkflowModuleId.isEmpty()) {
-        return;
+        return Optional.empty();
       }
-      resolvedWorkflowModuleIds.put(serviceClass, trimmedWorkflowModuleId);
+      return Optional.of(trimmedWorkflowModuleId);
+
     } catch (IOException e) {
-      throw new RuntimeException(
-          "Could not load workflow id from '"
-              + applicationArchive.getKey()
-              + "'", e);
+      throw new IllegalStateException(
+          "Could not load workflow id from '%s'".formatted(descriptorInJar.toString()), e);
     }
 
   }

@@ -18,10 +18,22 @@ import org.springframework.core.io.support.ResourcePatternUtils;
 import io.vanillabp.spi.service.WorkflowService;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * Autoconfiguration of VanillaBP workflow modules.
+ */
 @Slf4j
 @Configuration
 public class WorkflowModuleAutoConfiguration {
 
+  /**
+   * Searches for all workflow module descriptors found in classpath to build
+   * {@link WorkflowModule} objects. This method is static because it has to be processed
+   * by Spring Boot during the very beginning of booting the application.
+   * The bean returned is used for loading workflow module specific config files.
+   *
+   * @param resourceLoader The resource loader used to find META-INF/workflow-module files
+   * @return The workflow modules found
+   */
   @Bean
   public static WorkflowModules vanillaBpWorkflowModules(
       final ResourceLoader resourceLoader) {
@@ -39,7 +51,7 @@ public class WorkflowModuleAutoConfiguration {
                   .getContentAsString(Charset.defaultCharset())
                   .trim();
               if (workflowModuleId.isEmpty()) {
-                throw new RuntimeException(
+                throw new IllegalStateException(
                     "Empty workflow module descriptor '"
                         + resource.getURI()
                         + "'");
@@ -65,6 +77,12 @@ public class WorkflowModuleAutoConfiguration {
 
   }
 
+  /**
+   * Associates workflow services to workflow modules for later usage.
+   *
+   * @param allWorkflowModules All workflow modules found in classpath
+   * @param allWorkflowServiceClasses All classes of workflow services found
+   */
   public static void registerProcessServices(
       final List<WorkflowModule> allWorkflowModules,
       final List<Class<?>> allWorkflowServiceClasses) {
@@ -110,14 +128,14 @@ public class WorkflowModuleAutoConfiguration {
             // collect service class for later registration in global workflow module
             globalWorkflowModuleWorkflowServiceClasses.add(serviceClass);
           } catch (Exception e) {
-            throw new RuntimeException(
+            throw new IllegalStateException(
                 "Could not to determine workflow module id", e);
           }
 
         });
 
     if (globalClasspathWorkflowModuleDescriptors.size() > 1) {
-      throw new RuntimeException("""
+      throw new IllegalStateException("""
           Multiple workflow module descriptor files %s were found in modules which do not contain any service class annotated with @%s:
             - %s
           """

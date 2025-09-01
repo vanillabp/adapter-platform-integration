@@ -3,3 +3,16 @@ vanillabp:
     test:
       type: dummy
       test: 1
+  workflow-modules:
+    test-module:
+      adapters:
+        test:
+          resources-location: classpath:test-module/processes/dummy
+    multi-bpmn-module:
+      adapters:
+        test:
+          resources-location: classpath:test-module/processes/dummy
+no-module:
+  test: 48
+  test2: 4748
+  test-unmodified: 7

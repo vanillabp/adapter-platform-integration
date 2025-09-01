@@ -9,6 +9,9 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
+/**
+ * Meta-data of a workflow module.
+ */
 @RequiredArgsConstructor
 @Getter
 @Builder
@@ -19,12 +22,25 @@ public class WorkflowModule {
    */
   public static final String METAINF_WORKFLOWMODULE = "META-INF/workflow-module";
 
-  private final String workflowModuleId;
+  /**
+   * The workflow module ID.
+   */
+  private final String id;
 
+  /**
+   * The source URI of the JAR the workflow module ID was loaded from.
+   */
   private final URI sourceUri;
 
+  /**
+   * Workflow services associated to this workflow module.
+   */
   private final Set<Class<?>> workflowServices = new HashSet<>();
 
+  /**
+   * @param workflowService A workflow service class
+   * @return Whether the workflow service class belongs to this workflow module
+   */
   public boolean isWorkflowServiceKnown(
       final Class<?> workflowService) {
 
@@ -32,6 +48,11 @@ public class WorkflowModule {
 
   }
 
+  /**
+   * Add the given workflow service class to the workflow module.
+   *
+   * @param workflowService The workflow service class
+   */
   void addWorkflowService(
       final Class<?> workflowService) {
 
@@ -39,6 +60,11 @@ public class WorkflowModule {
 
   }
 
+  /**
+   * Add the given workflow service classes to the workflow module.
+   *
+   * @param workflowServices The workflow service classes
+   */
   void addWorkflowServices(
       final Collection<Class<?>> workflowServices) {
 

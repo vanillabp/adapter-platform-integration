@@ -15,6 +15,9 @@ import io.quarkus.arc.processor.InterceptorBindingRegistrar;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
+import io.quarkus.deployment.builditem.RunTimeConfigBuilderBuildItem;
+import io.quarkus.deployment.builditem.StaticInitConfigBuilderBuildItem;
+import io.vanillabp.integration.runtime.config.VanillaBpConfigBuilder;
 import io.vanillabp.integration.runtime.processservice.TransactionInterceptor;
 import io.vanillabp.spi.service.WorkflowTask;
 
@@ -23,12 +26,6 @@ import io.vanillabp.spi.service.WorkflowTask;
  * and the projects classes during augmentation phase.
  */
 public class VanillaBpBuildStepProcessor {
-
-  /**
-   * Each VanillaBP adapter is a Quarkus extension publishing a Quarkus extension
-   * capability with its name prefixed by this prefix. e.g. io.vanillabp.adapter.dummy
-   */
-  public static final String PREFIX_ADAPTER_PACKAGE = "io.vanillabp.adapter.";
 
   /**
    * The VanillaBP extensions feature.
@@ -47,20 +44,21 @@ public class VanillaBpBuildStepProcessor {
 
   }
 
-  /*
   /**
-   * Use customized builder for migration adapter properties.
+   * Use customized builder for migration adapter properties during initialization.
    *
-   * @return Build item for migration adapter properties
-   * /
-  // TODO May be deleted if not needed: to be figured out
-  @BuildStep
-  StaticInitConfigBuilderBuildItem buildMigrationAdapterProperties() {
-  
-    return new StaticInitConfigBuilderBuildItem(QuarkusMigrationAdapterPropertiesBuilder.class);
-  
-  }
+   * @param staticInitConfigBuilder used for static initialization
+   * @param runtimeInitConfigBuilder used for runtime initialization
    */
+  @BuildStep
+  void adoptStaticConfigBehaviorAccordingToVanillaBpNeeds(
+      final BuildProducer<StaticInitConfigBuilderBuildItem> staticInitConfigBuilder,
+      final BuildProducer<RunTimeConfigBuilderBuildItem> runtimeInitConfigBuilder) {
+
+    staticInitConfigBuilder.produce(new StaticInitConfigBuilderBuildItem(VanillaBpConfigBuilder.class));
+    runtimeInitConfigBuilder.produce(new RunTimeConfigBuilderBuildItem(VanillaBpConfigBuilder.class));
+
+  }
 
   /**
    * Build step for introducing {@link TransactionInterceptor} for all method's

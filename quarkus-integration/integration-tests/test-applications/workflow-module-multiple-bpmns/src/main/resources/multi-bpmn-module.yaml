@@ -1,0 +1,13 @@
+vanillabp:
+  workflow-modules:
+    test-module:
+      adapters:
+        test:
+          resources-location: classpath:test-module/processes/dummy
+    multi-bpmn-module:
+      adapters:
+        test:
+          resources-location: classpath:test-module/processes/dummy
+multi-bpmn-module:
+  test: 101
+  test-unmodified: 9

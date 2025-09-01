@@ -8,3 +8,8 @@ vanillabp:
       test: 1
     test2:
       type: dummy
+  workflow-modules:
+    test-module:
+      adapters:
+        test:
+          resources-location: classpath:test-module/processes/dummy

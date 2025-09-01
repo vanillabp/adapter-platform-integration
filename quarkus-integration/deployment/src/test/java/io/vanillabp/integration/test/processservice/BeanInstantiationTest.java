@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
-import io.vanillabp.integration.test.adapters.DummyAdapters;
+import io.vanillabp.integration.test.adapter.DummyAdapters;
 import io.vanillabp.integration.test.samples.sample2.Aggregate;
 import io.vanillabp.integration.test.samples.sample2.SampleWorkflowService;
 import io.vanillabp.spi.process.ProcessService;

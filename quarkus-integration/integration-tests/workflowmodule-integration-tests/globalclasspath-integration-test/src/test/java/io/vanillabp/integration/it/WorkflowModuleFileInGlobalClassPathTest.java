@@ -1,15 +1,15 @@
 package io.vanillabp.integration.it;
 
-import java.util.List;
+
+import static io.vanillabp.intergration.test.utils.TestCoverageUtils.quarkusProdModeTestDefaults;
+import static io.vanillabp.intergration.test.utils.TestCoverageUtils.testCoverageJavaAgent;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusProdModeTest;
-import io.vanillabp.intergration.test.utils.SuppressOutputExtension;
 
-@ExtendWith(SuppressOutputExtension.class)
+// @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowModuleFileInGlobalClassPathTest {
 
   @RegisterExtension
@@ -18,7 +18,7 @@ public class WorkflowModuleFileInGlobalClassPathTest {
           .addAsResource("application.yaml")
           .addAsResource("META-INF/workflow-module"))
       // JVM args needed for tracking coverage. Check pom.xml for systemPropertyVariables
-      .setJVMArgs(List.of(System.getProperty("jacoco.agent")));
+      .setJVMArgs(testCoverageJavaAgent(quarkusProdModeTestDefaults()));
 
   @Test
   public void testBuildCompletedWithoutError() {

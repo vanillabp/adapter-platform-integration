@@ -4,6 +4,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.ParameterizedType;
@@ -19,9 +20,10 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
-import io.vanillabp.integration.deployment.config.QuarkusMigrationAdapterProperties;
-import io.vanillabp.integration.deployment.config.QuarkusMigrationAdapterTransformer;
+import io.vanillabp.integration.deployment.workflowmodule.VanillaBpWorkflowModulesBuildItem;
 import io.vanillabp.integration.deployment.workflowmodule.WorkflowModuleBuildStepProcessor;
+import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
+import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterTransformer;
 import io.vanillabp.integration.runtime.processservice.ProcessServiceCdiBean;
 import io.vanillabp.integration.runtime.processservice.ProcessServiceCdiBeanRecorder;
 import io.vanillabp.spi.process.ProcessService;
@@ -48,7 +50,7 @@ public class ProcessServiceBuildStepProcessor {
    * @param indexBuildItem Classes of the project and its dependencies (if Jandix available)
    * @param applicationArchivesBuildItem Information about All archives (JARs and directories) of the project
    * @param processServiceRecorder Recorder for {@link ProcessService} beans
-   * @param processServiceBuildItems All {@link io.vanillabp.intergration.adapter.migration.spi.MigratableProcessService} beans provided by VanillaBP adapter extensions
+   * @param processServicesProvidedByAdapters All {@link io.vanillabp.intergration.adapter.migration.spi.MigratableProcessService} beans provided by VanillaBP adapter extensions
    * @param processServiceProducer {@link BuildProducer} for {@link ProcessServiceBuildItem} used to collect {@link ProcessService} beans
    * @param syntheticBeanProducer {@link BuildProducer} for {@link SyntheticBeanBuildItem} used to define {@link ProcessService} beans based on their generic parameter.
    */
@@ -60,24 +62,32 @@ public class ProcessServiceBuildStepProcessor {
       final BeanArchiveIndexBuildItem indexBuildItem,
       final ApplicationArchivesBuildItem applicationArchivesBuildItem,
       final ProcessServiceCdiBeanRecorder processServiceRecorder,
-      final List<VanillaBpMigratableProcessServiceBuildItem> processServiceBuildItems,
+      final List<VanillaBpMigratableProcessServiceBuildItem> processServicesProvidedByAdapters,
+      final VanillaBpWorkflowModulesBuildItem workflowModulesFound,
       final BuildProducer<ProcessServiceBuildItem> processServiceProducer,
       final BuildProducer<SyntheticBeanBuildItem> syntheticBeanProducer) {
 
     // check for consistent configuration and required VanillaBpMigratableProcessServiceBuildItems
+
+    final var adapterNamesOfProcessServicesProvidedByAdapters = processServicesProvidedByAdapters
+        .stream()
+        .map(VanillaBpMigratableProcessServiceBuildItem::getAdapterName)
+        .collect(Collectors.toSet());
     final var adapterProperties = QuarkusMigrationAdapterTransformer
         .builder()
         .properties(properties)
-        .capabilities(capabilities)
+        .capabilities(capabilities.getCapabilities())
         .build()
-        .getAndValidatePropertiesConfigured(processServiceBuildItems);
+        .getAndValidatePropertiesConfigured(
+            workflowModulesFound.getWorkflowModules().keySet(),
+            adapterNamesOfProcessServicesProvidedByAdapters);
 
     // scan for classes annotated by @WorkflowService
     final Set<Type> processServicesBuilt = new HashSet<>();
     indexBuildItem
         .getIndex()
         .getAnnotations(WorkflowService.class)
-        // and build an adapter aware process service for each workflow aggregate class
+        // and build an adapter-aware process service for each workflow aggregate class
         .forEach(annotation -> {
 
           try {
@@ -93,7 +103,10 @@ public class ProcessServiceBuildStepProcessor {
             // collect information necessary for bean creation
             final var serviceClass = annotation.target().asClass();
             final var workflowModuleId = WorkflowModuleBuildStepProcessor
-                .getWorkflowModuleId(applicationArchivesBuildItem, serviceClass);
+                .getWorkflowModuleId(
+                    workflowModulesFound,
+                    applicationArchivesBuildItem,
+                    serviceClass);
             final var bpmnProcessId = Optional
                 .ofNullable(annotation.value(ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_BPMNPROCESS))
                 .map(AnnotationValue::asNested)

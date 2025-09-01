@@ -7,7 +7,7 @@ import lombok.Getter;
 /**
  * The {@link io.quarkus.builder.item.BuildItem} adapter have to produce
  * in order to be processed by VanillaBP Quarkus integration.
- *
+ * <p>
  * Hint: It is a {@link MultiBuildItem} because multiple adapters may be used
  * at the same time (e.g. for migration).
  */

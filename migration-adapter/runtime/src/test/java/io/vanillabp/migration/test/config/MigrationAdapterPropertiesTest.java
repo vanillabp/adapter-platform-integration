@@ -33,7 +33,7 @@ public class MigrationAdapterPropertiesTest {
       .workflowModuleId("test-module")
       .adapters(Map.of("adapter-test", AdapterConfiguration
           .builder()
-          .resourcesLocation("classpath:test-modules/processes/test")
+          .resourcesLocation("classpath:test-module/processes/test")
           .build()))
       .workflows(Map.of("testProcess", WorkflowAdapterProperties
           .builder()

@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
-import io.vanillabp.integration.test.adapters.DummyAdapters;
+import io.vanillabp.integration.test.adapter.DummyAdapters;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.event.Event;
@@ -30,9 +30,10 @@ public class TransactionalObserversTest {
   static final QuarkusUnitTest config = new QuarkusUnitTest()
       .withApplicationRoot((
           jar) -> jar
-              .addAsResource("application.yaml")
-              .addClasses(ObservingBean.class, Actions.class)
-              .addClass(DummyAdapters.class))                       // necessary due to anonymous class in DummyAdapters
+              .addClass(DummyAdapters.class)                          // necessary due to anonymous class in DummyAdapters
+              .addAsResource("application.yaml")                   // load sample application properties
+              .addAsResource("META-INF/workflow-module")          // define workflow module at global classpath
+              .addClasses(ObservingBean.class, Actions.class))
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter()); // add mocked adapter
 
   public static String AFTER_SUCCESS = "AFTER_SUCCESS";

@@ -49,19 +49,21 @@ public class SpringBootMigrationAdapterProperties {
   private Map<String, WorkflowModuleProperties> workflowModules = Map.of();
 
   /**
-   * The adapter configuration. The properties in detail are defined by the adapter's
-   * Spring-Boot extension.
+   * The adapter configuration. The properties in detail are defined by the
+   * respective VanillaBP Spring Boot adapter.
    */
   @Getter
   @Setter
   @SuperBuilder(toBuilder = true)
   @NoArgsConstructor
   public static class AdapterConfiguration {
+
     /**
      * The adapter's type in case of a custom adapter identifier or null in case
      * of a non-custom adapter identifier.
      */
     private String type;
+
   }
 
   /**
@@ -72,22 +74,37 @@ public class SpringBootMigrationAdapterProperties {
   @SuperBuilder(toBuilder = true)
   @NoArgsConstructor
   public static class AdapterProperties {
+
+    /**
+     * The priorities of adapters specific to a workflow module.
+     *
+     * @see SpringBootMigrationAdapterProperties#getPrioritizedAdapters()
+     */
+    @Builder.Default
+    private List<String> prioritizedAdapters = List.of();
+
     /**
      * Where to load BPMN files from, which are specific to the adapter
      */
     private String resourcesLocation;
+
   }
 
+  /**
+   * The properties of a workflow module.
+   */
   @Getter
   @Setter
   @SuperBuilder(toBuilder = true)
   @NoArgsConstructor
   public static class WorkflowModuleProperties {
+
     /**
-     * Adapter properties.
+     * The properties of adapters specific to this workflow module.
      */
     @Builder.Default
     private Map<String, AdapterProperties> adapters = Map.of();
+
   }
 
 }

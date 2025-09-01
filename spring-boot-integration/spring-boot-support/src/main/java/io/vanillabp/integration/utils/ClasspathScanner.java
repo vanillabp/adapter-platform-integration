@@ -17,15 +17,28 @@ import org.springframework.util.SystemPropertyUtils;
 
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * A classpath scanner
+ */
 @Slf4j
 public class ClasspathScanner {
 
+  /**
+   * Cache to accelerate booting the application
+   */
   private static final Map<String, Resource[]> cache = new HashMap<>();
 
+  /**
+   * Hide public constructor. Use static methods provided instead.
+   */
   private ClasspathScanner() {
     // static class: hide public constructor
   }
 
+  /**
+   * @param resourceLoader Spring Boot resource loader
+   * @return A {@link ResourcePatternResolver}
+   */
   private static ResourcePatternResolver getResourcePatternResolver(
       final ResourceLoader resourceLoader) {
     if (resourceLoader == null) {
@@ -35,7 +48,15 @@ public class ClasspathScanner {
     }
   }
 
+  /**
+   * Determine all resources matching the given predicates.
+   *
+   * @param filters The predicates
+   * @return All matching resources
+   * @throws Exception Thrown if accessing resources fails
+   */
   @SafeVarargs
+  @SuppressWarnings("unused")
   public static List<Resource> allResources(
       final Predicate<Resource>... filters) throws Exception {
 
@@ -43,7 +64,16 @@ public class ClasspathScanner {
 
   }
 
+  /**
+   * Determine all resources matching the given predicates.
+   *
+   * @param resourceLoader The resource loader
+   * @param filters The predicates
+   * @return All matching resources
+   * @throws Exception Thrown if accessing resources fails
+   */
   @SafeVarargs
+  @SuppressWarnings("unused")
   public static List<Resource> allResources(
       final ResourceLoader resourceLoader,
       final Predicate<Resource>... filters) throws Exception {
@@ -52,7 +82,16 @@ public class ClasspathScanner {
 
   }
 
+  /**
+   * Determine all resources matching the given predicates within the given base-path.
+   *
+   * @param basePath The base-path to restrict the search
+   * @param filters The predicates
+   * @return All matching resources
+   * @throws Exception Thrown if accessing resources fails
+   */
   @SafeVarargs
+  @SuppressWarnings("unused")
   public static List<Resource> allResources(
       final String basePath,
       final Predicate<Resource>... filters) throws Exception {
@@ -61,7 +100,17 @@ public class ClasspathScanner {
 
   }
 
+  /**
+   * Determine all resources matching the given predicates within the given base-path.
+   *
+   * @param resourceLoader The resource loader
+   * @param basePath The base-path to restrict the search
+   * @param filters The predicates
+   * @return All matching resources
+   * @throws Exception Thrown if accessing resources fails
+   */
   @SafeVarargs
+  @SuppressWarnings("unused")
   public static List<Resource> allResources(
       final ResourceLoader resourceLoader,
       final String basePath,
@@ -103,7 +152,16 @@ public class ClasspathScanner {
 
   }
 
+  /**
+   * Determine all classes matching the given predicates.
+   *
+   * @param basePackage The base-package to restrict the search
+   * @param filters The predicates
+   * @return All matching classes
+   * @throws Exception Thrown if accessing classes fails
+   */
   @SafeVarargs
+  @SuppressWarnings("unused")
   public static List<Class<?>> allClasses(
       final String basePackage,
       final Predicate<MetadataReader>... filters) throws Exception {
@@ -112,7 +170,17 @@ public class ClasspathScanner {
 
   }
 
+  /**
+   * Determine all classes matching the given predicates within the given base-package.
+   *
+   * @param resourceLoader The resource loader
+   * @param basePackage The base-package to restrict the search
+   * @param filters The predicates
+   * @return All matching classes
+   * @throws Exception Thrown if accessing classes fails
+   */
   @SafeVarargs
+  @SuppressWarnings("unused")
   public static List<Class<?>> allClasses(
       final ResourceLoader resourceLoader,
       final String basePackage,
@@ -120,7 +188,7 @@ public class ClasspathScanner {
 
     final var packageSearchPath = "%s%s/**/*.class".formatted(
         ResourcePatternResolver.CLASSPATH_ALL_URL_PREFIX,
-        resolveBasePackage(basePackage));
+        ClassUtils.convertClassNameToResourcePath(SystemPropertyUtils.resolvePlaceholders(basePackage)));
 
     final List<Class<?>> classes = new LinkedList<>();
 
@@ -167,11 +235,5 @@ public class ClasspathScanner {
 
   }
 
-  private static String resolveBasePackage(
-      final String basePackage) {
-
-    return ClassUtils.convertClassNameToResourcePath(SystemPropertyUtils.resolvePlaceholders(basePackage));
-
-  }
 
 }
