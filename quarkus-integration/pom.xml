@@ -47,13 +47,17 @@
         <plugin>
           <artifactId>maven-surefire-plugin</artifactId>
           <configuration>
+            <!-- show LOG only in case of errors (last line of file will be printed) -->
+            <redirectTestOutputToFile>true</redirectTestOutputToFile>
+            <reportsDirectory>${project.build.directory}/failsafe-reports</reportsDirectory>
             <systemPropertyVariables>
               <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+              <quarkus.log.level>ERROR</quarkus.log.level>
               <maven.home>${maven.home}</maven.home>
               <maven.repo>${settings.localRepository}</maven.repo>
+              <!--suppress UnresolvedMavenProperty - filled by goal jacoco-maven-plugin:prepare-agent in root pom.xml -->
               <!-- passed to quarkus prod tests for tracking of coverage -->
-              <jacoco.agent>${settings.localRepository}/org/jacoco/org.jacoco.agent/${jacoco.version}/org.jacoco.agent-${jacoco.version}-runtime.jar=destfile=${project.build.directory}/jacoco-it.exec,append=true,includes=io/vanillabp/integration/deployment/**:io/vanillabp/integration/adapter/migration/**:io/vanillabp/integration/runtime/**,sessionid=anonymous-session-id</jacoco.agent>
-              <maven.project.version>${project.version}</maven.project.version>
+              <jacoco.agent>${jacoco.agent}</jacoco.agent>
             </systemPropertyVariables>
           </configuration>
         </plugin>
@@ -64,9 +68,9 @@
               <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
               <maven.home>${maven.home}</maven.home>
               <maven.repo>${settings.localRepository}</maven.repo>
+              <!--suppress UnresolvedMavenProperty -->
               <!-- passed to quarkus prod tests for tracking of coverage -->
-              <jacoco.agent>${settings.localRepository}/org/jacoco/org.jacoco.agent/${jacoco.version}/org.jacoco.agent-${jacoco.version}-runtime.jar=destfile=${project.build.directory}/jacoco-it.exec,append=true,includes=io/vanillabp/integration/deployment/**:io/vanillabp/integration/adapter/migration/**:io/vanillabp/integration/runtime/**,sessionid=anonymous-session-id</jacoco.agent>
-              <maven.project.version>${project.version}</maven.project.version>
+              <jacoco.agent>${jacoco.agent}</jacoco.agent>
             </systemPropertyVariables>
           </configuration>
         </plugin>

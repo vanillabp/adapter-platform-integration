@@ -7,11 +7,14 @@ import static org.junit.jupiter.api.Assertions.fail;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusProdModeTest;
 import io.vanillabp.integration.test.sample.SampleWorkflowService;
+import io.vanillabp.intergration.test.utils.SuppressOutputExtension;
 
+@ExtendWith(SuppressOutputExtension.class)
 public class WorkflowModuleFileMissingTest {
 
   @RegisterExtension
@@ -19,7 +22,7 @@ public class WorkflowModuleFileMissingTest {
       .withApplicationRoot(jar -> jar
           .addAsResource("application.yaml"))
       // JVM args needed for tracking coverage. Check pom.xml for <systemPropertyVariables> tag
-      .setJVMArgs(List.of("-javaagent:%s".formatted(System.getProperty("jacoco.agent"))))
+      .setJVMArgs(List.of(System.getProperty("jacoco.agent")))
       .assertBuildException(exception -> {
         final var rootCause = org.junit.platform.commons.util.ExceptionUtils
             .findNestedThrowables(exception)

@@ -21,7 +21,8 @@ public class MultipleWorkflowServicesTest {
       .withApplicationRoot(jar -> jar
           .addAsResource("application.yaml")
           .addPackage("io.vanillabp.integration.test"))
-      .setJVMArgs(List.of("-javaagent:%s".formatted(System.getProperty("jacoco.agent")))) // needed for tracking coverage
+      // JVM args needed for tracking coverage. Check pom.xml for systemPropertyVariables
+      .setJVMArgs(List.of(System.getProperty("jacoco.agent"))) // needed for tracking coverage
       .setRun(true)
       .setRuntimeProperties(Map.of("quarkus.http.port", Integer.toString(FreePortUtil.getFreePort())));
 

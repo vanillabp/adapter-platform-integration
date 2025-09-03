@@ -31,31 +31,6 @@
   </dependencyManagement>
 
   <build>
-    <pluginManagement>
-      <plugins>
-        <!-- configure JaCoCo for all sub-modules -->
-        <plugin>
-          <groupId>org.jacoco</groupId>
-          <artifactId>jacoco-maven-plugin</artifactId>
-          <executions>
-            <execution>
-              <id>prepare-agent-integration</id>
-              <goals>
-                <goal>prepare-agent-integration</goal>
-              </goals>
-              <configuration>
-                <excludes>
-                  <!-- exclude tests and sample code by explicitly only including code to be tested -->
-                  <exclude>io/vanillabp/integration/test</exclude>
-                  <exclude>io/vanillabp/integration/it</exclude>
-                </excludes>
-                <append>true</append>
-              </configuration>
-            </execution>
-          </executions>
-        </plugin>
-      </plugins>
-    </pluginManagement>
     <plugins>
       <!-- run integration tests in every sub-module -->
       <plugin>

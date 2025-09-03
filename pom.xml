@@ -54,8 +54,6 @@
     <lombok.version>1.18.34</lombok.version>
     <jacoco.version>0.8.13</jacoco.version>
     <mockito.version>5.17.0</mockito.version>
-    <surefire-plugin.version>3.5.2</surefire-plugin.version>
-    <failsafe-plugin.version>3.5.2</failsafe-plugin.version>
   </properties>
 
   <dependencyManagement>
@@ -99,7 +97,7 @@
         </plugin>
         <plugin>
           <artifactId>maven-failsafe-plugin</artifactId>
-          <version>${failsafe-plugin.version}</version>
+          <version>3.5.2</version>
         </plugin>
         <plugin>
           <groupId>com.diffplug.spotless</groupId>
@@ -165,10 +163,10 @@
         </plugin>
         <plugin>
           <artifactId>maven-surefire-plugin</artifactId>
-          <version>${surefire-plugin.version}</version>
+          <version>3.5.2</version>
           <configuration>
             <!-- see https://javadoc.io/doc/org.mockito/mockito-core/latest/org.mockito/org/mockito/Mockito.html#mockito-instrumentation -->
-            <argLine>@{argLine} -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
+            <argLine>@{jacoco.agent} -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
           </configuration>
           <dependencies>
             <dependency>
@@ -203,6 +201,11 @@
         <version>${jacoco.version}</version>
         <configuration>
           <sessionId>anonymous-session-id</sessionId>
+          <excludes>
+            <exclude>io/vanillabp/integration/test/**</exclude>
+            <exclude>io/vanillabp/integration/it/**</exclude>
+          </excludes>
+          <propertyName>jacoco.agent</propertyName>
         </configuration>
         <executions>
           <execution>
