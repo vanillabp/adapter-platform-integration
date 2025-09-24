@@ -35,14 +35,14 @@ public class ProcessServiceCdiBeanRecorder {
       final String workflowModuleId,
       final String bpmnProcessId,
       final String workflowAggregateClassName,
-      final MigrationAdapterProperties properties) throws ClassNotFoundException {
+      final RuntimeValue<MigrationAdapterProperties> properties) throws ClassNotFoundException {
 
     final var workflowAggregateClass = Thread
         .currentThread()
         .getContextClassLoader()
         .loadClass(workflowAggregateClassName);
     final var service = new ProcessServiceCdiBean(
-        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, List.of());
+        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties.getValue(), List.of());
     return new RuntimeValue<>(service);
 
   }

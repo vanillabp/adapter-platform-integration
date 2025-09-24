@@ -43,21 +43,21 @@ import lombok.extern.slf4j.Slf4j;
 public class WorkflowModuleBuildStepProcessor {
 
   /**
-   * Priority of workflow module specific YAML config files. A tick more important than original "application.yaml".
+   * Priority of workflow-module-specific YAML config files. A tick more important than the original "application.yaml".
    *
    * @see WorkflowModuleBuildStepProcessor#buildWorkflowModuleSpecificConfigFilesConfigBuilder(List, VanillaBpWorkflowModulesBuildItem, BuildProducer)
    */
   public static final int YAML_CONFIGFILE_ORDINAL = 256;
 
   /**
-   * Priority of workflow module specific Properties config files. A tick more important than original "application.properties".
+   * Priority of workflow-module-specific Properties config files. A tick more important than the original "application.properties".
    *
    * @see WorkflowModuleBuildStepProcessor#buildWorkflowModuleSpecificConfigFilesConfigBuilder(List, VanillaBpWorkflowModulesBuildItem, BuildProducer)
    */
   public static final int PROPERTIES_CONFIGFILE_ORDINAL = 251;
 
   /**
-   * Cache to accelerate augmentation phase.
+   * Cache to accelerate the augmentation phase.
    */
   private static final Map<ClassInfo, WorkflowModule> resolvedWorkflowModuleIds = new HashMap<>();
 
@@ -144,7 +144,7 @@ public class WorkflowModuleBuildStepProcessor {
    *     <tr>
    *       <td><b><code>XXX.yaml</code> (classpath, if <code>quarkus-config-yaml</code> is enabled)</b></td>
    *       <td><nobr><b>256</b></nobr></td>
-   *       <td><b>YAML on classpath specific to a certain workflow module having ID &quot;XXX&quot;.
+   *       <td><b>YAML on the classpath specific to a certain workflow module having ID &quot;XXX&quot;.
    *       Lower priority than filesystem <i>application.yaml</i> since external files may be used to
    *       override values without the need for rebuilding and deploying the application.</b></td>
    *     </tr>
@@ -156,7 +156,7 @@ public class WorkflowModuleBuildStepProcessor {
    *     <tr>
    *       <td><b><code>XXX.properties</code> (classpath, e.g. <code>src/main/resources</code>)</b></td>
    *       <td><nobr><b>251</b></nobr></td>
-   *       <td><b>Properties on classpath specific to a certain workflow module having ID &quot;XXX&quot;.
+   *       <td><b>Properties on the classpath specific to a certain workflow module having ID &quot;XXX&quot;.
    *       Lower priority than filesystem <i>application.properties</i> since external files may be used to
    *       override values without the need for rebuilding and deploying the application.</b></td>
    *     </tr>
@@ -349,6 +349,16 @@ public class WorkflowModuleBuildStepProcessor {
 
   }
 
+  /**
+   * Watches module-specific configuration files for hot deployment in a workflow application.
+   * This method identifies and monitors all possible configuration files (properties or YAML)
+   * associated with workflow modules as defined in the build process, scanning them from the
+   * application archives.
+   *
+   * @param allWorkflowModules A {@link VanillaBpWorkflowModulesBuildItem} containing information about all workflow modules.
+   * @param applicationArchives An {@link ApplicationArchivesBuildItem} containing the archives to be scanned for configuration files.
+   * @param watchedFiles A {@link BuildProducer} that collects {@link HotDeploymentWatchedFileBuildItem} instances for hot deployment purposes.
+   */
   @BuildStep
   void watchWorkflowModuleSpecificConfigFiles(
       final VanillaBpWorkflowModulesBuildItem allWorkflowModules,
@@ -402,6 +412,7 @@ public class WorkflowModuleBuildStepProcessor {
   /**
    * Determines the workflow module ID for a given {@link io.vanillabp.spi.process.ProcessService} class.
    *
+   * @param workflowModulesFound Information about all workflow modules found in the project
    * @param applicationArchivesBuildItem Information about All archives (JARs and directories) of the project
    * @param serviceClass The {@link io.vanillabp.spi.process.ProcessService} class
    * @return The workflow module ID

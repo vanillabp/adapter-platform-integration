@@ -3,14 +3,21 @@ package io.vanillabp.integration.runtime.workflowmodule;
 import java.net.URI;
 import java.util.Objects;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Meta-data of a workflow module
  */
 @Builder
 @Getter
+@Setter(AccessLevel.PACKAGE) // needed for object-serialization
+@AllArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PACKAGE) // needed for object-serialization
 public class WorkflowModule {
 
   /**

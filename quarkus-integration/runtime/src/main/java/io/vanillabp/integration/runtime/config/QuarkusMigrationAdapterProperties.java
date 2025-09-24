@@ -6,12 +6,14 @@ import java.util.Optional;
 
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
+import io.quarkus.runtime.annotations.StaticInitSafe;
 import io.smallrye.config.ConfigMapping;
 
 /**
  * Properties common to all adapters.
  */
-@ConfigRoot(phase = ConfigPhase.BUILD_TIME)
+@StaticInitSafe
+@ConfigRoot(phase = ConfigPhase.BUILD_AND_RUN_TIME_FIXED)
 @ConfigMapping(prefix = QuarkusMigrationAdapterProperties.PREFIX)
 public interface QuarkusMigrationAdapterProperties {
 
@@ -30,7 +32,7 @@ public interface QuarkusMigrationAdapterProperties {
   /**
    * The configuration of all adapters known. The key can be an adapter's identifier
    * or a custom identifier. In case of a custom identifier the {@link AdapterConfiguration#type()}
-   * property has to point to the adapters identifier the custom adapter is derived from.
+   * property has to point to the adapter identifier the custom adapter is derived from.
    * In case of a non-custom adapter identifier the {@link AdapterConfiguration#type()}
    * property has to be undefined.
    *

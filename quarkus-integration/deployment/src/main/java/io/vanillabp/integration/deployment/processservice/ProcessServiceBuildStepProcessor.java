@@ -4,7 +4,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.ParameterizedType;
@@ -12,7 +11,6 @@ import org.jboss.jandex.Type;
 
 import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
 import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
-import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
@@ -20,10 +18,9 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
+import io.vanillabp.integration.deployment.config.MigrationAdapterPropertiesBuildItem;
 import io.vanillabp.integration.deployment.workflowmodule.VanillaBpWorkflowModulesBuildItem;
 import io.vanillabp.integration.deployment.workflowmodule.WorkflowModuleBuildStepProcessor;
-import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
-import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterTransformer;
 import io.vanillabp.integration.runtime.processservice.ProcessServiceCdiBean;
 import io.vanillabp.integration.runtime.processservice.ProcessServiceCdiBeanRecorder;
 import io.vanillabp.spi.process.ProcessService;
@@ -45,42 +42,24 @@ public class ProcessServiceBuildStepProcessor {
    * Build step for build {@link ProcessService} beans for all services
    * annotated by {@link WorkflowService} at class level.
    *
-   * @param properties The projects VanillaBP configuration properties
-   * @param capabilities Capabilities of the projects all extensions available
    * @param indexBuildItem Classes of the project and its dependencies (if Jandix available)
    * @param applicationArchivesBuildItem Information about All archives (JARs and directories) of the project
+   * @param migrationAdapterProperties Properties of the migration adapter previously built and validated
+   * @param workflowModulesFound Information about all workflow modules found in the project
    * @param processServiceRecorder Recorder for {@link ProcessService} beans
-   * @param processServicesProvidedByAdapters All {@link io.vanillabp.intergration.adapter.migration.spi.MigratableProcessService} beans provided by VanillaBP adapter extensions
    * @param processServiceProducer {@link BuildProducer} for {@link ProcessServiceBuildItem} used to collect {@link ProcessService} beans
    * @param syntheticBeanProducer {@link BuildProducer} for {@link SyntheticBeanBuildItem} used to define {@link ProcessService} beans based on their generic parameter.
    */
   @Record(ExecutionTime.STATIC_INIT)
   @BuildStep
   void buildProcessServices(
-      final QuarkusMigrationAdapterProperties properties,
-      final Capabilities capabilities,
       final BeanArchiveIndexBuildItem indexBuildItem,
       final ApplicationArchivesBuildItem applicationArchivesBuildItem,
-      final ProcessServiceCdiBeanRecorder processServiceRecorder,
-      final List<VanillaBpMigratableProcessServiceBuildItem> processServicesProvidedByAdapters,
+      final MigrationAdapterPropertiesBuildItem migrationAdapterProperties,
       final VanillaBpWorkflowModulesBuildItem workflowModulesFound,
+      final ProcessServiceCdiBeanRecorder processServiceRecorder,
       final BuildProducer<ProcessServiceBuildItem> processServiceProducer,
       final BuildProducer<SyntheticBeanBuildItem> syntheticBeanProducer) {
-
-    // check for consistent configuration and required VanillaBpMigratableProcessServiceBuildItems
-
-    final var adapterNamesOfProcessServicesProvidedByAdapters = processServicesProvidedByAdapters
-        .stream()
-        .map(VanillaBpMigratableProcessServiceBuildItem::getAdapterName)
-        .collect(Collectors.toSet());
-    final var adapterProperties = QuarkusMigrationAdapterTransformer
-        .builder()
-        .properties(properties)
-        .capabilities(capabilities.getCapabilities())
-        .build()
-        .getAndValidatePropertiesConfigured(
-            workflowModulesFound.getWorkflowModules().keySet(),
-            adapterNamesOfProcessServicesProvidedByAdapters);
 
     // scan for classes annotated by @WorkflowService
     final Set<Type> processServicesBuilt = new HashSet<>();
@@ -119,7 +98,7 @@ public class ProcessServiceBuildStepProcessor {
                 workflowModuleId,
                 bpmnProcessId,
                 workflowAggregateType.toString(),
-                adapterProperties);
+                migrationAdapterProperties.getProperties());
             // ProcessServiceBuildItem is used for handing over the bean to subsequent build steps
             processServiceProducer.produce(new ProcessServiceBuildItem(processService));
             // Define a CDI {@link ProcessService} bean based on the workflow aggregate class generic parameter.

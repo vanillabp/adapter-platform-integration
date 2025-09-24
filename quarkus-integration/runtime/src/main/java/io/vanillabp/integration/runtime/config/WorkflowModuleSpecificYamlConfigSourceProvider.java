@@ -9,6 +9,7 @@ import java.util.List;
 import org.eclipse.microprofile.config.spi.ConfigSource;
 import org.eclipse.microprofile.config.spi.ConfigSourceProvider;
 
+import io.quarkus.runtime.annotations.StaticInitSafe;
 import io.smallrye.config.source.yaml.YamlConfigSourceLoader;
 import lombok.RequiredArgsConstructor;
 
@@ -16,6 +17,7 @@ import lombok.RequiredArgsConstructor;
  * A config source provider loading config files named by a workflow module ID.
  * The super class is responsible for determining profile-based variants.
  */
+@StaticInitSafe
 @RequiredArgsConstructor
 public class WorkflowModuleSpecificYamlConfigSourceProvider extends YamlConfigSourceLoader implements ConfigSourceProvider {
 
@@ -33,7 +35,7 @@ public class WorkflowModuleSpecificYamlConfigSourceProvider extends YamlConfigSo
    * Determine all config sources for all known file extensions.
    *
    * @param classLoader
-   *            the class loader which should be used for discovery and resource loading purposes
+   *            the class loader, which should be used for discovery and resource loading purposes
    * @return The config sources
    */
   @Override

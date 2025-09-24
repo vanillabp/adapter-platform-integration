@@ -10,7 +10,7 @@ import io.smallrye.config.SmallRyeConfigBuilder;
  * properties-files specific to workflow modules. The names of the files
  * are workflow module IDs.
  * <p>
- * The actual class providing workflow module IDs and the ordinal is
+ * The actual class providing workflow module IDs, and the ordinal is
  * generated during augmentation.
  */
 public abstract class WorkflowModuleSpecificPropertiesConfigBuilder implements ConfigBuilder {

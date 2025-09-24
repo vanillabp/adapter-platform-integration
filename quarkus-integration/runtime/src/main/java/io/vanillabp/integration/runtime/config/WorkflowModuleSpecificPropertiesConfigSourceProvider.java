@@ -10,6 +10,7 @@ import java.util.List;
 import org.eclipse.microprofile.config.spi.ConfigSource;
 import org.eclipse.microprofile.config.spi.ConfigSourceProvider;
 
+import io.quarkus.runtime.annotations.StaticInitSafe;
 import io.smallrye.config.AbstractLocationConfigSourceLoader;
 import io.smallrye.config.PropertiesConfigSource;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ import lombok.RequiredArgsConstructor;
  * A config source provider loading properties-files named by a workflow module ID.
  * The super class is responsible for determining profile-based variants.
  */
+@StaticInitSafe
 @RequiredArgsConstructor
 public class WorkflowModuleSpecificPropertiesConfigSourceProvider extends AbstractLocationConfigSourceLoader implements ConfigSourceProvider {
 
@@ -66,7 +68,7 @@ public class WorkflowModuleSpecificPropertiesConfigSourceProvider extends Abstra
    * Determine all config sources for all known file extensions.
    *
    * @param classLoader
-   *            the class loader which should be used for discovery and resource loading purposes
+   *            the class loader, which should be used for discovery and resource loading purposes
    * @return The config sources
    */
   public List<ConfigSource> getConfigSources(

@@ -21,7 +21,7 @@
   </modules>
 
   <properties>
-    <quarkus.version>3.25.3</quarkus.version>
+    <quarkus.version>3.26.4</quarkus.version>
   </properties>
 
   <dependencyManagement>
@@ -74,15 +74,13 @@
             </systemPropertyVariables>
           </configuration>
         </plugin>
-        <!--
-        To be removed if not necessary anymore:
         <plugin>
           <artifactId>maven-compiler-plugin</artifactId>
           <configuration>
             <parameters>true</parameters>
+            <!-- necessary for serialization by Quarkus recorders -->
           </configuration>
         </plugin>
-        -->
       </plugins>
     </pluginManagement>
   </build>

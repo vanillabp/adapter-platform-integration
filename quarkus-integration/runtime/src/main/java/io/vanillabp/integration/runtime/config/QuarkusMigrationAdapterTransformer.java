@@ -158,7 +158,7 @@ public class QuarkusMigrationAdapterTransformer {
   }
 
   /**
-   * Determine adapters configured based on capabilities of VanillaBP adapter
+   * Determine adapters configured based on the capabilities of VanillaBP adapter
    * Quarkus extensions and properties configured.
    *
    * @param adaptersFound All adapters found during augmentation.
@@ -295,8 +295,8 @@ public class QuarkusMigrationAdapterTransformer {
       return adapters.keySet().stream().toList();
     }
 
-    // if more than one adapter is configured then the
-    // property vanillabp.prioritized-adapters has to list each adapter
+    // if more than one adapter is configured, then the
+    // property vanillabp.prioritized-adapters have to list each adapter
     // configured:
     if (properties.prioritizedAdapters()
         .isEmpty() || (adapters.size() != properties.prioritizedAdapters().get().size())) {

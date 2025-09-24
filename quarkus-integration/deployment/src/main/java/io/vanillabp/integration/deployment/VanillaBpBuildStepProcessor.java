@@ -1,6 +1,7 @@
 package io.vanillabp.integration.deployment;
 
 import java.lang.reflect.Method;
+import java.net.URI;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -15,15 +16,18 @@ import io.quarkus.arc.processor.InterceptorBindingRegistrar;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
+import io.quarkus.deployment.builditem.ObjectSubstitutionBuildItem;
 import io.quarkus.deployment.builditem.RunTimeConfigBuilderBuildItem;
 import io.quarkus.deployment.builditem.StaticInitConfigBuilderBuildItem;
 import io.vanillabp.integration.runtime.config.VanillaBpConfigBuilder;
 import io.vanillabp.integration.runtime.processservice.TransactionInterceptor;
+import io.vanillabp.integration.runtime.util.UriSubstitute;
+import io.vanillabp.integration.runtime.util.UriSubstitution;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
  * Main VanillaBP extension processor, responsible for processing configuration
- * and the projects classes during augmentation phase.
+ * and the projects classes during the augmentation phase.
  */
 public class VanillaBpBuildStepProcessor {
 
@@ -45,7 +49,17 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
-   * Use customized builder for migration adapter properties during initialization.
+   * @return An object substitution build item for {@link URI}
+   */
+  @BuildStep
+  ObjectSubstitutionBuildItem uriSubstitution() {
+
+    return new ObjectSubstitutionBuildItem(URI.class, UriSubstitute.class, UriSubstitution.class);
+
+  }
+
+  /**
+   * Use a customized builder for migration adapter properties during initialization.
    *
    * @param staticInitConfigBuilder used for static initialization
    * @param runtimeInitConfigBuilder used for runtime initialization
@@ -74,7 +88,7 @@ public class VanillaBpBuildStepProcessor {
       final BuildProducer<InterceptorBindingRegistrarBuildItem> interceptorBindingRegistrarProducer) {
 
     // Typically an Interceptor needs an Annotation for interceptor binding. Since the
-    // annotation @WorkflowTask it is used for is not an interceptor binding annotation
+    // annotation @WorkflowTask it is used for is not an interceptor-binding annotation,
     // it needs to be added programmatically:
     annotationsTransformer.produce(new AnnotationsTransformerBuildItem(AnnotationTransformation
         .forClasses()
@@ -86,7 +100,7 @@ public class VanillaBpBuildStepProcessor {
         .map(Method::getName)
         .collect(Collectors.toSet());
     // Typically an Interceptor needs an Annotation for interceptor binding. Since the
-    // annotation @WorkflowTask it is used for is not an interceptor binding annotation
+    // annotation @WorkflowTask it is used for is not an interceptor-binding annotation,
     // the interceptor binding needs to be added programmatically:
     interceptorBindingRegistrarProducer.produce(new InterceptorBindingRegistrarBuildItem(
         new InterceptorBindingRegistrar() {
@@ -95,14 +109,14 @@ public class VanillaBpBuildStepProcessor {
             return List.of(InterceptorBinding.of(
                 WorkflowTask.class,
                 // all annotation-values need to be ignored to run the interceptor
-                // regardless the value of the annotation
+                // regardless of the value of the annotation
                 annotationMethods
             ));
           }
         }
     ));
 
-    // Beans of runtime package need to be registered as additional bean to the index:
+    // Beans of the runtime package need to be registered as additional bean to the index:
     return AdditionalBeanBuildItem
         .builder()
         .addBeanClass(TransactionInterceptor.class)
