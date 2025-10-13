@@ -2,7 +2,7 @@
 
 ### Separating workflow module properties from application properties
 
-Read the [Wiki](../../wiki/Workflow-modules) to learn about reasons for having multiple workflow modules.
+Read the [Wiki](https://github.com/vanillabp/adapter-platform-integration/wiki/Workflow-modules) to learn about reasons for having multiple workflow modules.
 In this situation the `application.yaml` files should not list properties specific to one of those workflow modules
 because otherwise properties of the workflow module would be part of a different (Maven/Gradle) module than the
 code. Testing the encapsulated workflow module would not be possible due to missing properties.

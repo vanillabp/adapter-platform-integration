@@ -22,7 +22,7 @@ Currently, these platforms are supported:
 1. **Spring Boot**<br>[![Coverage](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fvanillabp.github.io%2Fadapter-platform-integration%2Fspring-boot-report%2Findex.html&search=Total.*%3F.([0-9]%2B)[^0-9]*%3F%25&replace=%241%25&flags=m&label=Coverage&color=green&cacheSeconds=60)](https://vanillabp.github.io/adapter-platform-integration/spring-boot-report)
 2. **Quarkus**<br>[![Coverage](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fvanillabp.github.io%2Fadapter-platform-integration%2Fquarkus-report%2Findex.html&search=Total.*%3F.([0-9]%2B)[^0-9]*%3F%25&replace=%241%25&flags=m&label=Coverage&color=green&cacheSeconds=60)](https://vanillabp.github.io/adapter-platform-integration/quarkus-report)
 
-Developers who want to use VanillaBP should read the [Wiki](./wiki) documentation.
+Developers who want to use VanillaBP should read the [Wiki](https://github.com/vanillabp/adapter-platform-integration/wiki) documentation.
 It contains conceptional documentation as well as details specific to each platform.
 
 ## Contribution
@@ -63,7 +63,7 @@ In this repository this VanillaBP functionality can be found:
 
 1. Platform integration:
    1. Loading VanillaBP configuration according to the platform's way of configuration.
-   2. Detect [workflow modules](/wiki/Workflow-modules).
+   2. Detect [workflow modules](https://github.com/vanillabp/adapter-platform-integration/wiki/Workflow-modules).
    3. Deploy BPMS resources (e.g. BPMN files, DMN files, etc.).
    4. Detect [@WorkflowService](https://github.com/vanillabp/spi-for-java#wire-up-a-process) annotated services.
    5. Build a [ProcessService](https://github.com/vanillabp/spi-for-java#start-a-workflow) for each process deployed to be used by workflow services.
