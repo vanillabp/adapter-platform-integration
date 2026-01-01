@@ -1,31 +1,34 @@
 package io.vanillabp.integration.deployment.processservice;
 
+import static io.quarkus.gizmo.Type.classType;
+import static io.quarkus.gizmo.Type.parameterizedType;
+
+import java.util.Comparator;
 import java.util.HashSet;
-import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
 import org.jboss.jandex.AnnotationValue;
-import org.jboss.jandex.ParameterizedType;
+import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.Type;
 
-import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
-import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
+import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
+import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
+import io.quarkus.arc.deployment.GeneratedBeanGizmoAdaptor;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.annotations.ExecutionTime;
-import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
-import io.quarkus.deployment.builditem.ServiceStartBuildItem;
-import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
+import io.quarkus.gizmo.ClassCreator;
+import io.quarkus.gizmo.SignatureBuilder;
 import io.vanillabp.integration.deployment.config.MigrationAdapterPropertiesBuildItem;
 import io.vanillabp.integration.deployment.workflowmodule.VanillaBpWorkflowModulesBuildItem;
 import io.vanillabp.integration.deployment.workflowmodule.WorkflowModuleBuildStepProcessor;
-import io.vanillabp.integration.runtime.processservice.ProcessServiceCdiBean;
-import io.vanillabp.integration.runtime.processservice.ProcessServiceCdiBeanRecorder;
+import io.vanillabp.integration.runtime.processservice.ProcessServiceBaseCdiBean;
+import io.vanillabp.spi.process.AggregatePersistenceAware;
 import io.vanillabp.spi.process.ProcessService;
 import io.vanillabp.spi.service.WorkflowService;
-import jakarta.inject.Singleton;
+import jakarta.enterprise.context.ApplicationScoped;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -42,108 +45,195 @@ public class ProcessServiceBuildStepProcessor {
    * Build step for build {@link ProcessService} beans for all services
    * annotated by {@link WorkflowService} at class level.
    *
-   * @param indexBuildItem Classes of the project and its dependencies (if Jandix available)
    * @param applicationArchivesBuildItem Information about All archives (JARs and directories) of the project
-   * @param migrationAdapterProperties Properties of the migration adapter previously built and validated
+   * @param migrationAdapterProperties Properties of the migration adapter previously built and validated as a dependency
    * @param workflowModulesFound Information about all workflow modules found in the project
-   * @param processServiceRecorder Recorder for {@link ProcessService} beans
-   * @param processServiceProducer {@link BuildProducer} for {@link ProcessServiceBuildItem} used to collect {@link ProcessService} beans
-   * @param syntheticBeanProducer {@link BuildProducer} for {@link SyntheticBeanBuildItem} used to define {@link ProcessService} beans based on their generic parameter.
+   * @param generatedBeanBuildItemBuildProducer {@link BuildProducer} used to collect generated {@link ProcessService} beans
+   * @param additionalBeanBuildItemBuildProducer {@link BuildProducer} used to collect beans provided in module "runtime"
    */
-  @Record(ExecutionTime.STATIC_INIT)
   @BuildStep
   void buildProcessServices(
-      final BeanArchiveIndexBuildItem indexBuildItem,
       final ApplicationArchivesBuildItem applicationArchivesBuildItem,
       final MigrationAdapterPropertiesBuildItem migrationAdapterProperties,
       final VanillaBpWorkflowModulesBuildItem workflowModulesFound,
-      final ProcessServiceCdiBeanRecorder processServiceRecorder,
-      final BuildProducer<ProcessServiceBuildItem> processServiceProducer,
-      final BuildProducer<SyntheticBeanBuildItem> syntheticBeanProducer) {
+      final BuildProducer<GeneratedBeanBuildItem> generatedBeanBuildItemBuildProducer,
+      final BuildProducer<AdditionalBeanBuildItem> additionalBeanBuildItemBuildProducer) {
+
+    final var aggregatePersistenceAwares = applicationArchivesBuildItem
+        // search all archives of the project
+        .getAllApplicationArchives()
+        .stream()
+        .flatMap(archive -> archive
+            // collect each archive's known implementations
+            .getIndex()
+            .getAllKnownImplementations(AggregatePersistenceAware.class)
+            .stream()
+            .map(aware -> Map.entry(aware, archive)))
+        .toList();
 
     // scan for classes annotated by @WorkflowService
     final Set<Type> processServicesBuilt = new HashSet<>();
-    indexBuildItem
-        .getIndex()
-        .getAnnotations(WorkflowService.class)
+    applicationArchivesBuildItem
+        // search all archives of the project
+        .getAllApplicationArchives()
+        .stream()
+        .flatMap(archive -> archive
+            .getIndex()
+            .getAnnotations(WorkflowService.class)
+            .stream())
         // and build an adapter-aware process service for each workflow aggregate class
         .forEach(annotation -> {
 
-          try {
-            final var workflowAggregateType = annotation
-                .value(ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_AGGREGATECLASS)
-                .asClass();
-            // if there is more than one @WorkflowService class for a specific BPMN process ID,
-            // then use the one previously built
-            if (processServicesBuilt.contains(workflowAggregateType)) {
-              return;
-            }
-
-            // collect information necessary for bean creation
-            final var serviceClass = annotation.target().asClass();
-            final var workflowModuleId = WorkflowModuleBuildStepProcessor
-                .getWorkflowModuleId(
-                    workflowModulesFound,
-                    applicationArchivesBuildItem,
-                    serviceClass);
-            final var bpmnProcessId = Optional
-                .ofNullable(annotation.value(ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_BPMNPROCESS))
-                .map(AnnotationValue::asNested)
-                .map(a -> a.value(ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_BPMNPROCESS_BPMNPROCESSID))
-                .map(AnnotationValue::asString)
-                .orElse(serviceClass.simpleName());
-
-            // build bean, and BuildItems for the bean
-            final var processService = processServiceRecorder.recordProcessService(
-                workflowModuleId,
-                bpmnProcessId,
-                workflowAggregateType.toString(),
-                migrationAdapterProperties.getProperties());
-            // ProcessServiceBuildItem is used for handing over the bean to subsequent build steps
-            processServiceProducer.produce(new ProcessServiceBuildItem(processService));
-            // Define a CDI {@link ProcessService} bean based on the workflow aggregate class generic parameter.
-            syntheticBeanProducer.produce(SyntheticBeanBuildItem
-                .configure(ProcessServiceCdiBean.class)
-                .types(ParameterizedType.create(ProcessService.class, workflowAggregateType))
-                .scope(Singleton.class)
-                .name("VanillaBP_ProcessService_%s".formatted(workflowAggregateType.toString()))
-                .runtimeValue(processService)
-                .setRuntimeInit()
-                .unremovable()
-                .done());
-            processServicesBuilt.add(workflowAggregateType);
-          } catch (ClassNotFoundException e) {
-            log.info("NoClassDefFoundError: it might be an optional dependency", e);
+          final var workflowAggregateType = annotation
+              .value(ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_AGGREGATECLASS)
+              .asClass();
+          // if there is more than one @WorkflowService class for a specific BPMN process ID,
+          // then use the one previously built
+          if (processServicesBuilt.contains(workflowAggregateType)) {
+            return;
           }
+
+          // collect information necessary for bean creation
+          final var serviceClass = annotation.target().asClass();
+          final var workflowModuleId = WorkflowModuleBuildStepProcessor
+              .getWorkflowModuleId(
+                  workflowModulesFound,
+                  applicationArchivesBuildItem,
+                  serviceClass);
+          final var bpmnProcessId = Optional
+              .ofNullable(annotation.value(ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_BPMNPROCESS))
+              .map(AnnotationValue::asNested)
+              .map(a -> a.value(ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_BPMNPROCESS_BPMNPROCESSID))
+              .map(AnnotationValue::asString)
+              .orElse(serviceClass.simpleName());
+
+          // find persistence support class for the aggregate class
+          final var aggregatePersistenceType = aggregatePersistenceAwares
+              .stream()
+              // calculate distance of classes
+              .map(awareEntry -> Map.entry(
+                  awareEntry.getKey(),
+                  AggregatePersistenceResolver.distance(
+                      awareEntry.getValue().getIndex(),
+                      awareEntry.getKey(),
+                      workflowAggregateType.name()
+                  )))
+              // filter persistence awares those aggregate type is not assignable to the current aggregate type
+              .filter(awareEntry -> awareEntry.getValue() != Integer.MAX_VALUE)
+              // choose the most specific persistence support in terms of inheritance class distance
+              .min(Comparator.comparingInt(Map.Entry::getValue))
+              // if none found, fall back to persistence support based on Spring Data Util bean
+              .map(Map.Entry::getKey)
+              .orElseThrow(() -> new IllegalStateException(
+                  "You have to provide a CDI bean implementing\n  "
+                      + AggregatePersistenceAware.class.getName()
+                      + "\nwhich is responsible to persist aggregates.\n"
+                      + "This is necessary because in Quarkus there is no unique way to do persistence of entities:\n"
+                      + "- Active record pattern: https://quarkus.io/guides/hibernate-orm-panache#solution-1-using-the-active-record-pattern\n"
+                      + "- Repository record pattern: https://quarkus.io/guides/hibernate-orm-panache#solution-2-using-the-repository-pattern\n"
+                      + "- Spring Data pattern: https://quarkus.io/guides/spring-data-jpa"
+              ));
+
+          // generate process service CDI bean specific to the workflow aggregate
+          generateProcessService(
+              generatedBeanBuildItemBuildProducer,
+              workflowModuleId,
+              bpmnProcessId,
+              "%s.ProcessService_%s".formatted(
+                  workflowAggregateType.name().packagePrefix(),
+                  workflowAggregateType.name().withoutPackagePrefix()),
+              aggregatePersistenceType,
+              workflowAggregateType);
+
+          // prevent building more than one process service even if a workflow aggregate class
+          // is used in more than one @WorkflowService annotated service
+          processServicesBuilt.add(workflowAggregateType);
+
         });
 
   }
 
   /**
-   * Build step for runtime initialization of {@link ProcessService} beans. At runtime
-   * configuration validation is done based on data collected from BPMS (like
-   * backwards compatibility checks for BPMN versions deployed by previous versions of
-   * the business software project).
+   * Generate process service CDI bean specific to the workflow aggregate type given.
    *
-   * @param processServiceRecorder Recorder for {@link ProcessService} beans
-   * @param shutdownContextBuildItem The build item providing a runtime shutdown hook, used for tearing down {@link ProcessService}
-   * @param processServiceBuildItems All {@link ProcessService} beans provided previous build steps
-   * @return The build item telling Quarkus about the need for custom runtime bean initialization
+   * @param generatedBeanBuildItemBuildProducer The producer used to build multiple beans if necessary
+   * @param workflowModuleId The ID of the workflow module the service belongs to
+   * @param bpmnProcessId The BPMN process ID the service is for
+   * @param className The class name of the service to build
+   * @param aggregatePersistenceType The aggregate persistence type to be used by the service
+   * @param workflowAggregateType The workflow aggregate type the service is for
    */
-  @Record(ExecutionTime.RUNTIME_INIT)
-  @BuildStep
-  ServiceStartBuildItem initializeProcessServices(
-      final ProcessServiceCdiBeanRecorder processServiceRecorder,
-      final ShutdownContextBuildItem shutdownContextBuildItem,
-      final List<ProcessServiceBuildItem> processServiceBuildItems) {
+  private void generateProcessService(
+      final BuildProducer<GeneratedBeanBuildItem> generatedBeanBuildItemBuildProducer,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String className,
+      final ClassInfo aggregatePersistenceType,
+      final Type workflowAggregateType) {
 
-    // record runtime bean initialization for each ProcessService bean
-    processServiceBuildItems
-        .forEach(
-            processService -> processServiceRecorder
-                .startProcessService(shutdownContextBuildItem, processService.getProcessService()));
+    final var aggregatePersistenceClassName = aggregatePersistenceType.name().toString();
+    final var aggregateClassName = workflowAggregateType.name().toString();
 
-    return new ServiceStartBuildItem("VanillaBpProcessService");
+    /*
+     * public class ProcessService_Aggregate extends ProcessServiceBaseCdiBean<Aggregate> {
+     */
+    final var beanClassOutput = new GeneratedBeanGizmoAdaptor(generatedBeanBuildItemBuildProducer);
+    final var cc = ClassCreator
+        .builder()
+        .classOutput(beanClassOutput)
+        .className(className)
+        .signature(SignatureBuilder
+            .forClass()
+            .setSuperClass(
+                parameterizedType(classType(ProcessServiceBaseCdiBean.class), classType(workflowAggregateType.name()))))
+        .build();
+
+    // @ApplicationScoped
+    cc.addAnnotation(ApplicationScoped.class);
+
+    /*
+     * Class<AggregatePersistenceAware<A>> getAggregatePersistenceClass()
+     */
+    final var getAggregatePersistenceClass = cc.getMethodCreator(
+        "getAggregatePersistenceClass",
+        Class.class
+    );
+    // return AggregatePersistence.class;
+    getAggregatePersistenceClass
+        .returnValue(getAggregatePersistenceClass.loadClass(aggregatePersistenceClassName));
+
+    /*
+     * Class<A> getWorkflowAggregateClass()
+     */
+    final var getAggregateClass = cc.getMethodCreator(
+        "getWorkflowAggregateClass",
+        Class.class
+    );
+    // return A.class;
+    getAggregateClass.returnValue(
+        getAggregateClass.loadClass(aggregateClassName));
+
+    /*
+     * String getWorkflowModuleId()
+     */
+    final var getWorkflowModuleId = cc.getMethodCreator(
+        "getWorkflowModuleId",
+        String.class);
+    // return "wmid";
+    getWorkflowModuleId.returnValue(
+        getWorkflowModuleId.load(workflowModuleId));
+
+    /*
+     * String getBpmnProcessId()
+     */
+    final var getBpmnProcessId = cc.getMethodCreator(
+        "getBpmnProcessId",
+        String.class);
+    // return "pid";
+    getBpmnProcessId.returnValue(
+        getBpmnProcessId.load(bpmnProcessId));
+
+    cc.close();
 
   }
 

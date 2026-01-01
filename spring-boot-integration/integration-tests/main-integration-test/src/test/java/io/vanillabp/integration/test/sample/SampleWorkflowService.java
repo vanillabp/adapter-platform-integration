@@ -15,7 +15,7 @@ public class SampleWorkflowService {
   @Autowired
   private ProcessService<Aggregate> processService;
 
-  public Class<?> getAggregateClass() {
+  public Class<Aggregate> getAggregateClass() {
     return Aggregate.class;
   }
 

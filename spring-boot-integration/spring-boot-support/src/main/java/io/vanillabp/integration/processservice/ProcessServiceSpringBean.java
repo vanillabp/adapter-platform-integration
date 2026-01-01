@@ -1,42 +1,67 @@
-package io.vanillabp.integration.runtime.processservice;
-
+package io.vanillabp.integration.processservice;
 
 import java.util.List;
+
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processervice.MigrationProcessService;
 import io.vanillabp.intergration.adapter.migration.spi.MigratableProcessService;
+import io.vanillabp.spi.process.AggregatePersistenceAware;
 import io.vanillabp.spi.process.ProcessService;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
-/**
- * A {@link ProcessService} bean aware of adapter migration.
- */
 @Slf4j
-public class ProcessServiceCdiBean<A> extends MigrationProcessService<A> {
+public class ProcessServiceSpringBean<A> implements ProcessService<A> {
 
-  public ProcessServiceCdiBean(
+  @Getter
+  private final MigrationProcessService<A> migrationProcessService;
+
+  public ProcessServiceSpringBean(
       final String workflowModuleId,
       final String bpmnProcessId,
       final Class<A> workflowAggregateClass,
       final MigrationAdapterProperties properties,
+      final AggregatePersistenceAware<A> aggregatePersistenceAware,
       final List<MigratableProcessService<A>> migratableProcessServices) {
-    super(workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, migratableProcessServices);
+
+    migrationProcessService = new MigrationProcessService<>(
+        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, aggregatePersistenceAware, migratableProcessServices);
+
   }
 
   void startService() {
-    initialize();
+
+    migrationProcessService.initialize();
+
   }
 
   void stopService() {
-    log.info("Stopping process service: {}", workflowModuleId);
+
+    log.info("Stopping process service: {}", migrationProcessService.getWorkflowModuleId());
+
+  }
+
+  @Override
+  public String getWorkflowModuleId() {
+
+    return migrationProcessService.getWorkflowModuleId();
+
+  }
+
+  private boolean isTransactionActive() {
+
+    return TransactionSynchronizationManager.isActualTransactionActive();
+
   }
 
   @Override
   public A startWorkflow(
-      A workflowAggregate) throws Exception {
-    //return migrationProcessService.startWorkflow(workflowAggregate);
-    return workflowAggregate;
+      A workflowAggregate) {
+
+    return migrationProcessService.startWorkflow(workflowAggregate, isTransactionActive());
+
   }
 
   @Override

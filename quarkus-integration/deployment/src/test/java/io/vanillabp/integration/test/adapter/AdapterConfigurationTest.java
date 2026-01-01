@@ -7,8 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
-import io.vanillabp.integration.adapter.migration.processervice.MigrationProcessService;
-import io.vanillabp.integration.runtime.processservice.ProcessServiceCdiBean;
+import io.vanillabp.integration.runtime.processservice.ProcessServiceBaseCdiBean;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.samples.sample.Aggregate;
 import io.vanillabp.spi.process.ProcessService;
@@ -35,16 +34,19 @@ public class AdapterConfigurationTest {
    * ProcessService<Aggregate> should be created using dummy adapter configured in application.yaml
    */
   @Test
-  public void testAdapterConfiguration() {
+  public void testAdapterConfiguration() throws Exception {
 
     Assertions.assertNotNull(sampleProcessService);
-    Assertions.assertInstanceOf(ProcessServiceCdiBean.class, sampleProcessService);
+    Assertions.assertInstanceOf(ProcessService.class, sampleProcessService);
+    Assertions.assertInstanceOf(ProcessServiceBaseCdiBean.class, sampleProcessService);
 
-    final var migrationProcessService = ((MigrationProcessService<Aggregate>) sampleProcessService);
-    final var workflowAggregateClass = migrationProcessService.getWorkflowAggregateClass();
+    final var processServiceBaseBean = ((ProcessServiceBaseCdiBean<Aggregate>) sampleProcessService);
+
+    final var workflowAggregateClass = processServiceBaseBean.getWorkflowAggregateClass();
     Assertions.assertNotNull(workflowAggregateClass);
     Assertions.assertEquals(Aggregate.class, workflowAggregateClass);
 
+    final var migrationProcessService = processServiceBaseBean.getMigrationProcessService();
     final var adaptersConfigured = migrationProcessService.getAdapters();
     Assertions.assertNotNull(adaptersConfigured);
     Assertions.assertEquals(1, adaptersConfigured.size());

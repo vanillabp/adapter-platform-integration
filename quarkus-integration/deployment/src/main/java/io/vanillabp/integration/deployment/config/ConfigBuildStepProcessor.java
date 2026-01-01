@@ -4,7 +4,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
 import io.quarkus.deployment.Capabilities;
+import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
@@ -14,6 +16,7 @@ import io.vanillabp.integration.deployment.processservice.VanillaBpMigratablePro
 import io.vanillabp.integration.deployment.workflowmodule.VanillaBpWorkflowModulesBuildItem;
 import io.vanillabp.integration.deployment.workflowmodule.WorkflowModuleSpecificConfigBuilderBuildItem;
 import io.vanillabp.integration.runtime.config.MigrationAdapterPropertiesRecorder;
+import jakarta.enterprise.context.ApplicationScoped;
 
 /**
  * VanillaBP extension build step processor, responsible for building {@link MigrationAdapterProperties} beans.
@@ -39,6 +42,7 @@ public class ConfigBuildStepProcessor {
       final WorkflowModuleSpecificConfigBuilderBuildItem configsBuilt,
       final List<ObjectSubstitutionBuildItem> substitutionsProvided,
       final VanillaBpWorkflowModulesBuildItem workflowModulesFound,
+      final BuildProducer<SyntheticBeanBuildItem> syntheticBeanBuildItemBuildProducer,
       final MigrationAdapterPropertiesRecorder migrationAdapterPropertiesRecorder) {
 
     final var adapterNamesOfProcessServicesProvidedByAdapters = processServicesProvidedByAdapters
@@ -51,6 +55,16 @@ public class ConfigBuildStepProcessor {
         new HashSet<>(capabilities.getCapabilities()), // pass items to a serializable kind of set
         new HashSet<>(workflowModulesFound.getWorkflowModules().keySet()), // pass items to a serializable kind of set
         adapterNamesOfProcessServicesProvidedByAdapters);
+
+    // build properties as a CDI bean for injection into generated ProcessService beans
+    syntheticBeanBuildItemBuildProducer
+        .produce(
+            SyntheticBeanBuildItem
+                .configure(MigrationAdapterProperties.class)
+                .scope(ApplicationScoped.class)
+                .runtimeValue(migrationAdapterProperties)
+                .setRuntimeInit()
+                .done());
 
     return new MigrationAdapterPropertiesBuildItem(migrationAdapterProperties);
 

@@ -1,6 +1,5 @@
 package io.vanillabp.integration.test.adapter;
 
-
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Assertions;
@@ -8,8 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
-import io.vanillabp.integration.adapter.migration.processervice.MigrationProcessService;
-import io.vanillabp.integration.runtime.processservice.ProcessServiceCdiBean;
+import io.vanillabp.integration.runtime.processservice.ProcessServiceBaseCdiBean;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.samples.sample.Aggregate;
 import io.vanillabp.spi.process.ProcessService;
@@ -36,12 +34,14 @@ public class MultipleAdapterConfigurationTest {
    * ProcessService<Aggregate> should be created using dummy adapter configured in application.yaml
    */
   @Test
-  public void testAdapterConfiguration() {
+  public void testAdapterConfiguration() throws Exception {
 
     Assertions.assertNotNull(sampleProcessService);
-    Assertions.assertInstanceOf(ProcessServiceCdiBean.class, sampleProcessService);
+    Assertions.assertInstanceOf(ProcessServiceBaseCdiBean.class, sampleProcessService);
 
-    final var migrationProcessService = ((MigrationProcessService<Aggregate>) sampleProcessService);
+    final var processServiceBean = ((ProcessServiceBaseCdiBean<Aggregate>) sampleProcessService);
+    final var migrationProcessService = processServiceBean.getMigrationProcessService();
+
     final var workflowAggregateClass = migrationProcessService.getWorkflowAggregateClass();
     Assertions.assertNotNull(workflowAggregateClass);
     Assertions.assertEquals(Aggregate.class, workflowAggregateClass);

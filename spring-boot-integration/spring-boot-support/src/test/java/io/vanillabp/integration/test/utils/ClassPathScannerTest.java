@@ -46,22 +46,19 @@ public class ClassPathScannerTest {
     final var now1 = System.currentTimeMillis();
     final var classpathScanner = ClasspathScanner.allClasses("io.vanillabp.integration.utils");
     assertNotNull(classpathScanner);
-    assertEquals(1, classpathScanner.size());
-    assertEquals("ClasspathScanner", classpathScanner.getFirst().getSimpleName());
-    assertEquals("io.vanillabp.integration.utils.ClasspathScanner", classpathScanner.getFirst().getName());
+    assertTrue(classpathScanner.contains(ClasspathScanner.class));
     final var time1 = System.currentTimeMillis() - now1;
 
     final var now2 = System.currentTimeMillis();
     final var cached = ClasspathScanner.allClasses("io.vanillabp.integration.utils");
     assertNotNull(cached);
-    assertEquals(1, cached.size());
-    assertEquals("ClasspathScanner", cached.getFirst().getSimpleName());
-    assertEquals("io.vanillabp.integration.utils.ClasspathScanner", cached.getFirst().getName());
+    assertTrue(classpathScanner.contains(ClasspathScanner.class));
     assertEquals(classpathScanner, cached);
     final var time2 = System.currentTimeMillis() - now2;
     assertTrue(time2 < time1);
 
-    final var allClasses = ClasspathScanner.allClasses("");
+    final var allClasses = ClasspathScanner.allClasses("",
+        metadataReader -> metadataReader.getClassMetadata().getClassName().startsWith("io.vanillabp."));
     assertNotNull(allClasses);
     assertTrue(allClasses.size() > 1);
     assertTrue(allClasses.stream().anyMatch(clasz -> clasz.getSimpleName().equals("ClasspathScanner")));

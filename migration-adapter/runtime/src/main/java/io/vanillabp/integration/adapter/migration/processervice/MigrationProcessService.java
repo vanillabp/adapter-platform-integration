@@ -5,30 +5,38 @@ import java.util.Map;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.intergration.adapter.migration.spi.MigratableProcessService;
+import io.vanillabp.spi.process.AggregatePersistenceAware;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-@Getter
-public class MigrationProcessService<A> implements MigratableProcessService<A> {
+public class MigrationProcessService<A> {
 
-  protected String workflowModuleId;
+  @Getter
+  protected final String workflowModuleId;
 
-  protected String bpmnProcessId;
+  @Getter
+  protected final String bpmnProcessId;
 
-  protected Class<A> workflowAggregateClass;
+  @Getter
+  protected final Class<A> workflowAggregateClass;
 
-  protected Map<String, String> adapters;
+  @Getter
+  protected final Map<String, String> adapters;
 
-  protected List<String> prioritizedAdapters;
+  @Getter
+  protected final List<String> prioritizedAdapters;
 
-  protected List<MigratableProcessService<A>> processServices;
+  protected final List<MigratableProcessService<A>> processServices;
+
+  protected final AggregatePersistenceAware<A> aggregatePersistenceSupport;
 
   public MigrationProcessService(
       final String workflowModuleId,
       final String bpmnProcessId,
       final Class<A> workflowAggregateClass,
       final MigrationAdapterProperties properties,
+      final AggregatePersistenceAware<A> aggregatePersistenceSupport,
       final List<MigratableProcessService<A>> processServices) {
 
     this.workflowModuleId = workflowModuleId;
@@ -36,92 +44,35 @@ public class MigrationProcessService<A> implements MigratableProcessService<A> {
     this.workflowAggregateClass = workflowAggregateClass;
     this.adapters = properties.getAdapters();
     this.prioritizedAdapters = properties.getPrioritizedAdaptersFor(workflowModuleId, bpmnProcessId);
+    this.aggregatePersistenceSupport = aggregatePersistenceSupport;
     this.processServices = processServices;
+
+  }
+
+  public A startWorkflow(
+      final A workflowAggregate,
+      final boolean afterTransaction) {
+
+    // persist to get ID in case of @Id @GeneratedValue
+    // or force optimistic locking exceptions before running
+    // the workflow if aggregate was already persisted before
+    final var attachedAggregate = aggregatePersistenceSupport
+        .save(workflowAggregate);
+
+    final var aggregateId = aggregatePersistenceSupport
+        .getAggregateId(attachedAggregate);
+
+    // TODO: start workflow by using the right adapter
+
+    return attachedAggregate;
 
   }
 
   /**
    * Connect to BPMS after bean creation
    */
-  protected void initialize() {
+  public void initialize() {
 
   }
 
-  @Override
-  public String getWorkflowModuleId() {
-    return workflowModuleId;
-  }
-
-  @Override
-  public A startWorkflow(
-      A workflowAggregate) throws Exception {
-    log.info("Workflow aggregate class: {}", workflowAggregateClass);
-    return null;
-  }
-
-  @Override
-  public A correlateMessage(
-      A workflowAggregate,
-      String messageName) {
-    return null;
-  }
-
-  @Override
-  public A correlateMessage(
-      A workflowAggregate,
-      String messageName,
-      String correlationId) {
-    return null;
-  }
-
-  @Override
-  public A correlateMessage(
-      A workflowAggregate,
-      Object message) {
-    return null;
-  }
-
-  @Override
-  public A correlateMessage(
-      A workflowAggregate,
-      Object message,
-      String correlationId) {
-    return null;
-  }
-
-  @Override
-  public A completeUserTask(
-      A workflowAggregate,
-      String taskId) {
-    return null;
-  }
-
-  @Override
-  public A cancelUserTask(
-      A workflowAggregate,
-      String taskId,
-      String bpmnErrorCode) {
-    return null;
-  }
-
-  @Override
-  public A completeTask(
-      A workflowAggregate,
-      String taskId) {
-    return null;
-  }
-
-  @Override
-  public A cancelTask(
-      A workflowAggregate,
-      String taskId,
-      String bpmnErrorCode) {
-    return null;
-  }
-
-  @Override
-  public Boolean isTaskActive(
-      String taskId) {
-    return null;
-  }
 }

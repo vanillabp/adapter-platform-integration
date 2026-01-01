@@ -11,13 +11,14 @@ import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoCon
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.sample.Aggregate;
 import io.vanillabp.integration.test.sample.SampleWorkflowService;
+import io.vanillabp.integration.utils.impl.JpaSpringDataUtilConfiguration;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.intergration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.ProcessService;
 
 @SpringBootTest(
     classes = {
-        DummyAdapterConfiguration.class, WorkflowModuleAutoConfiguration.class, SpringBootMigrationAdapterAutoConfiguration.class, SampleWorkflowService.class, io.vanillabp.integration.test.sample2.SampleWorkflowService.class, WorkflowModuleConfiguration.class
+        DummyAdapterConfiguration.class, WorkflowModuleAutoConfiguration.class, SpringBootMigrationAdapterAutoConfiguration.class, JpaSpringDataUtilConfiguration.class, SampleWorkflowService.class, io.vanillabp.integration.test.sample2.SampleWorkflowService.class, WorkflowModuleConfiguration.class
     }
 )
 @ExtendWith(SuppressOutputExtension.class)

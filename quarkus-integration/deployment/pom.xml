@@ -17,6 +17,10 @@
       <artifactId>quarkus-arc-deployment</artifactId>
     </dependency>
     <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-narayana-jta-deployment</artifactId>
+    </dependency>
+    <dependency>
       <groupId>io.vanillabp</groupId>
       <artifactId>vanillabp-quarkus-integration</artifactId>
       <version>${project.version}</version>

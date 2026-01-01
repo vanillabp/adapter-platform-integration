@@ -1,5 +1,6 @@
 package io.vanillabp.integration.processservice;
 
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -23,9 +24,14 @@ import io.vanillabp.integration.adapter.migration.processervice.MigrationProcess
 import io.vanillabp.integration.config.SpringBootMigrationAdapterProperties;
 import io.vanillabp.integration.config.SpringBootMigrationAdapterTransformer;
 import io.vanillabp.integration.utils.ClasspathScanner;
+import io.vanillabp.integration.utils.SpringDataUtil;
+import io.vanillabp.integration.utils.impl.JpaSpringDataUtilConfiguration;
+import io.vanillabp.integration.utils.impl.SpringDataUtilBasedAggregatePersistenceSupport;
 import io.vanillabp.integration.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.integration.workflowmodule.WorkflowModules;
+import io.vanillabp.intergration.adapter.migration.spi.MigratableProcessService;
+import io.vanillabp.spi.process.AggregatePersistenceAware;
 import io.vanillabp.spi.service.WorkflowService;
 import lombok.extern.slf4j.Slf4j;
 
@@ -35,10 +41,12 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Configuration
 @AutoConfigureAfter({
-    WorkflowModuleAutoConfiguration.class
+    WorkflowModuleAutoConfiguration.class, JpaSpringDataUtilConfiguration.class
 })
 @EnableConfigurationProperties(SpringBootMigrationAdapterProperties.class)
 public class SpringBootMigrationAdapterAutoConfiguration {
+
+  static final String BEANNAME_MIGRATIONADAPERPROPERTIES = "VanillaBpMigrationAdapterProperties";
 
   private final Map<Class<?>, MigrationProcessService<?>> connectableServices = new HashMap<>();
 
@@ -52,7 +60,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    * @param adapterConfigurations Configuration beans of adapters found in classpath
    * @return The properties bean not specific to Spring Boot
    */
-  @Bean("VanillaBpMigrationAdapterProperties")
+  @Bean(BEANNAME_MIGRATIONADAPERPROPERTIES)
   public static MigrationAdapterProperties migrationAdapterProperties(
       final SpringBootMigrationAdapterProperties properties,
       final WorkflowModules allWorkflowModules,
@@ -90,7 +98,10 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    */
   @Bean
   public static BeanDefinitionRegistryPostProcessor buildProcessServices(
-      final WorkflowModules allWorkflowModules) {
+      final WorkflowModules allWorkflowModules,
+      final Optional<SpringDataUtil> springDataUtil,
+      final List<AggregatePersistenceAware<?>> aggregatePersistenceAwares,
+      final List<MigratableProcessService<?>> migratableProcessServices) {
 
     return registry -> {
 
@@ -128,6 +139,37 @@ public class SpringBootMigrationAdapterAutoConfiguration {
                 return;
               }
 
+              if (springDataUtil.isEmpty()) {
+                throw new IllegalStateException(
+                    """
+                        Spring Data Util bean not found! To solve this either
+                        - add spring-boot-starter-data-jpa to classpath and configure a data source, if you use JPA for persistence of aggregates
+                        - add @Import(io.vanillabp.integration.utils.impl.MongoDbSpringDataUtilConfiguration) to your main application class, if you use MongoDb for persistence of aggregates
+                        - add your own implementation of io.vanillabp.integration.utils.SpringDataUtil, if you use an alternative persistence""");
+              }
+
+              // find persistence support class for the aggregate class
+              @SuppressWarnings({
+                  "rawtypes", "unchecked"
+              })
+              final var aggregatePersistenceAware = aggregatePersistenceAwares
+                  .stream()
+                  // calculate distance of classes
+                  .map(aware -> Map.entry(
+                      aware,
+                      AggregatePersistenceResolver.inheritanceDistance(
+                          aware.getAggregateClass(),
+                          workflowAggregateType
+                      )))
+                  // filter persistence awares those aggregate type is not assignable to the current aggregate type
+                  .filter(awareEntry -> awareEntry.getValue() != Integer.MAX_VALUE)
+                  // choose the most specific persistence support in terms of inheritance class distance
+                  .min(Comparator.comparingInt(Map.Entry::getValue))
+                  // if none found, fall back to persistence support based on Spring Data Util bean
+                  .map(Map.Entry::getKey)
+                  .orElse(new SpringDataUtilBasedAggregatePersistenceSupport(
+                      springDataUtil.get(), workflowAggregateType));
+
               // collect information necessary for bean creation
               final var workflowModuleId = allWorkflowModules
                   .getWorkflowModules()
@@ -142,13 +184,19 @@ public class SpringBootMigrationAdapterAutoConfiguration {
                   .filter(Predicate.not(String::isEmpty))
                   .orElse(serviceClass.getSimpleName());
 
-              // build bean via bean definition
+              // build bean via bean definition: This means to build it as late as possible.
+              // A bean definition is a promise to Spring that this bean will be available and
+              // can be used for wiring before the bean is created.
+              // The reason for this is to avoid circular dependencies between the class
+              // annotated by @WorkflowService and the ProcessService bean.
               final var processServiceBeanDefinition = (RootBeanDefinition) BeanDefinitionBuilder
-                  .rootBeanDefinition(MigrationProcessService.class)
+                  .rootBeanDefinition(ProcessServiceSpringBean.class)
                   .addConstructorArgValue(workflowModuleId)
                   .addConstructorArgValue(bpmProcessId)
                   .addConstructorArgValue(workflowAggregateType)
-                  .addConstructorArgReference("VanillaBpMigrationAdapterProperties")
+                  .addConstructorArgReference(BEANNAME_MIGRATIONADAPERPROPERTIES)
+                  .addConstructorArgValue(aggregatePersistenceAware)
+                  .addConstructorArgValue(migratableProcessServices)
                   .getBeanDefinition();
               processServiceBeanDefinition.setTargetType(
                   ResolvableType.forClassWithGenerics(io.vanillabp.spi.process.ProcessService.class,

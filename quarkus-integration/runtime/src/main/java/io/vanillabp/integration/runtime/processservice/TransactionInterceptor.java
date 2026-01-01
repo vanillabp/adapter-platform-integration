@@ -9,9 +9,10 @@ import jakarta.interceptor.InvocationContext;
 
 /**
  * Typically an Interceptor needs an Annotation for interceptor binding. Since the
- * annotation @WorkflowTask it is used for is not an interceptor binding annotation
- * it will be added during deployment by VanillaBpIntegrationProcessor. Therefor,
- * &quot;CdiInterceptorInspection&quot; warnings have to be suppressed.
+ * annotation @WorkflowTask it is used for binding which is not an interceptor binding
+ * annotation, the missing annotation will be added during deployment by
+ * VanillaBpIntegrationProcessor. Therefore, &quot;CdiInterceptorInspection&quot;
+ * warnings have to be suppressed.
  */
 @SuppressWarnings("CdiInterceptorInspection")
 @Interceptor

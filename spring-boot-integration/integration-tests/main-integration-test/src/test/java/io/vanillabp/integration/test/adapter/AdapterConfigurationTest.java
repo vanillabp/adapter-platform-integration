@@ -5,15 +5,17 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.ResolvableType;
 
 import io.vanillabp.adapters.dummy.springboot.DummyAdapterConfiguration;
-import io.vanillabp.integration.adapter.migration.processervice.MigrationProcessService;
+import io.vanillabp.integration.processservice.ProcessServiceSpringBean;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.sample.Aggregate;
+import io.vanillabp.integration.utils.impl.JpaSpringDataUtilConfiguration;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.intergration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.ProcessService;
@@ -42,6 +44,7 @@ public class AdapterConfigurationTest {
    * ProcessService<Aggregate> should be created using dummy adapter configured in application.yaml
    */
   @Test
+  @SuppressWarnings("unchecked")
   public void testAdapterConfiguration() {
 
     this.contextRunner
@@ -49,8 +52,15 @@ public class AdapterConfigurationTest {
         .withInitializer(new ConfigDataApplicationContextInitializer())
         .withUserConfiguration(WorkflowModuleConfiguration.class)
         .withConfiguration(
-            AutoConfigurations.of(DummyAdapterConfiguration.class, WorkflowModuleAutoConfiguration.class,
+            AutoConfigurations.of(
+                HibernateJpaAutoConfiguration.class, JpaSpringDataUtilConfiguration.class,
+                DummyAdapterConfiguration.class, WorkflowModuleAutoConfiguration.class,
                 SpringBootMigrationAdapterAutoConfiguration.class))
+        .withPropertyValues(
+            "spring.datasource.url=jdbc:h2:mem:testdb",
+            "spring.datasource.driver-class-name=org.h2.Driver",
+            "spring.jpa.hibernate.ddl-auto=none"
+        )
         .run(context -> {
 
           final var sampleProcessServiceNames = context.getBeanNamesForType(
@@ -60,10 +70,12 @@ public class AdapterConfigurationTest {
           final var sampleProcessService = context.getBean(sampleProcessServiceNames[0], ProcessService.class);
 
           Assertions.assertNotNull(sampleProcessService);
-          Assertions.assertInstanceOf(MigrationProcessService.class, sampleProcessService);
+          Assertions.assertInstanceOf(ProcessServiceSpringBean.class, sampleProcessService);
 
           @SuppressWarnings("unchecked")
-          final var migrationProcessService = (MigrationProcessService<Aggregate>) sampleProcessService;
+          final var processServiceBean = (ProcessServiceSpringBean<Aggregate>) sampleProcessService;
+          final var migrationProcessService = processServiceBean.getMigrationProcessService();
+
           final var workflowAggregateClass = migrationProcessService.getWorkflowAggregateClass();
           Assertions.assertNotNull(workflowAggregateClass);
           Assertions.assertEquals(Aggregate.class, workflowAggregateClass);

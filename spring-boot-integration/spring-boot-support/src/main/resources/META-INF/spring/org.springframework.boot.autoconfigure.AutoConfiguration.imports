@@ -1,2 +1,3 @@
 io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration
+io.vanillabp.integration.utils.impl.JpaSpringDataUtilConfiguration
 io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration
