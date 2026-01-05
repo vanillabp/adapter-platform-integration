@@ -15,6 +15,7 @@ import io.quarkus.arc.deployment.InterceptorBindingRegistrarBuildItem;
 import io.quarkus.arc.processor.InterceptorBindingRegistrar;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.ObjectSubstitutionBuildItem;
 import io.quarkus.deployment.builditem.RunTimeConfigBuilderBuildItem;
@@ -49,6 +50,10 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
+   * If any serialization of Quarkus needs to serialize an object straight forward to serialize,
+   * an ObjectSubstitutionBuildItem needs to be provided for proper serialization and deserialization.
+   *
+   * @see io.vanillabp.integration.deployment.workflowmodule.WorkflowModuleBuildStepProcessor#findAllWorkflowModules(ApplicationArchivesBuildItem)
    * @return An object substitution build item for {@link URI}
    */
   @BuildStep
@@ -75,7 +80,7 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
-   * Build step for introducing {@link TransactionInterceptor} for all method's
+   * Build step for introducing {@link TransactionInterceptor} for all the method's
    * annotated by @{@link WorkflowTask}.
    *
    * @param annotationsTransformer {@link TransactionInterceptor}'s annotations need be transformed

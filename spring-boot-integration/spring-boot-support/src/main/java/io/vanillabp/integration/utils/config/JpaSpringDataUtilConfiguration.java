@@ -1,4 +1,4 @@
-package io.vanillabp.integration.utils.impl;
+package io.vanillabp.integration.utils.config;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 
 import io.vanillabp.integration.utils.SpringDataUtil;
+import io.vanillabp.integration.utils.impl.JpaSpringDataUtil;
 
 @Configuration
 @ConditionalOnMissingBean(SpringDataUtil.class) // only in case of application did not define it's own

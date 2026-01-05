@@ -49,6 +49,18 @@
       <version>${project.version}</version>
       <scope>compile</scope>
     </dependency>
+    <dependency>
+      <groupId>io.vanillabp.quarkus</groupId>
+      <artifactId>aggregateperstistence-tests</artifactId>
+      <version>${project.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.vanillabp.quarkus</groupId>
+      <artifactId>discovery-tests</artifactId>
+      <version>${project.version}</version>
+      <scope>compile</scope>
+    </dependency>
   </dependencies>
 
   <build>

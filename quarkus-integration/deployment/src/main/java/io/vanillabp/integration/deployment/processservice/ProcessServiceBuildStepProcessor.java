@@ -22,6 +22,7 @@ import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.gizmo.ClassCreator;
 import io.quarkus.gizmo.SignatureBuilder;
 import io.vanillabp.integration.deployment.config.MigrationAdapterPropertiesBuildItem;
+import io.vanillabp.integration.deployment.validation.EnsureClassIsBeanValidationBuildItem;
 import io.vanillabp.integration.deployment.workflowmodule.VanillaBpWorkflowModulesBuildItem;
 import io.vanillabp.integration.deployment.workflowmodule.WorkflowModuleBuildStepProcessor;
 import io.vanillabp.integration.runtime.processservice.ProcessServiceBaseCdiBean;
@@ -56,6 +57,7 @@ public class ProcessServiceBuildStepProcessor {
       final ApplicationArchivesBuildItem applicationArchivesBuildItem,
       final MigrationAdapterPropertiesBuildItem migrationAdapterProperties,
       final VanillaBpWorkflowModulesBuildItem workflowModulesFound,
+      final BuildProducer<EnsureClassIsBeanValidationBuildItem> ensureClassIsBeanBuildItemProducer,
       final BuildProducer<GeneratedBeanBuildItem> generatedBeanBuildItemBuildProducer,
       final BuildProducer<AdditionalBeanBuildItem> additionalBeanBuildItemBuildProducer) {
 
@@ -95,6 +97,15 @@ public class ProcessServiceBuildStepProcessor {
 
           // collect information necessary for bean creation
           final var serviceClass = annotation.target().asClass();
+          // ensure service class will be a CDI bean at runtime
+          ensureClassIsBeanBuildItemProducer
+              .produce(EnsureClassIsBeanValidationBuildItem
+                  .builder()
+                  .className(serviceClass.name())
+                  .usageDescription("Workflow service annotated with @"
+                      + WorkflowService.class.getName())
+                  .build());
+
           final var workflowModuleId = WorkflowModuleBuildStepProcessor
               .getWorkflowModuleId(
                   workflowModulesFound,
@@ -133,6 +144,14 @@ public class ProcessServiceBuildStepProcessor {
                       + "- Repository record pattern: https://quarkus.io/guides/hibernate-orm-panache#solution-2-using-the-repository-pattern\n"
                       + "- Spring Data pattern: https://quarkus.io/guides/spring-data-jpa"
               ));
+          // ensure service class will be a CDI bean at runtime
+          ensureClassIsBeanBuildItemProducer
+              .produce(EnsureClassIsBeanValidationBuildItem
+                  .builder()
+                  .className(aggregatePersistenceType.name())
+                  .usageDescription("Service implementing the interface "
+                      + AggregatePersistenceAware.class.getName())
+                  .build());
 
           // generate process service CDI bean specific to the workflow aggregate
           generateProcessService(

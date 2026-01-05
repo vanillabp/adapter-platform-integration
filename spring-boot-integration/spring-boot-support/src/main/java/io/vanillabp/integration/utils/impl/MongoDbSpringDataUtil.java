@@ -131,7 +131,7 @@ public class MongoDbSpringDataUtil implements SpringDataUtil {
       final Object entity) {
 
     final var persistentEntity = getPersistentEntity(entity.getClass());
-    return (I) Objects.requireNonNull(persistentEntity.getIdentifierAccessor(entity).getIdentifier());
+    return (I) persistentEntity.getIdentifierAccessor(entity).getIdentifier();
 
   }
 
@@ -149,7 +149,13 @@ public class MongoDbSpringDataUtil implements SpringDataUtil {
       final O entity) {
 
     final var persistentEntity = getPersistentEntity(entityClass);
-    return persistentEntity.isNew(entity);
+    if (persistentEntity.isNew(entity)) {
+      return false;
+    }
+
+    final var id = persistentEntity.getIdentifierAccessor(entity).getIdentifier();
+    assert (id != null);
+    return getRepository(entityClass).existsById(id);
 
   }
 

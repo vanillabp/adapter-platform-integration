@@ -93,12 +93,16 @@ public class JpaSpringDataUtil implements SpringDataUtil {
     var repositories = new Repositories(applicationContext);
 
     EntityInformation<?, Object> entityInfo;
-    do {
-      entityInfo = repositories.getEntityInformationFor(cls);
-      cls = entityInfo != null ? cls : cls.getSuperclass();
-    } while ((entityInfo == null) && (cls != Object.class));
-
-    if (entityInfo == null) {
+    try {
+      do {
+        entityInfo = repositories.getEntityInformationFor(cls);
+        cls = entityInfo != null ? cls : cls.getSuperclass();
+      } while ((entityInfo == null) && (cls != Object.class));
+      if (entityInfo == null) {
+        throw new IllegalStateException(
+            String.format("Type '%s' is not an entity!", type.getName()));
+      }
+    } catch (UnsupportedOperationException e) {
       throw new IllegalStateException(
           String.format("Type '%s' is not an entity!", type.getName()));
     }

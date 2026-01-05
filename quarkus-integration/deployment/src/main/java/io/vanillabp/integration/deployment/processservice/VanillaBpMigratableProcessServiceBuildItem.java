@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Getter;
 
 /**
- * The {@link io.quarkus.builder.item.BuildItem} adapter have to produce
+ * The {@link io.quarkus.builder.item.BuildItem}, adapters have to produce
  * to be processed by VanillaBP Quarkus integration.
  * <p>
  * Hint: It is a {@link MultiBuildItem} because multiple adapters may be used

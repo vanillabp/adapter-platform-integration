@@ -2,6 +2,7 @@ package io.vanillabp.integration.test.multibpmn;
 
 import org.slf4j.LoggerFactory;
 
+import io.vanillabp.spi.process.AggregatePersistenceAware;
 import io.vanillabp.spi.process.ProcessService;
 import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.WorkflowService;
@@ -13,13 +14,26 @@ import jakarta.inject.Singleton;
 @WorkflowService(workflowAggregateClass = Aggregate1.class,
     bpmnProcess = @BpmnProcess(bpmnProcessId = "Sample1Workflow"))
 @SuppressWarnings("unused")
-public class Sample1Workflow {
+public class Sample1Workflow implements AggregatePersistenceAware<Aggregate1> {
 
   @Inject
   ProcessService<Aggregate1> processService;
 
-  public Class<?> getAggregateClass() {
+  @Override
+  public Class<Aggregate1> getAggregateClass() {
     return Aggregate1.class;
+  }
+
+  @Override
+  public Aggregate1 save(
+      final Aggregate1 aggregate) {
+    return null; // not necessary for this test
+  }
+
+  @Override
+  public Object getAggregateId(
+      final Aggregate1 aggregate) {
+    return null; // not necessary for this test
   }
 
   @WorkflowTask
