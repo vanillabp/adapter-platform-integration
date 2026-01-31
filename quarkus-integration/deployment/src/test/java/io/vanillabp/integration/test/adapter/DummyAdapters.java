@@ -23,7 +23,7 @@ public class DummyAdapters {
             context.produce(new CapabilityBuildItem("io.vanillabp.adapter.dummy", "vanillabp-dummy"));
             context.produce(VanillaBpMigratableProcessServiceBuildItem
                 .builder()
-                .adapterName("dummy")
+                .adapterType("dummy")
                 .build());
           }
         }
@@ -48,14 +48,14 @@ public class DummyAdapters {
                 context.produce(new CapabilityBuildItem("io.vanillabp.adapter.dummy", "vanillabp-dummy"));
                 context.produce(VanillaBpMigratableProcessServiceBuildItem
                     .builder()
-                    .adapterName("dummy")
+                    .adapterType("dummy")
                     .build());
                 context.produce(
                     new FeatureBuildItem("vanillabp-dummy2")); // unique name for adapters: "vanillabp-" + adapter-id
                 context.produce(new CapabilityBuildItem("io.vanillabp.adapter.dummy2", "vanillabp-dummy2"));
                 context.produce(VanillaBpMigratableProcessServiceBuildItem
                     .builder()
-                    .adapterName("dummy2")
+                    .adapterType("dummy2")
                     .build());
               }
             })
@@ -78,7 +78,7 @@ public class DummyAdapters {
             context.produce(new CapabilityBuildItem("io.vanillabp.adapter.dummy", "vanillabp-dummy"));
             context.produce(VanillaBpMigratableProcessServiceBuildItem
                 .builder()
-                .adapterName(
+                .adapterType(
                     "a name not matching the substring of the adapter's capability after 'io.vanillabp.adapter.'")
                 .build());
           }

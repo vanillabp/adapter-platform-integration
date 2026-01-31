@@ -212,7 +212,7 @@ public class SpringBootMigrationAdapterTransformer {
     // if more than one adapter is configured then the
     // property vanillabp.prioritized-adapters has to list each adapter
     // configured:
-    final var adapterNamesConfigured = String.join(", ", adapters.keySet());
+    final var adapterIdsConfigured = String.join(", ", adapters.keySet());
     if (properties.getPrioritizedAdapters()
         .isEmpty() || (adapters.size() != properties.getPrioritizedAdapters().size())) {
       throw new IllegalStateException(
@@ -220,7 +220,7 @@ public class SpringBootMigrationAdapterTransformer {
               The property '%s.prioritized-adapters' must list all the adapters configured in '%s.adapters.*' to define
               the order in which adapters are addressed to find workflows running.
               Configured adapters are: %s."""
-              .formatted(PREFIX, PREFIX, adapterNamesConfigured));
+              .formatted(PREFIX, PREFIX, adapterIdsConfigured));
     }
 
     final var unknownAdapters = properties

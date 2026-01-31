@@ -7,8 +7,8 @@ package io.vanillabp.integration.adapter;
 public abstract class AdapterConfigurationBase {
 
   /**
-   * @return The ID of the adapter
+   * @return The name of the adapter's type
    */
-  public abstract String getAdapterId();
+  public abstract String getAdapterType();
 
 }

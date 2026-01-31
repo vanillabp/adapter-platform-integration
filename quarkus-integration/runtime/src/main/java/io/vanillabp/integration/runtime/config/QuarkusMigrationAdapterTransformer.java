@@ -107,6 +107,9 @@ public class QuarkusMigrationAdapterTransformer {
                         adapter.getKey(),
                         AdapterConfiguration
                             .builder()
+                            .prioritizedAdapters(adapter.getValue().prioritizedAdapters().isPresent()
+                                ? adapter.getValue().prioritizedAdapters().get()
+                                : List.of())
                             .resourcesLocation(adapter.getValue().resourcesLocation())
                             .build()))
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)))
@@ -172,7 +175,7 @@ public class QuarkusMigrationAdapterTransformer {
         .stream()
         .filter(capability -> capability.startsWith(PREFIX_ADAPTER_PACKAGE))
         .toList();
-    final var adapterNamesProvidedByOtherExtensions = adapterPackagesProvidedByOtherExtensions
+    final var adapterTypesProvidedByOtherExtensions = adapterPackagesProvidedByOtherExtensions
         .stream()
         .map(pkg -> pkg.substring(PREFIX_ADAPTER_PACKAGE.length()))
         .toList();
@@ -182,16 +185,16 @@ public class QuarkusMigrationAdapterTransformer {
               .formatted(PREFIX_ADAPTER_PACKAGE));
     }
 
-    // build result map (key = adapter name, value = adapter type)
+    // build result map (key = adapter id, value = adapter type)
     final var result = properties
         .adapters()
         .entrySet()
         .stream()
-        // map type property, if not set, to the adapters name
+        // map type property, if not set, to the adapters id
         .map(config -> Map.entry(config.getKey(), config.getValue().type().orElse(config.getKey())))
         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     if (result.isEmpty()) {
-      final var missingConfigSections = adapterNamesProvidedByOtherExtensions
+      final var missingConfigSections = adapterTypesProvidedByOtherExtensions
           .stream()
           .map(adapter -> "%s.adapters.xxxx.type=%s".formatted(PREFIX, adapter))
           .collect(Collectors.joining("\n  "));
@@ -206,7 +209,7 @@ public class QuarkusMigrationAdapterTransformer {
     final var unknownAdapters = result
         .entrySet()
         .stream()
-        .filter(adapter -> !adapterNamesProvidedByOtherExtensions.contains(adapter.getValue()))
+        .filter(adapter -> !adapterTypesProvidedByOtherExtensions.contains(adapter.getValue()))
         .map(adapter -> "'%s' found in '%s.adapters.%s.type'".formatted(adapter.getValue(), PREFIX, adapter.getKey()))
         .collect(Collectors.joining("\n  "));
     if (!unknownAdapters.isEmpty()) {
@@ -217,13 +220,13 @@ public class QuarkusMigrationAdapterTransformer {
                 %s
               Available adapter types provided by Quarkus extensions currently loaded: %s."""
               .formatted(PREFIX, unknownAdapters,
-                  String.join(", ", adapterNamesProvidedByOtherExtensions)));
+                  String.join(", ", adapterTypesProvidedByOtherExtensions)));
     }
 
     // validate adapters provided by VanillaBP Quarkus adapter extensions
     final var extensionsWithoutCapability = adaptersFound
         .stream()
-        .filter(adapter -> !adapterNamesProvidedByOtherExtensions.contains(adapter))
+        .filter(adapter -> !adapterTypesProvidedByOtherExtensions.contains(adapter))
         .collect(Collectors.joining("\n  "));
     if (!extensionsWithoutCapability.isEmpty()) {
       throw new IllegalStateException(
@@ -264,7 +267,7 @@ public class QuarkusMigrationAdapterTransformer {
     }
 
     // test for adapters not found in properties
-    final var unconfiguredAdapters = adapterNamesProvidedByOtherExtensions
+    final var unconfiguredAdapters = adapterTypesProvidedByOtherExtensions
         .stream()
         .filter(adapter -> !result.containsValue(adapter))
         .collect(Collectors.joining(", "));

@@ -16,9 +16,9 @@ import lombok.Getter;
 public final class VanillaBpMigratableProcessServiceBuildItem extends MultiBuildItem {
 
   /**
-   * The adapter's name
+   * The name of the adapter's type
    */
-  private String adapterName;
+  private String adapterType;
 
   /**
    * The adapter's bean class to be used for bean instantiation

@@ -45,16 +45,16 @@ public class ConfigBuildStepProcessor {
       final BuildProducer<SyntheticBeanBuildItem> syntheticBeanBuildItemBuildProducer,
       final MigrationAdapterPropertiesRecorder migrationAdapterPropertiesRecorder) {
 
-    final var adapterNamesOfProcessServicesProvidedByAdapters = processServicesProvidedByAdapters
+    final var adapterTypesOfProcessServicesProvidedByAdapters = processServicesProvidedByAdapters
         .stream()
-        .map(VanillaBpMigratableProcessServiceBuildItem::getAdapterName)
+        .map(VanillaBpMigratableProcessServiceBuildItem::getAdapterType)
         .collect(Collectors.toCollection(HashSet::new)); // pass items to a serializable kind of set
 
     // check for consistent configuration
     final var migrationAdapterProperties = migrationAdapterPropertiesRecorder.recordMigrationProperties(
         new HashSet<>(capabilities.getCapabilities()), // pass items to a serializable kind of set
         new HashSet<>(workflowModulesFound.getWorkflowModules().keySet()), // pass items to a serializable kind of set
-        adapterNamesOfProcessServicesProvidedByAdapters);
+        adapterTypesOfProcessServicesProvidedByAdapters);
 
     // build properties as a CDI bean for injection into generated ProcessService beans
     syntheticBeanBuildItemBuildProducer

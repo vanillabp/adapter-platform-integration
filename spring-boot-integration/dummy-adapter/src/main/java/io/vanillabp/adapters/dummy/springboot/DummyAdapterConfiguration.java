@@ -17,7 +17,7 @@ public class DummyAdapterConfiguration extends AdapterConfigurationBase {
    * @return The ID of the adapter
    */
   @Override
-  public String getAdapterId() {
+  public String getAdapterType() {
     return "dummy";
   }
 

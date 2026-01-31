@@ -70,7 +70,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
         .ofNullable(adapterConfigurations)
         .orElse(List.of())
         .stream()
-        .map(AdapterConfigurationBase::getAdapterId)
+        .map(AdapterConfigurationBase::getAdapterType)
         .toList();
 
     final var workflowModuleIds = allWorkflowModules

@@ -4,6 +4,7 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.vanillabp.adapter.dummy.deployment.config.DummyProperties;
+import io.vanillabp.adapter.dummy.runtime.MigratableProcessService;
 import io.vanillabp.integration.deployment.processservice.VanillaBpMigratableProcessServiceBuildItem;
 import lombok.extern.slf4j.Slf4j;
 
@@ -34,7 +35,8 @@ class DummyIntegrationProcessor {
 
     return VanillaBpMigratableProcessServiceBuildItem
         .builder()
-        .adapterName("dummy")
+        .adapterType("dummy")
+        .migratableProcessServiceBeanClass(MigratableProcessService.class.getName())
         .build();
 
   }
