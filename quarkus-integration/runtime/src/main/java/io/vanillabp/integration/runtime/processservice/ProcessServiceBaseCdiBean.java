@@ -4,13 +4,14 @@ import java.util.List;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processervice.MigrationProcessService;
-import io.vanillabp.spi.process.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.spi.process.ProcessService;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.transaction.TransactionSynchronizationRegistry;
+import jakarta.transaction.Transactional;
 import lombok.Getter;
 
 public abstract class ProcessServiceBaseCdiBean<A> implements ProcessService<A> {
@@ -18,6 +19,11 @@ public abstract class ProcessServiceBaseCdiBean<A> implements ProcessService<A> 
   @Inject
   MigrationAdapterProperties properties;
 
+  /**
+   * The persistences available at runtime. This is injected using {@link Instance} because the services
+   * annotated by {@link io.vanillabp.spi.service.WorkflowService} may implement {@link AggregatePersistenceAware}
+   * what causes cycle dependencies since this bean is typically also injected into the service.
+   */
   @Inject
   @Any
   Instance<AggregatePersistenceAware<?>> persistences;
@@ -39,23 +45,37 @@ public abstract class ProcessServiceBaseCdiBean<A> implements ProcessService<A> 
 
     this.migrationProcessService = new MigrationProcessService<>(
         getWorkflowModuleId(), getBpmnProcessId(), getWorkflowAggregateClass(), properties, getAggregatePersistence(), List
-            .of());
+            .of(), null);
 
   }
 
   public A startWorkflow(
       A workflowAggregate) {
 
-    return migrationProcessService.startWorkflow(workflowAggregate, isTransactionActive());
+    if (migrationProcessService.needsTransactionForStartingWorkflows() && noTransactionIsActive()) {
+      throw new RuntimeException(
+          "No transaction active available! Add run 'startWorkflow' only having a local transaction active.");
+    }
+
+    return migrationProcessService.startWorkflow(workflowAggregate);
+
+  }
+
+  @Transactional
+  public void startWorkflowPhaseTwo(
+      final String adapterId,
+      final Object workflowAggregateId) {
+
+    migrationProcessService.startWorkflowPhaseTwo(adapterId, workflowAggregateId);
 
   }
 
   @SuppressWarnings("unchecked")
-  private AggregatePersistenceAware<A> getAggregatePersistence() {
+  private io.vanillabp.intergration.adapter.migration.spi.AggregatePersistenceAware<A> getAggregatePersistence() {
 
     for (AggregatePersistenceAware<?> persistence : persistences) {
       if (getAggregatePersistenceClass().isAssignableFrom(persistence.getClass())) {
-        return (AggregatePersistenceAware<A>) persistence;
+        return new AggregatePersistenceAwareWrapper<A>((AggregatePersistenceAware<A>) persistence);
       }
     }
 
@@ -66,9 +86,15 @@ public abstract class ProcessServiceBaseCdiBean<A> implements ProcessService<A> 
 
   }
 
-  public boolean isTransactionActive() {
+  public boolean transactionIsActive() {
 
-    return txRegistry.getTransactionKey() != null;
+    return !noTransactionIsActive();
+
+  }
+
+  public boolean noTransactionIsActive() {
+
+    return txRegistry.getTransactionKey() == null;
 
   }
 

@@ -6,9 +6,10 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processervice.MigrationProcessService;
+import io.vanillabp.integration.spi.aggregate.AggregatePersistenceAware;
 import io.vanillabp.intergration.adapter.migration.spi.MigratableProcessService;
-import io.vanillabp.spi.process.AggregatePersistenceAware;
 import io.vanillabp.spi.process.ProcessService;
+import jakarta.transaction.Transactional;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -26,8 +27,8 @@ public class ProcessServiceSpringBean<A> implements ProcessService<A> {
       final AggregatePersistenceAware<A> aggregatePersistenceAware,
       final List<MigratableProcessService<A>> migratableProcessServices) {
 
-    migrationProcessService = new MigrationProcessService<>(
-        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, aggregatePersistenceAware, migratableProcessServices);
+    migrationProcessService = new MigrationProcessService<A>(
+        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, new AggregatePersistenceAwareWrapper<A>(aggregatePersistenceAware), migratableProcessServices, null);
 
   }
 
@@ -50,17 +51,24 @@ public class ProcessServiceSpringBean<A> implements ProcessService<A> {
 
   }
 
-  private boolean isTransactionActive() {
-
-    return TransactionSynchronizationManager.isActualTransactionActive();
-
-  }
-
-  @Override
   public A startWorkflow(
       A workflowAggregate) {
 
-    return migrationProcessService.startWorkflow(workflowAggregate, isTransactionActive());
+    if (migrationProcessService.needsTransactionForStartingWorkflows() && noTransactionIsActive()) {
+      throw new RuntimeException(
+          "No transaction active available! Add run 'startWorkflow' only having a local transaction active.");
+    }
+
+    return migrationProcessService.startWorkflow(workflowAggregate);
+
+  }
+
+  @Transactional
+  public void startWorkflowPhaseTwo(
+      final String adapterId,
+      final Object workflowAggregateId) {
+
+    migrationProcessService.startWorkflowPhaseTwo(adapterId, workflowAggregateId);
 
   }
 
@@ -130,6 +138,18 @@ public class ProcessServiceSpringBean<A> implements ProcessService<A> {
       String bpmnErrorCode) {
     //return migrationProcessService.cancelTask(workflowAggregate, taskId, bpmnErrorCode);
     return workflowAggregate;
+  }
+
+  public boolean transactionIsActive() {
+
+    return !noTransactionIsActive();
+
+  }
+
+  private boolean noTransactionIsActive() {
+
+    return TransactionSynchronizationManager.isActualTransactionActive();
+
   }
 
 }

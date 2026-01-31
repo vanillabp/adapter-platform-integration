@@ -6,7 +6,7 @@ import org.jboss.jandex.*;
 import org.junit.jupiter.api.Test;
 
 import io.vanillabp.integration.deployment.processservice.AggregatePersistenceResolver;
-import io.vanillabp.spi.process.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.AggregatePersistenceAware;
 
 class AggregatePersistenceResolverTest {
 

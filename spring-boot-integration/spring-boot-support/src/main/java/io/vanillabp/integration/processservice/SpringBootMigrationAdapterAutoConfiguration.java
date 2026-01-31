@@ -23,6 +23,7 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
 import io.vanillabp.integration.adapter.migration.processervice.MigrationProcessService;
 import io.vanillabp.integration.config.SpringBootMigrationAdapterProperties;
 import io.vanillabp.integration.config.SpringBootMigrationAdapterTransformer;
+import io.vanillabp.integration.spi.aggregate.AggregatePersistenceAware;
 import io.vanillabp.integration.utils.ClasspathScanner;
 import io.vanillabp.integration.utils.SpringDataUtil;
 import io.vanillabp.integration.utils.config.JpaSpringDataUtilConfiguration;
@@ -31,7 +32,6 @@ import io.vanillabp.integration.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.integration.workflowmodule.WorkflowModules;
 import io.vanillabp.intergration.adapter.migration.spi.MigratableProcessService;
-import io.vanillabp.spi.process.AggregatePersistenceAware;
 import io.vanillabp.spi.service.WorkflowService;
 import lombok.extern.slf4j.Slf4j;
 

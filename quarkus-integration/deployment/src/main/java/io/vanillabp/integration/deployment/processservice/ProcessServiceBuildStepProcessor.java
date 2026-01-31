@@ -26,7 +26,7 @@ import io.vanillabp.integration.deployment.validation.EnsureClassIsBeanValidatio
 import io.vanillabp.integration.deployment.workflowmodule.VanillaBpWorkflowModulesBuildItem;
 import io.vanillabp.integration.deployment.workflowmodule.WorkflowModuleBuildStepProcessor;
 import io.vanillabp.integration.runtime.processservice.ProcessServiceBaseCdiBean;
-import io.vanillabp.spi.process.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.spi.process.ProcessService;
 import io.vanillabp.spi.service.WorkflowService;
 import jakarta.enterprise.context.ApplicationScoped;

@@ -1,6 +1,6 @@
 package io.vanillabp.integration.test;
 
-import io.vanillabp.spi.process.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import jakarta.enterprise.context.ApplicationScoped;
 
 @ApplicationScoped

@@ -2,9 +2,11 @@ package io.vanillabp.intergration.test.utils.springboot;
 
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.AnnotationBeanNameGenerator;
+import org.springframework.lang.NonNull;
 
 public class FullyQualifiedRepositoryBeanNameGenerator extends AnnotationBeanNameGenerator {
 
+  @NonNull
   @Override
   protected String buildDefaultBeanName(
       final BeanDefinition definition) {

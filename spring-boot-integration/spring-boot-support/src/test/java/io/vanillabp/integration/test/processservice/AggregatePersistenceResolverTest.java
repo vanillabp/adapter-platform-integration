@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 import io.vanillabp.integration.processservice.AggregatePersistenceResolver;
-import io.vanillabp.spi.process.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.aggregate.AggregatePersistenceAware;
 
 class AggregatePersistenceResolverTest {
 

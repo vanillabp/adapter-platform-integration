@@ -10,7 +10,6 @@
 
   <groupId>io.vanillabp.adapter</groupId>
   <artifactId>migration-adapter-parent</artifactId>
-  <version>0.0.1-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>Migration adapter</name>
 

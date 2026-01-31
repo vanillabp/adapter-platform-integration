@@ -1,7 +1,7 @@
 package io.vanillabp.integration.utils.impl;
 
+import io.vanillabp.integration.spi.aggregate.AggregatePersistenceAware;
 import io.vanillabp.integration.utils.SpringDataUtil;
-import io.vanillabp.spi.process.AggregatePersistenceAware;
 import lombok.RequiredArgsConstructor;
 
 @RequiredArgsConstructor

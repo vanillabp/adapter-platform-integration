@@ -35,7 +35,7 @@ public class NoPersistenceAvailableTest {
         assertEquals(
             """
                 You have to provide a CDI bean implementing
-                  io.vanillabp.spi.process.AggregatePersistenceAware
+                  io.vanillabp.integration.spi.AggregatePersistenceAware
                 which is responsible to persist aggregates.
                 This is necessary because in Quarkus there is no unique way to do persistence of entities:
                 - Active record pattern: https://quarkus.io/guides/hibernate-orm-panache#solution-1-using-the-active-record-pattern

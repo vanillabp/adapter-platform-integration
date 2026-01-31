@@ -2,7 +2,7 @@ package io.vanillabp.integration.test.multibpmn;
 
 import org.slf4j.LoggerFactory;
 
-import io.vanillabp.spi.process.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.spi.process.ProcessService;
 import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.WorkflowService;

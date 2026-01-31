@@ -11,11 +11,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusProdModeTest;
+import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.test.Aggregate;
 import io.vanillabp.integration.test.NoBeanAggregatePersistence;
 import io.vanillabp.integration.test.WorkflowService;
 import io.vanillabp.intergration.test.utils.SuppressOutputExtension;
-import io.vanillabp.spi.process.AggregatePersistenceAware;
 
 @ExtendWith(SuppressOutputExtension.class)
 public class PersistenceNotABeanTest {

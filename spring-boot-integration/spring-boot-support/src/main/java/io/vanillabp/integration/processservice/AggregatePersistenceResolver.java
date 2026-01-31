@@ -7,7 +7,7 @@ import java.lang.reflect.WildcardType;
 import java.util.HashSet;
 import java.util.Set;
 
-import io.vanillabp.spi.process.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.aggregate.AggregatePersistenceAware;
 
 public final class AggregatePersistenceResolver {
 

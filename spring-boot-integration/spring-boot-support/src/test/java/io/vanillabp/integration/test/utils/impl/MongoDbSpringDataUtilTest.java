@@ -53,7 +53,7 @@ class MongoDbSpringDataUtilTest {
   @SpringBootConfiguration
   @EnableAutoConfiguration(
       exclude = {
-          SslAutoConfiguration.class, // MongoDb is not available over SSL
+          SslAutoConfiguration.class, // MongoDb is not available via SSL
           WorkflowModuleAutoConfiguration.class, // see resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports
           SpringBootMigrationAdapterAutoConfiguration.class // see resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports
       })

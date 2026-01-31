@@ -9,7 +9,7 @@ import org.jboss.jandex.IndexView;
 import org.jboss.jandex.Type;
 import org.jboss.jandex.WildcardType;
 
-import io.vanillabp.spi.process.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.AggregatePersistenceAware;
 
 /**
  * A utility class used to figure out the right aggregate persistence for a given aggregate type.
