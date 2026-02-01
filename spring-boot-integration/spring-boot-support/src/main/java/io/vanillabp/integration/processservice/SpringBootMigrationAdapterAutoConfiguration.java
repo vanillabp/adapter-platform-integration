@@ -31,7 +31,7 @@ import io.vanillabp.integration.utils.impl.SpringDataUtilBasedAggregatePersisten
 import io.vanillabp.integration.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.integration.workflowmodule.WorkflowModules;
-import io.vanillabp.intergration.adapter.migration.spi.MigratableProcessService;
+import io.vanillabp.intergration.adapter.spi.MigratableProcessService;
 import io.vanillabp.spi.service.WorkflowService;
 import lombok.extern.slf4j.Slf4j;
 

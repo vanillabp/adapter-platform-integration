@@ -71,7 +71,7 @@ public abstract class ProcessServiceBaseCdiBean<A> implements ProcessService<A> 
   }
 
   @SuppressWarnings("unchecked")
-  private io.vanillabp.intergration.adapter.migration.spi.AggregatePersistenceAware<A> getAggregatePersistence() {
+  private io.vanillabp.intergration.adapter.spi.AggregatePersistenceAware<A> getAggregatePersistence() {
 
     for (AggregatePersistenceAware<?> persistence : persistences) {
       if (getAggregatePersistenceClass().isAssignableFrom(persistence.getClass())) {

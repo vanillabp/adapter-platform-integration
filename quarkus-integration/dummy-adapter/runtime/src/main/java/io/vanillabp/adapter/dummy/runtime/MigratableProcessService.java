@@ -1,8 +1,8 @@
 package io.vanillabp.adapter.dummy.runtime;
 
-import io.vanillabp.intergration.adapter.migration.spi.AggregatePersistenceAware;
+import io.vanillabp.intergration.adapter.spi.AggregatePersistenceAware;
 
-public class MigratableProcessService<A> implements io.vanillabp.intergration.adapter.migration.spi.MigratableProcessService<A> {
+public class MigratableProcessService<A> implements io.vanillabp.intergration.adapter.spi.MigratableProcessService<A> {
 
   @Override
   public String getAdapterId() {

@@ -33,6 +33,11 @@ public class SpringBootMigrationAdapterProperties {
   private List<String> prioritizedAdapters = List.of();
 
   /**
+   * Where to load VanillaBP BPMN files from, which are NOT specific to any adapter.
+   */
+  private String resourcesLocation;
+
+  /**
    * The configuration of all adapters known. The key can be an adapter's identifier
    * or a custom identifier. In case of a custom identifier the {@link AdapterConfiguration#type}
    * property has to point to the adapters identifier the custom adapter is derived from.
@@ -76,17 +81,29 @@ public class SpringBootMigrationAdapterProperties {
   public static class AdapterProperties {
 
     /**
-     * The priorities of adapters specific to a workflow module.
-     *
-     * @see SpringBootMigrationAdapterProperties#getPrioritizedAdapters()
-     */
-    @Builder.Default
-    private List<String> prioritizedAdapters = List.of();
-
-    /**
      * Where to load BPMN files from, which are specific to the adapter
      */
     private String resourcesLocation;
+
+  }
+
+  /**
+   * The adapters configuration properties.
+   */
+  @Getter
+  @Setter
+  @SuperBuilder(toBuilder = true)
+  @NoArgsConstructor
+  public static class AdaptersConfigurationProperties {
+
+    /**
+     * Return the list of adapters, ordered by priority. New workflows will be started
+     * using the first adapter. Other actions will target the BPMS the workflow is running in.
+     * <p>
+     * Each item has to be a key in the map of {@link SpringBootMigrationAdapterProperties#adapters}.
+     */
+    @Builder.Default
+    private List<String> prioritizedAdapters = List.of();
 
   }
 
@@ -97,7 +114,7 @@ public class SpringBootMigrationAdapterProperties {
   @Setter
   @SuperBuilder(toBuilder = true)
   @NoArgsConstructor
-  public static class WorkflowModuleProperties {
+  public static class WorkflowModuleProperties extends AdaptersConfigurationProperties {
 
     /**
      * The properties of adapters specific to this workflow module.

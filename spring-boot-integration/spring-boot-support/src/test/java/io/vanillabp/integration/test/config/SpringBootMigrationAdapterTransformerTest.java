@@ -31,6 +31,7 @@ public class SpringBootMigrationAdapterTransformerTest {
         IllegalStateException.class,
         () -> transformerBuilder
             .adaptersFound(List.of())
+            .properties(propsBuilder.build())
             .build()
             .getAndValidatePropertiesConfigured());
     assertEquals("No adapters found in classpath! Add dependencies providing VanillaBP adapters.",

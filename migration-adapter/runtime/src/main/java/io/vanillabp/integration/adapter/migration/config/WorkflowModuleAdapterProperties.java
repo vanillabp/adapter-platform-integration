@@ -12,12 +12,12 @@ import lombok.experimental.SuperBuilder;
 @Setter
 @NoArgsConstructor
 @SuperBuilder
-public class WorkflowModuleAdapterProperties extends AdapterProperties {
+public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProperties {
 
   String workflowModuleId;
 
   @Builder.Default
-  private Map<String, AdapterConfiguration> adapters = Map.of();
+  private Map<String, AdapterProperties> adapters = Map.of();
 
   @Builder.Default
   private Map<String, WorkflowAdapterProperties> workflows = Map.of();

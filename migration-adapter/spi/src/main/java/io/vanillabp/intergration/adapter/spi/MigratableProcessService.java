@@ -1,4 +1,4 @@
-package io.vanillabp.intergration.adapter.migration.spi;
+package io.vanillabp.intergration.adapter.spi;
 
 /**
  * To be implemented by a platform integration adapter.

@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import io.vanillabp.integration.adapter.migration.config.AdapterConfiguration;
+import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
 import lombok.Builder;
@@ -47,6 +47,8 @@ public class SpringBootMigrationAdapterTransformer {
 
     final var result = new MigrationAdapterProperties();
 
+    result.setResourcesLocation(properties.getResourcesLocation());
+
     // validate properties of adapters against adapters found in classpath
     final var adaptersConfigured = getAndValidateAdaptersConfigured();
     result.setAdapters(adaptersConfigured);
@@ -77,20 +79,21 @@ public class SpringBootMigrationAdapterTransformer {
         .getWorkflowModules()
         .entrySet()
         .stream()
-        .map(config -> Map.entry(
-            config.getKey(),
+        .map(workflowModule -> Map.entry(
+            workflowModule.getKey(),
             (WorkflowModuleAdapterProperties) WorkflowModuleAdapterProperties
                 .builder()
-                .workflowModuleId(config.getKey())
+                .workflowModuleId(workflowModule.getKey())
+                .prioritizedAdapters(workflowModule.getValue().getPrioritizedAdapters())
                 .workflows(Map.of()) // TODO fill workflows
-                .adapters(config
+                .adapters(workflowModule
                     .getValue()
                     .getAdapters()
                     .entrySet()
                     .stream()
                     .map(adapter -> Map.entry(
                         adapter.getKey(),
-                        AdapterConfiguration
+                        AdapterProperties
                             .builder()
                             .resourcesLocation(adapter.getValue().getResourcesLocation())
                             .build()))

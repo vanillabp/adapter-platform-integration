@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import io.vanillabp.integration.adapter.migration.config.AdapterConfiguration;
+import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
@@ -55,17 +55,19 @@ public class QuarkusMigrationAdapterTransformer {
 
     final var result = new MigrationAdapterProperties();
 
-    // validate properties of adapters against adapters found in classpath
+    result.setResourcesLocation(properties.resourcesLocation().orElse(null));
+
+    // validate properties of adapters against adapters found in the classpath
     final var adaptersConfigured = getAndValidateAdaptersConfigured(
         adaptersFound);
     result.setAdapters(adaptersConfigured);
 
-    // validate priorities of adapters configured against adapters found in classpath
+    // validate priorities of adapters configured against adapters found in the classpath
     final var prioritizedAdaptersConfigured = getAndValidatePrioritizedAdaptersConfigured(
         adaptersConfigured);
     result.setPrioritizedAdapters(prioritizedAdaptersConfigured);
 
-    // validate properties of workflow modules against workflow modules found in classpath
+    // validate properties of workflow modules against workflow modules found in the classpath
     final var workflowModulesConfigured = getAndValidateWorkflowModulesConfigured(
         workflowModulesFound);
     result.setWorkflowModules(workflowModulesConfigured);
@@ -92,24 +94,24 @@ public class QuarkusMigrationAdapterTransformer {
         .workflowModules()
         .entrySet()
         .stream()
-        .map(config -> Map.entry(
-            config.getKey(),
+        .map(workflowModule -> Map.entry(
+            workflowModule.getKey(),
             (WorkflowModuleAdapterProperties) WorkflowModuleAdapterProperties
                 .builder()
-                .workflowModuleId(config.getKey())
+                .workflowModuleId(workflowModule.getKey())
+                .prioritizedAdapters(workflowModule.getValue().prioritizedAdapters().isPresent()
+                    ? workflowModule.getValue().prioritizedAdapters().get()
+                    : List.of())
                 .workflows(Map.of()) // TODO fill workflows
-                .adapters(config
+                .adapters(workflowModule
                     .getValue()
                     .adapters()
                     .entrySet()
                     .stream()
                     .map(adapter -> Map.entry(
                         adapter.getKey(),
-                        AdapterConfiguration
+                        AdapterProperties
                             .builder()
-                            .prioritizedAdapters(adapter.getValue().prioritizedAdapters().isPresent()
-                                ? adapter.getValue().prioritizedAdapters().get()
-                                : List.of())
                             .resourcesLocation(adapter.getValue().resourcesLocation())
                             .build()))
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)))
@@ -299,7 +301,7 @@ public class QuarkusMigrationAdapterTransformer {
     }
 
     // if more than one adapter is configured, then the
-    // property vanillabp.prioritized-adapters have to list each adapter
+    // property vanillabp.prioritized-adapters has to list each adapter
     // configured:
     if (properties.prioritizedAdapters()
         .isEmpty() || (adapters.size() != properties.prioritizedAdapters().get().size())) {

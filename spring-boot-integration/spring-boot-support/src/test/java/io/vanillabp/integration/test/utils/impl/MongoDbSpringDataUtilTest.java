@@ -29,6 +29,7 @@ import org.testcontainers.utility.DockerImageName;
 import com.mongodb.ConnectionString;
 
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
+import io.vanillabp.integration.test.utils.impl.jpa.BaseEntity;
 import io.vanillabp.integration.test.utils.impl.mongodb.DerivedEntity;
 import io.vanillabp.integration.test.utils.impl.mongodb.Entity;
 import io.vanillabp.integration.test.utils.impl.mongodb.Entity2;
@@ -62,7 +63,7 @@ class MongoDbSpringDataUtilTest {
       nameGenerator = FullyQualifiedRepositoryBeanNameGenerator.class)
   // to avoid conflicts due to autoconfiguration:
   @EntityScan(
-      basePackageClasses = io.vanillabp.integration.test.utils.impl.jpa.BaseEntity.class)
+      basePackageClasses = BaseEntity.class)
   @EnableJpaRepositories(
       basePackageClasses = io.vanillabp.integration.test.utils.impl.jpa.EntityRepository.class,
       nameGenerator = FullyQualifiedRepositoryBeanNameGenerator.class)

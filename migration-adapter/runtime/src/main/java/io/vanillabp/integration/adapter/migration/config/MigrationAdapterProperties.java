@@ -21,15 +21,26 @@ import lombok.experimental.SuperBuilder;
 @Setter
 @NoArgsConstructor
 @SuperBuilder
-public class MigrationAdapterProperties extends AdapterProperties {
+public class MigrationAdapterProperties extends AdaptersConfigurationProperties {
 
   private static final Logger logger = LoggerFactory.getLogger(MigrationAdapterProperties.class);
 
   public static final String PREFIX = "vanillabp";
 
+  /**
+   * Map of all adapters available. Keys are the adapter IDs and the values are the adapter types.
+   */
   @Builder.Default
   private Map<String, String> adapters = Map.of();
 
+  /**
+   * Where to load VanillaBP BPMN files from, which are NOT specific to any adapter.
+   */
+  private String resourcesLocation;
+
+  /**
+   * Properties specific to workflow modules.
+   */
   @Builder.Default
   private Map<String, WorkflowModuleAdapterProperties> workflowModules = Map.of();
 
@@ -40,6 +51,15 @@ public class MigrationAdapterProperties extends AdapterProperties {
     workflowModules.forEach((
         workflowModuleId,
         properties) -> properties.workflowModuleId = workflowModuleId);
+
+  }
+
+  public List<String> getPrioritizedAdaptersFor(
+      final String workflowModuleId) {
+
+    return getPrioritizedAdaptersFor(
+        workflowModuleId,
+        null);
 
   }
 
@@ -72,27 +92,41 @@ public class MigrationAdapterProperties extends AdapterProperties {
 
   }
 
-  public String getAdapterResourcesLocationFor(
+  /**
+   * Provides the resources location according to the given properties.
+   * 
+   * @param workflowModuleId The workflow module ID
+   * @param adapterId The adapter ID
+   * @return Entry holding the location as a key and whether the location contains VanillaBP BPMN (true)
+   *         or BPMN specific to the target BPMS (false).
+   */
+  public Map.Entry<String, Boolean> getAdapterResourcesLocationFor(
       final String workflowModuleId,
       final String adapterId) {
 
-    String resourcesLocation = null;
+    var isVanillaBpmn = true;
+    var resourcesLocation = getResourcesLocation();
     final var workflowModule = getWorkflowModules().get(workflowModuleId);
     if (workflowModule != null) {
       final var adapter = workflowModule.getAdapters().get(adapterId);
-      if (adapter != null) {
+      if ((adapter != null) && (adapter.getResourcesLocation() != null) && !adapter.getResourcesLocation().isBlank()) {
         resourcesLocation = adapter.getResourcesLocation();
+        isVanillaBpmn = false;
       }
     }
-    if (resourcesLocation == null) {
+
+    if ((resourcesLocation == null) || resourcesLocation.isBlank()) {
       throw new IllegalStateException(
           """
-              Property '%s.workflow-modules.%s.adapters.%s.resources-location' not set!
-              It has to point to a location specific to the adapter in order to avoid future problems once you wish to migrate to another adapter.
-              Sample: 'classpath*:/workflow-resources/%s'"""
-              .formatted(PREFIX, workflowModuleId, adapterId, adapterId));
+              Neither property '%s.workflow-modules.%s.adapters.%s.resources-location' for resources specific to the BPMS
+              nor property '%s.resources-location' for VanillaBP resources (not specific to the BPMS) is set!
+
+              If using first option then the location needs to be specific to the adapter in order to avoid future
+              problems once you wish to migrate to another adapter. Sample: 'classpath*:/workflow-resources/%s'"""
+              .formatted(PREFIX, workflowModuleId, adapterId, PREFIX, adapterId));
     }
-    return resourcesLocation;
+    return Map.entry(resourcesLocation, isVanillaBpmn);
+
   }
 
   public void validatePropertiesFor(
@@ -135,19 +169,19 @@ public class MigrationAdapterProperties extends AdapterProperties {
       throw new IllegalStateException("No workflow-modules where given!");
     }
 
-    final var adapterTypesNotInClasspath = adapters
+    final var adaptersNotInClasspath = adapters
         .entrySet()
         .stream()
         .filter(entry -> !adaptersLoaded.contains(entry.getValue()))
         .map(entry -> "%s of type %s".formatted(entry.getKey(), entry.getValue()))
         .collect(Collectors.joining(",\n  "));
-    if (!adapterTypesNotInClasspath.isEmpty()) {
+    if (!adaptersNotInClasspath.isEmpty()) {
       throw new IllegalStateException(
           """
               The following adapters were configured in properties section 'vanillabp.adapters' but there is no adapter in classpath matching the given type:
                  %s
               Available adapter types in classpath: %s"""
-              .formatted(adapterTypesNotInClasspath, adaptersLoaded));
+              .formatted(adaptersNotInClasspath, adaptersLoaded));
     }
 
     // unknown workflow-module properties
@@ -166,16 +200,36 @@ public class MigrationAdapterProperties extends AdapterProperties {
     // adapter configured
     if (adapters.size() == 1) {
       final var adapterId = adapters.keySet().iterator().next();
-      final var propPrefix = "%s.workflow-modules.".formatted(PREFIX);
-      final var propInfix = ".adapters.%s.resources-location\n  %s".formatted(adapterId, propPrefix);
-      final var propPostfix = ".adapters.%s.resources-location".formatted(adapterId);
-      logger.info(
-          """
-              Found only one VanillaBP adapter '%s' configured. Please ensure the properties
-                %s%s%s
-              are specific to this adapter in order to avoid future-problems once you wish to migrate to another adapter."""
-              .formatted(adapterId, propPrefix, String.join(propInfix, workflowModules.keySet()),
-                  propPostfix));
+      final var specificBpmnResources = workflowModules
+          .keySet()
+          .stream()
+          .map(workflowModuleId -> Map.entry(workflowModuleId,
+              getAdapterResourcesLocationFor(workflowModuleId, adapterId)))
+          .filter(entry -> {
+            final var isVanillaBpmn = entry.getValue().getValue();
+            return !isVanillaBpmn;
+          })
+          .map(Map.Entry::getKey)
+          .toList();
+      if (!specificBpmnResources.isEmpty()) {
+        final var propPrefix = "%s.workflow-modules.".formatted(PREFIX);
+        final var propInfix = ".adapters.%s.resources-location\n  %s".formatted(
+            adapterId,
+            propPrefix);
+        final var propPostfix = ".adapters.%s.resources-location".formatted(adapterId);
+        logger.info(
+            """
+                Found only one VanillaBP adapter '%s' configured. Please ensure the properties
+                  %s%s%s
+                are specific to this adapter in order to avoid future-problems once you wish to migrate to another adapter."""
+                .formatted(
+                    adapterId,
+                    propPrefix,
+                    String.join(
+                        propInfix,
+                        specificBpmnResources),
+                    propPostfix));
+      }
     }
 
     // adapters in class-path not used

@@ -12,7 +12,7 @@ import lombok.experimental.SuperBuilder;
 @Setter
 @NoArgsConstructor
 @SuperBuilder
-public class WorkflowAdapterProperties extends AdapterProperties {
+public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
 
   String bpmnProcessId;
 

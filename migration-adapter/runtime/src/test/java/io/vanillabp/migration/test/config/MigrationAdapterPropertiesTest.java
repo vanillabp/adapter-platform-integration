@@ -15,7 +15,7 @@ import org.slf4j.LoggerFactory;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import io.vanillabp.integration.adapter.migration.config.AdapterConfiguration;
+import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
@@ -31,7 +31,7 @@ public class MigrationAdapterPropertiesTest {
   private final WorkflowModuleAdapterProperties testModule = WorkflowModuleAdapterProperties
       .builder()
       .workflowModuleId("test-module")
-      .adapters(Map.of("adapter-test", AdapterConfiguration
+      .adapters(Map.of("adapter-test", AdapterProperties
           .builder()
           .resourcesLocation("classpath:test-module/processes/test")
           .build()))
@@ -90,9 +90,11 @@ public class MigrationAdapterPropertiesTest {
     );
     assertEquals(
         """
-            Property 'vanillabp.workflow-modules.fake-module.adapters.adapter-test.resources-location' not set!
-            It has to point to a location specific to the adapter in order to avoid future problems once you wish to migrate to another adapter.
-            Sample: 'classpath*:/workflow-resources/adapter-test'""",
+            Neither property 'vanillabp.workflow-modules.fake-module.adapters.adapter-test.resources-location' for resources specific to the BPMS
+            nor property 'vanillabp.resources-location' for VanillaBP resources (not specific to the BPMS) is set!
+
+            If using first option then the location needs to be specific to the adapter in order to avoid future
+            problems once you wish to migrate to another adapter. Sample: 'classpath*:/workflow-resources/adapter-test'""",
         exception.getMessage());
 
   }
@@ -104,11 +106,9 @@ public class MigrationAdapterPropertiesTest {
     properties.setAdapters(Map.of("adapter-test", "adapter2"));
     properties.setWorkflowModules(Map.of("fake-module", testModule));
     properties.setPrioritizedAdapters(List.of("adapter-test"));
+    properties.setResourcesLocation("whatever");
 
-    assertThrowsExactly(
-        IllegalStateException.class,
-        () -> properties.validateProperties(adaptersLoaded, List.of("test-module"))
-    );
+    properties.validateProperties(adaptersLoaded, List.of("test-module"));
 
     assertTrue(logWatcher.list
         .stream()
@@ -152,11 +152,11 @@ public class MigrationAdapterPropertiesTest {
     properties.setWorkflowModules(Map.of("test-module", WorkflowModuleAdapterProperties
         .builder()
         .workflowModuleId("test-module")
-        .adapters(Map.of("adapter-test1", AdapterConfiguration
+        .adapters(Map.of("adapter-test1", AdapterProperties
             .builder()
             .resourcesLocation("classpath*:processes/test1")
             .build(),
-            "adapter-test2", AdapterConfiguration
+            "adapter-test2", AdapterProperties
                 .builder()
                 .resourcesLocation("classpath*:processes/test2")
                 .build()))
@@ -201,6 +201,33 @@ public class MigrationAdapterPropertiesTest {
   }
 
   @Test
+  public void testOnlyOneAdapterInClasspathWithVanillaBpBpmnInsteadOfAdapterSpecificBpmn() {
+
+    final var testModuleWithoutResourcesSet = WorkflowModuleAdapterProperties
+        .builder()
+        .workflowModuleId("test-module")
+        .adapters(Map.of("adapter-test", AdapterProperties
+            .builder()
+            .build()))
+        .workflows(Map.of("testProcess", WorkflowAdapterProperties
+            .builder()
+            .bpmnProcessId("testProcess")
+            .build()))
+        .build();
+
+    final var properties = new MigrationAdapterProperties();
+    properties.setAdapters(Map.of("adapter-test", "adapter2"));
+    properties.setWorkflowModules(Map.of("test-module", testModuleWithoutResourcesSet));
+    properties.setPrioritizedAdapters(List.of("adapter-test"));
+    properties.setResourcesLocation("classpath*:vanilla-bp-bpmn");
+
+    properties.validateProperties(List.of("adapter2"), List.of("test-module"));
+
+    assertTrue(logWatcher.list.isEmpty());
+
+  }
+
+  @Test
   public void testAdaptersReferencedButNotConfigured() {
 
     final var properties = new MigrationAdapterProperties();
@@ -210,6 +237,10 @@ public class MigrationAdapterPropertiesTest {
         .builder()
         .workflowModuleId("test-module")
         .prioritizedAdapters(List.of("unknown-adapter2"))
+        .adapters(Map.of("adapter-test", AdapterProperties
+            .builder()
+            .resourcesLocation("whatever")
+            .build()))
         .workflows(Map.of("testProcess", WorkflowAdapterProperties
             .builder()
             .bpmnProcessId("testProcess")

@@ -6,9 +6,9 @@ import java.util.Map;
 import com.gruelbox.transactionoutbox.TransactionOutbox;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
-import io.vanillabp.intergration.adapter.migration.spi.AggregatePersistenceAware;
-import io.vanillabp.intergration.adapter.migration.spi.MigratableProcessService;
-import io.vanillabp.intergration.adapter.migration.spi.MigratableProcessServicePhaseTwo;
+import io.vanillabp.intergration.adapter.spi.AggregatePersistenceAware;
+import io.vanillabp.intergration.adapter.spi.MigratableProcessService;
+import io.vanillabp.intergration.adapter.spi.MigratableProcessServicePhaseTwo;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 

@@ -30,6 +30,11 @@ public interface QuarkusMigrationAdapterProperties {
   Optional<List<String>> prioritizedAdapters();
 
   /**
+   * Where to load VanillaBP BPMN files from, which are NOT specific to any adapter.
+   */
+  Optional<String> resourcesLocation();
+
+  /**
    * The configuration of all adapters known. The key can be an adapter's identifier
    * or a custom identifier. In case of a custom identifier the {@link AdapterConfiguration#type()}
    * property has to point to the adapter identifier the custom adapter is derived from.
@@ -67,13 +72,6 @@ public interface QuarkusMigrationAdapterProperties {
   interface AdapterProperties {
 
     /**
-     * The priorities of adapters specific to a workflow module.
-     *
-     * @see QuarkusMigrationAdapterProperties#prioritizedAdapters()
-     */
-    Optional<List<String>> prioritizedAdapters();
-
-    /**
      * Where to load BPMN files from, which are specific to the adapter
      */
     String resourcesLocation();
@@ -84,6 +82,13 @@ public interface QuarkusMigrationAdapterProperties {
    * The properties of a workflow module.
    */
   interface WorkflowModuleProperties {
+
+    /**
+     * The priorities of adapters specific to a workflow module.
+     *
+     * @see QuarkusMigrationAdapterProperties#prioritizedAdapters()
+     */
+    Optional<List<String>> prioritizedAdapters();
 
     /**
      * The properties of adapters specific to this workflow module.

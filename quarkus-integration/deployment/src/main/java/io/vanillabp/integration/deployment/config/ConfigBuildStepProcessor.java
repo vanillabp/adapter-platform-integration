@@ -16,6 +16,7 @@ import io.vanillabp.integration.deployment.processservice.VanillaBpMigratablePro
 import io.vanillabp.integration.deployment.workflowmodule.VanillaBpWorkflowModulesBuildItem;
 import io.vanillabp.integration.deployment.workflowmodule.WorkflowModuleSpecificConfigBuilderBuildItem;
 import io.vanillabp.integration.runtime.config.MigrationAdapterPropertiesRecorder;
+import io.vanillabp.intergration.adapter.spi.MigratableProcessService;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
@@ -27,7 +28,7 @@ public class ConfigBuildStepProcessor {
    * Validates properties given and builds the {@link MigrationAdapterProperties} object based on those properties.
    *
    * @param capabilities Capabilities of the projects all extensions available
-   * @param processServicesProvidedByAdapters All {@link io.vanillabp.intergration.adapter.migration.spi.MigratableProcessService} beans provided by VanillaBP adapter extensions
+   * @param processServicesProvidedByAdapters All {@link MigratableProcessService} beans provided by VanillaBP adapter extensions
    * @param configsBuilt The build item for workflow module configurations as a dependency for this build step
    * @param substitutionsProvided All object substitutions as a dependency for this build step
    * @param workflowModulesFound Information about all workflow modules found in the project

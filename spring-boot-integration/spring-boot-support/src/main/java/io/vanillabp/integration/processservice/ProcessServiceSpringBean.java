@@ -7,7 +7,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processervice.MigrationProcessService;
 import io.vanillabp.integration.spi.aggregate.AggregatePersistenceAware;
-import io.vanillabp.intergration.adapter.migration.spi.MigratableProcessService;
+import io.vanillabp.intergration.adapter.spi.MigratableProcessService;
 import io.vanillabp.spi.process.ProcessService;
 import jakarta.transaction.Transactional;
 import lombok.Getter;

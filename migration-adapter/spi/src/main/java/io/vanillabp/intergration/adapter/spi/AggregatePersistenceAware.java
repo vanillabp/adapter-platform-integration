@@ -1,4 +1,4 @@
-package io.vanillabp.intergration.adapter.migration.spi;
+package io.vanillabp.intergration.adapter.spi;
 
 /**
  * Implemented by classes which are aware of persisting aggregates of the given type.
