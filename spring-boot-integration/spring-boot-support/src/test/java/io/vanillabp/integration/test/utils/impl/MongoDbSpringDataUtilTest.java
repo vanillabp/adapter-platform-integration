@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.vanillabp.integration.test.utils.impl.jpa.BaseEntity;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,7 +30,6 @@ import org.testcontainers.utility.DockerImageName;
 import com.mongodb.ConnectionString;
 
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
-import io.vanillabp.integration.test.utils.impl.jpa.BaseEntity;
 import io.vanillabp.integration.test.utils.impl.mongodb.DerivedEntity;
 import io.vanillabp.integration.test.utils.impl.mongodb.Entity;
 import io.vanillabp.integration.test.utils.impl.mongodb.Entity2;

@@ -78,7 +78,7 @@
     <dependency>
       <groupId>io.vanillabp.adapter</groupId>
       <artifactId>migration-adapter</artifactId>
-      <version>${root.project.version}</version>
+      <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>io.vanillabp</groupId>
@@ -119,7 +119,7 @@
     <dependency>
       <groupId>io.vanillabp</groupId>
       <artifactId>test-utils</artifactId>
-      <version>0.0.1-SNAPSHOT</version>
+      <version>${project.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>

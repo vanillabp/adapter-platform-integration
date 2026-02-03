@@ -1,5 +1,7 @@
 package io.vanillabp.integration.test.processservice;
 
+import io.vanillabp.integration.test.sample2.Aggregate;
+import io.vanillabp.integration.test.sample2.SampleWorkflowService;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -9,8 +11,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import io.vanillabp.adapters.dummy.springboot.DummyAdapterConfiguration;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
-import io.vanillabp.integration.test.sample2.Aggregate;
-import io.vanillabp.integration.test.sample2.SampleWorkflowService;
 import io.vanillabp.integration.utils.config.JpaSpringDataUtilConfiguration;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.intergration.test.utils.SuppressOutputExtension;

@@ -11,7 +11,7 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
 @Singleton
-@WorkflowService(workflowAggregateClass = io.vanillabp.integration.test.sample2.Aggregate.class,
+@WorkflowService(workflowAggregateClass = Aggregate.class,
     bpmnProcess = @BpmnProcess(bpmnProcessId = "SampleWorkflow2"))
 @SuppressWarnings("unused")
 public class SampleWorkflowService implements AggregatePersistenceAware<Aggregate> {
