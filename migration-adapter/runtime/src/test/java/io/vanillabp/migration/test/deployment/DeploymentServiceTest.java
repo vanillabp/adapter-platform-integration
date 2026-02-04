@@ -16,6 +16,7 @@ import static org.mockito.Mockito.when;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -119,8 +120,8 @@ public class DeploymentServiceTest {
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
       // Create resources loader that returns a test BPMN file
-      final Function<String, List<Map.Entry<String, InputStream>>> resourcesLoader = location -> List
-          .of(Map.entry("test-process.bpmn", createDummyBpmnInputStream()));
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("test-process.bpmn",
+          createDummyBpmnInputStream());
 
       // readBpmn should return an executable process
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
@@ -157,7 +158,7 @@ public class DeploymentServiceTest {
           properties, List.of(), List.of());
 
       // Dummy loader that should not be called
-      final Function<String, List<Map.Entry<String, InputStream>>> resourcesLoader = location -> List.of();
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of();
 
       // IllegalStateException is expected
       final var exception = assertThrows(
@@ -178,8 +179,8 @@ public class DeploymentServiceTest {
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
       // Create resources loader with a BPMN file
-      final Function<String, List<Map.Entry<String, InputStream>>> resourcesLoader = location -> List
-          .of(Map.entry("empty-process.bpmn", createDummyBpmnInputStream()));
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("empty-process.bpmn",
+          createDummyBpmnInputStream());
 
       // readBpmn should return an empty list (no executable processes)
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
@@ -214,8 +215,8 @@ public class DeploymentServiceTest {
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
       // Create resources loader with BPMN file
-      final Function<String, List<Map.Entry<String, InputStream>>> resourcesLoader = location -> List
-          .of(Map.entry("my-process.bpmn", createDummyBpmnInputStream()));
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("my-process.bpmn",
+          createDummyBpmnInputStream());
 
       // Configure mock behavior for complete pipeline
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
@@ -250,10 +251,13 @@ public class DeploymentServiceTest {
       // Configure adapter1DeploymentService
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
-      // Create resources loader with two BPMN files
-      final Function<String, List<Map.Entry<String, InputStream>>> resourcesLoader = location -> List.of(
-          Map.entry("process1.bpmn", createDummyBpmnInputStream()),
-          Map.entry("process2.bpmn", createDummyBpmnInputStream()));
+      // Create resources loader with two BPMN files (LinkedHashMap to preserve insertion order)
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> {
+        final var resources = new LinkedHashMap<String, InputStream>();
+        resources.put("process1.bpmn", createDummyBpmnInputStream());
+        resources.put("process2.bpmn", createDummyBpmnInputStream());
+        return resources;
+      };
 
       // Mock behavior: first BPMN creates context, second uses it
       when(adapter1DeploymentService.readBpmn(anyString(), eq("process1.bpmn"), any(InputStream.class), anyBoolean()))
@@ -298,8 +302,8 @@ public class DeploymentServiceTest {
       lenient().when(adapter2WiringService.getProcessContextType()).thenReturn(Long.class);
 
       // Create resources loader
-      final Function<String, List<Map.Entry<String, InputStream>>> resourcesLoader = location -> List
-          .of(Map.entry("process.bpmn", createDummyBpmnInputStream()));
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
+          createDummyBpmnInputStream());
 
       // Configure mock behavior
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
@@ -345,8 +349,8 @@ public class DeploymentServiceTest {
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
       // Create resources loader
-      final Function<String, List<Map.Entry<String, InputStream>>> resourcesLoader = location -> List
-          .of(Map.entry("process.bpmn", createDummyBpmnInputStream()));
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
+          createDummyBpmnInputStream());
 
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenReturn(List.of(Map.entry("TestProcess", 42)));
@@ -381,8 +385,8 @@ public class DeploymentServiceTest {
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
       // Create resources loader
-      final Function<String, List<Map.Entry<String, InputStream>>> resourcesLoader = location -> List
-          .of(Map.entry("process.bpmn", createDummyBpmnInputStream()));
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
+          createDummyBpmnInputStream());
 
       // Configure mock behavior
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
@@ -442,8 +446,8 @@ public class DeploymentServiceTest {
       when(adapter1WiringService.getProcessContextType()).thenReturn(Integer.class);
 
       // Create resources loader
-      final Function<String, List<Map.Entry<String, InputStream>>> resourcesLoader = location -> List
-          .of(Map.entry("process.bpmn", createDummyBpmnInputStream()));
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
+          createDummyBpmnInputStream());
 
       // Configure mock behavior
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
@@ -485,8 +489,8 @@ public class DeploymentServiceTest {
       lenient().when(adapter2WiringService.getProcessContextType()).thenReturn(Long.class);
 
       // Create resources loader
-      final Function<String, List<Map.Entry<String, InputStream>>> resourcesLoader = location -> List
-          .of(Map.entry("process.bpmn", createDummyBpmnInputStream()));
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
+          createDummyBpmnInputStream());
 
       // Configure mock behavior
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))

@@ -39,7 +39,7 @@
     </dependency>
     <dependency>
       <groupId>io.vanillabp</groupId>
-      <artifactId>vanillabp-spring-boot-support</artifactId>
+      <artifactId>vanillabp-spring-boot-integration</artifactId>
       <version>${project.version}</version>
     </dependency>
   </dependencies>

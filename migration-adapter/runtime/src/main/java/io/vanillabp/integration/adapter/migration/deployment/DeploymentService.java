@@ -95,14 +95,15 @@ public class DeploymentService {
    * </ol>
    *
    * @param workflowModuleIds The workflow module IDs to deploy
-   * @param bpmnResourcesLoader A function that loads the BPMN resources for a given workflow module ID. It provides a
-   *     list of entries having the filename as the key and the BPMN input stream as the value.
+   * @param bpmnResourcesLoader A function that takes a resource location and loads the BPMN resources
+   *     for a given workflow module ID. It provides a
+   *     map having the filename as the key and the BPMN input stream as the value.
    * @param <PC> The processing context, used to store all information needed by the adapter to deploy the process.
    */
   @SuppressWarnings("unchecked")
   public <PC> void deployResources(
       final List<String> workflowModuleIds,
-      final Function<String, List<Map.Entry<String, InputStream>>> bpmnResourcesLoader) {
+      final Function<String, Map<String, InputStream>> bpmnResourcesLoader) {
 
     // walk through all workflow modules
     workflowModuleIds
@@ -135,6 +136,7 @@ public class DeploymentService {
           final var bpmsProcessingContext = new BpmsProcessingContextHolder<PC>();
           bpmnResourcesLoader
               .apply(resourceLocation)
+              .entrySet()
               // ...and process them...
               .forEach(bpmnFileEntry -> processBpmn(
                   workflowModuleId,

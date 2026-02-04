@@ -29,7 +29,7 @@ public class WorkflowModuleAutoConfiguration {
    * Searches for all workflow module descriptors found in classpath to build
    * {@link WorkflowModule} objects. This method is static because it has to be processed
    * by Spring Boot during the very beginning of booting the application.
-   * The bean returned is used for loading workflow module specific config files.
+   * The bean returned is used for loading workflow module-specific config files.
    *
    * @param resourceLoader The resource loader used to find META-INF/workflow-module files
    * @return The workflow modules found

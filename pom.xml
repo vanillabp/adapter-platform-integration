@@ -32,8 +32,8 @@
   <modules>
     <module>test-utils</module>
     <module>migration-adapter</module>
-    <module>quarkus-integration</module>
     <module>spring-boot-integration</module>
+    <module>quarkus-integration</module>
     <module>test-coverage-report</module>
   </modules>
 

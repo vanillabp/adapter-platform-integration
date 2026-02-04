@@ -8,17 +8,22 @@ import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoCon
 
 /**
  * Provides a dummy adapter used by integration tests.
+ * <p>
+ * This configuration should not contain any other bean definitions
+ * since this configuration needs to be run very early.
  */
 @Configuration
 @AutoConfiguration(before = SpringBootMigrationAdapterAutoConfiguration.class)
 public class DummyAdapterConfiguration extends AdapterConfigurationBase {
+
+  public static final String ADAPTER_TYPE = "dummy";
 
   /**
    * @return The ID of the adapter
    */
   @Override
   public String getAdapterType() {
-    return "dummy";
+    return ADAPTER_TYPE;
   }
 
 }

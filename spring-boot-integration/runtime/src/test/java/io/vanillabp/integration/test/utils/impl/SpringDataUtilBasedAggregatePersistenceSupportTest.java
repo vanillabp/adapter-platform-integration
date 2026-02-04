@@ -17,8 +17,10 @@ import org.springframework.data.repository.CrudRepository;
 
 import io.vanillabp.integration.utils.SpringDataUtil;
 import io.vanillabp.integration.utils.impl.SpringDataUtilBasedAggregatePersistenceSupport;
+import io.vanillabp.intergration.test.utils.SuppressOutputExtension;
 
 @ExtendWith(MockitoExtension.class)
+@ExtendWith(SuppressOutputExtension.class)
 public class SpringDataUtilBasedAggregatePersistenceSupportTest {
 
   @Captor

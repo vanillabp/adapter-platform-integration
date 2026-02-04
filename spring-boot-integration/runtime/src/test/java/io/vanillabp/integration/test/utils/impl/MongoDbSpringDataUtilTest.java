@@ -6,9 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.vanillabp.integration.test.utils.impl.jpa.BaseEntity;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -30,6 +30,7 @@ import org.testcontainers.utility.DockerImageName;
 import com.mongodb.ConnectionString;
 
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
+import io.vanillabp.integration.test.utils.impl.jpa.BaseEntity;
 import io.vanillabp.integration.test.utils.impl.mongodb.DerivedEntity;
 import io.vanillabp.integration.test.utils.impl.mongodb.Entity;
 import io.vanillabp.integration.test.utils.impl.mongodb.Entity2;
@@ -39,10 +40,12 @@ import io.vanillabp.integration.utils.SpringDataUtil;
 import io.vanillabp.integration.utils.config.MongoDbSpringDataUtilConfiguration;
 import io.vanillabp.integration.utils.impl.MongoDbSpringDataUtil;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
+import io.vanillabp.intergration.test.utils.SuppressOutputExtension;
 import io.vanillabp.intergration.test.utils.springboot.FullyQualifiedRepositoryBeanNameGenerator;
 
 @Testcontainers
 @SpringBootTest(classes = MongoDbSpringDataUtilTest.MongoDbTestConfiguration.class)
+@ExtendWith(SuppressOutputExtension.class)
 class MongoDbSpringDataUtilTest {
 
   @Container

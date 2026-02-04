@@ -26,7 +26,6 @@ import io.vanillabp.integration.config.SpringBootMigrationAdapterTransformer;
 import io.vanillabp.integration.spi.aggregate.AggregatePersistenceAware;
 import io.vanillabp.integration.utils.ClasspathScanner;
 import io.vanillabp.integration.utils.SpringDataUtil;
-import io.vanillabp.integration.utils.config.JpaSpringDataUtilConfiguration;
 import io.vanillabp.integration.utils.impl.SpringDataUtilBasedAggregatePersistenceSupport;
 import io.vanillabp.integration.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
@@ -41,7 +40,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Configuration
 @AutoConfigureAfter({
-    WorkflowModuleAutoConfiguration.class, JpaSpringDataUtilConfiguration.class
+    WorkflowModuleAutoConfiguration.class
 })
 @EnableConfigurationProperties(SpringBootMigrationAdapterProperties.class)
 public class SpringBootMigrationAdapterAutoConfiguration {
