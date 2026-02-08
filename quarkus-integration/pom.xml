@@ -16,7 +16,6 @@
     <module>quarkus-support</module>
     <module>deployment</module>
     <module>runtime</module>
-    <module>dummy-adapter</module>
     <module>integration-tests</module>
   </modules>
 

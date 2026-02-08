@@ -22,7 +22,7 @@ adapter extension. For ready-to-use adapter extensions checkout
 
 ## Modules
 
-To understand subsequent documentation read the Quarkus guide
+To understand subsequent documentation, read the Quarkus guide
 "[Writing your own extension](https://quarkus.io/guides/writing-extensions)"
 to learn about concepts of Quarkus extensions.
 
@@ -32,13 +32,10 @@ to learn about concepts of Quarkus extensions.
 2. **[runtime](./runtime):**<br>
    The runtime module of the extension. It is responsible for bridging to
    [VanillaBP migration adapter](../migration-adapter) at runtime.
-3. **[dummy-adapter](./dummy-adapter):**<br>
-   This adapter is a template for new adapters and is used as a adapter
-   by the integration tests.
-4. **[quarkus-support](./quarkus-support):**<br>
+3. **[quarkus-support](./quarkus-support):**<br>
    A tiny collection of useful things in the context of Quarkus to be used as
    a dependency instead of `io.vanillabp:spi-for-java`.
-5. **[integration-tests](./integration-tests):**<br>
+4. **[integration-tests](./integration-tests):**<br>
    Modules which ensure the VanillaBP Quarkus extension works as documented.
 
 ## Hints

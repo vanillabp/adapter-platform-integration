@@ -11,14 +11,13 @@ autoconfiguration mechanism to provide the best developer experience.
 
 ## Modules
 
-1. **[spring-boot-support](./spring-boot-support):**<br>
+1. **[runtime](./runtime):**<br>
    This is the main module which is primarily responsible for two things:
    1. Bringing the [VanillaBP SPI](https://github.com/vanillabp/spi-for-java) in Spring Boot to life.
    2. Managing of VanillaBP adapters at runtime connecting to BPMSs.
-2. **[dummy-adapter](./dummy-adapter):**<br>
-   This adapter is a template for new adapters and is used as a adapter
-   by the integration tests. For ready-to-use adapter modules checkout
-   [https://www.vanillabp.io](https://www.vanillabp.io).
+2. **[spring-boot-support](./spring-boot-support):**<br>
+   A tiny collection of useful things in the context of Spring Boot to be used as
+   a dependency instead of `io.vanillabp:spi-for-java`.
 3. **[integration-tests](./integration-tests):**<br>
    Modules which ensure the VanillaBP Spring Boot extension works as documented.
 

@@ -14,6 +14,7 @@
   <name>Quarkus integration - Integration tests parent</name>
 
   <modules>
+    <module>dummy-adapter</module>
     <module>test-applications</module>
     <module>main-integration-test</module>
     <module>workflowmodule-integration-tests</module>

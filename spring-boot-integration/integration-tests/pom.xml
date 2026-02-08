@@ -14,6 +14,8 @@
   <name>Spring Boot integration - Integration tests</name>
 
   <modules>
+    <module>dummy-adapter</module>
+    <module>dummy-extension</module>
     <module>test-applications</module>
     <module>main-integration-test</module>
     <module>workflowmodule-integration-tests</module>
