@@ -1,2 +1,2 @@
-io.vanillabp.adapters.dummy.springboot.DummyAdapterConfiguration
-io.vanillabp.adapters.dummy.springboot.deployment.DummyAdapterDeploymentConfiguration
+io.vanillabp.adapter.dummy.springboot.DummyAdapterConfiguration
+io.vanillabp.adapter.dummy.springboot.deployment.DummyAdapterDeploymentConfiguration

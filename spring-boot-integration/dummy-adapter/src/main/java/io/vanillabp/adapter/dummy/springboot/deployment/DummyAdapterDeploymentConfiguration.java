@@ -1,4 +1,4 @@
-package io.vanillabp.adapters.dummy.springboot.deployment;
+package io.vanillabp.adapter.dummy.springboot.deployment;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -9,7 +9,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import io.vanillabp.adapters.dummy.springboot.DummyAdapterConfiguration;
+import io.vanillabp.adapter.dummy.springboot.DummyAdapterConfiguration;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.workflowmodule.WorkflowModule;
@@ -21,11 +21,11 @@ import io.vanillabp.intergration.adapter.spi.AdapterDeploymentService;
 public class DummyAdapterDeploymentConfiguration {
 
   @Bean
-  public List<AdapterDeploymentService<?, ?, ?>> dummyDeploymentServices(
+  public List<AdapterDeploymentService<Object, Object, Object>> dummyDeploymentServices(
       final WorkflowModules allWorkflowModules,
       final MigrationAdapterProperties properties) {
 
-    final List<AdapterDeploymentService<?, ?, ?>> deploymentServices = new ArrayList<>();
+    final List<AdapterDeploymentService<Object, Object, Object>> deploymentServices = new ArrayList<>();
     final Set<String> adaptersBuilt = new HashSet<>();
 
     // walk through all workflow modules

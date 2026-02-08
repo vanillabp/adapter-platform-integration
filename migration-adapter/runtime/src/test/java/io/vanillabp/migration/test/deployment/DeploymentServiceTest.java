@@ -196,7 +196,7 @@ public class DeploymentServiceTest {
       final var warningLogs = logWatcher.list
           .stream()
           .filter(event -> event.getLevel() == Level.WARN)
-          .filter(event -> event.getFormattedMessage().contains("did not container any executable processes"))
+          .filter(event -> event.getFormattedMessage().contains("did not contain any executable processes"))
           .toList();
 
       assertEquals(1, warningLogs.size());

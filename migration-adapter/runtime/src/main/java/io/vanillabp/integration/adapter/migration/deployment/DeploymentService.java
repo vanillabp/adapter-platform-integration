@@ -148,7 +148,7 @@ public class DeploymentService {
                   .ifPresentOrElse(
                       bpmsProcessingContext::setBpmsProcessingContext,
                       () -> log.warn(
-                          "File '{}‘ of workflow module '{}' did not container any executable processes. Skipping deployment of this file!",
+                          "File '{}‘ of workflow module '{}' did not contain any executable processes. Skipping deployment of this file!",
                           bpmnFileEntry.getKey(),
                           workflowModuleId)));
           // ...and finally deploy all the resources together (BPMN, DMN) to the BPMS

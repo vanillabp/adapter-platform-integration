@@ -1,4 +1,4 @@
-package io.vanillabp.adapters.dummy.springboot;
+package io.vanillabp.adapter.dummy.springboot;
 
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.Configuration;

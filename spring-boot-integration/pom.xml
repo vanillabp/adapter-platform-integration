@@ -32,6 +32,7 @@
     <module>spring-boot-support</module>
     <module>runtime</module>
     <module>dummy-adapter</module>
+    <module>dummy-extension</module>
     <module>integration-tests</module>
   </modules>
 

@@ -1,11 +1,11 @@
-package io.vanillabp.adapters.dummy.springboot.deployment;
+package io.vanillabp.adapter.dummy.springboot.deployment;
 
 import java.io.InputStream;
 import java.util.IllegalFormatException;
 import java.util.List;
 import java.util.Map;
 
-import io.vanillabp.adapters.dummy.springboot.DummyAdapterConfiguration;
+import io.vanillabp.adapter.dummy.springboot.DummyAdapterConfiguration;
 import io.vanillabp.intergration.adapter.spi.AdapterDeploymentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -52,7 +52,8 @@ public class DeploymentService implements AdapterDeploymentService<Object, Objec
       final boolean isVanillaBpBpmn) throws IllegalFormatException {
 
     log.info("Dummy-Adapter: Reading BPMN for {}", workflowModuleId);
-    return List.of();
+
+    return List.of(Map.entry("DummyProcess", 1));
 
   }
 
@@ -65,6 +66,8 @@ public class DeploymentService implements AdapterDeploymentService<Object, Objec
       final Object model) {
 
     log.info("Dummy-Adapter: Preparing BPMN for {}", workflowModuleId);
+
+
     return new Object();
 
   }

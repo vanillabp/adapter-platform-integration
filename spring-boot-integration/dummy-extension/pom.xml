@@ -3,13 +3,14 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>io.vanillabp.springboot</groupId>
-    <artifactId>integration-tests-parent</artifactId>
+    <groupId>io.vanillabp</groupId>
+    <artifactId>spring-boot-integration-parent</artifactId>
     <version>2.0.0-SNAPSHOT</version>
   </parent>
 
-  <artifactId>main-integration-test</artifactId>
-  <name>Spring Boot integration - Integration test</name>
+  <groupId>io.vanillabp.springboot.extension</groupId>
+  <artifactId>dummy-extension</artifactId>
+  <name>Spring Boot integration - Dummy Extension</name>
 
   <licenses>
     <license>
@@ -34,37 +35,12 @@
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-test</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-data-jpa</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.h2database</groupId>
-      <artifactId>h2</artifactId>
-      <scope>test</scope>
+      <artifactId>spring-boot-autoconfigure</artifactId>
     </dependency>
     <dependency>
       <groupId>io.vanillabp</groupId>
-      <artifactId>vanillabp-spring-boot-support</artifactId>
+      <artifactId>vanillabp-spring-boot-integration</artifactId>
       <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>io.vanillabp.springboot.adapter</groupId>
-      <artifactId>dummy-adapter</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>io.vanillabp.springboot.extension</groupId>
-      <artifactId>dummy-extension</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>io.vanillabp</groupId>
-      <artifactId>test-utils</artifactId>
     </dependency>
   </dependencies>
 </project>
