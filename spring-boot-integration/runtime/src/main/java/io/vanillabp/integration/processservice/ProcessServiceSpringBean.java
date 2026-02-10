@@ -1,5 +1,6 @@
 package io.vanillabp.integration.processservice;
 
+import java.io.InputStream;
 import java.util.List;
 
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -8,7 +9,11 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
 import io.vanillabp.integration.adapter.migration.processervice.MigrationProcessService;
 import io.vanillabp.integration.spi.aggregate.AggregatePersistenceAware;
 import io.vanillabp.intergration.adapter.spi.MigratableProcessService;
+import io.vanillabp.spi.process.ProcessDefinition;
+import io.vanillabp.spi.process.ProcessDefinitionNotFoundException;
 import io.vanillabp.spi.process.ProcessService;
+import io.vanillabp.spi.process.WorkflowHistory;
+import io.vanillabp.spi.process.WorkflowNotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -138,6 +143,29 @@ public class ProcessServiceSpringBean<A> implements ProcessService<A> {
       String bpmnErrorCode) {
     //return migrationProcessService.cancelTask(workflowAggregate, taskId, bpmnErrorCode);
     return workflowAggregate;
+  }
+
+  @Override
+  public List<ProcessDefinition> getProcessDefinitions(
+      final A workflowAggregate,
+      final String historyContext) throws WorkflowNotFoundException {
+
+    return List.of();
+  }
+
+  @Override
+  public InputStream getBpmnXml(
+      final String processDefinitionId) throws ProcessDefinitionNotFoundException {
+
+    return null;
+  }
+
+  @Override
+  public WorkflowHistory getWorkflowHistory(
+      final A workflowAggregate,
+      final String historyContext) throws WorkflowNotFoundException {
+
+    return null;
   }
 
   public boolean transactionIsActive() {
