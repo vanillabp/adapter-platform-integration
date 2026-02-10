@@ -73,25 +73,85 @@ public class DeploymentTest {
 
       final var capturedOutput = output.getAll();
 
-      final var adapterLogMessage = "Dummy-Adapter: Starting workflow processing";
-      final var extensionLogMessage = "Dummy-Extension: Starting workflow processing";
+      final var readBpmn = "Dummy-Adapter: Reading BPMN for test-module";
+      final var prepareBpmn = "Dummy-Adapter: Preparing BPMN for test-module";
+      final var adapterWiring = "Dummy-Adapter: Wiring BPMN for test-module";
+      final var extensionWiring = "Dummy-Extension: Wiring BPMN for test-module";
+      final var deployResources = "Dummy-Adapter: Deploying resources for test-module";
+      final var appStarted = "seconds (process running for";
+      final var adapterStartProcessing = "Dummy-Adapter: Starting workflow processing for test-module";
+      final var extensionStartProcessing = "Dummy-Extension: Starting workflow processing for test-module";
 
-      final var adapterLogPosition = capturedOutput.indexOf(adapterLogMessage);
-      final var extensionLogPosition = capturedOutput.indexOf(extensionLogMessage);
+      final var readBpmnPos = capturedOutput.indexOf(readBpmn);
+      final var prepareBpmnPos = capturedOutput.indexOf(prepareBpmn);
+      final var adapterWiringPos = capturedOutput.indexOf(adapterWiring);
+      final var extensionWiringPos = capturedOutput.indexOf(extensionWiring);
+      final var deployResourcesPos = capturedOutput.indexOf(deployResources);
+      final var appStartedPos = capturedOutput.indexOf(appStarted);
+      final var adapterStartProcessingPos = capturedOutput.indexOf(adapterStartProcessing);
+      final var extensionStartProcessingPos = capturedOutput.indexOf(extensionStartProcessing);
 
-      Assertions.assertTrue(
-          adapterLogPosition >= 0,
-          "Expected Dummy-Adapter startWorkflowProcessing to be called. Captured output: "
+      Assertions.assertTrue(readBpmnPos >= 0,
+          "Expected '"
+              + readBpmn
+              + "'. Captured output: "
+              + capturedOutput);
+      Assertions.assertTrue(prepareBpmnPos >= 0,
+          "Expected '"
+              + prepareBpmn
+              + "'. Captured output: "
+              + capturedOutput);
+      Assertions.assertTrue(adapterWiringPos >= 0,
+          "Expected '"
+              + adapterWiring
+              + "'. Captured output: "
+              + capturedOutput);
+      Assertions.assertTrue(extensionWiringPos >= 0,
+          "Expected '"
+              + extensionWiring
+              + "'. Captured output: "
+              + capturedOutput);
+      Assertions.assertTrue(deployResourcesPos >= 0,
+          "Expected '"
+              + deployResources
+              + "'. Captured output: "
+              + capturedOutput);
+      Assertions.assertTrue(appStartedPos >= 0,
+          "Expected '"
+              + appStarted
+              + "'. Captured output: "
+              + capturedOutput);
+      Assertions.assertTrue(adapterStartProcessingPos >= 0,
+          "Expected '"
+              + adapterStartProcessing
+              + "'. Captured output: "
+              + capturedOutput);
+      Assertions.assertTrue(extensionStartProcessingPos >= 0,
+          "Expected '"
+              + extensionStartProcessing
+              + "'. Captured output: "
               + capturedOutput);
 
-      Assertions.assertTrue(
-          extensionLogPosition >= 0,
-          "Expected Dummy-Extension startWorkflowProcessing to be called. Captured output: "
+      Assertions.assertTrue(readBpmnPos < prepareBpmnPos,
+          "Expected reading BPMN before preparing. Captured output: "
               + capturedOutput);
-
-      Assertions.assertTrue(
-          adapterLogPosition < extensionLogPosition,
-          "Expected Dummy-Adapter to log before Dummy-Extension. Captured output: "
+      Assertions.assertTrue(prepareBpmnPos < adapterWiringPos,
+          "Expected preparing BPMN before adapter wiring. Captured output: "
+              + capturedOutput);
+      Assertions.assertTrue(adapterWiringPos < extensionWiringPos,
+          "Expected adapter wiring before extension wiring. Captured output: "
+              + capturedOutput);
+      Assertions.assertTrue(extensionWiringPos < deployResourcesPos,
+          "Expected extension wiring before deploying resources. Captured output: "
+              + capturedOutput);
+      Assertions.assertTrue(deployResourcesPos < appStartedPos,
+          "Expected deploying resources before app started. Captured output: "
+              + capturedOutput);
+      Assertions.assertTrue(appStartedPos < adapterStartProcessingPos,
+          "Expected app started before adapter starts processing. Captured output: "
+              + capturedOutput);
+      Assertions.assertTrue(adapterStartProcessingPos < extensionStartProcessingPos,
+          "Expected adapter starts processing before extension. Captured output: "
               + capturedOutput);
 
     }

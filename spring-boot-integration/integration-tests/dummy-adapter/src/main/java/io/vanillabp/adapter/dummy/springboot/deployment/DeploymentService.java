@@ -53,7 +53,7 @@ public class DeploymentService implements AdapterDeploymentService<Object, Objec
 
     log.info("Dummy-Adapter: Reading BPMN for {}", workflowModuleId);
 
-    return List.of(Map.entry("DummyProcess", 1));
+    return List.of(Map.entry("DummyProcess", new Object()));
 
   }
 

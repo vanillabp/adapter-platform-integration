@@ -1,1 +1,1 @@
-io.vanillabp.extensions.dummy.springboot.wiring.DummyExtensionWiringConfiguration
+io.vanillabp.extension.dummy.springboot.wiring.DummyExtensionWiringConfiguration
