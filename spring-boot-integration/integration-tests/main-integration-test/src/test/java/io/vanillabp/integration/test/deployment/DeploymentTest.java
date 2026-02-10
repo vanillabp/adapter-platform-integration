@@ -6,8 +6,6 @@ import java.util.List;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.springframework.boot.test.system.CapturedOutput;
-import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -25,9 +23,11 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.integration.workflowmodule.WorkflowModules;
 import io.vanillabp.intergration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.intergration.extension.spi.ExtensionWiringService;
+import io.vanillabp.intergration.test.utils.CapturedOutput;
+import io.vanillabp.intergration.test.utils.SuppressOutputExtension;
 import io.vanillabp.intergration.test.utils.springboot.SpringBootTestApplication;
 
-@ExtendWith(OutputCaptureExtension.class)
+@ExtendWith(SuppressOutputExtension.class)
 public class DeploymentTest {
 
   @Configuration

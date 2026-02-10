@@ -121,7 +121,7 @@
           <configuration>
             <!-- see https://javadoc.io/doc/org.mockito/mockito-core/latest/org.mockito/org/mockito/Mockito.html#mockito-instrumentation -->
             <!-- property 'jacoco.agent' is filled by jacoco-maven-plugin blow in this file -->
-            <argLine>@{jacoco.agent} -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
+            <argLine>@{jacoco.agent} -Xshare:off -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
           </configuration>
           <dependencies>
             <dependency>
@@ -137,7 +137,7 @@
       <plugin>
         <groupId>com.diffplug.spotless</groupId>
         <artifactId>spotless-maven-plugin</artifactId>
-        <version>2.44.0</version>
+        <version>3.1.0</version>
         <configuration>
           <pom>
             <includes>
@@ -147,7 +147,9 @@
               <exclude>**/target/**/</exclude>
               <exclude>**/node_modules/**/</exclude>
             </excludes>
-            <sortPom></sortPom>
+            <sortPom>
+              <quiet>true</quiet>
+            </sortPom>
           </pom>
           <markdown>
             <includes>
@@ -157,7 +159,7 @@
               <exclude>**/target/**/</exclude>
               <exclude>**/node_modules/**/</exclude>
             </excludes>
-            <flexmark></flexmark>
+            <flexmark/>
           </markdown>
           <yaml>
             <includes>
@@ -171,9 +173,9 @@
               <yamlFeatures>
                 <MINIMIZE_QUOTES>true</MINIMIZE_QUOTES>
                 <WRITE_DOC_START_MARKER>false</WRITE_DOC_START_MARKER>
+                <INDENT_ARRAYS_WITH_INDICATOR>true</INDENT_ARRAYS_WITH_INDICATOR>
               </yamlFeatures>
             </jackson>
-            <prettier></prettier>
           </yaml>
           <java>
             <eclipse>
@@ -181,7 +183,7 @@
               <file>${maven.multiModuleProjectDirectory}/formatting_conventions.xml</file>
               <version>4.35</version>
             </eclipse>
-            <removeUnusedImports></removeUnusedImports>
+            <removeUnusedImports/>
             <importOrder>
               <order>java,javax,org,com,at.phactum</order>
             </importOrder>

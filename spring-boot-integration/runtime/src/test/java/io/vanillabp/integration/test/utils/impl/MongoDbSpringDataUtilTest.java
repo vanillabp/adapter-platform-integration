@@ -43,9 +43,10 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.intergration.test.utils.SuppressOutputExtension;
 import io.vanillabp.intergration.test.utils.springboot.FullyQualifiedRepositoryBeanNameGenerator;
 
+@ExtendWith(SuppressOutputExtension.class)
+@SuppressOutputExtension.SuppressBackgroundOutput
 @Testcontainers
 @SpringBootTest(classes = MongoDbSpringDataUtilTest.MongoDbTestConfiguration.class)
-@ExtendWith(SuppressOutputExtension.class)
 class MongoDbSpringDataUtilTest {
 
   @Container

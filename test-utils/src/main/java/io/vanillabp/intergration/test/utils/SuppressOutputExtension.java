@@ -1,29 +1,75 @@
 package io.vanillabp.intergration.test.utils;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.io.PrintStream;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
 import org.junit.jupiter.api.extension.*;
 import org.junit.jupiter.api.extension.ExtensionContext.Namespace;
 import org.junit.jupiter.api.extension.ExtensionContext.Store;
 
-public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallback, BeforeEachCallback, AfterEachCallback {
+public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallback, BeforeEachCallback, AfterEachCallback, ParameterResolver {
+
+  /**
+   * Annotation to suppress output from background threads after all tests have completed.
+   * When present, output streams are redirected to a null output stream instead of being
+   * restored to the original streams. This prevents background threads (e.g., from
+   * Testcontainers or database drivers) from printing output after the test class finishes.
+   * Use on test classes together with {@code @ExtendWith(SuppressOutputExtension.class)}.
+   */
+  @Target(ElementType.TYPE)
+  @Retention(RetentionPolicy.RUNTIME)
+  public @interface SuppressBackgroundOutput {
+
+  }
 
   private static final Namespace NAMESPACE = Namespace.create(SuppressOutputExtension.class);
   private static final String CAPTURED_OUTPUT_KEY = "capturedOutput";
 
+  private boolean suppressBackgroundOutput = false;
+
   private PrintStream originalOut;
   private PrintStream originalErr;
-  private ByteArrayOutputStream buffer;
-  private ByteArrayOutputStream classLevelBuffer;
+  private ByteArrayOutputStream allBuffer;
+  private ByteArrayOutputStream outBuffer;
+  private ByteArrayOutputStream errBuffer;
+  private ByteArrayOutputStream classLevelAllBuffer;
+  private ByteArrayOutputStream classLevelOutBuffer;
+  private ByteArrayOutputStream classLevelErrBuffer;
+  private CapturedOutput capturedOutput;
 
   @Override
   public void beforeAll(
       final ExtensionContext context) {
 
     backupOriginalOutputStreams();
-    classLevelBuffer = new ByteArrayOutputStream();
+    classLevelAllBuffer = new ByteArrayOutputStream();
+    classLevelOutBuffer = new ByteArrayOutputStream();
+    classLevelErrBuffer = new ByteArrayOutputStream();
+    readAnnotations(context);
     startCapture(context);
+
+  }
+
+  /**
+   * Configures the extension to suppress output from background threads after afterAll.
+   * Instead of restoring the original output streams, they are set to a null output stream.
+   * <p>
+   * Use this method when registering the extension programmatically via
+   * {@code @RegisterExtension}. For declarative usage with {@code @ExtendWith},
+   * use the {@link SuppressBackgroundOutput} annotation instead.
+   *
+   * @return this extension instance for fluent configuration
+   */
+  public SuppressOutputExtension withSuppressBackgroundOutput() {
+
+    this.suppressBackgroundOutput = true;
+    return this;
 
   }
 
@@ -32,7 +78,11 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
       final ExtensionContext context) {
 
     stopCapture(context, true);
-    restoreOriginalOutputStreams();
+    if (suppressBackgroundOutput) {
+      silenceOutputStreams();
+    } else {
+      restoreOriginalOutputStreams();
+    }
 
   }
 
@@ -52,17 +102,51 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
 
   }
 
+  @Override
+  public boolean supportsParameter(
+      final ParameterContext parameterContext,
+      final ExtensionContext extensionContext) {
+
+    return CapturedOutput.class.isAssignableFrom(
+        parameterContext.getParameter().getType());
+
+  }
+
+  @Override
+  public Object resolveParameter(
+      final ParameterContext parameterContext,
+      final ExtensionContext extensionContext) {
+
+    return capturedOutput;
+
+  }
+
+  private void readAnnotations(
+      final ExtensionContext context) {
+
+    context.getTestClass()
+        .map(cls -> cls.getAnnotation(SuppressBackgroundOutput.class))
+        .ifPresent(annotation -> suppressBackgroundOutput = true);
+
+  }
+
   private void startCapture(
       final ExtensionContext context) {
 
-    buffer = new ByteArrayOutputStream();
-    PrintStream ps = new PrintStream(buffer);
+    allBuffer = new ByteArrayOutputStream();
+    outBuffer = new ByteArrayOutputStream();
+    errBuffer = new ByteArrayOutputStream();
 
-    System.setOut(ps);
-    System.setErr(ps);
+    System.setOut(new PrintStream(
+        new TeeOutputStream(allBuffer, outBuffer)));
+    System.setErr(new PrintStream(
+        new TeeOutputStream(allBuffer, errBuffer)));
 
-    // Store buffer reference in context for test access
-    getStore(context).put(CAPTURED_OUTPUT_KEY, buffer);
+    capturedOutput = new CapturedOutput(
+        classLevelAllBuffer, allBuffer, classLevelOutBuffer, outBuffer, classLevelErrBuffer, errBuffer);
+
+    // Store CapturedOutput in context for test access
+    getStore(context).put(CAPTURED_OUTPUT_KEY, capturedOutput);
 
   }
 
@@ -77,10 +161,12 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
       final ExtensionContext context,
       final boolean classLevel) {
 
-    // Append to class level buffer before potentially resetting
-    if (classLevelBuffer != null && buffer != null) {
+    // Append to class level buffers before potentially resetting
+    if (classLevelAllBuffer != null && allBuffer != null) {
       try {
-        classLevelBuffer.write(buffer.toByteArray());
+        classLevelAllBuffer.write(allBuffer.toByteArray());
+        classLevelOutBuffer.write(outBuffer.toByteArray());
+        classLevelErrBuffer.write(errBuffer.toByteArray());
       } catch (Exception e) {
         // Ignore
       }
@@ -92,7 +178,7 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
       } else {
         originalOut.println("----------- Captured Output -----------");
       }
-      originalOut.println(buffer.toString());
+      originalOut.println(allBuffer.toString());
       originalOut.println("---------------------------------------");
     }
 
@@ -102,6 +188,14 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
 
     System.setOut(originalOut);
     System.setErr(originalErr);
+
+  }
+
+  private void silenceOutputStreams() {
+
+    final var nullOut = new PrintStream(OutputStream.nullOutputStream());
+    System.setOut(nullOut);
+    System.setErr(nullOut);
 
   }
 
@@ -123,8 +217,8 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
       final ExtensionContext context) {
 
     final var store = context.getStore(NAMESPACE);
-    final var buffer = store.get(CAPTURED_OUTPUT_KEY, ByteArrayOutputStream.class);
-    return buffer != null ? buffer.toString() : "";
+    final var output = store.get(CAPTURED_OUTPUT_KEY, CapturedOutput.class);
+    return output != null ? output.getAll() : "";
 
   }
 
@@ -136,14 +230,68 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
    */
   public String getCapturedOutput() {
 
-    final var result = new StringBuilder();
-    if (classLevelBuffer != null) {
-      result.append(classLevelBuffer.toString());
+    return capturedOutput != null ? capturedOutput.getAll() : "";
+
+  }
+
+  private static class TeeOutputStream extends OutputStream {
+
+    private final OutputStream first;
+    private final OutputStream second;
+
+    TeeOutputStream(
+        final OutputStream first,
+        final OutputStream second) {
+
+      this.first = first;
+      this.second = second;
+
     }
-    if (buffer != null) {
-      result.append(buffer.toString());
+
+    @Override
+    public void write(
+        final int b) throws IOException {
+
+      first.write(b);
+      second.write(b);
+
     }
-    return result.toString();
+
+    @Override
+    public void write(
+        final byte[] b) throws IOException {
+
+      first.write(b);
+      second.write(b);
+
+    }
+
+    @Override
+    public void write(
+        final byte[] b,
+        final int off,
+        final int len) throws IOException {
+
+      first.write(b, off, len);
+      second.write(b, off, len);
+
+    }
+
+    @Override
+    public void flush() throws IOException {
+
+      first.flush();
+      second.flush();
+
+    }
+
+    @Override
+    public void close() throws IOException {
+
+      first.close();
+      second.close();
+
+    }
 
   }
 
