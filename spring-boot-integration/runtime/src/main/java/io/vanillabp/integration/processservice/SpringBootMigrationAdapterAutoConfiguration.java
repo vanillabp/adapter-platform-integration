@@ -120,7 +120,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
                 }
             );
 
-        // associate workflow services to workflow modules
+        // associate workflow services with workflow modules
         WorkflowModuleAutoConfiguration.registerProcessServices(
             allWorkflowModules.getWorkflowModules(),
             workflowServiceClasses);

@@ -1,4 +1,4 @@
-![Draft](../../readme/vanillabp-headline.png)
+![Header](../../readme/vanillabp-headline.png)
 
 ### SpringDataUtil versus AggregatePersistenceSupport
 

@@ -1,4 +1,4 @@
-![Draft](./readme/vanillabp-headline.png)
+![Header](./readme/vanillabp-headline.png)
 
 # VanillaBP platform integration
 
@@ -72,7 +72,7 @@ This repository contains the following VanillaBP functionality:
       2. Between different versions.
    2. Migrating from one BPMS to another.
 
-## Building
+### Building
 
 This project uses Java 21. In addition, `spotless` formatters are configured for all supported file
 types to enforce a consistent code style.
@@ -97,6 +97,6 @@ intention of giving back to the community as it has benefited the community in t
 
 ## License
 
-Copyright 2025 Phactum Softwareentwicklung GmbH
+Copyright 2026 Phactum Softwareentwicklung GmbH
 
 Licensed under the Apache License, Version 2.0

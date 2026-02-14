@@ -78,9 +78,9 @@ public class WorkflowModuleAutoConfiguration {
   }
 
   /**
-   * Associates workflow services to workflow modules for later usage.
+   * Associates workflow services with workflow modules for later usage.
    *
-   * @param allWorkflowModules All workflow modules found in classpath
+   * @param allWorkflowModules All workflow modules found in the classpath
    * @param allWorkflowServiceClasses All classes of workflow services found
    */
   public static void registerProcessServices(
@@ -95,7 +95,7 @@ public class WorkflowModuleAutoConfiguration {
         .forEach(serviceClass -> {
 
           try {
-            // register service class in workflow module identified by META-INF/workflow-service
+            // register a service class in the workflow module identified by META-INF/workflow-service
             // found in the same JAR/directory
             final var serviceClassSourceUri = serviceClass
                 .getProtectionDomain()

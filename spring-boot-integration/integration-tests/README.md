@@ -1,4 +1,4 @@
-![Draft](../../readme/vanillabp-headline.png)
+![Header](../../readme/vanillabp-headline.png)
 
 # VanillaBP Spring Boot support - integration tests.
 
