@@ -31,6 +31,19 @@ import org.springframework.lang.Nullable;
  *   <li>{@code {moduleId}-{profile}.properties} (for each active profile)</li>
  * </ul>
  *
+ * <p>Files are searched in the following classpath locations (analogous to
+ * Spring Boot's own {@code application.yaml} resolution which covers both
+ * root and {@code config/}):
+ * <ol>
+ *   <li>{@code {filename}} — classpath root</li>
+ *   <li>{@code config/{filename}} — config directory</li>
+ *   <li>{@code {moduleId}/{filename}} — workflow module subdirectory</li>
+ *   <li>{@code {moduleId}/config/{filename}} — config inside workflow module subdirectory</li>
+ * </ol>
+ * This allows workflow modules packaged as separate Maven/Gradle modules to
+ * place their configuration files in a module-specific subdirectory, avoiding
+ * classpath conflicts with other modules.
+ *
  * <p>Workflow module property sources are inserted with higher priority than
  * {@code application.yaml}/{@code application.properties}, matching the
  * behavior of the Quarkus implementation. Profile-specific variants have
@@ -114,44 +127,58 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
 
     // Load .yaml / .yml files (higher priority, loaded first so they end up
     // further from insertBefore in the property source list)
-    loadResources(resolver, baseName, yamlLoader)
+    loadResources(resolver, moduleId, baseName, yamlLoader)
         .forEach(ps -> addPropertySource(propertySources, insertBeforeName, ps));
 
     // Load .properties files (lower priority than YAML)
-    loadResources(resolver, baseName, propertiesLoader)
+    loadResources(resolver, moduleId, baseName, propertiesLoader)
         .forEach(ps -> addPropertySource(propertySources, insertBeforeName, ps));
 
   }
 
   /**
    * Load all property sources for files matching the given base name
-   * using the given loader.
+   * using the given loader. Files are searched in multiple classpath
+   * locations: root, config/, {moduleId}/, and {moduleId}/config/.
    */
   private List<PropertySource<?>> loadResources(
       final ResourcePatternResolver resolver,
+      final String moduleId,
       final String baseName,
       final org.springframework.boot.env.PropertySourceLoader loader) {
+
+    // Search locations analogous to Spring Boot's application.yaml resolution,
+    // plus workflow module subdirectory variants
+    final var searchPrefixes = List.of(
+        "",
+        "config/",
+        "%s/".formatted(moduleId),
+        "%s/config/".formatted(moduleId));
 
     return Arrays.stream(loader.getFileExtensions())
         .flatMap(extension -> {
           final var filename = "%s.%s".formatted(baseName, extension);
-          try {
-            final var resources = resolver.getResources(
-                CLASSPATH_PATTERN.formatted(filename));
-            return Arrays.stream(resources)
-                .filter(Resource::exists)
-                .flatMap(resource -> {
-                  try {
-                    return loader
-                        .load("workflowmodule:%s".formatted(filename), resource)
-                        .stream();
-                  } catch (IOException e) {
-                    return java.util.stream.Stream.empty();
-                  }
-                });
-          } catch (IOException e) {
-            return java.util.stream.Stream.empty();
-          }
+          return searchPrefixes.stream()
+              .flatMap(prefix -> {
+                final var location = "%s%s".formatted(prefix, filename);
+                try {
+                  final var resources = resolver.getResources(
+                      CLASSPATH_PATTERN.formatted(location));
+                  return Arrays.stream(resources)
+                      .filter(Resource::exists)
+                      .flatMap(resource -> {
+                        try {
+                          return loader
+                              .load("workflowmodule:%s".formatted(location), resource)
+                              .stream();
+                        } catch (IOException e) {
+                          return java.util.stream.Stream.empty();
+                        }
+                      });
+                } catch (IOException e) {
+                  return java.util.stream.Stream.empty();
+                }
+              });
         })
         .toList();
 

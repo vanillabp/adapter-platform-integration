@@ -6,6 +6,7 @@ import java.net.URL;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Stream;
 
 import org.eclipse.microprofile.config.spi.ConfigSource;
 import org.eclipse.microprofile.config.spi.ConfigSourceProvider;
@@ -18,6 +19,11 @@ import lombok.RequiredArgsConstructor;
 /**
  * A config source provider loading properties-files named by a workflow module ID.
  * The super class is responsible for determining profile-based variants.
+ *
+ * <p>Files are searched both at the classpath root and inside a subdirectory
+ * named after the workflow module ID. This allows workflow modules packaged
+ * as separate Maven/Gradle modules to place their configuration in a
+ * module-specific subdirectory (avoiding classpath conflicts).
  */
 @StaticInitSafe
 @RequiredArgsConstructor
@@ -66,6 +72,8 @@ public class WorkflowModuleSpecificPropertiesConfigSourceProvider extends Abstra
 
   /**
    * Determine all config sources for all known file extensions.
+   * Searches both at the classpath root ({@code {id}.properties}) and in
+   * a workflow module subdirectory ({@code {id}/{id}.properties}).
    *
    * @param classLoader
    *            the class loader, which should be used for discovery and resource loading purposes
@@ -76,8 +84,13 @@ public class WorkflowModuleSpecificPropertiesConfigSourceProvider extends Abstra
 
     return Arrays
         .stream(PROPS_EXTENSIONS)
-        .map(extension -> "%s.%s".formatted(workflowModuleId, extension))
-        .flatMap(filename -> loadConfigSources(filename, ordinal, classLoader).stream())
+        .flatMap(extension -> {
+          final var filename = "%s.%s".formatted(workflowModuleId, extension);
+          return Stream.of(
+              filename,
+              "%s/%s".formatted(workflowModuleId, filename));
+        })
+        .flatMap(location -> loadConfigSources(location, ordinal, classLoader).stream())
         .toList();
 
   }
