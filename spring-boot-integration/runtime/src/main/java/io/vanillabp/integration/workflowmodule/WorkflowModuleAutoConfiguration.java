@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.core.io.support.ResourcePatternUtils;
+import org.springframework.lang.Nullable;
 
 import io.vanillabp.spi.service.WorkflowService;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +27,20 @@ import lombok.extern.slf4j.Slf4j;
 public class WorkflowModuleAutoConfiguration {
 
   /**
+   * Build a bean holding all workflow modules found.
+   *
+   * @param resourceLoader The resource loader used to find META-INF/workflow-module files
+   * @return The workflow modules found
+   */
+  @Bean
+  public static WorkflowModules vanillaBpWorkflowModules(
+      final ResourceLoader resourceLoader) {
+
+    return determineWorkflowModules(resourceLoader);
+
+  }
+
+  /**
    * Searches for all workflow module descriptors found in classpath to build
    * {@link WorkflowModule} objects. This method is static because it has to be processed
    * by Spring Boot during the very beginning of booting the application.
@@ -34,9 +49,8 @@ public class WorkflowModuleAutoConfiguration {
    * @param resourceLoader The resource loader used to find META-INF/workflow-module files
    * @return The workflow modules found
    */
-  @Bean
-  public static WorkflowModules vanillaBpWorkflowModules(
-      final ResourceLoader resourceLoader) {
+  static WorkflowModules determineWorkflowModules(
+      @Nullable final ResourceLoader resourceLoader) {
 
     try {
 
