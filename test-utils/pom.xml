@@ -52,7 +52,7 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot</artifactId>
-      <version>3.5.5</version>
+      <version>3.5.14</version>
       <optional>true</optional>
     </dependency>
     <dependency>
