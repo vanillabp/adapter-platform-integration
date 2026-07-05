@@ -51,7 +51,7 @@
     <vanillabp.version>1.1.0-SNAPSHOT</vanillabp.version>
     <version.java>21</version.java>
     <lombok.version>1.18.46</lombok.version>
-    <transaction-outbox.version>6.1.653</transaction-outbox.version>
+    <transaction-outbox.version>7.0.707</transaction-outbox.version>
     <jacoco.version>0.8.15</jacoco.version>
     <mockito.version>5.23.0</mockito.version>
     <testcontainers.version>2.0.5</testcontainers.version>
