@@ -11,9 +11,15 @@ import io.smallrye.config.ConfigMapping;
 
 /**
  * Properties common to all adapters.
+ * <p>
+ * The config root uses phase {@link ConfigPhase#RUN_TIME} because parts of the
+ * configuration originate from workflow-module-specific config files which are
+ * added by generated config builders to the static-init/runtime config only —
+ * they are not visible to the build-time configuration. Additionally, VanillaBP
+ * configuration (e.g. adapter endpoints) must be overridable per environment.
  */
 @StaticInitSafe
-@ConfigRoot(phase = ConfigPhase.BUILD_AND_RUN_TIME_FIXED)
+@ConfigRoot(phase = ConfigPhase.RUN_TIME)
 @ConfigMapping(prefix = QuarkusMigrationAdapterProperties.PREFIX)
 public interface QuarkusMigrationAdapterProperties {
 

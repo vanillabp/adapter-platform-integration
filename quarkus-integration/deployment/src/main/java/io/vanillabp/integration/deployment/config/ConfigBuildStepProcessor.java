@@ -35,7 +35,7 @@ public class ConfigBuildStepProcessor {
    * @param migrationAdapterPropertiesRecorder Recorder for {@link MigrationAdapterProperties} objects
    * @return The {@link MigrationAdapterProperties} object
    */
-  @Record(ExecutionTime.STATIC_INIT)
+  @Record(ExecutionTime.RUNTIME_INIT)
   @BuildStep
   MigrationAdapterPropertiesBuildItem buildMigrationAdapterProperties(
       final Capabilities capabilities,

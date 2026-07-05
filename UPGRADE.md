@@ -4,6 +4,48 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Quarkus 3.26.4 → 3.37.1 (2026-07-05)
+
+Version bump in `quarkus-integration/pom.xml` (`quarkus.version`). One real change was
+required:
+
+### Config root phase changed to RUN_TIME
+
+`QuarkusMigrationAdapterProperties` was declared as
+`@ConfigRoot(phase = BUILD_AND_RUN_TIME_FIXED)`. Values of such config roots are read
+at **build time** and frozen. The workflow-module-specific config files
+(`<module-id>.properties/.yaml`) are added by generated config builders to the
+static-init/runtime config only — they are never part of the build-time
+configuration.
+
+Up to Quarkus 3.26 this worked **by accident**: the `@ConfigMapping` instance was
+re-populated at static init against the full config (including the module config
+sources). Since the Quarkus config optimization that introduced the generated
+`SharedConfig` class (mapping instances are created once from build-time values and
+reused in static-init and runtime config via `withMappingInstance`), the mapping's
+`workflowModules()` map stayed empty at runtime, and all `QuarkusProdModeTest`s that
+actually launch the application failed with:
+
+```
+IllegalStateException: No workflow-modules configured! Add properties sections
+'vanillabp.workflow-modules.<id>' ...
+```
+
+Fix (also semantically the right choice, because VanillaBP configuration such as
+adapter endpoints must be overridable per environment, e.g. via environment
+variables):
+
+- `QuarkusMigrationAdapterProperties`: `ConfigPhase.BUILD_AND_RUN_TIME_FIXED` →
+  `ConfigPhase.RUN_TIME`
+- `ConfigBuildStepProcessor.buildMigrationAdapterProperties`:
+  `@Record(ExecutionTime.STATIC_INIT)` → `@Record(ExecutionTime.RUNTIME_INIT)`
+  (the synthetic `MigrationAdapterProperties` bean was already `setRuntimeInit()`)
+
+Diagnosis hint for similar problems: decompile
+`io/quarkus/runtime/generated/StaticInitConfig*.class` and `SharedConfig.class` from
+the `generated-bytecode.jar` of a prod-mode build — they show which config builders,
+sources and mapping instances are actually wired.
+
 ## Spring Boot 3.5.x → 4.1.0 (2026-07-05)
 
 Spring Boot 4 modularized the formerly monolithic `spring-boot-autoconfigure` and
