@@ -3,11 +3,13 @@ package io.vanillabp.integration.processservice;
 import java.io.InputStream;
 import java.util.List;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
+import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.aggregate.AggregatePersistenceAware;
 import io.vanillabp.spi.process.ProcessDefinition;
 import io.vanillabp.spi.process.ProcessDefinitionNotFoundException;
@@ -30,16 +32,51 @@ public class ProcessServiceSpringBean<A> implements ProcessService<A> {
       final Class<A> workflowAggregateClass,
       final MigrationAdapterProperties properties,
       final AggregatePersistenceAware<A> aggregatePersistenceAware,
-      final List<MigratableProcessService<A>> migratableProcessServices) {
+      final List<MigratableProcessService<A>> migratableProcessServices,
+      final ObjectProvider<PhaseTwoOutbox> phaseTwoOutboxProvider) {
 
     migrationProcessService = new MigrationProcessService<A>(
-        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, new AggregatePersistenceAwareWrapper<A>(aggregatePersistenceAware), migratableProcessServices, null);
+        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, new AggregatePersistenceAwareWrapper<A>(aggregatePersistenceAware), migratableProcessServices, buildLazyPhaseTwoOutbox(
+            workflowModuleId, bpmnProcessId, phaseTwoOutboxProvider));
 
   }
 
-  void startService() {
+  /**
+   * Builds a {@link PhaseTwoOutbox} resolving the actual outbox bean lazily on first
+   * use: the outbox bean (and with it e.g. the DataSource) is not materialized when
+   * the process service bean is created but only if an adapter actually requires a
+   * two-phase commit for starting workflows.
+   *
+   * @param workflowModuleId The ID of the workflow module (used for error messages)
+   * @param bpmnProcessId The BPMN process ID (used for error messages)
+   * @param phaseTwoOutboxProvider The provider used to resolve the outbox bean
+   * @return The lazily resolving outbox or <code>null</code> if no provider was given
+   */
+  private static PhaseTwoOutbox buildLazyPhaseTwoOutbox(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final ObjectProvider<PhaseTwoOutbox> phaseTwoOutboxProvider) {
 
-    migrationProcessService.initialize();
+    if (phaseTwoOutboxProvider == null) {
+      return null;
+    }
+    return (
+        module,
+        process,
+        adapterId,
+        workflowAggregateId) -> {
+      final var phaseTwoOutbox = phaseTwoOutboxProvider.getIfAvailable();
+      if (phaseTwoOutbox == null) {
+        throw new IllegalStateException(
+            ("Adapter '%s' requires a two-phase commit for starting workflows of BPMN process '%s' "
+                + "of workflow module '%s', but no PhaseTwoOutbox bean is available! To solve this either\n"
+                + "- add spring-boot-starter-data-jpa and configure a data source (enables the gruelbox-based default),\n"
+                + "- add spring-boot-starter-data-mongodb and configure the MongoDB connection (enables the MongoDB default), or\n"
+                + "- define your own bean implementing io.vanillabp.integration.adapter.spi.PhaseTwoOutbox.")
+                .formatted(adapterId, bpmnProcessId, workflowModuleId));
+      }
+      phaseTwoOutbox.schedule(module, process, adapterId, workflowAggregateId);
+    };
 
   }
 

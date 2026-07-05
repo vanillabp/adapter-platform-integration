@@ -108,6 +108,44 @@ So `SpringDataUtil` is the Spring-Data-generic mechanism used *behind* the
 `AggregatePersistenceAware` abstraction, while a custom `AggregatePersistenceAware`
 bean is the extension point for any other persistence technology.
 
+### Phase-two outbox
+
+Adapters of remote BPMS report `needsTwoPhaseCommitForStartingWorkflows()` and
+require a transaction outbox (`PhaseTwoOutbox` SPI of the
+[migration adapter](../../migration-adapter)) which schedules phase two of starting a
+workflow within the local transaction and dispatches it reliably after the commit
+(also after a crash/restart, retrying with a backoff). This module provides two
+default implementations, both configured by the `vanillabp.outbox.*` properties
+(`poll-interval`, `attempt-frequency`, `block-after-attempts`, `create-schema`) and
+both only active if the application does not define its own `PhaseTwoOutbox` bean:
+
+1. **JPA (gruelbox-based):** `GruelboxPhaseTwoOutboxAutoConfiguration` sets up a
+   [gruelbox transaction-outbox](https://github.com/gruelbox/transaction-outbox)
+   using `SpringTransactionManager`/`SpringInstantiator`, active under the same
+   conditions as the JPA `SpringDataUtil`. The workflow-aggregate ID is serialized
+   as a string (gruelbox's invocation serializer only supports a whitelist of types)
+   and converted back by `MigratableProcessServicePhaseTwoSpringBean` using the
+   aggregate's ID type. Recovery and retries are done by a fixed-delay poller
+   calling `TransactionOutbox.flush()` (own `TaskScheduler` registered only if the
+   application has none; `@EnableScheduling` is not required). The outbox table
+   `TXNO_OUTBOX` is created by gruelbox's auto-DDL — set
+   `vanillabp.outbox.create-schema: false` to manage the schema manually (use
+   gruelbox's `DefaultPersistor.writeSchema(Writer)` or the DDL from the gruelbox
+   documentation for your database).
+2. **MongoDB (own implementation, gruelbox is JDBC-only):** `MongoPhaseTwoOutbox`
+   writes entries into the collection `vanillabp-phase-two-outbox` via
+   `MongoTemplate` within the current transaction;
+   `MongoPhaseTwoOutboxDispatcher` claims due entries atomically (find-and-modify
+   with attempts/backoff) and removes them after successful dispatch. **Note:**
+   transactional enlisting requires MongoDB transactions, i.e. a replica set and a
+   `MongoTransactionManager` bean — otherwise scheduling is best-effort.
+
+If both JPA and MongoDB are configured, JPA wins deterministically (consistent with
+the `SpringDataUtil` auto-configurations). To use a different outbox (e.g. another
+database or an existing outbox infrastructure), define a bean implementing
+`io.vanillabp.integration.adapter.spi.PhaseTwoOutbox` — both auto-configurations
+back off.
+
 ### Separating workflow module properties from application properties
 
 Read the [Wiki](https://github.com/vanillabp/adapter-platform-integration/wiki/Workflow-modules) to learn about reasons for having multiple workflow modules.

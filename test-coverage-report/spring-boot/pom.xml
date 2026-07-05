@@ -38,6 +38,16 @@
       <artifactId>submodule-integration-test</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <dependency>
+      <groupId>io.vanillabp.springboot</groupId>
+      <artifactId>outbox-jpa-integration-test</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.vanillabp.springboot</groupId>
+      <artifactId>outbox-mongo-integration-test</artifactId>
+      <version>${project.version}</version>
+    </dependency>
   </dependencies>
 
   <build>

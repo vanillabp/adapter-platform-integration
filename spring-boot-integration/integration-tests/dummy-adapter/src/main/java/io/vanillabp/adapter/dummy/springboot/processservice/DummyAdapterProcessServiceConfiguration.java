@@ -3,6 +3,7 @@ package io.vanillabp.adapter.dummy.springboot.processservice;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.env.Environment;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 
@@ -18,11 +19,22 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
 @AutoConfiguration
 public class DummyAdapterProcessServiceConfiguration {
 
+  /**
+   * The property forcing the dummy adapter to require a two-phase commit for starting
+   * workflows. Used by integration tests of
+   * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox} implementations.
+   */
+  public static final String PROPERTY_TWO_PHASE_COMMIT = "dummy-adapter.two-phase-commit";
+
   @Bean
   public MigratableProcessService<?> dummyMigratableProcessService(
-      final ObjectProvider<MigrationAdapterProperties> properties) {
+      final ObjectProvider<MigrationAdapterProperties> properties,
+      final Environment environment,
+      final ObjectProvider<DummyAdapterPhaseTwoListener> phaseTwoListeners) {
 
-    return new MigratableProcessService<>(properties);
+    return new MigratableProcessService<>(
+        properties, Boolean.TRUE.equals(
+            environment.getProperty(PROPERTY_TWO_PHASE_COMMIT, Boolean.class, Boolean.FALSE)), phaseTwoListeners);
 
   }
 

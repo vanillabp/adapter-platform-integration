@@ -15,12 +15,21 @@ import lombok.extern.slf4j.Slf4j;
  * the configuration (first adapter of type "dummy") since this bean may be created very
  * early during bootstrapping of the Spring context, before configuration properties
  * beans are bound.
+ * <p>
+ * For testing the two-phase workflow start, the property
+ * <code>dummy-adapter.two-phase-commit</code> forces
+ * {@link #needsTwoPhaseCommitForStartingWorkflows()} to return <code>true</code>, and
+ * an optional {@link DummyAdapterPhaseTwoListener} bean is notified on phase two.
  */
 @Slf4j
 @RequiredArgsConstructor
 public class MigratableProcessService<A> implements io.vanillabp.integration.adapter.spi.MigratableProcessService<A> {
 
   private final ObjectProvider<MigrationAdapterProperties> properties;
+
+  private final boolean needsTwoPhaseCommitForStartingWorkflows;
+
+  private final ObjectProvider<DummyAdapterPhaseTwoListener> phaseTwoListeners;
 
   @Override
   public String getAdapterId() {
@@ -50,7 +59,7 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
   @Override
   public boolean needsTwoPhaseCommitForStartingWorkflows() {
 
-    return false;
+    return needsTwoPhaseCommitForStartingWorkflows;
 
   }
 
@@ -68,6 +77,12 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
       final Object workflowAggregateId) {
 
     log.info("Dummy-Adapter: Starting workflow (phase two) for aggregate '{}'", workflowAggregateId);
+
+    if (phaseTwoListeners != null) {
+      phaseTwoListeners
+          .stream()
+          .forEach(listener -> listener.startedWorkflowPhaseTwo(workflowAggregateId));
+    }
 
   }
 

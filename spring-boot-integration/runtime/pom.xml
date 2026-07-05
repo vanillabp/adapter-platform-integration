@@ -90,6 +90,16 @@
       <optional>true</optional>
     </dependency>
     <dependency>
+      <groupId>com.gruelbox</groupId>
+      <artifactId>transactionoutbox-core</artifactId>
+      <version>${transaction-outbox.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.gruelbox</groupId>
+      <artifactId>transactionoutbox-spring</artifactId>
+      <version>${transaction-outbox.version}</version>
+    </dependency>
+    <dependency>
       <groupId>io.vanillabp.adapter</groupId>
       <artifactId>migration-adapter</artifactId>
       <version>${project.version}</version>

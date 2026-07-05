@@ -39,6 +39,31 @@ destroyed in an `afterCompletion()` synchronization (see
 never `STATUS_ACTIVE`, `setRollbackOnly()` would be too late and the JTA specification
 forbids registering further synchronizations in `afterCompletion()`.
 
+## Phase-two outbox
+
+Adapters of remote BPMS report `needsTwoPhaseCommitForStartingWorkflows()` and
+require a transaction outbox (`PhaseTwoOutbox` SPI of the
+[migration adapter](../../migration-adapter)) which schedules phase two of starting a
+workflow within the local transaction and dispatches it reliably after the commit
+(also after a crash/restart, retrying with a backoff).
+
+This module provides an own JDBC/JTA-based default implementation (gruelbox does not
+support JTA): `JdbcPhaseTwoOutbox` writes entries into the table
+`VANILLABP_PHASE_TWO_OUTBOX` using a connection of the Agroal datasource which is
+enlisted in the running JTA transaction, and `PhaseTwoOutboxDispatcher` claims due
+entries atomically (optimistic update with attempts/backoff) and dispatches them to
+`QuarkusMigratableProcessServicePhaseTwo` — right after the commit and by a
+fixed-delay poller (crash recovery and retries). The poller uses a plain scheduled
+executor started on `StartupEvent`, so the `quarkus-scheduler` extension is not
+required. The beans are only registered if the Agroal capability is present (see
+`VanillaBpBuildStepProcessor#buildPhaseTwoOutbox`); applications may define their own
+`PhaseTwoOutbox` bean instead.
+
+Configuration (`QuarkusMigrationAdapterProperties`): `vanillabp.outbox.poll-interval`,
+`vanillabp.outbox.attempt-frequency`, `vanillabp.outbox.block-after-attempts` and
+`vanillabp.outbox.create-schema` (disable the `CREATE TABLE IF NOT EXISTS` DDL to
+manage the schema manually, e.g. by Flyway or Liquibase).
+
 ## Noteworthy & Contributors
 
 [VanillaBP](https://www.github.com/vanillabp/spi-for-java) was developed by [Phactum](https://www.phactum.at) with the

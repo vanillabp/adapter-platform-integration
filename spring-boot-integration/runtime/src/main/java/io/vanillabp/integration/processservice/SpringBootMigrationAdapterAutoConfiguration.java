@@ -3,15 +3,19 @@ package io.vanillabp.integration.processservice;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 
 import io.vanillabp.integration.adapter.AdapterConfigurationBase;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.spi.MigratableProcessServicePhaseTwo;
 import io.vanillabp.integration.config.SpringBootMigrationAdapterProperties;
 import io.vanillabp.integration.config.SpringBootMigrationAdapterTransformer;
+import io.vanillabp.integration.utils.SpringDataUtil;
 import io.vanillabp.integration.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.integration.workflowmodule.WorkflowModules;
@@ -66,6 +70,27 @@ public class SpringBootMigrationAdapterAutoConfiguration {
         .workflowModulesFound(workflowModuleIds)
         .build()
         .getAndValidatePropertiesConfigured();
+
+  }
+
+  /**
+   * The bean receiving phase-two calls dispatched by a
+   * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox} implementation and
+   * routing them to the {@link io.vanillabp.spi.process.ProcessService} bean
+   * responsible for the workflow module and BPMN process given.
+   *
+   * @param processServices Provider of all process service beans registered
+   * @param springDataUtil Provider of the persistence utility used to determine aggregate-ID types
+   * @return The phase-two bean
+   */
+  @Bean
+  @ConditionalOnMissingBean(MigratableProcessServicePhaseTwo.class)
+  @SuppressWarnings("rawtypes")
+  public MigratableProcessServicePhaseTwoSpringBean migratableProcessServicePhaseTwo(
+      final ObjectProvider<io.vanillabp.spi.process.ProcessService> processServices,
+      final ObjectProvider<SpringDataUtil> springDataUtil) {
+
+    return new MigratableProcessServicePhaseTwoSpringBean(processServices, springDataUtil);
 
   }
 

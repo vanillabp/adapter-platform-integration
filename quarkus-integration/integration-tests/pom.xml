@@ -19,6 +19,7 @@
     <module>main-integration-test</module>
     <module>workflowmodule-integration-tests</module>
     <module>processservice-integration-tests</module>
+    <module>outbox-integration-tests</module>
   </modules>
 
   <dependencyManagement>

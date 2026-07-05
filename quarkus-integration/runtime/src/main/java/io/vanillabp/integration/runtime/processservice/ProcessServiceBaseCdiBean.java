@@ -4,6 +4,7 @@ import java.util.List;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
+import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.spi.process.ProcessService;
 import jakarta.annotation.PostConstruct;
@@ -35,6 +36,15 @@ public abstract class ProcessServiceBaseCdiBean<A> implements ProcessService<A> 
   @Any
   Instance<io.vanillabp.integration.adapter.spi.MigratableProcessService<?>> migratableProcessServices;
 
+  /**
+   * The outbox used to schedule phase two of a two-phase workflow start. Unsatisfied
+   * if no implementation is available (e.g. no datasource configured) - in this case
+   * only adapters not requiring a two-phase commit can start workflows.
+   */
+  @Inject
+  @Any
+  Instance<PhaseTwoOutbox> phaseTwoOutbox;
+
   @Inject
   TransactionSynchronizationRegistry txRegistry;
 
@@ -57,7 +67,8 @@ public abstract class ProcessServiceBaseCdiBean<A> implements ProcessService<A> 
         .toList();
 
     this.migrationProcessService = new MigrationProcessService<>(
-        getWorkflowModuleId(), getBpmnProcessId(), getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, null);
+        getWorkflowModuleId(), getBpmnProcessId(), getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, phaseTwoOutbox
+            .isResolvable() ? phaseTwoOutbox.get() : null);
 
   }
 

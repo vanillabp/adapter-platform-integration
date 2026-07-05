@@ -1,0 +1,20 @@
+quarkus:
+  datasource:
+    db-kind: h2
+    jdbc:
+      url: jdbc:h2:mem:outbox-it;DB_CLOSE_DELAY=-1
+dummy-adapter:
+  two-phase-commit: true
+vanillabp:
+  adapters:
+    test:
+      type: dummy
+      test: 1
+  workflow-modules:
+    test-module:
+      adapters:
+        test:
+          resources-location: classpath:test-module/processes/dummy
+  outbox:
+    poll-interval: PT0.5S
+    attempt-frequency: PT0.5S

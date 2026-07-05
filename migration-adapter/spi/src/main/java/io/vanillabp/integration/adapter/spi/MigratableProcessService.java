@@ -68,6 +68,15 @@ public interface MigratableProcessService<A> {
    * local transaction is committed. In case of a system crash this method will be called after restarting
    * the application.
    * <p>
+   * <strong>Idempotency contract:</strong> The call is scheduled through a
+   * {@link PhaseTwoOutbox} having at-least-once semantics: after a crash the call may
+   * be repeated even if a previous attempt already succeeded. Adapters MUST tolerate
+   * an already-started workflow for the same combination of workflow module, BPMN
+   * process and workflow aggregate ID - this triple
+   * (<code>workflowModuleId + bpmnProcessId + workflowAggregateId</code>) is the
+   * idempotency key. In this situation the method has to return normally without
+   * starting a second workflow instance.
+   * <p>
    * Possible implementations:
    * <ol>
    *   <li>For BPM systems with eventual consistency this method may be used to...

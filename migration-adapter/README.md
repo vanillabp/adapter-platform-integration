@@ -64,7 +64,7 @@ old one.
    adapter resources were deployed to (not only the highest-priority one), since
    during a BPMS migration all configured BPMSs have to keep processing workflows.
 
-### Two-phase workflow start (transaction outbox)
+### Two-phase workflow start (`PhaseTwoOutbox` SPI)
 
 Starting a workflow must be atomic with the local database transaction that persists
 the workflow aggregate — otherwise a crash could produce a workflow in the BPMS without
@@ -78,9 +78,35 @@ the local transaction, starting is split into two phases
 - **Phase two** runs after the local commit. For adapters reporting
   `needsTwoPhaseCommitForStartingWorkflows()`, a call to
   `MigratableProcessServicePhaseTwo` (implemented by the platform integration) is
-  scheduled via a *transaction outbox* (`com.gruelbox:transactionoutbox`) **within the
-  same local transaction**. The outbox guarantees phase two is executed after commit —
-  even after a crash and restart.
+  scheduled via the *transaction outbox* SPI `PhaseTwoOutbox`. If such an adapter is
+  used but no `PhaseTwoOutbox` is available, starting a workflow fails hard.
+
+The core does not implement (or depend on) any outbox itself — it only defines the
+`PhaseTwoOutbox` contract:
+
+- **Scheduling:** `schedule(workflowModuleId, bpmnProcessId, adapterId,
+  workflowAggregateId)` MUST be invoked within the still-running local transaction
+  that persists the workflow aggregate and MUST enlist the outbox entry in exactly
+  that transaction: the entry becomes visible if and only if the transaction commits.
+- **Recovery:** every committed-but-unprocessed entry has to be dispatched to
+  `MigratableProcessServicePhaseTwo` right after the commit *and* after an
+  application restart (crash recovery), retrying failed dispatches with a backoff.
+  Entries are removed (or marked processed) only after a successful dispatch.
+- **Idempotency:** as a consequence of the at-least-once semantics, adapters MUST
+  tolerate repeated `startWorkflowPhaseTwo` calls: the triple
+  `workflowModuleId + bpmnProcessId + workflowAggregateId` is the idempotency key —
+  a second call for an already-started workflow has to return without starting
+  another workflow instance.
+
+Default implementations are provided by the platform integrations (configured via
+`vanillabp.outbox.*`; applications may define their own `PhaseTwoOutbox` bean
+instead):
+
+|  Platform   |       Persistence        |                                      Implementation                                      |
+|-------------|--------------------------|------------------------------------------------------------------------------------------|
+| Spring Boot | JPA                      | based on `com.gruelbox:transactionoutbox` (`spring-boot-integration`)                    |
+| Spring Boot | MongoDB                  | own implementation using `MongoTemplate` (`spring-boot-integration`)                     |
+| Quarkus     | JDBC datasource (Agroal) | own JDBC/JTA-based implementation (`quarkus-integration`; gruelbox does not support JTA) |
 
 ### Aggregate persistence
 
@@ -105,8 +131,8 @@ core.
    This module provides the interfaces to be implemented by platform integration
    implementations as well as interfaces to be implemented by adapter
    implementations: `AdapterDeploymentService`, `MigratableProcessService`,
-   `MigratableProcessServicePhaseTwo`, `AggregatePersistenceAware` and
-   `ExtensionWiringService`. Adapters report BPMN parsing errors using
+   `MigratableProcessServicePhaseTwo`, `PhaseTwoOutbox`, `AggregatePersistenceAware`
+   and `ExtensionWiringService`. Adapters report BPMN parsing errors using
    `BpmnParseException`.
 2. **runtime:**<br>
    This module implements the runtime behavior according to the

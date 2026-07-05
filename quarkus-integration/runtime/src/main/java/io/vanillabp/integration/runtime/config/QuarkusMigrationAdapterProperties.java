@@ -1,5 +1,6 @@
 package io.vanillabp.integration.runtime.config;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -8,6 +9,7 @@ import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
 import io.quarkus.runtime.annotations.StaticInitSafe;
 import io.smallrye.config.ConfigMapping;
+import io.smallrye.config.WithDefault;
 
 /**
  * Properties common to all adapters.
@@ -57,6 +59,14 @@ public interface QuarkusMigrationAdapterProperties {
   Map<String, WorkflowModuleProperties> workflowModules();
 
   /**
+   * The configuration of the phase-two outbox used for two-phase workflow starts
+   * (see {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox}).
+   *
+   * @return The outbox configuration
+   */
+  PhaseTwoOutboxProperties outbox();
+
+  /**
    * The adapter configuration. The properties in detail are defined by the
    * respective VanillaBP adapter Quarkus extension.
    */
@@ -81,6 +91,51 @@ public interface QuarkusMigrationAdapterProperties {
      * Where to load BPMN files from, which are specific to the adapter
      */
     String resourcesLocation();
+
+  }
+
+  /**
+   * The configuration of the phase-two outbox.
+   */
+  interface PhaseTwoOutboxProperties {
+
+    /**
+     * The fixed delay between two background polls for committed-but-unprocessed
+     * outbox entries. Polling is required for crash recovery and retries; right after
+     * a commit the entry is dispatched immediately (independently of this delay).
+     *
+     * @return The poll interval
+     */
+    @WithDefault("PT10S")
+    Duration pollInterval();
+
+    /**
+     * How long to wait after a failed dispatch until the entry is retried.
+     *
+     * @return The retry backoff
+     */
+    @WithDefault("PT30S")
+    Duration attemptFrequency();
+
+    /**
+     * After how many failed attempts an entry is blocked (not retried any longer).
+     * Blocked entries have to be fixed manually (e.g. by cleaning up the outbox
+     * table).
+     *
+     * @return The maximum number of attempts
+     */
+    @WithDefault("10")
+    int blockAfterAttempts();
+
+    /**
+     * Whether the table used to store outbox entries is created automatically.
+     * Disable this if the database schema is managed manually (e.g. by Flyway or
+     * Liquibase).
+     *
+     * @return Whether to create the outbox table automatically
+     */
+    @WithDefault("true")
+    boolean createSchema();
 
   }
 

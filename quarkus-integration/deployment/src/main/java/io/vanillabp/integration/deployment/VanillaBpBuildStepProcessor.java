@@ -6,6 +6,8 @@ import org.jboss.jandex.AnnotationTransformation;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.AnnotationsTransformerBuildItem;
+import io.quarkus.deployment.Capabilities;
+import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.AdditionalApplicationArchiveMarkerBuildItem;
@@ -15,6 +17,9 @@ import io.quarkus.deployment.builditem.ObjectSubstitutionBuildItem;
 import io.quarkus.deployment.builditem.RunTimeConfigBuilderBuildItem;
 import io.quarkus.deployment.builditem.StaticInitConfigBuilderBuildItem;
 import io.vanillabp.integration.runtime.config.VanillaBpConfigBuilder;
+import io.vanillabp.integration.runtime.outbox.JdbcPhaseTwoOutbox;
+import io.vanillabp.integration.runtime.outbox.PhaseTwoOutboxDispatcher;
+import io.vanillabp.integration.runtime.outbox.QuarkusMigratableProcessServicePhaseTwo;
 import io.vanillabp.integration.runtime.processservice.EventualConsistencyTransactionSupport;
 import io.vanillabp.integration.runtime.processservice.TransactionInterceptor;
 import io.vanillabp.integration.runtime.processservice.VanillaBpTaskInterception;
@@ -127,6 +132,36 @@ public class VanillaBpBuildStepProcessor {
         .addBeanClasses(TransactionInterceptor.class, VanillaBpTaskInterception.class)
         .setUnremovable() // don't remove, since it is used under the hoods
         .build();
+
+  }
+
+  /**
+   * Registers the JDBC-based default implementation of the phase-two outbox (see
+   * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox}) used for two-phase
+   * workflow starts. Only registered if the Agroal extension is present (a JDBC
+   * datasource is required); applications may always provide their own
+   * <code>PhaseTwoOutbox</code> bean instead.
+   *
+   * @param capabilities Capabilities of the project's extensions
+   * @param additionalBeans Producer used to register the outbox beans
+   */
+  @BuildStep
+  void buildPhaseTwoOutbox(
+      final Capabilities capabilities,
+      final BuildProducer<AdditionalBeanBuildItem> additionalBeans) {
+
+    if (!capabilities.isPresent(Capability.AGROAL)) {
+      return;
+    }
+
+    additionalBeans.produce(AdditionalBeanBuildItem
+        .builder()
+        .addBeanClasses(
+            JdbcPhaseTwoOutbox.class,
+            PhaseTwoOutboxDispatcher.class,
+            QuarkusMigratableProcessServicePhaseTwo.class)
+        .setUnremovable() // don't remove, since it is used under the hoods
+        .build());
 
   }
 

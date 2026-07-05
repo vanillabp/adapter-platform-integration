@@ -16,6 +16,7 @@ import org.springframework.core.env.Environment;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
+import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.aggregate.AggregatePersistenceAware;
 import io.vanillabp.integration.utils.ClasspathScanner;
 import io.vanillabp.integration.utils.SpringDataUtil;
@@ -188,8 +189,13 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                   .map(processService -> (MigratableProcessService<A>) processService)
                   .toList();
 
+              // resolved lazily on first use (only if an adapter requires a
+              // two-phase commit for starting workflows)
+              final var phaseTwoOutboxProvider = supplierContext
+                  .beanProvider(PhaseTwoOutbox.class);
+
               return new ProcessServiceSpringBean<A>(
-                  workflowModuleId, bpmnProcessId, workflowAggregateType, properties, aggregatePersistenceAware, migratableProcessServices);
+                  workflowModuleId, bpmnProcessId, workflowAggregateType, properties, aggregatePersistenceAware, migratableProcessServices, phaseTwoOutboxProvider);
 
             }));
 

@@ -3,12 +3,10 @@ package io.vanillabp.integration.adapter.migration.processservice;
 import java.util.List;
 import java.util.Map;
 
-import com.gruelbox.transactionoutbox.TransactionOutbox;
-
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
-import io.vanillabp.integration.adapter.spi.MigratableProcessServicePhaseTwo;
+import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -40,7 +38,13 @@ public class MigrationProcessService<A> {
 
   private final AggregatePersistenceAware<A> aggregatePersistenceSupport;
 
-  private final TransactionOutbox transactionOutbox;
+  /**
+   * The outbox used to schedule phase two of a two-phase workflow start. Provided by
+   * the platform integration; may be <code>null</code> if the platform does not
+   * provide one - in this case starting workflows via adapters which report
+   * {@link MigratableProcessService#needsTwoPhaseCommitForStartingWorkflows()} fails.
+   */
+  private final PhaseTwoOutbox phaseTwoOutbox;
 
   public MigrationProcessService(
       final String workflowModuleId,
@@ -49,7 +53,7 @@ public class MigrationProcessService<A> {
       final MigrationAdapterProperties properties,
       final AggregatePersistenceAware<A> aggregatePersistenceSupport,
       final List<MigratableProcessService<A>> processServices,
-      final TransactionOutbox transactionOutbox) {
+      final PhaseTwoOutbox phaseTwoOutbox) {
 
     this.workflowModuleId = workflowModuleId;
     this.bpmnProcessId = bpmnProcessId;
@@ -74,7 +78,7 @@ public class MigrationProcessService<A> {
                   bpmnProcessId,
                   workflowModuleId));
     }
-    this.transactionOutbox = transactionOutbox;
+    this.phaseTwoOutbox = phaseTwoOutbox;
 
   }
 
@@ -104,14 +108,23 @@ public class MigrationProcessService<A> {
     adapter.startWorkflowPhaseOne(aggregatePersistenceSupport, attachedAggregate);
 
     if (adapter.needsTwoPhaseCommitForStartingWorkflows()) {
-      transactionOutbox
-          .with()
-          .schedule(MigratableProcessServicePhaseTwo.class)
-          .startWorkflowPhaseTwo(
-              workflowModuleId,
-              bpmnProcessId,
-              adapter.getAdapterId(),
-              aggregateId);
+      if (phaseTwoOutbox == null) {
+        throw new IllegalStateException(
+            ("Adapter '%s' requires a two-phase commit for starting workflows of BPMN process '%s' "
+                + "of workflow module '%s', but no PhaseTwoOutbox is available! "
+                + "Provide an implementation of io.vanillabp.integration.adapter.spi.PhaseTwoOutbox "
+                + "(e.g. by using JPA or MongoDB for persistence of aggregates which enables one of "
+                + "the default implementations of the platform integration).")
+                .formatted(
+                    adapter.getAdapterId(),
+                    bpmnProcessId,
+                    workflowModuleId));
+      }
+      phaseTwoOutbox.schedule(
+          workflowModuleId,
+          bpmnProcessId,
+          adapter.getAdapterId(),
+          aggregateId);
     }
 
     return attachedAggregate;
@@ -131,13 +144,6 @@ public class MigrationProcessService<A> {
                 .formatted(adapterId)));
 
     adapter.startWorkflowPhaseTwo(workflowAggregateId);
-
-  }
-
-  /**
-   * Connect to BPMS after bean creation
-   */
-  public void initialize() {
 
   }
 

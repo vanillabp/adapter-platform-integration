@@ -39,11 +39,6 @@
       <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>com.gruelbox</groupId>
-      <artifactId>transactionoutbox-core</artifactId>
-      <version>${transaction-outbox.version}</version>
-    </dependency>
-    <dependency>
       <groupId>io.vanillabp</groupId>
       <artifactId>test-utils</artifactId>
       <version>${project.version}</version>
