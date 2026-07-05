@@ -11,6 +11,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.ResolvableType;
 
 import io.vanillabp.adapter.dummy.springboot.DummyAdapterConfiguration;
+import io.vanillabp.adapter.dummy.springboot.processservice.DummyAdapterProcessServiceConfiguration;
 import io.vanillabp.integration.processservice.ProcessServiceSpringBean;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
@@ -39,7 +40,8 @@ public class AdapterConfigurationTest {
         .withConfiguration(
             AutoConfigurations.of(
                 HibernateJpaAutoConfiguration.class, JpaSpringDataUtilConfiguration.class,
-                DummyAdapterConfiguration.class, WorkflowModuleAutoConfiguration.class,
+                DummyAdapterConfiguration.class, DummyAdapterProcessServiceConfiguration.class,
+                WorkflowModuleAutoConfiguration.class,
                 SpringBootMigrationAdapterAutoConfiguration.class))
         .withPropertyValues(
             "spring.datasource.url=jdbc:h2:mem:testdb",

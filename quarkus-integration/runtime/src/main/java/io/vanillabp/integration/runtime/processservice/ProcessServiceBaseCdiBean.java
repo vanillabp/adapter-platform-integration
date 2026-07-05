@@ -28,6 +28,13 @@ public abstract class ProcessServiceBaseCdiBean<A> implements ProcessService<A> 
   @Any
   Instance<AggregatePersistenceAware<?>> persistences;
 
+  /**
+   * The process services of the VanillaBP adapters available at runtime.
+   */
+  @Inject
+  @Any
+  Instance<io.vanillabp.integration.adapter.spi.MigratableProcessService<?>> migratableProcessServices;
+
   @Inject
   TransactionSynchronizationRegistry txRegistry;
 
@@ -43,9 +50,14 @@ public abstract class ProcessServiceBaseCdiBean<A> implements ProcessService<A> 
   @PostConstruct
   public void initialize() {
 
+    @SuppressWarnings("unchecked")
+    final List<io.vanillabp.integration.adapter.spi.MigratableProcessService<A>> processServices = migratableProcessServices
+        .stream()
+        .map(processService -> (io.vanillabp.integration.adapter.spi.MigratableProcessService<A>) processService)
+        .toList();
+
     this.migrationProcessService = new MigrationProcessService<>(
-        getWorkflowModuleId(), getBpmnProcessId(), getWorkflowAggregateClass(), properties, getAggregatePersistence(), List
-            .of(), null);
+        getWorkflowModuleId(), getBpmnProcessId(), getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, null);
 
   }
 

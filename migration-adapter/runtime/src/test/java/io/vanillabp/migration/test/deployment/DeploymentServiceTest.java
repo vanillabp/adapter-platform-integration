@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -61,6 +62,9 @@ public class DeploymentServiceTest {
 
   @Mock
   private ExtensionWiringService<Integer, Integer> extension1WiringService;
+
+  @Mock
+  private ExtensionWiringService<Comparable<Integer>, Comparable<Integer>> interfaceTypeWiringService;
 
   @BeforeEach
   public void initializeTests() {
@@ -280,6 +284,174 @@ public class DeploymentServiceTest {
           eq("test-module"), eq(null), eq("process1.bpmn"), eq("Process1"), eq(1));
       verify(adapter1DeploymentService).prepareBpmn(
           eq("test-module"), eq(100), eq("process2.bpmn"), eq("Process2"), eq(2));
+
+    }
+
+    @Test
+    @DisplayName("All executable processes of a single BPMN file are processed with threaded context")
+    public void allProcessesOfBpmnFileAreProcessedWithThreadedContext() {
+
+      // Configure properties and mocks
+      final var properties = createPropertiesWithAdapter("adapter-test1");
+
+      // Configure adapter1DeploymentService
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+
+      // Create resources loader with a single BPMN file containing two executable processes
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("multi-process.bpmn",
+          createDummyBpmnInputStream());
+
+      // readBpmn returns TWO executable processes for the same file
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of(Map.entry("ProcessA", 41), Map.entry("ProcessB", 42)));
+
+      // the context of the first process has to be passed to the second process as existing context
+      when(adapter1DeploymentService.prepareBpmn(anyString(), eq(null), anyString(), eq("ProcessA"), eq(41)))
+          .thenReturn(100);
+      when(adapter1DeploymentService.prepareBpmn(anyString(), eq(100), anyString(), eq("ProcessB"), eq(42)))
+          .thenReturn(200);
+
+      // Create DeploymentService and call deployResources
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService), List.of());
+
+      testee.deployResources(List.of("test-module"), resourcesLoader);
+
+      // Verify: BOTH processes are wired using their respective context
+      verify(adapter1DeploymentService).wireBpmn(
+          eq("test-module"), eq("multi-process.bpmn"), eq("ProcessA"), eq(41), eq(100));
+      verify(adapter1DeploymentService).wireBpmn(
+          eq("test-module"), eq("multi-process.bpmn"), eq("ProcessB"), eq(42), eq(200));
+
+      // Verify: the FINAL context is deployed
+      verify(adapter1DeploymentService).deployResources(eq("test-module"), eq(200));
+
+    }
+
+    @Test
+    @DisplayName("Extension wiring services receive the same processing context as the adapter")
+    public void extensionWiringServicesReceiveSameContextAsAdapter() {
+
+      // Configure properties
+      final var properties = createPropertiesWithAdapter("adapter-test1");
+
+      // Configure adapter1DeploymentService
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+
+      // Configure wiring service (getOrder() not called when only one service in list)
+      lenient().when(adapter1WiringService.getOrder()).thenReturn(1);
+      when(adapter1WiringService.getModelType()).thenReturn(Integer.class);
+      when(adapter1WiringService.getProcessContextType()).thenReturn(Integer.class);
+
+      // Create resources loader
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
+          createDummyBpmnInputStream());
+
+      // Configure mock behavior
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of(Map.entry("TestProcess", 42)));
+      when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
+          .thenReturn(100);
+
+      // Create DeploymentService with wiring service
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService), List.of(adapter1WiringService));
+
+      testee.deployResources(List.of("test-module"), resourcesLoader);
+
+      // Verify: the extension receives the context returned by prepareBpmn
+      // (the same one passed to the adapter's wireBpmn), not the context of a previous file
+      verify(adapter1DeploymentService).wireBpmn(
+          eq("test-module"), eq("process.bpmn"), eq("TestProcess"), eq(42), eq(100));
+      verify(adapter1WiringService).wireBpmn(
+          eq("test-module"), eq("process.bpmn"), eq("TestProcess"), eq(42), eq(100));
+
+    }
+
+    @Test
+    @DisplayName("Extension wiring services declaring an interface as model type are matched")
+    public void extensionWiringServicesWithInterfaceModelTypeAreMatched() {
+
+      // Configure properties
+      final var properties = createPropertiesWithAdapter("adapter-test1");
+
+      // Configure adapter1DeploymentService (model and context types are classes)
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+      when(adapter1DeploymentService.getModelType()).thenReturn(Integer.class);
+      when(adapter1DeploymentService.getProcessContextType()).thenReturn(Integer.class);
+
+      // Configure wiring service declaring INTERFACES as model and context types
+      lenient().when(interfaceTypeWiringService.getOrder()).thenReturn(1);
+      doReturn(Comparable.class).when(interfaceTypeWiringService).getModelType();
+      doReturn(Comparable.class).when(interfaceTypeWiringService).getProcessContextType();
+
+      // Create resources loader
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
+          createDummyBpmnInputStream());
+
+      // Configure mock behavior
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of(Map.entry("TestProcess", 42)));
+      when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
+          .thenReturn(100);
+
+      // Create DeploymentService with wiring service
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService), List.of(interfaceTypeWiringService));
+
+      testee.deployResources(List.of("test-module"), resourcesLoader);
+
+      // Verify: the extension is matched by assignability (Integer implements Comparable)
+      verify(interfaceTypeWiringService).wireBpmn(
+          eq("test-module"), eq("process.bpmn"), eq("TestProcess"), eq(42), eq(100));
+
+      testee.startWorkflowProcessing(List.of("test-module"));
+
+      // Verify: the extension is also started by assignability
+      verify(interfaceTypeWiringService).startWorkflowProcessing(eq("test-module"), eq(100));
+
+    }
+
+    @Test
+    @DisplayName("All prioritized adapters are deployed and started")
+    public void allPrioritizedAdaptersAreDeployedAndStarted() {
+
+      // Configure properties with TWO prioritized adapters
+      final var properties = createPropertiesWithAdapters("adapter-test1", "adapter-test2");
+
+      // Configure both adapters
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+      when(adapter2DeploymentService.getAdapterId()).thenReturn("adapter-test2");
+
+      // Create resources loader
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
+          createDummyBpmnInputStream());
+
+      // Configure mock behavior of both adapters
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of(Map.entry("TestProcess", 42)));
+      when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
+          .thenReturn(100);
+      when(adapter2DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of(Map.entry("TestProcess", 4711L)));
+      when(adapter2DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
+          .thenReturn(4200L);
+
+      // Create DeploymentService with both adapters
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService, adapter2DeploymentService), List.of());
+
+      testee.deployResources(List.of("test-module"), resourcesLoader);
+
+      // Verify: resources are deployed to BOTH adapters
+      verify(adapter1DeploymentService).deployResources(eq("test-module"), eq(100));
+      verify(adapter2DeploymentService).deployResources(eq("test-module"), eq(4200L));
+
+      testee.startWorkflowProcessing(List.of("test-module"));
+
+      // Verify: BOTH adapters keep processing workflows (necessary for BPMS migration)
+      verify(adapter1DeploymentService).startWorkflowProcessing(eq("test-module"), eq(100));
+      verify(adapter2DeploymentService).startWorkflowProcessing(eq("test-module"), eq(4200L));
 
     }
 
@@ -537,6 +709,41 @@ public class DeploymentServiceTest {
                     .builder()
                     .resourcesLocation("classpath:test-module/processes")
                     .build()))
+                .build()))
+        .build();
+    // Call setWorkflowModules to set the workflowModuleId
+    properties.setWorkflowModules(properties.getWorkflowModules());
+    return properties;
+
+  }
+
+  /**
+   * Creates properties with multiple configured adapters (in given priority) and a workflow module.
+   */
+  private MigrationAdapterProperties createPropertiesWithAdapters(
+      final String... adapterIds) {
+
+    final var adapters = new LinkedHashMap<String, String>();
+    final var adapterProperties = new LinkedHashMap<String, AdapterProperties>();
+    for (final var adapterId : adapterIds) {
+      adapters.put(adapterId, "dummy");
+      adapterProperties.put(adapterId, AdapterProperties
+          .builder()
+          .resourcesLocation("classpath:test-module/processes/"
+              + adapterId)
+          .build());
+    }
+
+    final var properties = MigrationAdapterProperties
+        .builder()
+        .adapters(adapters)
+        .workflowModules(Map.of(
+            "test-module",
+            WorkflowModuleAdapterProperties
+                .builder()
+                .workflowModuleId("test-module")
+                .prioritizedAdapters(List.of(adapterIds))
+                .adapters(adapterProperties)
                 .build()))
         .build();
     // Call setWorkflowModules to set the workflowModuleId

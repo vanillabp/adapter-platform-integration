@@ -65,6 +65,15 @@ public class MigrationProcessService<A> {
             .findFirst()
             .stream())
         .toList();
+    if (this.adapterProcessServices.isEmpty()) {
+      throw new IllegalStateException(
+          ("No MigratableProcessService found for any of the prioritized adapters '%s' "
+              + "configured for BPMN process '%s' of workflow module '%s'!")
+              .formatted(
+                  String.join("', '", prioritizedAdapters),
+                  bpmnProcessId,
+                  workflowModuleId));
+    }
     this.transactionOutbox = transactionOutbox;
 
   }
@@ -92,7 +101,7 @@ public class MigrationProcessService<A> {
     final var adapter = adapterProcessServices
         .getFirst();
 
-    adapter.startWorkflowPhaseOne(aggregatePersistenceSupport, workflowAggregate);
+    adapter.startWorkflowPhaseOne(aggregatePersistenceSupport, attachedAggregate);
 
     if (adapter.needsTwoPhaseCommitForStartingWorkflows()) {
       transactionOutbox

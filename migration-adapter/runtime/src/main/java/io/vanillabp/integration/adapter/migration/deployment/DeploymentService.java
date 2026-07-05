@@ -61,8 +61,10 @@ public class DeploymentService {
 
   /**
    * A map of workflow module ids and a list of process-contexts to be started after deployment and booting the application.
+   * There is one entry per adapter configured for the workflow module (prioritized adapters), since for BPMS migration
+   * all deployed adapters have to keep processing workflows.
    */
-  private final Map<String, ToBeStarted<?>> bpmsProcessingContexts;
+  private final Map<String, List<ToBeStarted<?>>> bpmsProcessingContexts;
 
   /**
    * @param properties Attributes for configuration of the deployment process.
@@ -153,11 +155,13 @@ public class DeploymentService {
                           workflowModuleId)));
           // ...and finally deploy all the resources together (BPMN, DMN) to the BPMS
           deploymentService.deployResources(workflowModuleId, bpmsProcessingContext.getBpmsProcessingContext());
-          bpmsProcessingContexts.put(workflowModuleId, ToBeStarted
-              .<PC>builder()
-              .deploymentService(deploymentService)
-              .bpmsProcessingContext(bpmsProcessingContext.getBpmsProcessingContext())
-              .build());
+          bpmsProcessingContexts
+              .computeIfAbsent(workflowModuleId, id -> new LinkedList<>())
+              .add(ToBeStarted
+                  .<PC>builder()
+                  .deploymentService(deploymentService)
+                  .bpmsProcessingContext(bpmsProcessingContext.getBpmsProcessingContext())
+                  .build());
         });
 
   }
@@ -185,47 +189,52 @@ public class DeploymentService {
       final InputStream bpmn,
       final boolean isVanillaBpBpmn) {
 
-    return deploymentService
-        // read executable processes from the BPMN file
-        .readBpmn(
-            workflowModuleId,
-            filename,
-            bpmn,
-            isVanillaBpBpmn)
-        .stream()
-        // process each executable process by...
-        .map(processIdAndModel -> {
-          final var bpmnProcessId = processIdAndModel.getKey();
-          final var bpmnModel = processIdAndModel.getValue();
-          // ...preparing the model...
-          final var context = deploymentService.prepareBpmn(
-              workflowModuleId,
-              bpmsProcessingContext,
-              filename,
-              bpmnProcessId,
-              bpmnModel);
-          // ...wire the business code to the BPMN's tasks...
-          deploymentService.wireBpmn(
+    // read executable processes from the BPMN file
+    final var executableProcesses = deploymentService.readBpmn(
+        workflowModuleId,
+        filename,
+        bpmn,
+        isVanillaBpBpmn);
+    if (executableProcesses.isEmpty()) {
+      return Optional.empty();
+    }
+
+    // process each executable process, threading the processing context accumulated
+    // so far through ALL processes of the file...
+    var context = bpmsProcessingContext;
+    for (final var processIdAndModel : executableProcesses) {
+      final var bpmnProcessId = processIdAndModel.getKey();
+      final var bpmnModel = processIdAndModel.getValue();
+      // ...preparing the model...
+      context = deploymentService.prepareBpmn(
+          workflowModuleId,
+          context,
+          filename,
+          bpmnProcessId,
+          bpmnModel);
+      // ...wire the business code to the BPMN's tasks...
+      deploymentService.wireBpmn(
+          workflowModuleId,
+          filename,
+          bpmnProcessId,
+          bpmnModel,
+          context);
+      // ...and do wiring for all matching extensions wiring services found
+      // (extensions receive the same context as the adapter's wireBpmn)
+      final var currentContext = context;
+      wiringServices
+          .stream()
+          .filter(wiringService -> wiringService.getModelType().isInstance(bpmnModel))
+          .filter(wiringService -> wiringService.getProcessContextType().isInstance(currentContext))
+          .map(wiringService -> (ExtensionWiringService<BPMN, PC>) wiringService)
+          .forEach(wiringService -> wiringService.wireBpmn(
               workflowModuleId,
               filename,
               bpmnProcessId,
               bpmnModel,
-              context);
-          // ...and do wiring for all matching extensions wiring services found
-          wiringServices
-              .stream()
-              .filter(wiringService -> wiringService.getModelType().equals(bpmnModel.getClass()))
-              .filter(wiringService -> wiringService.getProcessContextType().equals(context.getClass()))
-              .map(wiringService -> (ExtensionWiringService<BPMN, PC>) wiringService)
-              .forEach(wiringService -> wiringService.wireBpmn(
-                  workflowModuleId,
-                  filename,
-                  bpmnProcessId,
-                  bpmnModel,
-                  bpmsProcessingContext));
-          return context;
-        })
-        .findFirst();
+              currentContext));
+    }
+    return Optional.ofNullable(context);
 
   }
 
@@ -242,38 +251,47 @@ public class DeploymentService {
     // walk through all workflow modules...
     workflowModuleIds
         .forEach(workflowModuleId -> {
-          final var bpmsProcessingContext = this.bpmsProcessingContexts.get(workflowModuleId);
-          if (bpmsProcessingContext == null) {
+          final var toBeStarted = this.bpmsProcessingContexts.get(workflowModuleId);
+          if (toBeStarted == null) {
             return;
           }
-          final var deploymentService = (AdapterDeploymentService<?, ?, PC>) bpmsProcessingContext.deploymentService;
-          final var processingContext = (PC) bpmsProcessingContext.getBpmsProcessingContext();
-          // ...and start workflow processing for each adapter
-          deploymentService
-              .startWorkflowProcessing(
-                  workflowModuleId,
-                  processingContext);
+          // ...and all adapters resources were deployed to (for BPMS migration all of them keep processing)...
+          toBeStarted
+              .forEach(bpmsProcessingContext -> {
+                final var deploymentService = (AdapterDeploymentService<?, ?, PC>) bpmsProcessingContext.deploymentService;
+                final var processingContext = (PC) bpmsProcessingContext.getBpmsProcessingContext();
+                // ...and start workflow processing for each adapter
+                deploymentService
+                    .startWorkflowProcessing(
+                        workflowModuleId,
+                        processingContext);
+              });
         });
 
     // walk through all workflow modules...
     workflowModuleIds
         .forEach(workflowModuleId -> {
-          final var bpmsProcessingContext = this.bpmsProcessingContexts.get(workflowModuleId);
-          if (bpmsProcessingContext == null) {
+          final var toBeStarted = this.bpmsProcessingContexts.get(workflowModuleId);
+          if (toBeStarted == null) {
             return;
           }
-          final var deploymentService = (AdapterDeploymentService<?, ?, PC>) bpmsProcessingContext.deploymentService;
-          final var processingContext = (PC) bpmsProcessingContext.getBpmsProcessingContext();
-          // ...and start workflow processing for each extension
-          wiringServices
-              .stream()
-              .filter(wiringService -> wiringService.getModelType().equals(deploymentService.getModelType()))
-              .filter(wiringService -> wiringService.getProcessContextType()
-                  .equals(deploymentService.getProcessContextType()))
-              .map(wiringService -> (ExtensionWiringService<BPMN, PC>) wiringService)
-              .forEach(wiringService -> wiringService.startWorkflowProcessing(
-                  workflowModuleId,
-                  processingContext));
+          // ...and all adapters resources were deployed to...
+          toBeStarted
+              .forEach(bpmsProcessingContext -> {
+                final var deploymentService = (AdapterDeploymentService<?, ?, PC>) bpmsProcessingContext.deploymentService;
+                final var processingContext = (PC) bpmsProcessingContext.getBpmsProcessingContext();
+                // ...and start workflow processing for each extension
+                wiringServices
+                    .stream()
+                    .filter(wiringService -> wiringService.getModelType()
+                        .isAssignableFrom(deploymentService.getModelType()))
+                    .filter(wiringService -> wiringService.getProcessContextType()
+                        .isAssignableFrom(deploymentService.getProcessContextType()))
+                    .map(wiringService -> (ExtensionWiringService<BPMN, PC>) wiringService)
+                    .forEach(wiringService -> wiringService.startWorkflowProcessing(
+                        workflowModuleId,
+                        processingContext));
+              });
         });
 
   }

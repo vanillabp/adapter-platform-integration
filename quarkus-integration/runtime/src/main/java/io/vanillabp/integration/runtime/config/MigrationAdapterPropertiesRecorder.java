@@ -37,6 +37,7 @@ public class MigrationAdapterPropertiesRecorder {
     final var adapterProperties = QuarkusMigrationAdapterTransformer
         .builder()
         .properties(properties)
+        .propertyNames(config.getPropertyNames()) // used to detect properties not mapped (yet)
         .capabilities(capabilities)
         .build()
         .getAndValidatePropertiesConfigured(

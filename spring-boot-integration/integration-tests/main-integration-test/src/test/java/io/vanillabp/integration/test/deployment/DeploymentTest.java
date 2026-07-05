@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Configuration;
 
 import io.vanillabp.adapter.dummy.springboot.DummyAdapterConfiguration;
 import io.vanillabp.adapter.dummy.springboot.deployment.DummyAdapterDeploymentConfiguration;
+import io.vanillabp.adapter.dummy.springboot.processservice.DummyAdapterProcessServiceConfiguration;
 import io.vanillabp.extension.dummy.springboot.wiring.DummyExtensionWiringConfiguration;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.deployment.DeploymentService;
@@ -62,6 +63,7 @@ public class DeploymentTest {
         .build(); var context = testApp.applicationBuilder(
             DummyAdapterConfiguration.class,
             DummyAdapterDeploymentConfiguration.class,
+            DummyAdapterProcessServiceConfiguration.class,
             DummyExtensionWiringConfiguration.class,
             WorkflowModuleAutoConfiguration.class,
             SpringBootMigrationAdapterAutoConfiguration.class,

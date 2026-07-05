@@ -23,7 +23,8 @@ public class MultipleAdapterConfigurationTest {
           .addPackage("io.vanillabp.integration.test.samples.sample")  // load sample application classes
           .addAsResource("multiple-adapters/application.yaml", "application.yaml")
           .addAsResource(WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
-          .addClass(DummyAdapters.class))                           // necessary due to anonymous class in DummyAdapters
+          .addClass(DummyAdapters.class)                           // necessary due to anonymous class in DummyAdapters
+          .addClass(TestMigratableProcessService.class))            // process service of the mocked adapter
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter()); // add mocked adapter
 
   @Inject

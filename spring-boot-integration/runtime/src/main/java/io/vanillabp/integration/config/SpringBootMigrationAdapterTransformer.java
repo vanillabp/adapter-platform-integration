@@ -45,6 +45,10 @@ public class SpringBootMigrationAdapterTransformer {
    */
   public MigrationAdapterProperties getAndValidatePropertiesConfigured() {
 
+    // TODO: process workflow-level properties instead of rejecting them once
+    //  filling 'workflows' of WorkflowModuleAdapterProperties is implemented
+    rejectWorkflowLevelConfiguration();
+
     final var result = new MigrationAdapterProperties();
 
     result.setResourcesLocation(properties.getResourcesLocation());
@@ -69,6 +73,33 @@ public class SpringBootMigrationAdapterTransformer {
   }
 
   /**
+   * Fail hard on workflow-level properties (<code>vanillabp.workflow-modules.*.workflows.*</code>)
+   * since they are not yet supported. Silently ignoring them could elect the wrong BPMS
+   * without any error.
+   *
+   * @throws IllegalStateException If workflow-level properties are configured
+   */
+  private void rejectWorkflowLevelConfiguration() {
+
+    final var workflowLevelConfigurations = properties
+        .getWorkflowModules()
+        .entrySet()
+        .stream()
+        .filter(workflowModule -> !workflowModule.getValue().getWorkflows().isEmpty())
+        .map(workflowModule -> "%s.workflow-modules.%s.workflows".formatted(PREFIX, workflowModule.getKey()))
+        .sorted()
+        .collect(Collectors.joining("\n  "));
+    if (!workflowLevelConfigurations.isEmpty()) {
+      throw new IllegalStateException(
+          """
+              Workflow-level configuration is not yet supported! Remove these properties:
+                %s"""
+              .formatted(workflowLevelConfigurations));
+    }
+
+  }
+
+  /**
    * Determine workflow module properties and validate them against workflow modules found in classpath.
    *
    * @return Map of workflow modules (key = workflow module ID, value = properties)
@@ -85,7 +116,9 @@ public class SpringBootMigrationAdapterTransformer {
                 .builder()
                 .workflowModuleId(workflowModule.getKey())
                 .prioritizedAdapters(workflowModule.getValue().getPrioritizedAdapters())
-                .workflows(Map.of()) // TODO fill workflows
+                // TODO fill workflows; until implemented, configured workflow-level
+                //  properties are rejected by rejectWorkflowLevelConfiguration()
+                .workflows(Map.of())
                 .adapters(workflowModule
                     .getValue()
                     .getAdapters()

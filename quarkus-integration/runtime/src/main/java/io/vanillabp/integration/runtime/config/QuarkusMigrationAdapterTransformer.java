@@ -6,7 +6,9 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
@@ -31,9 +33,22 @@ public class QuarkusMigrationAdapterTransformer {
   public static final String PREFIX_ADAPTER_PACKAGE = "io.vanillabp.adapter.";
 
   /**
+   * Matches raw configuration keys of workflow-level properties
+   * (e.g. <code>vanillabp.workflow-modules.my-module.workflows.MyProcess.prioritized-adapters</code>).
+   */
+  private static final Pattern WORKFLOW_LEVEL_PROPERTY = Pattern.compile(
+      "^%s\\.workflow-modules\\.(\"[^\"]+\"|[^.]+)\\.workflows\\..+".formatted(Pattern.quote(PREFIX)));
+
+  /**
    * The properties to transform
    */
   private final QuarkusMigrationAdapterProperties properties;
+
+  /**
+   * Raw names of all properties available. Used to detect workflow-level properties which are
+   * not modeled by {@link QuarkusMigrationAdapterProperties} (yet) and hence would be ignored silently.
+   */
+  private final Iterable<String> propertyNames;
 
   /**
    * Capabilities of Quarkus extensions available
@@ -52,6 +67,10 @@ public class QuarkusMigrationAdapterTransformer {
   public MigrationAdapterProperties getAndValidatePropertiesConfigured(
       final Collection<WorkflowModule> workflowModulesFound,
       final Collection<String> adaptersFound) throws IllegalStateException {
+
+    // TODO: process workflow-level properties instead of rejecting them once
+    //  filling 'workflows' of WorkflowModuleAdapterProperties is implemented
+    rejectWorkflowLevelConfiguration();
 
     final var result = new MigrationAdapterProperties();
 
@@ -73,6 +92,34 @@ public class QuarkusMigrationAdapterTransformer {
     result.setWorkflowModules(workflowModulesConfigured);
 
     return result;
+
+  }
+
+  /**
+   * Fail hard on workflow-level properties (<code>vanillabp.workflow-modules.*.workflows.*</code>)
+   * since they are not yet supported. Silently ignoring them could elect the wrong BPMS
+   * without any error. Since {@link QuarkusMigrationAdapterProperties} does not model
+   * workflow-level properties, the raw configuration keys are examined.
+   *
+   * @throws IllegalStateException If workflow-level properties are configured
+   */
+  private void rejectWorkflowLevelConfiguration() {
+
+    if (propertyNames == null) {
+      return;
+    }
+    final var workflowLevelConfigurations = StreamSupport
+        .stream(propertyNames.spliterator(), false)
+        .filter(propertyName -> WORKFLOW_LEVEL_PROPERTY.matcher(propertyName).matches())
+        .sorted()
+        .collect(Collectors.joining("\n  "));
+    if (!workflowLevelConfigurations.isEmpty()) {
+      throw new IllegalStateException(
+          """
+              Workflow-level configuration is not yet supported! Remove these properties:
+                %s"""
+              .formatted(workflowLevelConfigurations));
+    }
 
   }
 
@@ -102,7 +149,9 @@ public class QuarkusMigrationAdapterTransformer {
                 .prioritizedAdapters(workflowModule.getValue().prioritizedAdapters().isPresent()
                     ? workflowModule.getValue().prioritizedAdapters().get()
                     : List.of())
-                .workflows(Map.of()) // TODO fill workflows
+                // TODO fill workflows; until implemented, configured workflow-level
+                //  properties are rejected by rejectWorkflowLevelConfiguration()
+                .workflows(Map.of())
                 .adapters(workflowModule
                     .getValue()
                     .adapters()

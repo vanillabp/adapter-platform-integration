@@ -226,6 +226,52 @@ public class SpringBootMigrationAdapterTransformerTest {
 
   @Test
   @Order(7)
+  public void testWorkflowLevelConfigurationIsRejected() {
+
+    // build independent properties not to interfere with the ordered tests sharing builders
+    final var props = SpringBootMigrationAdapterProperties
+        .builder()
+        .prioritizedAdapters(List.of("test-adapter"))
+        .adapters(Map.of(
+            "test-adapter",
+            SpringBootMigrationAdapterProperties.AdapterConfiguration
+                .builder()
+                .type("test-type")
+                .build()))
+        .workflowModules(Map.of(
+            "test-module",
+            SpringBootMigrationAdapterProperties.WorkflowModuleProperties
+                .builder()
+                .workflows(Map.of(
+                    "MyProcess",
+                    SpringBootMigrationAdapterProperties.WorkflowProperties
+                        .builder()
+                        .prioritizedAdapters(List.of("test-adapter"))
+                        .build()))
+                .build()))
+        .build();
+
+    final var transformer = SpringBootMigrationAdapterTransformer
+        .builder()
+        .adaptersFound(List.of("test-type"))
+        .workflowModulesFound(List.of("test-module"))
+        .properties(props)
+        .build();
+
+    final var exception = assertThrowsExactly(
+        IllegalStateException.class,
+        transformer::getAndValidatePropertiesConfigured
+    );
+    assertEquals(
+        """
+            Workflow-level configuration is not yet supported! Remove these properties:
+              vanillabp.workflow-modules.test-module.workflows""",
+        exception.getMessage());
+
+  }
+
+  @Test
+  @Order(8)
   public void testMissingAdaptersPrioritized() {
 
     final var props = propsBuilder

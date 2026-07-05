@@ -26,6 +26,10 @@ Which BPMS is used is configured as a *prioritized list of adapters*
 (`...workflows.<bpmnProcessId>.prioritized-adapters`) — the most specific non-empty
 value wins (see `MigrationAdapterProperties`).
 
+*Note:* Workflow-level configuration (`...workflows.*`) is modeled by the core but not
+yet filled by the platform integrations. Until implemented, configuring it fails hard
+at startup ("not yet supported") instead of silently electing the wrong BPMS.
+
 - **New workflows** are always started using the first (highest-priority) adapter.
 - **Existing workflows** may still live in a previously used BPMS. For operations on
   existing workflows (message correlation, completing tasks) the adapters are asked in
@@ -50,10 +54,15 @@ old one.
 3. For each file run the pipeline `readBpmn` → `prepareBpmn` (per process) →
    `wireBpmn` (adapter) → `wireBpmn` of all matching `ExtensionWiringService`s.
    The adapter-specific *processing context* (generic parameter `PC`) is accumulated
-   across all files of a module.
+   across all executable processes of a file and across all files of a module.
+   Extensions receive the same processing context as the adapter's `wireBpmn`;
+   extensions are matched by assignability, so extensions may declare interfaces
+   as model or processing-context type.
 4. `deployResources` pushes the result to the BPMS.
 5. Once the application is ready, `startWorkflowProcessing` is called for adapters and
-   extensions — only then workflows are actually processed.
+   extensions — only then workflows are actually processed. It is called for *every*
+   adapter resources were deployed to (not only the highest-priority one), since
+   during a BPMS migration all configured BPMSs have to keep processing workflows.
 
 ### Two-phase workflow start (transaction outbox)
 
@@ -97,7 +106,8 @@ core.
    implementations as well as interfaces to be implemented by adapter
    implementations: `AdapterDeploymentService`, `MigratableProcessService`,
    `MigratableProcessServicePhaseTwo`, `AggregatePersistenceAware` and
-   `ExtensionWiringService`.
+   `ExtensionWiringService`. Adapters report BPMN parsing errors using
+   `BpmnParseException`.
 2. **runtime:**<br>
    This module implements the runtime behavior according to the
    features [listed above](#features), mainly `DeploymentService`

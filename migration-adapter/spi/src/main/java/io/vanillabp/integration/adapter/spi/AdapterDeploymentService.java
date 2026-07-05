@@ -1,7 +1,6 @@
 package io.vanillabp.integration.adapter.spi;
 
 import java.io.InputStream;
-import java.util.IllegalFormatException;
 import java.util.List;
 import java.util.Map;
 
@@ -47,13 +46,13 @@ public interface AdapterDeploymentService<BPMN, DMN, PC> {
    * @param bpmn The BPMN input stream
    * @param isVanillaBpBpmn Whether the input stream is VanillaBP or specific to the adapter's BPMS
    * @return The models of the executable processes found in the BPMN (key is the process ID, value is the model)
-   * @throws IllegalFormatException If the parsing fails
+   * @throws BpmnParseException If the parsing fails
    */
   List<Map.Entry<String, BPMN>> readBpmn(
       String workflowModuleId,
       String filename,
       InputStream bpmn,
-      boolean isVanillaBpBpmn) throws IllegalFormatException;
+      boolean isVanillaBpBpmn) throws BpmnParseException;
 
   /**
    * Prepares the given model according to the feature of the adapter (e.g. setting defaults, etc.).

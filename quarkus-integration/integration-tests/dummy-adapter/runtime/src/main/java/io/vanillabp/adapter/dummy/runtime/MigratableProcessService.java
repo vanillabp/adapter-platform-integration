@@ -4,10 +4,19 @@ import io.vanillabp.integration.adapter.spi.AggregatePersistenceAware;
 
 public class MigratableProcessService<A> implements io.vanillabp.integration.adapter.spi.MigratableProcessService<A> {
 
+  private final String adapterId;
+
+  public MigratableProcessService(
+      final String adapterId) {
+
+    this.adapterId = adapterId;
+
+  }
+
   @Override
   public String getAdapterId() {
 
-    return "";
+    return adapterId;
 
   }
 

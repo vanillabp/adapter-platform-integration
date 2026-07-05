@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import io.vanillabp.adapter.dummy.springboot.DummyAdapterConfiguration;
+import io.vanillabp.adapter.dummy.springboot.processservice.DummyAdapterProcessServiceConfiguration;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.sample2.Aggregate;
@@ -18,7 +19,7 @@ import io.vanillabp.spi.process.ProcessService;
 
 @SpringBootTest(
     classes = {
-        DummyAdapterConfiguration.class, WorkflowModuleAutoConfiguration.class, SpringBootMigrationAdapterAutoConfiguration.class, JpaSpringDataUtilConfiguration.class, io.vanillabp.integration.test.sample.SampleWorkflowService.class, SampleWorkflowService.class, WorkflowModuleConfiguration.class
+        DummyAdapterConfiguration.class, DummyAdapterProcessServiceConfiguration.class, WorkflowModuleAutoConfiguration.class, SpringBootMigrationAdapterAutoConfiguration.class, JpaSpringDataUtilConfiguration.class, io.vanillabp.integration.test.sample.SampleWorkflowService.class, SampleWorkflowService.class, WorkflowModuleConfiguration.class
     }
 )
 @ExtendWith(SuppressOutputExtension.class)

@@ -1,2 +1,3 @@
 io.vanillabp.adapter.dummy.springboot.DummyAdapterConfiguration
 io.vanillabp.adapter.dummy.springboot.deployment.DummyAdapterDeploymentConfiguration
+io.vanillabp.adapter.dummy.springboot.processservice.DummyAdapterProcessServiceConfiguration

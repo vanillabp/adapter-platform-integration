@@ -136,15 +136,18 @@ public class SpringBootDeploymentService {
      * classpath:/bpmn/order/process.bpmn
      */
 
-    final var index = uriString.indexOf(resourceLocation.replace("classpath*:", "")
+    final var locationPath = resourceLocation.replace("classpath*:", "")
         .replace("classpath:", "")
-        .replace("file:", ""));
+        .replace("file:", "");
+
+    final var index = uriString.indexOf(locationPath);
     if (index < 0) {
       return null;
     }
 
-    final var relative = uriString.substring(index)
-        .replaceFirst("^.*/", "")
+    // keep subdirectories: same-named BPMN files in different subdirectories of the
+    // resources-location must not overwrite each other in the result map
+    final var relative = uriString.substring(index + locationPath.length())
         .replace("\\", "/");
 
     return relative;

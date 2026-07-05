@@ -122,6 +122,32 @@ public class SpringBootMigrationAdapterProperties {
     @Builder.Default
     private Map<String, AdapterProperties> adapters = Map.of();
 
+    /**
+     * The properties of workflows specific to this workflow module. The key is the BPMN process ID.
+     * <p>
+     * <b>Attention:</b> Workflow-level configuration is not yet supported! It is only bound to
+     * detect and reject such configuration on startup instead of silently ignoring it.
+     */
+    @Builder.Default
+    private Map<String, WorkflowProperties> workflows = Map.of();
+
+  }
+
+  /**
+   * The properties of a workflow of a workflow module.
+   */
+  @Getter
+  @Setter
+  @SuperBuilder(toBuilder = true)
+  @NoArgsConstructor
+  public static class WorkflowProperties extends AdaptersConfigurationProperties {
+
+    /**
+     * The properties of adapters specific to this workflow.
+     */
+    @Builder.Default
+    private Map<String, AdapterProperties> adapters = Map.of();
+
   }
 
 }

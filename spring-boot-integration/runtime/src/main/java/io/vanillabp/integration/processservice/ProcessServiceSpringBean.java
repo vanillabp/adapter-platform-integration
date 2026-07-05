@@ -176,7 +176,7 @@ public class ProcessServiceSpringBean<A> implements ProcessService<A> {
 
   private boolean noTransactionIsActive() {
 
-    return TransactionSynchronizationManager.isActualTransactionActive();
+    return !TransactionSynchronizationManager.isActualTransactionActive();
 
   }
 
