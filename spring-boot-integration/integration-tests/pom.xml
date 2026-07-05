@@ -19,6 +19,7 @@
     <module>test-applications</module>
     <module>main-integration-test</module>
     <module>workflowmodule-integration-tests</module>
+    <module>fatjar-integration-test</module>
   </modules>
 
   <dependencyManagement>

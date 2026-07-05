@@ -7,7 +7,6 @@ import java.util.Set;
 
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 
 import io.vanillabp.adapter.dummy.springboot.DummyAdapterConfiguration;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
@@ -16,7 +15,6 @@ import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoCon
 import io.vanillabp.integration.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.workflowmodule.WorkflowModules;
 
-@Configuration
 @AutoConfiguration(after = SpringBootMigrationAdapterAutoConfiguration.class)
 public class DummyAdapterDeploymentConfiguration {
 

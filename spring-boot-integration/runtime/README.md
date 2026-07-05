@@ -9,12 +9,20 @@ Spring Boot auto-configuration (`META-INF/spring/...AutoConfiguration.imports`):
 1. `WorkflowModuleAutoConfiguration` — detects workflow modules and assigns
    `@WorkflowService` beans to them.
 2. `JpaSpringDataUtilConfiguration` — JPA-based persistence support (only if JPA is on
-   the classpath and no custom `SpringDataUtil` bean exists).
-3. `SpringBootMigrationAdapterAutoConfiguration` — transforms Spring properties into
+   the classpath, exactly one `EntityManagerFactory` exists and no custom
+   `SpringDataUtil` bean was defined).
+3. `MongoDbSpringDataUtilAutoConfiguration` — MongoDB-based persistence support (only
+   if Spring Data MongoDB is on the classpath, a `MongoDatabaseFactory` exists and no
+   other `SpringDataUtil` bean was defined). It is ordered after the JPA
+   configuration: **if both JPA and MongoDB are configured, JPA wins
+   deterministically.** To force MongoDB in this situation, import
+   `MongoDbSpringDataUtilConfiguration` explicitly.
+4. `SpringBootMigrationAdapterAutoConfiguration` — transforms Spring properties into
    the core `MigrationAdapterProperties`, collects adapters and registers one
-   `ProcessService<A>` bean per workflow aggregate.
-4. `DeploymentAutoConfiguration` — deploys BPMN resources on startup and starts
-   workflow processing on `ApplicationReadyEvent`.
+   `ProcessService<A>` bean per workflow aggregate (via the imported
+   `ProcessServiceBeanRegistrar`).
+5. `DeploymentAutoConfiguration` — deploys BPMN resources on `SmartLifecycle` start
+   and starts workflow processing on `ApplicationReadyEvent`.
 
 Additionally, `WorkflowModulePropertiesEnvironmentPostProcessor` (registered in
 `spring.factories`) merges workflow-module-specific config files into the Spring
@@ -25,19 +33,52 @@ over `application.*`.
 
 Workflow modules are declared by a `META-INF/workflow-module` marker file whose
 content is the workflow module ID. `@WorkflowService` classes are matched to a module
-by comparing the code-source URI of the class with the URI the marker file was loaded
-from. Services not matching any marker file belong to the *global* module (the whole
-application acting as a single workflow module) — only one global marker is allowed.
+by comparing classpath-root URL prefixes: the URL of the class resource
+(`Class#getResource`) minus the class' relative path against the URL of the marker
+file minus `META-INF/workflow-module`. Comparing URL prefixes works for all class
+loaders — plain classpath (`file:`), JARs (`jar:file:`) and Spring Boot repackaged
+fat JARs (`jar:nested:`, used by the Boot loader since 3.2). Services not matching
+any marker file belong to the *global* module (the whole application acting as a
+single workflow module) — only one global marker is allowed.
 
 ### ProcessService beans
 
-`ProcessService<A>` beans are registered as `BeanDefinition`s (not instances) via a
-`BeanDefinitionRegistryPostProcessor`, using `ResolvableType` with the aggregate class
-as generic parameter, so generic autowiring (`ProcessService<Ride>`) works. Registering
-definitions instead of beans avoids circular dependencies between the
-`@WorkflowService` bean and its `ProcessService`. Each bean wraps a
-`MigrationProcessService` of the migration adapter which implements the actual
-behavior.
+`ProcessService<A>` beans are registered by `ProcessServiceBeanRegistrar`, a Spring
+Framework `BeanRegistrar` imported by `SpringBootMigrationAdapterAutoConfiguration`.
+At registration time only the classpath is scanned for `@WorkflowService` classes —
+no beans are touched. Each bean is registered
+
+- with a generics-aware target type (`ProcessService<Ride>` via
+  `ParameterizedTypeReference`/`ResolvableType`), so generic autowiring works, and
+- with a lazy supplier resolving all dependencies (properties, persistence support,
+  the adapters' `MigratableProcessService`s) through the registrar's
+  `SupplierContext` at bean-creation time.
+
+Registering definitions instead of instances avoids circular dependencies between
+the `@WorkflowService` bean and its `ProcessService`. Deferring dependency resolution
+to the supplier keeps Hibernate/DataSource and adapter beans out of the bean-factory
+post-processing phase, so AOP proxying and `@ConfigurationProperties` binding work
+for all beans involved. Each bean wraps a `MigrationProcessService` of the migration
+adapter which implements the actual behavior.
+
+### Deployment lifecycle
+
+`SpringBootDeploymentService` implements `SmartLifecycle`:
+
+- `start()` loads and deploys all BPMN resources — during context refresh, after all
+  singletons were created;
+- `startWorkflowProcessing` is triggered by `ApplicationReadyEvent` (only once the
+  application is fully ready to process workflows);
+- `stop()` runs on graceful shutdown: it calls `stopWorkflowProcessing` of the core
+  `DeploymentService` (notifying extensions and adapters in reverse start order) and
+  stops all `ProcessServiceSpringBean`s.
+
+The lifecycle phase is `SmartLifecycle.DEFAULT_PHASE` (`Integer.MAX_VALUE`): on
+shutdown, lifecycle beans stop in descending phase order, so workflow processing
+stops in the very first group — before Spring Boot's web server graceful shutdown
+(`DEFAULT_PHASE - 1024`) and before messaging listener containers. This way no new
+workflow jobs are processed while the infrastructure they may depend on is torn
+down.
 
 ### SpringDataUtil versus AggregatePersistenceAware
 
@@ -53,11 +94,15 @@ Boot there are two ways to provide it:
 2. **Fallback via `SpringDataUtil`:** If no specific bean exists, the generic
    `SpringDataUtilBasedAggregatePersistenceSupport` is used. It relies on the
    `SpringDataUtil` abstraction for which two implementations exist:
-   - `JpaSpringDataUtil` (auto-configured if JPA is present): resolves the Spring Data
-     repository of the aggregate class, determines IDs via `PersistenceUnitUtil` and
+   - `JpaSpringDataUtil` (auto-configured if JPA is present and exactly one
+     `EntityManagerFactory` exists): resolves the Spring Data repository of the
+     aggregate class, determines IDs via the `PersistenceUnitUtil` of the persistence
+     unit responsible for the aggregate's type (multi-persistence-unit safe) and
      unproxies Hibernate proxies.
-   - `MongoDbSpringDataUtil`: must be activated explicitly via
-     `@Import(MongoDbSpringDataUtilConfiguration.class)`.
+   - `MongoDbSpringDataUtil` (auto-configured if Spring Data MongoDB is present and a
+     `MongoDatabaseFactory` exists). If both JPA and MongoDB are configured, JPA wins
+     deterministically — import `MongoDbSpringDataUtilConfiguration` explicitly to
+     force MongoDB-based aggregate persistence in this situation.
 
 So `SpringDataUtil` is the Spring-Data-generic mechanism used *behind* the
 `AggregatePersistenceAware` abstraction, while a custom `AggregatePersistenceAware`

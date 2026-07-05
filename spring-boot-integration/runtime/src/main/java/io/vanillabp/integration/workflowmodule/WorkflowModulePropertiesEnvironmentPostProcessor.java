@@ -2,21 +2,24 @@ package io.vanillabp.integration.workflowmodule;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.List;
-import java.util.Optional;
 
+import org.jspecify.annotations.Nullable;
+import org.springframework.boot.EnvironmentPostProcessor;
 import org.springframework.boot.SpringApplication;
-import org.springframework.boot.env.EnvironmentPostProcessor;
+import org.springframework.boot.context.config.ConfigDataEnvironmentPostProcessor;
 import org.springframework.boot.env.PropertiesPropertySourceLoader;
+import org.springframework.boot.env.PropertySourceLoader;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.core.Ordered;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.MutablePropertySources;
 import org.springframework.core.env.PropertySource;
+import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.ResourcePatternResolver;
 import org.springframework.core.io.support.ResourcePatternUtils;
-import org.springframework.lang.Nullable;
 
 /**
  * An {@link EnvironmentPostProcessor} that loads workflow module-specific
@@ -44,11 +47,17 @@ import org.springframework.lang.Nullable;
  * place their configuration files in a module-specific subdirectory, avoiding
  * classpath conflicts with other modules.
  *
- * <p>Workflow module property sources are inserted with higher priority than
- * {@code application.yaml}/{@code application.properties}, matching the
- * behavior of the Quarkus implementation. Profile-specific variants have
- * higher priority than base variants. YAML has higher priority than
+ * <p>Workflow module property sources are inserted right below the system
+ * environment (i.e. below system properties and environment variables but with
+ * higher priority than {@code application.yaml}/{@code application.properties}),
+ * matching the behavior of the Quarkus implementation. Profile-specific variants
+ * have higher priority than base variants. YAML has higher priority than
  * {@code .properties} for the same base name.
+ *
+ * <p><b>Limitation:</b> Multi-document YAML using
+ * {@code spring.config.activate.on-profile} is not supported inside workflow
+ * module config files — profile-specific values must be placed in files using
+ * the profile file-name suffix (e.g. {@code {moduleId}-{profile}.yaml}).
  */
 public class WorkflowModulePropertiesEnvironmentPostProcessor implements EnvironmentPostProcessor, Ordered {
 
@@ -58,14 +67,14 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
   private final YamlPropertySourceLoader yamlLoader = new YamlPropertySourceLoader();
 
   /**
-   * Run after {@code ConfigDataEnvironmentPostProcessor} so that
+   * Run after {@link ConfigDataEnvironmentPostProcessor} so that
    * {@code application.yaml} is already loaded and active profiles
    * are known.
    */
   @Override
   public int getOrder() {
 
-    return Ordered.HIGHEST_PRECEDENCE + 11;
+    return ConfigDataEnvironmentPostProcessor.ORDER + 1;
 
   }
 
@@ -74,8 +83,10 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
       final ConfigurableEnvironment environment,
       final SpringApplication application) {
 
+    final var resourceLoader = application.getResourceLoader();
+
     final var workflowModuleIds = WorkflowModuleAutoConfiguration
-        .determineWorkflowModules(null)
+        .determineWorkflowModules(resourceLoader)
         .getWorkflowModules()
         .stream()
         .map(WorkflowModule::getId)
@@ -85,39 +96,36 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
       return;
     }
 
-    final var propertySources = environment.getPropertySources();
     final var activeProfiles = environment.getActiveProfiles();
-
-    // Find the insertion point: before "Config resource" sources
-    // (which represent application.yaml/application.properties).
-    // We insert workflow module sources so they have higher priority
-    // than application config but lower priority than system properties
-    // and environment variables.
-    final var insertBeforeName = findApplicationConfigSourceName(propertySources)
-        .orElse(null);
-
     final var resolver = ResourcePatternUtils
-        .getResourcePatternResolver(null);
-    for (final var moduleId : workflowModuleIds) {
-      // Load base files (lower priority)
-      loadAndAdd(resolver, propertySources, insertBeforeName, moduleId, null);
+        .getResourcePatternResolver(resourceLoader);
 
-      // Load profile-specific files (higher priority — added before base)
-      for (final var profile : activeProfiles) {
-        loadAndAdd(resolver, propertySources, insertBeforeName, moduleId, profile);
+    for (final var moduleId : workflowModuleIds) {
+      // collect property sources ordered by priority (highest first):
+      // profile-specific files (last active profile first) before base files,
+      // YAML before .properties for the same base name
+      final var propertySources = new LinkedList<PropertySource<?>>();
+      for (var i = activeProfiles.length - 1; i >= 0; --i) {
+        propertySources.addAll(load(resolver, moduleId, activeProfiles[i]));
       }
+      propertySources.addAll(load(resolver, moduleId, null));
+
+      // insert right below system properties and environment variables but above
+      // all config files: adding after the system environment property source in
+      // reverse order keeps the priority order collected above
+      propertySources
+          .reversed()
+          .forEach(propertySource -> addPropertySource(environment.getPropertySources(), propertySource));
     }
 
   }
 
   /**
    * Load property sources for a given module ID and optional profile,
-   * then insert them into the environment.
+   * ordered by priority (highest first): YAML before .properties.
    */
-  private void loadAndAdd(
+  private List<PropertySource<?>> load(
       final ResourcePatternResolver resolver,
-      final MutablePropertySources propertySources,
-      @Nullable final String insertBeforeName,
       final String moduleId,
       @Nullable final String profile) {
 
@@ -125,14 +133,10 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
         ? "%s-%s".formatted(moduleId, profile)
         : moduleId;
 
-    // Load .yaml / .yml files (higher priority, loaded first so they end up
-    // further from insertBefore in the property source list)
-    loadResources(resolver, moduleId, baseName, yamlLoader)
-        .forEach(ps -> addPropertySource(propertySources, insertBeforeName, ps));
-
-    // Load .properties files (lower priority than YAML)
-    loadResources(resolver, moduleId, baseName, propertiesLoader)
-        .forEach(ps -> addPropertySource(propertySources, insertBeforeName, ps));
+    final var result = new LinkedList<PropertySource<?>>();
+    result.addAll(loadResources(resolver, moduleId, baseName, yamlLoader));
+    result.addAll(loadResources(resolver, moduleId, baseName, propertiesLoader));
+    return result;
 
   }
 
@@ -145,7 +149,7 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
       final ResourcePatternResolver resolver,
       final String moduleId,
       final String baseName,
-      final org.springframework.boot.env.PropertySourceLoader loader) {
+      final PropertySourceLoader loader) {
 
     // Search locations analogous to Spring Boot's application.yaml resolution,
     // plus workflow module subdirectory variants
@@ -185,36 +189,22 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
   }
 
   /**
-   * Add a property source before the application config sources,
-   * or at the end if no application config source was found.
+   * Add a property source right below system properties and environment
+   * variables but above all config files. Using the well-known name of the
+   * system environment property source is stable across Spring Boot versions
+   * (in contrast to matching names of config data property sources).
    */
   private void addPropertySource(
       final MutablePropertySources propertySources,
-      @Nullable final String insertBeforeName,
       final PropertySource<?> propertySource) {
 
-    if (insertBeforeName != null) {
-      propertySources.addBefore(insertBeforeName, propertySource);
+    if (propertySources.contains(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME)) {
+      propertySources.addAfter(
+          StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME,
+          propertySource);
     } else {
-      propertySources.addLast(propertySource);
+      propertySources.addFirst(propertySource);
     }
-
-  }
-
-  /**
-   * Find the name of the first application config property source.
-   * In Spring Boot 3.x, these are typically named starting with
-   * "Config resource".
-   */
-  private Optional<String> findApplicationConfigSourceName(
-      final MutablePropertySources propertySources) {
-
-    for (final var ps : propertySources) {
-      if (ps.getName().startsWith("Config resource")) {
-        return Optional.of(ps.getName());
-      }
-    }
-    return Optional.empty();
 
   }
 

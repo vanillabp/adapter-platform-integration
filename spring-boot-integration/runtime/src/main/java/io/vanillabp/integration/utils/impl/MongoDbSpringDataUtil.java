@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationContext;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.core.convert.DbRefResolver;
@@ -17,17 +18,16 @@ import org.springframework.data.mongodb.core.mapping.MongoMappingContext;
 import org.springframework.data.mongodb.core.mapping.MongoPersistentEntity;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.repository.support.Repositories;
-import org.springframework.lang.Nullable;
 
 import io.vanillabp.integration.utils.SpringDataUtil;
 
 public class MongoDbSpringDataUtil implements SpringDataUtil {
 
-  private static final Map<Class<?>, MongoRepository<?, Object>> REPOSITORY_MAP = new HashMap<>();
+  private final Map<Class<?>, MongoRepository<?, Object>> repositoryCache = new HashMap<>();
 
-  private static final Map<Class<?>, MongoPersistentEntity<?>> PERSISTENT_ENTITY_MAP_MAP = new HashMap<>();
+  private final Map<Class<?>, MongoPersistentEntity<?>> persistentEntityCache = new HashMap<>();
 
-  private final ApplicationContext applicationContext;
+  private final Repositories repositories;
 
   private final MongoConverter mongoConverter;
 
@@ -36,7 +36,7 @@ public class MongoDbSpringDataUtil implements SpringDataUtil {
       final MongoDatabaseFactory mongoDbFactory,
       @Nullable final MongoConverter mongoConverter) {
 
-    this.applicationContext = applicationContext;
+    this.repositories = new Repositories(applicationContext);
     this.mongoConverter = mongoConverter == null ? getDefaultMongoConverter(mongoDbFactory) : mongoConverter;
 
   }
@@ -56,14 +56,13 @@ public class MongoDbSpringDataUtil implements SpringDataUtil {
   public <O> MongoRepository<O, Object> getRepository(
       final Class<O> type) {
 
-    Class<? super O> cls = type;
-
-    if (REPOSITORY_MAP.containsKey(cls)) {
-      return (MongoRepository<O, Object>) REPOSITORY_MAP.get(cls);
+    synchronized (repositoryCache) {
+      if (repositoryCache.containsKey(type)) {
+        return (MongoRepository<O, Object>) repositoryCache.get(type);
+      }
     }
 
-    var repositories = new Repositories(applicationContext);
-
+    Class<? super O> cls = type;
     Optional<Object> repository;
     do {
       repository = repositories.getRepositoryFor(cls);
@@ -75,7 +74,9 @@ public class MongoDbSpringDataUtil implements SpringDataUtil {
           String.format("No Spring Data repository defined for '%s'!", type.getName()));
     }
 
-    REPOSITORY_MAP.put(cls, (MongoRepository<?, Object>) repository.get());
+    synchronized (repositoryCache) {
+      repositoryCache.put(type, (MongoRepository<?, Object>) repository.get());
+    }
 
     return (MongoRepository<O, Object>) repository.get();
 
@@ -84,8 +85,10 @@ public class MongoDbSpringDataUtil implements SpringDataUtil {
   private MongoPersistentEntity<?> getPersistentEntity(
       final Class<?> type) {
 
-    if (PERSISTENT_ENTITY_MAP_MAP.containsKey(type)) {
-      return PERSISTENT_ENTITY_MAP_MAP.get(type);
+    synchronized (persistentEntityCache) {
+      if (persistentEntityCache.containsKey(type)) {
+        return persistentEntityCache.get(type);
+      }
     }
 
     final var persistentEntity = mongoConverter.getMappingContext().getPersistentEntity(type);
@@ -102,7 +105,9 @@ public class MongoDbSpringDataUtil implements SpringDataUtil {
           + "' or its superclasses!");
     }
 
-    PERSISTENT_ENTITY_MAP_MAP.put(type, persistentEntity);
+    synchronized (persistentEntityCache) {
+      persistentEntityCache.put(type, persistentEntity);
+    }
 
     return persistentEntity;
 

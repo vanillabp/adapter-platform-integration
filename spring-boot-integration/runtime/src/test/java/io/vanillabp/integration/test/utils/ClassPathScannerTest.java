@@ -12,27 +12,29 @@ import io.vanillabp.integration.utils.ClasspathScanner;
 
 public class ClassPathScannerTest {
 
+  private final ClasspathScanner testee = new ClasspathScanner();
+
   @Test
   public void testAllResources() throws Exception {
 
-    final var allResources = ClasspathScanner.allResources();
+    final var allResources = testee.allResources();
     assertNotNull(allResources);
     assertTrue(allResources.size() > 1);
     assertTrue(allResources.stream().anyMatch(resource -> Objects.equals(
         resource.getFilename(), "application.yaml")));
 
-    final var applicationYaml = ClasspathScanner.allResources(resource -> Objects.equals(
+    final var applicationYaml = testee.allResources(resource -> Objects.equals(
         resource.getFilename(), "application.yaml"));
     assertNotNull(applicationYaml);
     assertEquals(1, applicationYaml.size());
     assertEquals("application.yaml", applicationYaml.getFirst().getFilename());
 
-    final var classpathscanneryaml = ClasspathScanner.allResources("test");
+    final var classpathscanneryaml = testee.allResources("test");
     assertNotNull(classpathscanneryaml);
     assertEquals(1, classpathscanneryaml.size());
     assertEquals("classpathscanner.yaml", classpathscanneryaml.getFirst().getFilename());
 
-    final var cached = ClasspathScanner.allResources("test");
+    final var cached = testee.allResources("test");
     assertNotNull(cached);
     assertEquals(1, cached.size());
     assertEquals("classpathscanner.yaml", cached.getFirst().getFilename());
@@ -44,20 +46,20 @@ public class ClassPathScannerTest {
   public void testAllClasses() throws Exception {
 
     final var now1 = System.nanoTime();
-    final var classpathScanner = ClasspathScanner.allClasses("io.vanillabp.integration.utils");
+    final var classpathScanner = testee.allClasses("io.vanillabp.integration.utils");
     final var time1 = System.nanoTime() - now1;
     assertNotNull(classpathScanner);
     assertTrue(classpathScanner.contains(ClasspathScanner.class));
 
     final var now2 = System.nanoTime();
-    final var cached = ClasspathScanner.allClasses("io.vanillabp.integration.utils");
+    final var cached = testee.allClasses("io.vanillabp.integration.utils");
     final var time2 = System.nanoTime() - now2;
     assertNotNull(cached);
     assertTrue(classpathScanner.contains(ClasspathScanner.class));
     assertEquals(classpathScanner, cached);
     assertTrue(time2 < time1);
 
-    final var allClasses = ClasspathScanner.allClasses("",
+    final var allClasses = testee.allClasses("",
         metadataReader -> metadataReader.getClassMetadata().getClassName().startsWith("io.vanillabp."));
     assertNotNull(allClasses);
     assertTrue(allClasses.size() > 1);

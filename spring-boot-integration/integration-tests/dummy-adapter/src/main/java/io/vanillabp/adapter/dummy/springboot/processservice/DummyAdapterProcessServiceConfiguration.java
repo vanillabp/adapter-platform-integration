@@ -3,7 +3,6 @@ package io.vanillabp.adapter.dummy.springboot.processservice;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 
@@ -16,7 +15,6 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
  * bootstrapping of the Spring context (before configuration properties beans are
  * bound). Therefore only an {@link ObjectProvider} is passed.
  */
-@Configuration
 @AutoConfiguration
 public class DummyAdapterProcessServiceConfiguration {
 

@@ -54,4 +54,18 @@ public interface ExtensionWiringService<BPMN, PC> {
       String workflowModuleId,
       PC bpmsProcessingContext);
 
+  /**
+   * Stop running the workflows BPMN processes previously started. Called on graceful
+   * shutdown of the application, before the platform's web or messaging
+   * infrastructure is stopped. The default implementation does nothing.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmsProcessingContext The processing context specific to the BPMS
+   */
+  default void stopWorkflowProcessing(
+      final String workflowModuleId,
+      final PC bpmsProcessingContext) {
+    // by default there is nothing to stop
+  }
+
 }

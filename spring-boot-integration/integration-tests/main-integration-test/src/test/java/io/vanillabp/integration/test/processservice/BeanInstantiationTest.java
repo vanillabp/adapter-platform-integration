@@ -9,17 +9,17 @@ import org.springframework.boot.test.context.SpringBootTest;
 import io.vanillabp.adapter.dummy.springboot.DummyAdapterConfiguration;
 import io.vanillabp.adapter.dummy.springboot.processservice.DummyAdapterProcessServiceConfiguration;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
+import io.vanillabp.integration.test.TestPersistenceConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.sample2.Aggregate;
 import io.vanillabp.integration.test.sample2.SampleWorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
-import io.vanillabp.integration.utils.config.JpaSpringDataUtilConfiguration;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.process.ProcessService;
 
 @SpringBootTest(
     classes = {
-        DummyAdapterConfiguration.class, DummyAdapterProcessServiceConfiguration.class, WorkflowModuleAutoConfiguration.class, SpringBootMigrationAdapterAutoConfiguration.class, JpaSpringDataUtilConfiguration.class, io.vanillabp.integration.test.sample.SampleWorkflowService.class, SampleWorkflowService.class, WorkflowModuleConfiguration.class
+        DummyAdapterConfiguration.class, DummyAdapterProcessServiceConfiguration.class, WorkflowModuleAutoConfiguration.class, SpringBootMigrationAdapterAutoConfiguration.class, TestPersistenceConfiguration.class, io.vanillabp.integration.test.sample.SampleWorkflowService.class, SampleWorkflowService.class, WorkflowModuleConfiguration.class
     }
 )
 @ExtendWith(SuppressOutputExtension.class)

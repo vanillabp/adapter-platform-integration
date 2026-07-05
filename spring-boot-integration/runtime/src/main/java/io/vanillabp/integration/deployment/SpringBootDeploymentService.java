@@ -7,36 +7,101 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.SmartLifecycle;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
 import io.vanillabp.integration.adapter.migration.deployment.DeploymentService;
+import io.vanillabp.integration.processservice.ProcessServiceSpringBean;
 import io.vanillabp.integration.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.workflowmodule.WorkflowModules;
-import jakarta.annotation.PostConstruct;
+import io.vanillabp.spi.process.ProcessService;
 import lombok.RequiredArgsConstructor;
 
 /**
  * Manages deployment of resources using {@link DeploymentService}.
+ * <p>
+ * The service participates in the application lifecycle as a
+ * {@link SmartLifecycle}:
+ * <ul>
+ *   <li>{@link #start()} loads and deploys all BPMN resources — during context
+ *       refresh, after all singletons were created but before the application is
+ *       marked as started;</li>
+ *   <li>{@code startWorkflowProcessing} is triggered by
+ *       {@link ApplicationReadyEvent} (i.e. only once the application is fully
+ *       ready to process workflows);</li>
+ *   <li>{@link #stop()} stops workflow processing of adapters/extensions and all
+ *       {@link ProcessServiceSpringBean}s on graceful shutdown.</li>
+ * </ul>
+ * <b>Phase:</b> {@link SmartLifecycle#DEFAULT_PHASE} ({@code Integer.MAX_VALUE}) is
+ * used deliberately: on shutdown, lifecycle beans are stopped in descending phase
+ * order, so workflow processing stops in the very first group — before Spring
+ * Boot's web server graceful shutdown ({@code SmartLifecycle.DEFAULT_PHASE - 1024})
+ * and before messaging listener containers. This way no new workflow jobs are
+ * processed while the infrastructure they may depend on is being torn down.
  */
 @RequiredArgsConstructor
-public class SpringBootDeploymentService {
+public class SpringBootDeploymentService implements SmartLifecycle {
 
   private final DeploymentService deploymentService;
 
   private final WorkflowModules allWorkflowModules;
 
+  private final ObjectProvider<ProcessService<?>> processServices;
+
+  private volatile boolean running = false;
+
   /**
    * Triggers loading of all BPMN resources and deployment of them.
    */
-  @PostConstruct
-  public void deployResources() {
+  @Override
+  public void start() {
 
     deploymentService.deployResources(
         getWorkflowModuleIds(),
         this::bpmnResourcesLoader);
+
+    running = true;
+
+  }
+
+  /**
+   * Stops processing of workflows on graceful shutdown: adapters and extensions are
+   * notified in reverse start order, afterwards all process services are stopped.
+   */
+  @Override
+  public void stop() {
+
+    deploymentService.stopWorkflowProcessing(
+        getWorkflowModuleIds());
+
+    processServices
+        .stream()
+        .filter(ProcessServiceSpringBean.class::isInstance)
+        .map(processService -> (ProcessServiceSpringBean<?>) processService)
+        .forEach(ProcessServiceSpringBean::stopService);
+
+    running = false;
+
+  }
+
+  @Override
+  public boolean isRunning() {
+
+    return running;
+
+  }
+
+  /**
+   * @see SpringBootDeploymentService class comment on the chosen phase
+   */
+  @Override
+  public int getPhase() {
+
+    return SmartLifecycle.DEFAULT_PHASE;
 
   }
 

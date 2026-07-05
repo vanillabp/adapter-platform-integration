@@ -11,9 +11,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.persistence.autoconfigure.EntityScan;
-import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.TestPropertySource;
@@ -30,7 +30,7 @@ import io.vanillabp.integration.utils.impl.JpaSpringDataUtil;
 
 @DataJpaTest
 @ContextConfiguration(classes = JpaSpringDataUtilTest.JpaTestBootConfiguration.class)
-@Import(JpaSpringDataUtilConfiguration.class)
+@ImportAutoConfiguration(JpaSpringDataUtilConfiguration.class)
 @ExtendWith(SuppressOutputExtension.class)
 class JpaSpringDataUtilTest {
 

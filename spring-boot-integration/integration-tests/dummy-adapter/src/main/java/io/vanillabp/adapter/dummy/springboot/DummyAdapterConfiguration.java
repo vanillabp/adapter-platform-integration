@@ -1,7 +1,6 @@
 package io.vanillabp.adapter.dummy.springboot;
 
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.context.annotation.Configuration;
 
 import io.vanillabp.integration.adapter.AdapterConfigurationBase;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
@@ -12,7 +11,6 @@ import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoCon
  * This configuration should not contain any other bean definitions
  * since this configuration needs to be run very early.
  */
-@Configuration
 @AutoConfiguration(before = SpringBootMigrationAdapterAutoConfiguration.class)
 public class DummyAdapterConfiguration extends AdapterConfigurationBase {
 

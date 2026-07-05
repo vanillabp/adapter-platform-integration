@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
-import org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.ResolvableType;
@@ -14,10 +13,10 @@ import io.vanillabp.adapter.dummy.springboot.DummyAdapterConfiguration;
 import io.vanillabp.adapter.dummy.springboot.processservice.DummyAdapterProcessServiceConfiguration;
 import io.vanillabp.integration.processservice.ProcessServiceSpringBean;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
+import io.vanillabp.integration.test.TestPersistenceConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.sample.Aggregate;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
-import io.vanillabp.integration.utils.config.JpaSpringDataUtilConfiguration;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.process.ProcessService;
 
@@ -36,18 +35,12 @@ public class AdapterConfigurationTest {
     this.contextRunner
         .withPropertyValues("spring.config.location=classpath:application.yaml")
         .withInitializer(new ConfigDataApplicationContextInitializer())
-        .withUserConfiguration(WorkflowModuleConfiguration.class)
+        .withUserConfiguration(WorkflowModuleConfiguration.class, TestPersistenceConfiguration.class)
         .withConfiguration(
             AutoConfigurations.of(
-                HibernateJpaAutoConfiguration.class, JpaSpringDataUtilConfiguration.class,
                 DummyAdapterConfiguration.class, DummyAdapterProcessServiceConfiguration.class,
                 WorkflowModuleAutoConfiguration.class,
                 SpringBootMigrationAdapterAutoConfiguration.class))
-        .withPropertyValues(
-            "spring.datasource.url=jdbc:h2:mem:testdb",
-            "spring.datasource.driver-class-name=org.h2.Driver",
-            "spring.jpa.hibernate.ddl-auto=none"
-        )
         .run(context -> {
 
           final var sampleProcessServiceNames = context.getBeanNamesForType(

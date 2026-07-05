@@ -6,6 +6,7 @@ import java.util.List;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -19,14 +20,15 @@ import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.deployment.SpringBootDeploymentService;
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
+import io.vanillabp.integration.test.TestPersistenceConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.sample.SampleWorkflowService;
 import io.vanillabp.integration.test.utils.CapturedOutput;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.springboot.SpringBootTestApplication;
-import io.vanillabp.integration.utils.config.JpaSpringDataUtilConfiguration;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.integration.workflowmodule.WorkflowModules;
+import io.vanillabp.spi.process.ProcessService;
 
 @ExtendWith(SuppressOutputExtension.class)
 public class DeploymentTest {
@@ -39,13 +41,14 @@ public class DeploymentTest {
         final WorkflowModules allWorkflowModules,
         final MigrationAdapterProperties properties,
         final List<AdapterDeploymentService<?, ?, ?>> deploymentServices,
-        final List<ExtensionWiringService<?, ?>> wiringServices) {
+        final List<ExtensionWiringService<?, ?>> wiringServices,
+        final ObjectProvider<ProcessService<?>> processServices) {
 
       final var deploymentService = new DeploymentService(
           properties, deploymentServices, wiringServices);
 
       return new SpringBootDeploymentService(
-          deploymentService, allWorkflowModules);
+          deploymentService, allWorkflowModules, processServices);
 
     }
 
@@ -67,7 +70,7 @@ public class DeploymentTest {
             DummyExtensionWiringConfiguration.class,
             WorkflowModuleAutoConfiguration.class,
             SpringBootMigrationAdapterAutoConfiguration.class,
-            JpaSpringDataUtilConfiguration.class,
+            TestPersistenceConfiguration.class,
             SampleWorkflowService.class,
             WorkflowModuleConfiguration.class,
             TestConfig.class)

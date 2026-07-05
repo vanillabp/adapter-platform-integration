@@ -18,7 +18,11 @@ import org.springframework.util.SystemPropertyUtils;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * A classpath scanner
+ * A classpath scanner.
+ * <p>
+ * Results of classpath searches are cached per instance to accelerate repeated
+ * scans (the cache is intentionally not static to avoid leaking state across
+ * cached Spring test contexts).
  */
 @Slf4j
 public class ClasspathScanner {
@@ -26,14 +30,7 @@ public class ClasspathScanner {
   /**
    * Cache to accelerate booting the application
    */
-  private static final Map<String, Resource[]> cache = new HashMap<>();
-
-  /**
-   * Hide public constructor. Use static methods provided instead.
-   */
-  private ClasspathScanner() {
-    // static class: hide public constructor
-  }
+  private final Map<String, Resource[]> cache = new HashMap<>();
 
   /**
    * @param resourceLoader Spring Boot resource loader
@@ -57,7 +54,7 @@ public class ClasspathScanner {
    */
   @SafeVarargs
   @SuppressWarnings("unused")
-  public static List<Resource> allResources(
+  public final List<Resource> allResources(
       final Predicate<Resource>... filters) throws Exception {
 
     return allResources(null, null, filters);
@@ -74,7 +71,7 @@ public class ClasspathScanner {
    */
   @SafeVarargs
   @SuppressWarnings("unused")
-  public static List<Resource> allResources(
+  public final List<Resource> allResources(
       final ResourceLoader resourceLoader,
       final Predicate<Resource>... filters) throws Exception {
 
@@ -92,7 +89,7 @@ public class ClasspathScanner {
    */
   @SafeVarargs
   @SuppressWarnings("unused")
-  public static List<Resource> allResources(
+  public final List<Resource> allResources(
       final String basePath,
       final Predicate<Resource>... filters) throws Exception {
 
@@ -111,7 +108,7 @@ public class ClasspathScanner {
    */
   @SafeVarargs
   @SuppressWarnings("unused")
-  public static List<Resource> allResources(
+  public final List<Resource> allResources(
       final ResourceLoader resourceLoader,
       final String basePath,
       final Predicate<Resource>... filters) throws Exception {
@@ -162,7 +159,7 @@ public class ClasspathScanner {
    */
   @SafeVarargs
   @SuppressWarnings("unused")
-  public static List<Class<?>> allClasses(
+  public final List<Class<?>> allClasses(
       final String basePackage,
       final Predicate<MetadataReader>... filters) throws Exception {
 
@@ -181,7 +178,7 @@ public class ClasspathScanner {
    */
   @SafeVarargs
   @SuppressWarnings("unused")
-  public static List<Class<?>> allClasses(
+  public final List<Class<?>> allClasses(
       final ResourceLoader resourceLoader,
       final String basePackage,
       final Predicate<MetadataReader>... filters) throws Exception {

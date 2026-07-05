@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
 
@@ -683,6 +684,114 @@ public class DeploymentServiceTest {
 
       // Verify: adapter2WiringService is NOT called (does not match)
       verify(adapter2WiringService, never()).startWorkflowProcessing(anyString(), any());
+
+    }
+
+  }
+
+  @Nested
+  @DisplayName("stopWorkflowProcessing Tests")
+  class StopWorkflowProcessingTests {
+
+    @Test
+    @DisplayName("stopWorkflowProcessing is called for deployed modules using the deployed context")
+    public void stopWorkflowProcessingIsCalledForDeployedModules() {
+
+      // Configure properties and mocks
+      final var properties = createPropertiesWithAdapter("adapter-test1");
+
+      // Configure adapter1DeploymentService
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+
+      // Create resources loader
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
+          createDummyBpmnInputStream());
+
+      // Configure mock behavior
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of(Map.entry("TestProcess", 42)));
+      when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
+          .thenReturn(100);
+
+      // Create DeploymentService
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService), List.of());
+
+      // Deploy, start and stop
+      testee.deployResources(List.of("test-module"), resourcesLoader);
+      testee.startWorkflowProcessing(List.of("test-module"));
+      testee.stopWorkflowProcessing(List.of("test-module"));
+
+      // Verify that stopWorkflowProcessing was called with the deployed context
+      verify(adapter1DeploymentService).stopWorkflowProcessing(eq("test-module"), eq(100));
+
+    }
+
+    @Test
+    @DisplayName("stopWorkflowProcessing skips non-deployed modules")
+    public void stopWorkflowProcessingSkipsNonDeployedModules() {
+
+      // Configure properties
+      final var properties = createPropertiesWithAdapter("adapter-test1");
+
+      // Create DeploymentService WITHOUT prior deployment
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService), List.of());
+
+      // Call stopWorkflowProcessing for a non-deployed module
+      testee.stopWorkflowProcessing(List.of("non-deployed-module"));
+
+      // Verify that stopWorkflowProcessing was NOT called
+      verify(adapter1DeploymentService, never()).stopWorkflowProcessing(anyString(), any());
+
+    }
+
+    @Test
+    @DisplayName("Matching extension wiring services are stopped before the adapter")
+    public void extensionWiringServicesAreStoppedBeforeAdapters() {
+
+      // Configure properties and mocks
+      final var properties = createPropertiesWithAdapter("adapter-test1");
+
+      // Configure adapter1DeploymentService
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+      when(adapter1DeploymentService.getModelType()).thenReturn(Integer.class);
+      when(adapter1DeploymentService.getProcessContextType()).thenReturn(Integer.class);
+
+      // Configure wiring services
+      when(adapter1WiringService.getOrder()).thenReturn(1);
+      when(adapter1WiringService.getModelType()).thenReturn(Integer.class);
+      when(adapter1WiringService.getProcessContextType()).thenReturn(Integer.class);
+      when(adapter2WiringService.getOrder()).thenReturn(2);
+      lenient().when(adapter2WiringService.getModelType()).thenReturn(Long.class);
+      lenient().when(adapter2WiringService.getProcessContextType()).thenReturn(Long.class);
+
+      // Create resources loader
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
+          createDummyBpmnInputStream());
+
+      // Configure mock behavior
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of(Map.entry("TestProcess", 42)));
+      when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
+          .thenReturn(100);
+
+      // Create DeploymentService with both wiring services
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService), List.of(adapter1WiringService, adapter2WiringService));
+
+      // Deploy, start and stop
+      testee.deployResources(List.of("test-module"), resourcesLoader);
+      testee.startWorkflowProcessing(List.of("test-module"));
+      testee.stopWorkflowProcessing(List.of("test-module"));
+
+      // Verify: matching extension is stopped BEFORE the adapter (reverse of start order)
+      final var inOrder = Mockito.inOrder(adapter1WiringService, adapter1DeploymentService);
+      inOrder.verify(adapter1WiringService).stopWorkflowProcessing(eq("test-module"), eq(100));
+      inOrder.verify(adapter1DeploymentService).stopWorkflowProcessing(eq("test-module"), eq(100));
+
+      // Verify: non-matching extension is NOT stopped
+      verify(adapter2WiringService, never()).stopWorkflowProcessing(anyString(), any());
 
     }
 

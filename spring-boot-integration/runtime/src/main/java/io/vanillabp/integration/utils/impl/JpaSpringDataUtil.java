@@ -13,30 +13,25 @@ import org.springframework.data.jpa.repository.JpaContext;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.repository.core.EntityInformation;
 import org.springframework.data.repository.support.Repositories;
-import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 
 import io.vanillabp.integration.utils.SpringDataUtil;
 
 public class JpaSpringDataUtil implements SpringDataUtil {
 
-  private static final Map<Class<?>, JpaRepository<?, Object>> REPOSITORY_MAP = new HashMap<>();
+  private final Map<Class<?>, JpaRepository<?, Object>> repositoryCache = new HashMap<>();
 
-  private static final Map<Class<?>, EntityInformation<?, Object>> ENTITYINFO_MAP = new HashMap<>();
+  private final Map<Class<?>, EntityInformation<?, Object>> entityInformationCache = new HashMap<>();
 
-  private final ApplicationContext applicationContext;
-
-  private final LocalContainerEntityManagerFactoryBean containerEntityManagerFactoryBean;
+  private final Repositories repositories;
 
   private final JpaContext jpaContext;
 
   public JpaSpringDataUtil(
       final ApplicationContext applicationContext,
-      final JpaContext jpaContext,
-      final LocalContainerEntityManagerFactoryBean containerEntityManagerFactoryBean) {
+      final JpaContext jpaContext) {
 
-    this.applicationContext = applicationContext;
+    this.repositories = new Repositories(applicationContext);
     this.jpaContext = jpaContext;
-    this.containerEntityManagerFactoryBean = containerEntityManagerFactoryBean;
 
   }
 
@@ -53,14 +48,13 @@ public class JpaSpringDataUtil implements SpringDataUtil {
   public <O> JpaRepository<O, Object> getRepository(
       final Class<O> type) {
 
-    Class<? super O> cls = type;
-
-    if (REPOSITORY_MAP.containsKey(cls)) {
-      return (JpaRepository<O, Object>) REPOSITORY_MAP.get(cls);
+    synchronized (repositoryCache) {
+      if (repositoryCache.containsKey(type)) {
+        return (JpaRepository<O, Object>) repositoryCache.get(type);
+      }
     }
 
-    var repositories = new Repositories(applicationContext);
-
+    Class<? super O> cls = type;
     Optional<Object> repository;
     do {
       repository = repositories.getRepositoryFor(cls);
@@ -72,7 +66,9 @@ public class JpaSpringDataUtil implements SpringDataUtil {
           String.format("No Spring Data repository defined for '%s'!", type.getName()));
     }
 
-    REPOSITORY_MAP.put(cls, (JpaRepository<?, Object>) repository.get());
+    synchronized (repositoryCache) {
+      repositoryCache.put(type, (JpaRepository<?, Object>) repository.get());
+    }
 
     return (JpaRepository<O, Object>) repository.get();
 
@@ -82,16 +78,15 @@ public class JpaSpringDataUtil implements SpringDataUtil {
   public Class<?> getIdType(
       Class<?> type) {
 
-    Class<?> cls = type;
-
-    if (ENTITYINFO_MAP.containsKey(cls)) {
-      return ENTITYINFO_MAP
-          .get(cls)
-          .getIdType();
+    synchronized (entityInformationCache) {
+      if (entityInformationCache.containsKey(type)) {
+        return entityInformationCache
+            .get(type)
+            .getIdType();
+      }
     }
 
-    var repositories = new Repositories(applicationContext);
-
+    Class<?> cls = type;
     EntityInformation<?, Object> entityInfo;
     try {
       do {
@@ -107,7 +102,9 @@ public class JpaSpringDataUtil implements SpringDataUtil {
           String.format("Type '%s' is not an entity!", type.getName()));
     }
 
-    ENTITYINFO_MAP.put(cls, entityInfo);
+    synchronized (entityInformationCache) {
+      entityInformationCache.put(type, entityInfo);
+    }
 
     return entityInfo.getIdType();
 
@@ -146,8 +143,12 @@ public class JpaSpringDataUtil implements SpringDataUtil {
   public <I> I getId(
       final Object domainEntity) {
 
-    final var id = containerEntityManagerFactoryBean
-        .getNativeEntityManagerFactory()
+    // resolve the persistence unit responsible for the entity's type to be
+    // correct in applications using multiple persistence units
+    final var entityClass = Hibernate.getClass(domainEntity);
+    final var id = jpaContext
+        .getEntityManagerByManagedType(entityClass)
+        .getEntityManagerFactory()
         .getPersistenceUnitUtil()
         .getIdentifier(domainEntity);
     if (id == null) {

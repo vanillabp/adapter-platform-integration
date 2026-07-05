@@ -2,19 +2,18 @@ package io.vanillabp.integration.workflowmodule;
 
 
 import java.io.IOException;
-import java.net.URI;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.BeanCreationException;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.core.io.support.ResourcePatternUtils;
-import org.springframework.lang.Nullable;
 
 import io.vanillabp.spi.service.WorkflowService;
 import lombok.extern.slf4j.Slf4j;
@@ -23,7 +22,7 @@ import lombok.extern.slf4j.Slf4j;
  * Autoconfiguration of VanillaBP workflow modules.
  */
 @Slf4j
-@Configuration
+@AutoConfiguration
 public class WorkflowModuleAutoConfiguration {
 
   /**
@@ -62,7 +61,7 @@ public class WorkflowModuleAutoConfiguration {
           .map(resource -> {
             try {
               final var workflowModuleId = resource
-                  .getContentAsString(Charset.defaultCharset())
+                  .getContentAsString(StandardCharsets.UTF_8)
                   .trim();
               if (workflowModuleId.isEmpty()) {
                 throw new IllegalStateException(
@@ -70,7 +69,15 @@ public class WorkflowModuleAutoConfiguration {
                         + resource.getURI()
                         + "'");
               }
-              return new WorkflowModule(workflowModuleId, resource.getURI());
+              // determine the classpath-root prefix of the JAR/directory the descriptor
+              // was found in: the descriptor URL minus 'META-INF/workflow-module'
+              final var descriptorUrl = resource
+                  .getURL()
+                  .toString();
+              final var sourceUri = descriptorUrl.endsWith(WorkflowModule.METAINF_WORKFLOWMODULE)
+                  ? descriptorUrl.substring(0, descriptorUrl.length() - WorkflowModule.METAINF_WORKFLOWMODULE.length())
+                  : descriptorUrl;
+              return new WorkflowModule(workflowModuleId, sourceUri);
             } catch (IOException e) {
               throw new BeanCreationException(
                   "Could not load workflow module descriptors from classpath '"
@@ -92,6 +99,36 @@ public class WorkflowModuleAutoConfiguration {
   }
 
   /**
+   * Determines the classpath-root prefix (external URL form) of the JAR or directory
+   * the given class was loaded from. This is done based on
+   * {@link Class#getResource(String)} instead of the class' protection domain since
+   * the URL of the class resource uses the very same protocol as resources resolved
+   * by Spring's resource loader. This way matching root prefixes works for all class
+   * loaders: plain classpath ({@code file:}), JARs ({@code jar:file:}) and Spring
+   * Boot repackaged fat JARs ({@code jar:nested:}).
+   *
+   * @param clazz The class
+   * @return The classpath-root prefix or {@code null} if it cannot be determined
+   */
+  static @Nullable String determineClasspathRootPrefix(
+      final Class<?> clazz) {
+
+    final var classResourcePath = clazz.getName().replace('.', '/')
+        + ".class";
+    final var classResourceUrl = clazz.getResource("/"
+        + classResourcePath);
+    if (classResourceUrl == null) {
+      return null;
+    }
+    final var url = classResourceUrl.toString();
+    if (!url.endsWith(classResourcePath)) {
+      return null;
+    }
+    return url.substring(0, url.length() - classResourcePath.length());
+
+  }
+
+  /**
    * Associates workflow services with workflow modules for later usage.
    *
    * @param allWorkflowModules All workflow modules found in the classpath
@@ -109,25 +146,13 @@ public class WorkflowModuleAutoConfiguration {
         .forEach(serviceClass -> {
 
           try {
-            // register a service class in the workflow module identified by META-INF/workflow-service
-            // found in the same JAR/directory
-            final var serviceClassSourceUri = serviceClass
-                .getProtectionDomain()
-                .getCodeSource()
-                .getLocation()
-                .toURI();
-            final URI serviceClassWorkflowDescriptorUrl;
-            if (serviceClassSourceUri.getPath().endsWith(".jar")) {
-              serviceClassWorkflowDescriptorUrl = URI
-                  .create(
-                      "jar:%s!/%s".formatted(serviceClassSourceUri.toString(), WorkflowModule.METAINF_WORKFLOWMODULE));
-            } else {
-              serviceClassWorkflowDescriptorUrl = serviceClassSourceUri
-                  .resolve(WorkflowModule.METAINF_WORKFLOWMODULE);
-            }
+            // register a service class in the workflow module identified by META-INF/workflow-module
+            // found in the same JAR/directory: match the classpath-root prefix of the service
+            // class against the classpath-root prefix of the workflow module descriptor
+            final var serviceClassRootPrefix = determineClasspathRootPrefix(serviceClass);
             final var workflowModuleInServiceClassJar = allWorkflowModules
                 .stream()
-                .filter(module -> module.getSourceUri().equals(serviceClassWorkflowDescriptorUrl))
+                .filter(module -> module.getSourceUri().equals(serviceClassRootPrefix))
                 .findFirst();
             if (workflowModuleInServiceClassJar.isPresent()) {
               globalClasspathWorkflowModuleDescriptors.remove(workflowModuleInServiceClassJar.get());
@@ -159,7 +184,6 @@ public class WorkflowModuleAutoConfiguration {
               globalClasspathWorkflowModuleDescriptors
                   .stream()
                   .map(WorkflowModule::getSourceUri)
-                  .map(URI::toString)
                   .collect(Collectors.joining("\n  - "))));
 
     }

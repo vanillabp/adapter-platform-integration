@@ -1,6 +1,5 @@
 package io.vanillabp.integration.workflowmodule;
 
-import java.net.URI;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
@@ -28,9 +27,14 @@ public class WorkflowModule {
   private final String id;
 
   /**
-   * The source URI of the JAR the workflow module ID was loaded from.
+   * The classpath-root prefix (external URL form) of the JAR or directory the
+   * workflow module descriptor was loaded from (the descriptor URL minus
+   * {@link #METAINF_WORKFLOWMODULE}). Used to match classes originating from the
+   * same JAR or directory. Comparing URL-prefix strings works for all class
+   * loaders: plain classpath ({@code file:}), JARs ({@code jar:file:}) and Spring
+   * Boot repackaged fat JARs ({@code jar:nested:}).
    */
-  private final URI sourceUri;
+  private final String sourceUri;
 
   /**
    * Workflow services associated to this workflow module.

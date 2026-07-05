@@ -43,7 +43,12 @@ public class ProcessServiceSpringBean<A> implements ProcessService<A> {
 
   }
 
-  void stopService() {
+  /**
+   * Stops the process service. Called by
+   * {@link io.vanillabp.integration.deployment.SpringBootDeploymentService} on
+   * graceful shutdown of the application.
+   */
+  public void stopService() {
 
     log.info("Stopping process service: {}", migrationProcessService.getWorkflowModuleId());
 

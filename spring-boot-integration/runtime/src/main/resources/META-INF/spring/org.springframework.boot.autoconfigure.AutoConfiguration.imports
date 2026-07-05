@@ -1,4 +1,5 @@
 io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration
 io.vanillabp.integration.utils.config.JpaSpringDataUtilConfiguration
+io.vanillabp.integration.utils.config.MongoDbSpringDataUtilAutoConfiguration
 io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration
 io.vanillabp.integration.deployment.DeploymentAutoConfiguration

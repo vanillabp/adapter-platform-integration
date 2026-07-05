@@ -46,8 +46,8 @@ public class WorkflowModulesTest {
   public void testMultipleGlobalWorkflowModuleDescriptorFilesFail() {
 
     final var workflowModules = List.of(
-        WorkflowModule.builder().id("1").sourceUri(URI.create("file:///1")).build(),
-        WorkflowModule.builder().id("2").sourceUri(URI.create("file:///2")).build());
+        WorkflowModule.builder().id("1").sourceUri("file:///1").build(),
+        WorkflowModule.builder().id("2").sourceUri("file:///2").build());
 
     final var exception = assertThrows(IllegalStateException.class,
         () -> WorkflowModuleAutoConfiguration.registerProcessServices(workflowModules, List.of()));

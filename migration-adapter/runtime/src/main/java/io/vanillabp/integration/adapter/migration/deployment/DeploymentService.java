@@ -1,6 +1,7 @@
 package io.vanillabp.integration.adapter.migration.deployment;
 
 import java.io.InputStream;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -291,6 +292,72 @@ public class DeploymentService {
                     .forEach(wiringService -> wiringService.startWorkflowProcessing(
                         workflowModuleId,
                         processingContext));
+              });
+        });
+
+  }
+
+  /**
+   * Stops running the workflows of the given BPMN processes. This is the counterpart
+   * of {@link #startWorkflowProcessing(List)} and is executed in reverse order:
+   * extensions are stopped first (in reverse wiring order), then the adapters —
+   * mirroring the start sequence where adapters are started before extensions.
+   *
+   * @param workflowModuleIds The workflow module IDs to stop
+   * @param <PC> The processing context, used to store all information needed by the adapter to deploy the process.
+   */
+  @SuppressWarnings("unchecked")
+  public <BPMN, PC> void stopWorkflowProcessing(
+      final List<String> workflowModuleIds) {
+
+    final var reversedWiringServices = new LinkedList<>(wiringServices);
+    Collections.reverse(reversedWiringServices);
+
+    final var reversedWorkflowModuleIds = new LinkedList<>(workflowModuleIds);
+    Collections.reverse(reversedWorkflowModuleIds);
+
+    // walk through all workflow modules (in reverse order)...
+    reversedWorkflowModuleIds
+        .forEach(workflowModuleId -> {
+          final var toBeStopped = this.bpmsProcessingContexts.get(workflowModuleId);
+          if (toBeStopped == null) {
+            return;
+          }
+          // ...and all adapters resources were deployed to...
+          toBeStopped
+              .forEach(bpmsProcessingContext -> {
+                final var deploymentService = (AdapterDeploymentService<?, ?, PC>) bpmsProcessingContext.deploymentService;
+                final var processingContext = (PC) bpmsProcessingContext.getBpmsProcessingContext();
+                // ...and stop workflow processing for each extension first (reverse of start)
+                reversedWiringServices
+                    .stream()
+                    .filter(wiringService -> wiringService.getModelType()
+                        .isAssignableFrom(deploymentService.getModelType()))
+                    .filter(wiringService -> wiringService.getProcessContextType()
+                        .isAssignableFrom(deploymentService.getProcessContextType()))
+                    .map(wiringService -> (ExtensionWiringService<BPMN, PC>) wiringService)
+                    .forEach(wiringService -> wiringService.stopWorkflowProcessing(
+                        workflowModuleId,
+                        processingContext));
+              });
+        });
+
+    // walk through all workflow modules (in reverse order)...
+    reversedWorkflowModuleIds
+        .forEach(workflowModuleId -> {
+          final var toBeStopped = this.bpmsProcessingContexts.get(workflowModuleId);
+          if (toBeStopped == null) {
+            return;
+          }
+          // ...and stop workflow processing for each adapter
+          toBeStopped
+              .forEach(bpmsProcessingContext -> {
+                final var deploymentService = (AdapterDeploymentService<?, ?, PC>) bpmsProcessingContext.deploymentService;
+                final var processingContext = (PC) bpmsProcessingContext.getBpmsProcessingContext();
+                deploymentService
+                    .stopWorkflowProcessing(
+                        workflowModuleId,
+                        processingContext);
               });
         });
 

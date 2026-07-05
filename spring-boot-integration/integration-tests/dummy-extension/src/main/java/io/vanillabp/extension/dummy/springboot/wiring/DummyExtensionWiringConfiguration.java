@@ -2,13 +2,11 @@ package io.vanillabp.extension.dummy.springboot.wiring;
 
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 
-@Configuration
 @AutoConfiguration(after = SpringBootMigrationAdapterAutoConfiguration.class)
 public class DummyExtensionWiringConfiguration {
 

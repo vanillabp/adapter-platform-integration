@@ -1,4 +1,4 @@
-@NonNullApi // needed to suppress warning "Not annotated parameter overrides @NonNullApi parameter"
+@NullMarked // needed to suppress warning "Not annotated parameter overrides @NullMarked parameter"
 package io.vanillabp.integration.workflowmodule;
 
-import org.springframework.lang.NonNullApi;
+import org.jspecify.annotations.NullMarked;
