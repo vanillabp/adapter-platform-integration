@@ -10,7 +10,7 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
-import io.vanillabp.integration.spi.aggregate.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.spi.process.ProcessDefinition;
 import io.vanillabp.spi.process.ProcessDefinitionNotFoundException;
 import io.vanillabp.spi.process.ProcessService;
@@ -36,7 +36,7 @@ public class ProcessServiceSpringBean<A> implements ProcessService<A> {
       final ObjectProvider<PhaseTwoOutbox> phaseTwoOutboxProvider) {
 
     migrationProcessService = new MigrationProcessService<A>(
-        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, new AggregatePersistenceAwareWrapper<A>(aggregatePersistenceAware), migratableProcessServices, buildLazyPhaseTwoOutbox(
+        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, aggregatePersistenceAware, migratableProcessServices, buildLazyPhaseTwoOutbox(
             workflowModuleId, bpmnProcessId, phaseTwoOutboxProvider));
 
   }

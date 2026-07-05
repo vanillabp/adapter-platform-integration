@@ -40,7 +40,7 @@ public class DeploymentTest {
     public SpringBootDeploymentService springBootDeploymentService(
         final WorkflowModules allWorkflowModules,
         final MigrationAdapterProperties properties,
-        final List<AdapterDeploymentService<?, ?, ?>> deploymentServices,
+        final List<AdapterDeploymentService<?, ?>> deploymentServices,
         final List<ExtensionWiringService<?, ?>> wiringServices,
         final ObjectProvider<ProcessService<?>> processServices) {
 
@@ -160,6 +160,30 @@ public class DeploymentTest {
               + capturedOutput);
 
     }
+
+    // after closing the context (graceful shutdown), workflow processing has to be
+    // stopped in reverse start order: extensions first, then adapters
+    final var capturedOutput = output.getAll();
+
+    final var extensionStopProcessing = "Dummy-Extension: Stopping workflow processing for test-module";
+    final var adapterStopProcessing = "Dummy-Adapter: Stopping workflow processing for test-module";
+
+    final var extensionStopProcessingPos = capturedOutput.indexOf(extensionStopProcessing);
+    final var adapterStopProcessingPos = capturedOutput.indexOf(adapterStopProcessing);
+
+    Assertions.assertTrue(extensionStopProcessingPos >= 0,
+        "Expected '"
+            + extensionStopProcessing
+            + "'. Captured output: "
+            + capturedOutput);
+    Assertions.assertTrue(adapterStopProcessingPos >= 0,
+        "Expected '"
+            + adapterStopProcessing
+            + "'. Captured output: "
+            + capturedOutput);
+    Assertions.assertTrue(extensionStopProcessingPos < adapterStopProcessingPos,
+        "Expected extension stops processing before adapter (reverse start order). Captured output: "
+            + capturedOutput);
 
   }
 

@@ -8,7 +8,9 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
+import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.config.ResilienceProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
 import lombok.Builder;
 
@@ -53,9 +55,16 @@ public class SpringBootMigrationAdapterTransformer {
 
     result.setResourcesLocation(properties.getResourcesLocation());
 
+    // map resilience settings (validated by MigrationAdapterProperties#validateProperties)
+    result.setResilience(mapResilience(properties.getResilience()));
+
     // validate properties of adapters against adapters found in classpath
     final var adaptersConfigured = getAndValidateAdaptersConfigured();
     result.setAdapters(adaptersConfigured);
+
+    // validate per-adapter deployment-failure policies
+    final var deploymentFailuresConfigured = getAndValidateDeploymentFailuresConfigured();
+    result.setDeploymentFailures(deploymentFailuresConfigured);
 
     // validate priorities of adapters configured against adapters found in classpath
     final var prioritizedAdaptersConfigured = getAndValidatePrioritizedAdaptersConfigured(
@@ -116,6 +125,7 @@ public class SpringBootMigrationAdapterTransformer {
                 .builder()
                 .workflowModuleId(workflowModule.getKey())
                 .prioritizedAdapters(workflowModule.getValue().getPrioritizedAdapters())
+                .resilience(mapResilience(workflowModule.getValue().getResilience()))
                 // TODO fill workflows; until implemented, configured workflow-level
                 //  properties are rejected by rejectWorkflowLevelConfiguration()
                 .workflows(Map.of())
@@ -175,6 +185,75 @@ public class SpringBootMigrationAdapterTransformer {
     }
 
     return result;
+
+  }
+
+  /**
+   * Maps the Spring Boot specific resilience properties to the platform-neutral
+   * resilience properties of the core.
+   *
+   * @param resilience The Spring Boot specific resilience block or null
+   * @return The platform-neutral resilience block or null if none was configured
+   */
+  private ResilienceProperties mapResilience(
+      final SpringBootMigrationAdapterProperties.ResilienceProperties resilience) {
+
+    if (resilience == null) {
+      return null;
+    }
+    return ResilienceProperties
+        .builder()
+        .maxRetries(resilience.getMaxRetries())
+        .initialInterval(resilience.getInitialInterval())
+        .multiplier(resilience.getMultiplier())
+        .timeout(resilience.getTimeout())
+        .build();
+
+  }
+
+  /**
+   * Determine and validate per-adapter deployment-failure policies configured
+   * (property <code>vanillabp.adapters.&lt;id&gt;.deployment-failure</code>).
+   *
+   * @return Map of policies (key = adapter name, value = policy)
+   */
+  private Map<String, DeploymentFailurePolicy> getAndValidateDeploymentFailuresConfigured() {
+
+    final var invalidPolicies = properties
+        .getAdapters()
+        .entrySet()
+        .stream()
+        .filter(adapter -> adapter.getValue().getDeploymentFailure() != null)
+        .filter(adapter -> {
+          try {
+            DeploymentFailurePolicy.valueOf(adapter.getValue().getDeploymentFailure().toUpperCase());
+            return false;
+          } catch (final IllegalArgumentException e) {
+            return true;
+          }
+        })
+        .map(adapter -> "'%s' found in '%s.adapters.%s.deployment-failure'"
+            .formatted(adapter.getValue().getDeploymentFailure(), PREFIX, adapter.getKey()))
+        .sorted()
+        .collect(Collectors.joining("\n  "));
+    if (!invalidPolicies.isEmpty()) {
+      throw new IllegalStateException(
+          """
+              Properties '%s.adapters.*.deployment-failure' must be one of 'fail' or 'warn'!
+              These values are invalid:
+                %s"""
+              .formatted(PREFIX, invalidPolicies));
+    }
+
+    return properties
+        .getAdapters()
+        .entrySet()
+        .stream()
+        .filter(adapter -> adapter.getValue().getDeploymentFailure() != null)
+        .map(adapter -> Map.entry(
+            adapter.getKey(),
+            DeploymentFailurePolicy.valueOf(adapter.getValue().getDeploymentFailure().toUpperCase())))
+        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
   }
 

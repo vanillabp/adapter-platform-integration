@@ -17,6 +17,7 @@ import io.quarkus.deployment.builditem.ObjectSubstitutionBuildItem;
 import io.quarkus.deployment.builditem.RunTimeConfigBuilderBuildItem;
 import io.quarkus.deployment.builditem.StaticInitConfigBuilderBuildItem;
 import io.vanillabp.integration.runtime.config.VanillaBpConfigBuilder;
+import io.vanillabp.integration.runtime.deployment.VanillaBpShutdownObserver;
 import io.vanillabp.integration.runtime.outbox.JdbcPhaseTwoOutbox;
 import io.vanillabp.integration.runtime.outbox.PhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.runtime.outbox.QuarkusMigratableProcessServicePhaseTwo;
@@ -162,6 +163,26 @@ public class VanillaBpBuildStepProcessor {
             QuarkusMigratableProcessServicePhaseTwo.class)
         .setUnremovable() // don't remove, since it is used under the hoods
         .build());
+
+  }
+
+  /**
+   * Registers {@link VanillaBpShutdownObserver} as a CDI bean: it stops workflow
+   * processing of adapters and extensions on graceful shutdown (the Quarkus
+   * counterpart of the Spring Boot integration's <code>SmartLifecycle.stop()</code>).
+   * It is marked unremovable because it is not injected by application code but
+   * driven by the {@link io.quarkus.runtime.ShutdownEvent}.
+   *
+   * @return The additional {@link VanillaBpShutdownObserver} bean
+   */
+  @BuildStep
+  AdditionalBeanBuildItem buildShutdownObserver() {
+
+    return AdditionalBeanBuildItem
+        .builder()
+        .addBeanClass(VanillaBpShutdownObserver.class)
+        .setUnremovable() // don't remove, since it is used under the hoods
+        .build();
 
   }
 

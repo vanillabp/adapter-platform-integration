@@ -3,6 +3,7 @@ package io.vanillabp.integration.test.config;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -11,6 +12,8 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 
+import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
+import io.vanillabp.integration.adapter.migration.config.ResilienceProperties;
 import io.vanillabp.integration.config.SpringBootMigrationAdapterProperties;
 import io.vanillabp.integration.config.SpringBootMigrationAdapterTransformer;
 
@@ -298,6 +301,153 @@ public class SpringBootMigrationAdapterTransformerTest {
         """
             The property 'vanillabp.prioritized-adapters' lists these adapters for which no property sections were found:
               test2-adapter -> 'vanillabp.adapters.test2-adapter'""",
+        exception.getMessage());
+
+  }
+
+  @Test
+  @Order(9)
+  public void testResilienceAndDeploymentFailureAreMapped() {
+
+    // build independent properties not to interfere with the ordered tests sharing builders
+    final var props = SpringBootMigrationAdapterProperties
+        .builder()
+        .adapters(Map.of(
+            "test-adapter",
+            SpringBootMigrationAdapterProperties.AdapterConfiguration
+                .builder()
+                .type("test-type")
+                .deploymentFailure("warn")
+                .build()))
+        .resilience(SpringBootMigrationAdapterProperties.ResilienceProperties
+            .builder()
+            .maxRetries(5)
+            .initialInterval(Duration.ofSeconds(2))
+            .multiplier(1.5)
+            .timeout(Duration.ofSeconds(10))
+            .build())
+        .workflowModules(Map.of(
+            "test-module",
+            SpringBootMigrationAdapterProperties.WorkflowModuleProperties
+                .builder()
+                .resilience(SpringBootMigrationAdapterProperties.ResilienceProperties
+                    .builder()
+                    .maxRetries(9)
+                    .build())
+                .adapters(Map.of(
+                    "test-adapter",
+                    SpringBootMigrationAdapterProperties.AdapterProperties
+                        .builder()
+                        .resourcesLocation("classpath:test-module/processes/test-adapter")
+                        .build()))
+                .build()))
+        .build();
+
+    final var result = SpringBootMigrationAdapterTransformer
+        .builder()
+        .adaptersFound(List.of("test-type"))
+        .workflowModulesFound(List.of("test-module"))
+        .properties(props)
+        .build()
+        .getAndValidatePropertiesConfigured();
+
+    // deployment-failure policy is mapped and defaults to FAIL for other adapters
+    assertEquals(DeploymentFailurePolicy.WARN, result.getDeploymentFailureFor("test-adapter"));
+    assertEquals(DeploymentFailurePolicy.FAIL, result.getDeploymentFailureFor("other-adapter"));
+
+    // global resilience block is mapped
+    final var global = result.getResilienceFor(null, null);
+    assertEquals(5, global.getMaxRetries());
+    assertEquals(Duration.ofSeconds(2), global.getInitialInterval());
+    assertEquals(1.5, global.getMultiplier());
+    assertEquals(Duration.ofSeconds(10), global.getTimeout());
+
+    // workflow module resilience block overrides the global block as a whole
+    final var module = result.getResilienceFor("test-module", null);
+    assertEquals(9, module.getMaxRetries());
+    assertEquals(ResilienceProperties.DEFAULT_INITIAL_INTERVAL, module.getInitialInterval());
+
+  }
+
+  @Test
+  @Order(10)
+  public void testInvalidDeploymentFailureIsRejected() {
+
+    // build independent properties not to interfere with the ordered tests sharing builders
+    final var props = SpringBootMigrationAdapterProperties
+        .builder()
+        .adapters(Map.of(
+            "test-adapter",
+            SpringBootMigrationAdapterProperties.AdapterConfiguration
+                .builder()
+                .type("test-type")
+                .deploymentFailure("sometimes")
+                .build()))
+        .build();
+
+    final var transformer = SpringBootMigrationAdapterTransformer
+        .builder()
+        .adaptersFound(List.of("test-type"))
+        .workflowModulesFound(List.of("test-module"))
+        .properties(props)
+        .build();
+
+    final var exception = assertThrowsExactly(
+        IllegalStateException.class,
+        transformer::getAndValidatePropertiesConfigured
+    );
+    assertEquals(
+        """
+            Properties 'vanillabp.adapters.*.deployment-failure' must be one of 'fail' or 'warn'!
+            These values are invalid:
+              'sometimes' found in 'vanillabp.adapters.test-adapter.deployment-failure'""",
+        exception.getMessage());
+
+  }
+
+  @Test
+  @Order(11)
+  public void testInvalidResilienceIsRejected() {
+
+    // build independent properties not to interfere with the ordered tests sharing builders
+    final var props = SpringBootMigrationAdapterProperties
+        .builder()
+        .adapters(Map.of(
+            "test-adapter",
+            SpringBootMigrationAdapterProperties.AdapterConfiguration
+                .builder()
+                .type("test-type")
+                .build()))
+        .resilience(SpringBootMigrationAdapterProperties.ResilienceProperties
+            .builder()
+            .maxRetries(-1)
+            .build())
+        .workflowModules(Map.of(
+            "test-module",
+            SpringBootMigrationAdapterProperties.WorkflowModuleProperties
+                .builder()
+                .adapters(Map.of(
+                    "test-adapter",
+                    SpringBootMigrationAdapterProperties.AdapterProperties
+                        .builder()
+                        .resourcesLocation("classpath:test-module/processes/test-adapter")
+                        .build()))
+                .build()))
+        .build();
+
+    final var transformer = SpringBootMigrationAdapterTransformer
+        .builder()
+        .adaptersFound(List.of("test-type"))
+        .workflowModulesFound(List.of("test-module"))
+        .properties(props)
+        .build();
+
+    final var exception = assertThrowsExactly(
+        IllegalStateException.class,
+        transformer::getAndValidatePropertiesConfigured
+    );
+    assertEquals(
+        "Property 'vanillabp.resilience.max-retries' must not be negative but is '-1'!",
         exception.getMessage());
 
   }

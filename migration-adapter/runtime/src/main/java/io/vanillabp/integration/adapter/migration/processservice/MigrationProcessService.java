@@ -4,9 +4,9 @@ import java.util.List;
 import java.util.Map;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
-import io.vanillabp.integration.adapter.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 

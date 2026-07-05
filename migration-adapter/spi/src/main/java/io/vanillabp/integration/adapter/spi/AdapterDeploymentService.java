@@ -4,29 +4,26 @@ import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
 
+import io.vanillabp.integration.extension.spi.ExtensionWiringService;
+
 /**
  * An implementation is responsible for reading the BPMN and transforming it into the model type.
  * Additionally, the final model will be deployed to the target BPMS.
  * The implementation has to be provided by the platform integration adapter.
  * <p>
+ * Conceptually, an adapter is &quot;the wiring service with deployment&quot;: it inherits
+ * preparing/wiring and starting/stopping of workflow processing from
+ * {@link ExtensionWiringService} and adds reading and deploying of BPMS resources.
+ * <p>
  * <i>Hint:</i> The {@link PC} is an object holding all information needed by the adapter to deploy the resources.
- * This
+ * <p>
+ * <i>Note:</i> There is deliberately no DMN model type parameter (yet): DMN support will be
+ * added to this interface once it is designed.
  *
  * @param <BPMN> The BPMN model type
- * @param <DMN> The DMN model type
  * @param <PC> The context to store all information needed by the adapter for wiring and deploying BPMN
  */
-public interface AdapterDeploymentService<BPMN, DMN, PC> {
-
-  /**
-   * @return The model type
-   */
-  Class<BPMN> getModelType();
-
-  /**
-   * @return The process context type
-   */
-  Class<PC> getProcessContextType();
+public interface AdapterDeploymentService<BPMN, PC> extends ExtensionWiringService<BPMN, PC> {
 
   /**
    * @return The ID of the adapter implementing this interface
@@ -72,22 +69,6 @@ public interface AdapterDeploymentService<BPMN, DMN, PC> {
       BPMN model);
 
   /**
-   * Wires the given model with the business code.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @param filename The filename of the BPMN file (used for logging and error messages)
-   * @param bpmnProcessId The BPMN process ID
-   * @param model The model
-   * @param context The context passed to startProcessing (usually used to collect wiring information)
-   */
-  void wireBpmn(
-      String workflowModuleId,
-      String filename,
-      String bpmnProcessId,
-      BPMN model,
-      PC context);
-
-  /**
    * Deploys the resources (process, decision matrix) to the target BPMS.
    *
    * @param workflowModuleId The workflow module ID
@@ -97,29 +78,5 @@ public interface AdapterDeploymentService<BPMN, DMN, PC> {
   void deployResources(
       String workflowModuleId,
       PC bpmsProcessingContext) throws IllegalStateException;
-
-  /**
-   * Start running the workflows BPMN processes previously deployed.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @param bpmsProcessingContext The processing context specific to the BPMS
-   */
-  void startWorkflowProcessing(
-      String workflowModuleId,
-      PC bpmsProcessingContext);
-
-  /**
-   * Stop running the workflows BPMN processes previously started. Called on graceful
-   * shutdown of the application, before the platform's web or messaging
-   * infrastructure is stopped. The default implementation does nothing.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @param bpmsProcessingContext The processing context specific to the BPMS
-   */
-  default void stopWorkflowProcessing(
-      final String workflowModuleId,
-      final PC bpmsProcessingContext) {
-    // by default there is nothing to stop
-  }
 
 }

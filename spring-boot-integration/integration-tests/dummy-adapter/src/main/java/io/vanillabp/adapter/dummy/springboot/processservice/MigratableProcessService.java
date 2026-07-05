@@ -6,7 +6,8 @@ import org.springframework.beans.factory.ObjectProvider;
 
 import io.vanillabp.adapter.dummy.springboot.DummyAdapterConfiguration;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
-import io.vanillabp.integration.adapter.spi.AggregatePersistenceAware;
+import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
+import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -47,12 +48,23 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
   }
 
   @Override
-  public Boolean isTaskActive(
+  public WorkflowAwareness awarenessOfTask(
+      final Object workflowAggregateId,
       final String taskId) {
 
-    log.info("Dummy-Adapter: Checking whether task '{}' is active", taskId);
+    log.info("Dummy-Adapter: Checking awareness of task '{}' of workflow aggregate '{}'", taskId, workflowAggregateId);
 
-    return null;
+    return WorkflowAwareness.UNKNOWN_TO_BPMS;
+
+  }
+
+  @Override
+  public WorkflowAwareness awarenessOfWorkflow(
+      final Object workflowAggregateId) {
+
+    log.info("Dummy-Adapter: Checking awareness of workflow of workflow aggregate '{}'", workflowAggregateId);
+
+    return WorkflowAwareness.UNKNOWN_TO_BPMS;
 
   }
 

@@ -33,11 +33,39 @@ at startup ("not yet supported") instead of silently electing the wrong BPMS.
 - **New workflows** are always started using the first (highest-priority) adapter.
 - **Existing workflows** may still live in a previously used BPMS. For operations on
   existing workflows (message correlation, completing tasks) the adapters are asked in
-  priority order whether they own the instance (`MigratableProcessService.isTaskActive`,
-  returning `true`/`false`/`null` for "unknown"). This is why eventual consistency has
-  to be handled *here* and not in individual adapters: a remote BPMS (like Camunda 8)
-  may not know an instance *yet*, and only the migration adapter can decide to fall
-  back to the next adapter in the list.
+  priority order whether they own the instance (`MigratableProcessService.awarenessOfTask`
+  and `awarenessOfWorkflow`, returning a `WorkflowAwareness`). This is why eventual
+  consistency has to be handled *here* and not in individual adapters: a remote BPMS
+  (like Camunda 8) may not know an instance *yet*, and only the migration adapter can
+  decide to fall back to the next adapter in the list.
+
+### Awareness contract (`WorkflowAwareness`)
+
+Asking a BPMS whether it knows a workflow or task has four possible answers
+(`MigratableProcessService.awarenessOfTask(workflowAggregateId, taskId)` /
+`awarenessOfWorkflow(workflowAggregateId)`):
+
+|       Value        |                            Meaning                            |        Migration adapter's reaction         |
+|--------------------|---------------------------------------------------------------|---------------------------------------------|
+| `TASK_ACTIVE`      | The BPMS knows the workflow/task and it is active             | Use this adapter                            |
+| `TASK_COMPLETED`   | The BPMS knows the workflow/task but it was already completed | Use this adapter (operation comes too late) |
+| `UNKNOWN_TO_BPMS`  | The BPMS definitely does not know the workflow/task           | Fall back to the next adapter of the list   |
+| `BPMS_UNAVAILABLE` | The BPMS could not be asked (unreachable, timeout)            | Do **not** fall back — retry later          |
+
+The distinction between `UNKNOWN_TO_BPMS` and `BPMS_UNAVAILABLE` is crucial: only a
+definite "not known" permits falling back to the next adapter — a temporary failure
+must not silently elect the wrong BPMS. There is an instance-level method
+(`awarenessOfWorkflow`) in addition to the task-level one because message correlation
+has no task ID and task IDs are not unique across BPMSs.
+
+Retries of undecidable calls are configured by the `resilience` block
+(`vanillabp.resilience.max-retries/initial-interval/multiplier/timeout`), overridable
+per workflow module (`vanillabp.workflow-modules.<id>.resilience`) and per workflow
+(`...workflows.<bpmnProcessId>.resilience`) — the most specific block configured wins
+as a whole (see `MigrationAdapterProperties.getResilienceFor`).
+
+*Note:* The awareness/resilience SPI prepares stable signatures for upcoming adapter
+implementations — the actual fallback election runtime is not implemented yet.
 
 To migrate, one puts the new BPMS first in the priority list and keeps the old one in
 the list: new instances start in the new BPMS while existing instances complete in the
@@ -63,6 +91,28 @@ old one.
    extensions — only then workflows are actually processed. It is called for *every*
    adapter resources were deployed to (not only the highest-priority one), since
    during a BPMS migration all configured BPMSs have to keep processing workflows.
+6. On graceful shutdown of the application, `stopWorkflowProcessing` is the
+   counterpart of step 5, executed in reverse order: extensions are stopped first (in
+   reverse wiring order), then the adapters. It is wired by the platform integrations
+   (Spring Boot: `SmartLifecycle.stop()`; Quarkus: a `ShutdownEvent` observer) so no
+   new workflow jobs are processed while web/messaging infrastructure is being torn
+   down.
+
+An adapter's `AdapterDeploymentService` extends `ExtensionWiringService`
+("the wiring service with deployment"): preparing/wiring and starting/stopping of
+workflow processing are inherited, reading and deploying of BPMS resources is added.
+There is deliberately no DMN model type parameter yet — DMN support will be added to
+the interface once designed.
+
+#### Deployment-failure policy
+
+By default, a failing deployment of any configured adapter aborts booting of the
+application. During a BPMS migration the old BPMS may be temporarily unreachable —
+setting `vanillabp.adapters.<id>.deployment-failure` to `warn` lets the application
+start anyway if a NON-first-priority adapter fails to deploy (the failure is logged
+and that adapter does not process workflows). A failure of the first-priority adapter
+always fails the boot, regardless of the policy, because new workflows could not be
+started otherwise.
 
 ### Two-phase workflow start (`PhaseTwoOutbox` SPI)
 
@@ -110,10 +160,13 @@ instead):
 
 ### Aggregate persistence
 
-The core does not know any persistence technology. `AggregatePersistenceAware`
+The core does not know any persistence technology.
+`io.vanillabp.integration.spi.AggregatePersistenceAware` (module `business-spi`)
 abstracts saving an aggregate and determining its ID. Implementations are provided by
 the platform integration (e.g. based on Spring Data) or by the business application
 itself; the implementation with the most specific generic type for the aggregate wins.
+It is the single canonical interface used on all platforms — business code implements
+it regardless of running on Spring Boot or Quarkus.
 
 ### Extensions
 
@@ -127,19 +180,29 @@ core.
 
 ## Modules
 
-1. **spi:** (Service Provider Interface)<br>
-   This module provides the interfaces to be implemented by platform integration
-   implementations as well as interfaces to be implemented by adapter
-   implementations: `AdapterDeploymentService`, `MigratableProcessService`,
-   `MigratableProcessServicePhaseTwo`, `PhaseTwoOutbox`, `AggregatePersistenceAware`
-   and `ExtensionWiringService`. Adapters report BPMN parsing errors using
-   `BpmnParseException`.
-2. **runtime:**<br>
+1. **business-spi:** (artifact `io.vanillabp:vanillabp-integration-spi`)<br>
+   Interfaces business code may implement, kept strictly separate from the adapter
+   SPI so business code never sees adapter-implementation interfaces. Currently:
+   `io.vanillabp.integration.spi.AggregatePersistenceAware` — the single canonical
+   persistence abstraction used on all platforms. It is provided to applications
+   transitively through the platform support modules (`vanillabp-spring-boot-support`
+   / `vanillabp-quarkus-support`).
+2. **spi:** (artifact `io.vanillabp.adapter:migration-adapter-spi`)<br>
+   The adapter-facing SPI to be implemented by BPMS adapters and platform
+   integrations: `AdapterDeploymentService` (extends `ExtensionWiringService`),
+   `MigratableProcessService` (incl. `WorkflowAwareness`),
+   `MigratableProcessServicePhaseTwo`, `PhaseTwoOutbox` and
+   `ExtensionWiringService`. Adapters report BPMN parsing errors using
+   `BpmnParseException`. Depends on `business-spi` (uses
+   `AggregatePersistenceAware` in signatures).
+3. **runtime:**<br>
    This module implements the runtime behavior according to the
    features [listed above](#features), mainly `DeploymentService`
-   (deployment pipeline), `MigrationProcessService` (per-process runtime used by the
+   (deployment pipeline incl. the shutdown pass and the deployment-failure policy),
+   `MigrationProcessService` (per-process runtime used by the
    platform integrations' `ProcessService` beans) and `MigrationAdapterProperties`
-   (configuration model incl. validation).
+   (configuration model incl. validation, resilience and deployment-failure
+   resolution).
 
 ## Noteworthy & Contributors
 

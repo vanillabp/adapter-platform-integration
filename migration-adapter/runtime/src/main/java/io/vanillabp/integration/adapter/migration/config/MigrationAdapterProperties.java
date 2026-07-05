@@ -28,10 +28,29 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   public static final String PREFIX = "vanillabp";
 
   /**
+   * The location BPMN resources are loaded from and whether that location contains
+   * VanillaBP BPMN (true) or BPMN specific to the target BPMS (false).
+   *
+   * @param location The resources location
+   * @param vanillaBpBpmn Whether the location contains VanillaBP BPMN
+   */
+  public record ResourcesLocation(String location, boolean vanillaBpBpmn) {
+  }
+
+  /**
    * Map of all adapters available. Keys are the adapter IDs and the values are the adapter types.
    */
   @Builder.Default
   private Map<String, String> adapters = Map.of();
+
+  /**
+   * Per-adapter policy how to treat a failing deployment of BPMS resources
+   * (property <code>vanillabp.adapters.&lt;id&gt;.deployment-failure</code>).
+   * Keys are the adapter IDs. Adapters not contained default to
+   * {@link DeploymentFailurePolicy#FAIL}.
+   */
+  @Builder.Default
+  private Map<String, DeploymentFailurePolicy> deploymentFailures = Map.of();
 
   /**
    * Where to load VanillaBP BPMN files from, which are NOT specific to any adapter.
@@ -44,13 +63,27 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   @Builder.Default
   private Map<String, WorkflowModuleAdapterProperties> workflowModules = Map.of();
 
-  public void setWorkflowModules(
-      final Map<String, WorkflowModuleAdapterProperties> workflowModules) {
+  /**
+   * Links child properties back to their parents (e.g. the workflow module ID into
+   * the module's properties object). Invoked by {@link #validateProperties(List, List)};
+   * has to be invoked explicitly if properties objects are built without running
+   * validation (e.g. in tests).
+   */
+  public void validateAndLink() {
 
-    this.workflowModules = workflowModules;
     workflowModules.forEach((
         workflowModuleId,
-        properties) -> properties.workflowModuleId = workflowModuleId);
+        moduleProperties) -> {
+      moduleProperties.workflowModuleId = workflowModuleId;
+      moduleProperties
+          .getWorkflows()
+          .forEach((
+              bpmnProcessId,
+              workflowProperties) -> {
+            workflowProperties.bpmnProcessId = bpmnProcessId;
+            workflowProperties.workflowModule = moduleProperties;
+          });
+    });
 
   }
 
@@ -93,14 +126,70 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
+   * Provides the effective resilience settings, resolved on the same three override
+   * levels as <code>prioritized-adapters</code>: global, workflow module and
+   * workflow - the most specific block configured wins as a whole. Values not set
+   * within the winning block fall back to the defaults.
+   *
+   * @param workflowModuleId The workflow module ID (may be null)
+   * @param bpmnProcessId The BPMN process ID (may be null)
+   * @return The effective resilience settings (never null, all values populated)
+   */
+  public ResilienceProperties getResilienceFor(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    var resilience = getResilience();
+    if (workflowModuleId == null) {
+      return ResilienceProperties.effective(resilience);
+    }
+    final var workflowModule = getWorkflowModules().get(workflowModuleId);
+    if (workflowModule == null) {
+      return ResilienceProperties.effective(resilience);
+    }
+    if (workflowModule.getResilience() != null) {
+      resilience = workflowModule.getResilience();
+    }
+    if (bpmnProcessId == null) {
+      return ResilienceProperties.effective(resilience);
+    }
+    final var workflow = workflowModule.getWorkflows().get(bpmnProcessId);
+    if (workflow == null) {
+      return ResilienceProperties.effective(resilience);
+    }
+    if (workflow.getResilience() != null) {
+      resilience = workflow.getResilience();
+    }
+    return ResilienceProperties.effective(resilience);
+
+  }
+
+  /**
+   * Provides the policy how to treat a failing deployment of BPMS resources for the
+   * given adapter.
+   *
+   * @param adapterId The adapter ID
+   * @return The policy, defaulting to {@link DeploymentFailurePolicy#FAIL}
+   */
+  public DeploymentFailurePolicy getDeploymentFailureFor(
+      final String adapterId) {
+
+    final var policy = deploymentFailures.get(adapterId);
+    return policy != null
+        ? policy
+        : DeploymentFailurePolicy.FAIL;
+
+  }
+
+  /**
    * Provides the resources location according to the given properties.
-   * 
+   *
    * @param workflowModuleId The workflow module ID
    * @param adapterId The adapter ID
-   * @return Entry holding the location as a key and whether the location contains VanillaBP BPMN (true)
+   * @return The location and whether the location contains VanillaBP BPMN (true)
    *         or BPMN specific to the target BPMS (false).
    */
-  public Map.Entry<String, Boolean> getAdapterResourcesLocationFor(
+  public ResourcesLocation getAdapterResourcesLocationFor(
       final String workflowModuleId,
       final String adapterId) {
 
@@ -125,7 +214,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
               problems once you wish to migrate to another adapter. Sample: 'classpath*:/workflow-resources/%s'"""
               .formatted(PREFIX, workflowModuleId, adapterId, PREFIX, adapterId));
     }
-    return Map.entry(resourcesLocation, isVanillaBpmn);
+    return new ResourcesLocation(resourcesLocation, isVanillaBpmn);
 
   }
 
@@ -138,13 +227,14 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     if (prioritizedAdapters.isEmpty()) {
       throw new IllegalStateException(
           """
-              More than one VanillaBP adapter was configured, but no default adapter is configured at
+              No adapter is configured to be used for BPMN process '%s' of workflow module '%s'! Define at least one of these properties:
                 %s.workflow-modules.%s.workflows.%s.prioritized-adapters or
                 %s.workflow-modules.%s.prioritized-adapters or
                 %s.prioritized-adapters
               Available adapters are '%s'."""
-              .formatted(PREFIX, workflowModuleId, bpmnProcessId, PREFIX, workflowModuleId, PREFIX, String
-                  .join("', '", adapterIds)));
+              .formatted(bpmnProcessId, workflowModuleId, PREFIX, workflowModuleId, bpmnProcessId, PREFIX,
+                  workflowModuleId, PREFIX, String
+                      .join("', '", adapterIds)));
     }
 
     final var listOfAdapters = String.join("', '", adapterIds);
@@ -165,6 +255,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       final List<String> adaptersLoaded,
       final List<String> knownWorkflowModuleIds) {
 
+    validateAndLink();
+
     if (knownWorkflowModuleIds.isEmpty()) {
       throw new IllegalStateException("No workflow-modules where given!");
     }
@@ -183,6 +275,48 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
               Available adapter types in classpath: %s"""
               .formatted(adaptersNotInClasspath, adaptersLoaded));
     }
+
+    // deployment-failure policies have to be configured for known adapters only
+    final var deploymentFailuresForUnknownAdapters = deploymentFailures
+        .keySet()
+        .stream()
+        .filter(adapterId -> !adapters.containsKey(adapterId))
+        .map(adapterId -> "%s.adapters.%s.deployment-failure".formatted(PREFIX, adapterId))
+        .sorted()
+        .collect(Collectors.joining("\n  "));
+    if (!deploymentFailuresForUnknownAdapters.isEmpty()) {
+      throw new IllegalStateException(
+          """
+              These properties refer to adapters not configured in 'vanillabp.adapters.*':
+                %s"""
+              .formatted(deploymentFailuresForUnknownAdapters));
+    }
+
+    // resilience blocks configured have to contain valid values
+    if (getResilience() != null) {
+      getResilience().validate("%s.resilience".formatted(PREFIX));
+    }
+    getWorkflowModules()
+        .values()
+        .forEach(workflowModule -> {
+          if (workflowModule.getResilience() != null) {
+            workflowModule
+                .getResilience()
+                .validate("%s.workflow-modules.%s.resilience"
+                    .formatted(PREFIX, workflowModule.workflowModuleId));
+          }
+          workflowModule
+              .getWorkflows()
+              .values()
+              .forEach(workflow -> {
+                if (workflow.getResilience() != null) {
+                  workflow
+                      .getResilience()
+                      .validate("%s.workflow-modules.%s.workflows.%s.resilience"
+                          .formatted(PREFIX, workflowModule.workflowModuleId, workflow.getBpmnProcessId()));
+                }
+              });
+        });
 
     // unknown workflow-module properties
     final var workflowModulesConfiguredButNotInClasspath = new LinkedList<>(getWorkflowModules().keySet());
@@ -205,10 +339,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
           .stream()
           .map(workflowModuleId -> Map.entry(workflowModuleId,
               getAdapterResourcesLocationFor(workflowModuleId, adapterId)))
-          .filter(entry -> {
-            final var isVanillaBpmn = entry.getValue().getValue();
-            return !isVanillaBpmn;
-          })
+          .filter(entry -> !entry.getValue().vanillaBpBpmn())
           .map(Map.Entry::getKey)
           .toList();
       if (!specificBpmnResources.isEmpty()) {

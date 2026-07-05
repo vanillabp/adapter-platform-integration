@@ -1,5 +1,6 @@
 package io.vanillabp.integration.config;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -38,6 +39,13 @@ public class SpringBootMigrationAdapterProperties {
   private String resourcesLocation;
 
   /**
+   * The resilience settings used when talking to BPMSs providing eventual consistency.
+   * May be overridden per workflow module (and, once supported, per workflow) - the
+   * most specific block configured wins as a whole.
+   */
+  private ResilienceProperties resilience;
+
+  /**
    * The configuration of all adapters known. The key can be an adapter's identifier
    * or a custom identifier. In case of a custom identifier the {@link AdapterConfiguration#type}
    * property has to point to the adapters identifier the custom adapter is derived from.
@@ -68,6 +76,47 @@ public class SpringBootMigrationAdapterProperties {
      * of a non-custom adapter identifier.
      */
     private String type;
+
+    /**
+     * How to treat a failing deployment of BPMS resources for this adapter:
+     * <code>fail</code> (default) aborts booting of the application;
+     * <code>warn</code> logs the failure of a NON-first-priority adapter and the
+     * application still starts (a failure of the first-priority adapter always
+     * fails the boot).
+     */
+    private String deploymentFailure;
+
+  }
+
+  /**
+   * The resilience settings used when talking to BPMSs providing eventual consistency.
+   */
+  @Getter
+  @Setter
+  @SuperBuilder(toBuilder = true)
+  @NoArgsConstructor
+  public static class ResilienceProperties {
+
+    /**
+     * The maximum number of retries after the initial attempt failed.
+     */
+    private Integer maxRetries;
+
+    /**
+     * The backoff interval before the first retry. Subsequent retries multiply the
+     * previous interval by {@link #multiplier}.
+     */
+    private Duration initialInterval;
+
+    /**
+     * The multiplier applied to the backoff interval for each subsequent retry.
+     */
+    private Double multiplier;
+
+    /**
+     * The timeout per adapter call.
+     */
+    private Duration timeout;
 
   }
 
@@ -104,6 +153,12 @@ public class SpringBootMigrationAdapterProperties {
      */
     @Builder.Default
     private List<String> prioritizedAdapters = List.of();
+
+    /**
+     * The resilience settings overriding less specific configuration levels as a
+     * whole block.
+     */
+    private ResilienceProperties resilience;
 
   }
 

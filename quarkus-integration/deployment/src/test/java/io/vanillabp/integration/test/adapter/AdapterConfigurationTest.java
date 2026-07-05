@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
+import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import io.vanillabp.integration.runtime.processservice.ProcessServiceBaseCdiBean;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.samples.sample.Aggregate;
@@ -30,6 +31,9 @@ public class AdapterConfigurationTest {
   @Inject
   @SuppressWarnings("CdiUnsatisfiedInjection")
   ProcessService<Aggregate> sampleProcessService;
+
+  @Inject
+  TestMigratableProcessService migratableProcessService;
 
   /**
    * ProcessService<Aggregate> should be created using dummy adapter configured in application.yaml
@@ -66,6 +70,21 @@ public class AdapterConfigurationTest {
     final var defaultAdapter = prioritizedAdapters.getFirst();
     Assertions.assertNotNull(defaultAdapter);
     Assertions.assertEquals("test", defaultAdapter);
+
+  }
+
+  /**
+   * Awareness enum round-trip through the dummy adapter's process service.
+   */
+  @Test
+  public void testAwarenessOfDummyAdapter() {
+
+    Assertions.assertEquals(
+        WorkflowAwareness.UNKNOWN_TO_BPMS,
+        migratableProcessService.awarenessOfTask("42", "task-id"));
+    Assertions.assertEquals(
+        WorkflowAwareness.UNKNOWN_TO_BPMS,
+        migratableProcessService.awarenessOfWorkflow("42"));
 
   }
 

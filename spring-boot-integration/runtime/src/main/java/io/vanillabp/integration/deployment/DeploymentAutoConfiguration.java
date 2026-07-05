@@ -35,7 +35,7 @@ public class DeploymentAutoConfiguration {
   public SpringBootDeploymentService deploymentService(
       final WorkflowModules allWorkflowModules,
       final MigrationAdapterProperties properties,
-      final List<AdapterDeploymentService<?, ?, ?>> deploymentServices,
+      final List<AdapterDeploymentService<?, ?>> deploymentServices,
       final List<ExtensionWiringService<?, ?>> wiringServices,
       final ObjectProvider<ProcessService<?>> processServices) {
 

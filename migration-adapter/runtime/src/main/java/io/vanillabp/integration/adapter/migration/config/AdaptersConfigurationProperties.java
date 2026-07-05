@@ -23,4 +23,12 @@ public class AdaptersConfigurationProperties {
   @Builder.Default
   private List<String> prioritizedAdapters = List.of();
 
+  /**
+   * Resilience settings used when talking to BPMSs providing eventual consistency.
+   * May be overridden on workflow module and workflow level - the most specific
+   * block configured wins as a whole (see
+   * {@link MigrationAdapterProperties#getResilienceFor(String, String)}).
+   */
+  private ResilienceProperties resilience;
+
 }

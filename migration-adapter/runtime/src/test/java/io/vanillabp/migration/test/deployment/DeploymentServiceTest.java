@@ -38,6 +38,7 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
+import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
 import io.vanillabp.integration.adapter.migration.deployment.DeploymentService;
@@ -50,10 +51,10 @@ public class DeploymentServiceTest {
   private ListAppender<ILoggingEvent> logWatcher;
 
   @Mock
-  private AdapterDeploymentService<Integer, Object, Integer> adapter1DeploymentService;
+  private AdapterDeploymentService<Integer, Integer> adapter1DeploymentService;
 
   @Mock
-  private AdapterDeploymentService<Long, Object, Long> adapter2DeploymentService;
+  private AdapterDeploymentService<Long, Long> adapter2DeploymentService;
 
   @Mock
   private ExtensionWiringService<Integer, Integer> adapter1WiringService;
@@ -516,7 +517,7 @@ public class DeploymentServiceTest {
                   .workflowModuleId("test-module")
                   .build()))
           .build();
-      properties.setWorkflowModules(properties.getWorkflowModules());
+      properties.validateAndLink();
 
       // Configure adapter1DeploymentService
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
@@ -797,6 +798,168 @@ public class DeploymentServiceTest {
 
   }
 
+  @Nested
+  @DisplayName("Deployment-failure policy Tests")
+  class DeploymentFailurePolicyTests {
+
+    @Test
+    @DisplayName("Failure of a non-first-priority adapter with policy 'warn' boots anyway")
+    public void nonPrimaryAdapterFailureWithWarnPolicyBootsAnyway() {
+
+      // Configure properties with TWO prioritized adapters, second one may fail
+      final var properties = createPropertiesWithAdapters("adapter-test1", "adapter-test2");
+      properties.setDeploymentFailures(Map.of("adapter-test2", DeploymentFailurePolicy.WARN));
+
+      // Configure both adapters
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+      when(adapter2DeploymentService.getAdapterId()).thenReturn("adapter-test2");
+
+      // Create resources loader
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
+          createDummyBpmnInputStream());
+
+      // First adapter deploys fine, second adapter fails (e.g. old BPMS unreachable)
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of(Map.entry("TestProcess", 42)));
+      when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
+          .thenReturn(100);
+      when(adapter2DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenThrow(new IllegalStateException("BPMS unreachable"));
+
+      // Create DeploymentService with both adapters
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService, adapter2DeploymentService), List.of());
+
+      // Deployment does NOT fail
+      testee.deployResources(List.of("test-module"), resourcesLoader);
+
+      // Verify: the first adapter was deployed
+      verify(adapter1DeploymentService).deployResources(eq("test-module"), eq(100));
+
+      // Verify: a warning naming the failing adapter was logged
+      final var warningLogs = logWatcher.list
+          .stream()
+          .filter(event -> event.getLevel() == Level.WARN)
+          .filter(event -> event.getFormattedMessage().contains("adapter-test2"))
+          .filter(event -> event.getFormattedMessage().contains("deployment-failure"))
+          .toList();
+      assertEquals(1, warningLogs.size());
+
+      // Verify: only the successfully deployed adapter starts processing
+      testee.startWorkflowProcessing(List.of("test-module"));
+      verify(adapter1DeploymentService).startWorkflowProcessing(eq("test-module"), eq(100));
+      verify(adapter2DeploymentService, never()).startWorkflowProcessing(anyString(), any());
+
+    }
+
+    @Test
+    @DisplayName("Failure of the first-priority adapter fails the boot even with policy 'warn'")
+    public void primaryAdapterFailureFailsEvenWithWarnPolicy() {
+
+      // Configure properties with TWO prioritized adapters, FIRST one may fail (policy is ignored)
+      final var properties = createPropertiesWithAdapters("adapter-test1", "adapter-test2");
+      properties.setDeploymentFailures(Map.of("adapter-test1", DeploymentFailurePolicy.WARN));
+
+      // Configure the first adapter to fail
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+      lenient().when(adapter2DeploymentService.getAdapterId()).thenReturn("adapter-test2");
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenThrow(new IllegalStateException("BPMS unreachable"));
+
+      // Create resources loader
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
+          createDummyBpmnInputStream());
+
+      // Create DeploymentService with both adapters
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService, adapter2DeploymentService), List.of());
+
+      // Deployment fails
+      final var exception = assertThrows(
+          IllegalStateException.class,
+          () -> testee.deployResources(List.of("test-module"), resourcesLoader));
+      assertTrue(exception.getMessage().contains("BPMS unreachable"));
+
+    }
+
+    @Test
+    @DisplayName("Failure of a non-first-priority adapter fails the boot by default")
+    public void nonPrimaryAdapterFailureFailsByDefault() {
+
+      // Configure properties with TWO prioritized adapters without any deployment-failure policy
+      final var properties = createPropertiesWithAdapters("adapter-test1", "adapter-test2");
+
+      // Configure both adapters, second one fails
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+      when(adapter2DeploymentService.getAdapterId()).thenReturn("adapter-test2");
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of(Map.entry("TestProcess", 42)));
+      when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
+          .thenReturn(100);
+      when(adapter2DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenThrow(new IllegalStateException("BPMS unreachable"));
+
+      // Create resources loader
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
+          createDummyBpmnInputStream());
+
+      // Create DeploymentService with both adapters
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService, adapter2DeploymentService), List.of());
+
+      // Deployment fails (deployment-failure defaults to 'fail')
+      final var exception = assertThrows(
+          IllegalStateException.class,
+          () -> testee.deployResources(List.of("test-module"), resourcesLoader));
+      assertTrue(exception.getMessage().contains("BPMS unreachable"));
+
+    }
+
+  }
+
+  @Nested
+  @DisplayName("Adapters as wiring services Tests")
+  class AdaptersAsWiringServicesTests {
+
+    @Test
+    @DisplayName("Adapters passed as wiring services are not wired a second time")
+    public void adaptersPassedAsWiringServicesAreFiltered() {
+
+      // Configure properties and mocks
+      final var properties = createPropertiesWithAdapter("adapter-test1");
+
+      // Configure adapter1DeploymentService
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+
+      // Create resources loader
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
+          createDummyBpmnInputStream());
+
+      // Configure mock behavior
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of(Map.entry("TestProcess", 42)));
+      when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
+          .thenReturn(100);
+
+      // Create DeploymentService passing the ADAPTER also as a wiring service (as bean
+      // containers collecting by type would do, since AdapterDeploymentService extends
+      // ExtensionWiringService)
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService), List.of(adapter1DeploymentService));
+
+      testee.deployResources(List.of("test-module"), resourcesLoader);
+      testee.startWorkflowProcessing(List.of("test-module"));
+
+      // Verify: the adapter is wired and started exactly ONCE (not additionally as an extension)
+      verify(adapter1DeploymentService, Mockito.times(1)).wireBpmn(
+          eq("test-module"), eq("process.bpmn"), eq("TestProcess"), eq(42), eq(100));
+      verify(adapter1DeploymentService, Mockito.times(1)).startWorkflowProcessing(
+          eq("test-module"), eq(100));
+
+    }
+
+  }
+
   // === Helper Methods ===
 
   /**
@@ -820,8 +983,8 @@ public class DeploymentServiceTest {
                     .build()))
                 .build()))
         .build();
-    // Call setWorkflowModules to set the workflowModuleId
-    properties.setWorkflowModules(properties.getWorkflowModules());
+    // Link back-references (workflowModuleId etc.)
+    properties.validateAndLink();
     return properties;
 
   }
@@ -855,8 +1018,8 @@ public class DeploymentServiceTest {
                 .adapters(adapterProperties)
                 .build()))
         .build();
-    // Call setWorkflowModules to set the workflowModuleId
-    properties.setWorkflowModules(properties.getWorkflowModules());
+    // Link back-references (workflowModuleId etc.)
+    properties.validateAndLink();
     return properties;
 
   }

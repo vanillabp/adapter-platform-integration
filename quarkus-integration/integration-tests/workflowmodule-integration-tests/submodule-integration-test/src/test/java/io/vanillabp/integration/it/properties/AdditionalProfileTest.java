@@ -1,7 +1,7 @@
 package io.vanillabp.integration.it.properties;
 
-import static io.vanillabp.integration.test.utils.TestCoverageUtils.quarkusProdModeTestDefaults;
 import static io.vanillabp.integration.test.utils.TestCoverageUtils.testCoverageJavaAgent;
+import static io.vanillabp.integration.test.utils.TestJvmArgs.quarkusProdModeTestDefaults;
 
 import java.util.Map;
 

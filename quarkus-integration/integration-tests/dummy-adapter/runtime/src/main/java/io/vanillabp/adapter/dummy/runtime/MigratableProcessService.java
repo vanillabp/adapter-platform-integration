@@ -1,6 +1,7 @@
 package io.vanillabp.adapter.dummy.runtime;
 
-import io.vanillabp.integration.adapter.spi.AggregatePersistenceAware;
+import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
+import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import jakarta.enterprise.inject.Instance;
 
 public class MigratableProcessService<A> implements io.vanillabp.integration.adapter.spi.MigratableProcessService<A> {
@@ -30,10 +31,19 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
   }
 
   @Override
-  public Boolean isTaskActive(
+  public WorkflowAwareness awarenessOfTask(
+      final Object workflowAggregateId,
       final String taskId) {
 
-    return null;
+    return WorkflowAwareness.UNKNOWN_TO_BPMS;
+
+  }
+
+  @Override
+  public WorkflowAwareness awarenessOfWorkflow(
+      final Object workflowAggregateId) {
+
+    return WorkflowAwareness.UNKNOWN_TO_BPMS;
 
   }
 

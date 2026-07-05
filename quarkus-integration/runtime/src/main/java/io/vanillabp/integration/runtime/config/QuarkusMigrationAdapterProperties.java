@@ -43,6 +43,15 @@ public interface QuarkusMigrationAdapterProperties {
   Optional<String> resourcesLocation();
 
   /**
+   * The resilience settings used when talking to BPMSs providing eventual consistency.
+   * May be overridden per workflow module (and, once supported, per workflow) - the
+   * most specific block configured wins as a whole.
+   *
+   * @return The resilience settings
+   */
+  Optional<ResilienceProperties> resilience();
+
+  /**
    * The configuration of all adapters known. The key can be an adapter's identifier
    * or a custom identifier. In case of a custom identifier the {@link AdapterConfiguration#type()}
    * property has to point to the adapter identifier the custom adapter is derived from.
@@ -79,6 +88,53 @@ public interface QuarkusMigrationAdapterProperties {
      * @return The adapter's type
      */
     Optional<String> type();
+
+    /**
+     * How to treat a failing deployment of BPMS resources for this adapter:
+     * <code>fail</code> (default) aborts booting of the application;
+     * <code>warn</code> logs the failure of a NON-first-priority adapter and the
+     * application still starts (a failure of the first-priority adapter always
+     * fails the boot).
+     *
+     * @return The deployment-failure policy
+     */
+    Optional<String> deploymentFailure();
+
+  }
+
+  /**
+   * The resilience settings used when talking to BPMSs providing eventual consistency.
+   */
+  interface ResilienceProperties {
+
+    /**
+     * The maximum number of retries after the initial attempt failed.
+     *
+     * @return The maximum number of retries
+     */
+    Optional<Integer> maxRetries();
+
+    /**
+     * The backoff interval before the first retry. Subsequent retries multiply the
+     * previous interval by {@link #multiplier()}.
+     *
+     * @return The initial backoff interval
+     */
+    Optional<Duration> initialInterval();
+
+    /**
+     * The multiplier applied to the backoff interval for each subsequent retry.
+     *
+     * @return The backoff multiplier
+     */
+    Optional<Double> multiplier();
+
+    /**
+     * The timeout per adapter call.
+     *
+     * @return The timeout
+     */
+    Optional<Duration> timeout();
 
   }
 
@@ -150,6 +206,14 @@ public interface QuarkusMigrationAdapterProperties {
      * @see QuarkusMigrationAdapterProperties#prioritizedAdapters()
      */
     Optional<List<String>> prioritizedAdapters();
+
+    /**
+     * The resilience settings overriding less specific configuration levels as a
+     * whole block.
+     *
+     * @return The resilience settings
+     */
+    Optional<ResilienceProperties> resilience();
 
     /**
      * The properties of adapters specific to this workflow module.

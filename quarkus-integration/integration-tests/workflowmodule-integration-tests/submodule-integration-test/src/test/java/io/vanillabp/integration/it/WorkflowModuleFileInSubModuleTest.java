@@ -1,8 +1,8 @@
 package io.vanillabp.integration.it;
 
 
-import static io.vanillabp.integration.test.utils.TestCoverageUtils.quarkusProdModeTestDefaults;
 import static io.vanillabp.integration.test.utils.TestCoverageUtils.testCoverageJavaAgent;
+import static io.vanillabp.integration.test.utils.TestJvmArgs.quarkusProdModeTestDefaults;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

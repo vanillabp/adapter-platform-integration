@@ -1,8 +1,9 @@
 package io.vanillabp.integration.test.adapter;
 
 import io.quarkus.arc.Unremovable;
-import io.vanillabp.integration.adapter.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
+import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
+import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
@@ -21,10 +22,19 @@ public class TestMigratableProcessService implements MigratableProcessService<Ob
   }
 
   @Override
-  public Boolean isTaskActive(
+  public WorkflowAwareness awarenessOfTask(
+      final Object workflowAggregateId,
       final String taskId) {
 
-    return null;
+    return WorkflowAwareness.UNKNOWN_TO_BPMS;
+
+  }
+
+  @Override
+  public WorkflowAwareness awarenessOfWorkflow(
+      final Object workflowAggregateId) {
+
+    return WorkflowAwareness.UNKNOWN_TO_BPMS;
 
   }
 

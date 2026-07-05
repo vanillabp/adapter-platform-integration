@@ -11,6 +11,8 @@ import org.springframework.core.ResolvableType;
 
 import io.vanillabp.adapter.dummy.springboot.DummyAdapterConfiguration;
 import io.vanillabp.adapter.dummy.springboot.processservice.DummyAdapterProcessServiceConfiguration;
+import io.vanillabp.integration.adapter.spi.MigratableProcessService;
+import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import io.vanillabp.integration.processservice.ProcessServiceSpringBean;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.test.TestPersistenceConfiguration;
@@ -78,6 +80,15 @@ public class AdapterConfigurationTest {
           final var defaultAdapter = prioritizedAdapters.getFirst();
           Assertions.assertNotNull(defaultAdapter);
           Assertions.assertEquals("test", defaultAdapter);
+
+          // awareness enum round-trip through the dummy adapter
+          final var migratableProcessService = context.getBean(MigratableProcessService.class);
+          Assertions.assertEquals(
+              WorkflowAwareness.UNKNOWN_TO_BPMS,
+              migratableProcessService.awarenessOfTask("42", "task-id"));
+          Assertions.assertEquals(
+              WorkflowAwareness.UNKNOWN_TO_BPMS,
+              migratableProcessService.awarenessOfWorkflow("42"));
 
         });
 

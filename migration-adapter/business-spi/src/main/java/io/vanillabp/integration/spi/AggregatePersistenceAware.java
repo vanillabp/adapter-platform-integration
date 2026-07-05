@@ -1,4 +1,4 @@
-package io.vanillabp.integration.spi.aggregate;
+package io.vanillabp.integration.spi;
 
 /**
  * Implemented by classes which are aware of persisting aggregates of the given type.
@@ -8,6 +8,9 @@ package io.vanillabp.integration.spi.aggregate;
  * the business processing application may provide additional implementations (e.g., by the service annotated
  * by the @{@link io.vanillabp.spi.service.WorkflowService} annotation). The implementation with the most specific
  * generic parameter is chosen, also taking superclasses and implemented interfaces into account.
+ * <p>
+ * This is the single, platform-independent interface: business code implements it regardless
+ * of whether the application runs on Spring Boot or Quarkus.
  *
  * @param <A> The aggregate type
  */

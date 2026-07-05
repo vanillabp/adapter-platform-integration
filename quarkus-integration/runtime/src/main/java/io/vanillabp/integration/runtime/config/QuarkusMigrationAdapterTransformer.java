@@ -11,7 +11,9 @@ import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
+import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.config.ResilienceProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import lombok.Builder;
@@ -76,10 +78,21 @@ public class QuarkusMigrationAdapterTransformer {
 
     result.setResourcesLocation(properties.resourcesLocation().orElse(null));
 
+    // map and validate resilience settings
+    final var globalResilience = mapResilience(properties.resilience().orElse(null));
+    if (globalResilience != null) {
+      globalResilience.validate("%s.resilience".formatted(PREFIX));
+    }
+    result.setResilience(globalResilience);
+
     // validate properties of adapters against adapters found in the classpath
     final var adaptersConfigured = getAndValidateAdaptersConfigured(
         adaptersFound);
     result.setAdapters(adaptersConfigured);
+
+    // validate per-adapter deployment-failure policies
+    final var deploymentFailuresConfigured = getAndValidateDeploymentFailuresConfigured();
+    result.setDeploymentFailures(deploymentFailuresConfigured);
 
     // validate priorities of adapters configured against adapters found in the classpath
     final var prioritizedAdaptersConfigured = getAndValidatePrioritizedAdaptersConfigured(
@@ -149,6 +162,9 @@ public class QuarkusMigrationAdapterTransformer {
                 .prioritizedAdapters(workflowModule.getValue().prioritizedAdapters().isPresent()
                     ? workflowModule.getValue().prioritizedAdapters().get()
                     : List.of())
+                .resilience(mapAndValidateModuleResilience(
+                    workflowModule.getKey(),
+                    workflowModule.getValue().resilience().orElse(null)))
                 // TODO fill workflows; until implemented, configured workflow-level
                 //  properties are rejected by rejectWorkflowLevelConfiguration()
                 .workflows(Map.of())
@@ -208,6 +224,94 @@ public class QuarkusMigrationAdapterTransformer {
     }
 
     return result;
+
+  }
+
+  /**
+   * Maps the Quarkus specific resilience properties to the platform-neutral
+   * resilience properties of the core.
+   *
+   * @param resilience The Quarkus specific resilience block or null
+   * @return The platform-neutral resilience block or null if none was configured
+   */
+  private ResilienceProperties mapResilience(
+      final QuarkusMigrationAdapterProperties.ResilienceProperties resilience) {
+
+    if (resilience == null) {
+      return null;
+    }
+    return ResilienceProperties
+        .builder()
+        .maxRetries(resilience.maxRetries().orElse(null))
+        .initialInterval(resilience.initialInterval().orElse(null))
+        .multiplier(resilience.multiplier().orElse(null))
+        .timeout(resilience.timeout().orElse(null))
+        .build();
+
+  }
+
+  /**
+   * Maps and validates the resilience block of a workflow module.
+   *
+   * @param workflowModuleId The workflow module ID (used in error messages)
+   * @param resilience The Quarkus specific resilience block or null
+   * @return The platform-neutral resilience block or null if none was configured
+   */
+  private ResilienceProperties mapAndValidateModuleResilience(
+      final String workflowModuleId,
+      final QuarkusMigrationAdapterProperties.ResilienceProperties resilience) {
+
+    final var result = mapResilience(resilience);
+    if (result != null) {
+      result.validate("%s.workflow-modules.%s.resilience".formatted(PREFIX, workflowModuleId));
+    }
+    return result;
+
+  }
+
+  /**
+   * Determine and validate per-adapter deployment-failure policies configured
+   * (property <code>vanillabp.adapters.&lt;id&gt;.deployment-failure</code>).
+   *
+   * @return Map of policies (key = adapter name, value = policy)
+   */
+  private Map<String, DeploymentFailurePolicy> getAndValidateDeploymentFailuresConfigured() {
+
+    final var invalidPolicies = properties
+        .adapters()
+        .entrySet()
+        .stream()
+        .filter(adapter -> adapter.getValue().deploymentFailure().isPresent())
+        .filter(adapter -> {
+          try {
+            DeploymentFailurePolicy.valueOf(adapter.getValue().deploymentFailure().get().toUpperCase());
+            return false;
+          } catch (final IllegalArgumentException e) {
+            return true;
+          }
+        })
+        .map(adapter -> "'%s' found in '%s.adapters.%s.deployment-failure'"
+            .formatted(adapter.getValue().deploymentFailure().get(), PREFIX, adapter.getKey()))
+        .sorted()
+        .collect(Collectors.joining("\n  "));
+    if (!invalidPolicies.isEmpty()) {
+      throw new IllegalStateException(
+          """
+              Properties '%s.adapters.*.deployment-failure' must be one of 'fail' or 'warn'!
+              These values are invalid:
+                %s"""
+              .formatted(PREFIX, invalidPolicies));
+    }
+
+    return properties
+        .adapters()
+        .entrySet()
+        .stream()
+        .filter(adapter -> adapter.getValue().deploymentFailure().isPresent())
+        .map(adapter -> Map.entry(
+            adapter.getKey(),
+            DeploymentFailurePolicy.valueOf(adapter.getValue().deploymentFailure().get().toUpperCase())))
+        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
   }
 

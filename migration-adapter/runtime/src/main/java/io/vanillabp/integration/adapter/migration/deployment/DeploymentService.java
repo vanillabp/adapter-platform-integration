@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 
+import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
@@ -31,7 +32,7 @@ public class DeploymentService {
   @Builder
   @Getter
   private static class ToBeStarted<PC> {
-    private AdapterDeploymentService<?, ?, PC> deploymentService;
+    private AdapterDeploymentService<?, PC> deploymentService;
     private PC bpmsProcessingContext;
   }
 
@@ -53,10 +54,14 @@ public class DeploymentService {
   /**
    * Deployment services of all adapters.
    */
-  private final List<AdapterDeploymentService<?, ?, ?>> deploymentServices;
+  private final List<AdapterDeploymentService<?, ?>> deploymentServices;
 
   /**
-   * Wiring services of all adapters and extensions.
+   * Wiring services of extensions only. Since {@link AdapterDeploymentService} extends
+   * {@link ExtensionWiringService}, adapters may show up in the list of wiring services
+   * passed to the constructor (e.g. collected by type in a bean container) - they are
+   * filtered out because adapters are wired explicitly as part of the deployment
+   * pipeline.
    */
   private final List<ExtensionWiringService<?, ?>> wiringServices;
 
@@ -73,12 +78,16 @@ public class DeploymentService {
    */
   public DeploymentService(
       final MigrationAdapterProperties properties,
-      final List<AdapterDeploymentService<?, ?, ?>> deploymentServices,
+      final List<AdapterDeploymentService<?, ?>> deploymentServices,
       final List<ExtensionWiringService<?, ?>> wiringServices) {
 
     this.properties = properties;
     this.deploymentServices = deploymentServices;
-    this.wiringServices = new LinkedList<>(wiringServices);
+    this.wiringServices = new LinkedList<>(wiringServices
+        .stream()
+        // adapters are wired explicitly by the deployment pipeline (see field comment)
+        .filter(wiringService -> !(wiringService instanceof AdapterDeploymentService))
+        .toList());
     this.wiringServices.sort(Comparator.comparingInt(ExtensionWiringService::getOrder));
     bpmsProcessingContexts = new HashMap<>();
 
@@ -96,6 +105,14 @@ public class DeploymentService {
    *   </ol>
    *   <li>deploy the result to the BPMS</li>
    * </ol>
+   * <p>
+   * A failing deployment aborts booting of the application unless the property
+   * <code>vanillabp.adapters.&lt;id&gt;.deployment-failure</code> is set to
+   * <code>warn</code> for the failing adapter <i>and</i> the adapter is not the
+   * first-priority adapter of the workflow module: in this case the failure is
+   * logged and the application still starts (e.g. the old BPMS during a migration
+   * being temporarily unreachable). A failure of the first-priority adapter always
+   * fails the boot.
    *
    * @param workflowModuleIds The workflow module IDs to deploy
    * @param bpmnResourcesLoader A function that takes a resource location and loads the BPMN resources
@@ -125,45 +142,88 @@ public class DeploymentService {
                 )))
             .map(deploymentService -> Map.entry(
                 workflowModuleId,
-                (AdapterDeploymentService<?, ?, PC>) deploymentService)))
+                (AdapterDeploymentService<?, PC>) deploymentService)))
         // and process the resources of the workflow module specific to the adapter
         .forEach(deploymentServiceEntry -> {
           final var workflowModuleId = deploymentServiceEntry.getKey();
           final var deploymentService = deploymentServiceEntry.getValue();
-          final var resourceLocationEntry = properties.getAdapterResourcesLocationFor(
-              workflowModuleId,
-              deploymentService.getAdapterId());
-          final var isVanillaBpBpmn = resourceLocationEntry.getValue();
-          final var resourceLocation = resourceLocationEntry.getKey();
-          // find all BPMN files in the resource location...
-          final var bpmsProcessingContext = new BpmsProcessingContextHolder<PC>();
-          bpmnResourcesLoader
-              .apply(resourceLocation)
-              .entrySet()
-              // ...and process them...
-              .forEach(bpmnFileEntry -> processBpmn(
+          try {
+            deployResourcesOfAdapter(
+                workflowModuleId,
+                deploymentService,
+                bpmnResourcesLoader);
+          } catch (final RuntimeException e) {
+            final var adapterId = deploymentService.getAdapterId();
+            final var firstPriorityAdapter = properties
+                .getPrioritizedAdaptersFor(workflowModuleId)
+                .getFirst();
+            final var policy = properties.getDeploymentFailureFor(adapterId);
+            if ((policy == DeploymentFailurePolicy.WARN) && !firstPriorityAdapter.equals(adapterId)) {
+              log.warn(
+                  "Deployment of workflow module '{}' failed for adapter '{}'! Since "
+                      + "'{}.adapters.{}.deployment-failure' is set to 'warn' and the adapter is not "
+                      + "the first-priority adapter, the application starts anyway. Workflows of this "
+                      + "workflow module are not processed by adapter '{}'!",
                   workflowModuleId,
-                  deploymentService,
-                  bpmsProcessingContext.getBpmsProcessingContext(),
-                  bpmnFileEntry.getKey(), // filename
-                  bpmnFileEntry.getValue(), // InputStream
-                  isVanillaBpBpmn)
-                  .ifPresentOrElse(
-                      bpmsProcessingContext::setBpmsProcessingContext,
-                      () -> log.warn(
-                          "File '{}‘ of workflow module '{}' did not contain any executable processes. Skipping deployment of this file!",
-                          bpmnFileEntry.getKey(),
-                          workflowModuleId)));
-          // ...and finally deploy all the resources together (BPMN, DMN) to the BPMS
-          deploymentService.deployResources(workflowModuleId, bpmsProcessingContext.getBpmsProcessingContext());
-          bpmsProcessingContexts
-              .computeIfAbsent(workflowModuleId, id -> new LinkedList<>())
-              .add(ToBeStarted
-                  .<PC>builder()
-                  .deploymentService(deploymentService)
-                  .bpmsProcessingContext(bpmsProcessingContext.getBpmsProcessingContext())
-                  .build());
+                  adapterId,
+                  MigrationAdapterProperties.PREFIX,
+                  adapterId,
+                  adapterId,
+                  e);
+            } else {
+              throw e;
+            }
+          }
         });
+
+  }
+
+  /**
+   * Deploys the resources of the given workflow module using the given adapter's
+   * deployment service and remembers the resulting processing context for
+   * {@link #startWorkflowProcessing(List)}.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param deploymentService The deployment service to use
+   * @param bpmnResourcesLoader A function that takes a resource location and loads the BPMN resources
+   * @param <PC> The processing context, used to store all information needed by the adapter to deploy the process.
+   */
+  private <PC> void deployResourcesOfAdapter(
+      final String workflowModuleId,
+      final AdapterDeploymentService<?, PC> deploymentService,
+      final Function<String, Map<String, InputStream>> bpmnResourcesLoader) {
+
+    final var resourcesLocation = properties.getAdapterResourcesLocationFor(
+        workflowModuleId,
+        deploymentService.getAdapterId());
+    // find all BPMN files in the resource location...
+    final var bpmsProcessingContext = new BpmsProcessingContextHolder<PC>();
+    bpmnResourcesLoader
+        .apply(resourcesLocation.location())
+        .entrySet()
+        // ...and process them...
+        .forEach(bpmnFileEntry -> processBpmn(
+            workflowModuleId,
+            deploymentService,
+            bpmsProcessingContext.getBpmsProcessingContext(),
+            bpmnFileEntry.getKey(), // filename
+            bpmnFileEntry.getValue(), // InputStream
+            resourcesLocation.vanillaBpBpmn())
+            .ifPresentOrElse(
+                bpmsProcessingContext::setBpmsProcessingContext,
+                () -> log.warn(
+                    "File '{}‘ of workflow module '{}' did not contain any executable processes. Skipping deployment of this file!",
+                    bpmnFileEntry.getKey(),
+                    workflowModuleId)));
+    // ...and finally deploy all the resources together (BPMN, DMN) to the BPMS
+    deploymentService.deployResources(workflowModuleId, bpmsProcessingContext.getBpmsProcessingContext());
+    bpmsProcessingContexts
+        .computeIfAbsent(workflowModuleId, id -> new LinkedList<>())
+        .add(ToBeStarted
+            .<PC>builder()
+            .deploymentService(deploymentService)
+            .bpmsProcessingContext(bpmsProcessingContext.getBpmsProcessingContext())
+            .build());
 
   }
 
@@ -177,14 +237,13 @@ public class DeploymentService {
    * @param bpmn The BPMN resource inputstream
    * @param isVanillaBpBpmn Whether the BPMN is VanillaBP's BPMN or is specific to the adapter's BPMS
    * @param <BPMN> The BPMN model type
-   * @param <DMN> The DMN model type
    * @param <PC> The processing context, used to store all information needed by the adapter to deploy the process
    * @return The context used to store all information needed by the adapter to deploy the process
    */
   @SuppressWarnings("unchecked")
-  private <BPMN, DMN, PC> Optional<PC> processBpmn(
+  private <BPMN, PC> Optional<PC> processBpmn(
       final String workflowModuleId,
-      final AdapterDeploymentService<BPMN, DMN, PC> deploymentService,
+      final AdapterDeploymentService<BPMN, PC> deploymentService,
       final PC bpmsProcessingContext,
       final String filename,
       final InputStream bpmn,
@@ -259,7 +318,7 @@ public class DeploymentService {
           // ...and all adapters resources were deployed to (for BPMS migration all of them keep processing)...
           toBeStarted
               .forEach(bpmsProcessingContext -> {
-                final var deploymentService = (AdapterDeploymentService<?, ?, PC>) bpmsProcessingContext.deploymentService;
+                final var deploymentService = (AdapterDeploymentService<?, PC>) bpmsProcessingContext.deploymentService;
                 final var processingContext = (PC) bpmsProcessingContext.getBpmsProcessingContext();
                 // ...and start workflow processing for each adapter
                 deploymentService
@@ -279,7 +338,7 @@ public class DeploymentService {
           // ...and all adapters resources were deployed to...
           toBeStarted
               .forEach(bpmsProcessingContext -> {
-                final var deploymentService = (AdapterDeploymentService<?, ?, PC>) bpmsProcessingContext.deploymentService;
+                final var deploymentService = (AdapterDeploymentService<?, PC>) bpmsProcessingContext.deploymentService;
                 final var processingContext = (PC) bpmsProcessingContext.getBpmsProcessingContext();
                 // ...and start workflow processing for each extension
                 wiringServices
@@ -326,7 +385,7 @@ public class DeploymentService {
           // ...and all adapters resources were deployed to...
           toBeStopped
               .forEach(bpmsProcessingContext -> {
-                final var deploymentService = (AdapterDeploymentService<?, ?, PC>) bpmsProcessingContext.deploymentService;
+                final var deploymentService = (AdapterDeploymentService<?, PC>) bpmsProcessingContext.deploymentService;
                 final var processingContext = (PC) bpmsProcessingContext.getBpmsProcessingContext();
                 // ...and stop workflow processing for each extension first (reverse of start)
                 reversedWiringServices
@@ -352,7 +411,7 @@ public class DeploymentService {
           // ...and stop workflow processing for each adapter
           toBeStopped
               .forEach(bpmsProcessingContext -> {
-                final var deploymentService = (AdapterDeploymentService<?, ?, PC>) bpmsProcessingContext.deploymentService;
+                final var deploymentService = (AdapterDeploymentService<?, PC>) bpmsProcessingContext.deploymentService;
                 final var processingContext = (PC) bpmsProcessingContext.getBpmsProcessingContext();
                 deploymentService
                     .stopWorkflowProcessing(

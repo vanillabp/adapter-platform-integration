@@ -8,7 +8,14 @@ for a great developer experience.
 ## Features
 
 1. A couple of dependencies to build pure workflow modules, not directly depending on Quarkus
-   or any VanillaBP Quarkus extension.
+   or any VanillaBP Quarkus extension. Besides the VanillaBP SPI this includes
+   `io.vanillabp:vanillabp-integration-spi` containing interfaces business code may
+   implement — most notably `io.vanillabp.integration.spi.AggregatePersistenceAware`
+   for custom aggregate persistence. This interface is platform-independent: business
+   code implements the very same interface regardless of running on Spring Boot or
+   Quarkus. Adapter authors, in contrast, implement the interfaces of the adapter SPI
+   (`io.vanillabp.adapter:migration-adapter-spi`) which is intentionally not exposed
+   to business code.
 2. A producer for `ProcessService<A>` beans to avoid
    IDE warning `Unsatisfied dependency: no bean matches the injection point`.
    It is part of the JAR but declared as an unselected CDI `@Alternative`, so it is

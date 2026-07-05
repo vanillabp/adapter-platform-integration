@@ -1,6 +1,6 @@
 package io.vanillabp.integration.utils.impl;
 
-import io.vanillabp.integration.spi.aggregate.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.utils.SpringDataUtil;
 import lombok.RequiredArgsConstructor;
 

@@ -24,9 +24,14 @@ public interface ExtensionWiringService<BPMN, PC> {
 
   /**
    * @return The order of this service. To be used to define the order of wiring the model by multiple extensions
-   *        using the same model type.
+   *        using the same model type. Defaults to <code>0</code>, so implementations (especially adapters)
+   *        only need to implement this method if a specific order is required.
    */
-  int getOrder();
+  default int getOrder() {
+
+    return 0;
+
+  }
 
   /**
    * Wires the given model with the business code.

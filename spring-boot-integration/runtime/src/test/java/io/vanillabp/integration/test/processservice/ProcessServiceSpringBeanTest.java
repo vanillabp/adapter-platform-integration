@@ -22,7 +22,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.processservice.ProcessServiceSpringBean;
-import io.vanillabp.integration.spi.aggregate.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.AggregatePersistenceAware;
 
 @ExtendWith(MockitoExtension.class)
 public class ProcessServiceSpringBeanTest {
@@ -45,7 +45,7 @@ public class ProcessServiceSpringBeanTest {
         .adapters(Map.of("test-adapter", "dummy"))
         .prioritizedAdapters(List.of("test-adapter"))
         .build();
-    properties.setWorkflowModules(properties.getWorkflowModules());
+    properties.validateAndLink();
 
     testee = new ProcessServiceSpringBean<>(
         "test-module", "TestProcess", Object.class, properties, aggregatePersistenceAware, List

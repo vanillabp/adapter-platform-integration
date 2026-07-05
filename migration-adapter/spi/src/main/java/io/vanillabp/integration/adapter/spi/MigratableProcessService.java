@@ -1,5 +1,7 @@
 package io.vanillabp.integration.adapter.spi;
 
+import io.vanillabp.integration.spi.AggregatePersistenceAware;
+
 /**
  * To be implemented by a platform integration adapter.
  *
@@ -13,13 +15,45 @@ public interface MigratableProcessService<A> {
   String getAdapterId();
 
   /**
-   * Determine whether the given task is active in the target BPMS.
+   * Determine whether the target BPMS is aware of the given task. Used by the
+   * migration adapter to elect the BPMS responsible for an existing workflow by
+   * asking the adapters in the order of the configured prioritized adapters.
+   * <p>
+   * <b>Contract:</b> {@link WorkflowAwareness#BPMS_UNAVAILABLE} means &quot;do not
+   * fall back to the next adapter - retry later&quot;; only
+   * {@link WorkflowAwareness#UNKNOWN_TO_BPMS} permits falling back to the next
+   * adapter of the prioritized list.
+   * <p>
+   * The workflow aggregate's ID is passed additionally to the task's ID because task
+   * IDs are not unique across BPMSs - the aggregate ID identifies the workflow
+   * instance the task is expected to belong to.
    *
+   * @param workflowAggregateId The ID of the workflow aggregate the task belongs to
    * @param taskId The task's ID
-   * @return true = active, false = inactive, null = unknown to BPMS
+   * @return The BPMS' awareness of the task
    */
-  Boolean isTaskActive(
+  WorkflowAwareness awarenessOfTask(
+      Object workflowAggregateId,
       String taskId);
+
+  /**
+   * Determine whether the target BPMS is aware of the workflow belonging to the
+   * given workflow aggregate. This instance-level method exists (in addition to
+   * {@link #awarenessOfTask(Object, String)}) because message correlation has no
+   * task ID to ask for.
+   * <p>
+   * <b>Contract:</b> {@link WorkflowAwareness#BPMS_UNAVAILABLE} means &quot;do not
+   * fall back to the next adapter - retry later&quot;; only
+   * {@link WorkflowAwareness#UNKNOWN_TO_BPMS} permits falling back to the next
+   * adapter of the prioritized list. For workflows {@link WorkflowAwareness#TASK_ACTIVE}
+   * means &quot;the workflow is active&quot; and {@link WorkflowAwareness#TASK_COMPLETED}
+   * means &quot;the workflow has ended&quot;.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @return The BPMS' awareness of the workflow
+   */
+  WorkflowAwareness awarenessOfWorkflow(
+      Object workflowAggregateId);
 
   /**
    * @return Whether the adapter needs a local transaction for starting a workflow properly.

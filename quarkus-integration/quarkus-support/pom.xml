@@ -18,6 +18,11 @@
       <artifactId>spi-for-java</artifactId>
     </dependency>
     <dependency>
+      <groupId>io.vanillabp</groupId>
+      <artifactId>vanillabp-integration-spi</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
       <groupId>jakarta.enterprise</groupId>
       <artifactId>jakarta.enterprise.cdi-api</artifactId>
     </dependency>

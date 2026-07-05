@@ -4,6 +4,70 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Adapter SPI consolidation (2026-07-05)
+
+Breaking changes of the adapter SPI, relevant for the upcoming adapter repositories
+(there are no adapters built against the previous signatures yet):
+
+### New module `io.vanillabp:vanillabp-integration-spi` (business SPI)
+
+The SPI was split into a *business SPI* (interfaces business code may implement) and
+the *adapter SPI* (`io.vanillabp.adapter:migration-adapter-spi`, implemented by BPMS
+adapters and platform integrations):
+
+- `AggregatePersistenceAware` now exists exactly once:
+  `io.vanillabp.integration.spi.AggregatePersistenceAware` in
+  `vanillabp-integration-spi`. The three byte-identical copies
+  (`io.vanillabp.integration.adapter.spi.*` in the adapter SPI,
+  `io.vanillabp.integration.spi.aggregate.*` in `vanillabp-spring-boot-support`,
+  `io.vanillabp.integration.spi.*` in `vanillabp-quarkus-support`) and both
+  `AggregatePersistenceAwareWrapper` classes were removed. The support modules
+  provide the interface transitively, so business code keeps depending on the
+  support module only (Spring Boot users have to adjust the import from
+  `io.vanillabp.integration.spi.aggregate` to `io.vanillabp.integration.spi`).
+
+### `AdapterDeploymentService<BPMN, DMN, PC>` → `AdapterDeploymentService<BPMN, PC> extends ExtensionWiringService<BPMN, PC>`
+
+- The unused `DMN` type parameter was removed (DMN support will be added once
+  designed).
+- The adapter interface no longer declares `getModelType()`,
+  `getProcessContextType()`, `wireBpmn(...)`, `startWorkflowProcessing(...)` and
+  `stopWorkflowProcessing(...)` itself — they are inherited from
+  `ExtensionWiringService` (an adapter is "the wiring service with deployment").
+- `ExtensionWiringService.getOrder()` got a `default 0`, so adapters need not
+  implement it.
+- `ExtensionWiringService.stopWorkflowProcessing(...)` (default no-op) is called on
+  graceful shutdown in reverse start order (extensions first, then adapters) —
+  wired by Spring Boot's `SmartLifecycle.stop()` and a Quarkus `ShutdownEvent`
+  observer.
+
+### `MigratableProcessService`: awareness instead of `isTaskActive`
+
+`Boolean isTaskActive(String taskId)` was replaced by:
+
+```java
+WorkflowAwareness awarenessOfTask(Object workflowAggregateId, String taskId);
+WorkflowAwareness awarenessOfWorkflow(Object workflowAggregateId);
+```
+
+with `enum WorkflowAwareness { TASK_ACTIVE, TASK_COMPLETED, UNKNOWN_TO_BPMS,
+BPMS_UNAVAILABLE }`. Contract: `BPMS_UNAVAILABLE` means "do not fall back to the next
+adapter — retry later"; only `UNKNOWN_TO_BPMS` permits falling back. The
+instance-level method exists because message correlation has no task ID and task IDs
+are not unique across BPMSs. `startWorkflowPhaseOne` now uses
+`io.vanillabp.integration.spi.AggregatePersistenceAware` (import change only).
+
+### New configuration
+
+- `vanillabp.adapters.<id>.deployment-failure` = `fail` (default) | `warn`:
+  with `warn` a deployment failure of a NON-first-priority adapter is logged and the
+  application still starts; a failure of the first-priority adapter always fails the
+  boot.
+- `vanillabp.resilience.{max-retries,initial-interval,multiplier,timeout}`:
+  retry/backoff settings for eventually-consistent BPMS calls, overridable per
+  workflow module and (once supported) per workflow — the most specific block wins
+  as a whole.
+
 ## Quarkus 3.26.4 → 3.37.1 (2026-07-05)
 
 Version bump in `quarkus-integration/pom.xml` (`quarkus.version`). One real change was

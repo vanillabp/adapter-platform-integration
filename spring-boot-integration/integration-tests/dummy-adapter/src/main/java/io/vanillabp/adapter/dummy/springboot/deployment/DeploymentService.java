@@ -12,7 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @RequiredArgsConstructor
-public class DeploymentService implements AdapterDeploymentService<Object, Object, Object> {
+public class DeploymentService implements AdapterDeploymentService<Object, Object> {
 
   private final String adapterId;
 
@@ -99,6 +99,15 @@ public class DeploymentService implements AdapterDeploymentService<Object, Objec
       final Object bpmsProcessingContext) {
 
     log.info("Dummy-Adapter: Starting workflow processing for {}", workflowModuleId);
+
+  }
+
+  @Override
+  public void stopWorkflowProcessing(
+      final String workflowModuleId,
+      final Object bpmsProcessingContext) {
+
+    log.info("Dummy-Adapter: Stopping workflow processing for {}", workflowModuleId);
 
   }
 

@@ -19,11 +19,11 @@ import io.vanillabp.integration.workflowmodule.WorkflowModules;
 public class DummyAdapterDeploymentConfiguration {
 
   @Bean
-  public List<AdapterDeploymentService<Object, Object, Object>> dummyDeploymentServices(
+  public List<AdapterDeploymentService<Object, Object>> dummyDeploymentServices(
       final WorkflowModules allWorkflowModules,
       final MigrationAdapterProperties properties) {
 
-    final List<AdapterDeploymentService<Object, Object, Object>> deploymentServices = new ArrayList<>();
+    final List<AdapterDeploymentService<Object, Object>> deploymentServices = new ArrayList<>();
     final Set<String> adaptersBuilt = new HashSet<>();
 
     // walk through all workflow modules

@@ -3,17 +3,16 @@ package io.vanillabp.integration.test.utils;
 import java.util.LinkedList;
 import java.util.List;
 
+/**
+ * Helpers for collecting test coverage of code executed in forked JVMs (e.g. Quarkus
+ * prod-mode tests): the JaCoCo agent configured for the build is passed on to the
+ * forked JVM.
+ */
 public class TestCoverageUtils {
 
   public static List<String> testCoverageJavaAgent() {
 
     return testCoverageJavaAgent(new LinkedList<>());
-
-  }
-
-  public static List<String> quarkusProdModeTestDefaults() {
-
-    return quarkusProdModeTestDefaults(new LinkedList<>());
 
   }
 
@@ -26,15 +25,6 @@ public class TestCoverageUtils {
     }
 
     jvmArgs.add(jacocoAgent);
-
-    return jvmArgs;
-
-  }
-
-  public static List<String> quarkusProdModeTestDefaults(
-      final List<String> jvmArgs) {
-
-    jvmArgs.add("-Xmx192m"); // see QuarkusProdModeTest#jvmArgs
 
     return jvmArgs;
 

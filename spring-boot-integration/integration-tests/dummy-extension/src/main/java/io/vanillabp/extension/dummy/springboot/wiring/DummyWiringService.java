@@ -53,4 +53,13 @@ public class DummyWiringService implements ExtensionWiringService<Object, Object
 
   }
 
+  @Override
+  public void stopWorkflowProcessing(
+      final String workflowModuleId,
+      final Object bpmsProcessingContext) {
+
+    log.info("Dummy-Extension: Stopping workflow processing for {}", workflowModuleId);
+
+  }
+
 }

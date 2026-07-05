@@ -1,7 +1,7 @@
 package io.vanillabp.integration.it;
 
-import static io.vanillabp.integration.test.utils.TestCoverageUtils.quarkusProdModeTestDefaults;
 import static io.vanillabp.integration.test.utils.TestCoverageUtils.testCoverageJavaAgent;
+import static io.vanillabp.integration.test.utils.TestJvmArgs.quarkusProdModeTestDefaults;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.fail;

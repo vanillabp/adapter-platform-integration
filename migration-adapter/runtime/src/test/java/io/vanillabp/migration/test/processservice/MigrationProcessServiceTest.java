@@ -20,9 +20,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
-import io.vanillabp.integration.adapter.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.AggregatePersistenceAware;
 
 @ExtendWith(MockitoExtension.class)
 public class MigrationProcessServiceTest {
@@ -46,7 +46,7 @@ public class MigrationProcessServiceTest {
         .adapters(Map.of("test-adapter", "dummy"))
         .prioritizedAdapters(List.of("test-adapter"))
         .build();
-    properties.setWorkflowModules(properties.getWorkflowModules());
+    properties.validateAndLink();
     return properties;
 
   }

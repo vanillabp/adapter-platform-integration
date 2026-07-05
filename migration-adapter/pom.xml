@@ -14,6 +14,7 @@
   <name>Migration adapter</name>
 
   <modules>
+    <module>business-spi</module>
     <module>spi</module>
     <module>runtime</module>
   </modules>
