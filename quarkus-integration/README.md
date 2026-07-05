@@ -38,6 +38,37 @@ to learn about concepts of Quarkus extensions.
 4. **[integration-tests](./integration-tests):**<br>
    Modules which ensure the VanillaBP Quarkus extension works as documented.
 
+## Implementation concepts
+
+In contrast to Spring Boot (runtime reflection), the Quarkus integration does as much
+as possible at **build time**, following Quarkus' extension philosophy:
+
+1. **Code analysis via Jandex:** `@WorkflowService` classes and
+   `AggregatePersistenceAware` implementations are found in the Jandex index
+   (`ProcessServiceBuildStepProcessor`). That is why workflow sub-modules must be
+   indexed using the `jandex-maven-plugin`.
+2. **Bean generation via Gizmo:** For each workflow aggregate a
+   `ProcessService_<Aggregate>` CDI bean class extending `ProcessServiceBaseCdiBean<A>`
+   is generated as bytecode at build time — the Quarkus counterpart of Spring's
+   `BeanDefinition` registration. The runtime base class bridges to the
+   [migration adapter](../migration-adapter)'s `MigrationProcessService`.
+3. **Workflow module detection:** `WorkflowModuleBuildStepProcessor` scans all
+   application archives for `META-INF/workflow-module` marker files (content = workflow
+   module ID); the root archive acts as the *global* module fallback.
+4. **Workflow-module-specific configuration:** Config sources for
+   `<module-id>[-<profile>].properties/.yaml` files are generated as `ConfigBuilder`
+   classes with config ordinals slightly above `application.*` (properties: 251,
+   YAML: 256), so module properties take precedence. The files are also registered for
+   dev-mode hot reload.
+5. **Aggregate persistence:** Unlike Spring Boot there is *no* generic fallback —
+   Quarkus has no single persistence idiom. A CDI bean implementing
+   `AggregatePersistenceAware` (from [quarkus-support](./quarkus-support)) is required
+   per aggregate; the most specific generic type wins (`AggregatePersistenceResolver`,
+   Jandex-based).
+6. **Validation at build time:** `EnsureCollectedClassesAreBeansBuildStepProcessor`
+   fails the build if collected classes (workflow services, persistence
+   implementations) are not actual CDI beans.
+
 ## Hints
 
 ### Logging during tests

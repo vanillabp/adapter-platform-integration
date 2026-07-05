@@ -1,8 +1,67 @@
 ![Header](../../readme/vanillabp-headline.png)
 
-### SpringDataUtil versus AggregatePersistenceSupport
+# Spring Boot integration runtime
 
-TODO
+This module brings the VanillaBP SPI to life in Spring Boot and bridges to the
+platform-neutral [migration adapter](../../migration-adapter). It is wired up via
+Spring Boot auto-configuration (`META-INF/spring/...AutoConfiguration.imports`):
+
+1. `WorkflowModuleAutoConfiguration` — detects workflow modules and assigns
+   `@WorkflowService` beans to them.
+2. `JpaSpringDataUtilConfiguration` — JPA-based persistence support (only if JPA is on
+   the classpath and no custom `SpringDataUtil` bean exists).
+3. `SpringBootMigrationAdapterAutoConfiguration` — transforms Spring properties into
+   the core `MigrationAdapterProperties`, collects adapters and registers one
+   `ProcessService<A>` bean per workflow aggregate.
+4. `DeploymentAutoConfiguration` — deploys BPMN resources on startup and starts
+   workflow processing on `ApplicationReadyEvent`.
+
+Additionally, `WorkflowModulePropertiesEnvironmentPostProcessor` (registered in
+`spring.factories`) merges workflow-module-specific config files into the Spring
+`Environment` before regular config resources, so module properties take precedence
+over `application.*`.
+
+### Workflow module detection
+
+Workflow modules are declared by a `META-INF/workflow-module` marker file whose
+content is the workflow module ID. `@WorkflowService` classes are matched to a module
+by comparing the code-source URI of the class with the URI the marker file was loaded
+from. Services not matching any marker file belong to the *global* module (the whole
+application acting as a single workflow module) — only one global marker is allowed.
+
+### ProcessService beans
+
+`ProcessService<A>` beans are registered as `BeanDefinition`s (not instances) via a
+`BeanDefinitionRegistryPostProcessor`, using `ResolvableType` with the aggregate class
+as generic parameter, so generic autowiring (`ProcessService<Ride>`) works. Registering
+definitions instead of beans avoids circular dependencies between the
+`@WorkflowService` bean and its `ProcessService`. Each bean wraps a
+`MigrationProcessService` of the migration adapter which implements the actual
+behavior.
+
+### SpringDataUtil versus AggregatePersistenceAware
+
+The migration adapter accesses workflow aggregates through its
+`AggregatePersistenceAware` interface (save an aggregate, determine its ID). In Spring
+Boot there are two ways to provide it:
+
+1. **Custom bean:** The application (or an adapter) provides a bean implementing the
+   `AggregatePersistenceAware` interface from
+   [spring-boot-support](../spring-boot-support). If several candidates exist, the one
+   with the most specific generic aggregate type is chosen
+   (`AggregatePersistenceResolver`, based on inheritance distance).
+2. **Fallback via `SpringDataUtil`:** If no specific bean exists, the generic
+   `SpringDataUtilBasedAggregatePersistenceSupport` is used. It relies on the
+   `SpringDataUtil` abstraction for which two implementations exist:
+   - `JpaSpringDataUtil` (auto-configured if JPA is present): resolves the Spring Data
+     repository of the aggregate class, determines IDs via `PersistenceUnitUtil` and
+     unproxies Hibernate proxies.
+   - `MongoDbSpringDataUtil`: must be activated explicitly via
+     `@Import(MongoDbSpringDataUtilConfiguration.class)`.
+
+So `SpringDataUtil` is the Spring-Data-generic mechanism used *behind* the
+`AggregatePersistenceAware` abstraction, while a custom `AggregatePersistenceAware`
+bean is the extension point for any other persistence technology.
 
 ### Separating workflow module properties from application properties
 
