@@ -1,4 +1,4 @@
-package io.vanillabp.intergration.adapter.spi;
+package io.vanillabp.integration.adapter.spi;
 
 /**
  * This interface collects all methods necessary for two phase committed

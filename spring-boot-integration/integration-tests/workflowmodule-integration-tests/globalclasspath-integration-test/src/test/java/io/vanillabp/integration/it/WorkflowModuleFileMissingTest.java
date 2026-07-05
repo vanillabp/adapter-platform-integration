@@ -12,7 +12,7 @@ import org.springframework.core.io.DefaultResourceLoader;
 
 import io.vanillabp.integration.test.TestApplication;
 import io.vanillabp.integration.test.sample.SampleWorkflowService;
-import io.vanillabp.intergration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowModuleFileMissingTest {

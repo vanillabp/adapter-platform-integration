@@ -14,18 +14,18 @@ import io.vanillabp.adapter.dummy.springboot.deployment.DummyAdapterDeploymentCo
 import io.vanillabp.extension.dummy.springboot.wiring.DummyExtensionWiringConfiguration;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.deployment.DeploymentService;
+import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.deployment.SpringBootDeploymentService;
+import io.vanillabp.integration.extension.spi.ExtensionWiringService;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.sample.SampleWorkflowService;
+import io.vanillabp.integration.test.utils.CapturedOutput;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.springboot.SpringBootTestApplication;
 import io.vanillabp.integration.utils.config.JpaSpringDataUtilConfiguration;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.integration.workflowmodule.WorkflowModules;
-import io.vanillabp.intergration.adapter.spi.AdapterDeploymentService;
-import io.vanillabp.intergration.extension.spi.ExtensionWiringService;
-import io.vanillabp.intergration.test.utils.CapturedOutput;
-import io.vanillabp.intergration.test.utils.SuppressOutputExtension;
-import io.vanillabp.intergration.test.utils.springboot.SpringBootTestApplication;
 
 @ExtendWith(SuppressOutputExtension.class)
 public class DeploymentTest {

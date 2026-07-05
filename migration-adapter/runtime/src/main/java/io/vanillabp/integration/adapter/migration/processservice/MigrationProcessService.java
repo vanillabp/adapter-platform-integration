@@ -1,4 +1,4 @@
-package io.vanillabp.integration.adapter.migration.processervice;
+package io.vanillabp.integration.adapter.migration.processservice;
 
 import java.util.List;
 import java.util.Map;
@@ -6,9 +6,9 @@ import java.util.Map;
 import com.gruelbox.transactionoutbox.TransactionOutbox;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
-import io.vanillabp.intergration.adapter.spi.AggregatePersistenceAware;
-import io.vanillabp.intergration.adapter.spi.MigratableProcessService;
-import io.vanillabp.intergration.adapter.spi.MigratableProcessServicePhaseTwo;
+import io.vanillabp.integration.adapter.spi.AggregatePersistenceAware;
+import io.vanillabp.integration.adapter.spi.MigratableProcessService;
+import io.vanillabp.integration.adapter.spi.MigratableProcessServicePhaseTwo;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 

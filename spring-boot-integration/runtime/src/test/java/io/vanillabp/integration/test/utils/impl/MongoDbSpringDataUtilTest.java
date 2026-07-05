@@ -30,18 +30,18 @@ import org.testcontainers.utility.DockerImageName;
 import com.mongodb.ConnectionString;
 
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.impl.jpa.BaseEntity;
 import io.vanillabp.integration.test.utils.impl.mongodb.DerivedEntity;
 import io.vanillabp.integration.test.utils.impl.mongodb.Entity;
 import io.vanillabp.integration.test.utils.impl.mongodb.Entity2;
 import io.vanillabp.integration.test.utils.impl.mongodb.EntityRepository;
 import io.vanillabp.integration.test.utils.impl.mongodb.EntityWithoutRepository;
+import io.vanillabp.integration.test.utils.springboot.FullyQualifiedRepositoryBeanNameGenerator;
 import io.vanillabp.integration.utils.SpringDataUtil;
 import io.vanillabp.integration.utils.config.MongoDbSpringDataUtilConfiguration;
 import io.vanillabp.integration.utils.impl.MongoDbSpringDataUtil;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
-import io.vanillabp.intergration.test.utils.SuppressOutputExtension;
-import io.vanillabp.intergration.test.utils.springboot.FullyQualifiedRepositoryBeanNameGenerator;
 
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput

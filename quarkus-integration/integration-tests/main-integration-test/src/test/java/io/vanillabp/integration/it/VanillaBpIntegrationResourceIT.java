@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.quarkus.test.junit.QuarkusIntegrationTest;
-import io.vanillabp.intergration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 @QuarkusIntegrationTest
 @ExtendWith(SuppressOutputExtension.class)

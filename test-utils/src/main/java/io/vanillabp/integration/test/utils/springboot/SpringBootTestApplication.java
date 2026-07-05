@@ -1,4 +1,4 @@
-package io.vanillabp.intergration.test.utils.springboot;
+package io.vanillabp.integration.test.utils.springboot;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;

@@ -1,6 +1,6 @@
-package io.vanillabp.intergration.extension.spi;
+package io.vanillabp.integration.extension.spi;
 
-import io.vanillabp.intergration.adapter.spi.AdapterDeploymentService;
+import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 
 /**
  * An implementation is responsible for preparing the BPMN and wiring it with the business code.

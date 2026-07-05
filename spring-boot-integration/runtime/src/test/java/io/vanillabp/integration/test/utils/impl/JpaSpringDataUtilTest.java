@@ -18,6 +18,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.TestPropertySource;
 
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.impl.jpa.DerivedEntity;
 import io.vanillabp.integration.test.utils.impl.jpa.Entity;
 import io.vanillabp.integration.test.utils.impl.jpa.Entity2;
@@ -26,7 +27,6 @@ import io.vanillabp.integration.test.utils.impl.jpa.EntityWithoutRepository;
 import io.vanillabp.integration.utils.SpringDataUtil;
 import io.vanillabp.integration.utils.config.JpaSpringDataUtilConfiguration;
 import io.vanillabp.integration.utils.impl.JpaSpringDataUtil;
-import io.vanillabp.intergration.test.utils.SuppressOutputExtension;
 
 @DataJpaTest
 @ContextConfiguration(classes = JpaSpringDataUtilTest.JpaTestBootConfiguration.class)

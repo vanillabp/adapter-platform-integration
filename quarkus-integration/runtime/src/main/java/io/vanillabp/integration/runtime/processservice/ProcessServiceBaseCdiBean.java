@@ -3,7 +3,7 @@ package io.vanillabp.integration.runtime.processservice;
 import java.util.List;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
-import io.vanillabp.integration.adapter.migration.processervice.MigrationProcessService;
+import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.spi.process.ProcessService;
 import jakarta.annotation.PostConstruct;
@@ -71,7 +71,7 @@ public abstract class ProcessServiceBaseCdiBean<A> implements ProcessService<A> 
   }
 
   @SuppressWarnings("unchecked")
-  private io.vanillabp.intergration.adapter.spi.AggregatePersistenceAware<A> getAggregatePersistence() {
+  private io.vanillabp.integration.adapter.spi.AggregatePersistenceAware<A> getAggregatePersistence() {
 
     for (AggregatePersistenceAware<?> persistence : persistences) {
       if (getAggregatePersistenceClass().isAssignableFrom(persistence.getClass())) {

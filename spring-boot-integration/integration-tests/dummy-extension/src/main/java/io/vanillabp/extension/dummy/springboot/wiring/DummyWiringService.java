@@ -1,7 +1,7 @@
 package io.vanillabp.extension.dummy.springboot.wiring;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
-import io.vanillabp.intergration.extension.spi.ExtensionWiringService;
+import io.vanillabp.integration.extension.spi.ExtensionWiringService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 

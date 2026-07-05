@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 import io.vanillabp.adapter.dummy.springboot.DummyAdapterConfiguration;
-import io.vanillabp.intergration.adapter.spi.AdapterDeploymentService;
+import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 

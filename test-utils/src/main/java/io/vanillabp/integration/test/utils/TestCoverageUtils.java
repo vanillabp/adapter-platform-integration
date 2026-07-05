@@ -1,4 +1,4 @@
-package io.vanillabp.intergration.test.utils;
+package io.vanillabp.integration.test.utils;
 
 import java.util.LinkedList;
 import java.util.List;

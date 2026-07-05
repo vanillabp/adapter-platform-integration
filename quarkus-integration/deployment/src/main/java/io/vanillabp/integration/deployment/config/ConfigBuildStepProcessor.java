@@ -12,11 +12,11 @@ import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ObjectSubstitutionBuildItem;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.deployment.processservice.VanillaBpMigratableProcessServiceBuildItem;
 import io.vanillabp.integration.deployment.workflowmodule.VanillaBpWorkflowModulesBuildItem;
 import io.vanillabp.integration.deployment.workflowmodule.WorkflowModuleSpecificConfigBuilderBuildItem;
 import io.vanillabp.integration.runtime.config.MigrationAdapterPropertiesRecorder;
-import io.vanillabp.intergration.adapter.spi.MigratableProcessService;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**

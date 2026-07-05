@@ -39,8 +39,8 @@ import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
 import io.vanillabp.integration.adapter.migration.deployment.DeploymentService;
-import io.vanillabp.intergration.adapter.spi.AdapterDeploymentService;
-import io.vanillabp.intergration.extension.spi.ExtensionWiringService;
+import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
+import io.vanillabp.integration.extension.spi.ExtensionWiringService;
 
 @ExtendWith(MockitoExtension.class)
 public class DeploymentServiceTest {

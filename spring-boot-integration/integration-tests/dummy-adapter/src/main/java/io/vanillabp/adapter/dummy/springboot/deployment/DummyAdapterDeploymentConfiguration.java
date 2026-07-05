@@ -11,10 +11,10 @@ import org.springframework.context.annotation.Configuration;
 
 import io.vanillabp.adapter.dummy.springboot.DummyAdapterConfiguration;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.workflowmodule.WorkflowModules;
-import io.vanillabp.intergration.adapter.spi.AdapterDeploymentService;
 
 @Configuration
 @AutoConfiguration(after = SpringBootMigrationAdapterAutoConfiguration.class)

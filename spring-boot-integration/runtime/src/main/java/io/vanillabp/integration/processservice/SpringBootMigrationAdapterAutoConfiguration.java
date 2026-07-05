@@ -20,7 +20,8 @@ import org.springframework.core.ResolvableType;
 
 import io.vanillabp.integration.adapter.AdapterConfigurationBase;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
-import io.vanillabp.integration.adapter.migration.processervice.MigrationProcessService;
+import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
+import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.config.SpringBootMigrationAdapterProperties;
 import io.vanillabp.integration.config.SpringBootMigrationAdapterTransformer;
 import io.vanillabp.integration.spi.aggregate.AggregatePersistenceAware;
@@ -30,7 +31,6 @@ import io.vanillabp.integration.utils.impl.SpringDataUtilBasedAggregatePersisten
 import io.vanillabp.integration.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.integration.workflowmodule.WorkflowModules;
-import io.vanillabp.intergration.adapter.spi.MigratableProcessService;
 import io.vanillabp.spi.service.WorkflowService;
 import lombok.extern.slf4j.Slf4j;
 

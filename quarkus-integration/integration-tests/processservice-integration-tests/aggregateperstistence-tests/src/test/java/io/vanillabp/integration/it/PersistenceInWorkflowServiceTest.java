@@ -1,7 +1,7 @@
 package io.vanillabp.integration.it;
 
-import static io.vanillabp.intergration.test.utils.TestCoverageUtils.quarkusProdModeTestDefaults;
-import static io.vanillabp.intergration.test.utils.TestCoverageUtils.testCoverageJavaAgent;
+import static io.vanillabp.integration.test.utils.TestCoverageUtils.quarkusProdModeTestDefaults;
+import static io.vanillabp.integration.test.utils.TestCoverageUtils.testCoverageJavaAgent;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -10,7 +10,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import io.quarkus.test.QuarkusProdModeTest;
 import io.vanillabp.integration.test.Aggregate;
 import io.vanillabp.integration.test.WorkflowServiceAndAggregatePersistence;
-import io.vanillabp.intergration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 @ExtendWith(SuppressOutputExtension.class)
 public class PersistenceInWorkflowServiceTest {

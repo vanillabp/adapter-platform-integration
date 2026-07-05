@@ -8,7 +8,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusDevModeTest;
 import io.restassured.RestAssured;
-import io.vanillabp.intergration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 @ExtendWith(SuppressOutputExtension.class)
 public class ConfigWatcherInDevModeIT {

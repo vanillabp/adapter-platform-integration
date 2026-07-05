@@ -11,7 +11,7 @@ import io.vanillabp.integration.test.TestApplication;
 import io.vanillabp.integration.test.multibpmn.Aggregate1;
 import io.vanillabp.integration.test.multibpmn.Aggregate2;
 import io.vanillabp.integration.test.sample.Aggregate;
-import io.vanillabp.intergration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.ProcessService;
 
 @SpringBootTest(classes = TestApplication.class)

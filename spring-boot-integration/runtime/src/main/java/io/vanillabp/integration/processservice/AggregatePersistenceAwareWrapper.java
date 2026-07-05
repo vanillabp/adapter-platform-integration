@@ -5,7 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.Delegate;
 
 @RequiredArgsConstructor
-public class AggregatePersistenceAwareWrapper<A> implements io.vanillabp.intergration.adapter.spi.AggregatePersistenceAware<A> {
+public class AggregatePersistenceAwareWrapper<A> implements io.vanillabp.integration.adapter.spi.AggregatePersistenceAware<A> {
 
   @Delegate
   private final AggregatePersistenceAware<A> delegate;

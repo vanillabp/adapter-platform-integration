@@ -10,8 +10,8 @@ import java.util.Optional;
 import java.util.function.Function;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
-import io.vanillabp.intergration.adapter.spi.AdapterDeploymentService;
-import io.vanillabp.intergration.extension.spi.ExtensionWiringService;
+import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
+import io.vanillabp.integration.extension.spi.ExtensionWiringService;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;

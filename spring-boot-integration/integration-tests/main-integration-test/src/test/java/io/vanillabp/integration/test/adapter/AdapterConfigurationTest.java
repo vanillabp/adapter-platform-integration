@@ -15,9 +15,9 @@ import io.vanillabp.integration.processservice.ProcessServiceSpringBean;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.sample.Aggregate;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.utils.config.JpaSpringDataUtilConfiguration;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
-import io.vanillabp.intergration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.ProcessService;
 
 @ExtendWith(SuppressOutputExtension.class)
