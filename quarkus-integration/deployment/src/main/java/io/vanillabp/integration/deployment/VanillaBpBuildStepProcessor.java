@@ -1,30 +1,28 @@
 package io.vanillabp.integration.deployment;
 
-import java.lang.reflect.Method;
 import java.net.URI;
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
 
 import org.jboss.jandex.AnnotationTransformation;
-import org.jboss.jandex.DotName;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.AnnotationsTransformerBuildItem;
-import io.quarkus.arc.deployment.InterceptorBindingRegistrarBuildItem;
-import io.quarkus.arc.processor.InterceptorBindingRegistrar;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.builditem.AdditionalApplicationArchiveMarkerBuildItem;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.ObjectSubstitutionBuildItem;
 import io.quarkus.deployment.builditem.RunTimeConfigBuilderBuildItem;
 import io.quarkus.deployment.builditem.StaticInitConfigBuilderBuildItem;
 import io.vanillabp.integration.runtime.config.VanillaBpConfigBuilder;
+import io.vanillabp.integration.runtime.processservice.EventualConsistencyTransactionSupport;
 import io.vanillabp.integration.runtime.processservice.TransactionInterceptor;
+import io.vanillabp.integration.runtime.processservice.VanillaBpTaskInterception;
 import io.vanillabp.integration.runtime.util.UriSubstitute;
 import io.vanillabp.integration.runtime.util.UriSubstitution;
+import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.spi.service.WorkflowTask;
+import io.vanillabp.spi.service.WorkflowTasks;
 
 /**
  * Main VanillaBP extension processor, responsible for processing configuration
@@ -46,6 +44,23 @@ public class VanillaBpBuildStepProcessor {
   FeatureBuildItem buildExtensionFeature() {
 
     return new FeatureBuildItem(FEATURE);
+
+  }
+
+  /**
+   * Registers the workflow-module descriptor as an application-archive marker. This way
+   * workflow-module JARs are treated as application archives even if they do not
+   * provide a Jandex index (e.g. Gradle modules or JARs containing only the descriptor
+   * and BPMS resources). A Jandex index remains necessary only for discovery of
+   * {@link io.vanillabp.spi.service.WorkflowService} annotated classes inside
+   * sub-modules, not for workflow-module detection itself.
+   *
+   * @return The additional application-archive marker build item
+   */
+  @BuildStep
+  AdditionalApplicationArchiveMarkerBuildItem workflowModuleArchiveMarker() {
+
+    return new AdditionalApplicationArchiveMarkerBuildItem(WorkflowModule.METAINF_WORKFLOWMODULE);
 
   }
 
@@ -80,51 +95,54 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
-   * Build step for introducing {@link TransactionInterceptor} for all the method's
+   * Build step for introducing {@link TransactionInterceptor} for all the methods
    * annotated by @{@link WorkflowTask}.
+   * <p>
+   * The annotation @{@link WorkflowTask} is not an interceptor binding. Additionally, it
+   * is repeatable: a method carrying two or more <code>&#64;WorkflowTask</code>
+   * annotations only carries the container annotation @{@link WorkflowTasks} in the
+   * Jandex index, so an interceptor binding registered for <code>&#64;WorkflowTask</code>
+   * would silently not match such methods. Therefore, the internal interceptor binding
+   * @{@link VanillaBpTaskInterception} (used by {@link TransactionInterceptor}) is added
+   * to every method carrying <code>&#64;WorkflowTask</code> or
+   * <code>&#64;WorkflowTasks</code>.
    *
-   * @param annotationsTransformer {@link TransactionInterceptor}'s annotations need be transformed
-   * @param interceptorBindingRegistrarProducer @{@link WorkflowTask} needs to be registered manually
+   * @param annotationsTransformer Used to add the interceptor binding to workflow task methods
    * @return The additional {@link TransactionInterceptor} bean
    */
   @BuildStep
   AdditionalBeanBuildItem buildTransactionInterceptors(
-      final BuildProducer<AnnotationsTransformerBuildItem> annotationsTransformer,
-      final BuildProducer<InterceptorBindingRegistrarBuildItem> interceptorBindingRegistrarProducer) {
+      final BuildProducer<AnnotationsTransformerBuildItem> annotationsTransformer) {
 
-    // Typically an Interceptor needs an Annotation for interceptor binding. Since the
-    // annotation @WorkflowTask it is used for is not an interceptor-binding annotation,
-    // it needs to be added programmatically:
     annotationsTransformer.produce(new AnnotationsTransformerBuildItem(AnnotationTransformation
-        .forClasses()
-        .whenClass(DotName.createSimple(TransactionInterceptor.class.getName()))
-        .transform(t -> t.add(WorkflowTask.class))));
+        .forMethods()
+        .whenAnyMatch(WorkflowTask.class, WorkflowTasks.class)
+        .transform(t -> t.add(VanillaBpTaskInterception.class))));
 
-    final var annotationMethods = Arrays
-        .stream(WorkflowTask.class.getDeclaredMethods())
-        .map(Method::getName)
-        .collect(Collectors.toSet());
-    // Typically an Interceptor needs an Annotation for interceptor binding. Since the
-    // annotation @WorkflowTask it is used for is not an interceptor-binding annotation,
-    // the interceptor binding needs to be added programmatically:
-    interceptorBindingRegistrarProducer.produce(new InterceptorBindingRegistrarBuildItem(
-        new InterceptorBindingRegistrar() {
-          @Override
-          public List<InterceptorBinding> getAdditionalBindings() {
-            return List.of(InterceptorBinding.of(
-                WorkflowTask.class,
-                // all annotation-values need to be ignored to run the interceptor
-                // regardless of the value of the annotation
-                annotationMethods
-            ));
-          }
-        }
-    ));
-
-    // Beans of the runtime package need to be registered as additional bean to the index:
+    // Classes of the runtime module need to be registered as additional beans to become
+    // part of the bean archive index. This also registers @VanillaBpTaskInterception as
+    // an interceptor binding since the annotation is meta-annotated by @InterceptorBinding.
     return AdditionalBeanBuildItem
         .builder()
-        .addBeanClass(TransactionInterceptor.class)
+        .addBeanClasses(TransactionInterceptor.class, VanillaBpTaskInterception.class)
+        .setUnremovable() // don't remove, since it is used under the hoods
+        .build();
+
+  }
+
+  /**
+   * Registers {@link EventualConsistencyTransactionSupport} as a CDI bean. It is marked
+   * unremovable because it is not injected by application code but used by the VanillaBP
+   * runtime under the hoods.
+   *
+   * @return The additional {@link EventualConsistencyTransactionSupport} bean
+   */
+  @BuildStep
+  AdditionalBeanBuildItem buildEventualConsistencyTransactionSupport() {
+
+    return AdditionalBeanBuildItem
+        .builder()
+        .addBeanClass(EventualConsistencyTransactionSupport.class)
         .setUnremovable() // don't remove, since it is used under the hoods
         .build();
 

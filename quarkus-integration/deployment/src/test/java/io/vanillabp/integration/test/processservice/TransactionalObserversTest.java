@@ -32,7 +32,7 @@ public class TransactionalObserversTest {
           jar) -> jar
               .addClass(DummyAdapters.class)                          // necessary due to anonymous class in DummyAdapters
               .addAsResource("application.yaml")                   // load sample application properties
-              .addAsResource("META-INF/workflow-module")          // define workflow module at global classpath
+              .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module")          // define workflow module at global classpath
               .addClasses(ObservingBean.class, Actions.class))
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter()); // add mocked adapter
 

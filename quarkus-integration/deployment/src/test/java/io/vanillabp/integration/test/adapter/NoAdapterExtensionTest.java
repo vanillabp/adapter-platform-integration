@@ -20,7 +20,7 @@ public class NoAdapterExtensionTest {
           .addPackage("io.vanillabp.integration.test.samples.sample")  // load sample application classes
           // load sample application properties
           .addAsResource("application.yaml")
-          .addAsResource(WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
+          .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
           .addClass(DummyAdapters.class))                              // necessary due to anonymous class in DummyAdapters
       .assertException(exceptionHavingMessage(IllegalStateException.class,
           "No extensions found with capabilities 'io.vanillabp.adapter.*'! Add Quarkus extensions providing VanillaBP adapters."));

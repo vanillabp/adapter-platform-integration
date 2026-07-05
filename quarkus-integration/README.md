@@ -45,8 +45,13 @@ as possible at **build time**, following Quarkus' extension philosophy:
 
 1. **Code analysis via Jandex:** `@WorkflowService` classes and
    `AggregatePersistenceAware` implementations are found in the Jandex index
-   (`ProcessServiceBuildStepProcessor`). That is why workflow sub-modules must be
-   indexed using the `jandex-maven-plugin`.
+   (`ProcessServiceBuildStepProcessor`). That is why workflow sub-modules containing
+   such classes must be indexed using the `jandex-maven-plugin`. The Jandex index is
+   *not* needed for workflow-module detection itself: the `META-INF/workflow-module`
+   descriptor is registered as an additional application-archive marker
+   (`AdditionalApplicationArchiveMarkerBuildItem`), so JARs containing only the
+   descriptor and BPMS resources (or JARs built without the plugin, e.g. by Gradle)
+   are detected as well.
 2. **Bean generation via Gizmo:** For each workflow aggregate a
    `ProcessService_<Aggregate>` CDI bean class extending `ProcessServiceBaseCdiBean<A>`
    is generated as bytecode at build time — the Quarkus counterpart of Spring's

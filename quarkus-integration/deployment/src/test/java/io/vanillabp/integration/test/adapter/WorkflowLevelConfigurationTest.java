@@ -25,7 +25,7 @@ public class WorkflowLevelConfigurationTest {
           .addPackage("io.vanillabp.integration.test.samples.sample")  // load sample application classes
           // load sample application properties incl. workflow-level properties
           .addAsResource("workflow-level-configuration/application.yaml", "application.yaml")
-          .addAsResource(WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
+          .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
           .addClass(DummyAdapters.class)                              // necessary due to anonymous class in DummyAdapters
           .addClass(TestMigratableProcessService.class))            // process service of the mocked adapter
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter())     // add mocked adapter

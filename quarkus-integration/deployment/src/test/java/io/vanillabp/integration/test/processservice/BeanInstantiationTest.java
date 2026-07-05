@@ -26,7 +26,7 @@ public class BeanInstantiationTest {
           .addPackage("io.vanillabp.integration.test.samples.sample")  // load sample application classes
           .addPackage("io.vanillabp.integration.test.samples.sample2") // load sample application classes
           .addAsResource("application.yaml")                   // load sample application properties
-          .addAsResource("META-INF/workflow-module"))          // define workflow module at global classpath
+          .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))          // define workflow module at global classpath
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter()); // add mocked adapter
 
   @Inject

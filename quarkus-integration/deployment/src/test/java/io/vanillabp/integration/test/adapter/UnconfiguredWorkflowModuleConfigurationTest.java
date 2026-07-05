@@ -20,7 +20,7 @@ public class UnconfiguredWorkflowModuleConfigurationTest {
           .addPackage("io.vanillabp.integration.test.samples.sample")  // load sample application classes
           // load sample application properties
           .addAsResource("unconfigured-workflow-module/application.yaml", "application.yaml")
-          .addAsResource(WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
+          .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
           .addClass(DummyAdapters.class))                              // necessary due to anonymous class in DummyAdapters
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter())     // add mocked adapter
       .assertException(exceptionHavingMessage(IllegalStateException.class,

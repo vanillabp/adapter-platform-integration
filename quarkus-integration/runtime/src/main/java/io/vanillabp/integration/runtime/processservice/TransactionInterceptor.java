@@ -1,5 +1,6 @@
 package io.vanillabp.integration.runtime.processservice;
 
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import jakarta.annotation.Priority;
@@ -8,25 +9,31 @@ import jakarta.interceptor.Interceptor;
 import jakarta.interceptor.InvocationContext;
 
 /**
- * Typically an Interceptor needs an Annotation for interceptor binding. Since the
- * annotation @WorkflowTask it is used for binding which is not an interceptor binding
- * annotation, the missing annotation will be added during deployment by
- * VanillaBpIntegrationProcessor. Therefore, &quot;CdiInterceptorInspection&quot;
- * warnings have to be suppressed.
+ * Interceptor applied to all workflow task methods (methods annotated by
+ * @{@link io.vanillabp.spi.service.WorkflowTask}). The interceptor binding
+ * @{@link VanillaBpTaskInterception} is added to those methods at build time by an
+ * annotation transformer of the deployment module, since <code>&#64;WorkflowTask</code>
+ * itself is not an interceptor binding.
+ * <p>
+ * <strong>Note:</strong> This interceptor is currently a placeholder for transaction
+ * handling to be implemented later. For now it only logs the invocation of workflow
+ * task methods.
  */
-@SuppressWarnings("CdiInterceptorInspection")
+@VanillaBpTaskInterception
 @Interceptor
 @Priority(Interceptor.Priority.PLATFORM_AFTER)
 public class TransactionInterceptor {
+
+  private static final Logger log = LoggerFactory.getLogger(TransactionInterceptor.class);
 
   @AroundInvoke
   @SuppressWarnings("unused")
   public Object aroundInvokeCheckForTransaction(
       final InvocationContext invocationContext) throws Exception {
 
-    LoggerFactory.getLogger(this.getClass()).info("Before {}", invocationContext.getMethod().getName());
+    log.info("Before {}", invocationContext.getMethod().getName());
     final var result = invocationContext.proceed();
-    LoggerFactory.getLogger(this.getClass()).info("After {}", invocationContext.getMethod().getName());
+    log.info("After {}", invocationContext.getMethod().getName());
     return result;
 
   }

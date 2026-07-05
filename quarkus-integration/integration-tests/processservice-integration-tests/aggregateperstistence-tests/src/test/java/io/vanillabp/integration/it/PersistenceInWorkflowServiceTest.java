@@ -21,7 +21,7 @@ public class PersistenceInWorkflowServiceTest {
           .addAsResource("application.yaml")
           .addClass(WorkflowServiceAndAggregatePersistence.class)
           .addClass(Aggregate.class)
-          .addAsResource("META-INF/workflow-module"))
+          .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
       // JVM args needed for tracking coverage. Check pom.xml for <systemPropertyVariables> tag
       .setJVMArgs(testCoverageJavaAgent(quarkusProdModeTestDefaults()));
 

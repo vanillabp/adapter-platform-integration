@@ -16,5 +16,6 @@
     <module>without-workflow-module-file</module>
     <module>with-workflow-module-file</module>
     <module>workflow-module-multiple-bpmns</module>
+    <module>workflow-module-without-index</module>
   </modules>
 </project>

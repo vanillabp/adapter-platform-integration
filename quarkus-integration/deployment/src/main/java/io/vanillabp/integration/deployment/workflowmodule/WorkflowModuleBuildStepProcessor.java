@@ -6,7 +6,6 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -14,8 +13,6 @@ import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import org.jboss.jandex.ClassInfo;
 
 import io.quarkus.deployment.GeneratedClassGizmoAdaptor;
 import io.quarkus.deployment.annotations.BuildProducer;
@@ -57,13 +54,10 @@ public class WorkflowModuleBuildStepProcessor {
   public static final int PROPERTIES_CONFIGFILE_ORDINAL = 251;
 
   /**
-   * Cache to accelerate the augmentation phase.
-   */
-  private static final Map<ClassInfo, WorkflowModule> resolvedWorkflowModuleIds = new HashMap<>();
-
-  /**
    * Finds all workflow modules specified by <code>META-INF/workflow-module</code> files in their
-   * Maven/Gradle module.
+   * Maven/Gradle module. The result is keyed by the archive holding the descriptor since the
+   * same workflow module may be provided by more than one archive (workflow module equality
+   * is based on the module's ID).
    *
    * @param applicationArchivesBuildItem The archives part of this Quarkus build
    * @return A build item holding meta-information of all workflow modules
@@ -84,19 +78,16 @@ public class WorkflowModuleBuildStepProcessor {
                 // and read them
                 .readWorkflowModuleDescriptor(sourceUri)
                 // to build a WorkflowModule object
-                .map(id -> Map.entry(WorkflowModule
+                .map(id -> Map.entry(archive, WorkflowModule
                     .builder()
                     .id(id)
                     .sourceUri(sourceUri)
                     .global(archive.equals(applicationArchivesBuildItem.getRootArchive()))
-                    .build(), archive)))
+                    .build())))
             .stream())
         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-    return VanillaBpWorkflowModulesBuildItem
-        .builder()
-        .workflowModules(workflowModules)
-        .build();
+    return new VanillaBpWorkflowModulesBuildItem(workflowModules);
 
   }
 
@@ -315,7 +306,6 @@ public class WorkflowModuleBuildStepProcessor {
 
         final var workflowModuleIds = workflowModules
             .getWorkflowModules()
-            .keySet()
             .stream()
             .map(WorkflowModule::getId)
             .toList();
@@ -353,11 +343,17 @@ public class WorkflowModuleBuildStepProcessor {
    * Watches module-specific configuration files for hot deployment in a workflow application.
    * This method identifies and monitors all possible configuration files (properties or YAML)
    * associated with workflow modules as defined in the build process, scanning them from the
-   * application archives.
+   * application archives. Both locations loaded by the config source providers are watched:
+   * files at the classpath root (<code>{id}[-{profile}].{ext}</code>) and files inside a
+   * subdirectory named after the workflow module ID
+   * (<code>{id}/{id}[-{profile}].{ext}</code>). Therefore, files are registered using their
+   * path relative to the archive root, not just their file name.
    *
    * @param allWorkflowModules A {@link VanillaBpWorkflowModulesBuildItem} containing information about all workflow modules.
    * @param applicationArchives An {@link ApplicationArchivesBuildItem} containing the archives to be scanned for configuration files.
    * @param watchedFiles A {@link BuildProducer} that collects {@link HotDeploymentWatchedFileBuildItem} instances for hot deployment purposes.
+   * @see WorkflowModuleSpecificPropertiesConfigSourceProvider#getConfigSources(ClassLoader)
+   * @see WorkflowModuleSpecificYamlConfigSourceProvider#getConfigSources(ClassLoader)
    */
   @BuildStep
   void watchWorkflowModuleSpecificConfigFiles(
@@ -365,7 +361,7 @@ public class WorkflowModuleBuildStepProcessor {
       final ApplicationArchivesBuildItem applicationArchives,
       final BuildProducer<HotDeploymentWatchedFileBuildItem> watchedFiles) {
 
-    // determine all filenames possible
+    // determine all relative paths possible
 
     final var propertiesFileExtensions = new WorkflowModuleSpecificPropertiesConfigSourceProvider(
         "any", -1)
@@ -380,13 +376,14 @@ public class WorkflowModuleBuildStepProcessor {
             Arrays.stream(propertiesFileExtensions),
             Arrays.stream(yamlFileExtensions))
         .collect(Collectors.joining("|"));
-    final var filenamePatterns = allWorkflowModules
+    final var relativePathPatterns = allWorkflowModules
         .getWorkflowModules()
-        .keySet()
         .stream()
         .map(WorkflowModule::getId)
-        // to build a regex pattern "id*.(?:extension1|extension2)"
-        .map(id -> "%s.*\\.(?:%s)".formatted(id, extensionPattern))
+        .map(Pattern::quote)
+        // to build regex patterns matching "id[-profile].(extension1|extension2)" at the
+        // classpath root as well as inside a subdirectory named after the workflow module ID
+        .map(id -> "(?:%s/)?%s[^/]*\\.(?:%s)".formatted(id, id, extensionPattern))
         .map(Pattern::compile)
         .toList();
 
@@ -397,91 +394,13 @@ public class WorkflowModuleBuildStepProcessor {
         // traverse all archives
         .forEach(archive -> archive
             .accept(openPathTree -> openPathTree
-                .walk(visit -> filenamePatterns.
-                // and check each file to match one of the patterns
+                .walk(visit -> relativePathPatterns.
+                // and check each file's relative path to match one of the patterns
                     forEach(pattern -> Optional
-                        .ofNullable(visit.getPath())
-                        .map(Path::getFileName)
-                        .map(Path::toString)
-                        .filter(filename -> pattern.matcher(filename).matches())
+                        .ofNullable(visit.getRelativePath("/"))
+                        .filter(relativePath -> pattern.matcher(relativePath).matches())
                         .map(HotDeploymentWatchedFileBuildItem::new)
                         .ifPresent(watchedFiles::produce)))));
-
-  }
-
-  /**
-   * Determines the workflow module ID for a given {@link io.vanillabp.spi.process.ProcessService} class.
-   *
-   * @param workflowModulesFound Information about all workflow modules found in the project
-   * @param applicationArchivesBuildItem Information about All archives (JARs and directories) of the project
-   * @param serviceClass The {@link io.vanillabp.spi.process.ProcessService} class
-   * @return The workflow module ID
-   */
-  public static String getWorkflowModuleId(
-      final VanillaBpWorkflowModulesBuildItem workflowModulesFound,
-      final ApplicationArchivesBuildItem applicationArchivesBuildItem,
-      final ClassInfo serviceClass) {
-
-    final var knownWorkflowModule = resolvedWorkflowModuleIds.get(serviceClass);
-    if (knownWorkflowModule != null) {
-      return knownWorkflowModule.getId();
-    }
-
-    // load workflow module ID from META-INF/workflow-module of the same JAR
-    // the workflow service class belongs to
-
-    final var containingArchive = applicationArchivesBuildItem.containingArchive(serviceClass.name());
-    final var workflowModuleInSameArchive = workflowModulesFound
-        .getWorkflowModules()
-        .entrySet()
-        .stream()
-        .filter(entry -> entry.getValue().equals(containingArchive))
-        .findFirst()
-        .map(Map.Entry::getKey);
-    if (workflowModuleInSameArchive.isPresent()) {
-      final var workflowModule = workflowModuleInSameArchive.get();
-      resolvedWorkflowModuleIds.put(serviceClass, workflowModule);
-      return workflowModule.getId();
-    }
-
-    // load workflow module ID from META-INF/workflow-module of the Java module JAR
-    // the workflow service class belongs to
-    // ==== NOT YET SUPPORTED ====
-    /*
-    if (serviceClass.module() != null) {
-      serviceClass.module().moduleInfoClass()
-      ....
-    }
-     */
-
-    // load workflow module ID from META-INF/workflow-module in classpath
-    // (this is suitable if the entire application is one workflow module):
-
-    final var rootArchive = applicationArchivesBuildItem.getRootArchive();
-    final var workflowModuleInRootArchive = workflowModulesFound
-        .getWorkflowModules()
-        .entrySet()
-        .stream()
-        .filter(entry -> entry.getValue().equals(rootArchive))
-        .findFirst()
-        .map(Map.Entry::getKey);
-    if (workflowModuleInRootArchive.isPresent()) {
-      final var workflowModule = workflowModuleInRootArchive.get();
-      resolvedWorkflowModuleIds.put(serviceClass, workflowModule);
-      return workflowModule.getId();
-    }
-
-    throw new IllegalStateException(
-        """
-            No workflow module descriptor '%s' was found in any valid location:
-              - in JAR/directory of class '%s'
-              - in JAR/directory of Java module (%s) of class '%s'
-              - in global classpath"""
-            .formatted(
-                WorkflowModule.METAINF_WORKFLOWMODULE,
-                serviceClass.name(),
-                serviceClass.module() == null ? "if defined" : serviceClass.module().name(),
-                serviceClass.name()));
 
   }
 

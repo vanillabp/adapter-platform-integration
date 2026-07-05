@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_NoIndexWorkflow" targetNamespace="http://vanillabp.io/tests/no-index-module">
+  <bpmn:process id="NoIndexWorkflow" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1"/>
+  </bpmn:process>
+</bpmn:definitions>

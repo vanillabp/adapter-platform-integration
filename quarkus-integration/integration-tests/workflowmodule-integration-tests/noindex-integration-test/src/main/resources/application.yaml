@@ -1,0 +1,4 @@
+vanillabp:
+  adapters:
+    test:
+      type: dummy

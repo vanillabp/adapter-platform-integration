@@ -54,7 +54,7 @@ public class ConfigBuildStepProcessor {
     // check for consistent configuration
     final var migrationAdapterProperties = migrationAdapterPropertiesRecorder.recordMigrationProperties(
         new HashSet<>(capabilities.getCapabilities()), // pass items to a serializable kind of set
-        new HashSet<>(workflowModulesFound.getWorkflowModules().keySet()), // pass items to a serializable kind of set
+        new HashSet<>(workflowModulesFound.getWorkflowModules()), // pass items to a serializable kind of set
         adapterTypesOfProcessServicesProvidedByAdapters);
 
     // build properties as a CDI bean for injection into generated ProcessService beans

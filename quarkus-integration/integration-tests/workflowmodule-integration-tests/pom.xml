@@ -15,5 +15,6 @@
   <modules>
     <module>globalclasspath-integration-test</module>
     <module>submodule-integration-test</module>
+    <module>noindex-integration-test</module>
   </modules>
 </project>

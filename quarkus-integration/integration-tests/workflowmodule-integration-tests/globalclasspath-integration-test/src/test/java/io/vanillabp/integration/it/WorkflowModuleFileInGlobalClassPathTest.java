@@ -17,7 +17,7 @@ public class WorkflowModuleFileInGlobalClassPathTest {
   static final QuarkusProdModeTest prodModeTest = new QuarkusProdModeTest()
       .withApplicationRoot(jar -> jar
           .addAsResource("application.yaml")
-          .addAsResource("META-INF/workflow-module"))
+          .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
       // JVM args needed for tracking coverage. Check pom.xml for systemPropertyVariables
       .setJVMArgs(testCoverageJavaAgent(quarkusProdModeTestDefaults()));
 

@@ -1,30 +1,64 @@
 package io.vanillabp.integration.deployment.validation;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
-import org.jboss.jandex.DotName;
-import org.jboss.jandex.IndexView;
-
-import io.quarkus.arc.deployment.BeanRegistrationPhaseBuildItem;
+import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.arc.deployment.ValidationPhaseBuildItem;
 import io.quarkus.arc.deployment.ValidationPhaseBuildItem.ValidationErrorBuildItem;
-import io.quarkus.arc.processor.BeanInfo;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 
+/**
+ * Validates that classes collected by other build steps (e.g. workflow services or
+ * aggregate persistence implementations) are actual CDI beans at runtime.
+ */
 public class EnsureCollectedClassesAreBeansBuildStepProcessor {
 
+  /**
+   * The classes collected are not necessarily injected by application code but looked up
+   * dynamically at runtime. This build step prevents ArC from removing them as unused
+   * beans (which would also cause false positives in
+   * {@link #ensureCollectedClassesAreBeans(ValidationPhaseBuildItem, List, BuildProducer)}
+   * since removed beans are not part of the validation context any more).
+   *
+   * @param classIsBeanValidationBuildItems The classes collected by other build steps
+   * @param unremovableBeans Producer for unremovable-bean build items
+   */
+  @BuildStep
+  void preserveCollectedBeans(
+      final List<EnsureClassIsBeanValidationBuildItem> classIsBeanValidationBuildItems,
+      final BuildProducer<UnremovableBeanBuildItem> unremovableBeans) {
+
+    if (classIsBeanValidationBuildItems.isEmpty()) {
+      return;
+    }
+    unremovableBeans.produce(UnremovableBeanBuildItem
+        .beanTypes(classIsBeanValidationBuildItems
+            .stream()
+            .map(EnsureClassIsBeanValidationBuildItem::getClassName)
+            .collect(Collectors.toSet())));
+
+  }
+
+  /**
+   * Checks each collected class during ArC's validation phase, the documented hook for
+   * custom bean validations (in contrast to the bean-registration phase, synthetic beans
+   * are visible here as well). A class passes the check if any bean's set of bean types
+   * contains the class. ArC's computed bean types are used on purpose: they respect
+   * restrictions like {@link jakarta.enterprise.inject.Typed}.
+   *
+   * @param validationPhase The ArC validation phase
+   * @param classIsBeanValidationBuildItems The classes collected by other build steps
+   * @param validationErrors Producer for validation errors failing the build
+   */
   @BuildStep
   void ensureCollectedClassesAreBeans(
-      final BeanRegistrationPhaseBuildItem beanRegistrationPhase,
+      final ValidationPhaseBuildItem validationPhase,
       final List<EnsureClassIsBeanValidationBuildItem> classIsBeanValidationBuildItems,
       final BuildProducer<ValidationErrorBuildItem> validationErrors) {
 
-    final var index = beanRegistrationPhase
-        .getBeanProcessor()
-        .getBeanDeployment()
-        .getBeanArchiveIndex();
-    final var beans = beanRegistrationPhase
+    final var beans = validationPhase
         .getContext()
         .beans()
         .stream()
@@ -33,10 +67,14 @@ public class EnsureCollectedClassesAreBeansBuildStepProcessor {
     classIsBeanValidationBuildItems
         .forEach(buildItem -> {
           final var requiredType = buildItem.getClassName();
-          final var found = beans.stream()
-              .anyMatch(bean -> isBeanAssignableTo(bean, requiredType, index));
+          final var found = beans
+              .stream()
+              .anyMatch(bean -> bean
+                  .getTypes()
+                  .stream()
+                  .anyMatch(beanType -> beanType.name().equals(requiredType)));
           if (!found) {
-            validationErrors.produce(new ValidationPhaseBuildItem.ValidationErrorBuildItem(
+            validationErrors.produce(new ValidationErrorBuildItem(
                 new IllegalStateException(
                     """
                         Class
@@ -49,60 +87,6 @@ public class EnsureCollectedClassesAreBeansBuildStepProcessor {
           }
         });
 
-  }
-
-  private boolean isBeanAssignableTo(
-      final BeanInfo bean,
-      final DotName requiredType,
-      final IndexView index) {
-
-    final var beanClass = bean.getBeanClass();
-    if (beanClass.equals(requiredType)) {
-      return true;
-    }
-
-    final var classInfo = index.getClassByName(beanClass);
-    if (classInfo == null) {
-      return false;
-    }
-
-    // Interfaces prüfen
-    for (final var iface : classInfo.interfaceNames()) {
-      if (iface.equals(requiredType)) {
-        return true;
-      }
-      if (isAssignableViaHierarchy(iface, requiredType, index)) {
-        return true;
-      }
-    }
-
-    // Superklasse prüfen
-    final var superClass = classInfo.superName();
-    return superClass != null && isAssignableViaHierarchy(superClass, requiredType, index);
-  }
-
-  private boolean isAssignableViaHierarchy(
-      final DotName current,
-      final DotName target,
-      final IndexView index) {
-
-    if (current.equals(target)) {
-      return true;
-    }
-
-    final var info = index.getClassByName(current);
-    if (info == null) {
-      return false;
-    }
-
-    for (final var iface : info.interfaceNames()) {
-      if (isAssignableViaHierarchy(iface, target, index)) {
-        return true;
-      }
-    }
-
-    final var superClass = info.superName();
-    return superClass != null && isAssignableViaHierarchy(superClass, target, index);
   }
 
 }

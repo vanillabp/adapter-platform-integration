@@ -1,0 +1,8 @@
+vanillabp:
+  workflow-modules:
+    no-index-module:
+      adapters:
+        test:
+          resources-location: classpath:no-index-module/processes/dummy
+no-index-module:
+  test: 42

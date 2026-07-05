@@ -27,7 +27,7 @@ public class PersistenceNotABeanTest {
           .addClass(WorkflowService.class)
           .addClass(NoBeanAggregatePersistence.class)
           .addClass(Aggregate.class)
-          .addAsResource("META-INF/workflow-module"))
+          .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
       // JVM args needed for tracking coverage. Check pom.xml for <systemPropertyVariables> tag
       .setJVMArgs(testCoverageJavaAgent(quarkusProdModeTestDefaults()))
       .assertBuildException(exception -> {

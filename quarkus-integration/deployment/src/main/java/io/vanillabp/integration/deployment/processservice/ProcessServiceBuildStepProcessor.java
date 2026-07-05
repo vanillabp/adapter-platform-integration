@@ -13,9 +13,11 @@ import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.Type;
 
+import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanGizmoAdaptor;
+import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
@@ -24,7 +26,6 @@ import io.quarkus.gizmo.SignatureBuilder;
 import io.vanillabp.integration.deployment.config.MigrationAdapterPropertiesBuildItem;
 import io.vanillabp.integration.deployment.validation.EnsureClassIsBeanValidationBuildItem;
 import io.vanillabp.integration.deployment.workflowmodule.VanillaBpWorkflowModulesBuildItem;
-import io.vanillabp.integration.deployment.workflowmodule.WorkflowModuleBuildStepProcessor;
 import io.vanillabp.integration.runtime.processservice.ProcessServiceBaseCdiBean;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.spi.process.ProcessService;
@@ -38,9 +39,24 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ProcessServiceBuildStepProcessor {
 
-  public static String ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_AGGREGATECLASS = "workflowAggregateClass";
-  public static String ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_BPMNPROCESS = "bpmnProcess";
-  public static String ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_BPMNPROCESS_BPMNPROCESSID = "bpmnProcessId";
+  public static final String ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_AGGREGATECLASS = "workflowAggregateClass";
+  public static final String ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_BPMNPROCESS = "bpmnProcess";
+  public static final String ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_BPMNPROCESS_BPMNPROCESSID = "bpmnProcessId";
+
+  /**
+   * Beans implementing {@link AggregatePersistenceAware} are not necessarily injected by
+   * application code but looked up dynamically at runtime (see
+   * {@link ProcessServiceBaseCdiBean}). This build step prevents ArC from removing them
+   * as unused beans.
+   *
+   * @return The unremovable-bean build item covering all {@link AggregatePersistenceAware} beans
+   */
+  @BuildStep
+  UnremovableBeanBuildItem preserveAggregatePersistenceAwareBeans() {
+
+    return UnremovableBeanBuildItem.beanTypes(AggregatePersistenceAware.class);
+
+  }
 
   /**
    * Build step for build {@link ProcessService} beans for all services
@@ -106,9 +122,8 @@ public class ProcessServiceBuildStepProcessor {
                       + WorkflowService.class.getName())
                   .build());
 
-          final var workflowModuleId = WorkflowModuleBuildStepProcessor
+          final var workflowModuleId = workflowModulesFound
               .getWorkflowModuleId(
-                  workflowModulesFound,
                   applicationArchivesBuildItem,
                   serviceClass);
           final var bpmnProcessId = Optional
@@ -209,6 +224,10 @@ public class ProcessServiceBuildStepProcessor {
 
     // @ApplicationScoped
     cc.addAnnotation(ApplicationScoped.class);
+    // @Unremovable: the bean is injected by aggregate class specific injection points
+    // (e.g. "ProcessService<MyAggregate>") which ArC's removal detection does not
+    // recognize in all situations (e.g. if only accessed programmatically)
+    cc.addAnnotation(Unremovable.class);
 
     /*
      * Class<AggregatePersistenceAware<A>> getAggregatePersistenceClass()
