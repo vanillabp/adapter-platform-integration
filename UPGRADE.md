@@ -4,6 +4,27 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Adapter start phases carry module + process id (2026-07-09)
+
+Breaking change of `MigratableProcessService`, relevant for BPMS adapters:
+
+- `startWorkflowPhaseOne(aggregatePersistence, aggregate)` →
+  `startWorkflowPhaseOne(String workflowModuleId, String bpmnProcessId,
+  aggregatePersistence, aggregate)`.
+- `startWorkflowPhaseTwo(aggregateId)` →
+  `startWorkflowPhaseTwo(String workflowModuleId, String bpmnProcessId, aggregateId)`.
+
+Reason: a `MigratableProcessService` is one bean per adapter id, shared across all
+processes; without the module and process id an adapter cannot tell which process to
+start (embedded engines need the BPMN process id to select the process and the module
+id as the BPMS tenant; remote engines need the process id for the create-instance
+command). The methods' own documented idempotency key
+(`workflowModuleId + bpmnProcessId + workflowAggregateId`) was previously
+unconstructible. Both values are forwarded from `MigrationProcessService`, which holds
+them as fields. `awarenessOfTask`/`awarenessOfWorkflow` still take only the aggregate
+id — they will gain the same two parameters in the fallback-election story (they are
+not called by the core yet).
+
 ## Phase-two outbox restructured (2026-07-09)
 
 Breaking changes of the outbox part of the adapter SPI, relevant for custom
