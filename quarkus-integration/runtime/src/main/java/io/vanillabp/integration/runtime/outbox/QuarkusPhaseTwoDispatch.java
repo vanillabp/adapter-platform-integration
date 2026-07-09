@@ -1,5 +1,7 @@
 package io.vanillabp.integration.runtime.outbox;
 
+import org.jspecify.annotations.NonNull;
+
 import io.vanillabp.integration.adapter.spi.PhaseTwoDispatch;
 import io.vanillabp.integration.adapter.spi.ProcessServicePhaseTwo;
 import io.vanillabp.spi.process.ProcessService;
@@ -7,7 +9,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
-import org.jspecify.annotations.NonNull;
 
 /**
  * The Quarkus implementation of {@link PhaseTwoDispatch}: calls dispatched by a
@@ -29,19 +30,19 @@ public class QuarkusPhaseTwoDispatch implements PhaseTwoDispatch {
       final String workflowModuleId,
       final String bpmnProcessId,
       final Object workflowAggregateId) {
-    
+
     final var processService = findProcessService(
         workflowModuleId,
         bpmnProcessId);
-    
+
     processService.startWorkflowPhaseTwo(workflowAggregateId);
 
   }
-  
+
   private @NonNull ProcessServicePhaseTwo findProcessService(
       final String workflowModuleId,
       final String bpmnProcessId) {
-    
+
     return processServices
         .stream()
         .filter(ProcessServicePhaseTwo.class::isInstance)
@@ -55,7 +56,7 @@ public class QuarkusPhaseTwoDispatch implements PhaseTwoDispatch {
                 .formatted(
                     bpmnProcessId,
                     workflowModuleId)));
-    
+
   }
-  
+
 }

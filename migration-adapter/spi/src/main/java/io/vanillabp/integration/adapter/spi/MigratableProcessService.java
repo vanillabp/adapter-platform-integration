@@ -90,9 +90,14 @@ public interface MigratableProcessService<A> {
    *   </li>
    * </ol>
    *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow to be started
+   * @param aggregatePersistence The persistence of the workflow-aggregate
    * @param workflowAggregate The workflow-aggregate
    */
   void startWorkflowPhaseOne(
+      String workflowModuleId,
+      String bpmnProcessId,
       AggregatePersistenceAware<A> aggregatePersistence,
       A workflowAggregate);
 
@@ -136,9 +141,13 @@ public interface MigratableProcessService<A> {
    *   </li>
    * </ol>
    *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow to be started
    * @param workflowAggregateId The ID of the workflow aggregate
    */
   void startWorkflowPhaseTwo(
+      String workflowModuleId,
+      String bpmnProcessId,
       Object workflowAggregateId);
 
 }

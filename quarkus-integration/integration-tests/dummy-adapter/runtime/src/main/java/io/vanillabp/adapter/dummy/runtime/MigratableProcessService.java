@@ -56,6 +56,8 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
 
   @Override
   public void startWorkflowPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
       final AggregatePersistenceAware<A> aggregatePersistence,
       final A workflowAggregate) {
 
@@ -63,6 +65,8 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
 
   @Override
   public void startWorkflowPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
       final Object workflowAggregateId) {
 
     if (phaseTwoListeners != null) {

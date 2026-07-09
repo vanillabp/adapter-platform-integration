@@ -77,18 +77,29 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
 
   @Override
   public void startWorkflowPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
       final AggregatePersistenceAware<A> aggregatePersistence,
       final A workflowAggregate) {
 
-    log.info("Dummy-Adapter: Starting workflow (phase one)");
+    log.info(
+        "Dummy-Adapter: Starting workflow (phase one) of BPMN process '{}' of workflow module '{}'",
+        bpmnProcessId,
+        workflowModuleId);
 
   }
 
   @Override
   public void startWorkflowPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
       final Object workflowAggregateId) {
 
-    log.info("Dummy-Adapter: Starting workflow (phase two) for aggregate '{}'", workflowAggregateId);
+    log.info(
+        "Dummy-Adapter: Starting workflow (phase two) of BPMN process '{}' of workflow module '{}' for aggregate '{}'",
+        bpmnProcessId,
+        workflowModuleId,
+        workflowAggregateId);
 
     if (phaseTwoListeners != null) {
       phaseTwoListeners

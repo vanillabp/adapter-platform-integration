@@ -106,8 +106,9 @@ public class MigrationProcessServiceTest {
     final var result = testee.startWorkflow(detachedAggregate);
 
     assertSame(attachedAggregate, result);
-    verify(processService).startWorkflowPhaseOne(aggregatePersistence, attachedAggregate);
-    verify(processService, never()).startWorkflowPhaseOne(aggregatePersistence, detachedAggregate);
+    verify(processService).startWorkflowPhaseOne("test-module", "TestProcess", aggregatePersistence, attachedAggregate);
+    verify(processService, never())
+        .startWorkflowPhaseOne("test-module", "TestProcess", aggregatePersistence, detachedAggregate);
 
   }
 
@@ -147,7 +148,7 @@ public class MigrationProcessServiceTest {
 
     testee.startWorkflowPhaseTwo(42L);
 
-    verify(processService).startWorkflowPhaseTwo(42L);
+    verify(processService).startWorkflowPhaseTwo("test-module", "TestProcess", 42L);
 
   }
 

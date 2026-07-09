@@ -47,6 +47,8 @@ public class TestMigratableProcessService implements MigratableProcessService<Ob
 
   @Override
   public void startWorkflowPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
       final AggregatePersistenceAware<Object> aggregatePersistence,
       final Object workflowAggregate) {
 
@@ -54,6 +56,8 @@ public class TestMigratableProcessService implements MigratableProcessService<Ob
 
   @Override
   public void startWorkflowPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
       final Object workflowAggregateId) {
 
   }

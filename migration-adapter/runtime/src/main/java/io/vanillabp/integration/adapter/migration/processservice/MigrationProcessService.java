@@ -105,7 +105,7 @@ public class MigrationProcessService<A> {
     final var adapter = adapterProcessServices
         .getFirst();
 
-    adapter.startWorkflowPhaseOne(aggregatePersistenceSupport, attachedAggregate);
+    adapter.startWorkflowPhaseOne(workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, attachedAggregate);
 
     if (adapter.needsTwoPhaseCommitForStartingWorkflows()) {
       if (phaseTwoOutbox == null) {
@@ -145,7 +145,7 @@ public class MigrationProcessService<A> {
 
     adapterProcessServices
         .getFirst()
-        .startWorkflowPhaseTwo(workflowAggregateId);
+        .startWorkflowPhaseTwo(workflowModuleId, bpmnProcessId, workflowAggregateId);
 
   }
 
