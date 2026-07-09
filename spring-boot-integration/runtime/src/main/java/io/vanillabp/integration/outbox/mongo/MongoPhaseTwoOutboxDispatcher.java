@@ -12,7 +12,7 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.scheduling.TaskScheduler;
 
-import io.vanillabp.integration.adapter.spi.MigratableProcessServicePhaseTwo;
+import io.vanillabp.integration.adapter.spi.PhaseTwoDispatch;
 import io.vanillabp.integration.outbox.AggregateIdConverter;
 import io.vanillabp.integration.outbox.PhaseTwoOutboxProperties;
 import jakarta.annotation.PreDestroy;
@@ -21,7 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Dispatches committed-but-unprocessed entries of the MongoDB-based phase-two outbox
- * to the {@link MigratableProcessServicePhaseTwo} bean:
+ * to the {@link PhaseTwoDispatch} method corresponding to the entry's operation:
  * <ul>
  *   <li>right after a commit (triggered by {@link MongoPhaseTwoOutbox}) and</li>
  *   <li>by a fixed-delay poller (crash recovery and retries, poll interval configured
@@ -42,7 +42,7 @@ public class MongoPhaseTwoOutboxDispatcher {
 
   private final MongoTemplate mongoTemplate;
 
-  private final ObjectProvider<MigratableProcessServicePhaseTwo> processServicePhaseTwo;
+  private final ObjectProvider<PhaseTwoDispatch> phaseTwoDispatch;
 
   private final TaskScheduler taskScheduler;
 
@@ -124,21 +124,26 @@ public class MongoPhaseTwoOutboxDispatcher {
       final PhaseTwoOutboxEntry entry) {
 
     try {
-      processServicePhaseTwo
-          .getObject()
-          .startWorkflowPhaseTwo(
-              entry.getWorkflowModuleId(),
-              entry.getBpmnProcessId(),
-              entry.getAdapterId(),
-              convertAggregateId(entry));
+      switch (entry.getOperation()) {
+        case MongoPhaseTwoOutbox.OPERATION_START_WORKFLOW -> phaseTwoDispatch
+            .getObject()
+            .startWorkflowPhaseTwo(
+                entry.getWorkflowModuleId(),
+                entry.getBpmnProcessId(),
+                convertAggregateId(entry));
+        default -> throw new IllegalStateException(
+            "Unknown operation '%s' of outbox entry '%s'! Maybe it was written by a newer version of your software?"
+                .formatted(entry.getOperation(), entry.getId()));
+      }
       mongoTemplate.remove(
           Query.query(Criteria.where("_id").is(entry.getId())),
           MongoPhaseTwoOutbox.COLLECTION);
     } catch (Exception e) {
       if (entry.getAttempts() + 1 >= properties.getBlockAfterAttempts()) {
         log.error(
-            "Starting workflow (phase two) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
+            "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
                 + "failed {} times - the outbox entry '{}' is now blocked and has to be cleaned up manually!",
+            entry.getOperation(),
             entry.getBpmnProcessId(),
             entry.getWorkflowModuleId(),
             entry.getAggregateId(),
@@ -147,8 +152,9 @@ public class MongoPhaseTwoOutboxDispatcher {
             e);
       } else {
         log.warn(
-            "Starting workflow (phase two) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
+            "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
                 + "failed - will retry",
+            entry.getOperation(),
             entry.getBpmnProcessId(),
             entry.getWorkflowModuleId(),
             entry.getAggregateId(),

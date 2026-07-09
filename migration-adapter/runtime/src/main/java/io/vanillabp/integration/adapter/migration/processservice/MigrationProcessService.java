@@ -120,10 +120,9 @@ public class MigrationProcessService<A> {
                     bpmnProcessId,
                     workflowModuleId));
       }
-      phaseTwoOutbox.schedule(
+      phaseTwoOutbox.scheduleStartWorkflow(
           workflowModuleId,
           bpmnProcessId,
-          adapter.getAdapterId(),
           aggregateId);
     }
 
@@ -131,19 +130,22 @@ public class MigrationProcessService<A> {
 
   }
 
+  /**
+   * Executes phase two of starting a workflow, dispatched by the
+   * {@link PhaseTwoOutbox} after the local transaction of
+   * {@link #startWorkflow(Object)} was committed. Like in phase one, the adapter of
+   * the highest priority is used - in contrast to other operations (message
+   * correlation, completing tasks, etc.) which probe the prioritized adapters to find
+   * the BPMS the workflow instance is running in.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate (in its original type)
+   */
   public void startWorkflowPhaseTwo(
-      final String adapterId,
       final Object workflowAggregateId) {
 
-    final var adapter = adapterProcessServices
-        .stream()
-        .filter(processService -> processService.getAdapterId().equals(adapterId))
-        .findFirst()
-        .orElseThrow(() -> new IllegalStateException(
-            "No adapter found for ID '%s'! Maybe it was available in a previous version your software?"
-                .formatted(adapterId)));
-
-    adapter.startWorkflowPhaseTwo(workflowAggregateId);
+    adapterProcessServices
+        .getFirst()
+        .startWorkflowPhaseTwo(workflowAggregateId);
 
   }
 

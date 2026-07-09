@@ -2,7 +2,7 @@ package io.vanillabp.integration.outbox.gruelbox;
 
 import com.gruelbox.transactionoutbox.TransactionOutbox;
 
-import io.vanillabp.integration.adapter.spi.MigratableProcessServicePhaseTwo;
+import io.vanillabp.integration.adapter.spi.PhaseTwoDispatch;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
 import lombok.RequiredArgsConstructor;
 
@@ -14,8 +14,8 @@ import lombok.RequiredArgsConstructor;
  * <p>
  * The workflow aggregate's ID is converted to a {@link String} before scheduling since
  * gruelbox's <code>DefaultInvocationSerializer</code> only supports a whitelist of
- * types. The platform's {@link MigratableProcessServicePhaseTwo} bean converts it back
- * to the aggregate's ID type.
+ * types. The platform's {@link PhaseTwoDispatch} bean converts it back to the
+ * aggregate's ID type.
  */
 @RequiredArgsConstructor
 public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
@@ -23,10 +23,9 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
   private final TransactionOutbox transactionOutbox;
 
   @Override
-  public void schedule(
+  public void scheduleStartWorkflow(
       final String workflowModuleId,
       final String bpmnProcessId,
-      final String adapterId,
       final Object workflowAggregateId) {
 
     transactionOutbox
@@ -34,7 +33,6 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
         .startWorkflowPhaseTwo(
             workflowModuleId,
             bpmnProcessId,
-            adapterId,
             workflowAggregateId == null ? null : workflowAggregateId.toString());
 
   }

@@ -14,7 +14,10 @@ import lombok.RequiredArgsConstructor;
  * The default {@link PhaseTwoOutbox} implementation for Spring Boot applications using
  * MongoDB for aggregate persistence (gruelbox is JDBC-only). The outbox entry is
  * written via {@link MongoTemplate} which participates in the currently running
- * Spring-managed MongoDB transaction.
+ * Spring-managed MongoDB transaction. The scheduled operation is stored as a
+ * discriminator with each entry (see {@link #OPERATION_START_WORKFLOW}), so the
+ * dispatcher calls the corresponding
+ * {@link io.vanillabp.integration.adapter.spi.PhaseTwoDispatch} method.
  * <p>
  * <strong>Note:</strong> MongoDB transactions require a replica set. Without one (no
  * <code>MongoTransactionManager</code> or standalone server) the entry is written
@@ -30,22 +33,28 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
    */
   public static final String COLLECTION = "vanillabp-phase-two-outbox";
 
+  /**
+   * Operation discriminator of entries scheduled via
+   * {@link #scheduleStartWorkflow(String, String, Object)}.
+   */
+  public static final String OPERATION_START_WORKFLOW = "START_WORKFLOW";
+
   private final MongoTemplate mongoTemplate;
 
   private final MongoPhaseTwoOutboxDispatcher dispatcher;
 
   @Override
-  public void schedule(
+  public void scheduleStartWorkflow(
       final String workflowModuleId,
       final String bpmnProcessId,
-      final String adapterId,
       final Object workflowAggregateId) {
 
     final var now = Instant.now();
     final var entry = new PhaseTwoOutboxEntry(
-        UUID.randomUUID().toString(), workflowModuleId, bpmnProcessId, adapterId, workflowAggregateId == null ? null
-            : workflowAggregateId.toString(), workflowAggregateId == null ? null
-                : workflowAggregateId.getClass().getName(), now, 0, now);
+        UUID.randomUUID()
+            .toString(), workflowModuleId, bpmnProcessId, OPERATION_START_WORKFLOW, workflowAggregateId == null ? null
+                : workflowAggregateId.toString(), workflowAggregateId == null ? null
+                    : workflowAggregateId.getClass().getName(), now, 0, now);
 
     mongoTemplate.insert(entry, COLLECTION);
 

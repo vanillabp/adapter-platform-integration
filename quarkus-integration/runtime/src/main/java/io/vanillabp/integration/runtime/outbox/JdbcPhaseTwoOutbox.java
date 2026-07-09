@@ -22,9 +22,12 @@ import jakarta.transaction.TransactionSynchronizationRegistry;
  * connection is acquired within the still-running JTA transaction, it is enlisted
  * automatically - the entry becomes visible if and only if the transaction commits.
  * <p>
- * The workflow aggregate's ID is stored in serialized form (as a string) together with
- * its original type, so the {@link PhaseTwoOutboxDispatcher} can convert it back
- * before dispatching.
+ * The scheduled operation is stored as a discriminator with each entry (see
+ * {@link #OPERATION_START_WORKFLOW}), so the {@link JdbcPhaseTwoOutboxDispatcher}
+ * calls the corresponding
+ * {@link io.vanillabp.integration.adapter.spi.PhaseTwoDispatch} method. The workflow
+ * aggregate's ID is stored in serialized form (as a string) together with its original
+ * type, so the dispatcher can convert it back before dispatching.
  */
 @ApplicationScoped
 public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
@@ -34,10 +37,18 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
    */
   public static final String TABLE_NAME = "VANILLABP_PHASE_TWO_OUTBOX";
 
-  private static final String INSERT_ENTRY = "INSERT INTO "
-      + TABLE_NAME
-      + " (ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, ADAPTER_ID, AGGREGATE_ID, AGGREGATE_ID_TYPE,"
-      + " CREATED_AT, ATTEMPTS, NEXT_ATTEMPT_AT) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)";
+  /**
+   * Operation discriminator of entries scheduled via
+   * {@link #scheduleStartWorkflow(String, String, Object)}.
+   */
+  public static final String OPERATION_START_WORKFLOW = "START_WORKFLOW";
+
+  private static final String INSERT_ENTRY = """
+      INSERT INTO %s \
+      (ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, AGGREGATE_ID, AGGREGATE_ID_TYPE, \
+      CREATED_AT, ATTEMPTS, NEXT_ATTEMPT_AT) \
+      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)"""
+      .formatted(TABLE_NAME);
 
   @Inject
   Instance<DataSource> dataSource;
@@ -46,13 +57,12 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
   TransactionSynchronizationRegistry txRegistry;
 
   @Inject
-  PhaseTwoOutboxDispatcher dispatcher;
+  JdbcPhaseTwoOutboxDispatcher dispatcher;
 
   @Override
-  public void schedule(
+  public void scheduleStartWorkflow(
       final String workflowModuleId,
       final String bpmnProcessId,
-      final String adapterId,
       final Object workflowAggregateId) {
 
     if (txRegistry.getTransactionKey() == null) {
@@ -71,7 +81,7 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
       statement.setString(1, UUID.randomUUID().toString());
       statement.setString(2, workflowModuleId);
       statement.setString(3, bpmnProcessId);
-      statement.setString(4, adapterId);
+      statement.setString(4, OPERATION_START_WORKFLOW);
       statement.setString(5, workflowAggregateId == null ? null : workflowAggregateId.toString());
       statement.setString(6, workflowAggregateId == null ? null : workflowAggregateId.getClass().getName());
       statement.setTimestamp(7, Timestamp.from(now));

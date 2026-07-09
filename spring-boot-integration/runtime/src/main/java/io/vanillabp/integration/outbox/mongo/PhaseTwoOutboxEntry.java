@@ -28,7 +28,12 @@ public class PhaseTwoOutboxEntry {
 
   private String bpmnProcessId;
 
-  private String adapterId;
+  /**
+   * The scheduled operation (see the <code>OPERATION_*</code> constants of
+   * {@link MongoPhaseTwoOutbox}), determining which {@link
+   * io.vanillabp.integration.adapter.spi.PhaseTwoDispatch} method is called.
+   */
+  private String operation;
 
   private String aggregateId;
 

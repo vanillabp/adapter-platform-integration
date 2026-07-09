@@ -13,7 +13,7 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
-import io.vanillabp.integration.adapter.spi.MigratableProcessServicePhaseTwo;
+import io.vanillabp.integration.adapter.spi.PhaseTwoDispatch;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.outbox.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfiguration;
@@ -64,7 +64,7 @@ public class MongoPhaseTwoOutboxAutoConfiguration {
 
   /**
    * @param mongoTemplate The template used to claim and remove entries
-   * @param processServicePhaseTwo The bean dispatched to
+   * @param phaseTwoDispatch The bean dispatched to
    * @param taskScheduler The task scheduler running the poller
    * @param properties The <code>vanillabp.outbox</code> properties
    * @return The dispatcher polling the outbox collection
@@ -72,12 +72,12 @@ public class MongoPhaseTwoOutboxAutoConfiguration {
   @Bean
   public MongoPhaseTwoOutboxDispatcher vanillaBpMongoPhaseTwoOutboxDispatcher(
       final MongoTemplate mongoTemplate,
-      final ObjectProvider<MigratableProcessServicePhaseTwo> processServicePhaseTwo,
+      final ObjectProvider<PhaseTwoDispatch> phaseTwoDispatch,
       final TaskScheduler taskScheduler,
       final PhaseTwoOutboxProperties properties) {
 
     return new MongoPhaseTwoOutboxDispatcher(
-        mongoTemplate, processServicePhaseTwo, taskScheduler, properties);
+        mongoTemplate, phaseTwoDispatch, taskScheduler, properties);
 
   }
 

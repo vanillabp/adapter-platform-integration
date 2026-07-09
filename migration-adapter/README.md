@@ -126,22 +126,35 @@ the local transaction, starting is split into two phases
   right here (same transaction, phase two is a no-op); remote/eventually-consistent
   BPMS only lock/validate.
 - **Phase two** runs after the local commit. For adapters reporting
-  `needsTwoPhaseCommitForStartingWorkflows()`, a call to
-  `MigratableProcessServicePhaseTwo` (implemented by the platform integration) is
-  scheduled via the *transaction outbox* SPI `PhaseTwoOutbox`. If such an adapter is
-  used but no `PhaseTwoOutbox` is available, starting a workflow fails hard.
+  `needsTwoPhaseCommitForStartingWorkflows()`, the phase-two call is scheduled via
+  the *transaction outbox* SPI `PhaseTwoOutbox`. If such an adapter is used but no
+  `PhaseTwoOutbox` is available, starting a workflow fails hard.
+
+The dispatch of a scheduled call is routed back into the process-service bean which
+scheduled it: the platform's `PhaseTwoDispatch` bean looks up the bean responsible
+for the workflow module and BPMN process (all process-service beans implement the
+common interface `ProcessServicePhaseTwo`) and calls its phase-two method, which
+delegates to `MigrationProcessService`. Only *there* the adapter to be used is
+determined — it is deliberately not stored with the outbox entry. For starting
+workflows this is always the adapter of the highest priority (the same rule as in
+phase one); future `ProcessService` operations (message correlation, completing
+tasks, ...) will instead probe the prioritized adapters to find the BPMS the
+workflow instance is running in. Each such operation will get its own `schedule*`
+method in `PhaseTwoOutbox` and a corresponding method in `PhaseTwoDispatch` and
+`ProcessServicePhaseTwo`.
 
 The core does not implement (or depend on) any outbox itself — it only defines the
 `PhaseTwoOutbox` contract:
 
-- **Scheduling:** `schedule(workflowModuleId, bpmnProcessId, adapterId,
+- **Scheduling:** `scheduleStartWorkflow(workflowModuleId, bpmnProcessId,
   workflowAggregateId)` MUST be invoked within the still-running local transaction
   that persists the workflow aggregate and MUST enlist the outbox entry in exactly
   that transaction: the entry becomes visible if and only if the transaction commits.
-- **Recovery:** every committed-but-unprocessed entry has to be dispatched to
-  `MigratableProcessServicePhaseTwo` right after the commit *and* after an
-  application restart (crash recovery), retrying failed dispatches with a backoff.
-  Entries are removed (or marked processed) only after a successful dispatch.
+- **Recovery:** every committed-but-unprocessed entry has to be dispatched to the
+  `PhaseTwoDispatch` method corresponding to the scheduled operation right after the
+  commit *and* after an application restart (crash recovery), retrying failed
+  dispatches with a backoff. Entries are removed (or marked processed) only after a
+  successful dispatch.
 - **Idempotency:** as a consequence of the at-least-once semantics, adapters MUST
   tolerate repeated `startWorkflowPhaseTwo` calls: the triple
   `workflowModuleId + bpmnProcessId + workflowAggregateId` is the idempotency key —
@@ -191,7 +204,7 @@ core.
    The adapter-facing SPI to be implemented by BPMS adapters and platform
    integrations: `AdapterDeploymentService` (extends `ExtensionWiringService`),
    `MigratableProcessService` (incl. `WorkflowAwareness`),
-   `MigratableProcessServicePhaseTwo`, `PhaseTwoOutbox` and
+   `PhaseTwoOutbox` (incl. `PhaseTwoDispatch` and `ProcessServicePhaseTwo`) and
    `ExtensionWiringService`. Adapters report BPMN parsing errors using
    `BpmnParseException`. Depends on `business-spi` (uses
    `AggregatePersistenceAware` in signatures).

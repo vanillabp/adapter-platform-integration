@@ -129,8 +129,25 @@ public class MigrationProcessServiceTest {
     testee.startWorkflow(aggregate);
 
     // the outbox entry has to be scheduled using the idempotency key
-    // 'workflowModuleId + bpmnProcessId + workflowAggregateId' and the adapter's ID
-    verify(phaseTwoOutbox).schedule("test-module", "TestProcess", "test-adapter", 42L);
+    // 'workflowModuleId + bpmnProcessId + workflowAggregateId'; the adapter is not
+    // part of the scheduled call since it is determined at dispatch time
+    verify(phaseTwoOutbox).scheduleStartWorkflow("test-module", "TestProcess", 42L);
+
+  }
+
+  @Test
+  @DisplayName("startWorkflowPhaseTwo uses the adapter of the highest priority")
+  public void startWorkflowPhaseTwoUsesHighestPriorityAdapter() {
+
+    when(processService.getAdapterId()).thenReturn("test-adapter");
+
+    final var testee = new MigrationProcessService<>(
+        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
+            .of(processService), phaseTwoOutbox);
+
+    testee.startWorkflowPhaseTwo(42L);
+
+    verify(processService).startWorkflowPhaseTwo(42L);
 
   }
 
@@ -151,7 +168,7 @@ public class MigrationProcessServiceTest {
 
     testee.startWorkflow(aggregate);
 
-    verify(phaseTwoOutbox, never()).schedule(any(), any(), any(), any());
+    verify(phaseTwoOutbox, never()).scheduleStartWorkflow(any(), any(), any());
 
   }
 

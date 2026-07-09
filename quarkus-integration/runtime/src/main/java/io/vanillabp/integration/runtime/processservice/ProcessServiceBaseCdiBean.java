@@ -5,6 +5,7 @@ import java.util.List;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.adapter.spi.ProcessServicePhaseTwo;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.spi.process.ProcessService;
 import jakarta.annotation.PostConstruct;
@@ -15,7 +16,7 @@ import jakarta.transaction.TransactionSynchronizationRegistry;
 import jakarta.transaction.Transactional;
 import lombok.Getter;
 
-public abstract class ProcessServiceBaseCdiBean<A> implements ProcessService<A> {
+public abstract class ProcessServiceBaseCdiBean<A> implements ProcessService<A>, ProcessServicePhaseTwo {
 
   @Inject
   MigrationAdapterProperties properties;
@@ -84,12 +85,12 @@ public abstract class ProcessServiceBaseCdiBean<A> implements ProcessService<A> 
 
   }
 
+  @Override
   @Transactional
   public void startWorkflowPhaseTwo(
-      final String adapterId,
       final Object workflowAggregateId) {
 
-    migrationProcessService.startWorkflowPhaseTwo(adapterId, workflowAggregateId);
+    migrationProcessService.startWorkflowPhaseTwo(workflowAggregateId);
 
   }
 

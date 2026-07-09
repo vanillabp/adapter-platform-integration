@@ -4,6 +4,29 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Phase-two outbox restructured (2026-07-09)
+
+Breaking changes of the outbox part of the adapter SPI, relevant for custom
+`PhaseTwoOutbox` implementations (adapters are not affected —
+`MigratableProcessService` is unchanged):
+
+- `PhaseTwoOutbox.schedule(module, process, adapterId, aggregateId)` →
+  `scheduleStartWorkflow(module, process, aggregateId)`. The adapter is no longer
+  part of the scheduled call: it is determined at dispatch time by
+  `MigrationProcessService` (starting a workflow always uses the highest-priority
+  adapter; upcoming `ProcessService` operations will probe the prioritized adapters
+  instead). Every future two-phase operation gets its own `schedule*` method.
+- `MigratableProcessServicePhaseTwo` (4-arg method incl. `adapterId`) was replaced
+  by `PhaseTwoDispatch` (3-arg, no `adapterId`) — the platform-provided bean outbox
+  implementations dispatch to.
+- New interface `ProcessServicePhaseTwo`: implemented by the platform integrations'
+  process-service beans; `PhaseTwoDispatch` implementations use it to route a
+  dispatched call to the bean of the workflow module/BPMN process it belongs to.
+- Store-based default implementations (Spring MongoDB, Quarkus JDBC) now persist an
+  `operation` discriminator instead of the adapter ID (JDBC column `ADAPTER_ID` →
+  `OPERATION`; entries of the previous format are not migrated — the table/collection
+  was never part of a release).
+
 ## Adapter SPI consolidation (2026-07-05)
 
 Breaking changes of the adapter SPI, relevant for the upcoming adapter repositories

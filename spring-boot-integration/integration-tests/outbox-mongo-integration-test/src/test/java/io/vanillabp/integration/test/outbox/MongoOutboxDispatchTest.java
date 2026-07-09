@@ -177,7 +177,7 @@ public class MongoOutboxDispatchTest {
         .append("_id", UUID.randomUUID().toString())
         .append("workflowModuleId", "test-module")
         .append("bpmnProcessId", "SampleWorkflowService")
-        .append("adapterId", "test")
+        .append("operation", "START_WORKFLOW")
         .append("aggregateId", "left-over-aggregate")
         .append("aggregateIdType", String.class.getName())
         .append("createdAt", Date.from(now))

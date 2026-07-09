@@ -114,7 +114,11 @@ Adapters of remote BPMS report `needsTwoPhaseCommitForStartingWorkflows()` and
 require a transaction outbox (`PhaseTwoOutbox` SPI of the
 [migration adapter](../../migration-adapter)) which schedules phase two of starting a
 workflow within the local transaction and dispatches it reliably after the commit
-(also after a crash/restart, retrying with a backoff). This module provides two
+(also after a crash/restart, retrying with a backoff). Dispatched calls are routed by
+`PhaseTwoDispatchSpringBean` (the platform's `PhaseTwoDispatch` implementation) to
+the `ProcessServiceSpringBean` responsible for the workflow module and BPMN process
+(looked up via the common interface `ProcessServicePhaseTwo`) — there the adapter to
+be used is determined. This module provides two
 default implementations, both configured by the `vanillabp.outbox.*` properties
 (`poll-interval`, `attempt-frequency`, `block-after-attempts`, `create-schema`) and
 both only active if the application does not define its own `PhaseTwoOutbox` bean:
@@ -124,8 +128,9 @@ both only active if the application does not define its own `PhaseTwoOutbox` bea
    using `SpringTransactionManager`/`SpringInstantiator`, active under the same
    conditions as the JPA `SpringDataUtil`. The workflow-aggregate ID is serialized
    as a string (gruelbox's invocation serializer only supports a whitelist of types)
-   and converted back by `MigratableProcessServicePhaseTwoSpringBean` using the
-   aggregate's ID type. Recovery and retries are done by a fixed-delay poller
+   and converted back by `PhaseTwoDispatchSpringBean` using the
+   aggregate's ID type. Which phase-two operation was scheduled is encoded in the
+   scheduled `GruelboxPhaseTwoDispatch` method itself. Recovery and retries are done by a fixed-delay poller
    calling `TransactionOutbox.flush()` (own `TaskScheduler` registered only if the
    application has none; `@EnableScheduling` is not required). The outbox table
    `TXNO_OUTBOX` is created by gruelbox's auto-DDL — set
@@ -134,7 +139,8 @@ both only active if the application does not define its own `PhaseTwoOutbox` bea
    documentation for your database).
 2. **MongoDB (own implementation, gruelbox is JDBC-only):** `MongoPhaseTwoOutbox`
    writes entries into the collection `vanillabp-phase-two-outbox` via
-   `MongoTemplate` within the current transaction;
+   `MongoTemplate` within the current transaction (the scheduled operation is stored
+   as a discriminator with each entry);
    `MongoPhaseTwoOutboxDispatcher` claims due entries atomically (find-and-modify
    with attempts/backoff) and removes them after successful dispatch. **Note:**
    transactional enlisting requires MongoDB transactions, i.e. a replica set and a

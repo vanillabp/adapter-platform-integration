@@ -10,6 +10,7 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.adapter.spi.ProcessServicePhaseTwo;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.spi.process.ProcessDefinition;
 import io.vanillabp.spi.process.ProcessDefinitionNotFoundException;
@@ -21,7 +22,7 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class ProcessServiceSpringBean<A> implements ProcessService<A> {
+public class ProcessServiceSpringBean<A> implements ProcessService<A>, ProcessServicePhaseTwo {
 
   @Getter
   private final MigrationProcessService<A> migrationProcessService;
@@ -63,19 +64,19 @@ public class ProcessServiceSpringBean<A> implements ProcessService<A> {
     return (
         module,
         process,
-        adapterId,
         workflowAggregateId) -> {
       final var phaseTwoOutbox = phaseTwoOutboxProvider.getIfAvailable();
       if (phaseTwoOutbox == null) {
         throw new IllegalStateException(
-            ("Adapter '%s' requires a two-phase commit for starting workflows of BPMN process '%s' "
-                + "of workflow module '%s', but no PhaseTwoOutbox bean is available! To solve this either\n"
-                + "- add spring-boot-starter-data-jpa and configure a data source (enables the gruelbox-based default),\n"
-                + "- add spring-boot-starter-data-mongodb and configure the MongoDB connection (enables the MongoDB default), or\n"
-                + "- define your own bean implementing io.vanillabp.integration.adapter.spi.PhaseTwoOutbox.")
-                .formatted(adapterId, bpmnProcessId, workflowModuleId));
+            """
+                Starting workflows of BPMN process '%s' of workflow module '%s' requires a two-phase commit, \
+                but no PhaseTwoOutbox bean is available! To solve this either
+                - add spring-boot-starter-data-jpa and configure a data source (enables the gruelbox-based default),
+                - add spring-boot-starter-data-mongodb and configure the MongoDB connection (enables the MongoDB default), or
+                - define your own bean implementing io.vanillabp.integration.adapter.spi.PhaseTwoOutbox."""
+                .formatted(bpmnProcessId, workflowModuleId));
       }
-      phaseTwoOutbox.schedule(module, process, adapterId, workflowAggregateId);
+      phaseTwoOutbox.scheduleStartWorkflow(module, process, workflowAggregateId);
     };
 
   }
@@ -98,6 +99,20 @@ public class ProcessServiceSpringBean<A> implements ProcessService<A> {
 
   }
 
+  @Override
+  public String getBpmnProcessId() {
+
+    return migrationProcessService.getBpmnProcessId();
+
+  }
+
+  @Override
+  public Class<A> getWorkflowAggregateClass() {
+
+    return migrationProcessService.getWorkflowAggregateClass();
+
+  }
+
   public A startWorkflow(
       A workflowAggregate) {
 
@@ -110,12 +125,12 @@ public class ProcessServiceSpringBean<A> implements ProcessService<A> {
 
   }
 
+  @Override
   @Transactional
   public void startWorkflowPhaseTwo(
-      final String adapterId,
       final Object workflowAggregateId) {
 
-    migrationProcessService.startWorkflowPhaseTwo(adapterId, workflowAggregateId);
+    migrationProcessService.startWorkflowPhaseTwo(workflowAggregateId);
 
   }
 

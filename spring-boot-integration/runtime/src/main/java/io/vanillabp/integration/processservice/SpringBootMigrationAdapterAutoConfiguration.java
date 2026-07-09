@@ -12,7 +12,7 @@ import org.springframework.context.annotation.Import;
 
 import io.vanillabp.integration.adapter.AdapterConfigurationBase;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
-import io.vanillabp.integration.adapter.spi.MigratableProcessServicePhaseTwo;
+import io.vanillabp.integration.adapter.spi.PhaseTwoDispatch;
 import io.vanillabp.integration.config.SpringBootMigrationAdapterProperties;
 import io.vanillabp.integration.config.SpringBootMigrationAdapterTransformer;
 import io.vanillabp.integration.utils.SpringDataUtil;
@@ -81,16 +81,16 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    *
    * @param processServices Provider of all process service beans registered
    * @param springDataUtil Provider of the persistence utility used to determine aggregate-ID types
-   * @return The phase-two bean
+   * @return The phase-two dispatch bean
    */
   @Bean
-  @ConditionalOnMissingBean(MigratableProcessServicePhaseTwo.class)
+  @ConditionalOnMissingBean(PhaseTwoDispatch.class)
   @SuppressWarnings("rawtypes")
-  public MigratableProcessServicePhaseTwoSpringBean migratableProcessServicePhaseTwo(
+  public PhaseTwoDispatchSpringBean phaseTwoDispatch(
       final ObjectProvider<io.vanillabp.spi.process.ProcessService> processServices,
       final ObjectProvider<SpringDataUtil> springDataUtil) {
 
-    return new MigratableProcessServicePhaseTwoSpringBean(processServices, springDataUtil);
+    return new PhaseTwoDispatchSpringBean(processServices, springDataUtil);
 
   }
 

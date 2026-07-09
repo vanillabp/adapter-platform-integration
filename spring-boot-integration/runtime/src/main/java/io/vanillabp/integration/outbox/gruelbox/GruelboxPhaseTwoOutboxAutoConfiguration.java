@@ -24,7 +24,7 @@ import com.gruelbox.transactionoutbox.TransactionOutbox;
 import com.gruelbox.transactionoutbox.spring.SpringInstantiator;
 import com.gruelbox.transactionoutbox.spring.SpringTransactionManager;
 
-import io.vanillabp.integration.adapter.spi.MigratableProcessServicePhaseTwo;
+import io.vanillabp.integration.adapter.spi.PhaseTwoDispatch;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.outbox.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.utils.config.JpaSpringDataUtilConfiguration;
@@ -65,8 +65,7 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
 
   /**
    * The gruelbox {@link TransactionOutbox} enlisting entries in Spring-managed JDBC
-   * transactions and instantiating the scheduled
-   * {@link io.vanillabp.integration.adapter.spi.MigratableProcessServicePhaseTwo}
+   * transactions and instantiating the scheduled {@link GruelboxPhaseTwoDispatch}
    * from the application context.
    *
    * @param applicationContext Used to resolve the scheduled bean at dispatch time
@@ -115,23 +114,22 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
    * The bean invoked by the outbox at dispatch time (resolved by gruelbox's
    * <code>SpringInstantiator</code> as the unique bean of type
    * {@link GruelboxPhaseTwoDispatch}). It delegates to the platform's
-   * {@link MigratableProcessServicePhaseTwo} bean which converts the string-serialized
+   * {@link PhaseTwoDispatch} bean which converts the string-serialized
    * workflow-aggregate ID back to the aggregate's ID type.
    *
-   * @param processServicePhaseTwo Provider of the phase-two bean delegated to
+   * @param phaseTwoDispatch Provider of the phase-two dispatch bean delegated to
    * @return The dispatch bean
    */
   @Bean
   public GruelboxPhaseTwoDispatch vanillaBpGruelboxPhaseTwoDispatch(
-      final ObjectProvider<MigratableProcessServicePhaseTwo> processServicePhaseTwo) {
+      final ObjectProvider<PhaseTwoDispatch> phaseTwoDispatch) {
 
     return (
         workflowModuleId,
         bpmnProcessId,
-        adapterId,
-        workflowAggregateId) -> processServicePhaseTwo
+        workflowAggregateId) -> phaseTwoDispatch
             .getObject()
-            .startWorkflowPhaseTwo(workflowModuleId, bpmnProcessId, adapterId, workflowAggregateId);
+            .startWorkflowPhaseTwo(workflowModuleId, bpmnProcessId, workflowAggregateId);
 
   }
 

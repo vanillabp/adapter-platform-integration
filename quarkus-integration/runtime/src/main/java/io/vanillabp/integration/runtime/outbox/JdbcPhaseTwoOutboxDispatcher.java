@@ -19,7 +19,7 @@ import org.eclipse.microprofile.config.ConfigProvider;
 
 import io.quarkus.runtime.StartupEvent;
 import io.smallrye.config.SmallRyeConfig;
-import io.vanillabp.integration.adapter.spi.MigratableProcessServicePhaseTwo;
+import io.vanillabp.integration.adapter.spi.PhaseTwoDispatch;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -30,7 +30,8 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Dispatches committed-but-unprocessed entries of the JDBC-based phase-two outbox (see
- * {@link JdbcPhaseTwoOutbox}) to the {@link MigratableProcessServicePhaseTwo} bean:
+ * {@link JdbcPhaseTwoOutbox}) to the {@link PhaseTwoDispatch} method corresponding to
+ * the entry's operation:
  * <ul>
  *   <li>right after a commit (triggered by {@link JdbcPhaseTwoOutbox}) and</li>
  *   <li>by a fixed-delay poller (crash recovery and retries, poll interval configured
@@ -52,32 +53,37 @@ import lombok.extern.slf4j.Slf4j;
  */
 @ApplicationScoped
 @Slf4j
-public class PhaseTwoOutboxDispatcher {
+public class JdbcPhaseTwoOutboxDispatcher {
 
-  private static final String CREATE_TABLE = "CREATE TABLE IF NOT EXISTS "
-      + JdbcPhaseTwoOutbox.TABLE_NAME
-      + " (ID VARCHAR(36) PRIMARY KEY,"
-      + " WORKFLOW_MODULE_ID VARCHAR(255) NOT NULL,"
-      + " BPMN_PROCESS_ID VARCHAR(255) NOT NULL,"
-      + " ADAPTER_ID VARCHAR(255) NOT NULL,"
-      + " AGGREGATE_ID VARCHAR(1024),"
-      + " AGGREGATE_ID_TYPE VARCHAR(255),"
-      + " CREATED_AT TIMESTAMP NOT NULL,"
-      + " ATTEMPTS INT NOT NULL,"
-      + " NEXT_ATTEMPT_AT TIMESTAMP NOT NULL)";
+  private static final String CREATE_TABLE = """
+      CREATE TABLE IF NOT EXISTS %s (\
+      ID VARCHAR(36) PRIMARY KEY, \
+      WORKFLOW_MODULE_ID VARCHAR(255) NOT NULL, \
+      BPMN_PROCESS_ID VARCHAR(255) NOT NULL, \
+      OPERATION VARCHAR(255) NOT NULL, \
+      AGGREGATE_ID VARCHAR(1024), \
+      AGGREGATE_ID_TYPE VARCHAR(255), \
+      CREATED_AT TIMESTAMP NOT NULL, \
+      ATTEMPTS INT NOT NULL, \
+      NEXT_ATTEMPT_AT TIMESTAMP NOT NULL)"""
+      .formatted(JdbcPhaseTwoOutbox.TABLE_NAME);
 
-  private static final String SELECT_DUE_ENTRIES = "SELECT ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID,"
-      + " ADAPTER_ID, AGGREGATE_ID, AGGREGATE_ID_TYPE, ATTEMPTS FROM "
-      + JdbcPhaseTwoOutbox.TABLE_NAME
-      + " WHERE NEXT_ATTEMPT_AT <= ? AND ATTEMPTS < ?";
+  private static final String SELECT_DUE_ENTRIES = """
+      SELECT ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, AGGREGATE_ID, AGGREGATE_ID_TYPE, ATTEMPTS \
+      FROM %s \
+      WHERE NEXT_ATTEMPT_AT <= ? AND ATTEMPTS < ?"""
+      .formatted(JdbcPhaseTwoOutbox.TABLE_NAME);
 
-  private static final String CLAIM_ENTRY = "UPDATE "
-      + JdbcPhaseTwoOutbox.TABLE_NAME
-      + " SET ATTEMPTS = ATTEMPTS + 1, NEXT_ATTEMPT_AT = ? WHERE ID = ? AND ATTEMPTS = ?";
+  private static final String CLAIM_ENTRY = """
+      UPDATE %s \
+      SET ATTEMPTS = ATTEMPTS + 1, NEXT_ATTEMPT_AT = ? \
+      WHERE ID = ? AND ATTEMPTS = ?"""
+      .formatted(JdbcPhaseTwoOutbox.TABLE_NAME);
 
-  private static final String DELETE_ENTRY = "DELETE FROM "
-      + JdbcPhaseTwoOutbox.TABLE_NAME
-      + " WHERE ID = ?";
+  private static final String DELETE_ENTRY = """
+      DELETE FROM %s \
+      WHERE ID = ?"""
+      .formatted(JdbcPhaseTwoOutbox.TABLE_NAME);
 
   /**
    * A due outbox entry read from the database.
@@ -85,7 +91,7 @@ public class PhaseTwoOutboxDispatcher {
    * @param id The entry's ID
    * @param workflowModuleId The ID of the workflow module the workflow belongs to
    * @param bpmnProcessId The BPMN process ID of the workflow to be started
-   * @param adapterId The ID of the adapter the workflow was started with in phase one
+   * @param operation The scheduled operation (see the <code>OPERATION_*</code> constants of {@link JdbcPhaseTwoOutbox})
    * @param aggregateId The workflow aggregate's ID as a string
    * @param aggregateIdType The original type of the workflow aggregate's ID
    * @param attempts The number of dispatch attempts so far
@@ -94,7 +100,7 @@ public class PhaseTwoOutboxDispatcher {
                        String id,
                        String workflowModuleId,
                        String bpmnProcessId,
-                       String adapterId,
+                       String operation,
                        String aggregateId,
                        String aggregateIdType,
                        int attempts) {
@@ -104,7 +110,7 @@ public class PhaseTwoOutboxDispatcher {
   Instance<DataSource> dataSource;
 
   @Inject
-  Instance<MigratableProcessServicePhaseTwo> processServicePhaseTwo;
+  Instance<PhaseTwoDispatch> phaseTwoDispatch;
 
   private QuarkusMigrationAdapterProperties.PhaseTwoOutboxProperties properties;
 
@@ -242,8 +248,9 @@ public class PhaseTwoOutboxDispatcher {
   }
 
   /**
-   * Dispatches a single claimed entry. On success the entry is removed; on failure it
-   * stays claimed and is retried after the configured backoff.
+   * Dispatches a single claimed entry to the {@link PhaseTwoDispatch} method
+   * corresponding to the entry's operation. On success the entry is removed; on
+   * failure it stays claimed and is retried after the configured backoff.
    *
    * @param connection The connection used to remove the entry on success
    * @param entry The claimed entry
@@ -253,18 +260,23 @@ public class PhaseTwoOutboxDispatcher {
       final Entry entry) throws SQLException {
 
     try {
-      processServicePhaseTwo
-          .get()
-          .startWorkflowPhaseTwo(
-              entry.workflowModuleId(),
-              entry.bpmnProcessId(),
-              entry.adapterId(),
-              convertAggregateId(entry));
+      switch (entry.operation()) {
+        case JdbcPhaseTwoOutbox.OPERATION_START_WORKFLOW -> phaseTwoDispatch
+            .get()
+            .startWorkflowPhaseTwo(
+                entry.workflowModuleId(),
+                entry.bpmnProcessId(),
+                convertAggregateId(entry));
+        default -> throw new IllegalStateException(
+            "Unknown operation '%s' of outbox entry '%s'! Maybe it was written by a newer version of your software?"
+                .formatted(entry.operation(), entry.id()));
+      }
     } catch (Exception e) {
       if (entry.attempts() + 1 >= properties.blockAfterAttempts()) {
         log.error(
-            "Starting workflow (phase two) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
+            "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
                 + "failed {} times - the outbox entry '{}' is now blocked and has to be cleaned up manually!",
+            entry.operation(),
             entry.bpmnProcessId(),
             entry.workflowModuleId(),
             entry.aggregateId(),
@@ -273,8 +285,9 @@ public class PhaseTwoOutboxDispatcher {
             e);
       } else {
         log.warn(
-            "Starting workflow (phase two) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
+            "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
                 + "failed - will retry",
+            entry.operation(),
             entry.bpmnProcessId(),
             entry.workflowModuleId(),
             entry.aggregateId(),

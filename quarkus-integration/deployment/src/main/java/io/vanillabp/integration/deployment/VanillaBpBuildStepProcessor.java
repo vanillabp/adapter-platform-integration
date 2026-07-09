@@ -19,8 +19,8 @@ import io.quarkus.deployment.builditem.StaticInitConfigBuilderBuildItem;
 import io.vanillabp.integration.runtime.config.VanillaBpConfigBuilder;
 import io.vanillabp.integration.runtime.deployment.VanillaBpShutdownObserver;
 import io.vanillabp.integration.runtime.outbox.JdbcPhaseTwoOutbox;
-import io.vanillabp.integration.runtime.outbox.PhaseTwoOutboxDispatcher;
-import io.vanillabp.integration.runtime.outbox.QuarkusMigratableProcessServicePhaseTwo;
+import io.vanillabp.integration.runtime.outbox.JdbcPhaseTwoOutboxDispatcher;
+import io.vanillabp.integration.runtime.outbox.QuarkusPhaseTwoDispatch;
 import io.vanillabp.integration.runtime.processservice.EventualConsistencyTransactionSupport;
 import io.vanillabp.integration.runtime.processservice.TransactionInterceptor;
 import io.vanillabp.integration.runtime.processservice.VanillaBpTaskInterception;
@@ -159,8 +159,8 @@ public class VanillaBpBuildStepProcessor {
         .builder()
         .addBeanClasses(
             JdbcPhaseTwoOutbox.class,
-            PhaseTwoOutboxDispatcher.class,
-            QuarkusMigratableProcessServicePhaseTwo.class)
+            JdbcPhaseTwoOutboxDispatcher.class,
+            QuarkusPhaseTwoDispatch.class)
         .setUnremovable() // don't remove, since it is used under the hoods
         .build());
 

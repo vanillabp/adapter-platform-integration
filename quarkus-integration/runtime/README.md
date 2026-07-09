@@ -50,10 +50,14 @@ workflow within the local transaction and dispatches it reliably after the commi
 This module provides an own JDBC/JTA-based default implementation (gruelbox does not
 support JTA): `JdbcPhaseTwoOutbox` writes entries into the table
 `VANILLABP_PHASE_TWO_OUTBOX` using a connection of the Agroal datasource which is
-enlisted in the running JTA transaction, and `PhaseTwoOutboxDispatcher` claims due
+enlisted in the running JTA transaction (the scheduled operation is stored as a
+discriminator with each entry), and `JdbcPhaseTwoOutboxDispatcher` claims due
 entries atomically (optimistic update with attempts/backoff) and dispatches them to
-`QuarkusMigratableProcessServicePhaseTwo` — right after the commit and by a
-fixed-delay poller (crash recovery and retries). The poller uses a plain scheduled
+the corresponding method of `QuarkusPhaseTwoDispatch` — right after the commit and
+by a fixed-delay poller (crash recovery and retries). `QuarkusPhaseTwoDispatch`
+routes the call to the generated process-service bean responsible for the workflow
+module and BPMN process (looked up via the common interface
+`ProcessServicePhaseTwo`) — there the adapter to be used is determined. The poller uses a plain scheduled
 executor started on `StartupEvent`, so the `quarkus-scheduler` extension is not
 required. The beans are only registered if the Agroal capability is present (see
 `VanillaBpBuildStepProcessor#buildPhaseTwoOutbox`); applications may define their own
