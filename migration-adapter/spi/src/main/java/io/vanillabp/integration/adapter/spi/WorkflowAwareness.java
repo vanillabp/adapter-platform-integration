@@ -13,17 +13,17 @@ package io.vanillabp.integration.adapter.spi;
 public enum WorkflowAwareness {
 
   /**
-   * The BPMS knows the workflow/task and the task is currently active. Operations
-   * (e.g. completing the task) are expected to succeed using this adapter.
+   * The BPMS knows the workflow/task and it is currently active. Operations
+   * (e.g. completing a task) are expected to succeed using this adapter.
    */
-  TASK_ACTIVE,
+  ACTIVE,
 
   /**
-   * The BPMS knows the workflow/task but the task was already completed (or the
+   * The BPMS knows the workflow/task but it was already completed (or the
    * workflow has ended). Do not fall back to the next adapter - the BPMS asked is
    * (or was) the one responsible, the operation simply comes too late.
    */
-  TASK_COMPLETED,
+  COMPLETED,
 
   /**
    * The BPMS definitely does not know the workflow/task. Falling back to the next

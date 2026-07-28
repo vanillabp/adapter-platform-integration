@@ -1,0 +1,9 @@
+vanillabp:
+  adapters:
+    test:
+      type: dummy
+      test: 1
+  workflow-modules:
+    test-module:
+      prioritized-adapters:
+        - test

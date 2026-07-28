@@ -5,11 +5,14 @@ import static io.vanillabp.integration.test.utils.AssertException.exceptionHavin
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
+@ExtendWith(SuppressOutputExtension.class)
 public class UnconfiguredWorkflowModuleConfigurationTest {
 
   // Start the unit test with the extension loaded, and sample classes

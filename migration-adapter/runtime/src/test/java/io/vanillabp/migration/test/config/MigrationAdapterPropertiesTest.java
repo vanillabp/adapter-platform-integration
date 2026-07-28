@@ -4,13 +4,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.slf4j.LoggerFactory;
 
 import ch.qos.logback.classic.Logger;
@@ -19,12 +19,13 @@ import ch.qos.logback.core.read.ListAppender;
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
-import io.vanillabp.integration.adapter.migration.config.ResilienceProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
+@ExtendWith(SuppressOutputExtension.class)
 public class MigrationAdapterPropertiesTest {
 
   private ListAppender<ILoggingEvent> logWatcher;
@@ -84,7 +85,10 @@ public class MigrationAdapterPropertiesTest {
 
     final var properties = new MigrationAdapterProperties();
     properties.setAdapters(Map.of("adapter-test", "adapter2"));
-    properties.setWorkflowModules(Map.of("test-module", testModule));
+    properties.setWorkflowModules(Map.of("fake-module", WorkflowModuleAdapterProperties
+        .builder()
+        .workflowModuleId("fake-module")
+        .build()));
     properties.setPrioritizedAdapters(List.of("adapter-test"));
 
     final var exception = assertThrowsExactly(
@@ -107,7 +111,12 @@ public class MigrationAdapterPropertiesTest {
 
     final var properties = new MigrationAdapterProperties();
     properties.setAdapters(Map.of("adapter-test", "adapter2"));
-    properties.setWorkflowModules(Map.of("fake-module", testModule));
+    properties.setWorkflowModules(Map.of(
+        "test-module", testModule,
+        "fake-module", WorkflowModuleAdapterProperties
+            .builder()
+            .workflowModuleId("fake-module")
+            .build()));
     properties.setPrioritizedAdapters(List.of("adapter-test"));
     properties.setResourcesLocation("whatever");
 
@@ -116,7 +125,7 @@ public class MigrationAdapterPropertiesTest {
     assertTrue(logWatcher.list
         .stream()
         .map(ILoggingEvent::getFormattedMessage)
-        .anyMatch(msg -> msg.equals("""
+        .anyMatch(msg -> msg.startsWith("""
             Found properties for workflow modules
               vanillabp.workflow-modules.fake-module
             which were not found in the class-path!""")));
@@ -320,103 +329,6 @@ public class MigrationAdapterPropertiesTest {
               vanillabp.workflow-modules.test-module.prioritized-adapters or
               vanillabp.prioritized-adapters
             Available adapters are 'adapter-test'.""",
-        exception.getMessage());
-
-  }
-
-  @Test
-  public void testResilienceResolvedOnAllLevels() {
-
-    final var properties = new MigrationAdapterProperties();
-    properties.setAdapters(Map.of("adapter-test", "adapter2"));
-    properties.setPrioritizedAdapters(List.of("adapter-test"));
-    properties.setResilience(ResilienceProperties
-        .builder()
-        .maxRetries(1)
-        .build());
-    properties.setWorkflowModules(Map.of("test-module", WorkflowModuleAdapterProperties
-        .builder()
-        .workflowModuleId("test-module")
-        .resilience(ResilienceProperties
-            .builder()
-            .maxRetries(2)
-            .initialInterval(Duration.ofSeconds(5))
-            .build())
-        .workflows(Map.of("testProcess", WorkflowAdapterProperties
-            .builder()
-            .bpmnProcessId("testProcess")
-            .resilience(ResilienceProperties
-                .builder()
-                .maxRetries(7)
-                .multiplier(3.0)
-                .build())
-            .build()))
-        .build()));
-    properties.validateAndLink();
-
-    // global level
-    final var global = properties.getResilienceFor(null, null);
-    assertEquals(1, global.getMaxRetries());
-    // values not configured fall back to the defaults
-    assertEquals(ResilienceProperties.DEFAULT_INITIAL_INTERVAL, global.getInitialInterval());
-    assertEquals(ResilienceProperties.DEFAULT_MULTIPLIER, global.getMultiplier());
-    assertEquals(ResilienceProperties.DEFAULT_TIMEOUT, global.getTimeout());
-
-    // workflow module level overrides the global block as a whole
-    final var module = properties.getResilienceFor("test-module", null);
-    assertEquals(2, module.getMaxRetries());
-    assertEquals(Duration.ofSeconds(5), module.getInitialInterval());
-    assertEquals(ResilienceProperties.DEFAULT_MULTIPLIER, module.getMultiplier());
-
-    // workflow level overrides the workflow module block as a whole
-    final var workflow = properties.getResilienceFor("test-module", "testProcess");
-    assertEquals(7, workflow.getMaxRetries());
-    assertEquals(3.0, workflow.getMultiplier());
-    // maxRetries/initialInterval of the module block do NOT shine through
-    assertEquals(ResilienceProperties.DEFAULT_INITIAL_INTERVAL, workflow.getInitialInterval());
-
-    // unknown module/workflow falls back to the global block
-    assertEquals(1, properties.getResilienceFor("other-module", null).getMaxRetries());
-    assertEquals(2, properties.getResilienceFor("test-module", "otherProcess").getMaxRetries());
-
-  }
-
-  @Test
-  public void testResilienceDefaultsIfNotConfigured() {
-
-    final var properties = new MigrationAdapterProperties();
-
-    final var resilience = properties.getResilienceFor("test-module", "testProcess");
-
-    assertEquals(ResilienceProperties.DEFAULT_MAX_RETRIES, resilience.getMaxRetries());
-    assertEquals(ResilienceProperties.DEFAULT_INITIAL_INTERVAL, resilience.getInitialInterval());
-    assertEquals(ResilienceProperties.DEFAULT_MULTIPLIER, resilience.getMultiplier());
-    assertEquals(ResilienceProperties.DEFAULT_TIMEOUT, resilience.getTimeout());
-
-  }
-
-  @Test
-  public void testInvalidResilienceValuesAreRejected() {
-
-    final var properties = new MigrationAdapterProperties();
-    properties.setAdapters(Map.of("adapter-test", "adapter2"));
-    properties.setPrioritizedAdapters(List.of("adapter-test"));
-    properties.setResourcesLocation("whatever");
-    properties.setWorkflowModules(Map.of("test-module", WorkflowModuleAdapterProperties
-        .builder()
-        .workflowModuleId("test-module")
-        .resilience(ResilienceProperties
-            .builder()
-            .multiplier(0.5)
-            .build())
-        .build()));
-
-    final var exception = assertThrowsExactly(
-        IllegalStateException.class,
-        () -> properties.validateProperties(List.of("adapter2"), List.of("test-module")));
-
-    assertEquals(
-        "Property 'vanillabp.workflow-modules.test-module.resilience.multiplier' must be at least 1.0 but is '0.5'!",
         exception.getMessage());
 
   }

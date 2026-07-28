@@ -18,8 +18,10 @@ import io.vanillabp.integration.adapter.migration.processservice.MigrationProces
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.adapter.spi.PhaseTwoCall;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOperation;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 @ExtendWith(MockitoExtension.class)
+@ExtendWith(SuppressOutputExtension.class)
 public class PhaseTwoRouterTest {
 
   @Mock

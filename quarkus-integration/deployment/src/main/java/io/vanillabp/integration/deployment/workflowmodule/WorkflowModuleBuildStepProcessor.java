@@ -81,6 +81,10 @@ public class WorkflowModuleBuildStepProcessor {
                 .map(id -> Map.entry(archive, WorkflowModule
                     .builder()
                     .id(id)
+                    // NOTE: sourceUri is resolvable on the BUILD machine / in dev
+                    // mode only (it points into the augmentation classpath) -
+                    // prod-mode code paths must never dereference it; it is kept
+                    // to locate the workflow module (e.g. resources) at build time
                     .sourceUri(sourceUri)
                     .global(archive.equals(applicationArchivesBuildItem.getRootArchive()))
                     .build())))

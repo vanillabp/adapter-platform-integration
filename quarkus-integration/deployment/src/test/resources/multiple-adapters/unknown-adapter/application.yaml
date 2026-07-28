@@ -13,3 +13,5 @@ vanillabp:
       adapters:
         test:
           resources-location: classpath:test-module/processes/dummy
+        test2:
+          resources-location: classpath:test-module/processes/dummy

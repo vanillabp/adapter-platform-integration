@@ -40,10 +40,6 @@ public class DeploymentService {
   @Setter
   private static class BpmsProcessingContextHolder<PC> {
     private PC bpmsProcessingContext;
-
-    public boolean isEmpty() {
-      return bpmsProcessingContext == null;
-    }
   }
 
   /**
@@ -198,23 +194,63 @@ public class DeploymentService {
         deploymentService.getAdapterId());
     // find all BPMN files in the resource location...
     final var bpmsProcessingContext = new BpmsProcessingContextHolder<PC>();
-    bpmnResourcesLoader
-        .apply(resourcesLocation.location())
-        .entrySet()
-        // ...and process them...
-        .forEach(bpmnFileEntry -> processBpmn(
-            workflowModuleId,
-            deploymentService,
-            bpmsProcessingContext.getBpmsProcessingContext(),
-            bpmnFileEntry.getKey(), // filename
-            bpmnFileEntry.getValue(), // InputStream
-            resourcesLocation.vanillaBpBpmn())
-            .ifPresentOrElse(
-                bpmsProcessingContext::setBpmsProcessingContext,
-                () -> log.warn(
-                    "File '{}‘ of workflow module '{}' did not contain any executable processes. Skipping deployment of this file!",
-                    bpmnFileEntry.getKey(),
-                    workflowModuleId)));
+    final var bpmnFiles = bpmnResourcesLoader.apply(resourcesLocation.location());
+    try {
+      bpmnFiles
+          .entrySet()
+          // ...and process them...
+          .forEach(bpmnFileEntry -> processBpmn(
+              workflowModuleId,
+              deploymentService,
+              bpmsProcessingContext.getBpmsProcessingContext(),
+              bpmnFileEntry.getKey(), // filename
+              bpmnFileEntry.getValue(), // InputStream
+              resourcesLocation.vanillaBpBpmn())
+              .ifPresentOrElse(
+                  bpmsProcessingContext::setBpmsProcessingContext,
+                  () -> log.warn(
+                      "File '{}' of workflow module '{}' did not contain any executable processes. Skipping deployment of this file!",
+                      bpmnFileEntry.getKey(),
+                      workflowModuleId)));
+    } finally {
+      // streams are opened by the platform's resources loader and owned by this
+      // pipeline: close ALL of them regardless of the processing outcome - also
+      // the ones never processed because an earlier file failed (adapters must
+      // not close them, see AdapterDeploymentService#readBpmn)
+      bpmnFiles.forEach((
+          filename,
+          bpmn) -> {
+        try {
+          bpmn.close();
+        } catch (final java.io.IOException e) {
+          log.warn(
+              "Could not close the stream of BPMN file '{}' of workflow module '{}'",
+              filename,
+              workflowModuleId,
+              e);
+        }
+      });
+    }
+
+    // zero executable processes (empty/missing location or only non-executable
+    // BPMN): warn with the key to change and skip this adapter for this module -
+    // the adapter must never be called with a null processing context
+    if (bpmsProcessingContext.getBpmsProcessingContext() == null) {
+      log.warn(
+          "No executable BPMN processes found for workflow module '{}' at location '{}'! "
+              + "Adapter '{}' is skipped for this workflow module. If this is unintended, "
+              + "check property '{}.workflow-modules.{}.adapters.{}.resources-location' "
+              + "(or '{}.resources-location') and the BPMN files at that location.",
+          workflowModuleId,
+          resourcesLocation.location(),
+          deploymentService.getAdapterId(),
+          MigrationAdapterProperties.PREFIX,
+          workflowModuleId,
+          deploymentService.getAdapterId(),
+          MigrationAdapterProperties.PREFIX);
+      return;
+    }
+
     // ...and finally deploy all the resources together (BPMN, DMN) to the BPMS
     deploymentService.deployResources(workflowModuleId, bpmsProcessingContext.getBpmsProcessingContext());
     bpmsProcessingContexts
@@ -272,6 +308,18 @@ public class DeploymentService {
           filename,
           bpmnProcessId,
           bpmnModel);
+      if (context == null) {
+        throw new IllegalStateException(
+            """
+                Adapter '%s' returned a null processing context from prepareBpmn for BPMN process '%s' \
+                of file '%s' of workflow module '%s'! prepareBpmn must always return a non-null \
+                context - it is threaded through the whole deployment pipeline."""
+                .formatted(
+                    deploymentService.getAdapterId(),
+                    bpmnProcessId,
+                    filename,
+                    workflowModuleId));
+      }
       // ...wire the business code to the BPMN's tasks...
       deploymentService.wireBpmn(
           workflowModuleId,
@@ -279,13 +327,17 @@ public class DeploymentService {
           bpmnProcessId,
           bpmnModel,
           context);
-      // ...and do wiring for all matching extensions wiring services found
-      // (extensions receive the same context as the adapter's wireBpmn)
+      // ...and do wiring for all matching extensions wiring services found:
+      // matching uses DECLARED-type assignability - the same rule as
+      // startWorkflowProcessing/stopWorkflowProcessing - so an extension is either
+      // consistently wired AND started or consistently neither
       final var currentContext = context;
       wiringServices
           .stream()
-          .filter(wiringService -> wiringService.getModelType().isInstance(bpmnModel))
-          .filter(wiringService -> wiringService.getProcessContextType().isInstance(currentContext))
+          .filter(wiringService -> wiringService.getModelType()
+              .isAssignableFrom(deploymentService.getModelType()))
+          .filter(wiringService -> wiringService.getProcessContextType()
+              .isAssignableFrom(deploymentService.getProcessContextType()))
           .map(wiringService -> (ExtensionWiringService<BPMN, PC>) wiringService)
           .forEach(wiringService -> wiringService.wireBpmn(
               workflowModuleId,

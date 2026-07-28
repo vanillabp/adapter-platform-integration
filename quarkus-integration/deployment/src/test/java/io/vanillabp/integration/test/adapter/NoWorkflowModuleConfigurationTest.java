@@ -5,11 +5,14 @@ import static io.vanillabp.integration.test.utils.AssertException.exceptionHavin
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
+@ExtendWith(SuppressOutputExtension.class)
 public class NoWorkflowModuleConfigurationTest {
 
   // Start the unit test with the extension loaded, and sample classes
@@ -24,7 +27,10 @@ public class NoWorkflowModuleConfigurationTest {
           .addClass(DummyAdapters.class))                              // necessary due to anonymous class in DummyAdapters
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter())     // add mocked adapter
       .assertException(exceptionHavingMessage(IllegalStateException.class,
-          "No workflow-modules configured! Add properties sections 'vanillabp.workflow-modules.test-module'."));
+          """
+              Unconfigured VanillaBP workflow modules were found in classpath:
+                test-module
+              Add property keys 'vanillabp.workflow-modules.*' to configure them."""));
 
   @Test
   public void testAdapterConfiguration() {

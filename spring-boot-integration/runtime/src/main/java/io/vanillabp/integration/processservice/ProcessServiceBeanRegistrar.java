@@ -54,14 +54,28 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
 
     try {
 
-      // find all workflow service classes in classpath
+      // find all workflow service classes in classpath: @WorkflowService is
+      // @Inherited, so the superclass chain has to be examined, too (a subclass of
+      // an annotated class is itself a workflow service)
+      final var metadataReaderFactory = new org.springframework.core.type.classreading.SimpleMetadataReaderFactory();
       final var workflowServiceClasses = new ClasspathScanner()
-          // find classes annotated with @WorkflowService
           .allClasses(
               "",
               metadataReader -> {
                 try {
-                  return metadataReader.getAnnotationMetadata().hasAnnotation(WorkflowService.class.getName());
+                  var metadata = metadataReader.getAnnotationMetadata();
+                  while (true) {
+                    if (metadata.hasAnnotation(WorkflowService.class.getName())) {
+                      return true;
+                    }
+                    final var superClassName = metadata.getSuperClassName();
+                    if ((superClassName == null) || superClassName.startsWith("java.")) {
+                      return false;
+                    }
+                    metadata = metadataReaderFactory
+                        .getMetadataReader(superClassName)
+                        .getAnnotationMetadata();
+                  }
                 } catch (Exception e) {
                   return false;
                 }
@@ -141,7 +155,13 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                   .filter(workflowModule -> workflowModule.isWorkflowServiceKnown(serviceClass))
                   .findFirst()
                   .map(WorkflowModule::getId)
-                  .orElseThrow();
+                  .orElseThrow(() -> new IllegalStateException(
+                      """
+                          Workflow service class '%s' does not belong to any workflow module! Every \
+                          @WorkflowService class must be part of a workflow module (a classpath \
+                          entry having a 'META-INF/workflow-module' marker file) or of the global \
+                          workflow module (no marker file anywhere in the application)."""
+                          .formatted(serviceClass.getName())));
 
               final var properties = supplierContext.bean(
                   SpringBootMigrationAdapterAutoConfiguration.BEANNAME_MIGRATIONADAPERPROPERTIES,

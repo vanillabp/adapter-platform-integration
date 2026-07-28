@@ -1,11 +1,9 @@
 package io.vanillabp.integration.deployment;
 
 import java.net.URI;
-
-import org.jboss.jandex.AnnotationTransformation;
+import java.util.List;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
-import io.quarkus.arc.deployment.AnnotationsTransformerBuildItem;
 import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.annotations.BuildProducer;
@@ -16,19 +14,16 @@ import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.ObjectSubstitutionBuildItem;
 import io.quarkus.deployment.builditem.RunTimeConfigBuilderBuildItem;
 import io.quarkus.deployment.builditem.StaticInitConfigBuilderBuildItem;
+import io.vanillabp.integration.deployment.processservice.VanillaBpMigratableProcessServiceBuildItem;
 import io.vanillabp.integration.runtime.config.VanillaBpConfigBuilder;
 import io.vanillabp.integration.runtime.deployment.VanillaBpShutdownObserver;
 import io.vanillabp.integration.runtime.outbox.JdbcPhaseTwoOutbox;
 import io.vanillabp.integration.runtime.outbox.JdbcPhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.runtime.processservice.EventualConsistencyTransactionSupport;
 import io.vanillabp.integration.runtime.processservice.PhaseTwoRouterProducer;
-import io.vanillabp.integration.runtime.processservice.TransactionInterceptor;
-import io.vanillabp.integration.runtime.processservice.VanillaBpTaskInterception;
 import io.vanillabp.integration.runtime.util.UriSubstitute;
 import io.vanillabp.integration.runtime.util.UriSubstitution;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
-import io.vanillabp.spi.service.WorkflowTask;
-import io.vanillabp.spi.service.WorkflowTasks;
 
 /**
  * Main VanillaBP extension processor, responsible for processing configuration
@@ -101,38 +96,28 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
-   * Build step for introducing {@link TransactionInterceptor} for all the methods
-   * annotated by @{@link WorkflowTask}.
-   * <p>
-   * The annotation @{@link WorkflowTask} is not an interceptor binding. Additionally, it
-   * is repeatable: a method carrying two or more <code>&#64;WorkflowTask</code>
-   * annotations only carries the container annotation @{@link WorkflowTasks} in the
-   * Jandex index, so an interceptor binding registered for <code>&#64;WorkflowTask</code>
-   * would silently not match such methods. Therefore, the internal interceptor binding
-   * @{@link VanillaBpTaskInterception} (used by {@link TransactionInterceptor}) is added
-   * to every method carrying <code>&#64;WorkflowTask</code> or
-   * <code>&#64;WorkflowTasks</code>.
+   * Registers the adapters' process-service beans announced via
+   * {@link VanillaBpMigratableProcessServiceBuildItem}: adapters only produce the
+   * build item (adapter type + bean class), the VanillaBP extension registers the
+   * bean - no separate self-registration needed.
    *
-   * @param annotationsTransformer Used to add the interceptor binding to workflow task methods
-   * @return The additional {@link TransactionInterceptor} bean
+   * @param processServicesProvidedByAdapters The build items produced by the adapters
+   * @param additionalBeans Producer used to register the announced beans
    */
   @BuildStep
-  AdditionalBeanBuildItem buildTransactionInterceptors(
-      final BuildProducer<AnnotationsTransformerBuildItem> annotationsTransformer) {
+  void buildAdapterProcessServiceBeans(
+      final List<VanillaBpMigratableProcessServiceBuildItem> processServicesProvidedByAdapters,
+      final BuildProducer<AdditionalBeanBuildItem> additionalBeans) {
 
-    annotationsTransformer.produce(new AnnotationsTransformerBuildItem(AnnotationTransformation
-        .forMethods()
-        .whenAnyMatch(WorkflowTask.class, WorkflowTasks.class)
-        .transform(t -> t.add(VanillaBpTaskInterception.class))));
-
-    // Classes of the runtime module need to be registered as additional beans to become
-    // part of the bean archive index. This also registers @VanillaBpTaskInterception as
-    // an interceptor binding since the annotation is meta-annotated by @InterceptorBinding.
-    return AdditionalBeanBuildItem
-        .builder()
-        .addBeanClasses(TransactionInterceptor.class, VanillaBpTaskInterception.class)
-        .setUnremovable() // don't remove, since it is used under the hoods
-        .build();
+    processServicesProvidedByAdapters
+        .stream()
+        .map(VanillaBpMigratableProcessServiceBuildItem::getMigratableProcessServiceBeanClass)
+        .filter(beanClass -> (beanClass != null) && !beanClass.isBlank())
+        .forEach(beanClass -> additionalBeans.produce(AdditionalBeanBuildItem
+            .builder()
+            .addBeanClass(beanClass)
+            .setUnremovable() // don't remove, since it is used under the hoods
+            .build()));
 
   }
 

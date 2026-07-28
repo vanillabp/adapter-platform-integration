@@ -4,11 +4,13 @@ import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.samples.sample.Aggregate;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.ProcessService;
 import jakarta.inject.Inject;
 
@@ -22,6 +24,7 @@ import jakarta.inject.Inject;
  * introduced by the adapter-config-model story (26d), which will turn this failure
  * into a green boot.
  */
+@ExtendWith(SuppressOutputExtension.class)
 public class MultipleAdapterConfigurationTest {
 
   // Start the unit test with the extension loaded, and sample classes

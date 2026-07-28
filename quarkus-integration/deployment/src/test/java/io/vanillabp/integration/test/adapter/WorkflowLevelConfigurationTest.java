@@ -5,16 +5,19 @@ import static io.vanillabp.integration.test.utils.AssertException.exceptionHavin
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
  * Workflow-level properties (vanillabp.workflow-modules.*.workflows.*) are not supported yet.
  * Until implemented they must be rejected instead of being ignored silently, since ignoring
  * them could elect the wrong BPMS without any error.
  */
+@ExtendWith(SuppressOutputExtension.class)
 public class WorkflowLevelConfigurationTest {
 
   // Start the unit test with the extension loaded, and sample classes

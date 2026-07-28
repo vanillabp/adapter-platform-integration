@@ -44,8 +44,10 @@ import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterPr
 import io.vanillabp.integration.adapter.migration.deployment.DeploymentService;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 @ExtendWith(MockitoExtension.class)
+@ExtendWith(SuppressOutputExtension.class)
 public class DeploymentServiceTest {
 
   private ListAppender<ILoggingEvent> logWatcher;
@@ -75,6 +77,13 @@ public class DeploymentServiceTest {
     logWatcher = new ListAppender<>();
     logWatcher.start();
     ((Logger) LoggerFactory.getLogger(DeploymentService.class)).addAppender(logWatcher);
+
+    // extension matching uses the adapters' DECLARED types - stub them for all
+    // tests (real adapters always provide them)
+    org.mockito.Mockito.lenient().when(adapter1DeploymentService.getModelType()).thenReturn(Integer.class);
+    org.mockito.Mockito.lenient().when(adapter1DeploymentService.getProcessContextType()).thenReturn(Integer.class);
+    org.mockito.Mockito.lenient().when(adapter2DeploymentService.getModelType()).thenReturn(Long.class);
+    org.mockito.Mockito.lenient().when(adapter2DeploymentService.getProcessContextType()).thenReturn(Long.class);
 
   }
 
@@ -1027,6 +1036,164 @@ public class DeploymentServiceTest {
   /**
    * Creates a dummy InputStream for BPMN tests.
    */
+  /**
+   * An input stream tracking whether it was closed - used to pin the
+   * stream-ownership contract of the deployment pipeline.
+   */
+  private static class CountingCloseInputStream extends ByteArrayInputStream {
+
+    private boolean closed = false;
+
+    private CountingCloseInputStream() {
+      super("<bpmn>dummy</bpmn>".getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Override
+    public void close() throws java.io.IOException {
+      closed = true;
+      super.close();
+    }
+
+  }
+
+  @Nested
+  @DisplayName("Pipeline hygiene tests")
+  class PipelineHygieneTests {
+
+    @Test
+    @DisplayName("All BPMN streams are closed even if parsing the first of several files fails")
+    public void allStreamsAreClosedOnParseFailure() {
+
+      final var properties = createPropertiesWithAdapter("adapter-test1");
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+
+      final var stream1 = new CountingCloseInputStream();
+      final var stream2 = new CountingCloseInputStream();
+      final var files = new java.util.LinkedHashMap<String, InputStream>();
+      files.put("first.bpmn", stream1);
+      files.put("second.bpmn", stream2);
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> files;
+
+      // parsing the FIRST file fails - the second file is never processed
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenThrow(new io.vanillabp.integration.adapter.spi.BpmnParseException("parse failure of first.bpmn"));
+
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService), List.of());
+
+      assertThrows(
+          io.vanillabp.integration.adapter.spi.BpmnParseException.class,
+          () -> testee.deployResources(List.of("test-module"), resourcesLoader));
+
+      // no open streams remain - also the never-processed one is closed
+      assertTrue(stream1.closed, "stream of the failing file has to be closed");
+      assertTrue(stream2.closed, "stream of the never-processed file has to be closed");
+
+    }
+
+    @Test
+    @DisplayName("Zero executable processes skip the adapter with a warning instead of a null context")
+    public void zeroExecutableProcessesSkipAdapter() {
+
+      final var properties = createPropertiesWithAdapter("adapter-test1");
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("collab.bpmn",
+          createDummyBpmnInputStream());
+
+      // no executable processes in the file
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of());
+
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService), List.of());
+
+      testee.deployResources(List.of("test-module"), resourcesLoader);
+      testee.startWorkflowProcessing(List.of("test-module"));
+      testee.stopWorkflowProcessing(List.of("test-module"));
+
+      // the adapter is never called with a null processing context
+      verify(adapter1DeploymentService, never()).deployResources(anyString(), any());
+      verify(adapter1DeploymentService, never()).startWorkflowProcessing(anyString(), any());
+      verify(adapter1DeploymentService, never()).stopWorkflowProcessing(anyString(), any());
+
+      // the warning names the location and the property key to change
+      assertTrue(logWatcher.list
+          .stream()
+          .map(ILoggingEvent::getFormattedMessage)
+          .anyMatch(msg -> msg.contains("No executable BPMN processes found") && msg.contains("test-module") && msg
+              .contains("resources-location")));
+
+    }
+
+    @Test
+    @DisplayName("A null context returned by prepareBpmn fails with a guiding message")
+    public void nullContextFromPrepareBpmnFails() {
+
+      final var properties = createPropertiesWithAdapter("adapter-test1");
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
+          createDummyBpmnInputStream());
+
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of(Map.entry("TestProcess", 42)));
+      when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
+          .thenReturn(null);
+
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService), List.of());
+
+      final var exception = assertThrows(
+          IllegalStateException.class,
+          () -> testee.deployResources(List.of("test-module"), resourcesLoader));
+      assertTrue(exception.getMessage().contains("prepareBpmn"));
+      assertTrue(exception.getMessage().contains("adapter-test1"));
+
+    }
+
+    @Test
+    @DisplayName("Extension matching uses declared types: subtype extension is neither wired nor started")
+    public void subtypeExtensionIsNeitherWiredNorStarted() {
+
+      final var properties = createPropertiesWithAdapter("adapter-test1");
+
+      // an adapter declaring Number as model type - but delivering an Integer
+      // instance at runtime
+      @SuppressWarnings("unchecked")
+      final AdapterDeploymentService<Number, Number> numberAdapter = org.mockito.Mockito
+          .mock(AdapterDeploymentService.class);
+      lenient().when(numberAdapter.getAdapterId()).thenReturn("adapter-test1");
+      lenient().when(numberAdapter.getModelType()).thenReturn(Number.class);
+      lenient().when(numberAdapter.getProcessContextType()).thenReturn(Number.class);
+      lenient().when(numberAdapter.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of(Map.entry("TestProcess", 42)));
+      lenient().when(numberAdapter.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
+          .thenReturn(100);
+
+      // an extension declaring the SUBTYPE Integer: with the former isInstance
+      // matching it was wired (the actual model IS an Integer) but never started -
+      // declared-type matching makes it consistently neither
+      lenient().when(adapter1WiringService.getOrder()).thenReturn(1);
+      lenient().when(adapter1WiringService.getModelType()).thenReturn(Integer.class);
+      lenient().when(adapter1WiringService.getProcessContextType()).thenReturn(Integer.class);
+
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
+          createDummyBpmnInputStream());
+
+      final var testee = new DeploymentService(
+          properties, List.of(numberAdapter), List.of(adapter1WiringService));
+
+      testee.deployResources(List.of("test-module"), resourcesLoader);
+      testee.startWorkflowProcessing(List.of("test-module"));
+
+      verify(adapter1WiringService, never()).wireBpmn(anyString(), anyString(), anyString(), any(), any());
+      verify(adapter1WiringService, never()).startWorkflowProcessing(anyString(), any());
+
+    }
+
+  }
+
   private InputStream createDummyBpmnInputStream() {
 
     return new ByteArrayInputStream("<bpmn>dummy</bpmn>".getBytes(StandardCharsets.UTF_8));

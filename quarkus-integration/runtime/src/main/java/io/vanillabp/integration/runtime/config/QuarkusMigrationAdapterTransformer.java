@@ -13,7 +13,6 @@ import java.util.stream.StreamSupport;
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
-import io.vanillabp.integration.adapter.migration.config.ResilienceProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import lombok.Builder;
@@ -78,13 +77,6 @@ public class QuarkusMigrationAdapterTransformer {
 
     result.setResourcesLocation(properties.resourcesLocation().orElse(null));
 
-    // map and validate resilience settings
-    final var globalResilience = mapResilience(properties.resilience().orElse(null));
-    if (globalResilience != null) {
-      globalResilience.validate("%s.resilience".formatted(PREFIX));
-    }
-    result.setResilience(globalResilience);
-
     // validate properties of adapters against adapters found in the classpath
     final var adaptersConfigured = getAndValidateAdaptersConfigured(
         adaptersFound);
@@ -99,10 +91,26 @@ public class QuarkusMigrationAdapterTransformer {
         adaptersConfigured);
     result.setPrioritizedAdapters(prioritizedAdaptersConfigured);
 
-    // validate properties of workflow modules against workflow modules found in the classpath
-    final var workflowModulesConfigured = getAndValidateWorkflowModulesConfigured(
-        workflowModulesFound);
+    // map properties of workflow modules
+    final var workflowModulesConfigured = getWorkflowModulesConfigured();
     result.setWorkflowModules(workflowModulesConfigured);
+
+    // run the core validation - one validation, in core, identical on all
+    // platforms (adapter types are the capability suffixes of the VanillaBP
+    // adapter extensions loaded)
+    final var adapterTypesProvidedByExtensions = capabilities
+        .stream()
+        .filter(capability -> capability.startsWith(PREFIX_ADAPTER_PACKAGE))
+        .map(pkg -> pkg.substring(PREFIX_ADAPTER_PACKAGE.length()))
+        .toList();
+    final var knownWorkflowModuleIds = workflowModulesFound
+        .stream()
+        .map(WorkflowModule::getId)
+        .toList();
+    result.validateProperties(adapterTypesProvidedByExtensions, knownWorkflowModuleIds);
+
+    // Quarkus-specific consistency: every adapter extension has to be configured
+    validateAllExtensionsConfigured(adaptersFound, adapterTypesProvidedByExtensions, adaptersConfigured);
 
     return result;
 
@@ -137,20 +145,15 @@ public class QuarkusMigrationAdapterTransformer {
   }
 
   /**
-   * Determine workflow module properties and validate them against workflow modules found in classpath.
+   * Maps workflow module properties. Whether the configured modules match the
+   * modules found in the classpath is validated by the core
+   * ({@link MigrationAdapterProperties#validateProperties(List, List)}).
    *
-   * @param workflowModulesFound All workflow modules found based on META-INF/workflow-module files
    * @return Map of workflow modules (key = workflow module ID, value = properties)
    */
-  private Map<String, WorkflowModuleAdapterProperties> getAndValidateWorkflowModulesConfigured(
-      final Collection<WorkflowModule> workflowModulesFound) {
+  private Map<String, WorkflowModuleAdapterProperties> getWorkflowModulesConfigured() {
 
-    final var knownWorkflowModuleIds = workflowModulesFound
-        .stream()
-        .map(WorkflowModule::getId)
-        .toList();
-
-    final var result = properties
+    return properties
         .workflowModules()
         .entrySet()
         .stream()
@@ -162,9 +165,6 @@ public class QuarkusMigrationAdapterTransformer {
                 .prioritizedAdapters(workflowModule.getValue().prioritizedAdapters().isPresent()
                     ? workflowModule.getValue().prioritizedAdapters().get()
                     : List.of())
-                .resilience(mapAndValidateModuleResilience(
-                    workflowModule.getKey(),
-                    workflowModule.getValue().resilience().orElse(null)))
                 // TODO fill workflows; until implemented, configured workflow-level
                 //  properties are rejected by rejectWorkflowLevelConfiguration()
                 .workflows(Map.of())
@@ -182,90 +182,6 @@ public class QuarkusMigrationAdapterTransformer {
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)))
                 .build()))
         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-    if (result.isEmpty() && !knownWorkflowModuleIds.isEmpty()) {
-      final var missingConfigSections = knownWorkflowModuleIds
-          .stream()
-          .map(module -> "%s.workflow-modules.%s".formatted(PREFIX, module))
-          .collect(Collectors.joining("', '"));
-      throw new IllegalStateException(
-          "No workflow-modules configured! Add properties sections '%s'.".formatted(missingConfigSections));
-    }
-
-    // check for unconfigured workflow modules
-    final var unconfiguredModules = knownWorkflowModuleIds
-        .stream()
-        .filter(module -> !result.containsKey(module))
-        .collect(Collectors.joining("\n, "));
-    if (!unconfiguredModules.isEmpty()) {
-      throw new IllegalStateException(
-          """
-              Unconfigured VanillaBP workflow modules were found in classpath:
-                %s
-              Add property keys '%s.workflow-modules.*' to configure them."""
-              .formatted(unconfiguredModules, PREFIX));
-    }
-
-    // check for unknown adapters
-    final var unknownModules = result
-        .keySet()
-        .stream()
-        .filter(workflowModuleAdapterProperties -> !knownWorkflowModuleIds.contains(workflowModuleAdapterProperties))
-        .map(workflowModuleAdapterProperties -> "%s.workflow-modules.%s".formatted(PREFIX,
-            workflowModuleAdapterProperties))
-        .collect(Collectors.joining("\n, "));
-    if (!unknownModules.isEmpty()) {
-      throw new IllegalStateException(
-          """
-              Property keys '%s.workflow-modules.*' must name VanillaBP workflow modules available in classpath!
-              These unknown workflow modules were found in properties:
-                %s
-              Available workflow modules currently loaded in classpath: '%s'."""
-              .formatted(PREFIX, unknownModules, String.join("', '", knownWorkflowModuleIds)));
-    }
-
-    return result;
-
-  }
-
-  /**
-   * Maps the Quarkus specific resilience properties to the platform-neutral
-   * resilience properties of the core.
-   *
-   * @param resilience The Quarkus specific resilience block or null
-   * @return The platform-neutral resilience block or null if none was configured
-   */
-  private ResilienceProperties mapResilience(
-      final QuarkusMigrationAdapterProperties.ResilienceProperties resilience) {
-
-    if (resilience == null) {
-      return null;
-    }
-    return ResilienceProperties
-        .builder()
-        .maxRetries(resilience.maxRetries().orElse(null))
-        .initialInterval(resilience.initialInterval().orElse(null))
-        .multiplier(resilience.multiplier().orElse(null))
-        .timeout(resilience.timeout().orElse(null))
-        .build();
-
-  }
-
-  /**
-   * Maps and validates the resilience block of a workflow module.
-   *
-   * @param workflowModuleId The workflow module ID (used in error messages)
-   * @param resilience The Quarkus specific resilience block or null
-   * @return The platform-neutral resilience block or null if none was configured
-   */
-  private ResilienceProperties mapAndValidateModuleResilience(
-      final String workflowModuleId,
-      final QuarkusMigrationAdapterProperties.ResilienceProperties resilience) {
-
-    final var result = mapResilience(resilience);
-    if (result != null) {
-      result.validate("%s.workflow-modules.%s.resilience".formatted(PREFIX, workflowModuleId));
-    }
-    return result;
 
   }
 
@@ -360,23 +276,8 @@ public class QuarkusMigrationAdapterTransformer {
               .formatted(missingConfigSections));
     }
 
-    // check for unknown adapters
-    final var unknownAdapters = result
-        .entrySet()
-        .stream()
-        .filter(adapter -> !adapterTypesProvidedByOtherExtensions.contains(adapter.getValue()))
-        .map(adapter -> "'%s' found in '%s.adapters.%s.type'".formatted(adapter.getValue(), PREFIX, adapter.getKey()))
-        .collect(Collectors.joining("\n  "));
-    if (!unknownAdapters.isEmpty()) {
-      throw new IllegalStateException(
-          """
-              Properties '%s.adapters.*.type' must contain VanillaBP adapters added as Quarkus extension!
-              These adapters are unknown:
-                %s
-              Available adapter types provided by Quarkus extensions currently loaded: %s."""
-              .formatted(PREFIX, unknownAdapters,
-                  String.join(", ", adapterTypesProvidedByOtherExtensions)));
-    }
+    // whether the configured types are actually provided by extensions is
+    // validated by the core (MigrationAdapterProperties#validateProperties)
 
     // validate adapters provided by VanillaBP Quarkus adapter extensions
     final var extensionsWithoutCapability = adaptersFound
@@ -392,24 +293,31 @@ public class QuarkusMigrationAdapterTransformer {
               .formatted(extensionsWithoutCapability));
     }
 
-    // validate properties against adapters provided by VanillaBP Quarkus adapter extensions
-    final var missingAdapters = result
-        .values()
-        .stream()
-        .filter(type -> !adaptersFound.contains(type))
-        .collect(Collectors.joining("\n  "));
-    if (!missingAdapters.isEmpty()) {
-      throw new IllegalStateException(
-          """
-              Missing VanillaBP adapter extensions for these types found in properties:
-                %s"""
-              .formatted(missingAdapters));
-    }
+    // whether configured types actually exist is validated by the core against
+    // the capability-derived types (MigrationAdapterProperties#validateProperties)
+
+    return result;
+
+  }
+
+  /**
+   * Validates - AFTER the core validation, so configuration typos are reported
+   * with the core's guiding messages first - that every VanillaBP adapter
+   * extension added to the application is actually configured.
+   *
+   * @param adaptersFound All adapters found during augmentation
+   * @param adapterTypesProvidedByExtensions The capability-derived adapter types
+   * @param adapters The configured adapters (key = adapter id, value = type)
+   */
+  private void validateAllExtensionsConfigured(
+      final Collection<String> adaptersFound,
+      final List<String> adapterTypesProvidedByExtensions,
+      final Map<String, String> adapters) {
 
     // validate properties of process services against adapters provided by VanillaBP Quarkus adapter extensions
     final var buildItemsNotConfigured = adaptersFound
         .stream()
-        .filter(Predicate.not(result::containsValue))
+        .filter(Predicate.not(adapters::containsValue))
         .map(adapter -> "%s.adapters.*.type=%s".formatted(PREFIX, adapter))
         .collect(Collectors.joining("\n  "));
     if (!buildItemsNotConfigured.isEmpty()) {
@@ -422,9 +330,9 @@ public class QuarkusMigrationAdapterTransformer {
     }
 
     // test for adapters not found in properties
-    final var unconfiguredAdapters = adapterTypesProvidedByOtherExtensions
+    final var unconfiguredAdapters = adapterTypesProvidedByExtensions
         .stream()
-        .filter(adapter -> !result.containsValue(adapter))
+        .filter(adapter -> !adapters.containsValue(adapter))
         .collect(Collectors.joining(", "));
     if (!unconfiguredAdapters.isEmpty()) {
       throw new IllegalStateException(
@@ -433,8 +341,6 @@ public class QuarkusMigrationAdapterTransformer {
               Add section section if intended or remove extensions for these types: %s."""
               .formatted(PREFIX, unconfiguredAdapters));
     }
-
-    return result;
 
   }
 
@@ -453,35 +359,9 @@ public class QuarkusMigrationAdapterTransformer {
       return adapters.keySet().stream().toList();
     }
 
-    // if more than one adapter is configured, then the
-    // property vanillabp.prioritized-adapters has to list each adapter
-    // configured:
-    if (properties.prioritizedAdapters()
-        .isEmpty() || (adapters.size() != properties.prioritizedAdapters().get().size())) {
-      throw new IllegalStateException(
-          """
-              The property '%s.prioritized-adapters' must list all the adapters configured in '%s.adapters.*' to define
-              the order in which adapters are addressed to find workflows running.
-              Configured adapters are: %s."""
-              .formatted(PREFIX, PREFIX, String.join(", ", adapters.keySet())));
-    }
-
-    final var unknownAdapters = properties
-        .prioritizedAdapters()
-        .get()
-        .stream()
-        .filter(adapter -> !adapters.containsKey(adapter))
-        .map(adapter -> "%s -> '%s.adapters.%s'".formatted(adapter, PREFIX, adapter))
-        .collect(Collectors.joining("\n  "));
-    if (!unknownAdapters.isEmpty()) {
-      throw new IllegalStateException(
-          """
-              The property '%s.prioritized-adapters' lists these adapters for which no property sections were found:
-                %s"""
-              .formatted(PREFIX, unknownAdapters));
-    }
-
-    return properties.prioritizedAdapters().get();
+    // completeness, duplicates and unknown adapter ids are validated by the core
+    // (MigrationAdapterProperties#validateProperties)
+    return properties.prioritizedAdapters().orElse(List.of());
 
   }
 

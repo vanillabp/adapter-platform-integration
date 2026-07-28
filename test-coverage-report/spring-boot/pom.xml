@@ -48,6 +48,11 @@
       <artifactId>outbox-mongo-integration-test</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <dependency>
+      <groupId>io.vanillabp.springboot</groupId>
+      <artifactId>fatjar-integration-test</artifactId>
+      <version>${project.version}</version>
+    </dependency>
   </dependencies>
 
   <build>

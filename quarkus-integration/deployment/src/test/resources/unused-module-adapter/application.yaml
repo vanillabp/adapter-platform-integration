@@ -1,17 +1,12 @@
 vanillabp:
-  resilience:
-    max-retries: 5
-    initial-interval: PT2S
-    multiplier: 1.5
-    timeout: PT10S
   adapters:
     test:
       type: dummy
-      deployment-failure: warn
+      test: 1
   workflow-modules:
     test-module:
-      resilience:
-        max-retries: 9
       adapters:
         test:
+          resources-location: classpath:test-module/processes/dummy
+        typo-adapter:
           resources-location: classpath:test-module/processes/dummy

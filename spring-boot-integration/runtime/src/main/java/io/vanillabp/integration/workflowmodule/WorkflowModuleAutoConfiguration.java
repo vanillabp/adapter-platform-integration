@@ -82,7 +82,7 @@ public class WorkflowModuleAutoConfiguration {
               throw new BeanCreationException(
                   "Could not load workflow module descriptors from classpath '"
                       + WorkflowModule.METAINF_WORKFLOWMODULE
-                      + "'");
+                      + "'", e);
             }
           })
           .toList();
@@ -93,7 +93,7 @@ public class WorkflowModuleAutoConfiguration {
       throw new BeanCreationException(
           "Could not load workflow module descriptors from classpath '"
               + WorkflowModule.METAINF_WORKFLOWMODULE
-              + "'");
+              + "'", e);
     }
 
   }

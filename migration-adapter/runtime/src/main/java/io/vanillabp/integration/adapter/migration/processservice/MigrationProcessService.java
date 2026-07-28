@@ -91,7 +91,7 @@ public class MigrationProcessService<A> {
 
   }
 
-  public boolean needsTransactionForStartingWorkflows() {
+  public boolean needsTwoPhaseCommitForStartingWorkflows() {
 
     return adapterProcessServices
         .getFirst()

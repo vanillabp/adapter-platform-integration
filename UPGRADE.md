@@ -4,6 +4,44 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Validation parity, ProcessService stubs, SPI alignments (2026-07-28)
+
+Hardening changes relevant for adapters and early adopters:
+
+- **One validation, in core:** `MigrationAdapterProperties.validateProperties` is
+  now called on BOTH platforms (Quarkus previously re-implemented the checks
+  inline and diverged). The transformers only map platform bindings and check
+  what only the platform can know (adapters present in classpath, workflow-level
+  rejection, deployment-failure value parsing, Quarkus extension/capability
+  consistency). Behavior changes: configuration for a workflow module NOT in the
+  classpath only WARNS (previously Quarkus failed the build); new checks reject
+  unused `vanillabp.workflow-modules.<m>.adapters.<id>` entries and duplicates in
+  `prioritized-adapters` lists.
+- **`vanillabp.resilience.*` removed entirely** ("optimize late" - it was mapped
+  and validated but never consumed). Retry/timeout design returns per adapter
+  with the first consumer (complete/cancel-task story).
+- **`ProcessService` operations not yet implemented throw
+  `UnsupportedOperationException`** ("not yet supported by VanillaBP 2") from the
+  new platform-neutral base `ProcessServiceBase` - replacing Spring's silent
+  no-ops and Quarkus' raw `AbstractMethodError`.
+- **`WorkflowAwareness` constants renamed:** `TASK_ACTIVE` → `ACTIVE`,
+  `TASK_COMPLETED` → `COMPLETED` (the enum answers for workflows AND tasks; both
+  constants were unused so far, no adapter is affected).
+- **`AggregatePersistenceAware.loadById(Object)` added** (business SPI; needed by
+  the task-processing and sync stories). The platform-provided supports implement
+  it (Spring Data: `findById`). Additionally ALL methods of the interface are now
+  `default` methods throwing an `UnsupportedOperationException` with a guiding
+  message - future method additions stay source-compatible for hand-written
+  implementations; the platform supports override everything.
+- **Naming unified:** `MigrationProcessService.needsTransactionForStartingWorkflows`
+  → `needsTwoPhaseCommitForStartingWorkflows` (the SPI term).
+- **Deployment pipeline hygiene:** BPMN input streams are owned and closed by the
+  pipeline (adapters must not close them); `prepareBpmn` must return non-null;
+  modules without any executable BPMN process are skipped with a warning instead
+  of calling adapters with a null processing context; extension matching uses
+  declared-type assignability everywhere (wiring previously matched on actual
+  instances while start/stop matched on declared types).
+
 ## Phase-two chain collapsed: `PhaseTwoCall` + `PhaseTwoRouter` (2026-07-28)
 
 Breaking changes of the outbox part of the adapter SPI and the platform beans

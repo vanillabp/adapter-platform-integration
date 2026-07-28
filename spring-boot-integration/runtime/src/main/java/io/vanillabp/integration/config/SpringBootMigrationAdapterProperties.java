@@ -1,6 +1,5 @@
 package io.vanillabp.integration.config;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -37,13 +36,6 @@ public class SpringBootMigrationAdapterProperties {
    * Where to load VanillaBP BPMN files from, which are NOT specific to any adapter.
    */
   private String resourcesLocation;
-
-  /**
-   * The resilience settings used when talking to BPMSs providing eventual consistency.
-   * May be overridden per workflow module (and, once supported, per workflow) - the
-   * most specific block configured wins as a whole.
-   */
-  private ResilienceProperties resilience;
 
   /**
    * The configuration of all adapters known. The key can be an adapter's identifier
@@ -89,38 +81,6 @@ public class SpringBootMigrationAdapterProperties {
   }
 
   /**
-   * The resilience settings used when talking to BPMSs providing eventual consistency.
-   */
-  @Getter
-  @Setter
-  @SuperBuilder(toBuilder = true)
-  @NoArgsConstructor
-  public static class ResilienceProperties {
-
-    /**
-     * The maximum number of retries after the initial attempt failed.
-     */
-    private Integer maxRetries;
-
-    /**
-     * The backoff interval before the first retry. Subsequent retries multiply the
-     * previous interval by {@link #multiplier}.
-     */
-    private Duration initialInterval;
-
-    /**
-     * The multiplier applied to the backoff interval for each subsequent retry.
-     */
-    private Double multiplier;
-
-    /**
-     * The timeout per adapter call.
-     */
-    private Duration timeout;
-
-  }
-
-  /**
    * The adapter properties.
    */
   @Getter
@@ -153,12 +113,6 @@ public class SpringBootMigrationAdapterProperties {
      */
     @Builder.Default
     private List<String> prioritizedAdapters = List.of();
-
-    /**
-     * The resilience settings overriding less specific configuration levels as a
-     * whole block.
-     */
-    private ResilienceProperties resilience;
 
   }
 

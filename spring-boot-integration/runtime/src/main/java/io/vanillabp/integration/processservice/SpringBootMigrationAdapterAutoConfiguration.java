@@ -1,8 +1,6 @@
 package io.vanillabp.integration.processservice;
 
-import java.util.List;
-import java.util.Optional;
-
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -46,11 +44,12 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   public static MigrationAdapterProperties migrationAdapterProperties(
       final SpringBootMigrationAdapterProperties properties,
       final WorkflowModules allWorkflowModules,
-      final List<AdapterConfigurationBase> adapterConfigurations) {
+      final ObjectProvider<AdapterConfigurationBase> adapterConfigurations) {
 
-    final var adaptersLoaded = Optional
-        .ofNullable(adapterConfigurations)
-        .orElse(List.of())
+    // ObjectProvider (not a required List): without any adapter on the classpath the
+    // bean creation still runs and the transformer's guiding message
+    // "No adapters found in classpath!" is actually reachable
+    final var adaptersLoaded = adapterConfigurations
         .stream()
         .map(AdapterConfigurationBase::getAdapterType)
         .toList();

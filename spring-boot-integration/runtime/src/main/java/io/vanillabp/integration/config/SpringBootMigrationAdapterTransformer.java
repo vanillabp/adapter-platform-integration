@@ -10,7 +10,6 @@ import java.util.stream.Collectors;
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
-import io.vanillabp.integration.adapter.migration.config.ResilienceProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
 import lombok.Builder;
 
@@ -54,9 +53,6 @@ public class SpringBootMigrationAdapterTransformer {
     final var result = new MigrationAdapterProperties();
 
     result.setResourcesLocation(properties.getResourcesLocation());
-
-    // map resilience settings (validated by MigrationAdapterProperties#validateProperties)
-    result.setResilience(mapResilience(properties.getResilience()));
 
     // validate properties of adapters against adapters found in classpath
     final var adaptersConfigured = getAndValidateAdaptersConfigured();
@@ -125,7 +121,6 @@ public class SpringBootMigrationAdapterTransformer {
                 .builder()
                 .workflowModuleId(workflowModule.getKey())
                 .prioritizedAdapters(workflowModule.getValue().getPrioritizedAdapters())
-                .resilience(mapResilience(workflowModule.getValue().getResilience()))
                 // TODO fill workflows; until implemented, configured workflow-level
                 //  properties are rejected by rejectWorkflowLevelConfiguration()
                 .workflows(Map.of())
@@ -143,71 +138,12 @@ public class SpringBootMigrationAdapterTransformer {
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)))
                 .build()))
         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-    if (result.isEmpty() && !workflowModulesFound.isEmpty()) {
-      final var missingConfigSections = workflowModulesFound
-          .stream()
-          .map(module -> "%s.workflow-modules.%s".formatted(PREFIX, module))
-          .collect(Collectors.joining("', '"));
-      throw new IllegalStateException(
-          "No workflow-modules configured! Add properties sections '%s'.".formatted(missingConfigSections));
-    }
 
-    // check for unconfigured workflow modules
-    final var unconfiguredModules = workflowModulesFound
-        .stream()
-        .filter(module -> !result.containsKey(module))
-        .collect(Collectors.joining("\n, "));
-    if (!unconfiguredModules.isEmpty()) {
-      throw new IllegalStateException(
-          """
-              Unconfigured VanillaBP workflow modules were found in classpath:
-                %s
-              Add property keys '%s.workflow-modules.*' to configure them."""
-              .formatted(unconfiguredModules, PREFIX));
-    }
-
-    // check for unknown adapters
-    final var unknownModules = result
-        .keySet()
-        .stream()
-        .filter(workflowModuleAdapterProperties -> !workflowModulesFound.contains(workflowModuleAdapterProperties))
-        .map(workflowModuleAdapterProperties -> "%s.workflow-modules.%s".formatted(PREFIX,
-            workflowModuleAdapterProperties))
-        .collect(Collectors.joining("\n, "));
-    if (!unknownModules.isEmpty()) {
-      throw new IllegalStateException(
-          """
-              Property keys '%s.workflow-modules.*' must name VanillaBP workflow modules available in classpath!
-              These unknown workflow modules were found in properties:
-                %s
-              Available workflow modules currently loaded in classpath: '%s'."""
-              .formatted(PREFIX, unknownModules, String.join("', '", workflowModulesFound)));
-    }
+    // whether the configured modules match the modules found in classpath is
+    // validated by the core (MigrationAdapterProperties#validateProperties) -
+    // one validation, in core, identical on all platforms
 
     return result;
-
-  }
-
-  /**
-   * Maps the Spring Boot specific resilience properties to the platform-neutral
-   * resilience properties of the core.
-   *
-   * @param resilience The Spring Boot specific resilience block or null
-   * @return The platform-neutral resilience block or null if none was configured
-   */
-  private ResilienceProperties mapResilience(
-      final SpringBootMigrationAdapterProperties.ResilienceProperties resilience) {
-
-    if (resilience == null) {
-      return null;
-    }
-    return ResilienceProperties
-        .builder()
-        .maxRetries(resilience.getMaxRetries())
-        .initialInterval(resilience.getInitialInterval())
-        .multiplier(resilience.getMultiplier())
-        .timeout(resilience.getTimeout())
-        .build();
 
   }
 
@@ -289,21 +225,8 @@ public class SpringBootMigrationAdapterTransformer {
               .formatted(missingConfigSections));
     }
 
-    // check for unknown adapters
-    final var unknownAdapters = result
-        .entrySet()
-        .stream()
-        .filter(adapter -> !adaptersFound.contains(adapter.getValue()))
-        .map(adapter -> "'%s' found in '%s.adapters.%s.type'".formatted(adapter.getValue(), PREFIX, adapter.getKey()))
-        .collect(Collectors.joining(", "));
-    if (!unknownAdapters.isEmpty()) {
-      throw new IllegalStateException(
-          """
-              Properties '%s.adapters.*.type' must contain VanillaBP adapters available in classpath!
-              These adapters are unknown: %s.
-              Available adapter types currently loaded in classpath: '%s'."""
-              .formatted(PREFIX, unknownAdapters, String.join("', '", adaptersFound)));
-    }
+    // whether the configured types are actually available in classpath is
+    // validated by the core (MigrationAdapterProperties#validateProperties)
 
     return result;
 
@@ -324,34 +247,8 @@ public class SpringBootMigrationAdapterTransformer {
       return adapters.keySet().stream().toList();
     }
 
-    // if more than one adapter is configured then the
-    // property vanillabp.prioritized-adapters has to list each adapter
-    // configured:
-    final var adapterIdsConfigured = String.join(", ", adapters.keySet());
-    if (properties.getPrioritizedAdapters()
-        .isEmpty() || (adapters.size() != properties.getPrioritizedAdapters().size())) {
-      throw new IllegalStateException(
-          """
-              The property '%s.prioritized-adapters' must list all the adapters configured in '%s.adapters.*' to define
-              the order in which adapters are addressed to find workflows running.
-              Configured adapters are: %s."""
-              .formatted(PREFIX, PREFIX, adapterIdsConfigured));
-    }
-
-    final var unknownAdapters = properties
-        .getPrioritizedAdapters()
-        .stream()
-        .filter(adapter -> !adapters.containsKey(adapter))
-        .map(adapter -> "%s -> '%s.adapters.%s'".formatted(adapter, PREFIX, adapter))
-        .collect(Collectors.joining("\n  "));
-    if (!unknownAdapters.isEmpty()) {
-      throw new IllegalStateException(
-          """
-              The property '%s.prioritized-adapters' lists these adapters for which no property sections were found:
-                %s"""
-              .formatted(PREFIX, unknownAdapters));
-    }
-
+    // completeness, duplicates and unknown adapter ids are validated by the core
+    // (MigrationAdapterProperties#validateProperties)
     return properties.getPrioritizedAdapters();
 
   }

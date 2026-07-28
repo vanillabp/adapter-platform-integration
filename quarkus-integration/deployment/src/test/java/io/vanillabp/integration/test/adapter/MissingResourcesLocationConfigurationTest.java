@@ -12,8 +12,13 @@ import io.quarkus.test.QuarkusUnitTest;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
+/**
+ * Same-config-same-outcome matrix (core validation on all platforms): a workflow
+ * module without any resources-location yields the guiding message naming the
+ * property keys to add.
+ */
 @ExtendWith(SuppressOutputExtension.class)
-public class UnknownAdapterConfigurationTest {
+public class MissingResourcesLocationConfigurationTest {
 
   // Start the unit test with the extension loaded, and sample classes
   @RegisterExtension
@@ -22,19 +27,21 @@ public class UnknownAdapterConfigurationTest {
           .create(JavaArchive.class)
           .addPackage("io.vanillabp.integration.test.samples.sample")  // load sample application classes
           // load sample application properties
-          .addAsResource("unknown-adapter/application.yaml", "application.yaml")
+          .addAsResource("missing-resources-location/application.yaml", "application.yaml")
           .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
           .addClass(DummyAdapters.class))                              // necessary due to anonymous class in DummyAdapters
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter())     // add mocked adapter
       .assertException(exceptionHavingMessage(IllegalStateException.class,
           """
-              The following adapters were configured in properties section 'vanillabp.adapters' but there is no adapter in classpath matching the given type:
-                 test of type unknown
-              Available adapter types in classpath: [dummy]"""));
+              Neither property 'vanillabp.workflow-modules.test-module.adapters.test.resources-location' for resources specific to the BPMS
+              nor property 'vanillabp.resources-location' for VanillaBP resources (not specific to the BPMS) is set!
+
+              If using first option then the location needs to be specific to the adapter in order to avoid future
+              problems once you wish to migrate to another adapter. Sample: 'classpath*:/workflow-resources/test'"""));
 
   @Test
   public void testAdapterConfiguration() {
-    // should never be executed due to the expected build exception
+    // should never be executed due to the expected startup exception
   }
 
 }

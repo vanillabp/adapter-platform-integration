@@ -126,45 +126,6 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Provides the effective resilience settings, resolved on the same three override
-   * levels as <code>prioritized-adapters</code>: global, workflow module and
-   * workflow - the most specific block configured wins as a whole. Values not set
-   * within the winning block fall back to the defaults.
-   *
-   * @param workflowModuleId The workflow module ID (may be null)
-   * @param bpmnProcessId The BPMN process ID (may be null)
-   * @return The effective resilience settings (never null, all values populated)
-   */
-  public ResilienceProperties getResilienceFor(
-      final String workflowModuleId,
-      final String bpmnProcessId) {
-
-    var resilience = getResilience();
-    if (workflowModuleId == null) {
-      return ResilienceProperties.effective(resilience);
-    }
-    final var workflowModule = getWorkflowModules().get(workflowModuleId);
-    if (workflowModule == null) {
-      return ResilienceProperties.effective(resilience);
-    }
-    if (workflowModule.getResilience() != null) {
-      resilience = workflowModule.getResilience();
-    }
-    if (bpmnProcessId == null) {
-      return ResilienceProperties.effective(resilience);
-    }
-    final var workflow = workflowModule.getWorkflows().get(bpmnProcessId);
-    if (workflow == null) {
-      return ResilienceProperties.effective(resilience);
-    }
-    if (workflow.getResilience() != null) {
-      resilience = workflow.getResilience();
-    }
-    return ResilienceProperties.effective(resilience);
-
-  }
-
-  /**
    * Provides the policy how to treat a failing deployment of BPMS resources for the
    * given adapter.
    *
@@ -276,6 +237,20 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
               .formatted(adaptersNotInClasspath, adaptersLoaded));
     }
 
+    // every workflow module found in the classpath has to be configured
+    final var unconfiguredModules = knownWorkflowModuleIds
+        .stream()
+        .filter(module -> !getWorkflowModules().containsKey(module))
+        .collect(Collectors.joining("\n  "));
+    if (!unconfiguredModules.isEmpty()) {
+      throw new IllegalStateException(
+          """
+              Unconfigured VanillaBP workflow modules were found in classpath:
+                %s
+              Add property keys '%s.workflow-modules.*' to configure them."""
+              .formatted(unconfiguredModules, PREFIX));
+    }
+
     // deployment-failure policies have to be configured for known adapters only
     final var deploymentFailuresForUnknownAdapters = deploymentFailures
         .keySet()
@@ -292,32 +267,6 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
               .formatted(deploymentFailuresForUnknownAdapters));
     }
 
-    // resilience blocks configured have to contain valid values
-    if (getResilience() != null) {
-      getResilience().validate("%s.resilience".formatted(PREFIX));
-    }
-    getWorkflowModules()
-        .values()
-        .forEach(workflowModule -> {
-          if (workflowModule.getResilience() != null) {
-            workflowModule
-                .getResilience()
-                .validate("%s.workflow-modules.%s.resilience"
-                    .formatted(PREFIX, workflowModule.workflowModuleId));
-          }
-          workflowModule
-              .getWorkflows()
-              .values()
-              .forEach(workflow -> {
-                if (workflow.getResilience() != null) {
-                  workflow
-                      .getResilience()
-                      .validate("%s.workflow-modules.%s.workflows.%s.resilience"
-                          .formatted(PREFIX, workflowModule.workflowModuleId, workflow.getBpmnProcessId()));
-                }
-              });
-        });
-
     // unknown workflow-module properties
     final var workflowModulesConfiguredButNotInClasspath = new LinkedList<>(getWorkflowModules().keySet());
     workflowModulesConfiguredButNotInClasspath.removeAll(knownWorkflowModuleIds);
@@ -327,9 +276,65 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
           """
               Found properties for workflow modules
                 {}.workflow-modules.{}
-              which were not found in the class-path!""",
+              which were not found in the class-path! These properties are never used - remove them
+              or add the workflow module (a dependency having a 'META-INF/workflow-module' marker
+              file with that ID) to the application.""",
           PREFIX, String.join(propPrefix, workflowModulesConfiguredButNotInClasspath));
     }
+
+    // module-adapter entries which are never used (V1-style check): every key under
+    // 'vanillabp.workflow-modules.<module>.adapters.<id>' has to reference a
+    // configured adapter id
+    final var unusedModuleAdapterEntries = getWorkflowModules()
+        .values()
+        .stream()
+        .flatMap(workflowModule -> workflowModule
+            .getAdapters()
+            .keySet()
+            .stream()
+            .filter(adapterId -> !adapters.containsKey(adapterId))
+            .map(adapterId -> "%s.workflow-modules.%s.adapters.%s"
+                .formatted(PREFIX, workflowModule.workflowModuleId, adapterId)))
+        .sorted()
+        .collect(Collectors.joining("\n  "));
+    if (!unusedModuleAdapterEntries.isEmpty()) {
+      throw new IllegalStateException(
+          """
+              These properties refer to adapter ids not configured in 'vanillabp.adapters.*' - they are never used:
+                %s
+              Configured adapter ids are: '%s'. Fix the adapter id or add a section 'vanillabp.adapters.<id>'."""
+              .formatted(unusedModuleAdapterEntries, String.join("', '", adapters.keySet())));
+    }
+
+    // duplicates in prioritized-adapters lists
+    validateNoDuplicatePrioritizedAdapters(
+        getPrioritizedAdapters(),
+        "%s.prioritized-adapters".formatted(PREFIX));
+
+    // if more than one adapter is configured, the property
+    // 'vanillabp.prioritized-adapters' has to list each configured adapter
+    if (adapters.size() > 1 && (getPrioritizedAdapters().size() != adapters.size())) {
+      throw new IllegalStateException(
+          """
+              The property '%s.prioritized-adapters' must list all the adapters configured in '%s.adapters.*' to define
+              the order in which adapters are addressed to find workflows running.
+              Configured adapters are: %s."""
+              .formatted(PREFIX, PREFIX, String.join(", ", adapters.keySet())));
+    }
+    getWorkflowModules()
+        .values()
+        .forEach(workflowModule -> {
+          validateNoDuplicatePrioritizedAdapters(
+              workflowModule.getPrioritizedAdapters(),
+              "%s.workflow-modules.%s.prioritized-adapters".formatted(PREFIX, workflowModule.workflowModuleId));
+          workflowModule
+              .getWorkflows()
+              .values()
+              .forEach(workflow -> validateNoDuplicatePrioritizedAdapters(
+                  workflow.getPrioritizedAdapters(),
+                  "%s.workflow-modules.%s.workflows.%s.prioritized-adapters"
+                      .formatted(PREFIX, workflowModule.workflowModuleId, workflow.getBpmnProcessId())));
+        });
 
     // adapter configured
     if (adapters.size() == 1) {
@@ -364,24 +369,15 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     }
 
     // adapters in class-path not used
-    final var notConfiguredAdapters = new HashMap<String, Set<String>>() {
-      @Override
-      public Set<String> get(
-          final Object key) {
-        var adapters = super.get(key);
-        if (adapters == null) {
-          adapters = new HashSet<>();
-          super.put(key.toString(), adapters);
-        }
-        return adapters;
-      }
-    };
+    final var notConfiguredAdapters = new HashMap<String, Set<String>>();
     getPrioritizedAdapters()
         .stream()
         .filter(adapterId -> !adapters.containsKey(adapterId))
         .forEach(
             adapterId -> notConfiguredAdapters
-                .get("%s.prioritized-adapters".formatted(MigrationAdapterProperties.PREFIX))
+                .computeIfAbsent(
+                    "%s.prioritized-adapters".formatted(MigrationAdapterProperties.PREFIX),
+                    key -> new HashSet<>())
                 .add(adapterId));
     getWorkflowModules()
         .values()
@@ -391,8 +387,10 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
                   .filter(adapterId -> !adapters.containsKey(adapterId))
                   .forEach(
                       adapterId -> notConfiguredAdapters
-                          .get("%s.workflow-modules.%s.prioritized-adapters".formatted(PREFIX,
-                              workflowModule.workflowModuleId))
+                          .computeIfAbsent(
+                              "%s.workflow-modules.%s.prioritized-adapters".formatted(PREFIX,
+                                  workflowModule.workflowModuleId),
+                              key -> new HashSet<>())
                           .add(adapterId));
               workflowModule
                   .getWorkflows()
@@ -404,8 +402,10 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
                           .filter(adapterId -> !adapters.containsKey(adapterId))
                           .forEach(
                               adapterId -> notConfiguredAdapters
-                                  .get("%s.workflow-modules.%s.workflows.%s.prioritized-adapters".formatted(PREFIX,
-                                      workflowModule.workflowModuleId, workflow.getBpmnProcessId()))
+                                  .computeIfAbsent(
+                                      "%s.workflow-modules.%s.workflows.%s.prioritized-adapters".formatted(PREFIX,
+                                          workflowModule.workflowModuleId, workflow.getBpmnProcessId()),
+                                      key -> new HashSet<>())
                                   .add(adapterId)));
             });
     if (!notConfiguredAdapters.isEmpty()) {
@@ -446,6 +446,28 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
                         adapterId));
                   });
         });
+  }
+
+  private static void validateNoDuplicatePrioritizedAdapters(
+      final List<String> prioritizedAdapters,
+      final String propertyKey) {
+
+    final var duplicates = prioritizedAdapters
+        .stream()
+        .filter(adapterId -> prioritizedAdapters
+            .stream()
+            .filter(adapterId::equals)
+            .count() > 1)
+        .distinct()
+        .collect(Collectors.joining("', '"));
+    if (!duplicates.isEmpty()) {
+      throw new IllegalStateException(
+          """
+              The property '%s' lists these adapter ids more than once: '%s'!
+              Remove the duplicates - the order of the remaining entries defines the priority."""
+              .formatted(propertyKey, duplicates));
+    }
+
   }
 
   private List<String> getBpmnProcessIdsForWorkflowModule(

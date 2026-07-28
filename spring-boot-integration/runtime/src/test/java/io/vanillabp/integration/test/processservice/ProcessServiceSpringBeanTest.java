@@ -81,28 +81,42 @@ public class ProcessServiceSpringBeanTest {
     when(migratableProcessService.needsTwoPhaseCommitForStartingWorkflows()).thenReturn(true);
 
     final var exception = assertThrowsExactly(
-        RuntimeException.class,
+        IllegalStateException.class,
         () -> testee.startWorkflow(new Object()));
-    assertTrue(exception.getMessage().contains("No transaction active"));
+    // the guiding message has to state the fix
+    assertTrue(exception.getMessage().contains("No transaction is active"));
+    assertTrue(exception.getMessage().contains("@Transactional"));
 
   }
 
   @Test
-  @DisplayName("Not yet implemented operations return the aggregate unchanged (stubs)")
-  public void notYetImplementedOperationsReturnAggregate() {
+  @DisplayName("Not yet implemented operations throw UnsupportedOperationException saying so")
+  public void notYetImplementedOperationsThrow() {
 
     final var aggregate = new Object();
 
-    assertSame(aggregate, testee.startWorkflowByMessage(aggregate, "TestMessage"));
-    assertSame(aggregate, testee.startWorkflowByMessage(aggregate, new Object()));
-    assertSame(aggregate, testee.correlateMessage(aggregate, "TestMessage"));
-    assertSame(aggregate, testee.correlateMessage(aggregate, "TestMessage", "correlation-1"));
-    assertSame(aggregate, testee.correlateMessage(aggregate, new Object()));
-    assertSame(aggregate, testee.correlateMessage(aggregate, new Object(), "correlation-1"));
-    assertSame(aggregate, testee.completeUserTask(aggregate, "task-1"));
-    assertSame(aggregate, testee.cancelUserTask(aggregate, "task-1", "error"));
-    assertSame(aggregate, testee.completeTask(aggregate, "task-1"));
-    assertSame(aggregate, testee.cancelTask(aggregate, "task-1", "error"));
+    final var operations = java.util.List.<org.junit.jupiter.api.function.Executable>of(
+        () -> testee.startWorkflowByMessage(aggregate, "TestMessage"),
+        () -> testee.startWorkflowByMessage(aggregate, new Object()),
+        () -> testee.correlateMessage(aggregate, "TestMessage"),
+        () -> testee.correlateMessage(aggregate, "TestMessage", "correlation-1"),
+        () -> testee.correlateMessage(aggregate, new Object()),
+        () -> testee.correlateMessage(aggregate, new Object(), "correlation-1"),
+        () -> testee.completeUserTask(aggregate, "task-1"),
+        () -> testee.cancelUserTask(aggregate, "task-1", "error"),
+        () -> testee.completeTask(aggregate, "task-1"),
+        () -> testee.cancelTask(aggregate, "task-1", "error"),
+        () -> testee.getProcessDefinitions(aggregate, null),
+        () -> testee.getBpmnXml("definition-1"),
+        () -> testee.getWorkflowHistory(aggregate, null));
+
+    for (final var operation : operations) {
+      final var exception = assertThrowsExactly(
+          UnsupportedOperationException.class,
+          operation);
+      // a silent no-op would hide the missing implementation - the message says so
+      assertTrue(exception.getMessage().contains("not yet supported by VanillaBP 2"));
+    }
 
   }
 

@@ -40,7 +40,8 @@ public interface AdapterDeploymentService<BPMN, PC> extends ExtensionWiringServi
    *
    * @param workflowModuleId The workflow module ID
    * @param filename The filename of the BPMN file (used for logging and error messages)
-   * @param bpmn The BPMN input stream
+   * @param bpmn The BPMN input stream. It is owned and closed by the deployment
+   *        pipeline - implementations must NOT close it.
    * @param isVanillaBpBpmn Whether the input stream is VanillaBP or specific to the adapter's BPMS
    * @return The models of the executable processes found in the BPMN (key is the process ID, value is the model)
    * @throws BpmnParseException If the parsing fails
@@ -59,7 +60,9 @@ public interface AdapterDeploymentService<BPMN, PC> extends ExtensionWiringServi
    * @param filename The filename of the BPMN file (used for logging and error messages)
    * @param bpmnProcessId The BPMN process ID
    * @param model The model
-   * @return The context passed to startProcessing (usually used to collect wiring information)
+   * @return The context passed to startProcessing (usually used to collect wiring
+   *         information); must NEVER be null - it is threaded through the whole
+   *         deployment pipeline
    */
   PC prepareBpmn(
       String workflowModuleId,
@@ -72,7 +75,9 @@ public interface AdapterDeploymentService<BPMN, PC> extends ExtensionWiringServi
    * Deploys the resources (process, decision matrix) to the target BPMS.
    *
    * @param workflowModuleId The workflow module ID
-   * @param bpmsProcessingContext The processing context specific to the BPMS
+   * @param bpmsProcessingContext The processing context specific to the BPMS; never
+   *        null - modules without any executable BPMN process are skipped by the
+   *        deployment pipeline (with a warning) instead of being deployed
    * @throws IllegalStateException If the deployment fails
    */
   void deployResources(

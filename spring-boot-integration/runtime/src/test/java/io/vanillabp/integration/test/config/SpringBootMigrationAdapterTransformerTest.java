@@ -2,39 +2,60 @@ package io.vanillabp.integration.test.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
-import io.vanillabp.integration.adapter.migration.config.ResilienceProperties;
 import io.vanillabp.integration.config.SpringBootMigrationAdapterProperties;
 import io.vanillabp.integration.config.SpringBootMigrationAdapterTransformer;
 
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+/**
+ * Tests the Spring Boot property transformation. The transformer only performs
+ * Spring-Boot-specific mapping plus the checks the core cannot perform (adapters
+ * found in classpath, workflow-level rejection, deployment-failure value parsing) -
+ * everything else is validated by the core
+ * ({@code MigrationAdapterProperties#validateProperties}), so the same
+ * configuration yields the same validation outcome on all platforms.
+ */
 public class SpringBootMigrationAdapterTransformerTest {
 
-  private static SpringBootMigrationAdapterTransformer.SpringBootMigrationAdapterTransformerBuilder transformerBuilder = SpringBootMigrationAdapterTransformer
-      .builder();
+  private static SpringBootMigrationAdapterProperties.WorkflowModuleProperties validModule() {
 
-  private static SpringBootMigrationAdapterProperties.SpringBootMigrationAdapterPropertiesBuilder<?, ?> propsBuilder = SpringBootMigrationAdapterProperties
-      .builder();
+    return SpringBootMigrationAdapterProperties.WorkflowModuleProperties
+        .builder()
+        .adapters(Map.of(
+            "test-adapter",
+            SpringBootMigrationAdapterProperties.AdapterProperties
+                .builder()
+                .resourcesLocation("classpath:test-module/processes/test-adapter")
+                .build()))
+        .build();
+
+  }
+
+  private static SpringBootMigrationAdapterProperties.AdapterConfiguration adapterOfTestType() {
+
+    return SpringBootMigrationAdapterProperties.AdapterConfiguration
+        .builder()
+        .type("test-type")
+        .build();
+
+  }
 
   @Test
-  @Order(0)
   public void testNoAdaptersInClasspath() {
 
     final var exception = assertThrowsExactly(
         IllegalStateException.class,
-        () -> transformerBuilder
+        () -> SpringBootMigrationAdapterTransformer
+            .builder()
             .adaptersFound(List.of())
-            .properties(propsBuilder.build())
+            .workflowModulesFound(List.of("test-module"))
+            .properties(SpringBootMigrationAdapterProperties.builder().build())
             .build()
             .getAndValidatePropertiesConfigured());
     assertEquals("No adapters found in classpath! Add dependencies providing VanillaBP adapters.",
@@ -43,14 +64,15 @@ public class SpringBootMigrationAdapterTransformerTest {
   }
 
   @Test
-  @Order(1)
   public void testNoAdaptersConfigured() {
 
     final var exception = assertThrowsExactly(
         IllegalStateException.class,
-        () -> transformerBuilder
+        () -> SpringBootMigrationAdapterTransformer
+            .builder()
             .adaptersFound(List.of("test-adapter"))
-            .properties(propsBuilder.build())
+            .workflowModulesFound(List.of("test-module"))
+            .properties(SpringBootMigrationAdapterProperties.builder().build())
             .build()
             .getAndValidatePropertiesConfigured());
     assertEquals(
@@ -62,89 +84,54 @@ public class SpringBootMigrationAdapterTransformerTest {
   }
 
   @Test
-  @Order(2)
-  public void testUnknownAdaptersConfigured() {
+  public void testUnknownAdapterTypeIsRejectedByCore() {
 
-    final var props = propsBuilder
+    final var props = SpringBootMigrationAdapterProperties
+        .builder()
         .adapters(Map.of(
             "test-adapter",
             SpringBootMigrationAdapterProperties.AdapterConfiguration
                 .builder()
                 .type("unknown")
                 .build()))
+        .workflowModules(Map.of("test-module", validModule()))
         .build();
-
-    final var transformer = transformerBuilder
-        .adaptersFound(List.of("test-type"))
-        .properties(props)
-        .build();
-    transformerBuilder = transformer.toBuilder(); // save for next test method
 
     final var exception = assertThrowsExactly(
         IllegalStateException.class,
-        transformer::getAndValidatePropertiesConfigured
-    );
+        () -> SpringBootMigrationAdapterTransformer
+            .builder()
+            .adaptersFound(List.of("test-type"))
+            .workflowModulesFound(List.of("test-module"))
+            .properties(props)
+            .build()
+            .getAndValidatePropertiesConfigured());
     assertEquals(
         """
-            Properties 'vanillabp.adapters.*.type' must contain VanillaBP adapters available in classpath!
-            These adapters are unknown: 'unknown' found in 'vanillabp.adapters.test-adapter.type'.
-            Available adapter types currently loaded in classpath: 'test-type'.""",
+            The following adapters were configured in properties section 'vanillabp.adapters' but there is no adapter in classpath matching the given type:
+               test-adapter of type unknown
+            Available adapter types in classpath: [test-type]""",
         exception.getMessage());
 
   }
 
   @Test
-  @Order(3)
-  public void testNoWorkflowModulesConfigured() {
+  public void testUnconfiguredWorkflowModulesAreRejectedByCore() {
 
-    final var props = propsBuilder
-        .adapters(Map.of(
-            "test-adapter",
-            SpringBootMigrationAdapterProperties.AdapterConfiguration
-                .builder()
-                .type("test-type")
-                .build()))
-        .prioritizedAdapters(List.of("test-adapter"))
+    final var props = SpringBootMigrationAdapterProperties
+        .builder()
+        .adapters(Map.of("test-adapter", adapterOfTestType()))
         .build();
-    propsBuilder = props.toBuilder(); // save for next test method
-
-    final var transformer = transformerBuilder
-        .properties(props)
-        .workflowModulesFound(List.of("test-module"))
-        .build();
-    transformerBuilder = transformer.toBuilder(); // save for next test method
 
     final var exception = assertThrowsExactly(
         IllegalStateException.class,
-        transformer::getAndValidatePropertiesConfigured
-    );
-    assertEquals(
-        "No workflow-modules configured! Add properties sections 'vanillabp.workflow-modules.test-module'.",
-        exception.getMessage());
-
-  }
-
-  @Test
-  @Order(4)
-  public void testUnconfiguredWorkflowModulesFound() {
-
-    final var props = propsBuilder
-        .workflowModules(Map.of(
-            "unknown-module",
-            SpringBootMigrationAdapterProperties.WorkflowModuleProperties
-                .builder()
-                .build()))
-        .build();
-
-    final var transformer = transformerBuilder
-        .properties(props)
-        .build();
-    transformerBuilder = transformer.toBuilder(); // save for next test method
-
-    final var exception = assertThrowsExactly(
-        IllegalStateException.class,
-        transformer::getAndValidatePropertiesConfigured
-    );
+        () -> SpringBootMigrationAdapterTransformer
+            .builder()
+            .adaptersFound(List.of("test-type"))
+            .workflowModulesFound(List.of("test-module"))
+            .properties(props)
+            .build()
+            .getAndValidatePropertiesConfigured());
     assertEquals(
         """
             Unconfigured VanillaBP workflow modules were found in classpath:
@@ -155,69 +142,51 @@ public class SpringBootMigrationAdapterTransformerTest {
   }
 
   @Test
-  @Order(5)
-  public void testWorkflowModuleConfigWithoutWorkflowModule() {
+  public void testModuleConfigWithoutModuleInClasspathOnlyWarns() {
 
-    final var props = propsBuilder
+    // the core warns about configured-but-unknown modules (the app still boots) -
+    // the former Spring-only hard failure was removed for platform parity
+    final var props = SpringBootMigrationAdapterProperties
+        .builder()
+        .adapters(Map.of("test-adapter", adapterOfTestType()))
         .workflowModules(Map.of(
-            "test-module",
-            SpringBootMigrationAdapterProperties.WorkflowModuleProperties
-                .builder()
-                .build(),
-            "my-module",
-            SpringBootMigrationAdapterProperties.WorkflowModuleProperties
-                .builder()
-                .build()))
+            "test-module", validModule(),
+            "unknown-module", validModule()))
         .build();
 
-    final var transformer = transformerBuilder
+    final var result = SpringBootMigrationAdapterTransformer
+        .builder()
+        .adaptersFound(List.of("test-type"))
+        .workflowModulesFound(List.of("test-module"))
         .properties(props)
-        .build();
-    transformerBuilder = transformer.toBuilder(); // save for next test method
+        .build()
+        .getAndValidatePropertiesConfigured();
 
-    final var exception = assertThrowsExactly(
-        IllegalStateException.class,
-        transformer::getAndValidatePropertiesConfigured
-    );
-    assertEquals(
-        """
-            Property keys 'vanillabp.workflow-modules.*' must name VanillaBP workflow modules available in classpath!
-            These unknown workflow modules were found in properties:
-              vanillabp.workflow-modules.my-module
-            Available workflow modules currently loaded in classpath: 'test-module'.""",
-        exception.getMessage());
+    assertTrue(result.getWorkflowModules().containsKey("test-module"));
 
   }
 
   @Test
-  @Order(6)
-  public void testMissingPrioritizedAdapters() {
+  public void testIncompletePrioritizedAdaptersAreRejectedByCore() {
 
-    final var props = propsBuilder
+    final var props = SpringBootMigrationAdapterProperties
+        .builder()
         .prioritizedAdapters(List.of("test-adapter"))
         .adapters(Map.of(
-            "test-adapter",
-            SpringBootMigrationAdapterProperties.AdapterConfiguration
-                .builder()
-                .type("test-type")
-                .build(),
-            "test2-adapter",
-            SpringBootMigrationAdapterProperties.AdapterConfiguration
-                .builder()
-                .type("test-type")
-                .build()))
+            "test-adapter", adapterOfTestType(),
+            "test2-adapter", adapterOfTestType()))
+        .workflowModules(Map.of("test-module", validModule()))
         .build();
-
-    final var transformer = transformerBuilder
-        .adaptersFound(List.of("test-type"))
-        .properties(props)
-        .build();
-    transformerBuilder = transformer.toBuilder(); // save for next test method
 
     final var exception = assertThrowsExactly(
         IllegalStateException.class,
-        transformer::getAndValidatePropertiesConfigured
-    );
+        () -> SpringBootMigrationAdapterTransformer
+            .builder()
+            .adaptersFound(List.of("test-type"))
+            .workflowModulesFound(List.of("test-module"))
+            .properties(props)
+            .build()
+            .getAndValidatePropertiesConfigured());
     assertEquals(
         """
             The property 'vanillabp.prioritized-adapters' must list all the adapters configured in 'vanillabp.adapters.*' to define
@@ -228,19 +197,104 @@ public class SpringBootMigrationAdapterTransformerTest {
   }
 
   @Test
-  @Order(7)
+  public void testUnknownPrioritizedAdapterIsRejectedByCore() {
+
+    final var props = SpringBootMigrationAdapterProperties
+        .builder()
+        .prioritizedAdapters(List.of("test2-adapter"))
+        .adapters(Map.of("test-adapter", adapterOfTestType()))
+        .workflowModules(Map.of("test-module", validModule()))
+        .build();
+
+    final var exception = assertThrowsExactly(
+        IllegalStateException.class,
+        () -> SpringBootMigrationAdapterTransformer
+            .builder()
+            .adaptersFound(List.of("test-type"))
+            .workflowModulesFound(List.of("test-module"))
+            .properties(props)
+            .build()
+            .getAndValidatePropertiesConfigured());
+    assertEquals(
+        """
+            There are VanillaBP adapters referenced not found in any property section 'vanillabp.adapters.*':
+              vanillabp.prioritized-adapters => test2-adapter
+            """,
+        exception.getMessage());
+
+  }
+
+  @Test
+  public void testDuplicatePrioritizedAdapterIsRejectedByCore() {
+
+    final var props = SpringBootMigrationAdapterProperties
+        .builder()
+        .prioritizedAdapters(List.of("test-adapter", "test2-adapter", "test-adapter"))
+        .adapters(Map.of(
+            "test-adapter", adapterOfTestType(),
+            "test2-adapter", adapterOfTestType()))
+        .workflowModules(Map.of("test-module", validModule()))
+        .build();
+
+    final var exception = assertThrowsExactly(
+        IllegalStateException.class,
+        () -> SpringBootMigrationAdapterTransformer
+            .builder()
+            .adaptersFound(List.of("test-type"))
+            .workflowModulesFound(List.of("test-module"))
+            .properties(props)
+            .build()
+            .getAndValidatePropertiesConfigured());
+    assertTrue(exception.getMessage().contains("more than once"));
+    assertTrue(exception.getMessage().contains("test-adapter"));
+
+  }
+
+  @Test
+  public void testUnusedModuleAdapterEntryIsRejectedByCore() {
+
+    final var module = SpringBootMigrationAdapterProperties.WorkflowModuleProperties
+        .builder()
+        .adapters(Map.of(
+            "test-adapter",
+            SpringBootMigrationAdapterProperties.AdapterProperties
+                .builder()
+                .resourcesLocation("classpath:test-module/processes/test-adapter")
+                .build(),
+            "typo-adapter",
+            SpringBootMigrationAdapterProperties.AdapterProperties
+                .builder()
+                .resourcesLocation("classpath:test-module/processes/typo-adapter")
+                .build()))
+        .build();
+    final var props = SpringBootMigrationAdapterProperties
+        .builder()
+        .adapters(Map.of("test-adapter", adapterOfTestType()))
+        .workflowModules(Map.of("test-module", module))
+        .build();
+
+    final var exception = assertThrowsExactly(
+        IllegalStateException.class,
+        () -> SpringBootMigrationAdapterTransformer
+            .builder()
+            .adaptersFound(List.of("test-type"))
+            .workflowModulesFound(List.of("test-module"))
+            .properties(props)
+            .build()
+            .getAndValidatePropertiesConfigured());
+    assertTrue(exception.getMessage()
+        .contains("vanillabp.workflow-modules.test-module.adapters.typo-adapter"));
+    assertTrue(exception.getMessage().contains("never used"));
+
+  }
+
+  @Test
   public void testWorkflowLevelConfigurationIsRejected() {
 
-    // build independent properties not to interfere with the ordered tests sharing builders
     final var props = SpringBootMigrationAdapterProperties
         .builder()
         .prioritizedAdapters(List.of("test-adapter"))
-        .adapters(Map.of(
-            "test-adapter",
-            SpringBootMigrationAdapterProperties.AdapterConfiguration
-                .builder()
-                .type("test-type")
-                .build()))
+        .adapters(Map.of("test-adapter", adapterOfTestType()))
         .workflowModules(Map.of(
             "test-module",
             SpringBootMigrationAdapterProperties.WorkflowModuleProperties
@@ -254,17 +308,15 @@ public class SpringBootMigrationAdapterTransformerTest {
                 .build()))
         .build();
 
-    final var transformer = SpringBootMigrationAdapterTransformer
-        .builder()
-        .adaptersFound(List.of("test-type"))
-        .workflowModulesFound(List.of("test-module"))
-        .properties(props)
-        .build();
-
     final var exception = assertThrowsExactly(
         IllegalStateException.class,
-        transformer::getAndValidatePropertiesConfigured
-    );
+        () -> SpringBootMigrationAdapterTransformer
+            .builder()
+            .adaptersFound(List.of("test-type"))
+            .workflowModulesFound(List.of("test-module"))
+            .properties(props)
+            .build()
+            .getAndValidatePropertiesConfigured());
     assertEquals(
         """
             Workflow-level configuration is not yet supported! Remove these properties:
@@ -274,42 +326,8 @@ public class SpringBootMigrationAdapterTransformerTest {
   }
 
   @Test
-  @Order(8)
-  public void testMissingAdaptersPrioritized() {
+  public void testDeploymentFailureIsMapped() {
 
-    final var props = propsBuilder
-        .prioritizedAdapters(List.of("test2-adapter"))
-        .adapters(Map.of(
-            "test-adapter",
-            SpringBootMigrationAdapterProperties.AdapterConfiguration
-                .builder()
-                .type("test-type")
-                .build()))
-        .build();
-
-    final var transformer = transformerBuilder
-        .adaptersFound(List.of("test-type"))
-        .properties(props)
-        .build();
-    transformerBuilder = transformer.toBuilder(); // save for next test method
-
-    final var exception = assertThrowsExactly(
-        IllegalStateException.class,
-        transformer::getAndValidatePropertiesConfigured
-    );
-    assertEquals(
-        """
-            The property 'vanillabp.prioritized-adapters' lists these adapters for which no property sections were found:
-              test2-adapter -> 'vanillabp.adapters.test2-adapter'""",
-        exception.getMessage());
-
-  }
-
-  @Test
-  @Order(9)
-  public void testResilienceAndDeploymentFailureAreMapped() {
-
-    // build independent properties not to interfere with the ordered tests sharing builders
     final var props = SpringBootMigrationAdapterProperties
         .builder()
         .adapters(Map.of(
@@ -319,28 +337,7 @@ public class SpringBootMigrationAdapterTransformerTest {
                 .type("test-type")
                 .deploymentFailure("warn")
                 .build()))
-        .resilience(SpringBootMigrationAdapterProperties.ResilienceProperties
-            .builder()
-            .maxRetries(5)
-            .initialInterval(Duration.ofSeconds(2))
-            .multiplier(1.5)
-            .timeout(Duration.ofSeconds(10))
-            .build())
-        .workflowModules(Map.of(
-            "test-module",
-            SpringBootMigrationAdapterProperties.WorkflowModuleProperties
-                .builder()
-                .resilience(SpringBootMigrationAdapterProperties.ResilienceProperties
-                    .builder()
-                    .maxRetries(9)
-                    .build())
-                .adapters(Map.of(
-                    "test-adapter",
-                    SpringBootMigrationAdapterProperties.AdapterProperties
-                        .builder()
-                        .resourcesLocation("classpath:test-module/processes/test-adapter")
-                        .build()))
-                .build()))
+        .workflowModules(Map.of("test-module", validModule()))
         .build();
 
     final var result = SpringBootMigrationAdapterTransformer
@@ -355,25 +352,11 @@ public class SpringBootMigrationAdapterTransformerTest {
     assertEquals(DeploymentFailurePolicy.WARN, result.getDeploymentFailureFor("test-adapter"));
     assertEquals(DeploymentFailurePolicy.FAIL, result.getDeploymentFailureFor("other-adapter"));
 
-    // global resilience block is mapped
-    final var global = result.getResilienceFor(null, null);
-    assertEquals(5, global.getMaxRetries());
-    assertEquals(Duration.ofSeconds(2), global.getInitialInterval());
-    assertEquals(1.5, global.getMultiplier());
-    assertEquals(Duration.ofSeconds(10), global.getTimeout());
-
-    // workflow module resilience block overrides the global block as a whole
-    final var module = result.getResilienceFor("test-module", null);
-    assertEquals(9, module.getMaxRetries());
-    assertEquals(ResilienceProperties.DEFAULT_INITIAL_INTERVAL, module.getInitialInterval());
-
   }
 
   @Test
-  @Order(10)
   public void testInvalidDeploymentFailureIsRejected() {
 
-    // build independent properties not to interfere with the ordered tests sharing builders
     final var props = SpringBootMigrationAdapterProperties
         .builder()
         .adapters(Map.of(
@@ -385,69 +368,20 @@ public class SpringBootMigrationAdapterTransformerTest {
                 .build()))
         .build();
 
-    final var transformer = SpringBootMigrationAdapterTransformer
-        .builder()
-        .adaptersFound(List.of("test-type"))
-        .workflowModulesFound(List.of("test-module"))
-        .properties(props)
-        .build();
-
     final var exception = assertThrowsExactly(
         IllegalStateException.class,
-        transformer::getAndValidatePropertiesConfigured
-    );
+        () -> SpringBootMigrationAdapterTransformer
+            .builder()
+            .adaptersFound(List.of("test-type"))
+            .workflowModulesFound(List.of("test-module"))
+            .properties(props)
+            .build()
+            .getAndValidatePropertiesConfigured());
     assertEquals(
         """
             Properties 'vanillabp.adapters.*.deployment-failure' must be one of 'fail' or 'warn'!
             These values are invalid:
               'sometimes' found in 'vanillabp.adapters.test-adapter.deployment-failure'""",
-        exception.getMessage());
-
-  }
-
-  @Test
-  @Order(11)
-  public void testInvalidResilienceIsRejected() {
-
-    // build independent properties not to interfere with the ordered tests sharing builders
-    final var props = SpringBootMigrationAdapterProperties
-        .builder()
-        .adapters(Map.of(
-            "test-adapter",
-            SpringBootMigrationAdapterProperties.AdapterConfiguration
-                .builder()
-                .type("test-type")
-                .build()))
-        .resilience(SpringBootMigrationAdapterProperties.ResilienceProperties
-            .builder()
-            .maxRetries(-1)
-            .build())
-        .workflowModules(Map.of(
-            "test-module",
-            SpringBootMigrationAdapterProperties.WorkflowModuleProperties
-                .builder()
-                .adapters(Map.of(
-                    "test-adapter",
-                    SpringBootMigrationAdapterProperties.AdapterProperties
-                        .builder()
-                        .resourcesLocation("classpath:test-module/processes/test-adapter")
-                        .build()))
-                .build()))
-        .build();
-
-    final var transformer = SpringBootMigrationAdapterTransformer
-        .builder()
-        .adaptersFound(List.of("test-type"))
-        .workflowModulesFound(List.of("test-module"))
-        .properties(props)
-        .build();
-
-    final var exception = assertThrowsExactly(
-        IllegalStateException.class,
-        transformer::getAndValidatePropertiesConfigured
-    );
-    assertEquals(
-        "Property 'vanillabp.resilience.max-retries' must not be negative but is '-1'!",
         exception.getMessage());
 
   }

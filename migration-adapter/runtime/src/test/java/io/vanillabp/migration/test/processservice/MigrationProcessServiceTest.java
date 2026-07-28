@@ -23,8 +23,10 @@ import io.vanillabp.integration.adapter.migration.processservice.MigrationProces
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 @ExtendWith(MockitoExtension.class)
+@ExtendWith(SuppressOutputExtension.class)
 public class MigrationProcessServiceTest {
 
   @Mock
@@ -295,8 +297,8 @@ public class MigrationProcessServiceTest {
   }
 
   @Test
-  @DisplayName("needsTransactionForStartingWorkflows delegates to the first prioritized adapter")
-  public void needsTransactionForStartingWorkflowsDelegates() {
+  @DisplayName("needsTwoPhaseCommitForStartingWorkflows delegates to the first prioritized adapter")
+  public void needsTwoPhaseCommitForStartingWorkflowsDelegates() {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
     when(processService.needsTwoPhaseCommitForStartingWorkflows()).thenReturn(true, false);
@@ -305,8 +307,8 @@ public class MigrationProcessServiceTest {
         "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
             .of(processService), null);
 
-    assertTrue(testee.needsTransactionForStartingWorkflows());
-    assertFalse(testee.needsTransactionForStartingWorkflows());
+    assertTrue(testee.needsTwoPhaseCommitForStartingWorkflows());
+    assertFalse(testee.needsTwoPhaseCommitForStartingWorkflows());
 
   }
 

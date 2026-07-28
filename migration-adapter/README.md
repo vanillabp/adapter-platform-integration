@@ -47,8 +47,8 @@ Asking a BPMS whether it knows a workflow or task has four possible answers
 
 |       Value        |                            Meaning                            |        Migration adapter's reaction         |
 |--------------------|---------------------------------------------------------------|---------------------------------------------|
-| `TASK_ACTIVE`      | The BPMS knows the workflow/task and it is active             | Use this adapter                            |
-| `TASK_COMPLETED`   | The BPMS knows the workflow/task but it was already completed | Use this adapter (operation comes too late) |
+| `ACTIVE`           | The BPMS knows the workflow/task and it is active             | Use this adapter                            |
+| `COMPLETED`        | The BPMS knows the workflow/task but it was already completed | Use this adapter (operation comes too late) |
 | `UNKNOWN_TO_BPMS`  | The BPMS definitely does not know the workflow/task           | Fall back to the next adapter of the list   |
 | `BPMS_UNAVAILABLE` | The BPMS could not be asked (unreachable, timeout)            | Do **not** fall back — retry later          |
 
@@ -58,14 +58,11 @@ must not silently elect the wrong BPMS. There is an instance-level method
 (`awarenessOfWorkflow`) in addition to the task-level one because message correlation
 has no task ID and task IDs are not unique across BPMSs.
 
-Retries of undecidable calls are configured by the `resilience` block
-(`vanillabp.resilience.max-retries/initial-interval/multiplier/timeout`), overridable
-per workflow module (`vanillabp.workflow-modules.<id>.resilience`) and per workflow
-(`...workflows.<bpmnProcessId>.resilience`) — the most specific block configured wins
-as a whole (see `MigrationAdapterProperties.getResilienceFor`).
-
-*Note:* The awareness/resilience SPI prepares stable signatures for upcoming adapter
+*Note:* The awareness SPI prepares stable signatures for upcoming adapter
 implementations — the actual fallback election runtime is not implemented yet.
+Retry/backoff configuration for undecidable calls was deliberately removed
+("optimize late") and returns per adapter with the first real consumer (the
+complete/cancel-task story).
 
 To migrate, one puts the new BPMS first in the priority list and keeps the old one in
 the list: new instances start in the new BPMS while existing instances complete in the
@@ -238,8 +235,10 @@ core.
    (deployment pipeline incl. the shutdown pass and the deployment-failure policy),
    `MigrationProcessService` (per-process runtime used by the
    platform integrations' `ProcessService` beans) and `MigrationAdapterProperties`
-   (configuration model incl. validation, resilience and deployment-failure
-   resolution).
+   (configuration model incl. validation and deployment-failure resolution;
+   the validation is the single, platform-neutral implementation - the platform
+   transformers only map platform-specific bindings and check what only the
+   platform can know).
 
 ## Noteworthy & Contributors
 

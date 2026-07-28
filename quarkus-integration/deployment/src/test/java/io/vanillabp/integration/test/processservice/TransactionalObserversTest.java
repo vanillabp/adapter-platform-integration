@@ -6,10 +6,12 @@ import java.util.List;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
 import io.vanillabp.integration.test.adapter.DummyAdapters;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.event.Event;
@@ -24,6 +26,7 @@ import lombok.Getter;
  * Tests that Arc transactional observers work with Narayana-provided Synchronization registry.
  * All observers also make use of Request scoped bean so that we verify that the context is automatically activated.
  */
+@ExtendWith(SuppressOutputExtension.class)
 public class TransactionalObserversTest {
 
   @RegisterExtension

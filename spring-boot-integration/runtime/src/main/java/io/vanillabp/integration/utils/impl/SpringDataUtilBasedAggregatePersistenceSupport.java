@@ -37,4 +37,15 @@ public class SpringDataUtilBasedAggregatePersistenceSupport<A> implements Aggreg
 
   }
 
+  @Override
+  public A loadById(
+      final Object aggregateId) {
+
+    return springDataUtil
+        .getRepository(aggregateClass)
+        .findById(aggregateId)
+        .orElse(null);
+
+  }
+
 }

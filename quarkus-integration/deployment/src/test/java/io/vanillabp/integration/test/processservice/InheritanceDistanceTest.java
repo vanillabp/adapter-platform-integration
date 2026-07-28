@@ -6,10 +6,13 @@ import org.jboss.jandex.IndexView;
 import org.jboss.jandex.Indexer;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.vanillabp.integration.deployment.processservice.AggregatePersistenceResolver;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 
+@ExtendWith(SuppressOutputExtension.class)
 public class InheritanceDistanceTest {
 
   interface IA {

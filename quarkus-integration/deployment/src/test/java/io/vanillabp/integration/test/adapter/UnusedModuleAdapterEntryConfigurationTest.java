@@ -12,8 +12,13 @@ import io.quarkus.test.QuarkusUnitTest;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
+/**
+ * Same-config-same-outcome matrix (core validation on all platforms): a
+ * module-adapter entry referencing an unconfigured adapter id is never used and
+ * rejected with a guiding message (V1-style check).
+ */
 @ExtendWith(SuppressOutputExtension.class)
-public class UnknownAdapterConfigurationTest {
+public class UnusedModuleAdapterEntryConfigurationTest {
 
   // Start the unit test with the extension loaded, and sample classes
   @RegisterExtension
@@ -22,19 +27,18 @@ public class UnknownAdapterConfigurationTest {
           .create(JavaArchive.class)
           .addPackage("io.vanillabp.integration.test.samples.sample")  // load sample application classes
           // load sample application properties
-          .addAsResource("unknown-adapter/application.yaml", "application.yaml")
+          .addAsResource("unused-module-adapter/application.yaml", "application.yaml")
           .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
           .addClass(DummyAdapters.class))                              // necessary due to anonymous class in DummyAdapters
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter())     // add mocked adapter
-      .assertException(exceptionHavingMessage(IllegalStateException.class,
-          """
-              The following adapters were configured in properties section 'vanillabp.adapters' but there is no adapter in classpath matching the given type:
-                 test of type unknown
-              Available adapter types in classpath: [dummy]"""));
+      .assertException(exceptionHavingMessage(IllegalStateException.class, """
+          These properties refer to adapter ids not configured in 'vanillabp.adapters.*' - they are never used:
+            vanillabp.workflow-modules.test-module.adapters.typo-adapter
+          Configured adapter ids are: 'test'. Fix the adapter id or add a section 'vanillabp.adapters.<id>'."""));
 
   @Test
   public void testAdapterConfiguration() {
-    // should never be executed due to the expected build exception
+    // should never be executed due to the expected startup exception
   }
 
 }

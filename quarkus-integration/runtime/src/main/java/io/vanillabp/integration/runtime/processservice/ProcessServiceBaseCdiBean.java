@@ -6,9 +6,9 @@ import java.util.function.Function;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
+import io.vanillabp.integration.adapter.migration.processservice.ProcessServiceBase;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
-import io.vanillabp.spi.process.ProcessService;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
@@ -16,7 +16,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.TransactionSynchronizationRegistry;
 import lombok.Getter;
 
-public abstract class ProcessServiceBaseCdiBean<A> implements ProcessService<A> {
+public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A> {
 
   @Inject
   MigrationAdapterProperties properties;
@@ -128,12 +128,12 @@ public abstract class ProcessServiceBaseCdiBean<A> implements ProcessService<A> 
 
   }
 
+  @Override
   public A startWorkflow(
-      A workflowAggregate) {
+      final A workflowAggregate) {
 
-    if (migrationProcessService.needsTransactionForStartingWorkflows() && noTransactionIsActive()) {
-      throw new RuntimeException(
-          "No transaction active available! Add run 'startWorkflow' only having a local transaction active.");
+    if (migrationProcessService.needsTwoPhaseCommitForStartingWorkflows() && noTransactionIsActive()) {
+      throw newMissingTransactionException();
     }
 
     return migrationProcessService.startWorkflow(workflowAggregate);

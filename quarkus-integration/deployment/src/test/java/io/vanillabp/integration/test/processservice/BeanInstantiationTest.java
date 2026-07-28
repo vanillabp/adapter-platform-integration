@@ -4,6 +4,7 @@ import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
@@ -11,9 +12,11 @@ import io.vanillabp.integration.test.adapter.DummyAdapters;
 import io.vanillabp.integration.test.adapter.TestMigratableProcessService;
 import io.vanillabp.integration.test.samples.sample2.Aggregate;
 import io.vanillabp.integration.test.samples.sample2.SampleWorkflowService;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.ProcessService;
 import jakarta.inject.Inject;
 
+@ExtendWith(SuppressOutputExtension.class)
 public class BeanInstantiationTest {
 
   // Start the unit test with the extension loaded, and sample classes

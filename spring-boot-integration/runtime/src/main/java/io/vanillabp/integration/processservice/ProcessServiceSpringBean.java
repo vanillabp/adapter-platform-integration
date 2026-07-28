@@ -1,6 +1,5 @@
 package io.vanillabp.integration.processservice;
 
-import java.io.InputStream;
 import java.util.List;
 import java.util.function.Function;
 
@@ -10,21 +9,17 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
+import io.vanillabp.integration.adapter.migration.processservice.ProcessServiceBase;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.outbox.AggregateIdConverter;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.utils.SpringDataUtil;
-import io.vanillabp.spi.process.ProcessDefinition;
-import io.vanillabp.spi.process.ProcessDefinitionNotFoundException;
-import io.vanillabp.spi.process.ProcessService;
-import io.vanillabp.spi.process.WorkflowHistory;
-import io.vanillabp.spi.process.WorkflowNotFoundException;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class ProcessServiceSpringBean<A> implements ProcessService<A> {
+public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
 
   @Getter
   private final MigrationProcessService<A> migrationProcessService;
@@ -158,123 +153,16 @@ public class ProcessServiceSpringBean<A> implements ProcessService<A> {
 
   }
 
+  @Override
   public A startWorkflow(
-      A workflowAggregate) {
+      final A workflowAggregate) {
 
-    if (migrationProcessService.needsTransactionForStartingWorkflows() && noTransactionIsActive()) {
-      throw new RuntimeException(
-          "No transaction active available! Add run 'startWorkflow' only having a local transaction active.");
+    if (migrationProcessService.needsTwoPhaseCommitForStartingWorkflows() && noTransactionIsActive()) {
+      throw newMissingTransactionException();
     }
 
     return migrationProcessService.startWorkflow(workflowAggregate);
 
-  }
-
-  @Override
-  public A startWorkflowByMessage(
-      A workflowAggregate,
-      String messageName) {
-    //return migrationProcessService.startWorkflowByMessage(workflowAggregate, messageName);
-    return workflowAggregate;
-  }
-
-  @Override
-  public A startWorkflowByMessage(
-      A workflowAggregate,
-      Object message) {
-    //return migrationProcessService.startWorkflowByMessage(workflowAggregate, message);
-    return workflowAggregate;
-  }
-
-  @Override
-  public A correlateMessage(
-      A workflowAggregate,
-      String messageName) {
-    //return migrationProcessService.correlateMessage(workflowAggregate, messageName);
-    return workflowAggregate;
-  }
-
-  @Override
-  public A correlateMessage(
-      A workflowAggregate,
-      String messageName,
-      String correlationId) {
-    //return migrationProcessService.correlateMessage(workflowAggregate, messageName, correlationId);
-    return workflowAggregate;
-  }
-
-  @Override
-  public A correlateMessage(
-      A workflowAggregate,
-      Object message) {
-    //return migrationProcessService.correlateMessage(workflowAggregate, message);
-    return workflowAggregate;
-  }
-
-  @Override
-  public A correlateMessage(
-      A workflowAggregate,
-      Object message,
-      String correlationId) {
-    //return migrationProcessService.correlateMessage(workflowAggregate, message, correlationId);
-    return workflowAggregate;
-  }
-
-  @Override
-  public A completeUserTask(
-      A workflowAggregate,
-      String taskId) {
-    //return migrationProcessService.completeUserTask(workflowAggregate, taskId);
-    return workflowAggregate;
-  }
-
-  @Override
-  public A cancelUserTask(
-      A workflowAggregate,
-      String taskId,
-      String bpmnErrorCode) {
-    //return migrationProcessService.cancelUserTask(workflowAggregate, taskId, bpmnErrorCode);
-    return workflowAggregate;
-  }
-
-  @Override
-  public A completeTask(
-      A workflowAggregate,
-      String taskId) {
-    //return migrationProcessService.completeTask(workflowAggregate, taskId);
-    return workflowAggregate;
-  }
-
-  @Override
-  public A cancelTask(
-      A workflowAggregate,
-      String taskId,
-      String bpmnErrorCode) {
-    //return migrationProcessService.cancelTask(workflowAggregate, taskId, bpmnErrorCode);
-    return workflowAggregate;
-  }
-
-  @Override
-  public List<ProcessDefinition> getProcessDefinitions(
-      final A workflowAggregate,
-      final String historyContext) throws WorkflowNotFoundException {
-
-    return List.of();
-  }
-
-  @Override
-  public InputStream getBpmnXml(
-      final String processDefinitionId) throws ProcessDefinitionNotFoundException {
-
-    return null;
-  }
-
-  @Override
-  public WorkflowHistory getWorkflowHistory(
-      final A workflowAggregate,
-      final String historyContext) throws WorkflowNotFoundException {
-
-    return null;
   }
 
   public boolean transactionIsActive() {

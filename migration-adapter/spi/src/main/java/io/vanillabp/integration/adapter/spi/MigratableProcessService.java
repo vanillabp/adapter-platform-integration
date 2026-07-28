@@ -45,8 +45,8 @@ public interface MigratableProcessService<A> {
    * <b>Contract:</b> {@link WorkflowAwareness#BPMS_UNAVAILABLE} means &quot;do not
    * fall back to the next adapter - retry later&quot;; only
    * {@link WorkflowAwareness#UNKNOWN_TO_BPMS} permits falling back to the next
-   * adapter of the prioritized list. For workflows {@link WorkflowAwareness#TASK_ACTIVE}
-   * means &quot;the workflow is active&quot; and {@link WorkflowAwareness#TASK_COMPLETED}
+   * adapter of the prioritized list. For workflows {@link WorkflowAwareness#ACTIVE}
+   * means &quot;the workflow is active&quot; and {@link WorkflowAwareness#COMPLETED}
    * means &quot;the workflow has ended&quot;.
    *
    * @param workflowAggregateId The ID of the workflow aggregate

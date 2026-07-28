@@ -2,8 +2,10 @@ package io.vanillabp.integration.test.processservice;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.vanillabp.integration.deployment.processservice.ProcessServiceBuildStepProcessor;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.WorkflowService;
 
@@ -14,6 +16,7 @@ import io.vanillabp.spi.service.WorkflowService;
  * is done by name and therefor does not show up if the annotation changed.
  */
 @WorkflowService(workflowAggregateClass = WorkflowServiceAnnotationTest.class)
+@ExtendWith(SuppressOutputExtension.class)
 public class WorkflowServiceAnnotationTest {
 
   static final String SECONDARY_BPMN_PROCESS_ID = "secondary";

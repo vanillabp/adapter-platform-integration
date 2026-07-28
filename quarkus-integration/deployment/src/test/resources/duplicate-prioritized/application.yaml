@@ -1,5 +1,6 @@
 vanillabp:
   prioritized-adapters:
+    - test
     - test2
     - test
   adapters:

@@ -21,7 +21,12 @@ public final class VanillaBpMigratableProcessServiceBuildItem extends MultiBuild
   private String adapterType;
 
   /**
-   * The adapter's bean class to be used for bean instantiation
+   * The CDI bean class providing the adapter's
+   * {@link io.vanillabp.integration.adapter.spi.MigratableProcessService} (usually
+   * an <code>@ApplicationScoped</code> producer). It is registered as an
+   * unremovable additional bean by the VanillaBP extension - adapters need no
+   * separate self-registration. May be null if the adapter registers its beans
+   * itself.
    */
   private String migratableProcessServiceBeanClass;
 
