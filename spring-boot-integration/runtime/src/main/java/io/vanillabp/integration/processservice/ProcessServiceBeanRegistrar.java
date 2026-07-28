@@ -15,6 +15,7 @@ import org.springframework.core.ResolvableType;
 import org.springframework.core.env.Environment;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
@@ -194,8 +195,15 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
               final var phaseTwoOutboxProvider = supplierContext
                   .beanProvider(PhaseTwoOutbox.class);
 
+              // the bean registers itself with the router as phase-two dispatch
+              // target of this workflow module/BPMN process
+              final var phaseTwoRouter = supplierContext
+                  .bean(PhaseTwoRouter.class);
+              final var springDataUtilProvider = supplierContext
+                  .beanProvider(SpringDataUtil.class);
+
               return new ProcessServiceSpringBean<A>(
-                  workflowModuleId, bpmnProcessId, workflowAggregateType, properties, aggregatePersistenceAware, migratableProcessServices, phaseTwoOutboxProvider);
+                  workflowModuleId, bpmnProcessId, workflowAggregateType, properties, aggregatePersistenceAware, migratableProcessServices, phaseTwoOutboxProvider, phaseTwoRouter, springDataUtilProvider);
 
             }));
 

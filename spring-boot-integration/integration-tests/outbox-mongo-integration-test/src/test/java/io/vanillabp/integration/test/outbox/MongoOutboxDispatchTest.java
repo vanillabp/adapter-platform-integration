@@ -38,7 +38,9 @@ import io.vanillabp.spi.process.ProcessService;
  * written in one MongoDB transaction:
  * <ul>
  *   <li>the outbox entry is enlisted in the local transaction (gone on rollback),</li>
- *   <li>phase two is dispatched after the commit and the entry is removed,</li>
+ *   <li>phase two is dispatched after the commit and the entry is marked DONE
+ *       (deleted asynchronously after the retention period only),</li>
+ *   <li>a duplicate schedule for the same aggregate is a no-op,</li>
  *   <li>a failing dispatch is retried and</li>
  *   <li>a left-over entry (e.g. of a crashed instance) is dispatched by the
  *       poller.</li>
@@ -99,8 +101,16 @@ public class MongoOutboxDispatchTest {
 
   }
 
+  private long countDoneOutboxEntries() {
+
+    return mongoTemplate
+        .getCollection(OUTBOX_COLLECTION)
+        .countDocuments(new org.bson.Document("status", "DONE"));
+
+  }
+
   @Test
-  @DisplayName("Phase two is dispatched after commit and the entry is removed")
+  @DisplayName("Phase two is dispatched after commit and the entry is marked DONE")
   public void phaseTwoDispatchedAfterCommit() throws Exception {
 
     final var attachedAggregate = transactionTemplate.execute(status -> {
@@ -114,12 +124,37 @@ public class MongoOutboxDispatchTest {
     final var invocations = listener.awaitInvocations(1, 10000);
     assertEquals(attachedAggregate.getId(), invocations.getFirst());
 
-    // the entry has to be removed after the successful dispatch
+    // DONE instead of delete: the entry has to be marked DONE after the successful
+    // dispatch and stays visible until the asynchronous retention cleanup
     final var deadline = System.currentTimeMillis() + 10000;
-    while (countOutboxEntries() > 0) {
-      assertTrue(System.currentTimeMillis() < deadline, "outbox entry was not removed");
+    while (countDoneOutboxEntries() == 0) {
+      assertTrue(System.currentTimeMillis() < deadline, "outbox entry was not marked DONE");
       Thread.sleep(50);
     }
+
+  }
+
+  @Test
+  @DisplayName("A duplicate schedule for the same aggregate is a no-op (unique idempotency key)")
+  public void duplicateScheduleIsNoOp() throws Exception {
+
+    final var attachedAggregate = transactionTemplate.execute(status -> {
+      final var aggregate = new Aggregate();
+      aggregate.setContent("dedup-test");
+      return processService.startWorkflow(aggregate);
+    });
+    assertNotNull(attachedAggregate);
+    listener.awaitInvocations(1, 10000);
+
+    // starting the workflow again for the same aggregate schedules the same
+    // idempotency key: the unique index makes it a no-op - no second entry, no
+    // second dispatch (the DONE entry keeps the deduplication window open)
+    transactionTemplate.execute(status -> processService.startWorkflow(attachedAggregate));
+
+    // wait longer than the poll interval: no second dispatch may happen
+    Thread.sleep(1500);
+    assertEquals(1, listener.getInvocations().size());
+    assertEquals(1, countOutboxEntries());
 
   }
 
@@ -179,7 +214,9 @@ public class MongoOutboxDispatchTest {
         .append("bpmnProcessId", "SampleWorkflowService")
         .append("operation", "START_WORKFLOW")
         .append("aggregateId", "left-over-aggregate")
-        .append("aggregateIdType", String.class.getName())
+        .append("adapterId", "test")
+        .append("idempotencyKey", "test-module|SampleWorkflowService|left-over-aggregate")
+        .append("status", "OPEN")
         .append("createdAt", Date.from(now))
         .append("attempts", 0)
         .append("nextAttemptAt", Date.from(now));

@@ -1,14 +1,12 @@
 package io.vanillabp.integration.runtime.outbox;
 
-import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -19,7 +17,9 @@ import org.eclipse.microprofile.config.ConfigProvider;
 
 import io.quarkus.runtime.StartupEvent;
 import io.smallrye.config.SmallRyeConfig;
-import io.vanillabp.integration.adapter.spi.PhaseTwoDispatch;
+import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
+import io.vanillabp.integration.adapter.spi.PhaseTwoCall;
+import io.vanillabp.integration.adapter.spi.PhaseTwoOperation;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -29,50 +29,59 @@ import jakarta.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Dispatches committed-but-unprocessed entries of the JDBC-based phase-two outbox (see
- * {@link JdbcPhaseTwoOutbox}) to the {@link PhaseTwoDispatch} method corresponding to
- * the entry's operation:
+ * Dispatches committed-but-unprocessed entries of the JDBC-based phase-two outbox
+ * (see {@link JdbcPhaseTwoOutbox}) through the core's {@link PhaseTwoRouter}:
  * <ul>
- *   <li>right after a commit (triggered by {@link JdbcPhaseTwoOutbox}) and</li>
- *   <li>by a fixed-delay poller (crash recovery and retries, poll interval configured
- *       by <code>vanillabp.outbox.poll-interval</code>) started on
- *       {@link StartupEvent}.</li>
+ * <li>right after a commit (triggered by {@link JdbcPhaseTwoOutbox}) and</li>
+ * <li>by a fixed-delay poller (crash recovery and retries, poll interval configured
+ * by <code>vanillabp.outbox.poll-interval</code>) started on
+ * {@link StartupEvent}.</li>
  * </ul>
  * The poller uses a plain scheduled executor, so the <code>quarkus-scheduler</code>
- * extension is not required. Due entries are claimed atomically (optimistic update
- * incrementing the number of attempts and setting the next attempt according to
- * <code>vanillabp.outbox.attempt-frequency</code>), so a failed dispatch is
- * automatically retried with a backoff and multiple instances do not dispatch the same
- * entry concurrently. Entries are removed on successful dispatch only (at-least-once
- * semantics). After <code>vanillabp.outbox.block-after-attempts</code> failed attempts
- * an entry is blocked and has to be cleaned up manually.
+ * extension is not required. Due entries (status {@link #STATUS_OPEN}) are claimed
+ * atomically (optimistic update incrementing the number of attempts and setting the
+ * next attempt according to <code>vanillabp.outbox.attempt-frequency</code>), so a
+ * failed dispatch is automatically retried with a backoff and multiple instances do
+ * not dispatch the same entry concurrently. On successful dispatch the entry is
+ * marked {@link #STATUS_DONE} - it stays in the table (keeping the deduplication
+ * window open) and is deleted asynchronously once
+ * <code>vanillabp.outbox.retention</code> passed. After
+ * <code>vanillabp.outbox.block-after-attempts</code> failed attempts an entry is
+ * marked {@link #STATUS_BLOCKED} and has to be cleaned up manually.
  * <p>
- * The outbox table is created on startup (<code>CREATE TABLE IF NOT EXISTS</code>)
- * unless <code>vanillabp.outbox.create-schema</code> is disabled for manually managed
- * schemas.
+ * <strong>Cluster safety:</strong> multiple application instances (pods) may poll
+ * concurrently without any distributed lock: the SELECT may return the same due
+ * entries on several instances, but the claim is an optimistic UPDATE
+ * (<code>WHERE ID = ? AND ATTEMPTS = ?</code>) - exactly one instance wins the
+ * claim and dispatches the entry, the others simply skip it. The retention cleanup
+ * is a plain idempotent DELETE.
+ * <p>
+ * The outbox table is created on startup unless
+ * <code>vanillabp.outbox.create-schema</code> is disabled for manually managed
+ * schemas - in that case also create the unique constraint on
+ * <code>IDEMPOTENCY_KEY</code> yourself (the storage-level deduplication of the
+ * outbox contract). The DDL is kept portable: table existence is checked via JDBC
+ * metadata (<code>CREATE TABLE IF NOT EXISTS</code> is not supported by Oracle and
+ * SQL Server), the timestamp type is chosen per database (SQL Server's
+ * <code>TIMESTAMP</code> is a row version, MySQL's has auto-initialization quirks
+ * and a 2038 range limit) and the idempotency key is limited to 512 characters so
+ * MySQL's unique-index key-length limit (3072 bytes with utf8mb4) is respected.
  */
 @ApplicationScoped
 @Slf4j
 public class JdbcPhaseTwoOutboxDispatcher {
 
-  private static final String CREATE_TABLE = """
-      CREATE TABLE IF NOT EXISTS %s (\
-      ID VARCHAR(36) PRIMARY KEY, \
-      WORKFLOW_MODULE_ID VARCHAR(255) NOT NULL, \
-      BPMN_PROCESS_ID VARCHAR(255) NOT NULL, \
-      OPERATION VARCHAR(255) NOT NULL, \
-      AGGREGATE_ID VARCHAR(1024), \
-      AGGREGATE_ID_TYPE VARCHAR(255), \
-      CREATED_AT TIMESTAMP NOT NULL, \
-      ATTEMPTS INT NOT NULL, \
-      NEXT_ATTEMPT_AT TIMESTAMP NOT NULL)"""
-      .formatted(JdbcPhaseTwoOutbox.TABLE_NAME);
+  public static final String STATUS_OPEN = "OPEN";
+
+  public static final String STATUS_DONE = "DONE";
+
+  public static final String STATUS_BLOCKED = "BLOCKED";
 
   private static final String SELECT_DUE_ENTRIES = """
-      SELECT ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, AGGREGATE_ID, AGGREGATE_ID_TYPE, ATTEMPTS \
+      SELECT ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, AGGREGATE_ID, ADAPTER_ID, ATTEMPTS \
       FROM %s \
-      WHERE NEXT_ATTEMPT_AT <= ? AND ATTEMPTS < ?"""
-      .formatted(JdbcPhaseTwoOutbox.TABLE_NAME);
+      WHERE STATUS = '%s' AND NEXT_ATTEMPT_AT <= ? AND ATTEMPTS < ?"""
+      .formatted(JdbcPhaseTwoOutbox.TABLE_NAME, STATUS_OPEN);
 
   private static final String CLAIM_ENTRY = """
       UPDATE %s \
@@ -80,20 +89,32 @@ public class JdbcPhaseTwoOutboxDispatcher {
       WHERE ID = ? AND ATTEMPTS = ?"""
       .formatted(JdbcPhaseTwoOutbox.TABLE_NAME);
 
-  private static final String DELETE_ENTRY = """
-      DELETE FROM %s \
+  private static final String MARK_ENTRY_DONE = """
+      UPDATE %s \
+      SET STATUS = '%s', DONE_AT = ? \
       WHERE ID = ?"""
-      .formatted(JdbcPhaseTwoOutbox.TABLE_NAME);
+      .formatted(JdbcPhaseTwoOutbox.TABLE_NAME, STATUS_DONE);
+
+  private static final String MARK_ENTRY_BLOCKED = """
+      UPDATE %s \
+      SET STATUS = '%s' \
+      WHERE ID = ?"""
+      .formatted(JdbcPhaseTwoOutbox.TABLE_NAME, STATUS_BLOCKED);
+
+  private static final String DELETE_EXPIRED_DONE_ENTRIES = """
+      DELETE FROM %s \
+      WHERE STATUS = '%s' AND DONE_AT < ?"""
+      .formatted(JdbcPhaseTwoOutbox.TABLE_NAME, STATUS_DONE);
 
   /**
    * A due outbox entry read from the database.
    *
    * @param id The entry's ID
    * @param workflowModuleId The ID of the workflow module the workflow belongs to
-   * @param bpmnProcessId The BPMN process ID of the workflow to be started
-   * @param operation The scheduled operation (see the <code>OPERATION_*</code> constants of {@link JdbcPhaseTwoOutbox})
-   * @param aggregateId The workflow aggregate's ID as a string
-   * @param aggregateIdType The original type of the workflow aggregate's ID
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param operation The name of the scheduled {@link PhaseTwoOperation}
+   * @param aggregateId The workflow aggregate's ID in serialized form
+   * @param adapterId The ID of the elected BPMS adapter (may be <code>null</code>)
    * @param attempts The number of dispatch attempts so far
    */
   private record Entry(
@@ -102,7 +123,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
                        String bpmnProcessId,
                        String operation,
                        String aggregateId,
-                       String aggregateIdType,
+                       String adapterId,
                        int attempts) {
   }
 
@@ -110,7 +131,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
   Instance<DataSource> dataSource;
 
   @Inject
-  Instance<PhaseTwoDispatch> phaseTwoDispatch;
+  Instance<PhaseTwoRouter> phaseTwoRouter;
 
   private QuarkusMigrationAdapterProperties.PhaseTwoOutboxProperties properties;
 
@@ -177,20 +198,97 @@ public class JdbcPhaseTwoOutboxDispatcher {
 
   private void createTableIfNotExists() {
 
-    try (var connection = dataSource.get().getConnection(); var statement = connection.createStatement()) {
-      statement.executeUpdate(CREATE_TABLE);
+    try (var connection = dataSource.get().getConnection()) {
+      // existence is checked via JDBC metadata since 'CREATE TABLE IF NOT EXISTS'
+      // is not supported by all databases (e.g. Oracle, SQL Server)
+      if (tableExists(connection)) {
+        return;
+      }
+      try (var statement = connection.createStatement()) {
+        statement.executeUpdate(buildCreateTable(connection));
+      }
     } catch (SQLException e) {
       throw new IllegalStateException(
-          ("Could not create the phase-two outbox table '%s'! Set 'vanillabp.outbox.create-schema' "
-              + "to 'false' and manage the schema manually if the DDL is not suitable for your database.")
+          """
+              Could not create the phase-two outbox table '%s'! Set 'vanillabp.outbox.create-schema' \
+              to 'false' and manage the schema manually if the DDL is not suitable for your database."""
               .formatted(JdbcPhaseTwoOutbox.TABLE_NAME), e);
     }
 
   }
 
+  private static boolean tableExists(
+      final Connection connection) throws SQLException {
+
+    final var metaData = connection.getMetaData();
+    // unquoted identifiers are folded to upper case by some databases (Oracle, H2)
+    // and to lower case by others (PostgreSQL) - check both spellings
+    for (final var tableName : List.of(
+        JdbcPhaseTwoOutbox.TABLE_NAME,
+        JdbcPhaseTwoOutbox.TABLE_NAME.toLowerCase())) {
+      try (var tables = metaData.getTables(null, null, tableName, new String[]{
+          "TABLE"
+      })) {
+        if (tables.next()) {
+          return true;
+        }
+      }
+    }
+    return false;
+
+  }
+
   /**
-   * Claims and dispatches all due entries. Exceptions are caught to keep the poller
-   * alive.
+   * Builds the CREATE TABLE statement using a timestamp type suitable for the
+   * database: SQL Server's <code>TIMESTAMP</code> is a row version (not a
+   * date-time), MySQL's <code>TIMESTAMP</code> has auto-initialization quirks and
+   * ends in 2038. The idempotency key is limited to 512 characters (2048 bytes
+   * with utf8mb4) to stay below MySQL's unique-index key-length limit of 3072
+   * bytes.
+   *
+   * @param connection The connection used to detect the database
+   * @return The CREATE TABLE statement
+   */
+  private static String buildCreateTable(
+      final Connection connection) throws SQLException {
+
+    final var product = connection
+        .getMetaData()
+        .getDatabaseProductName()
+        .toLowerCase();
+    final String timestampType;
+    if (product.contains("microsoft")) {
+      timestampType = "DATETIME2";
+    } else if (product.contains("mysql") || product.contains("mariadb")) {
+      timestampType = "DATETIME(6)";
+    } else {
+      timestampType = "TIMESTAMP";
+    }
+    return """
+        CREATE TABLE %s (\
+        ID VARCHAR(36) PRIMARY KEY, \
+        WORKFLOW_MODULE_ID VARCHAR(255) NOT NULL, \
+        BPMN_PROCESS_ID VARCHAR(255) NOT NULL, \
+        OPERATION VARCHAR(255) NOT NULL, \
+        AGGREGATE_ID VARCHAR(1024), \
+        ADAPTER_ID VARCHAR(255), \
+        IDEMPOTENCY_KEY VARCHAR(512) UNIQUE, \
+        STATUS VARCHAR(16) NOT NULL, \
+        CREATED_AT %s NOT NULL, \
+        ATTEMPTS INT NOT NULL, \
+        NEXT_ATTEMPT_AT %s NOT NULL, \
+        DONE_AT %s)"""
+        .formatted(
+            JdbcPhaseTwoOutbox.TABLE_NAME,
+            timestampType,
+            timestampType,
+            timestampType);
+
+  }
+
+  /**
+   * Claims and dispatches all due entries, then deletes DONE entries whose retention
+   * passed. Exceptions are caught to keep the poller alive.
    */
   private synchronized void poll() {
 
@@ -200,6 +298,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
           dispatch(connection, entry);
         }
       }
+      cleanupDoneEntries(connection);
     } catch (Exception e) {
       log.error("Polling the VanillaBP phase-two outbox failed - will retry", e);
     }
@@ -248,11 +347,11 @@ public class JdbcPhaseTwoOutboxDispatcher {
   }
 
   /**
-   * Dispatches a single claimed entry to the {@link PhaseTwoDispatch} method
-   * corresponding to the entry's operation. On success the entry is removed; on
-   * failure it stays claimed and is retried after the configured backoff.
+   * Dispatches a single claimed entry through the core's {@link PhaseTwoRouter}. On
+   * success the entry is marked DONE; on failure it stays claimed and is retried
+   * after the configured backoff, until it is blocked.
    *
-   * @param connection The connection used to remove the entry on success
+   * @param connection The connection used to update the entry
    * @param entry The claimed entry
    */
   private void dispatch(
@@ -260,19 +359,25 @@ public class JdbcPhaseTwoOutboxDispatcher {
       final Entry entry) throws SQLException {
 
     try {
-      switch (entry.operation()) {
-        case JdbcPhaseTwoOutbox.OPERATION_START_WORKFLOW -> phaseTwoDispatch
-            .get()
-            .startWorkflowPhaseTwo(
-                entry.workflowModuleId(),
-                entry.bpmnProcessId(),
-                convertAggregateId(entry));
-        default -> throw new IllegalStateException(
+      final PhaseTwoOperation operation;
+      try {
+        operation = PhaseTwoOperation.valueOf(entry.operation());
+      } catch (IllegalArgumentException e) {
+        throw new IllegalStateException(
             "Unknown operation '%s' of outbox entry '%s'! Maybe it was written by a newer version of your software?"
                 .formatted(entry.operation(), entry.id()));
       }
+      phaseTwoRouter
+          .get()
+          .dispatch(new PhaseTwoCall(
+              operation, entry.workflowModuleId(), entry.bpmnProcessId(), entry.aggregateId(), entry.adapterId(), Map
+                  .of()));
     } catch (Exception e) {
       if (entry.attempts() + 1 >= properties.blockAfterAttempts()) {
+        try (var statement = connection.prepareStatement(MARK_ENTRY_BLOCKED)) {
+          statement.setString(1, entry.id());
+          statement.executeUpdate();
+        }
         log.error(
             "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
                 + "failed {} times - the outbox entry '{}' is now blocked and has to be cleaned up manually!",
@@ -295,58 +400,26 @@ public class JdbcPhaseTwoOutboxDispatcher {
       }
       return;
     }
-    try (var statement = connection.prepareStatement(DELETE_ENTRY)) {
-      statement.setString(1, entry.id());
+    try (var statement = connection.prepareStatement(MARK_ENTRY_DONE)) {
+      statement.setTimestamp(1, Timestamp.from(Instant.now()));
+      statement.setString(2, entry.id());
       statement.executeUpdate();
     }
 
   }
 
   /**
-   * Converts the serialized aggregate ID back to its original type stored along the
-   * entry. Unknown types are passed through as strings.
+   * Deletes successfully dispatched (DONE) entries whose retention period passed -
+   * the asynchronous cleanup of the "DONE instead of delete" contract.
    *
-   * @param entry The entry to be dispatched
-   * @return The aggregate ID to be passed on
+   * @param connection The connection to be used
    */
-  private Object convertAggregateId(
-      final Entry entry) {
+  private void cleanupDoneEntries(
+      final Connection connection) throws SQLException {
 
-    final var aggregateId = entry.aggregateId();
-    final var aggregateIdType = entry.aggregateIdType();
-    if (aggregateId == null || aggregateIdType == null) {
-      return aggregateId;
-    }
-    try {
-      return switch (aggregateIdType) {
-        case "java.lang.String" -> aggregateId;
-        case "java.lang.Long" -> Long.valueOf(aggregateId);
-        case "java.lang.Integer" -> Integer.valueOf(aggregateId);
-        case "java.lang.Short" -> Short.valueOf(aggregateId);
-        case "java.lang.Byte" -> Byte.valueOf(aggregateId);
-        case "java.lang.Double" -> Double.valueOf(aggregateId);
-        case "java.lang.Float" -> Float.valueOf(aggregateId);
-        case "java.lang.Boolean" -> Boolean.valueOf(aggregateId);
-        case "java.math.BigInteger" -> new BigInteger(aggregateId);
-        case "java.math.BigDecimal" -> new BigDecimal(aggregateId);
-        case "java.util.UUID" -> UUID.fromString(aggregateId);
-        default -> {
-          log.warn(
-              "Unknown workflow-aggregate ID type '{}' of outbox entry '{}' - passing the ID through as a string!",
-              aggregateIdType,
-              entry.id());
-          yield aggregateId;
-        }
-      };
-    } catch (IllegalArgumentException e) {
-      log.warn(
-          "Could not convert workflow-aggregate ID '{}' of outbox entry '{}' to type '{}' "
-              + "- passing the ID through as a string!",
-          aggregateId,
-          entry.id(),
-          aggregateIdType,
-          e);
-      return aggregateId;
+    try (var statement = connection.prepareStatement(DELETE_EXPIRED_DONE_ENTRIES)) {
+      statement.setTimestamp(1, Timestamp.from(Instant.now().minus(properties.retention())));
+      statement.executeUpdate();
     }
 
   }

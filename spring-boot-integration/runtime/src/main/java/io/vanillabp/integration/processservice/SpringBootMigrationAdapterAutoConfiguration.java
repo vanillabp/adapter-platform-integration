@@ -3,7 +3,6 @@ package io.vanillabp.integration.processservice;
 import java.util.List;
 import java.util.Optional;
 
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -12,10 +11,9 @@ import org.springframework.context.annotation.Import;
 
 import io.vanillabp.integration.adapter.AdapterConfigurationBase;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
-import io.vanillabp.integration.adapter.spi.PhaseTwoDispatch;
+import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.config.SpringBootMigrationAdapterProperties;
 import io.vanillabp.integration.config.SpringBootMigrationAdapterTransformer;
-import io.vanillabp.integration.utils.SpringDataUtil;
 import io.vanillabp.integration.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.integration.workflowmodule.WorkflowModules;
@@ -74,23 +72,20 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   }
 
   /**
-   * The bean receiving phase-two calls dispatched by a
+   * The core-owned router receiving phase-two calls dispatched by a
    * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox} implementation and
    * routing them to the {@link io.vanillabp.spi.process.ProcessService} bean
-   * responsible for the workflow module and BPMN process given.
+   * responsible for the workflow module and BPMN process given. The process-service
+   * beans register themselves (including the aggregate-ID converter) at
+   * bean-creation time.
    *
-   * @param processServices Provider of all process service beans registered
-   * @param springDataUtil Provider of the persistence utility used to determine aggregate-ID types
-   * @return The phase-two dispatch bean
+   * @return The phase-two router
    */
   @Bean
-  @ConditionalOnMissingBean(PhaseTwoDispatch.class)
-  @SuppressWarnings("rawtypes")
-  public PhaseTwoDispatchSpringBean phaseTwoDispatch(
-      final ObjectProvider<io.vanillabp.spi.process.ProcessService> processServices,
-      final ObjectProvider<SpringDataUtil> springDataUtil) {
+  @ConditionalOnMissingBean(PhaseTwoRouter.class)
+  public PhaseTwoRouter vanillaBpPhaseTwoRouter() {
 
-    return new PhaseTwoDispatchSpringBean(processServices, springDataUtil);
+    return new PhaseTwoRouter();
 
   }
 

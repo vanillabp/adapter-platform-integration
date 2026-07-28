@@ -114,37 +114,53 @@ Adapters of remote BPMS report `needsTwoPhaseCommitForStartingWorkflows()` and
 require a transaction outbox (`PhaseTwoOutbox` SPI of the
 [migration adapter](../../migration-adapter)) which schedules phase two of starting a
 workflow within the local transaction and dispatches it reliably after the commit
-(also after a crash/restart, retrying with a backoff). Dispatched calls are routed by
-`PhaseTwoDispatchSpringBean` (the platform's `PhaseTwoDispatch` implementation) to
-the `ProcessServiceSpringBean` responsible for the workflow module and BPMN process
-(looked up via the common interface `ProcessServicePhaseTwo`) — there the adapter to
-be used is determined. This module provides two
+(also after a crash/restart, retrying with a backoff). Dispatched calls are routed
+through the core-owned `PhaseTwoRouter` (see the
+[migration adapter's README](../../migration-adapter/README.md) for the chain and
+the outbox contract — idempotency key, DONE instead of delete, retention). Each
+`ProcessServiceSpringBean` registers itself with the router at bean creation,
+including the converter turning the serialized aggregate ID back into the
+aggregate's ID type: Spring-Data managed aggregates use `SpringDataUtil.getIdType`;
+for aggregates NOT managed by Spring Data (custom `AggregatePersistenceAware`
+implementations) the serialized String is passed through unchanged instead of
+failing. This module provides two
 default implementations, both configured by the `vanillabp.outbox.*` properties
-(`poll-interval`, `attempt-frequency`, `block-after-attempts`, `create-schema`) and
+(`poll-interval`, `attempt-frequency`, `block-after-attempts`, `create-schema`,
+`retention`) and
 both only active if the application does not define its own `PhaseTwoOutbox` bean:
 
 1. **JPA (gruelbox-based):** `GruelboxPhaseTwoOutboxAutoConfiguration` sets up a
    [gruelbox transaction-outbox](https://github.com/gruelbox/transaction-outbox)
    using `SpringTransactionManager`/`SpringInstantiator`, active under the same
-   conditions as the JPA `SpringDataUtil`. The workflow-aggregate ID is serialized
-   as a string (gruelbox's invocation serializer only supports a whitelist of types)
-   and converted back by `PhaseTwoDispatchSpringBean` using the
-   aggregate's ID type. Which phase-two operation was scheduled is encoded in the
-   scheduled `GruelboxPhaseTwoDispatch` method itself. Recovery and retries are done by a fixed-delay poller
-   calling `TransactionOutbox.flush()` (own `TaskScheduler` registered only if the
-   application has none; `@EnableScheduling` is not required). The outbox table
+   conditions as the JPA `SpringDataUtil`. The `PhaseTwoCall` is flattened into
+   String parameters of the scheduled `GruelboxPhaseTwoDispatch` invocation
+   (gruelbox's invocation serializer only supports a whitelist of types) and
+   rebuilt at dispatch time. The contract maps onto gruelbox's native
+   capabilities: the idempotency key becomes the `uniqueRequestId` (unique
+   constraint of `TXNO_OUTBOX`; duplicates are a no-op), "DONE instead of delete"
+   is gruelbox's retention of processed entries (`vanillabp.outbox.retention` maps
+   to the retention threshold). Recovery, retries and retention cleanup are done by
+   a fixed-delay poller calling `TransactionOutbox.flush()` on a **private
+   single-thread executor** — no `TaskScheduler` bean is registered or used, so an
+   application's `@EnableScheduling` setup stays unaffected. The outbox table
    `TXNO_OUTBOX` is created by gruelbox's auto-DDL — set
    `vanillabp.outbox.create-schema: false` to manage the schema manually (use
    gruelbox's `DefaultPersistor.writeSchema(Writer)` or the DDL from the gruelbox
    documentation for your database).
 2. **MongoDB (own implementation, gruelbox is JDBC-only):** `MongoPhaseTwoOutbox`
    writes entries into the collection `vanillabp-phase-two-outbox` via
-   `MongoTemplate` within the current transaction (the scheduled operation is stored
-   as a discriminator with each entry);
-   `MongoPhaseTwoOutboxDispatcher` claims due entries atomically (find-and-modify
-   with attempts/backoff) and removes them after successful dispatch. **Note:**
-   transactional enlisting requires MongoDB transactions, i.e. a replica set and a
-   `MongoTransactionManager` bean — otherwise scheduling is best-effort.
+   `MongoTemplate` within the current transaction, persisting all `PhaseTwoCall`
+   fields plus the idempotency key (sparse unique index, created automatically
+   unless `create-schema` is disabled — then create it manually).
+   `MongoPhaseTwoOutboxDispatcher` claims due OPEN entries atomically
+   (find-and-modify with attempts/backoff), marks them DONE after successful
+   dispatch and deletes DONE entries once the retention passed; repeatedly failing
+   entries are marked BLOCKED. It also runs on a private single-thread executor
+   (no `TaskScheduler`). **Note:** transactional enlisting requires MongoDB
+   transactions, i.e. a replica set and a `MongoTransactionManager` bean —
+   otherwise scheduling is best-effort. Duplicate schedules are detected by a
+   pre-check read since a duplicate-key error would abort the whole MongoDB
+   transaction; the unique index remains the backstop for concurrent duplicates.
 
 If both JPA and MongoDB are configured, JPA wins deterministically (consistent with
 the `SpringDataUtil` auto-configurations). To use a different outbox (e.g. another

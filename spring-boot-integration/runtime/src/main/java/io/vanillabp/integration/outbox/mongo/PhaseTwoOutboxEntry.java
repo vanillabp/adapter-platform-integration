@@ -1,6 +1,7 @@
 package io.vanillabp.integration.outbox.mongo;
 
 import java.time.Instant;
+import java.util.Map;
 
 import org.springframework.data.annotation.Id;
 
@@ -11,15 +12,29 @@ import lombok.Setter;
 
 /**
  * A single entry of the MongoDB-based phase-two outbox, stored in the collection
- * {@link MongoPhaseTwoOutbox#COLLECTION}. The workflow aggregate's ID is stored in
- * serialized form ({@link #aggregateId}) together with its original type
- * ({@link #aggregateIdType}) so it can be converted back before dispatching.
+ * {@link MongoPhaseTwoOutbox#COLLECTION}. The entry persists the fields of a
+ * {@link io.vanillabp.integration.adapter.spi.PhaseTwoCall} - the workflow
+ * aggregate's ID in its serialized (String) form; conversion back to the aggregate's
+ * ID type happens in the core's router at dispatch time.
+ * <p>
+ * The {@link #idempotencyKey} carries the call's idempotency key (if present) and is
+ * enforced unique by a sparse unique index on the collection - the storage-level
+ * deduplication of the outbox contract. The {@link #status} lifecycle is
+ * {@link #STATUS_OPEN} → {@link #STATUS_DONE} (successful dispatch; deleted
+ * asynchronously after the configured retention) or {@link #STATUS_BLOCKED} (too many
+ * failed attempts; manual cleanup required).
  */
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class PhaseTwoOutboxEntry {
+
+  public static final String STATUS_OPEN = "OPEN";
+
+  public static final String STATUS_DONE = "DONE";
+
+  public static final String STATUS_BLOCKED = "BLOCKED";
 
   @Id
   private String id;
@@ -29,20 +44,35 @@ public class PhaseTwoOutboxEntry {
   private String bpmnProcessId;
 
   /**
-   * The scheduled operation (see the <code>OPERATION_*</code> constants of
-   * {@link MongoPhaseTwoOutbox}), determining which {@link
-   * io.vanillabp.integration.adapter.spi.PhaseTwoDispatch} method is called.
+   * The name of the scheduled
+   * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOperation}.
    */
   private String operation;
 
   private String aggregateId;
 
-  private String aggregateIdType;
+  /**
+   * The ID of the BPMS adapter elected at scheduling time (may be
+   * <code>null</code> for future probing operations).
+   */
+  private String adapterId;
+
+  private Map<String, String> args;
+
+  /**
+   * The call's idempotency key; <code>null</code> if the operation must not be
+   * deduplicated.
+   */
+  private String idempotencyKey;
+
+  private String status;
 
   private Instant createdAt;
 
   private int attempts;
 
   private Instant nextAttemptAt;
+
+  private Instant doneAt;
 
 }

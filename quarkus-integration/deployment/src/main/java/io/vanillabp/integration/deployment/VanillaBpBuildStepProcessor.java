@@ -20,8 +20,8 @@ import io.vanillabp.integration.runtime.config.VanillaBpConfigBuilder;
 import io.vanillabp.integration.runtime.deployment.VanillaBpShutdownObserver;
 import io.vanillabp.integration.runtime.outbox.JdbcPhaseTwoOutbox;
 import io.vanillabp.integration.runtime.outbox.JdbcPhaseTwoOutboxDispatcher;
-import io.vanillabp.integration.runtime.outbox.QuarkusPhaseTwoDispatch;
 import io.vanillabp.integration.runtime.processservice.EventualConsistencyTransactionSupport;
+import io.vanillabp.integration.runtime.processservice.PhaseTwoRouterProducer;
 import io.vanillabp.integration.runtime.processservice.TransactionInterceptor;
 import io.vanillabp.integration.runtime.processservice.VanillaBpTaskInterception;
 import io.vanillabp.integration.runtime.util.UriSubstitute;
@@ -137,6 +137,26 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
+   * Registers the core-owned phase-two router (via {@link PhaseTwoRouterProducer}):
+   * the generated process-service beans register themselves with it at bean
+   * creation, and the phase-two outbox dispatches committed entries through it. It
+   * is registered independently of any outbox implementation, so custom
+   * <code>PhaseTwoOutbox</code> beans can rely on it, too.
+   *
+   * @return The additional {@link PhaseTwoRouterProducer} bean
+   */
+  @BuildStep
+  AdditionalBeanBuildItem buildPhaseTwoRouter() {
+
+    return AdditionalBeanBuildItem
+        .builder()
+        .addBeanClass(PhaseTwoRouterProducer.class)
+        .setUnremovable() // don't remove, since it is used under the hoods
+        .build();
+
+  }
+
+  /**
    * Registers the JDBC-based default implementation of the phase-two outbox (see
    * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox}) used for two-phase
    * workflow starts. Only registered if the Agroal extension is present (a JDBC
@@ -159,8 +179,7 @@ public class VanillaBpBuildStepProcessor {
         .builder()
         .addBeanClasses(
             JdbcPhaseTwoOutbox.class,
-            JdbcPhaseTwoOutboxDispatcher.class,
-            QuarkusPhaseTwoDispatch.class)
+            JdbcPhaseTwoOutboxDispatcher.class)
         .setUnremovable() // don't remove, since it is used under the hoods
         .build());
 

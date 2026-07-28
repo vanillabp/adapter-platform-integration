@@ -36,6 +36,8 @@ public class OutboxDispatchTest {
 
   private static final String COUNT_OUTBOX_ENTRIES = "select count(*) from TXNO_OUTBOX";
 
+  private static final String COUNT_PROCESSED_OUTBOX_ENTRIES = "select count(*) from TXNO_OUTBOX where processed = true";
+
   @Autowired
   private ProcessService<Aggregate> processService;
 
@@ -107,6 +109,36 @@ public class OutboxDispatchTest {
     // wait longer than the poll interval: phase two must never be dispatched
     Thread.sleep(1500);
     assertTrue(listener.getInvocations().isEmpty());
+
+  }
+
+  @Test
+  @DisplayName("A duplicate schedule for the same aggregate is a no-op and the DONE entry stays visible")
+  public void duplicateScheduleIsNoOpAndDoneEntryRetained() throws Exception {
+
+    final var attachedAggregate = transactionTemplate.execute(status -> {
+      final var aggregate = new Aggregate();
+      aggregate.setContent("dedup-test");
+      return processService.startWorkflow(aggregate);
+    });
+    assertNotNull(attachedAggregate);
+    listener.awaitInvocations(1, 10000);
+
+    // DONE instead of delete: gruelbox retains the processed entry (unique request
+    // ID + retention threshold), keeping the deduplication window open
+    final var deadline = System.currentTimeMillis() + 10000;
+    while (jdbcTemplate.queryForObject(COUNT_PROCESSED_OUTBOX_ENTRIES, Long.class) == 0) {
+      assertTrue(System.currentTimeMillis() < deadline, "processed outbox entry was not retained");
+      Thread.sleep(50);
+    }
+
+    // starting the workflow again for the same aggregate schedules the same
+    // idempotency key: the unique constraint makes it a no-op - no second dispatch
+    transactionTemplate.execute(status -> processService.startWorkflow(attachedAggregate));
+
+    // wait longer than the poll interval: no second dispatch may happen
+    Thread.sleep(1500);
+    assertEquals(1, listener.getInvocations().size());
 
   }
 

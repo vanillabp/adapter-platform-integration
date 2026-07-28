@@ -130,36 +130,60 @@ the local transaction, starting is split into two phases
   the *transaction outbox* SPI `PhaseTwoOutbox`. If such an adapter is used but no
   `PhaseTwoOutbox` is available, starting a workflow fails hard.
 
-The dispatch of a scheduled call is routed back into the process-service bean which
-scheduled it: the platform's `PhaseTwoDispatch` bean looks up the bean responsible
-for the workflow module and BPMN process (all process-service beans implement the
-common interface `ProcessServicePhaseTwo`) and calls its phase-two method, which
-delegates to `MigrationProcessService`. Only *there* the adapter to be used is
-determined — it is deliberately not stored with the outbox entry. For starting
-workflows this is always the adapter of the highest priority (the same rule as in
-phase one); future `ProcessService` operations (message correlation, completing
-tasks, ...) will instead probe the prioritized adapters to find the BPMS the
-workflow instance is running in. Each such operation will get its own `schedule*`
-method in `PhaseTwoOutbox` and a corresponding method in `PhaseTwoDispatch` and
-`ProcessServicePhaseTwo`.
+A scheduled call is described by the immutable value type `PhaseTwoCall`
+(operation, workflow module, BPMN process, workflow-aggregate ID in serialized
+String form, elected adapter ID, operation-specific args). The dispatch chain is as
+short as possible:
+
+```
+schedule*                     dispatch(call)         startWorkflowPhaseTwo(id, adapterId)
+ProcessService ──► PhaseTwoOutbox (store) ──► PhaseTwoRouter ──► MigrationProcessService ──► adapter
+      within local TX             after commit        (core-owned)     (adapter selection)
+```
+
+The core-owned `PhaseTwoRouter` holds a registry `(workflowModuleId, bpmnProcessId)
+→ MigrationProcessService`, filled by the platform integration at bean-creation
+time together with a converter turning the serialized aggregate ID back into the
+aggregate's ID type (the platform knows the persistence layer — conversion happens
+exactly once, in the router). For `START_WORKFLOW` the adapter elected in phase one
+**is persisted with the outbox entry** and used in phase two — no re-election from
+the then-current priorities. If the adapter was removed from the configuration
+while the entry was still open (stale entry), dispatching fails with a guiding
+message naming that case. Future `ProcessService` operations (message correlation,
+completing tasks, ...) will instead probe the prioritized adapters at dispatch time
+(their calls carry no adapter ID); each such operation gets its own typed
+`schedule*` default method in `PhaseTwoOutbox` building the `PhaseTwoCall`.
 
 The core does not implement (or depend on) any outbox itself — it only defines the
-`PhaseTwoOutbox` contract:
+`PhaseTwoOutbox` contract (stores implement exactly one method,
+`schedule(PhaseTwoCall)`):
 
-- **Scheduling:** `scheduleStartWorkflow(workflowModuleId, bpmnProcessId,
-  workflowAggregateId)` MUST be invoked within the still-running local transaction
-  that persists the workflow aggregate and MUST enlist the outbox entry in exactly
-  that transaction: the entry becomes visible if and only if the transaction commits.
-- **Recovery:** every committed-but-unprocessed entry has to be dispatched to the
-  `PhaseTwoDispatch` method corresponding to the scheduled operation right after the
-  commit *and* after an application restart (crash recovery), retrying failed
-  dispatches with a backoff. Entries are removed (or marked processed) only after a
-  successful dispatch.
-- **Idempotency:** as a consequence of the at-least-once semantics, adapters MUST
-  tolerate repeated `startWorkflowPhaseTwo` calls: the triple
-  `workflowModuleId + bpmnProcessId + workflowAggregateId` is the idempotency key —
-  a second call for an already-started workflow has to return without starting
-  another workflow instance.
+- **Scheduling:** `schedule(call)` MUST be invoked within the still-running local
+  transaction that persists the workflow aggregate and MUST enlist the outbox entry
+  in exactly that transaction: the entry becomes visible if and only if the
+  transaction commits.
+- **Idempotency key:** implementations MUST enforce uniqueness of
+  `PhaseTwoCall.idempotencyKey()` (where present) via the store's unique-constraint
+  mechanism; a duplicate `schedule` is a no-op returning `false`. For
+  `START_WORKFLOW` the key is `workflowModuleId|bpmnProcessId|workflowAggregateId`
+  — the storage-level enforcement of "a workflow is started at most once per
+  aggregate". The derivation rules per operation are documented on
+  `PhaseTwoOperation` and are a persisted contract.
+- **Recovery:** every committed-but-unprocessed entry has to be dispatched through
+  the `PhaseTwoRouter` right after the commit *and* after an application restart
+  (crash recovery), retrying failed dispatches with a backoff.
+- **DONE instead of delete:** a successful dispatch marks the entry DONE; physical
+  deletion happens asynchronously after a configurable retention
+  (`vanillabp.outbox.retention`, default 7 days) — keeping the deduplication window
+  open beyond dispatch. Entries failing repeatedly are blocked (ERROR log naming
+  module/process/aggregate/operation) and left as a monitorable trail.
+- **At-least-once residual window:** a crash between the remote BPMS call and
+  marking the entry DONE re-dispatches the entry on recovery. This is accepted
+  (eventual consistency); adapters MUST therefore tolerate repeated
+  `startWorkflowPhaseTwo` calls — a second call for an already-started workflow has
+  to return without starting another workflow instance. (Planned mitigation for
+  the election story: probe `awarenessOfWorkflow` before re-dispatching entries
+  with `attempts > 0` — not implemented yet.)
 
 Default implementations are provided by the platform integrations (configured via
 `vanillabp.outbox.*`; applications may define their own `PhaseTwoOutbox` bean

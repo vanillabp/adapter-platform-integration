@@ -4,6 +4,45 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Phase-two chain collapsed: `PhaseTwoCall` + `PhaseTwoRouter` (2026-07-28)
+
+Breaking changes of the outbox part of the adapter SPI and the platform beans
+(adapters are not affected — `MigratableProcessService` is unchanged):
+
+- **Removed:** `PhaseTwoDispatch` and `ProcessServicePhaseTwo` (SPI) and the
+  platform dispatch beans (`PhaseTwoDispatchSpringBean`,
+  `QuarkusPhaseTwoDispatch`). The chain
+  Outbox → `PhaseTwoDispatch` → `ProcessServicePhaseTwo` →
+  `MigrationProcessService` had two layers too many; it is now
+  Outbox → `PhaseTwoRouter` (core-owned, `migration-adapter` runtime) →
+  `MigrationProcessService` → adapter. Platform process-service beans register
+  with the router at bean creation (including a `Function<String,Object>`
+  converting the serialized aggregate ID back to the aggregate's ID type —
+  conversion happens exactly once, in the router).
+- **`PhaseTwoOutbox` reworked (hybrid):** one abstract method
+  `boolean schedule(PhaseTwoCall call)`; typed default methods
+  (`scheduleStartWorkflow(module, process, aggregateId, adapterId)`) build the
+  new immutable `PhaseTwoCall` record and delegate. The signature gained
+  `adapterId`: the adapter elected in phase one IS persisted for start operations
+  and used at dispatch time (no re-election; stale entries after configuration
+  changes yield a guiding error). Contract additions: unique idempotency key
+  (store-level unique constraint, duplicate schedule = no-op returning `false`),
+  DONE instead of delete (async cleanup after `vanillabp.outbox.retention`,
+  default 7 days), documented at-least-once residual window. Key derivation rules
+  live on `PhaseTwoOperation` and are a persisted contract.
+- **Store schemas changed** (entries of the previous format are not migrated —
+  never released): Quarkus JDBC table `VANILLABP_PHASE_TWO_OUTBOX` gained
+  `ADAPTER_ID`, `IDEMPOTENCY_KEY` (unique), `STATUS`, `DONE_AT` and dropped
+  `AGGREGATE_ID_TYPE`; the Mongo collection analogously (sparse unique index on
+  `idempotencyKey`). Gruelbox maps the contract natively
+  (`uniqueRequestId` + retention threshold).
+- **`vanillaBpOutboxTaskScheduler` beans deleted (Spring):** the outbox
+  dispatchers run on private single-thread executors; an application's
+  `@EnableScheduling`/`TaskScheduler` setup is no longer affected.
+- **`@Transactional` removed** from the former
+  `ProcessServiceSpringBean.startWorkflowPhaseTwo` (the method itself is gone;
+  phase two needs no local transaction — dual-TM applications broke on it).
+
 ## Adapter start phases carry module + process id (2026-07-09)
 
 Breaking change of `MigratableProcessService`, relevant for BPMS adapters:

@@ -49,7 +49,7 @@ public class ProcessServiceSpringBeanTest {
 
     testee = new ProcessServiceSpringBean<>(
         "test-module", "TestProcess", Object.class, properties, aggregatePersistenceAware, List
-            .of(migratableProcessService), null);
+            .of(migratableProcessService), null, null, null);
 
   }
 
@@ -84,6 +84,25 @@ public class ProcessServiceSpringBeanTest {
         RuntimeException.class,
         () -> testee.startWorkflow(new Object()));
     assertTrue(exception.getMessage().contains("No transaction active"));
+
+  }
+
+  @Test
+  @DisplayName("Not yet implemented operations return the aggregate unchanged (stubs)")
+  public void notYetImplementedOperationsReturnAggregate() {
+
+    final var aggregate = new Object();
+
+    assertSame(aggregate, testee.startWorkflowByMessage(aggregate, "TestMessage"));
+    assertSame(aggregate, testee.startWorkflowByMessage(aggregate, new Object()));
+    assertSame(aggregate, testee.correlateMessage(aggregate, "TestMessage"));
+    assertSame(aggregate, testee.correlateMessage(aggregate, "TestMessage", "correlation-1"));
+    assertSame(aggregate, testee.correlateMessage(aggregate, new Object()));
+    assertSame(aggregate, testee.correlateMessage(aggregate, new Object(), "correlation-1"));
+    assertSame(aggregate, testee.completeUserTask(aggregate, "task-1"));
+    assertSame(aggregate, testee.cancelUserTask(aggregate, "task-1", "error"));
+    assertSame(aggregate, testee.completeTask(aggregate, "task-1"));
+    assertSame(aggregate, testee.cancelTask(aggregate, "task-1", "error"));
 
   }
 

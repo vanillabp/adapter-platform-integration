@@ -7,13 +7,13 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.index.Index;
 import org.springframework.data.mongodb.repository.MongoRepository;
-import org.springframework.scheduling.TaskScheduler;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
-import io.vanillabp.integration.adapter.spi.PhaseTwoDispatch;
+import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.outbox.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfiguration;
@@ -26,6 +26,11 @@ import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfig
  * {@link PhaseTwoOutbox} bean was defined. It is ordered after
  * {@link GruelboxPhaseTwoOutboxAutoConfiguration}: if both JPA and MongoDB are
  * configured, JPA wins deterministically.
+ * <p>
+ * Unless <code>vanillabp.outbox.create-schema</code> is set to <code>false</code>, a
+ * sparse unique index on the entries' idempotency key is created automatically - the
+ * storage-level deduplication of the outbox contract. If the schema is managed
+ * manually, create that index yourself (see the module's <code>README.md</code>).
  * <p>
  * <strong>Note:</strong> Transactional enlisting of outbox entries requires MongoDB
  * transactions, i.e. a replica set and a
@@ -44,53 +49,44 @@ import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfig
 public class MongoPhaseTwoOutboxAutoConfiguration {
 
   /**
-   * The task scheduler used to poll the outbox. Only registered if the application
-   * does not define its own {@link TaskScheduler} bean;
-   * <code>&#64;EnableScheduling</code> is not required.
-   *
-   * @return The task scheduler
-   */
-  @Bean
-  @ConditionalOnMissingBean(TaskScheduler.class)
-  public ThreadPoolTaskScheduler vanillaBpOutboxTaskScheduler() {
-
-    final var taskScheduler = new ThreadPoolTaskScheduler();
-    taskScheduler.setPoolSize(1);
-    taskScheduler.setThreadNamePrefix("vanillabp-outbox-");
-    taskScheduler.setDaemon(true);
-    return taskScheduler;
-
-  }
-
-  /**
-   * @param mongoTemplate The template used to claim and remove entries
-   * @param phaseTwoDispatch The bean dispatched to
-   * @param taskScheduler The task scheduler running the poller
+   * @param mongoTemplate The template used to claim and update entries
+   * @param phaseTwoRouter Provider of the core's router dispatched to
    * @param properties The <code>vanillabp.outbox</code> properties
-   * @return The dispatcher polling the outbox collection
+   * @return The dispatcher polling the outbox collection (private single-thread
+   *         executor - no {@link org.springframework.scheduling.TaskScheduler}
+   *         involved)
    */
   @Bean
   public MongoPhaseTwoOutboxDispatcher vanillaBpMongoPhaseTwoOutboxDispatcher(
       final MongoTemplate mongoTemplate,
-      final ObjectProvider<PhaseTwoDispatch> phaseTwoDispatch,
-      final TaskScheduler taskScheduler,
+      final ObjectProvider<PhaseTwoRouter> phaseTwoRouter,
       final PhaseTwoOutboxProperties properties) {
 
     return new MongoPhaseTwoOutboxDispatcher(
-        mongoTemplate, phaseTwoDispatch, taskScheduler, properties);
+        mongoTemplate, phaseTwoRouter, properties);
 
   }
 
   /**
    * @param mongoTemplate The template used to write entries within the current transaction
    * @param dispatcher The dispatcher triggered right after a commit
+   * @param properties The <code>vanillabp.outbox</code> properties
    * @return The {@link PhaseTwoOutbox} used by the process services
    */
   @Bean
   public MongoPhaseTwoOutbox vanillaBpMongoPhaseTwoOutbox(
       final MongoTemplate mongoTemplate,
-      final MongoPhaseTwoOutboxDispatcher dispatcher) {
+      final MongoPhaseTwoOutboxDispatcher dispatcher,
+      final PhaseTwoOutboxProperties properties) {
 
+    if (properties.isCreateSchema()) {
+      mongoTemplate
+          .indexOps(MongoPhaseTwoOutbox.COLLECTION)
+          .createIndex(new Index()
+              .on("idempotencyKey", Sort.Direction.ASC)
+              .unique()
+              .sparse());
+    }
     return new MongoPhaseTwoOutbox(mongoTemplate, dispatcher);
 
   }

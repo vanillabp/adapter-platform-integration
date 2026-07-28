@@ -193,6 +193,16 @@ public interface QuarkusMigrationAdapterProperties {
     @WithDefault("true")
     boolean createSchema();
 
+    /**
+     * How long successfully dispatched entries (marked as DONE) are retained before
+     * they are deleted asynchronously. Retained entries keep the deduplication
+     * window of the idempotency contract open beyond dispatch.
+     *
+     * @return The retention period of DONE entries
+     */
+    @WithDefault("P7D")
+    Duration retention();
+
   }
 
   /**

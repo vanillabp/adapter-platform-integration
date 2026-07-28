@@ -1,10 +1,12 @@
 package io.vanillabp.integration.outbox.gruelbox;
 
+import com.gruelbox.transactionoutbox.AlreadyScheduledException;
 import com.gruelbox.transactionoutbox.TransactionOutbox;
 
-import io.vanillabp.integration.adapter.spi.PhaseTwoDispatch;
+import io.vanillabp.integration.adapter.spi.PhaseTwoCall;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * The default {@link PhaseTwoOutbox} implementation for Spring Boot applications using
@@ -12,28 +14,48 @@ import lombok.RequiredArgsConstructor;
  * transaction-outbox</a> configured with Spring's transaction manager, so the outbox
  * entry is enlisted in the currently running local (JDBC) transaction.
  * <p>
- * The workflow aggregate's ID is converted to a {@link String} before scheduling since
- * gruelbox's <code>DefaultInvocationSerializer</code> only supports a whitelist of
- * types. The platform's {@link PhaseTwoDispatch} bean converts it back to the
- * aggregate's ID type.
+ * The idempotency contract of {@link PhaseTwoOutbox} maps onto gruelbox's
+ * <code>uniqueRequestId</code> mechanism: the {@link PhaseTwoCall#idempotencyKey()} is
+ * used as unique request ID, enforced by a unique constraint of gruelbox's outbox
+ * table. A duplicate schedule raises {@link AlreadyScheduledException} which is turned
+ * into the contract's no-op (<code>false</code>). Successfully dispatched entries with
+ * a unique request ID are retained by gruelbox until the configured retention
+ * threshold passes (the contract's "DONE instead of delete").
  */
 @RequiredArgsConstructor
+@Slf4j
 public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
 
   private final TransactionOutbox transactionOutbox;
 
   @Override
-  public void scheduleStartWorkflow(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final Object workflowAggregateId) {
+  public boolean schedule(
+      final PhaseTwoCall call) {
 
-    transactionOutbox
-        .schedule(GruelboxPhaseTwoDispatch.class)
-        .startWorkflowPhaseTwo(
-            workflowModuleId,
-            bpmnProcessId,
-            workflowAggregateId == null ? null : workflowAggregateId.toString());
+    try {
+      transactionOutbox
+          .with()
+          .uniqueRequestId(call
+              .idempotencyKey()
+              .orElse(null))
+          .schedule(GruelboxPhaseTwoDispatch.class)
+          .dispatch(
+              call.operation().name(),
+              call.workflowModuleId(),
+              call.bpmnProcessId(),
+              call.workflowAggregateId(),
+              call.adapterId());
+      return true;
+    } catch (AlreadyScheduledException e) {
+      log.debug(
+          "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
+              + "was already scheduled - skipping",
+          call.operation(),
+          call.bpmnProcessId(),
+          call.workflowModuleId(),
+          call.workflowAggregateId());
+      return false;
+    }
 
   }
 

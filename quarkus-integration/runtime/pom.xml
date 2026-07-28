@@ -35,6 +35,17 @@
       <artifactId>quarkus-config-yaml</artifactId>
       <optional>true</optional>
     </dependency>
+    <dependency>
+      <groupId>io.vanillabp</groupId>
+      <artifactId>test-utils</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>jakarta.persistence</groupId>
+      <artifactId>jakarta.persistence-api</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>

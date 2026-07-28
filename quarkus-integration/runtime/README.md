@@ -50,23 +50,31 @@ workflow within the local transaction and dispatches it reliably after the commi
 This module provides an own JDBC/JTA-based default implementation (gruelbox does not
 support JTA): `JdbcPhaseTwoOutbox` writes entries into the table
 `VANILLABP_PHASE_TWO_OUTBOX` using a connection of the Agroal datasource which is
-enlisted in the running JTA transaction (the scheduled operation is stored as a
-discriminator with each entry), and `JdbcPhaseTwoOutboxDispatcher` claims due
-entries atomically (optimistic update with attempts/backoff) and dispatches them to
-the corresponding method of `QuarkusPhaseTwoDispatch` — right after the commit and
-by a fixed-delay poller (crash recovery and retries). `QuarkusPhaseTwoDispatch`
-routes the call to the generated process-service bean responsible for the workflow
-module and BPMN process (looked up via the common interface
-`ProcessServicePhaseTwo`) — there the adapter to be used is determined. The poller uses a plain scheduled
+enlisted in the running JTA transaction. The entry persists all fields of the
+`PhaseTwoCall` (operation discriminator, elected adapter ID, serialized aggregate
+ID) plus the idempotency key, enforced unique by a constraint of the table —
+duplicate schedules are a no-op. `JdbcPhaseTwoOutboxDispatcher` claims due OPEN
+entries atomically (optimistic update with attempts/backoff) and dispatches them
+through the core-owned `PhaseTwoRouter` — right after the commit and by a
+fixed-delay poller (crash recovery and retries). Successful dispatches mark the
+entry DONE (deleted asynchronously once `vanillabp.outbox.retention` passed —
+keeping the deduplication window open); repeatedly failing entries are marked
+BLOCKED. The generated process-service beans register themselves with the router
+(produced by `PhaseTwoRouterProducer`) at bean creation, including a converter
+turning the serialized aggregate ID back into the aggregate's ID type (determined
+by reflection over the aggregate class, see `AggregateIdConversion`; if
+undeterminable, the String is passed through). The poller uses a plain scheduled
 executor started on `StartupEvent`, so the `quarkus-scheduler` extension is not
-required. The beans are only registered if the Agroal capability is present (see
-`VanillaBpBuildStepProcessor#buildPhaseTwoOutbox`); applications may define their own
-`PhaseTwoOutbox` bean instead.
+required. The outbox beans are only registered if the Agroal capability is present
+(see `VanillaBpBuildStepProcessor#buildPhaseTwoOutbox`); applications may define
+their own `PhaseTwoOutbox` bean instead.
 
 Configuration (`QuarkusMigrationAdapterProperties`): `vanillabp.outbox.poll-interval`,
-`vanillabp.outbox.attempt-frequency`, `vanillabp.outbox.block-after-attempts` and
+`vanillabp.outbox.attempt-frequency`, `vanillabp.outbox.block-after-attempts`,
+`vanillabp.outbox.retention` and
 `vanillabp.outbox.create-schema` (disable the `CREATE TABLE IF NOT EXISTS` DDL to
-manage the schema manually, e.g. by Flyway or Liquibase).
+manage the schema manually, e.g. by Flyway or Liquibase — then also create the
+unique constraint on `IDEMPOTENCY_KEY` yourself).
 
 ## Noteworthy & Contributors
 

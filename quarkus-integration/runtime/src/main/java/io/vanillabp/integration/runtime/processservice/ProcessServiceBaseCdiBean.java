@@ -1,11 +1,12 @@
 package io.vanillabp.integration.runtime.processservice;
 
 import java.util.List;
+import java.util.function.Function;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
+import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
-import io.vanillabp.integration.adapter.spi.ProcessServicePhaseTwo;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.spi.process.ProcessService;
 import jakarta.annotation.PostConstruct;
@@ -13,10 +14,9 @@ import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.transaction.TransactionSynchronizationRegistry;
-import jakarta.transaction.Transactional;
 import lombok.Getter;
 
-public abstract class ProcessServiceBaseCdiBean<A> implements ProcessService<A>, ProcessServicePhaseTwo {
+public abstract class ProcessServiceBaseCdiBean<A> implements ProcessService<A> {
 
   @Inject
   MigrationAdapterProperties properties;
@@ -49,6 +49,13 @@ public abstract class ProcessServiceBaseCdiBean<A> implements ProcessService<A>,
   @Inject
   TransactionSynchronizationRegistry txRegistry;
 
+  /**
+   * The core-owned router dispatching committed phase-two outbox entries. This bean
+   * registers itself (including the aggregate-ID converter) at bean creation.
+   */
+  @Inject
+  Instance<PhaseTwoRouter> phaseTwoRouter;
+
   @Getter
   MigrationProcessService<A> migrationProcessService;
 
@@ -71,6 +78,32 @@ public abstract class ProcessServiceBaseCdiBean<A> implements ProcessService<A>,
         getWorkflowModuleId(), getBpmnProcessId(), getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, phaseTwoOutbox
             .isResolvable() ? phaseTwoOutbox.get() : null);
 
+    // register as phase-two dispatch target: outbox entries for this workflow
+    // module/BPMN process are routed here after the local transaction was committed
+    if (phaseTwoRouter.isResolvable()) {
+      phaseTwoRouter
+          .get()
+          .register(migrationProcessService, buildAggregateIdConverter());
+    }
+
+  }
+
+  /**
+   * Builds the converter turning the serialized (String) workflow-aggregate ID of an
+   * outbox entry back into the aggregate's ID type (determined by reflection - see
+   * {@link AggregateIdConversion}). If the type cannot be determined (custom
+   * persistence), the String is passed through unchanged.
+   *
+   * @return The converter registered with the {@link PhaseTwoRouter}
+   */
+  private Function<String, Object> buildAggregateIdConverter() {
+
+    final var aggregateIdType = AggregateIdConversion
+        .determineIdType(getWorkflowAggregateClass());
+    return serializedAggregateId -> aggregateIdType
+        .<Object>map(idType -> AggregateIdConversion.convert(serializedAggregateId, idType))
+        .orElse(serializedAggregateId);
+
   }
 
   public A startWorkflow(
@@ -82,15 +115,6 @@ public abstract class ProcessServiceBaseCdiBean<A> implements ProcessService<A>,
     }
 
     return migrationProcessService.startWorkflow(workflowAggregate);
-
-  }
-
-  @Override
-  @Transactional
-  public void startWorkflowPhaseTwo(
-      final Object workflowAggregateId) {
-
-    migrationProcessService.startWorkflowPhaseTwo(workflowAggregateId);
 
   }
 

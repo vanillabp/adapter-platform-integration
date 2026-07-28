@@ -1,6 +1,7 @@
 package io.vanillabp.integration.outbox.gruelbox;
 
 import java.sql.SQLException;
+import java.util.Map;
 
 import javax.sql.DataSource;
 
@@ -14,8 +15,6 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.scheduling.TaskScheduler;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import com.gruelbox.transactionoutbox.DefaultPersistor;
@@ -24,7 +23,9 @@ import com.gruelbox.transactionoutbox.TransactionOutbox;
 import com.gruelbox.transactionoutbox.spring.SpringInstantiator;
 import com.gruelbox.transactionoutbox.spring.SpringTransactionManager;
 
-import io.vanillabp.integration.adapter.spi.PhaseTwoDispatch;
+import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
+import io.vanillabp.integration.adapter.spi.PhaseTwoCall;
+import io.vanillabp.integration.adapter.spi.PhaseTwoOperation;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.outbox.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.utils.config.JpaSpringDataUtilConfiguration;
@@ -46,6 +47,16 @@ import jakarta.persistence.EntityManagerFactory;
  * schema migration unless <code>vanillabp.outbox.create-schema</code> is set to
  * <code>false</code> (see the module's <code>README.md</code> for managing the schema
  * manually).
+ * <p>
+ * <strong>Contract mapping (deviations):</strong> the {@link PhaseTwoOutbox} contract
+ * is mapped onto gruelbox's native capabilities: idempotency keys become
+ * <code>uniqueRequestId</code>s (unique constraint of <code>TXNO_OUTBOX</code>), "DONE
+ * instead of delete" becomes gruelbox's retention of processed entries with a unique
+ * request ID (<code>vanillabp.outbox.retention</code> maps to gruelbox's retention
+ * threshold; expired entries are deleted by the background flush), and blocking after
+ * <code>vanillabp.outbox.block-after-attempts</code> failed attempts is gruelbox's
+ * native blocklisting. The {@link PhaseTwoCall#args()} map is NOT transported (empty
+ * for all operations existing today - see {@link GruelboxPhaseTwoDispatch}).
  */
 @AutoConfiguration(
     after = JpaSpringDataUtilConfiguration.class,
@@ -93,6 +104,7 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
             .build())
         .attemptFrequency(properties.getAttemptFrequency())
         .blockAfterAttempts(properties.getBlockAfterAttempts())
+        .retentionThreshold(properties.getRetention())
         .initializeImmediately(true)
         .build();
 
@@ -113,58 +125,42 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
   /**
    * The bean invoked by the outbox at dispatch time (resolved by gruelbox's
    * <code>SpringInstantiator</code> as the unique bean of type
-   * {@link GruelboxPhaseTwoDispatch}). It delegates to the platform's
-   * {@link PhaseTwoDispatch} bean which converts the string-serialized
-   * workflow-aggregate ID back to the aggregate's ID type.
+   * {@link GruelboxPhaseTwoDispatch}). It rebuilds the {@link PhaseTwoCall} and
+   * routes it through the core's {@link PhaseTwoRouter}.
    *
-   * @param phaseTwoDispatch Provider of the phase-two dispatch bean delegated to
+   * @param phaseTwoRouter Provider of the router dispatched to
    * @return The dispatch bean
    */
   @Bean
   public GruelboxPhaseTwoDispatch vanillaBpGruelboxPhaseTwoDispatch(
-      final ObjectProvider<PhaseTwoDispatch> phaseTwoDispatch) {
+      final ObjectProvider<PhaseTwoRouter> phaseTwoRouter) {
 
     return (
+        operation,
         workflowModuleId,
         bpmnProcessId,
-        workflowAggregateId) -> phaseTwoDispatch
+        workflowAggregateId,
+        adapterId) -> phaseTwoRouter
             .getObject()
-            .startWorkflowPhaseTwo(workflowModuleId, bpmnProcessId, workflowAggregateId);
-
-  }
-
-  /**
-   * The task scheduler used to poll the outbox. Only registered if the application
-   * does not define its own {@link TaskScheduler} bean;
-   * <code>&#64;EnableScheduling</code> is not required.
-   *
-   * @return The task scheduler
-   */
-  @Bean
-  @ConditionalOnMissingBean(TaskScheduler.class)
-  public ThreadPoolTaskScheduler vanillaBpOutboxTaskScheduler() {
-
-    final var taskScheduler = new ThreadPoolTaskScheduler();
-    taskScheduler.setPoolSize(1);
-    taskScheduler.setThreadNamePrefix("vanillabp-outbox-");
-    taskScheduler.setDaemon(true);
-    return taskScheduler;
+            .dispatch(new PhaseTwoCall(
+                PhaseTwoOperation
+                    .valueOf(operation), workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, Map.of()));
 
   }
 
   /**
    * @param transactionOutbox The gruelbox transaction outbox
-   * @param taskScheduler The task scheduler running the poller
    * @param properties The <code>vanillabp.outbox</code> properties
-   * @return The dispatcher polling the outbox for recovery and retries
+   * @return The dispatcher polling the outbox for recovery, retries and retention
+   *         cleanup (private single-thread executor - no
+   *         {@link org.springframework.scheduling.TaskScheduler} involved)
    */
   @Bean
   public GruelboxPhaseTwoOutboxDispatcher vanillaBpGruelboxPhaseTwoOutboxDispatcher(
       final TransactionOutbox transactionOutbox,
-      final TaskScheduler taskScheduler,
       final PhaseTwoOutboxProperties properties) {
 
-    return new GruelboxPhaseTwoOutboxDispatcher(transactionOutbox, taskScheduler, properties);
+    return new GruelboxPhaseTwoOutboxDispatcher(transactionOutbox, properties);
 
   }
 
@@ -202,9 +198,10 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
       return Dialect.MS_SQL_SERVER;
     }
     throw new IllegalStateException(
-        ("Database '%s' is not supported by the gruelbox-based VanillaBP phase-two outbox! "
-            + "Define your own com.gruelbox.transactionoutbox.TransactionOutbox bean or provide a custom "
-            + "implementation of io.vanillabp.integration.adapter.spi.PhaseTwoOutbox.")
+        """
+            Database '%s' is not supported by the gruelbox-based VanillaBP phase-two outbox! \
+            Define your own com.gruelbox.transactionoutbox.TransactionOutbox bean or provide a custom \
+            implementation of io.vanillabp.integration.adapter.spi.PhaseTwoOutbox."""
             .formatted(productName));
 
   }

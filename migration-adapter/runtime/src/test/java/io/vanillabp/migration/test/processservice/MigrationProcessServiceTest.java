@@ -129,16 +129,16 @@ public class MigrationProcessServiceTest {
 
     testee.startWorkflow(aggregate);
 
-    // the outbox entry has to be scheduled using the idempotency key
-    // 'workflowModuleId + bpmnProcessId + workflowAggregateId'; the adapter is not
-    // part of the scheduled call since it is determined at dispatch time
-    verify(phaseTwoOutbox).scheduleStartWorkflow("test-module", "TestProcess", 42L);
+    // the adapter elected in phase one is part of the scheduled call: phase two
+    // uses exactly this adapter instead of re-electing one from the then-current
+    // priorities
+    verify(phaseTwoOutbox).scheduleStartWorkflow("test-module", "TestProcess", 42L, "test-adapter");
 
   }
 
   @Test
-  @DisplayName("startWorkflowPhaseTwo uses the adapter of the highest priority")
-  public void startWorkflowPhaseTwoUsesHighestPriorityAdapter() {
+  @DisplayName("startWorkflowPhaseTwo uses the adapter persisted with the outbox entry")
+  public void startWorkflowPhaseTwoUsesPersistedAdapter() {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
 
@@ -146,9 +146,33 @@ public class MigrationProcessServiceTest {
         "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
             .of(processService), phaseTwoOutbox);
 
-    testee.startWorkflowPhaseTwo(42L);
+    testee.startWorkflowPhaseTwo(42L, "test-adapter");
 
     verify(processService).startWorkflowPhaseTwo("test-module", "TestProcess", 42L);
+
+  }
+
+  @Test
+  @DisplayName("startWorkflowPhaseTwo fails with a guiding message if the persisted adapter is no longer configured")
+  public void startWorkflowPhaseTwoFailsOnStaleAdapter() {
+
+    when(processService.getAdapterId()).thenReturn("test-adapter");
+
+    final var testee = new MigrationProcessService<>(
+        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
+            .of(processService), phaseTwoOutbox);
+
+    final var exception = assertThrowsExactly(
+        IllegalStateException.class,
+        () -> testee.startWorkflowPhaseTwo(42L, "removed-adapter"));
+
+    // the message has to name the stale adapter, the BPMN process, the workflow
+    // module and that the entry is stale after a configuration change
+    assertTrue(exception.getMessage().contains("removed-adapter"));
+    assertTrue(exception.getMessage().contains("TestProcess"));
+    assertTrue(exception.getMessage().contains("test-module"));
+    assertTrue(exception.getMessage().contains("configuration"));
+    verify(processService, never()).startWorkflowPhaseTwo(any(), any(), any());
 
   }
 
@@ -169,7 +193,7 @@ public class MigrationProcessServiceTest {
 
     testee.startWorkflow(aggregate);
 
-    verify(phaseTwoOutbox, never()).scheduleStartWorkflow(any(), any(), any());
+    verify(phaseTwoOutbox, never()).scheduleStartWorkflow(any(), any(), any(), any());
 
   }
 

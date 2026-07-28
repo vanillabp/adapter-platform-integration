@@ -2,27 +2,29 @@ package io.vanillabp.integration.processservice;
 
 import java.io.InputStream;
 import java.util.List;
+import java.util.function.Function;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
+import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
-import io.vanillabp.integration.adapter.spi.ProcessServicePhaseTwo;
+import io.vanillabp.integration.outbox.AggregateIdConverter;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
+import io.vanillabp.integration.utils.SpringDataUtil;
 import io.vanillabp.spi.process.ProcessDefinition;
 import io.vanillabp.spi.process.ProcessDefinitionNotFoundException;
 import io.vanillabp.spi.process.ProcessService;
 import io.vanillabp.spi.process.WorkflowHistory;
 import io.vanillabp.spi.process.WorkflowNotFoundException;
-import jakarta.transaction.Transactional;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class ProcessServiceSpringBean<A> implements ProcessService<A>, ProcessServicePhaseTwo {
+public class ProcessServiceSpringBean<A> implements ProcessService<A> {
 
   @Getter
   private final MigrationProcessService<A> migrationProcessService;
@@ -34,11 +36,59 @@ public class ProcessServiceSpringBean<A> implements ProcessService<A>, ProcessSe
       final MigrationAdapterProperties properties,
       final AggregatePersistenceAware<A> aggregatePersistenceAware,
       final List<MigratableProcessService<A>> migratableProcessServices,
-      final ObjectProvider<PhaseTwoOutbox> phaseTwoOutboxProvider) {
+      final ObjectProvider<PhaseTwoOutbox> phaseTwoOutboxProvider,
+      final PhaseTwoRouter phaseTwoRouter,
+      final ObjectProvider<SpringDataUtil> springDataUtilProvider) {
 
     migrationProcessService = new MigrationProcessService<A>(
         workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, aggregatePersistenceAware, migratableProcessServices, buildLazyPhaseTwoOutbox(
             workflowModuleId, bpmnProcessId, phaseTwoOutboxProvider));
+
+    // register as phase-two dispatch target: outbox entries for this workflow
+    // module/BPMN process are routed here after the local transaction was committed
+    if (phaseTwoRouter != null) {
+      phaseTwoRouter.register(
+          migrationProcessService,
+          buildAggregateIdConverter(workflowAggregateClass, springDataUtilProvider));
+    }
+
+  }
+
+  /**
+   * Builds the converter turning the serialized (String) workflow-aggregate ID of an
+   * outbox entry back into the aggregate's ID type. The ID type is determined via
+   * Spring Data; if the aggregate is not a Spring-Data entity (i.e. a custom
+   * {@link AggregatePersistenceAware} implementation is used), the String is passed
+   * through unchanged instead of failing - the custom persistence layer is
+   * responsible for handling the serialized form.
+   *
+   * @param workflowAggregateClass The aggregate's class used to determine the ID type
+   * @param springDataUtilProvider Provider of the persistence utility (may be empty)
+   * @return The converter registered with the {@link PhaseTwoRouter}
+   */
+  private static <A> Function<String, Object> buildAggregateIdConverter(
+      final Class<A> workflowAggregateClass,
+      final ObjectProvider<SpringDataUtil> springDataUtilProvider) {
+
+    return serializedAggregateId -> {
+      final var springDataUtil = springDataUtilProvider == null
+          ? null
+          : springDataUtilProvider.getIfAvailable();
+      if (springDataUtil == null) {
+        return serializedAggregateId;
+      }
+      final Class<?> aggregateIdType;
+      try {
+        aggregateIdType = springDataUtil.getIdType(workflowAggregateClass);
+      } catch (Exception e) {
+        log.debug(
+            "Aggregate '{}' is not managed by Spring Data - passing the serialized aggregate ID through unchanged",
+            workflowAggregateClass.getName(),
+            e);
+        return serializedAggregateId;
+      }
+      return AggregateIdConverter.convert(serializedAggregateId, aggregateIdType);
+    };
 
   }
 
@@ -61,10 +111,7 @@ public class ProcessServiceSpringBean<A> implements ProcessService<A>, ProcessSe
     if (phaseTwoOutboxProvider == null) {
       return null;
     }
-    return (
-        module,
-        process,
-        workflowAggregateId) -> {
+    return call -> {
       final var phaseTwoOutbox = phaseTwoOutboxProvider.getIfAvailable();
       if (phaseTwoOutbox == null) {
         throw new IllegalStateException(
@@ -76,7 +123,7 @@ public class ProcessServiceSpringBean<A> implements ProcessService<A>, ProcessSe
                 - define your own bean implementing io.vanillabp.integration.adapter.spi.PhaseTwoOutbox."""
                 .formatted(bpmnProcessId, workflowModuleId));
       }
-      phaseTwoOutbox.scheduleStartWorkflow(module, process, workflowAggregateId);
+      return phaseTwoOutbox.schedule(call);
     };
 
   }
@@ -99,14 +146,12 @@ public class ProcessServiceSpringBean<A> implements ProcessService<A>, ProcessSe
 
   }
 
-  @Override
   public String getBpmnProcessId() {
 
     return migrationProcessService.getBpmnProcessId();
 
   }
 
-  @Override
   public Class<A> getWorkflowAggregateClass() {
 
     return migrationProcessService.getWorkflowAggregateClass();
@@ -126,12 +171,19 @@ public class ProcessServiceSpringBean<A> implements ProcessService<A>, ProcessSe
   }
 
   @Override
-  @Transactional
-  public void startWorkflowPhaseTwo(
-      final Object workflowAggregateId) {
+  public A startWorkflowByMessage(
+      A workflowAggregate,
+      String messageName) {
+    //return migrationProcessService.startWorkflowByMessage(workflowAggregate, messageName);
+    return workflowAggregate;
+  }
 
-    migrationProcessService.startWorkflowPhaseTwo(workflowAggregateId);
-
+  @Override
+  public A startWorkflowByMessage(
+      A workflowAggregate,
+      Object message) {
+    //return migrationProcessService.startWorkflowByMessage(workflowAggregate, message);
+    return workflowAggregate;
   }
 
   @Override

@@ -20,4 +20,18 @@ public class WorkflowService {
 
   }
 
+  /**
+   * Starts the workflow (again) for an already persisted aggregate - used to test
+   * the idempotency of scheduling phase two.
+   *
+   * @param aggregate The aggregate to start the workflow for
+   * @return The attached aggregate
+   */
+  public Aggregate startWorkflowAgain(
+      final Aggregate aggregate) {
+
+    return processService.startWorkflow(aggregate);
+
+  }
+
 }

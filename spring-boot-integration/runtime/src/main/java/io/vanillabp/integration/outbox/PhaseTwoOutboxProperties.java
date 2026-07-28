@@ -44,4 +44,12 @@ public class PhaseTwoOutboxProperties {
    */
   private boolean createSchema = true;
 
+  /**
+   * How long successfully dispatched entries (marked as DONE) are retained before
+   * they are deleted asynchronously. Retained entries keep the deduplication window
+   * of the idempotency contract open beyond dispatch (see
+   * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox}).
+   */
+  private Duration retention = Duration.ofDays(7);
+
 }

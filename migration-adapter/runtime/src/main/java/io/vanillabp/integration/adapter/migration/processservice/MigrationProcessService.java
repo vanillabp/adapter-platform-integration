@@ -110,11 +110,12 @@ public class MigrationProcessService<A> {
     if (adapter.needsTwoPhaseCommitForStartingWorkflows()) {
       if (phaseTwoOutbox == null) {
         throw new IllegalStateException(
-            ("Adapter '%s' requires a two-phase commit for starting workflows of BPMN process '%s' "
-                + "of workflow module '%s', but no PhaseTwoOutbox is available! "
-                + "Provide an implementation of io.vanillabp.integration.adapter.spi.PhaseTwoOutbox "
-                + "(e.g. by using JPA or MongoDB for persistence of aggregates which enables one of "
-                + "the default implementations of the platform integration).")
+            """
+                Adapter '%s' requires a two-phase commit for starting workflows of BPMN process '%s' \
+                of workflow module '%s', but no PhaseTwoOutbox is available! \
+                Provide an implementation of io.vanillabp.integration.adapter.spi.PhaseTwoOutbox \
+                (e.g. by using JPA or MongoDB for persistence of aggregates which enables one of \
+                the default implementations of the platform integration)."""
                 .formatted(
                     adapter.getAdapterId(),
                     bpmnProcessId,
@@ -123,7 +124,8 @@ public class MigrationProcessService<A> {
       phaseTwoOutbox.scheduleStartWorkflow(
           workflowModuleId,
           bpmnProcessId,
-          aggregateId);
+          aggregateId,
+          adapter.getAdapterId());
     }
 
     return attachedAggregate;
@@ -132,20 +134,37 @@ public class MigrationProcessService<A> {
 
   /**
    * Executes phase two of starting a workflow, dispatched by the
-   * {@link PhaseTwoOutbox} after the local transaction of
-   * {@link #startWorkflow(Object)} was committed. Like in phase one, the adapter of
-   * the highest priority is used - in contrast to other operations (message
-   * correlation, completing tasks, etc.) which probe the prioritized adapters to find
-   * the BPMS the workflow instance is running in.
+   * {@link PhaseTwoRouter} after the local transaction of
+   * {@link #startWorkflow(Object)} was committed. The adapter elected in phase one
+   * was persisted with the outbox entry and is used here - there is no re-election
+   * from the then-current priorities.
    *
    * @param workflowAggregateId The ID of the workflow aggregate (in its original type)
+   * @param adapterId The ID of the adapter elected in phase one
    */
   public void startWorkflowPhaseTwo(
-      final Object workflowAggregateId) {
+      final Object workflowAggregateId,
+      final String adapterId) {
 
-    adapterProcessServices
-        .getFirst()
-        .startWorkflowPhaseTwo(workflowModuleId, bpmnProcessId, workflowAggregateId);
+    final var adapter = adapterProcessServices
+        .stream()
+        .filter(processService -> processService.getAdapterId().equals(adapterId))
+        .findFirst()
+        .orElseThrow(() -> new IllegalStateException(
+            """
+                Cannot execute phase two of starting the workflow of aggregate '%s': adapter '%s' is \
+                not (or no longer) configured for BPMN process '%s' of workflow module '%s'! The \
+                outbox entry is stale - the adapter was probably removed from the configuration \
+                (property 'vanillabp.prioritized-adapters' or its module-/workflow-level \
+                overrides) after the entry was scheduled. Restore the adapter's configuration or \
+                remove the entry from the outbox store."""
+                .formatted(
+                    workflowAggregateId,
+                    adapterId,
+                    bpmnProcessId,
+                    workflowModuleId)));
+
+    adapter.startWorkflowPhaseTwo(workflowModuleId, bpmnProcessId, workflowAggregateId);
 
   }
 
