@@ -85,6 +85,75 @@ public class MigrationProcessServiceTest {
 
   }
 
+  /**
+   * Creates properties with two configured and prioritized adapters
+   * 'first-adapter' and 'second-adapter' (in this priority order).
+   */
+  private MigrationAdapterProperties createTwoAdapterProperties() {
+
+    final var properties = MigrationAdapterProperties
+        .builder()
+        .adapters(Map.of("first-adapter", "dummy", "second-adapter", "other"))
+        .prioritizedAdapters(List.of("first-adapter", "second-adapter"))
+        .build();
+    properties.validateAndLink();
+    return properties;
+
+  }
+
+  @Test
+  @DisplayName("Constructor fails fast if ANY prioritized adapter has no process service (B2)")
+  public void constructorFailsFastOnAnyMissingPrioritizedAdapter() {
+
+    // only the SECOND prioritized adapter is served - before the fix the missing
+    // one was silently dropped and workflows started in the wrong BPMS
+    when(processService.getAdapterId()).thenReturn("second-adapter");
+
+    final var exception = assertThrowsExactly(
+        IllegalStateException.class,
+        () -> new MigrationProcessService<>(
+            "test-module", "TestProcess", Object.class, createTwoAdapterProperties(), aggregatePersistence, List
+                .of(processService), null));
+
+    // the guiding message has to name the adapter id, module, process and the
+    // likely causes (missing dependency, typo in the prioritized-adapters keys)
+    assertTrue(exception.getMessage().contains("first-adapter"));
+    assertTrue(exception.getMessage().contains("test-module"));
+    assertTrue(exception.getMessage().contains("TestProcess"));
+    assertTrue(exception.getMessage().contains("classpath"));
+    assertTrue(exception.getMessage().contains("vanillabp.prioritized-adapters"));
+    assertTrue(exception.getMessage().contains("vanillabp.workflow-modules.test-module.prioritized-adapters"));
+
+  }
+
+  @Test
+  @DisplayName("Election order follows the configured priorities, not the bean registration order")
+  public void electionOrderFollowsConfiguredPriorities() {
+
+    @SuppressWarnings("unchecked")
+    final MigratableProcessService<Object> secondAdapter = org.mockito.Mockito.mock(MigratableProcessService.class);
+    when(processService.getAdapterId()).thenReturn("first-adapter");
+    when(secondAdapter.getAdapterId()).thenReturn("second-adapter");
+
+    // beans are passed in REVERSE priority order - the election must follow the
+    // configured priorities nevertheless
+    final var testee = new MigrationProcessService<>(
+        "test-module", "TestProcess", Object.class, createTwoAdapterProperties(), aggregatePersistence, List
+            .of(secondAdapter, processService), phaseTwoOutbox);
+
+    final var aggregate = new Object();
+    when(aggregatePersistence.save(aggregate)).thenReturn(aggregate);
+    when(aggregatePersistence.getAggregateId(aggregate)).thenReturn(42L);
+    when(processService.needsTwoPhaseCommitForStartingWorkflows()).thenReturn(false);
+
+    testee.startWorkflow(aggregate);
+
+    // phase one has to run in the highest-priority adapter only
+    verify(processService).startWorkflowPhaseOne("test-module", "TestProcess", aggregatePersistence, aggregate);
+    verify(secondAdapter, never()).startWorkflowPhaseOne(any(), any(), any(), any());
+
+  }
+
   @Test
   @DisplayName("startWorkflow passes the attached aggregate to phase one")
   public void startWorkflowPassesAttachedAggregateToPhaseOne() {

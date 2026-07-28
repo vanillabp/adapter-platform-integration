@@ -61,23 +61,32 @@ public class MigrationProcessService<A> {
     this.adapters = properties.getAdapters();
     this.prioritizedAdapters = properties.getPrioritizedAdaptersFor(workflowModuleId, bpmnProcessId);
     this.aggregatePersistenceSupport = aggregatePersistenceSupport;
+    // fail fast: EVERY prioritized adapter id must have a matching process
+    // service - silently dropping one would make workflows start in the wrong
+    // BPMS (exactly the error VanillaBP is meant to prevent)
     this.adapterProcessServices = prioritizedAdapters
         .stream()
-        .flatMap(adapterId -> processServices
+        .map(adapterId -> processServices
             .stream()
             .filter(processService -> processService.getAdapterId().equals(adapterId))
             .findFirst()
-            .stream())
+            .orElseThrow(() -> new IllegalStateException(
+                """
+                    No VanillaBP adapter serves the prioritized adapter id '%s' configured for BPMN \
+                    process '%s' of workflow module '%s'! Likely causes: the adapter's dependency \
+                    is missing on the classpath, the adapter id is a typo in \
+                    'vanillabp.prioritized-adapters' (or its overrides \
+                    'vanillabp.workflow-modules.%s.prioritized-adapters' / \
+                    'vanillabp.workflow-modules.%s.workflows.%s.prioritized-adapters'), or the \
+                    adapter serves a different adapter id than configured."""
+                    .formatted(
+                        adapterId,
+                        bpmnProcessId,
+                        workflowModuleId,
+                        workflowModuleId,
+                        workflowModuleId,
+                        bpmnProcessId))))
         .toList();
-    if (this.adapterProcessServices.isEmpty()) {
-      throw new IllegalStateException(
-          ("No MigratableProcessService found for any of the prioritized adapters '%s' "
-              + "configured for BPMN process '%s' of workflow module '%s'!")
-              .formatted(
-                  String.join("', '", prioritizedAdapters),
-                  bpmnProcessId,
-                  workflowModuleId));
-    }
     this.phaseTwoOutbox = phaseTwoOutbox;
 
   }

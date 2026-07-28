@@ -31,11 +31,26 @@ public abstract class ProcessServiceBaseCdiBean<A> implements ProcessService<A> 
   Instance<AggregatePersistenceAware<?>> persistences;
 
   /**
-   * The process services of the VanillaBP adapters available at runtime.
+   * The process services of the VanillaBP adapters available at runtime. The
+   * convention is one <i>element</i> bean per adapter (never a bean of type
+   * <code>List&lt;MigratableProcessService&gt;</code>) so several adapter types
+   * coexist in one application.
    */
   @Inject
   @Any
   Instance<io.vanillabp.integration.adapter.spi.MigratableProcessService<?>> migratableProcessServices;
+
+  /**
+   * Additionally accepted shape: beans of type
+   * <code>List&lt;MigratableProcessService&gt;</code>, flattened into the collected
+   * process services. Synthetic beans created from runtime configuration (one
+   * process service per configured adapter id, adapter-config-model story 26d)
+   * cannot always be registered as individual element beans on Quarkus - a single
+   * List bean per adapter is the documented escape hatch there.
+   */
+  @Inject
+  @Any
+  Instance<List<io.vanillabp.integration.adapter.spi.MigratableProcessService<?>>> migratableProcessServiceLists;
 
   /**
    * The outbox used to schedule phase two of a two-phase workflow start. Unsatisfied
@@ -68,9 +83,16 @@ public abstract class ProcessServiceBaseCdiBean<A> implements ProcessService<A> 
   @PostConstruct
   public void initialize() {
 
+    // collect element beans plus flattened List beans (see field javadoc)
     @SuppressWarnings("unchecked")
-    final List<io.vanillabp.integration.adapter.spi.MigratableProcessService<A>> processServices = migratableProcessServices
-        .stream()
+    final List<io.vanillabp.integration.adapter.spi.MigratableProcessService<A>> processServices = java.util.stream.Stream
+        .concat(
+            migratableProcessServices.stream(),
+            migratableProcessServiceLists
+                .stream()
+                .filter(java.util.Objects::nonNull)
+                .flatMap(List::stream))
+        .filter(java.util.Objects::nonNull)
         .map(processService -> (io.vanillabp.integration.adapter.spi.MigratableProcessService<A>) processService)
         .toList();
 

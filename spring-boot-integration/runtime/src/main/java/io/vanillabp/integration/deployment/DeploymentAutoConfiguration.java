@@ -31,13 +31,30 @@ public class DeploymentAutoConfiguration {
 
   static final String BEANNAME_DEPLOYMENTSERVICE = "VanillaBpDeploymentService";
 
+  /**
+   * Collects the adapters' deployment services and the extensions' wiring services
+   * via {@link ObjectProvider} streams: the convention is one <i>element</i> bean
+   * per adapter/extension (never a bean of type <code>List&lt;...&gt;</code>) so
+   * multiple adapter types coexist in one application - the central migration
+   * scenario. Since {@link AdapterDeploymentService} extends
+   * {@link ExtensionWiringService}, the wiring stream contains the adapters, too;
+   * the core {@link DeploymentService} filters them out (adapters are wired
+   * explicitly by the deployment pipeline).
+   */
   @Bean(BEANNAME_DEPLOYMENTSERVICE)
   public SpringBootDeploymentService deploymentService(
       final WorkflowModules allWorkflowModules,
       final MigrationAdapterProperties properties,
-      final List<AdapterDeploymentService<?, ?>> deploymentServices,
-      final List<ExtensionWiringService<?, ?>> wiringServices,
+      final ObjectProvider<AdapterDeploymentService<?, ?>> deploymentServiceProvider,
+      final ObjectProvider<ExtensionWiringService<?, ?>> wiringServiceProvider,
       final ObjectProvider<ProcessService<?>> processServices) {
+
+    final List<AdapterDeploymentService<?, ?>> deploymentServices = deploymentServiceProvider
+        .stream()
+        .toList();
+    final List<ExtensionWiringService<?, ?>> wiringServices = wiringServiceProvider
+        .stream()
+        .toList();
 
     final var deploymentService = new DeploymentService(
         properties, deploymentServices, wiringServices);
