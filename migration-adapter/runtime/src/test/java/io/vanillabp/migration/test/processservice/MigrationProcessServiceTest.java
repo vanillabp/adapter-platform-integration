@@ -157,6 +157,38 @@ public class MigrationProcessServiceTest {
   }
 
   @Test
+  @DisplayName("startWorkflow fails fast on a null or blank aggregate ID (checked once, in core)")
+  public void startWorkflowFailsOnNullOrBlankAggregateId() {
+
+    when(processService.getAdapterId()).thenReturn("test-adapter");
+
+    final var testee = new MigrationProcessService<>(
+        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
+            .of(processService), null);
+
+    final var aggregate = new Object();
+    when(aggregatePersistence.save(aggregate)).thenReturn(aggregate);
+
+    // null ID
+    when(aggregatePersistence.getAggregateId(aggregate)).thenReturn(null);
+    final var nullException = assertThrowsExactly(
+        IllegalStateException.class,
+        () -> testee.startWorkflow(aggregate));
+    assertTrue(nullException.getMessage().contains(Object.class.getName()));
+    assertTrue(nullException.getMessage().contains("startWorkflow"));
+
+    // blank ID
+    when(aggregatePersistence.getAggregateId(aggregate)).thenReturn("  ");
+    assertThrowsExactly(
+        IllegalStateException.class,
+        () -> testee.startWorkflow(aggregate));
+
+    // the adapter is never reached
+    verify(processService, never()).startWorkflowPhaseOne(any(), any(), any(), any());
+
+  }
+
+  @Test
   @DisplayName("startWorkflow passes the attached aggregate to phase one")
   public void startWorkflowPassesAttachedAggregateToPhaseOne() {
 

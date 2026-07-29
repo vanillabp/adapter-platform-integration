@@ -10,6 +10,15 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 public interface MigratableProcessService<A> {
 
   /**
+   * The name of the process variable carrying the workflow aggregate's ID in BPMSs
+   * without a dedicated business-key concept (e.g. Camunda 8, Process-Engine-API).
+   * Adapters MUST use this constant instead of their own literal - the variable
+   * name is a cross-adapter contract (a workflow started by one adapter may be
+   * probed or continued by another during a BPMS migration).
+   */
+  String AGGREGATE_ID_VARIABLE = "aggregateId";
+
+  /**
    * @return The adapter's ID this service belongs to
    */
   String getAdapterId();

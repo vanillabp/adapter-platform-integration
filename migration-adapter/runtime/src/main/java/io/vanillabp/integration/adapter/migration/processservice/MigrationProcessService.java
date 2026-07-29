@@ -111,6 +111,18 @@ public class MigrationProcessService<A> {
     final var aggregateId = aggregatePersistenceSupport
         .getAggregateId(attachedAggregate);
 
+    // checked ONCE here for all adapters: the aggregate's ID is the workflow's
+    // identifier (business key / process variable) and the outbox idempotency key
+    if ((aggregateId == null) || aggregateId.toString().isBlank()) {
+      throw new IllegalStateException(
+          """
+              The ID of the workflow aggregate of class '%s' is null or blank after saving! The ID \
+              identifies the workflow in the BPMS (business key / process variable) and is part of \
+              the start's idempotency key - assign it before calling startWorkflow or use a \
+              generated ID which is assigned on save."""
+              .formatted(workflowAggregateClass.getName()));
+    }
+
     final var adapter = adapterProcessServices
         .getFirst();
 
