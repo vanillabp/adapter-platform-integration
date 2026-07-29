@@ -19,6 +19,8 @@ import io.vanillabp.integration.runtime.config.VanillaBpConfigBuilder;
 import io.vanillabp.integration.runtime.deployment.VanillaBpShutdownObserver;
 import io.vanillabp.integration.runtime.outbox.JdbcPhaseTwoOutbox;
 import io.vanillabp.integration.runtime.outbox.JdbcPhaseTwoOutboxDispatcher;
+import io.vanillabp.integration.runtime.outbox.MongoPhaseTwoOutbox;
+import io.vanillabp.integration.runtime.outbox.MongoPhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.runtime.processservice.EventualConsistencyTransactionSupport;
 import io.vanillabp.integration.runtime.processservice.PhaseTwoRouterProducer;
 import io.vanillabp.integration.runtime.util.UriSubstitute;
@@ -142,11 +144,12 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
-   * Registers the JDBC-based default implementation of the phase-two outbox (see
+   * Registers the default implementation of the phase-two outbox (see
    * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox}) used for two-phase
-   * workflow starts. Only registered if the Agroal extension is present (a JDBC
-   * datasource is required); applications may always provide their own
-   * <code>PhaseTwoOutbox</code> bean instead.
+   * workflow starts: the JDBC/Agroal-based one if a JDBC datasource applies, else
+   * the MongoDB-based one if the <code>quarkus-mongodb-client</code> extension is
+   * present. Applications may always provide their own <code>PhaseTwoOutbox</code>
+   * bean instead.
    *
    * @param capabilities Capabilities of the project's extensions
    * @param additionalBeans Producer used to register the outbox beans
@@ -156,17 +159,30 @@ public class VanillaBpBuildStepProcessor {
       final Capabilities capabilities,
       final BuildProducer<AdditionalBeanBuildItem> additionalBeans) {
 
-    if (!capabilities.isPresent(Capability.AGROAL)) {
+    if (capabilities.isPresent(Capability.AGROAL)) {
+      additionalBeans.produce(AdditionalBeanBuildItem
+          .builder()
+          .addBeanClasses(
+              JdbcPhaseTwoOutbox.class,
+              JdbcPhaseTwoOutboxDispatcher.class)
+          .setUnremovable() // don't remove, since it is used under the hoods
+          .build());
       return;
     }
 
-    additionalBeans.produce(AdditionalBeanBuildItem
-        .builder()
-        .addBeanClasses(
-            JdbcPhaseTwoOutbox.class,
-            JdbcPhaseTwoOutboxDispatcher.class)
-        .setUnremovable() // don't remove, since it is used under the hoods
-        .build());
+    // MongoDB-based default: only if no JDBC datasource applies (JDBC wins
+    // deterministically when both extensions are present - consistent with the
+    // Spring Boot integration where the JPA outbox is ordered before the MongoDB
+    // one) and the MongoDB client extension is available
+    if (capabilities.isPresent(Capability.MONGODB_CLIENT)) {
+      additionalBeans.produce(AdditionalBeanBuildItem
+          .builder()
+          .addBeanClasses(
+              MongoPhaseTwoOutbox.class,
+              MongoPhaseTwoOutboxDispatcher.class)
+          .setUnremovable() // don't remove, since it is used under the hoods
+          .build());
+    }
 
   }
 

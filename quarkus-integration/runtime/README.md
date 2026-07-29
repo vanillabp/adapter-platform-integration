@@ -69,12 +69,36 @@ required. The outbox beans are only registered if the Agroal capability is prese
 (see `VanillaBpBuildStepProcessor#buildPhaseTwoOutbox`); applications may define
 their own `PhaseTwoOutbox` bean instead.
 
+For applications using MongoDB (`quarkus-mongodb-client`) instead of a JDBC
+datasource, a MongoDB-based default is provided: `MongoPhaseTwoOutbox` writes into
+the collection `vanillabp-phase-two-outbox` (same layout as the Spring Boot MongoDB
+outbox) of the database configured by `quarkus.mongodb.database`, and
+`MongoPhaseTwoOutboxDispatcher` claims/dispatches/blocks and cleans up analogously
+(atomic `findOneAndUpdate` claims, cluster-safe without a lock). Since MongoDB is
+no JTA resource, the outbox operates **best-effort**: the entry is written before
+the commit; on rollback it is deleted best-effort (a crash in between leaves an
+orphan which ends up BLOCKED with a monitorable ERROR). The idempotency key is
+enforced by a partial unique index, created automatically unless
+`vanillabp.outbox.create-schema` is disabled. If both Agroal and the MongoDB client
+are present, the JDBC outbox wins deterministically (consistent with Spring Boot
+where the JPA outbox is ordered first).
+
+|                  |           JDBC outbox (Agroal)           |       MongoDB outbox (`quarkus-mongodb-client`)       |
+|------------------|------------------------------------------|-------------------------------------------------------|
+| Enlisting        | JTA transaction (entry = part of TX)     | best-effort (write before commit, delete on rollback) |
+| Store            | table `VANILLABP_PHASE_TWO_OUTBOX`       | collection `vanillabp-phase-two-outbox`               |
+| Dedup            | unique constraint `IDEMPOTENCY_KEY`      | partial unique index `idempotencyKey`                 |
+| Claim            | optimistic `UPDATE ... WHERE ATTEMPTS=?` | `findOneAndUpdate`                                    |
+| DONE + retention | yes                                      | yes                                                   |
+| Selected when    | Agroal capability present                | no Agroal, MongoDB client present                     |
+
 Configuration (`QuarkusMigrationAdapterProperties`): `vanillabp.outbox.poll-interval`,
 `vanillabp.outbox.attempt-frequency`, `vanillabp.outbox.block-after-attempts`,
 `vanillabp.outbox.retention` and
-`vanillabp.outbox.create-schema` (disable the `CREATE TABLE IF NOT EXISTS` DDL to
-manage the schema manually, e.g. by Flyway or Liquibase — then also create the
-unique constraint on `IDEMPOTENCY_KEY` yourself).
+`vanillabp.outbox.create-schema` (disable the `CREATE TABLE IF NOT EXISTS` DDL /
+index creation to manage the schema manually, e.g. by Flyway or Liquibase — then
+also create the unique constraint on `IDEMPOTENCY_KEY` / the partial unique index
+on `idempotencyKey` yourself).
 
 ## Noteworthy & Contributors
 

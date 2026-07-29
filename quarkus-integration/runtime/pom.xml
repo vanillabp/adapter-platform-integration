@@ -36,6 +36,12 @@
       <optional>true</optional>
     </dependency>
     <dependency>
+      <!-- optional: only used by the MongoDB-based phase-two outbox default -->
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-mongodb-client</artifactId>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
       <groupId>io.vanillabp</groupId>
       <artifactId>test-utils</artifactId>
       <version>${project.version}</version>

@@ -97,8 +97,8 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
         .toList();
 
     this.migrationProcessService = new MigrationProcessService<>(
-        getWorkflowModuleId(), getBpmnProcessId(), getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, phaseTwoOutbox
-            .isResolvable() ? phaseTwoOutbox.get() : null);
+        getWorkflowModuleId(), getBpmnProcessId(), getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, buildLazyPhaseTwoOutbox(
+            getWorkflowModuleId(), getBpmnProcessId(), phaseTwoOutbox));
 
     // register as phase-two dispatch target: outbox entries for this workflow
     // module/BPMN process are routed here after the local transaction was committed
@@ -107,6 +107,38 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
           .get()
           .register(migrationProcessService, buildAggregateIdConverter());
     }
+
+  }
+
+  /**
+   * Builds a {@link PhaseTwoOutbox} resolving the actual outbox bean lazily on
+   * first use, with a guiding message naming all remedies if none is available -
+   * an unconfigured application still boots (only starting a two-phase workflow
+   * fails, with instructions).
+   *
+   * @param workflowModuleId The ID of the workflow module (used for error messages)
+   * @param bpmnProcessId The BPMN process ID (used for error messages)
+   * @param phaseTwoOutbox The CDI instance used to resolve the outbox bean
+   * @return The lazily resolving outbox
+   */
+  private static PhaseTwoOutbox buildLazyPhaseTwoOutbox(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Instance<PhaseTwoOutbox> phaseTwoOutbox) {
+
+    return call -> {
+      if (!phaseTwoOutbox.isResolvable()) {
+        throw new IllegalStateException(
+            """
+                Starting workflows of BPMN process '%s' of workflow module '%s' requires a two-phase commit, \
+                but no PhaseTwoOutbox bean is available! To solve this either
+                - add the 'quarkus-agroal' extension and configure a JDBC datasource (enables the JDBC default),
+                - add the 'quarkus-mongodb-client' extension and configure the MongoDB connection incl. 'quarkus.mongodb.database' (enables the MongoDB default), or
+                - define your own bean implementing io.vanillabp.integration.adapter.spi.PhaseTwoOutbox."""
+                .formatted(bpmnProcessId, workflowModuleId));
+      }
+      return phaseTwoOutbox.get().schedule(call);
+    };
 
   }
 
