@@ -251,7 +251,7 @@ public class MigrationProcessServiceTest {
 
     testee.startWorkflowPhaseTwo(42L, "test-adapter");
 
-    verify(processService).startWorkflowPhaseTwo("test-module", "TestProcess", 42L);
+    verify(processService).startWorkflowPhaseTwo("test-module", "TestProcess", aggregatePersistence, 42L);
 
   }
 
@@ -275,7 +275,7 @@ public class MigrationProcessServiceTest {
     assertTrue(exception.getMessage().contains("TestProcess"));
     assertTrue(exception.getMessage().contains("test-module"));
     assertTrue(exception.getMessage().contains("configuration"));
-    verify(processService, never()).startWorkflowPhaseTwo(any(), any(), any());
+    verify(processService, never()).startWorkflowPhaseTwo(any(), any(), any(), any());
 
   }
 

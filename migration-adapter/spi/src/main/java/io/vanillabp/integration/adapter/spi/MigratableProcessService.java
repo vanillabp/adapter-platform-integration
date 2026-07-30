@@ -10,15 +10,6 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 public interface MigratableProcessService<A> {
 
   /**
-   * The name of the process variable carrying the workflow aggregate's ID in BPMSs
-   * without a dedicated business-key concept (e.g. Camunda 8, Process-Engine-API).
-   * Adapters MUST use this constant instead of their own literal - the variable
-   * name is a cross-adapter contract (a workflow started by one adapter may be
-   * probed or continued by another during a BPMS migration).
-   */
-  String AGGREGATE_ID_VARIABLE = "aggregateId";
-
-  /**
    * @return The adapter's ID this service belongs to
    */
   String getAdapterId();
@@ -150,13 +141,22 @@ public interface MigratableProcessService<A> {
    *   </li>
    * </ol>
    *
+   * <p>
+   * How the workflow aggregate's ID is stored in the BPMS is the adapter's decision:
+   * e.g. Camunda 7 uses its dedicated business key, whereas Camunda 8 stores the
+   * aggregate as process variables and therefore uses a variable named after the
+   * aggregate's ID property (see
+   * {@link AggregatePersistenceAware#getAggregateIdName()}).
+   *
    * @param workflowModuleId The ID of the workflow module the workflow belongs to
    * @param bpmnProcessId The BPMN process ID of the workflow to be started
+   * @param aggregatePersistence The persistence of the workflow-aggregate
    * @param workflowAggregateId The ID of the workflow aggregate
    */
   void startWorkflowPhaseTwo(
       String workflowModuleId,
       String bpmnProcessId,
+      AggregatePersistenceAware<A> aggregatePersistence,
       Object workflowAggregateId);
 
 }

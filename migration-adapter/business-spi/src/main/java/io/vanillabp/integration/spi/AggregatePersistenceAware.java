@@ -72,6 +72,30 @@ public interface AggregatePersistenceAware<A> {
   }
 
   /**
+   * Determines the name of the aggregate's ID property. How the aggregate's ID is
+   * stored in the BPMS is the adapter's decision: adapters having a dedicated
+   * business-identifier concept (e.g. the Camunda 7 business key) do not need this
+   * name, whereas adapters storing the aggregate (or its ID) in the BPMS itself
+   * (e.g. Camunda 8) name the process variable after the aggregate's ID property.
+   * <p>
+   * The platform-provided implementations (e.g. based on Spring Data) support this
+   * out of the box; custom implementations have to override this method if such an
+   * adapter is used.
+   *
+   * @return The name of the aggregate's ID property
+   */
+  default String getAggregateIdName() {
+
+    throw new UnsupportedOperationException(
+        """
+            getAggregateIdName is not implemented by '%s'! The configured VanillaBP adapter stores \
+            the workflow aggregate's ID in the BPMS named like the aggregate's ID property - \
+            implement getAggregateIdName in your AggregatePersistenceAware implementation."""
+            .formatted(getClass().getName()));
+
+  }
+
+  /**
    * Loads the aggregate by its ID. Used by VanillaBP e.g. when processing BPMN
    * tasks (the aggregate is loaded, the business method is executed and the
    * aggregate is saved within one transaction).

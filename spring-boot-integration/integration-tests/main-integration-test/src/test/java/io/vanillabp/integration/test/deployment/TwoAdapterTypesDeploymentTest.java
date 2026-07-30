@@ -194,6 +194,7 @@ public class TwoAdapterTypesDeploymentTest {
     public void startWorkflowPhaseTwo(
         final String workflowModuleId,
         final String bpmnProcessId,
+        final AggregatePersistenceAware<Object> aggregatePersistence,
         final Object workflowAggregateId) {
       // nothing to do
     }

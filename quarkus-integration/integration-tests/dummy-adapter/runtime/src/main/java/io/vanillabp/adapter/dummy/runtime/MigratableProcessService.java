@@ -67,6 +67,7 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
   public void startWorkflowPhaseTwo(
       final String workflowModuleId,
       final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
       final Object workflowAggregateId) {
 
     if (phaseTwoListeners != null) {

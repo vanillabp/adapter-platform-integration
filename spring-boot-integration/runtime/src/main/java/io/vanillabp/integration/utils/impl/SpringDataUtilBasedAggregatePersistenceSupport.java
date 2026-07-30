@@ -38,6 +38,14 @@ public class SpringDataUtilBasedAggregatePersistenceSupport<A> implements Aggreg
   }
 
   @Override
+  public String getAggregateIdName() {
+
+    return springDataUtil
+        .getIdName(aggregateClass);
+
+  }
+
+  @Override
   public A loadById(
       final Object aggregateId) {
 

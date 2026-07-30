@@ -85,7 +85,8 @@ public class PhaseTwoAggregateIdConverterTest {
 
     router.dispatch(startWorkflowCall("42"));
 
-    verify(migratableProcessService).startWorkflowPhaseTwo("test-module", "TestProcess", 42L);
+    verify(migratableProcessService).startWorkflowPhaseTwo("test-module", "TestProcess", aggregatePersistenceAware,
+        42L);
 
   }
 
@@ -100,7 +101,8 @@ public class PhaseTwoAggregateIdConverterTest {
 
     // the dispatch must NOT fail (which would block the outbox entry permanently) -
     // the custom persistence layer is responsible for the serialized form
-    verify(migratableProcessService).startWorkflowPhaseTwo("test-module", "TestProcess", "custom-id-4711");
+    verify(migratableProcessService).startWorkflowPhaseTwo(
+        "test-module", "TestProcess", aggregatePersistenceAware, "custom-id-4711");
 
   }
 

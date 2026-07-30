@@ -58,6 +58,7 @@ public class TestMigratableProcessService implements MigratableProcessService<Ob
   public void startWorkflowPhaseTwo(
       final String workflowModuleId,
       final String bpmnProcessId,
+      final AggregatePersistenceAware<Object> aggregatePersistence,
       final Object workflowAggregateId) {
 
   }

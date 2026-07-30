@@ -185,7 +185,7 @@ public class MigrationProcessService<A> {
                     bpmnProcessId,
                     workflowModuleId)));
 
-    adapter.startWorkflowPhaseTwo(workflowModuleId, bpmnProcessId, workflowAggregateId);
+    adapter.startWorkflowPhaseTwo(workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId);
 
   }
 

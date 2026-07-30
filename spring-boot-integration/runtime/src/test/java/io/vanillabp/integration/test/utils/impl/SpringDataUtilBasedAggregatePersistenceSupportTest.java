@@ -68,6 +68,20 @@ public class SpringDataUtilBasedAggregatePersistenceSupportTest {
   }
 
   @Test
+  public void testGetAggregateIdName() {
+
+    when(springDataUtil.getIdName(String.class)).thenReturn("id");
+
+    final var support = new SpringDataUtilBasedAggregatePersistenceSupport<>(
+        springDataUtil, String.class);
+
+    final var idName = support.getAggregateIdName();
+
+    assertEquals("id", idName);
+
+  }
+
+  @Test
   public void testgetAggregateClass() {
 
     final var support = new SpringDataUtilBasedAggregatePersistenceSupport<>(

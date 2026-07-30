@@ -4,6 +4,26 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Aggregate-ID storage is the adapter's decision (2026-07-30)
+
+Review feedback on the hardening story: the shared SPI constant
+`MigratableProcessService.AGGREGATE_ID_VARIABLE` (`"aggregateId"`) was removed
+again. How the workflow aggregate's ID is stored in the BPMS is the **adapter's
+decision**, not a cross-adapter contract: Camunda 7 uses its dedicated business
+key, whereas Camunda 8 stores the aggregate as process variables and therefore
+names the variable carrying the ID after the aggregate's ID property (the
+Process-Engine-API adapter follows the Camunda 8 model).
+
+- **`AggregatePersistenceAware.getAggregateIdName()` added** (business SPI,
+  `default` method with a guiding message like the other methods). The
+  Spring-Data-based support implements it via `SpringDataUtil.getIdName`.
+- **`startWorkflowPhaseTwo` signature changed** (adapter SPI, breaking for BPMS
+  adapters): `startWorkflowPhaseTwo(module, process, aggregateId)` →
+  `startWorkflowPhaseTwo(module, process, aggregatePersistence, aggregateId)` -
+  phase two is dispatched from the outbox (possibly after a restart), so the
+  adapter has no other way to obtain the aggregate's ID-property name there.
+  Phase one already carried the persistence support.
+
 ## Validation parity, ProcessService stubs, SPI alignments (2026-07-28)
 
 Hardening changes relevant for adapters and early adopters:
