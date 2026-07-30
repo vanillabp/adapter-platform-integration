@@ -60,6 +60,14 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   private Map<String, WorkflowModuleAdapterProperties> workflowModules = Map.of();
 
   /**
+   * Configuration of the default
+   * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox} implementations
+   * (properties section <code>vanillabp.outbox</code>).
+   */
+  @Builder.Default
+  private PhaseTwoOutboxProperties outbox = new PhaseTwoOutboxProperties();
+
+  /**
    * Derived view of {@link #getAdapters()}: adapter ID mapped to the adapter's type.
    * An adapter entry without an explicit {@link AdapterConfigProperties#getType()
    * type} defaults to its ID being the type.

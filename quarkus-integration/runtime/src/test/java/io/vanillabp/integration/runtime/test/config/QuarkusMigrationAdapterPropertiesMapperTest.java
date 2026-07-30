@@ -1,9 +1,11 @@
 package io.vanillabp.integration.runtime.test.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -12,7 +14,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import io.smallrye.config.SmallRyeConfigBuilder;
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
+import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterPropertiesMapper;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
@@ -47,6 +51,14 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                           Map<String, QuarkusMigrationAdapterProperties.WorkflowProperties> workflows) implements QuarkusMigrationAdapterProperties.WorkflowModuleProperties {
   }
 
+  private record OutboxProperties(
+                                  Duration pollInterval,
+                                  Duration attemptFrequency,
+                                  int blockAfterAttempts,
+                                  boolean createSchema,
+                                  Duration retention) implements QuarkusMigrationAdapterProperties.PhaseTwoOutboxProperties {
+  }
+
   private record Properties(
                             Optional<List<String>> prioritizedAdapters,
                             Optional<String> resourcesLocation,
@@ -66,7 +78,9 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
             "c7", new AdapterConfiguration(Optional.empty(), Optional.empty())), Map.of(
                 "loan-approval", new WorkflowModuleProperties(
                     Optional.of(List.of("c7")), Map.of("c7", new AdapterProperties("classpath:c7-bpmn")), Map
-                        .of("LoanApproval", new WorkflowProperties(Optional.of(List.of("c8-cloud")))))), null);
+                        .of("LoanApproval",
+                            new WorkflowProperties(Optional.of(List.of("c8-cloud")))))), new OutboxProperties(
+                                Duration.ofSeconds(1), Duration.ofSeconds(2), 3, false, Duration.ofDays(1)));
 
     final var core = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(properties);
 
@@ -86,6 +100,36 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     assertEquals(
         List.of("c8-cloud"),
         module.getWorkflows().get("LoanApproval").getPrioritizedAdapters());
+
+    assertEquals(Duration.ofSeconds(1), core.getOutbox().getPollInterval());
+    assertEquals(Duration.ofSeconds(2), core.getOutbox().getAttemptFrequency());
+    assertEquals(3, core.getOutbox().getBlockAfterAttempts());
+    assertFalse(core.getOutbox().isCreateSchema());
+    assertEquals(Duration.ofDays(1), core.getOutbox().getRetention());
+
+  }
+
+  @Test
+  @DisplayName("The interface's @WithDefault outbox values equal the core defaults")
+  public void outboxDefaultsMatchCoreDefaults() {
+
+    // instantiate the REAL mapping with an empty configuration so SmallRye fills
+    // the @WithDefault values, map onto the core and compare against the core's
+    // field initializers - pins the necessarily duplicated defaults against drift
+    final var config = new SmallRyeConfigBuilder()
+        .withMapping(QuarkusMigrationAdapterProperties.class)
+        .build();
+    final var mappedDefaults = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(
+        config
+            .getConfigMapping(QuarkusMigrationAdapterProperties.class)
+            .outbox());
+
+    final var coreDefaults = new PhaseTwoOutboxProperties();
+    assertEquals(coreDefaults.getPollInterval(), mappedDefaults.getPollInterval());
+    assertEquals(coreDefaults.getAttemptFrequency(), mappedDefaults.getAttemptFrequency());
+    assertEquals(coreDefaults.getBlockAfterAttempts(), mappedDefaults.getBlockAfterAttempts());
+    assertEquals(coreDefaults.isCreateSchema(), mappedDefaults.isCreateSchema());
+    assertEquals(coreDefaults.getRetention(), mappedDefaults.getRetention());
 
   }
 

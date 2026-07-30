@@ -17,10 +17,12 @@ import org.eclipse.microprofile.config.ConfigProvider;
 
 import io.quarkus.runtime.StartupEvent;
 import io.smallrye.config.SmallRyeConfig;
+import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.adapter.spi.PhaseTwoCall;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOperation;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
+import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterPropertiesMapper;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
@@ -133,7 +135,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
   @Inject
   Instance<PhaseTwoRouter> phaseTwoRouter;
 
-  private QuarkusMigrationAdapterProperties.PhaseTwoOutboxProperties properties;
+  private PhaseTwoOutboxProperties properties;
 
   private ScheduledExecutorService executor;
 
@@ -152,13 +154,14 @@ public class JdbcPhaseTwoOutboxDispatcher {
       return;
     }
 
-    properties = ConfigProvider
-        .getConfig()
-        .unwrap(SmallRyeConfig.class)
-        .getConfigMapping(QuarkusMigrationAdapterProperties.class)
-        .outbox();
+    properties = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(
+        ConfigProvider
+            .getConfig()
+            .unwrap(SmallRyeConfig.class)
+            .getConfigMapping(QuarkusMigrationAdapterProperties.class)
+            .outbox());
 
-    if (properties.createSchema()) {
+    if (properties.isCreateSchema()) {
       createTableIfNotExists();
     }
 
@@ -170,7 +173,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
     executor.scheduleWithFixedDelay(
         this::poll,
         0,
-        properties.pollInterval().toMillis(),
+        properties.getPollInterval().toMillis(),
         TimeUnit.MILLISECONDS);
 
   }
@@ -311,7 +314,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
     final var entries = new ArrayList<Entry>();
     try (var statement = connection.prepareStatement(SELECT_DUE_ENTRIES)) {
       statement.setTimestamp(1, Timestamp.from(Instant.now()));
-      statement.setInt(2, properties.blockAfterAttempts());
+      statement.setInt(2, properties.getBlockAfterAttempts());
       try (var resultSet = statement.executeQuery()) {
         while (resultSet.next()) {
           entries.add(new Entry(
@@ -338,7 +341,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
       final Entry entry) throws SQLException {
 
     try (var statement = connection.prepareStatement(CLAIM_ENTRY)) {
-      statement.setTimestamp(1, Timestamp.from(Instant.now().plus(properties.attemptFrequency())));
+      statement.setTimestamp(1, Timestamp.from(Instant.now().plus(properties.getAttemptFrequency())));
       statement.setString(2, entry.id());
       statement.setInt(3, entry.attempts());
       return statement.executeUpdate() == 1;
@@ -373,7 +376,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
               operation, entry.workflowModuleId(), entry.bpmnProcessId(), entry.aggregateId(), entry.adapterId(), Map
                   .of()));
     } catch (Exception e) {
-      if (entry.attempts() + 1 >= properties.blockAfterAttempts()) {
+      if (entry.attempts() + 1 >= properties.getBlockAfterAttempts()) {
         try (var statement = connection.prepareStatement(MARK_ENTRY_BLOCKED)) {
           statement.setString(1, entry.id());
           statement.executeUpdate();
@@ -418,7 +421,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
       final Connection connection) throws SQLException {
 
     try (var statement = connection.prepareStatement(DELETE_EXPIRED_DONE_ENTRIES)) {
-      statement.setTimestamp(1, Timestamp.from(Instant.now().minus(properties.retention())));
+      statement.setTimestamp(1, Timestamp.from(Instant.now().minus(properties.getRetention())));
       statement.executeUpdate();
     }
 

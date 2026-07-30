@@ -9,7 +9,7 @@ import org.springframework.context.event.EventListener;
 
 import com.gruelbox.transactionoutbox.TransactionOutbox;
 
-import io.vanillabp.integration.outbox.PhaseTwoOutboxProperties;
+import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

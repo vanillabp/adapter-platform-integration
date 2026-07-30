@@ -183,8 +183,9 @@ The core does not implement (or depend on) any outbox itself — it only defines
   with `attempts > 0` — not implemented yet.)
 
 Default implementations are provided by the platform integrations (configured via
-`vanillabp.outbox.*`; applications may define their own `PhaseTwoOutbox` bean
-instead):
+`vanillabp.outbox.*` — keys, defaults and documentation are modeled ONCE in the
+core class `PhaseTwoOutboxProperties`, bound as part of the `vanillabp.*` tree;
+applications may define their own `PhaseTwoOutbox` bean instead):
 
 |  Platform   |       Persistence        |                                      Implementation                                      |
 |-------------|--------------------------|------------------------------------------------------------------------------------------|

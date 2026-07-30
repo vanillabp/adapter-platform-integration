@@ -27,7 +27,7 @@ import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.adapter.spi.PhaseTwoCall;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOperation;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
-import io.vanillabp.integration.outbox.PhaseTwoOutboxProperties;
+import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 import io.vanillabp.integration.utils.config.JpaSpringDataUtilConfiguration;
 import jakarta.persistence.EntityManagerFactory;
 
@@ -71,7 +71,7 @@ import jakarta.persistence.EntityManagerFactory;
     DataSource.class, PlatformTransactionManager.class
 })
 @ConditionalOnMissingBean(PhaseTwoOutbox.class)
-@EnableConfigurationProperties(PhaseTwoOutboxProperties.class)
+@EnableConfigurationProperties(VanillaBpConfigurationProperties.class)
 public class GruelboxPhaseTwoOutboxAutoConfiguration {
 
   /**
@@ -82,7 +82,9 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
    * @param applicationContext Used to resolve the scheduled bean at dispatch time
    * @param transactionManager The Spring transaction manager entries are enlisted with
    * @param dataSource The data source storing the outbox table
-   * @param properties The <code>vanillabp.outbox</code> properties
+   * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree carrying the
+   *          <code>vanillabp.outbox</code> section (registered here as well so the
+   *          outbox works in contexts without the full VanillaBP auto-configuration)
    * @return The transaction outbox
    */
   @Bean
@@ -91,8 +93,9 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
       final ApplicationContext applicationContext,
       final PlatformTransactionManager transactionManager,
       final DataSource dataSource,
-      final PhaseTwoOutboxProperties properties) {
+      final VanillaBpConfigurationProperties vanillaBpProperties) {
 
+    final var properties = vanillaBpProperties.getOutbox();
     return TransactionOutbox
         .builder()
         .transactionManager(new SpringTransactionManager(transactionManager, dataSource))
@@ -150,7 +153,9 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
 
   /**
    * @param transactionOutbox The gruelbox transaction outbox
-   * @param properties The <code>vanillabp.outbox</code> properties
+   * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree carrying the
+   *          <code>vanillabp.outbox</code> section (registered here as well so the
+   *          outbox works in contexts without the full VanillaBP auto-configuration)
    * @return The dispatcher polling the outbox for recovery, retries and retention
    *         cleanup (private single-thread executor - no
    *         {@link org.springframework.scheduling.TaskScheduler} involved)
@@ -158,9 +163,9 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
   @Bean
   public GruelboxPhaseTwoOutboxDispatcher vanillaBpGruelboxPhaseTwoOutboxDispatcher(
       final TransactionOutbox transactionOutbox,
-      final PhaseTwoOutboxProperties properties) {
+      final VanillaBpConfigurationProperties vanillaBpProperties) {
 
-    return new GruelboxPhaseTwoOutboxDispatcher(transactionOutbox, properties);
+    return new GruelboxPhaseTwoOutboxDispatcher(transactionOutbox, vanillaBpProperties.getOutbox());
 
   }
 

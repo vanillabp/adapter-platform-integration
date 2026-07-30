@@ -16,6 +16,36 @@
       "description": "The configuration of all adapters known, keyed by adapter ID. The ID can be an adapter's type or a custom identifier - in the latter case 'type' has to name the adapter type. Besides the platform keys ('type', 'deployment-failure') each BPMS adapter contributes its own keys to its section (e.g. connection settings)."
     },
     {
+      "name": "vanillabp.outbox.poll-interval",
+      "type": "java.time.Duration",
+      "description": "The fixed delay between two background polls for committed-but-unprocessed outbox entries. Polling is required for crash recovery and retries; right after a commit the entry is dispatched immediately (independently of this delay).",
+      "defaultValue": "10s"
+    },
+    {
+      "name": "vanillabp.outbox.attempt-frequency",
+      "type": "java.time.Duration",
+      "description": "How long to wait after a failed dispatch until the entry is retried.",
+      "defaultValue": "30s"
+    },
+    {
+      "name": "vanillabp.outbox.block-after-attempts",
+      "type": "java.lang.Integer",
+      "description": "After how many failed attempts an entry is blocked (not retried any longer). Blocked entries have to be fixed manually (e.g. by cleaning up the outbox store).",
+      "defaultValue": 10
+    },
+    {
+      "name": "vanillabp.outbox.create-schema",
+      "type": "java.lang.Boolean",
+      "description": "Whether the schema (table/collection) used to store outbox entries is created automatically. Disable this if the database schema is managed manually (e.g. by Flyway or Liquibase).",
+      "defaultValue": true
+    },
+    {
+      "name": "vanillabp.outbox.retention",
+      "type": "java.time.Duration",
+      "description": "How long successfully dispatched entries (marked as DONE) are retained before they are deleted asynchronously. Retained entries keep the deduplication window of the idempotency contract open beyond dispatch.",
+      "defaultValue": "7d"
+    },
+    {
       "name": "vanillabp.workflow-modules",
       "type": "java.util.Map<java.lang.String,io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties>",
       "description": "The properties of all workflow modules, keyed by the workflow module's ID: per-module adapter priorities ('prioritized-adapters') and per-module adapter properties ('adapters.<id>.resources-location' for BPMS-specific BPMN)."

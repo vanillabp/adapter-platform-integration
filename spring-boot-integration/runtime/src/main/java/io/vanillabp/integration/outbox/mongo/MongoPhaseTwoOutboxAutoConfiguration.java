@@ -15,7 +15,7 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
-import io.vanillabp.integration.outbox.PhaseTwoOutboxProperties;
+import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfiguration;
 
 /**
@@ -45,13 +45,15 @@ import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfig
     MongoDatabaseFactory.class, MongoTemplate.class
 })
 @ConditionalOnMissingBean(PhaseTwoOutbox.class)
-@EnableConfigurationProperties(PhaseTwoOutboxProperties.class)
+@EnableConfigurationProperties(VanillaBpConfigurationProperties.class)
 public class MongoPhaseTwoOutboxAutoConfiguration {
 
   /**
    * @param mongoTemplate The template used to claim and update entries
    * @param phaseTwoRouter Provider of the core's router dispatched to
-   * @param properties The <code>vanillabp.outbox</code> properties
+   * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree carrying the
+   *          <code>vanillabp.outbox</code> section (registered here as well so the
+   *          outbox works in contexts without the full VanillaBP auto-configuration)
    * @return The dispatcher polling the outbox collection (private single-thread
    *         executor - no {@link org.springframework.scheduling.TaskScheduler}
    *         involved)
@@ -60,26 +62,28 @@ public class MongoPhaseTwoOutboxAutoConfiguration {
   public MongoPhaseTwoOutboxDispatcher vanillaBpMongoPhaseTwoOutboxDispatcher(
       final MongoTemplate mongoTemplate,
       final ObjectProvider<PhaseTwoRouter> phaseTwoRouter,
-      final PhaseTwoOutboxProperties properties) {
+      final VanillaBpConfigurationProperties vanillaBpProperties) {
 
     return new MongoPhaseTwoOutboxDispatcher(
-        mongoTemplate, phaseTwoRouter, properties);
+        mongoTemplate, phaseTwoRouter, vanillaBpProperties.getOutbox());
 
   }
 
   /**
    * @param mongoTemplate The template used to write entries within the current transaction
    * @param dispatcher The dispatcher triggered right after a commit
-   * @param properties The <code>vanillabp.outbox</code> properties
+   * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree carrying the
+   *          <code>vanillabp.outbox</code> section (registered here as well so the
+   *          outbox works in contexts without the full VanillaBP auto-configuration)
    * @return The {@link PhaseTwoOutbox} used by the process services
    */
   @Bean
   public MongoPhaseTwoOutbox vanillaBpMongoPhaseTwoOutbox(
       final MongoTemplate mongoTemplate,
       final MongoPhaseTwoOutboxDispatcher dispatcher,
-      final PhaseTwoOutboxProperties properties) {
+      final VanillaBpConfigurationProperties vanillaBpProperties) {
 
-    if (properties.isCreateSchema()) {
+    if (vanillaBpProperties.getOutbox().isCreateSchema()) {
       mongoTemplate
           .indexOps(MongoPhaseTwoOutbox.COLLECTION)
           .createIndex(new Index()

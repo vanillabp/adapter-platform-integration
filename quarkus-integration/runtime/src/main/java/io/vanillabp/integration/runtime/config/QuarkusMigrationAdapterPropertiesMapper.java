@@ -3,7 +3,6 @@ package io.vanillabp.integration.runtime.config;
 import java.util.List;
 import java.util.Optional;
 
-import org.mapstruct.BeanMapping;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.Named;
@@ -13,6 +12,7 @@ import org.mapstruct.factory.Mappers;
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
 
@@ -28,10 +28,14 @@ import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterPr
  * visible to MapStruct by the {@code vanillabp-mapstruct-fluent-accessors} SPI on
  * the annotation-processor path.
  * <p>
- * Explicit ignores: {@code outbox} (platform-owned, not part of the core model -
- * consolidated by its own story) and the core's back-references
- * ({@code workflowModuleId}, {@code bpmnProcessId}, {@code workflowModule}) which
- * are linked by {@code MigrationAdapterProperties#validateAndLink()}.
+ * Explicit ignores: the core's back-references ({@code workflowModuleId},
+ * {@code bpmnProcessId}, {@code workflowModule}) which are linked by
+ * {@code MigrationAdapterProperties#validateAndLink()}.
+ * <p>
+ * The outbox defaults are declared TWICE by necessity (SmallRye requires
+ * {@code @WithDefault} on the interface, the core carries them as field
+ * initializers) - their equality is pinned by
+ * {@code QuarkusMigrationAdapterPropertiesMapperTest}.
  */
 @Mapper(
     unmappedSourcePolicy = ReportingPolicy.ERROR,
@@ -40,12 +44,12 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
 
   QuarkusMigrationAdapterPropertiesMapper INSTANCE = Mappers.getMapper(QuarkusMigrationAdapterPropertiesMapper.class);
 
-  @BeanMapping(ignoreUnmappedSourceProperties = {
-      "outbox"
-  })
   @Mapping(target = "prioritizedAdapters", qualifiedByName = "unwrapStringList")
   MigrationAdapterProperties toCore(
       QuarkusMigrationAdapterProperties properties);
+
+  PhaseTwoOutboxProperties toCore(
+      QuarkusMigrationAdapterProperties.PhaseTwoOutboxProperties outboxProperties);
 
   AdapterConfigProperties toCore(
       QuarkusMigrationAdapterProperties.AdapterConfiguration adapterConfiguration);

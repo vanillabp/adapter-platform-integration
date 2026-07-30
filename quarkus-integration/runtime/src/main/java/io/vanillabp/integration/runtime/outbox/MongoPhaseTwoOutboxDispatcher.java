@@ -20,10 +20,12 @@ import com.mongodb.client.model.Updates;
 
 import io.quarkus.runtime.StartupEvent;
 import io.smallrye.config.SmallRyeConfig;
+import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.adapter.spi.PhaseTwoCall;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOperation;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
+import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterPropertiesMapper;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
@@ -71,7 +73,7 @@ public class MongoPhaseTwoOutboxDispatcher {
   @Inject
   Instance<PhaseTwoRouter> phaseTwoRouter;
 
-  private QuarkusMigrationAdapterProperties.PhaseTwoOutboxProperties properties;
+  private PhaseTwoOutboxProperties properties;
 
   private ScheduledExecutorService executor;
 
@@ -90,13 +92,14 @@ public class MongoPhaseTwoOutboxDispatcher {
       return;
     }
 
-    properties = ConfigProvider
-        .getConfig()
-        .unwrap(SmallRyeConfig.class)
-        .getConfigMapping(QuarkusMigrationAdapterProperties.class)
-        .outbox();
+    properties = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(
+        ConfigProvider
+            .getConfig()
+            .unwrap(SmallRyeConfig.class)
+            .getConfigMapping(QuarkusMigrationAdapterProperties.class)
+            .outbox());
 
-    if (properties.createSchema()) {
+    if (properties.isCreateSchema()) {
       outboxCollection().createIndex(
           Indexes.ascending("idempotencyKey"),
           new IndexOptions()
@@ -112,7 +115,7 @@ public class MongoPhaseTwoOutboxDispatcher {
     executor.scheduleWithFixedDelay(
         this::poll,
         0,
-        properties.pollInterval().toMillis(),
+        properties.getPollInterval().toMillis(),
         TimeUnit.MILLISECONDS);
 
   }
@@ -176,10 +179,10 @@ public class MongoPhaseTwoOutboxDispatcher {
             Filters.and(
                 Filters.eq("status", MongoPhaseTwoOutbox.STATUS_OPEN),
                 Filters.lte("nextAttemptAt", Date.from(now)),
-                Filters.lt("attempts", properties.blockAfterAttempts())),
+                Filters.lt("attempts", properties.getBlockAfterAttempts())),
             Updates.combine(
                 Updates.inc("attempts", 1),
-                Updates.set("nextAttemptAt", Date.from(now.plus(properties.attemptFrequency())))));
+                Updates.set("nextAttemptAt", Date.from(now.plus(properties.getAttemptFrequency())))));
         if (entry == null) {
           break;
         }
@@ -189,7 +192,7 @@ public class MongoPhaseTwoOutboxDispatcher {
       collection.deleteMany(
           Filters.and(
               Filters.eq("status", MongoPhaseTwoOutbox.STATUS_DONE),
-              Filters.lt("doneAt", Date.from(Instant.now().minus(properties.retention())))));
+              Filters.lt("doneAt", Date.from(Instant.now().minus(properties.getRetention())))));
     } catch (final RuntimeException e) {
       log.error("Polling the VanillaBP phase-two outbox failed - will retry", e);
     }
@@ -236,7 +239,7 @@ public class MongoPhaseTwoOutboxDispatcher {
               Updates.set("status", MongoPhaseTwoOutbox.STATUS_DONE),
               Updates.set("doneAt", Date.from(Instant.now()))));
     } catch (final RuntimeException e) {
-      if (entry.getInteger("attempts") + 1 >= properties.blockAfterAttempts()) {
+      if (entry.getInteger("attempts") + 1 >= properties.getBlockAfterAttempts()) {
         collection.updateOne(
             Filters.eq("_id", entryId),
             Updates.set("status", MongoPhaseTwoOutbox.STATUS_BLOCKED));

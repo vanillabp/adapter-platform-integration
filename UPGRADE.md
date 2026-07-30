@@ -4,6 +4,26 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## `vanillabp.outbox.*` consolidated onto the core model (2026-07-30)
+
+Follow-up of the config-binding consolidation (decision 7): the outbox
+configuration was modeled per platform (Spring
+`io.vanillabp.integration.outbox.PhaseTwoOutboxProperties`, Quarkus nested
+`@ConfigMapping` interface) with duplicated defaults and javadoc. Now the core
+class `io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties`
+is the single source of truth (attached to `MigrationAdapterProperties.outbox`,
+bound as part of the `vanillabp.*` tree). **Keys and defaults unchanged**
+(PT10S / PT30S / 10 / true / P7D - pinned by a core unit test).
+
+- Spring: the standalone properties class is DELETED; the outbox
+  auto-configurations consume `MigrationAdapterProperties.getOutbox()`. The
+  outbox key descriptions moved into
+  `additional-spring-configuration-metadata.json`.
+- Quarkus: the nested `@ConfigMapping` interface stays (SmallRye needs
+  `@WithDefault`), the dispatchers consume the CORE object via the generated
+  mapper; the necessarily duplicated defaults (interface vs. core) are pinned
+  equal by `QuarkusMigrationAdapterPropertiesMapperTest`.
+
 ## Configuration binding consolidated onto the core model (2026-07-30)
 
 The `vanillabp.*` tree was modeled three times (core POJOs,
