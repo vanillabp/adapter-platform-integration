@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
@@ -32,16 +33,14 @@ public class MigrationAdapterPropertiesTest {
 
   private final List<String> adaptersLoaded = List.of("adapter1", "adapter2");
 
+  // no workflow-level entries: workflow-level configuration is rejected by
+  // validateProperties until story 27 implements resolving it
   private final WorkflowModuleAdapterProperties testModule = WorkflowModuleAdapterProperties
       .builder()
       .workflowModuleId("test-module")
       .adapters(Map.of("adapter-test", AdapterProperties
           .builder()
           .resourcesLocation("classpath:test-module/processes/test")
-          .build()))
-      .workflows(Map.of("testProcess", WorkflowAdapterProperties
-          .builder()
-          .bpmnProcessId("testProcess")
           .build()))
       .build();
 
@@ -65,7 +64,7 @@ public class MigrationAdapterPropertiesTest {
   public void testAdapterTypesNotInClasspath() {
 
     final var properties = new MigrationAdapterProperties();
-    properties.setAdapters(Map.of("adapter-unknown", "adapter-unknown"));
+    properties.setAdapters(Map.of("adapter-unknown", new AdapterConfigProperties()));
 
     final var exception = assertThrowsExactly(
         IllegalStateException.class,
@@ -84,7 +83,7 @@ public class MigrationAdapterPropertiesTest {
   public void testNoResourceLocationGiven() {
 
     final var properties = new MigrationAdapterProperties();
-    properties.setAdapters(Map.of("adapter-test", "adapter2"));
+    properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
     properties.setWorkflowModules(Map.of("fake-module", WorkflowModuleAdapterProperties
         .builder()
         .workflowModuleId("fake-module")
@@ -110,7 +109,7 @@ public class MigrationAdapterPropertiesTest {
   public void testWorkflowModulesConfiguredButNotInClasspath() {
 
     final var properties = new MigrationAdapterProperties();
-    properties.setAdapters(Map.of("adapter-test", "adapter2"));
+    properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
     properties.setWorkflowModules(Map.of(
         "test-module", testModule,
         "fake-module", WorkflowModuleAdapterProperties
@@ -133,33 +132,12 @@ public class MigrationAdapterPropertiesTest {
   }
 
   @Test
-  public void testMissingPrioritizedAdapters() {
-
-    final var properties = new MigrationAdapterProperties();
-    properties.setAdapters(Map.of("adapter-test", "adapter2"));
-    properties.setWorkflowModules(Map.of("test-module", testModule));
-
-    final var exception = assertThrowsExactly(
-        IllegalStateException.class,
-        () -> properties.validateProperties(List.of("adapter2"), List.of("test-module"))
-    );
-    assertEquals(
-        """
-            You need to define at least one property of
-              vanillabp.prioritized-adapters
-              vanillabp.workflow-modules.test-module.prioritized-adapters
-            """,
-        exception.getMessage());
-
-  }
-
-  @Test
   public void testPrioritizedAdapters() {
 
     final var properties = new MigrationAdapterProperties();
     properties.setAdapters(Map.of(
-        "adapter-test1", "adapter1",
-        "adapter-test2", "adapter2"));
+        "adapter-test1", AdapterConfigProperties.ofType("adapter1"),
+        "adapter-test2", AdapterConfigProperties.ofType("adapter2")));
     properties.setPrioritizedAdapters(List.of("adapter-test2", "adapter-test1"));
     properties.setWorkflowModules(Map.of("test-module", WorkflowModuleAdapterProperties
         .builder()
@@ -195,7 +173,7 @@ public class MigrationAdapterPropertiesTest {
   public void testOnlyOneAdapterInClasspath() {
 
     final var properties = new MigrationAdapterProperties();
-    properties.setAdapters(Map.of("adapter-test", "adapter2"));
+    properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
     properties.setWorkflowModules(Map.of("test-module", testModule));
     properties.setPrioritizedAdapters(List.of("adapter-test"));
 
@@ -221,14 +199,10 @@ public class MigrationAdapterPropertiesTest {
         .adapters(Map.of("adapter-test", AdapterProperties
             .builder()
             .build()))
-        .workflows(Map.of("testProcess", WorkflowAdapterProperties
-            .builder()
-            .bpmnProcessId("testProcess")
-            .build()))
         .build();
 
     final var properties = new MigrationAdapterProperties();
-    properties.setAdapters(Map.of("adapter-test", "adapter2"));
+    properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
     properties.setWorkflowModules(Map.of("test-module", testModuleWithoutResourcesSet));
     properties.setPrioritizedAdapters(List.of("adapter-test"));
     properties.setResourcesLocation("classpath*:vanilla-bp-bpmn");
@@ -243,7 +217,7 @@ public class MigrationAdapterPropertiesTest {
   public void testAdaptersReferencedButNotConfigured() {
 
     final var properties = new MigrationAdapterProperties();
-    properties.setAdapters(Map.of("adapter-test", "adapter2"));
+    properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
     properties.setPrioritizedAdapters(List.of("unknown-adapter1"));
     properties.setWorkflowModules(Map.of("test-module", WorkflowModuleAdapterProperties
         .builder()
@@ -252,11 +226,6 @@ public class MigrationAdapterPropertiesTest {
         .adapters(Map.of("adapter-test", AdapterProperties
             .builder()
             .resourcesLocation("whatever")
-            .build()))
-        .workflows(Map.of("testProcess", WorkflowAdapterProperties
-            .builder()
-            .bpmnProcessId("testProcess")
-            .prioritizedAdapters(List.of("adapter-test", "unknown-adapter3"))
             .build()))
         .build()));
 
@@ -267,7 +236,6 @@ public class MigrationAdapterPropertiesTest {
     assertEquals(
         """
             There are VanillaBP adapters referenced not found in any property section 'vanillabp.adapters.*':
-              vanillabp.workflow-modules.test-module.workflows.testProcess.prioritized-adapters => unknown-adapter3
               vanillabp.workflow-modules.test-module.prioritized-adapters => unknown-adapter2
               vanillabp.prioritized-adapters => unknown-adapter1
             """,
@@ -278,7 +246,7 @@ public class MigrationAdapterPropertiesTest {
   public void testValidatePropertiesForHavingWrongPrioritizedAdapters() {
 
     final var properties = new MigrationAdapterProperties();
-    properties.setAdapters(Map.of("adapter-test", "adapter2"));
+    properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
     properties.setPrioritizedAdapters(List.of("unknown-adapter1"));
     properties.setWorkflowModules(Map.of("test-module", WorkflowModuleAdapterProperties
         .builder()
@@ -308,7 +276,7 @@ public class MigrationAdapterPropertiesTest {
   public void testValidatePropertiesForHavingWrongNoPrioritizedAdapters() {
 
     final var properties = new MigrationAdapterProperties();
-    properties.setAdapters(Map.of("adapter-test", "adapter2"));
+    properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
     properties.setWorkflowModules(Map.of("test-module", WorkflowModuleAdapterProperties
         .builder()
         .workflowModuleId("test-module")
@@ -334,16 +302,84 @@ public class MigrationAdapterPropertiesTest {
   }
 
   @Test
-  public void testDeploymentFailureForUnknownAdapterIsRejected() {
+  public void testDeploymentFailureDefaultsToFail() {
 
     final var properties = new MigrationAdapterProperties();
-    properties.setAdapters(Map.of("adapter-test", "adapter2"));
+    properties.setAdapters(Map.of(
+        "adapter-test", AdapterConfigProperties
+            .builder()
+            .type("adapter2")
+            .deploymentFailure(DeploymentFailurePolicy.WARN)
+            .build()));
+
+    assertEquals(DeploymentFailurePolicy.WARN, properties.getDeploymentFailureFor("adapter-test"));
+    assertEquals(DeploymentFailurePolicy.FAIL, properties.getDeploymentFailureFor("other-adapter"));
+
+  }
+
+  @Test
+  public void testAdapterTypeDefaultsToAdapterId() {
+
+    final var properties = new MigrationAdapterProperties();
+    properties.setAdapters(Map.of(
+        "adapter2", new AdapterConfigProperties(),
+        "custom-id", AdapterConfigProperties.ofType("adapter1")));
+
+    assertEquals(
+        Map.of(
+            "adapter2", "adapter2",
+            "custom-id", "adapter1"),
+        properties.adapterTypes());
+
+  }
+
+  @Test
+  public void testSingleAdapterDefaultsPrioritizedAdapters() {
+
+    final var properties = new MigrationAdapterProperties();
+    properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
+    properties.setWorkflowModules(Map.of("test-module", testModule));
+
+    properties.validateProperties(List.of("adapter2"), List.of("test-module"));
+
+    assertEquals(List.of("adapter-test"), properties.getPrioritizedAdapters());
+
+  }
+
+  @Test
+  public void testNoAdaptersConfiguredIsRejected() {
+
+    final var properties = new MigrationAdapterProperties();
+    properties.setWorkflowModules(Map.of("test-module", testModule));
+
+    final var exception = assertThrowsExactly(
+        IllegalStateException.class,
+        () -> properties.validateProperties(List.of("adapter1", "adapter2"), List.of("test-module")));
+
+    assertEquals(
+        """
+            No adapters configured! Add properties sections for your BPMS (e.g. xxx) having type set to adapters found in classpath:
+              vanillabp.adapters.xxx.type=adapter1
+              vanillabp.adapters.xxx.type=adapter2""",
+        exception.getMessage());
+
+  }
+
+  @Test
+  public void testWorkflowLevelConfigurationIsRejected() {
+
+    final var properties = new MigrationAdapterProperties();
+    properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
     properties.setPrioritizedAdapters(List.of("adapter-test"));
     properties.setResourcesLocation("whatever");
-    properties.setDeploymentFailures(Map.of("unknown-adapter", DeploymentFailurePolicy.WARN));
     properties.setWorkflowModules(Map.of("test-module", WorkflowModuleAdapterProperties
         .builder()
         .workflowModuleId("test-module")
+        .workflows(Map.of("MyProcess", WorkflowAdapterProperties
+            .builder()
+            .bpmnProcessId("MyProcess")
+            .prioritizedAdapters(List.of("adapter-test"))
+            .build()))
         .build()));
 
     final var exception = assertThrowsExactly(
@@ -352,21 +388,66 @@ public class MigrationAdapterPropertiesTest {
 
     assertEquals(
         """
-            These properties refer to adapters not configured in 'vanillabp.adapters.*':
-              vanillabp.adapters.unknown-adapter.deployment-failure""",
+            Workflow-level configuration is not yet supported! Remove these properties:
+              vanillabp.workflow-modules.test-module.workflows""",
         exception.getMessage());
 
   }
 
   @Test
-  public void testDeploymentFailureDefaultsToFail() {
+  public void testEnvironmentVariableOverrideOfConfiguredIdsIsAccepted() {
 
     final var properties = new MigrationAdapterProperties();
-    properties.setAdapters(Map.of("adapter-test", "adapter2"));
-    properties.setDeploymentFailures(Map.of("adapter-test", DeploymentFailurePolicy.WARN));
+    properties.setAdapters(Map.of("c8-cloud", AdapterConfigProperties.ofType("adapter2")));
+    properties.setWorkflowModules(Map.of("test-module", testModule));
 
-    assertEquals(DeploymentFailurePolicy.WARN, properties.getDeploymentFailureFor("adapter-test"));
-    assertEquals(DeploymentFailurePolicy.FAIL, properties.getDeploymentFailureFor("other-adapter"));
+    // both the Quarkus-style (C8_CLOUD) and the Spring-uniform-style (C8CLOUD)
+    // mangling of the dashed id have to be accepted, as well as static keys and
+    // platform-owned sections without dynamic id segments
+    properties.validateEnvironmentVariableUsage(List.of(
+        "VANILLABP_ADAPTERS_C8_CLOUD_TYPE",
+        "VANILLABP_ADAPTERS_C8CLOUD_TYPE",
+        "VANILLABP_WORKFLOW_MODULES_TEST_MODULE_PRIORITIZED_ADAPTERS",
+        "VANILLABP_PRIORITIZED_ADAPTERS",
+        "VANILLABP_RESOURCES_LOCATION",
+        "VANILLABP_OUTBOX_POLL_INTERVAL",
+        "OTHER_ENV_VAR"));
+
+  }
+
+  @Test
+  public void testEnvironmentVariableIntroducingUnknownIdIsRejected() {
+
+    final var properties = new MigrationAdapterProperties();
+    properties.setAdapters(Map.of("c8-cloud", AdapterConfigProperties.ofType("adapter2")));
+    properties.setWorkflowModules(Map.of("test-module", testModule));
+
+    final var exception = assertThrowsExactly(
+        IllegalStateException.class,
+        () -> properties.validateEnvironmentVariableUsage(List.of(
+            "VANILLABP_ADAPTERS_C8_ONPREM_TYPE")));
+
+    assertTrue(exception.getMessage().contains("VANILLABP_ADAPTERS_C8_ONPREM_TYPE"));
+    assertTrue(exception.getMessage().contains("'c8-cloud'"));
+    assertTrue(exception.getMessage().contains("cannot introduce a new adapter or workflow module"));
+    assertTrue(exception.getMessage().contains("Declare the ID in a configuration file"));
+
+  }
+
+  @Test
+  public void testEnvironmentVariableIntroducingUnknownModuleIdIsRejected() {
+
+    final var properties = new MigrationAdapterProperties();
+    properties.setAdapters(Map.of("c8-cloud", AdapterConfigProperties.ofType("adapter2")));
+    properties.setWorkflowModules(Map.of("test-module", testModule));
+
+    final var exception = assertThrowsExactly(
+        IllegalStateException.class,
+        () -> properties.validateEnvironmentVariableUsage(List.of(
+            "VANILLABP_WORKFLOW_MODULES_OTHER_MODULE_PRIORITIZED_ADAPTERS")));
+
+    assertTrue(exception.getMessage().contains("VANILLABP_WORKFLOW_MODULES_OTHER_MODULE_PRIORITIZED_ADAPTERS"));
+    assertTrue(exception.getMessage().contains("'test-module'"));
 
   }
 

@@ -171,6 +171,14 @@
               <groupId>org.springframework.boot</groupId>
               <artifactId>spring-boot-autoconfigure-processor</artifactId>
             </path>
+            <!-- generates META-INF/spring-configuration-metadata.json (IDE completion
+                 for the vanillabp.* keys inherited from the core model); descriptions
+                 of the stable top-level keys come from
+                 META-INF/additional-spring-configuration-metadata.json -->
+            <path>
+              <groupId>org.springframework.boot</groupId>
+              <artifactId>spring-boot-configuration-processor</artifactId>
+            </path>
           </annotationProcessorPaths>
         </configuration>
       </plugin>

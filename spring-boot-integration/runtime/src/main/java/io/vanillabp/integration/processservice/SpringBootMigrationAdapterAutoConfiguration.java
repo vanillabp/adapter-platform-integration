@@ -1,17 +1,26 @@
 package io.vanillabp.integration.processservice;
 
+import java.util.LinkedList;
+import java.util.List;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.context.properties.ConfigurationPropertiesBinding;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
+import org.springframework.core.convert.converter.Converter;
+import org.springframework.core.env.AbstractEnvironment;
+import org.springframework.core.env.EnumerablePropertySource;
+import org.springframework.core.env.Environment;
 
 import io.vanillabp.integration.adapter.AdapterConfigurationBase;
+import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
-import io.vanillabp.integration.config.SpringBootMigrationAdapterProperties;
-import io.vanillabp.integration.config.SpringBootMigrationAdapterTransformer;
+import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 import io.vanillabp.integration.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.integration.workflowmodule.WorkflowModules;
@@ -24,35 +33,68 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @AutoConfiguration(after = WorkflowModuleAutoConfiguration.class)
-@EnableConfigurationProperties(SpringBootMigrationAdapterProperties.class)
+@EnableConfigurationProperties(VanillaBpConfigurationProperties.class)
 @Import(ProcessServiceBeanRegistrar.class)
 public class SpringBootMigrationAdapterAutoConfiguration {
 
   static final String BEANNAME_MIGRATIONADAPERPROPERTIES = "VanillaBpMigrationAdapterProperties";
 
   /**
-   * Maps and validates VanillaBP properties (specific to Spring Boot) to
-   * {@link MigrationAdapterProperties} bean. It is used by common adapter
-   * implementation of module "migration-adapter".
+   * Converts the values of <code>vanillabp.adapters.&lt;id&gt;.deployment-failure</code>
+   * case-insensitively into the core enum. Registered as a
+   * {@link ConfigurationPropertiesBinding} converter so an invalid value fails the
+   * binding with a message naming the allowed values (Spring's bind failure adds the
+   * offending property key and value).
    *
-   * @param properties The Spring Boot specific properties
+   * @return The converter
+   */
+  @Bean
+  @ConfigurationPropertiesBinding
+  public static Converter<String, DeploymentFailurePolicy> vanillaBpDeploymentFailurePolicyConverter() {
+
+    return source -> {
+      try {
+        return DeploymentFailurePolicy.valueOf(source.trim().toUpperCase());
+      } catch (final IllegalArgumentException e) {
+        throw new IllegalArgumentException(
+            "must be one of 'fail' or 'warn'");
+      }
+    };
+
+  }
+
+  /**
+   * Validates the directly bound {@link VanillaBpConfigurationProperties} (facts
+   * from the classpath are passed into the core validation) and provides them as
+   * the platform-neutral {@link MigrationAdapterProperties} bean used by the common
+   * adapter implementation of module "migration-adapter".
+   *
+   * @param properties The bound core properties
+   * @param environment The Spring environment (used to detect environment variables
+   *          not taken over by the binding)
    * @param allWorkflowModules All workflow modules found in classpath
    * @param adapterConfigurations Configuration beans of adapters found in classpath
-   * @return The properties bean not specific to Spring Boot
+   * @return The validated properties bean
    */
   @Bean(BEANNAME_MIGRATIONADAPERPROPERTIES)
+  @Primary
   public static MigrationAdapterProperties migrationAdapterProperties(
-      final SpringBootMigrationAdapterProperties properties,
+      final VanillaBpConfigurationProperties properties,
+      final Environment environment,
       final WorkflowModules allWorkflowModules,
       final ObjectProvider<AdapterConfigurationBase> adapterConfigurations) {
 
     // ObjectProvider (not a required List): without any adapter on the classpath the
-    // bean creation still runs and the transformer's guiding message
+    // bean creation still runs and the guiding message
     // "No adapters found in classpath!" is actually reachable
     final var adaptersLoaded = adapterConfigurations
         .stream()
         .map(AdapterConfigurationBase::getAdapterType)
         .toList();
+    if (adaptersLoaded.isEmpty()) {
+      throw new IllegalStateException(
+          "No adapters found in classpath! Add dependencies providing VanillaBP adapters.");
+    }
 
     final var workflowModuleIds = allWorkflowModules
         .getWorkflowModules()
@@ -60,13 +102,35 @@ public class SpringBootMigrationAdapterAutoConfiguration {
         .map(WorkflowModule::getId)
         .toList();
 
-    return SpringBootMigrationAdapterTransformer
-        .builder()
-        .properties(properties)
-        .adaptersFound(adaptersLoaded)
-        .workflowModulesFound(workflowModuleIds)
-        .build()
-        .getAndValidatePropertiesConfigured();
+    properties.validateProperties(adaptersLoaded, workflowModuleIds);
+    properties.validateEnvironmentVariableUsage(rawPropertyNames(environment));
+
+    return properties;
+
+  }
+
+  /**
+   * Collects the raw names of all enumerable properties of the environment -
+   * including the unconverted environment-variable names of the
+   * <code>systemEnvironment</code> property source, which the core uses to detect
+   * <code>VANILLABP_*</code> variables not taken over by the binding.
+   *
+   * @param environment The Spring environment
+   * @return The raw property names
+   */
+  private static List<String> rawPropertyNames(
+      final Environment environment) {
+
+    final var result = new LinkedList<String>();
+    if (environment instanceof AbstractEnvironment abstractEnvironment) {
+      abstractEnvironment
+          .getPropertySources()
+          .stream()
+          .filter(EnumerablePropertySource.class::isInstance)
+          .map(EnumerablePropertySource.class::cast)
+          .forEach(propertySource -> result.addAll(List.of(propertySource.getPropertyNames())));
+    }
+    return result;
 
   }
 

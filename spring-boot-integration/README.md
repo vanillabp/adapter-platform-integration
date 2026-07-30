@@ -19,6 +19,35 @@ autoconfiguration mechanism to provide the best developer experience.
 3. **[integration-tests](./integration-tests):**<br>
    Modules which ensure the VanillaBP Spring Boot extension works as documented.
 
+## Configuration binding
+
+The user-facing `vanillabp.*` configuration tree is modeled ONCE, in the
+platform-neutral core (`MigrationAdapterProperties` of the migration adapter).
+Spring Boot binds the core POJOs directly: the thin subclass
+`VanillaBpConfigurationProperties` only carries
+`@ConfigurationProperties("vanillabp")`, so relaxed names, profiles and
+environment-variable overrides work out of the box and every property added to
+the core model is picked up without platform code. Defaulting (`normalize()`)
+and ALL validation live in the core - the auto-configuration only feeds in the
+classpath facts (adapter types found, workflow-module ids) and the raw property
+names (used to detect `VANILLABP_*` environment variables not taken over by the
+binding).
+
+The runtime module runs the Spring Boot configuration processor and ships
+`META-INF/spring-configuration-metadata.json` (types plus hand-written
+descriptions of the stable top-level keys in
+`additional-spring-configuration-metadata.json`) for IDE completion. Map-typed
+dynamic keys (`vanillabp.adapters.<id>.*`, `vanillabp.workflow-modules.<id>.*`)
+are declared once with their value type - IDEs drill into the value types on
+the classpath.
+
+BPMS adapters contribute their own keys to the same tree (e.g.
+`vanillabp.adapters.<id>.rest-address`) by binding an adapter-owned second
+`@ConfigurationProperties("vanillabp")` overlay class: same-prefix classes
+coexist, and keys unknown to the core view are ignored by the JavaBean binding.
+The adapter-id set is always derived from the core properties
+(`adapterTypes()`), never from an overlay map.
+
 ## Noteworthy & Contributors
 
 [VanillaBP](https://www.github.com/vanillabp/spi-for-java) was developed by [Phactum](https://www.phactum.at) with the

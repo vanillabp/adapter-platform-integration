@@ -2,4 +2,3 @@ vanillabp:
   adapters:
     test:
       type: dummy
-      test: 1

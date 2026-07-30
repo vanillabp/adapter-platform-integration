@@ -4,6 +4,59 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Configuration binding consolidated onto the core model (2026-07-30)
+
+The `vanillabp.*` tree was modeled three times (core POJOs,
+`SpringBootMigrationAdapterProperties`, `QuarkusMigrationAdapterProperties`)
+with two hand-written copy transformers. Now the tree is modeled ONCE in the
+core and bound natively per platform. **Zero user-visible config-key changes.**
+
+- **Core model reshape:** `MigrationAdapterProperties.adapters` is now
+  `Map<String, AdapterConfigProperties>` (fields `type`, `deploymentFailure`),
+  matching the user-facing keys `vanillabp.adapters.<id>.{type,deployment-failure}`
+  1:1 (prerequisite for direct binding; pulled forward from story 26d). The
+  separate `deploymentFailures` map is gone; `getDeploymentFailureFor(id)` stays.
+  The id→type view is `adapterTypes()` (deliberately NOT a JavaBean getter - the
+  binder and the metadata processor must not see it as a property).
+- **`deployment-failure` is bound as the core enum** on both platforms
+  (case-insensitively; Spring via a `@ConfigurationPropertiesBinding` converter,
+  Quarkus via SmallRye's enum converter). An invalid value fails naming the
+  offending key and the allowed values - the former aggregate message
+  ("These values are invalid: ...") is replaced by the platform's bind failure
+  carrying "must be one of 'fail' or 'warn'" (Spring) / SmallRye's
+  allowed-values message (Quarkus).
+- **Core `normalize()` + validation absorb the last duplicated logic:** type
+  defaulting (`type` absent → id is the type), single-adapter
+  `prioritized-adapters` defaulting, the "No adapters configured!" message
+  (Quarkus' `xxxx` placeholder aligned to `xxx`) and the workflow-level
+  rejection (the Quarkus message changed from listing raw keys to the core
+  wording `...Remove these properties: vanillabp.workflow-modules.<id>.workflows`).
+  The check "deployment-failure configured for unknown adapter id" is gone -
+  structurally impossible now (the policy lives inside the adapter's section).
+- **Spring binds the core POJOs directly:** `SpringBootMigrationAdapterProperties`
+  and the transformer are DELETED; the thin subclass
+  `VanillaBpConfigurationProperties` carries `@ConfigurationProperties("vanillabp")`.
+  The module now ships IDE metadata (`spring-configuration-metadata.json` incl.
+  hand-written descriptions of the stable top-level keys).
+- **Quarkus keeps `@ConfigMapping`; the transformer shrank to capability checks
+  plus a GENERATED MapStruct `toCore()`** (`unmappedSourcePolicy`/
+  `unmappedTargetPolicy = ERROR`: adding a property to only one side fails the
+  build). The SmallRye interface's fluent accessors are made visible to MapStruct
+  by the new build-time-only artifact `vanillabp-mapstruct-fluent-accessors`
+  (annotation-processor path only - build the reactor with `install`, not
+  `package`).
+- **Blanket `withMappingIgnore("vanillabp.**")` dropped:** adapter extensions
+  now register an OVERLAY `@ConfigMapping(prefix = "vanillabp")` for their own
+  keys (reference: the Quarkus dummy adapter's `DummyAdapterOverlayProperties`;
+  Spring counterpart: a second `@ConfigurationProperties("vanillabp")` class).
+  Consequence: a typo under `vanillabp.*` FAILS the Quarkus startup again
+  (Spring's JavaBean binding stays lenient - accepted asymmetry).
+- **Environment-variable misbinding validation:** env vars cannot introduce NEW
+  dashed adapter/module ids (they can only override entries declared in config
+  files). `VANILLABP_*` variables whose id segment matches no configured id now
+  fail the startup with a guiding message on both platforms
+  (`MigrationAdapterProperties.validateEnvironmentVariableUsage`).
+
 ## Aggregate-ID storage is the adapter's decision (2026-07-30)
 
 Review feedback on the hardening story: the shared SPI constant

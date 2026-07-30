@@ -29,7 +29,7 @@ public class NoAdapterConfigurationTest {
       .assertException(exceptionHavingMessage(IllegalStateException.class,
           """
               No adapters configured! Add properties sections for your BPMS (e.g. xxx) having type set to adapters found in classpath:
-                vanillabp.adapters.xxxx.type=dummy"""));
+                vanillabp.adapters.xxx.type=dummy"""));
 
   @Test
   public void testAdapterConfiguration() {

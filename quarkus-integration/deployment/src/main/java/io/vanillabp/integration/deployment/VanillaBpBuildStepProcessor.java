@@ -12,10 +12,7 @@ import io.quarkus.deployment.builditem.AdditionalApplicationArchiveMarkerBuildIt
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.ObjectSubstitutionBuildItem;
-import io.quarkus.deployment.builditem.RunTimeConfigBuilderBuildItem;
-import io.quarkus.deployment.builditem.StaticInitConfigBuilderBuildItem;
 import io.vanillabp.integration.deployment.processservice.VanillaBpMigratableProcessServiceBuildItem;
-import io.vanillabp.integration.runtime.config.VanillaBpConfigBuilder;
 import io.vanillabp.integration.runtime.deployment.VanillaBpShutdownObserver;
 import io.vanillabp.integration.runtime.outbox.JdbcPhaseTwoOutbox;
 import io.vanillabp.integration.runtime.outbox.JdbcPhaseTwoOutboxDispatcher;
@@ -78,22 +75,6 @@ public class VanillaBpBuildStepProcessor {
   ObjectSubstitutionBuildItem uriSubstitution() {
 
     return new ObjectSubstitutionBuildItem(URI.class, UriSubstitute.class, UriSubstitution.class);
-
-  }
-
-  /**
-   * Use a customized builder for migration adapter properties during initialization.
-   *
-   * @param staticInitConfigBuilder used for static initialization
-   * @param runtimeInitConfigBuilder used for runtime initialization
-   */
-  @BuildStep
-  void adoptStaticConfigBehaviorAccordingToVanillaBpNeeds(
-      final BuildProducer<StaticInitConfigBuilderBuildItem> staticInitConfigBuilder,
-      final BuildProducer<RunTimeConfigBuilderBuildItem> runtimeInitConfigBuilder) {
-
-    staticInitConfigBuilder.produce(new StaticInitConfigBuilderBuildItem(VanillaBpConfigBuilder.class));
-    runtimeInitConfigBuilder.produce(new RunTimeConfigBuilderBuildItem(VanillaBpConfigBuilder.class));
 
   }
 

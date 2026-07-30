@@ -216,8 +216,7 @@ public class WorkflowModuleBuildStepProcessor {
   /**
    * Activate {@link ConfigBuilder} classes generated for workflow module specific files. This is
    * only done for custom workflow module properties because VanillaBP properties are needed already
-   * during augmentation (see
-   * {@link io.vanillabp.integration.deployment.config.QuarkusMigrationAdapterPropertiesConfigBuilderCustomizer}).
+   * during augmentation.
    * <p>
    * This is done in a separate step to ensure generated classes are available. If this had been done in
    * one build step, then there would have been no guarantees that the classes are available

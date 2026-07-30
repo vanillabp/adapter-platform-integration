@@ -1,0 +1,24 @@
+{
+  "properties": [
+    {
+      "name": "vanillabp.prioritized-adapters",
+      "type": "java.util.List<java.lang.String>",
+      "description": "Adapter IDs ordered by priority. New workflows are started using the first adapter; other actions target the BPMS the workflow is running in. Each item has to be a key of 'vanillabp.adapters'. May be omitted if exactly one adapter is configured. Overridable per workflow module ('vanillabp.workflow-modules.<id>.prioritized-adapters')."
+    },
+    {
+      "name": "vanillabp.resources-location",
+      "type": "java.lang.String",
+      "description": "Where to load VanillaBP BPMN files from, which are NOT specific to any adapter (e.g. 'classpath*:processes'). Adapter-specific BPMN is configured per workflow module at 'vanillabp.workflow-modules.<module>.adapters.<id>.resources-location'."
+    },
+    {
+      "name": "vanillabp.adapters",
+      "type": "java.util.Map<java.lang.String,io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties>",
+      "description": "The configuration of all adapters known, keyed by adapter ID. The ID can be an adapter's type or a custom identifier - in the latter case 'type' has to name the adapter type. Besides the platform keys ('type', 'deployment-failure') each BPMS adapter contributes its own keys to its section (e.g. connection settings)."
+    },
+    {
+      "name": "vanillabp.workflow-modules",
+      "type": "java.util.Map<java.lang.String,io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties>",
+      "description": "The properties of all workflow modules, keyed by the workflow module's ID: per-module adapter priorities ('prioritized-adapters') and per-module adapter properties ('adapters.<id>.resources-location' for BPMS-specific BPMN)."
+    }
+  ]
+}

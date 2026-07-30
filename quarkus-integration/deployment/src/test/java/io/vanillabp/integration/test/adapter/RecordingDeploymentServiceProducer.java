@@ -22,7 +22,9 @@ public class RecordingDeploymentServiceProducer {
    * The system property receiving the workflow module IDs passed to
    * {@link DeploymentService#stopWorkflowProcessing(List)}.
    */
-  public static final String PROPERTY_STOPPED_MODULES = "vanillabp.test.stopped-modules";
+  // deliberately OUTSIDE the vanillabp.* tree: with the blanket withMappingIgnore
+  // gone, unknown keys under vanillabp.* fail the startup (typo detection)
+  public static final String PROPERTY_STOPPED_MODULES = "vanillabp-test.stopped-modules";
 
   @Produces
   @Singleton

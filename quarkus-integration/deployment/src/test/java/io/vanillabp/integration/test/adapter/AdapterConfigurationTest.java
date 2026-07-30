@@ -29,7 +29,11 @@ public class AdapterConfigurationTest {
           .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
           .addClass(DummyAdapters.class)                           // necessary due to anonymous class in DummyAdapters
           .addClass(TestMigratableProcessService.class))            // process service of the mocked adapter
-      .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter()); // add mocked adapter
+      .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter())  // add mocked adapter
+      // an environment-variable shaped OVERRIDE of the configured adapter id 'test':
+      // accepted by the misbinding validation (only variables introducing UNKNOWN
+      // ids fail the startup - see EnvironmentVariableMisbindingTest)
+      .overrideConfigKey("VANILLABP_ADAPTERS_TEST_TYPE", "dummy");
 
   @Inject
   @SuppressWarnings("CdiUnsatisfiedInjection")

@@ -38,19 +38,15 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Map of all adapters available. Keys are the adapter IDs and the values are the adapter types.
+   * The configuration of all adapters known
+   * (properties section <code>vanillabp.adapters.&lt;id&gt;.*</code>). Keys are the
+   * adapter IDs. The key can be an adapter's type or a custom identifier. In case of
+   * a custom identifier the {@link AdapterConfigProperties#getType() type} property
+   * has to point to the adapter type the custom adapter is derived from. In case of
+   * an adapter-type identifier the type property may be undefined.
    */
   @Builder.Default
-  private Map<String, String> adapters = Map.of();
-
-  /**
-   * Per-adapter policy how to treat a failing deployment of BPMS resources
-   * (property <code>vanillabp.adapters.&lt;id&gt;.deployment-failure</code>).
-   * Keys are the adapter IDs. Adapters not contained default to
-   * {@link DeploymentFailurePolicy#FAIL}.
-   */
-  @Builder.Default
-  private Map<String, DeploymentFailurePolicy> deploymentFailures = Map.of();
+  private Map<String, AdapterConfigProperties> adapters = Map.of();
 
   /**
    * Where to load VanillaBP BPMN files from, which are NOT specific to any adapter.
@@ -62,6 +58,41 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    */
   @Builder.Default
   private Map<String, WorkflowModuleAdapterProperties> workflowModules = Map.of();
+
+  /**
+   * Derived view of {@link #getAdapters()}: adapter ID mapped to the adapter's type.
+   * An adapter entry without an explicit {@link AdapterConfigProperties#getType()
+   * type} defaults to its ID being the type.
+   *
+   * @return Map of all adapters available (key = adapter ID, value = adapter type)
+   */
+  public Map<String, String> adapterTypes() {
+
+    return adapters
+        .entrySet()
+        .stream()
+        .collect(Collectors.toMap(
+            Map.Entry::getKey,
+            entry -> entry.getValue().getType() != null
+                ? entry.getValue().getType()
+                : entry.getKey()));
+
+  }
+
+  /**
+   * Applies convention-over-configuration defaults to the bound properties:
+   * if exactly one adapter is configured, the property
+   * <code>vanillabp.prioritized-adapters</code> may be omitted and defaults to that
+   * adapter. Invoked by {@link #validateProperties(List, List)}; has to be invoked
+   * explicitly if properties objects are used without running validation.
+   */
+  public void normalize() {
+
+    if (getPrioritizedAdapters().isEmpty() && (adapters.size() == 1)) {
+      setPrioritizedAdapters(List.copyOf(adapters.keySet()));
+    }
+
+  }
 
   /**
    * Links child properties back to their parents (e.g. the workflow module ID into
@@ -135,9 +166,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   public DeploymentFailurePolicy getDeploymentFailureFor(
       final String adapterId) {
 
-    final var policy = deploymentFailures.get(adapterId);
-    return policy != null
-        ? policy
+    final var adapter = adapters.get(adapterId);
+    return (adapter != null) && (adapter.getDeploymentFailure() != null)
+        ? adapter.getDeploymentFailure()
         : DeploymentFailurePolicy.FAIL;
 
   }
@@ -216,13 +247,45 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       final List<String> adaptersLoaded,
       final List<String> knownWorkflowModuleIds) {
 
+    normalize();
     validateAndLink();
+
+    // TODO: process workflow-level properties instead of rejecting them once
+    //  story 27 implements resolving 'workflows' of WorkflowModuleAdapterProperties.
+    //  Fail hard since silently ignoring them could elect the wrong BPMS without
+    //  any error.
+    final var workflowLevelConfigurations = workflowModules
+        .entrySet()
+        .stream()
+        .filter(workflowModule -> !workflowModule.getValue().getWorkflows().isEmpty())
+        .map(workflowModule -> "%s.workflow-modules.%s.workflows".formatted(PREFIX, workflowModule.getKey()))
+        .sorted()
+        .collect(Collectors.joining("\n  "));
+    if (!workflowLevelConfigurations.isEmpty()) {
+      throw new IllegalStateException(
+          """
+              Workflow-level configuration is not yet supported! Remove these properties:
+                %s"""
+              .formatted(workflowLevelConfigurations));
+    }
 
     if (knownWorkflowModuleIds.isEmpty()) {
       throw new IllegalStateException("No workflow-modules where given!");
     }
 
-    final var adaptersNotInClasspath = adapters
+    if (adapters.isEmpty()) {
+      final var missingConfigSections = adaptersLoaded
+          .stream()
+          .map(adapter -> "%s.adapters.xxx.type=%s".formatted(PREFIX, adapter))
+          .collect(Collectors.joining("\n  "));
+      throw new IllegalStateException(
+          """
+              No adapters configured! Add properties sections for your BPMS (e.g. xxx) having type set to adapters found in classpath:
+                %s"""
+              .formatted(missingConfigSections));
+    }
+
+    final var adaptersNotInClasspath = adapterTypes()
         .entrySet()
         .stream()
         .filter(entry -> !adaptersLoaded.contains(entry.getValue()))
@@ -249,22 +312,6 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
                 %s
               Add property keys '%s.workflow-modules.*' to configure them."""
               .formatted(unconfiguredModules, PREFIX));
-    }
-
-    // deployment-failure policies have to be configured for known adapters only
-    final var deploymentFailuresForUnknownAdapters = deploymentFailures
-        .keySet()
-        .stream()
-        .filter(adapterId -> !adapters.containsKey(adapterId))
-        .map(adapterId -> "%s.adapters.%s.deployment-failure".formatted(PREFIX, adapterId))
-        .sorted()
-        .collect(Collectors.joining("\n  "));
-    if (!deploymentFailuresForUnknownAdapters.isEmpty()) {
-      throw new IllegalStateException(
-          """
-              These properties refer to adapters not configured in 'vanillabp.adapters.*':
-                %s"""
-              .formatted(deploymentFailuresForUnknownAdapters));
     }
 
     // unknown workflow-module properties
@@ -421,18 +468,12 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
                   .collect(Collectors.joining("\n  "))));
     }
 
-    // resources-location
+    // resources-location (an empty prioritized-adapters list cannot occur here:
+    // a single configured adapter is defaulted by normalize(), multiple adapters
+    // are forced into 'vanillabp.prioritized-adapters' by the check above)
     knownWorkflowModuleIds.forEach(
         workflowModuleId -> {
           final var prioritizedAdaptersOfModule = getPrioritizedAdaptersFor(workflowModuleId, null);
-          if (prioritizedAdaptersOfModule.isEmpty()) {
-            throw new IllegalStateException("""
-                You need to define at least one property of
-                  %s.prioritized-adapters
-                  %s.workflow-modules.%s.prioritized-adapters
-                """
-                .formatted(PREFIX, PREFIX, workflowModuleId));
-          }
           prioritizedAdaptersOfModule.forEach(adapterId -> getAdapterResourcesLocationFor(workflowModuleId, adapterId));
           getBpmnProcessIdsForWorkflowModule(workflowModuleId)
               .forEach(
@@ -446,6 +487,95 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
                         adapterId));
                   });
         });
+  }
+
+  /**
+   * Validates that environment variables addressing the <code>vanillabp.*</code> tree
+   * were actually taken over by the configuration binding. Environment variables can
+   * only <b>override</b> entries of dynamic maps (adapters, workflow modules) which
+   * are already declared in a configuration file - they cannot <b>introduce</b> a new
+   * entry whose ID contains dashes or dots (the binder cannot reconstruct the ID from
+   * the variable's name). Such a variable is silently ignored by the binding, so this
+   * check fails the startup with a guiding message instead.
+   * <p>
+   * The check is a best-effort guard on the ID segments: matching is performed on a
+   * separator-free uppercase form (<code>c8-cloud</code> matches both
+   * <code>C8_CLOUD</code> and <code>C8CLOUD</code>), so unusual IDs sharing a prefix
+   * with another configured ID may escape detection - but a valid override is never
+   * reported as an error.
+   *
+   * @param rawPropertyNames The raw names of all properties available, including the
+   *          unconverted environment-variable names (both platforms surface them)
+   */
+  public void validateEnvironmentVariableUsage(
+      final Iterable<String> rawPropertyNames) {
+
+    final var envVarPrefix = PREFIX.toUpperCase()
+        + "_";
+    final var violations = new LinkedList<String>();
+
+    for (final var propertyName : rawPropertyNames) {
+      if (!propertyName.matches("^%s[A-Z0-9_]+$".formatted(envVarPrefix))) {
+        continue;
+      }
+      final var path = propertyName.substring(envVarPrefix.length());
+      if (path.startsWith("ADAPTERS_")) {
+        validateEnvironmentVariableIdSegment(
+            propertyName,
+            path.substring("ADAPTERS_".length()),
+            adapters.keySet(),
+            "%s.adapters".formatted(PREFIX),
+            violations);
+      } else if (path.startsWith("WORKFLOW_MODULES_")) {
+        validateEnvironmentVariableIdSegment(
+            propertyName,
+            path.substring("WORKFLOW_MODULES_".length()),
+            workflowModules.keySet(),
+            "%s.workflow-modules".formatted(PREFIX),
+            violations);
+      }
+      // all other sections (e.g. prioritized-adapters, resources-location,
+      // outbox) carry no dynamic ID segment - a typo there is either caught by
+      // the platform's unknown-key detection or harmless to the BPMS election
+    }
+
+    if (!violations.isEmpty()) {
+      throw new IllegalStateException(
+          """
+              Environment variables addressing the '%s' configuration were NOT taken over by the configuration binding:
+                %s
+              Environment variables can only OVERRIDE entries already declared in a configuration file - they
+              cannot introduce a new adapter or workflow module (the entry's ID cannot be reconstructed from the
+              variable's name). Declare the ID in a configuration file (e.g. 'vanillabp.adapters.<id>.type') and
+              use the environment variable to override its values, or fix the ID part of the variable's name."""
+              .formatted(PREFIX, String.join("\n  ", violations)));
+    }
+
+  }
+
+  private static void validateEnvironmentVariableIdSegment(
+      final String propertyName,
+      final String idAndRemainder,
+      final Set<String> configuredIds,
+      final String sectionKey,
+      final List<String> violations) {
+
+    final var comparableRemainder = idAndRemainder.replace("_", "");
+    final var matches = configuredIds
+        .stream()
+        .map(id -> id.toUpperCase().replaceAll("[^A-Z0-9]", ""))
+        .anyMatch(comparableRemainder::startsWith);
+    if (!matches) {
+      violations.add(
+          "'%s' does not address any of the IDs configured in '%s.*' (%s)"
+              .formatted(
+                  propertyName,
+                  sectionKey,
+                  configuredIds.isEmpty()
+                      ? "none configured"
+                      : "'%s'".formatted(String.join("', '", configuredIds))));
+    }
+
   }
 
   private static void validateNoDuplicatePrioritizedAdapters(

@@ -37,7 +37,7 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
 
     return properties
         .getObject()
-        .getAdapters()
+        .adapterTypes()
         .entrySet()
         .stream()
         .filter(adapter -> DummyAdapterConfiguration.ADAPTER_TYPE.equals(adapter.getValue()))

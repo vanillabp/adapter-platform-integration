@@ -37,6 +37,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
@@ -516,7 +517,7 @@ public class DeploymentServiceTest {
       // Create properties with VanillaBP resources location (not adapter-specific)
       final var properties = MigrationAdapterProperties
           .builder()
-          .adapters(Map.of("adapter-test1", "dummy"))
+          .adapters(Map.of("adapter-test1", AdapterConfigProperties.ofType("dummy")))
           .prioritizedAdapters(List.of("adapter-test1"))
           .resourcesLocation("classpath:vanillabp-processes")
           .workflowModules(Map.of(
@@ -817,7 +818,7 @@ public class DeploymentServiceTest {
 
       // Configure properties with TWO prioritized adapters, second one may fail
       final var properties = createPropertiesWithAdapters("adapter-test1", "adapter-test2");
-      properties.setDeploymentFailures(Map.of("adapter-test2", DeploymentFailurePolicy.WARN));
+      properties.getAdapters().get("adapter-test2").setDeploymentFailure(DeploymentFailurePolicy.WARN);
 
       // Configure both adapters
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
@@ -867,7 +868,7 @@ public class DeploymentServiceTest {
 
       // Configure properties with TWO prioritized adapters, FIRST one may fail (policy is ignored)
       final var properties = createPropertiesWithAdapters("adapter-test1", "adapter-test2");
-      properties.setDeploymentFailures(Map.of("adapter-test1", DeploymentFailurePolicy.WARN));
+      properties.getAdapters().get("adapter-test1").setDeploymentFailure(DeploymentFailurePolicy.WARN);
 
       // Configure the first adapter to fail
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
@@ -979,7 +980,7 @@ public class DeploymentServiceTest {
 
     final var properties = MigrationAdapterProperties
         .builder()
-        .adapters(Map.of(adapterId, "dummy"))
+        .adapters(Map.of(adapterId, AdapterConfigProperties.ofType("dummy")))
         .workflowModules(Map.of(
             "test-module",
             WorkflowModuleAdapterProperties
@@ -1004,10 +1005,10 @@ public class DeploymentServiceTest {
   private MigrationAdapterProperties createPropertiesWithAdapters(
       final String... adapterIds) {
 
-    final var adapters = new LinkedHashMap<String, String>();
+    final var adapters = new LinkedHashMap<String, AdapterConfigProperties>();
     final var adapterProperties = new LinkedHashMap<String, AdapterProperties>();
     for (final var adapterId : adapterIds) {
-      adapters.put(adapterId, "dummy");
+      adapters.put(adapterId, AdapterConfigProperties.ofType("dummy"));
       adapterProperties.put(adapterId, AdapterProperties
           .builder()
           .resourcesLocation("classpath:test-module/processes/"

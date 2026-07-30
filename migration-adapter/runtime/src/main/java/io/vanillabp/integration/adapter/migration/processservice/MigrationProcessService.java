@@ -58,7 +58,7 @@ public class MigrationProcessService<A> {
     this.workflowModuleId = workflowModuleId;
     this.bpmnProcessId = bpmnProcessId;
     this.workflowAggregateClass = workflowAggregateClass;
-    this.adapters = properties.getAdapters();
+    this.adapters = properties.adapterTypes();
     this.prioritizedAdapters = properties.getPrioritizedAdaptersFor(workflowModuleId, bpmnProcessId);
     this.aggregatePersistenceSupport = aggregatePersistenceSupport;
     // fail fast: EVERY prioritized adapter id must have a matching process

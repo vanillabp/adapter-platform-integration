@@ -19,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.processservice.ProcessServiceSpringBean;
@@ -42,7 +43,7 @@ public class ProcessServiceSpringBeanTest {
 
     final var properties = MigrationAdapterProperties
         .builder()
-        .adapters(Map.of("test-adapter", "dummy"))
+        .adapters(Map.of("test-adapter", AdapterConfigProperties.ofType("dummy")))
         .prioritizedAdapters(List.of("test-adapter"))
         .build();
     properties.validateAndLink();

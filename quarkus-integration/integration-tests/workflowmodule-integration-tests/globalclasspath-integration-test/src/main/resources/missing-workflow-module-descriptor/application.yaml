@@ -3,4 +3,5 @@ vanillabp:
     test:
       type: dummy
       test: 1
-  prioritizedAdapters: unknown
+  prioritized-adapters:
+    - unknown

@@ -36,6 +36,12 @@
       <optional>true</optional>
     </dependency>
     <dependency>
+      <!-- runtime API of the generated toCore() properties mapper -->
+      <groupId>org.mapstruct</groupId>
+      <artifactId>mapstruct</artifactId>
+      <version>${mapstruct.version}</version>
+    </dependency>
+    <dependency>
       <!-- optional: only used by the MongoDB-based phase-two outbox default -->
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-mongodb-client</artifactId>
@@ -89,6 +95,21 @@
                   <groupId>io.quarkus</groupId>
                   <artifactId>quarkus-extension-processor</artifactId>
                   <version>${quarkus.version}</version>
+                </path>
+                <!-- generates the mechanical toCore() properties mapper; the
+                     fluent-accessors SPI makes the SmallRye @ConfigMapping
+                     interface's record-style accessors visible to MapStruct
+                     (build this module via 'install' so the SPI artifact is
+                     resolvable - see the repository README) -->
+                <path>
+                  <groupId>org.mapstruct</groupId>
+                  <artifactId>mapstruct-processor</artifactId>
+                  <version>${mapstruct.version}</version>
+                </path>
+                <path>
+                  <groupId>io.vanillabp</groupId>
+                  <artifactId>vanillabp-mapstruct-fluent-accessors</artifactId>
+                  <version>${project.version}</version>
                 </path>
               </annotationProcessorPaths>
             </configuration>

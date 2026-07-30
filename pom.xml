@@ -30,6 +30,7 @@
   </developers>
 
   <modules>
+    <module>build-tools/mapstruct-fluent-accessors</module>
     <module>test-utils</module>
     <module>migration-adapter</module>
     <module>spring-boot-integration</module>
@@ -51,6 +52,7 @@
     <vanillabp.version>1.1.1-SNAPSHOT</vanillabp.version>
     <version.java>21</version.java>
     <lombok.version>1.18.46</lombok.version>
+    <mapstruct.version>1.6.3</mapstruct.version>
     <transaction-outbox.version>7.0.707</transaction-outbox.version>
     <jacoco.version>0.8.15</jacoco.version>
     <mockito.version>5.23.0</mockito.version>

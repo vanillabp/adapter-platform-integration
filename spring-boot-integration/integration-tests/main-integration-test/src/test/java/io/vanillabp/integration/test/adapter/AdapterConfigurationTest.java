@@ -10,6 +10,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.ResolvableType;
 
 import io.vanillabp.adapter.dummy.springboot.DummyAdapterConfiguration;
+import io.vanillabp.adapter.dummy.springboot.DummyAdapterOverlayProperties;
 import io.vanillabp.adapter.dummy.springboot.processservice.DummyAdapterProcessServiceConfiguration;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
@@ -89,6 +90,11 @@ public class AdapterConfigurationTest {
           Assertions.assertEquals(
               WorkflowAwareness.UNKNOWN_TO_BPMS,
               migratableProcessService.awarenessOfWorkflow("42"));
+
+          // the adapter-specific key 'vanillabp.adapters.test.test' (unknown to the
+          // core model) reaches the dummy adapter's overlay of the shared tree typed
+          final var overlay = context.getBean(DummyAdapterOverlayProperties.class);
+          Assertions.assertEquals(1, overlay.getAdapters().get("test").getTest());
 
         });
 

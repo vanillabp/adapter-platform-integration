@@ -2,4 +2,3 @@ vanillabp:
   adapters:
     test:
       type: unknown
-      test: 1

@@ -73,6 +73,25 @@ as possible at **build time**, following Quarkus' extension philosophy:
 6. **Validation at build time:** `EnsureCollectedClassesAreBeansBuildStepProcessor`
    fails the build if collected classes (workflow services, persistence
    implementations) are not actual CDI beans.
+7. **Configuration binding:** the user-facing `vanillabp.*` tree is modeled ONCE in
+   the platform-neutral core (`MigrationAdapterProperties`).
+   `QuarkusMigrationAdapterProperties` stays a RUN_TIME `@ConfigMapping` (module
+   config files and env overrides need the runtime config), and the transformer
+   copies it onto the core model via the GENERATED MapStruct mapper
+   `QuarkusMigrationAdapterPropertiesMapper` (`unmappedSourcePolicy`/
+   `unmappedTargetPolicy = ERROR` pins the mapping at compile time; the SmallRye
+   interface's fluent accessors are made visible to MapStruct by the reactor
+   artifact `vanillabp-mapstruct-fluent-accessors` on the annotation-processor path
+   — build with `install`, not `package`). Defaulting and ALL guiding validation
+   run in the core; the transformer keeps only the capability checks.
+   Adapter extensions contribute their own keys to the shared tree via an
+   adapter-owned RUN_TIME `@ConfigRoot @ConfigMapping(prefix = "vanillabp")`
+   overlay (reference: the dummy adapter's `DummyAdapterOverlayProperties`).
+   There is deliberately NO blanket `withMappingIgnore("vanillabp.**")`: SmallRye's
+   unknown-key validation passes if ANY registered mapping knows a key, so the
+   platform mapping and the adapter overlays validate the tree together and a typo
+   under `vanillabp.*` fails the startup (Quarkus is stricter than Spring Boot
+   here - accepted).
 
 ## Hints
 

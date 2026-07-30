@@ -10,6 +10,7 @@ import io.quarkus.runtime.annotations.ConfigRoot;
 import io.quarkus.runtime.annotations.StaticInitSafe;
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
+import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 
 /**
  * Properties common to all adapters.
@@ -85,11 +86,12 @@ public interface QuarkusMigrationAdapterProperties {
      * <code>fail</code> (default) aborts booting of the application;
      * <code>warn</code> logs the failure of a NON-first-priority adapter and the
      * application still starts (a failure of the first-priority adapter always
-     * fails the boot).
+     * fails the boot). The value is converted case-insensitively; an invalid value
+     * fails the configuration naming the allowed values.
      *
      * @return The deployment-failure policy
      */
-    Optional<String> deploymentFailure();
+    Optional<DeploymentFailurePolicy> deploymentFailure();
 
   }
 
@@ -176,6 +178,30 @@ public interface QuarkusMigrationAdapterProperties {
      * The properties of adapters specific to this workflow module.
      */
     Map<String, AdapterProperties> adapters();
+
+    /**
+     * The properties of workflows specific to this workflow module. The key is the
+     * BPMN process ID.
+     * <p>
+     * <b>Attention:</b> Workflow-level configuration is not yet supported! It is only
+     * bound so the core validation can detect and reject such configuration on
+     * startup instead of silently ignoring it.
+     */
+    Map<String, WorkflowProperties> workflows();
+
+  }
+
+  /**
+   * The properties of a workflow of a workflow module.
+   */
+  interface WorkflowProperties {
+
+    /**
+     * The priorities of adapters specific to a workflow.
+     *
+     * @see QuarkusMigrationAdapterProperties#prioritizedAdapters()
+     */
+    Optional<List<String>> prioritizedAdapters();
 
   }
 

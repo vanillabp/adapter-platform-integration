@@ -39,7 +39,7 @@ public class DummyProcessServiceProducer {
       @Any final Instance<DummyPhaseTwoListener> phaseTwoListeners) {
 
     final var adapterId = properties
-        .getAdapters()
+        .adapterTypes()
         .entrySet()
         .stream()
         .filter(adapter -> ADAPTER_TYPE.equals(adapter.getValue()))

@@ -15,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 
+import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
@@ -57,7 +58,7 @@ public class PhaseTwoAggregateIdConverterTest {
 
     final var properties = MigrationAdapterProperties
         .builder()
-        .adapters(Map.of("test-adapter", "dummy"))
+        .adapters(Map.of("test-adapter", AdapterConfigProperties.ofType("dummy")))
         .prioritizedAdapters(List.of("test-adapter"))
         .build();
     properties.validateAndLink();

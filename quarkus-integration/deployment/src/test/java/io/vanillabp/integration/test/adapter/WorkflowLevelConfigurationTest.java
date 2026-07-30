@@ -15,7 +15,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 /**
  * Workflow-level properties (vanillabp.workflow-modules.*.workflows.*) are not supported yet.
  * Until implemented they must be rejected instead of being ignored silently, since ignoring
- * them could elect the wrong BPMS without any error.
+ * them could elect the wrong BPMS without any error. The rejection is performed ONCE, by the
+ * core validation on the bound tree - the message is identical on all platforms.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowLevelConfigurationTest {
@@ -35,7 +36,7 @@ public class WorkflowLevelConfigurationTest {
       .assertException(exceptionHavingMessage(IllegalStateException.class,
           """
               Workflow-level configuration is not yet supported! Remove these properties:
-                vanillabp.workflow-modules.test-module.workflows.MyProcess.resources-location"""));
+                vanillabp.workflow-modules.test-module.workflows"""));
 
   @Test
   public void testWorkflowLevelConfigurationIsRejected() {

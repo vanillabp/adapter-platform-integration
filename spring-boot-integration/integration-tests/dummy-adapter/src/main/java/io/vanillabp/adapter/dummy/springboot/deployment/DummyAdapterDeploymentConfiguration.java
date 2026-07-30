@@ -29,7 +29,7 @@ public class DummyAdapterDeploymentConfiguration {
       final MigrationAdapterProperties properties) {
 
     final var adapterId = properties
-        .getAdapters()
+        .adapterTypes()
         .entrySet()
         .stream()
         .filter(adapter -> adapter.getValue().equals(DummyAdapterConfiguration.ADAPTER_TYPE))
