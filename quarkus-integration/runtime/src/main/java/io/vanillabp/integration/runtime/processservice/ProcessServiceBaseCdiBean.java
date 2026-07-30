@@ -42,15 +42,18 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
 
   /**
    * Additionally accepted shape: beans of type
-   * <code>List&lt;MigratableProcessService&gt;</code>, flattened into the collected
-   * process services. Synthetic beans created from runtime configuration (one
-   * process service per configured adapter id, adapter-config-model story 26d)
-   * cannot always be registered as individual element beans on Quarkus - a single
-   * List bean per adapter is the documented escape hatch there.
+   * <code>List&lt;MigratableProcessService&lt;Object&gt;&gt;</code>, flattened into
+   * the collected process services. Synthetic beans created from runtime
+   * configuration (one process service per configured adapter id,
+   * adapter-config-model story 26d) cannot be registered as individual element
+   * beans on Quarkus - a single List bean per adapter is the documented shape
+   * there. The element type parameter is LITERALLY {@code Object} by convention
+   * (CDI's parameterized-type matching of nested wildcards is not reliable across
+   * modes, so the platform looks the beans up with the exact type).
    */
   @Inject
   @Any
-  Instance<List<io.vanillabp.integration.adapter.spi.MigratableProcessService<?>>> migratableProcessServiceLists;
+  Instance<List<io.vanillabp.integration.adapter.spi.MigratableProcessService<Object>>> migratableProcessServiceLists;
 
   /**
    * The outbox used to schedule phase two of a two-phase workflow start. Unsatisfied

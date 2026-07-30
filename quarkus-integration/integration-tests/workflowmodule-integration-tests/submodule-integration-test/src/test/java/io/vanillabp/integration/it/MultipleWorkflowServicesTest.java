@@ -26,7 +26,10 @@ public class MultipleWorkflowServicesTest {
       // JVM args needed for tracking coverage. Check pom.xml for systemPropertyVariables
       .setJVMArgs(testCoverageJavaAgent(quarkusProdModeTestDefaults()))
       .setRun(true)
-      .setRuntimeProperties(Map.of("quarkus.http.port", Integer.toString(FreePortUtil.getFreePort())));
+      .setRuntimeProperties(Map.of(
+          "quarkus.http.port", Integer.toString(FreePortUtil.getFreePort()),
+          "quarkus.log.file.enable", "true",
+          "quarkus.log.file.path", "/tmp/claude-1000/mws-app.log"));
 
   @Test
   public void testProcessServicesBelongToTheRightWorkflowModule() {

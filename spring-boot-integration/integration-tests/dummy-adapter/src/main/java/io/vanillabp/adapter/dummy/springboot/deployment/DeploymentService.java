@@ -89,7 +89,7 @@ public class DeploymentService implements AdapterDeploymentService<Object, Objec
       final String workflowModuleId,
       final Object bpmsProcessingContext) throws IllegalStateException {
 
-    log.info("Dummy-Adapter: Deploying resources for {}", workflowModuleId);
+    log.info("Dummy-Adapter[{}]: Deploying resources for {}", adapterId, workflowModuleId);
 
   }
 

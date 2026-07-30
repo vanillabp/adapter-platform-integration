@@ -1,22 +1,17 @@
 package io.vanillabp.adapter.dummy.springboot.processservice;
 
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.context.annotation.Bean;
-import org.springframework.core.env.Environment;
+import org.springframework.context.annotation.Import;
 
+import io.vanillabp.adapter.dummy.springboot.DummyAdapterBeanRegistrar;
 import io.vanillabp.adapter.dummy.springboot.DummyAdapterOverlayProperties;
-import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 
 /**
- * Provides the dummy adapter's {@link MigratableProcessService} bean picked up by the
- * {@link io.vanillabp.spi.process.ProcessService} beans built by the VanillaBP Spring
- * Boot integration.
- * <p>
- * The bean must not have eager dependencies since it is created very early during
- * bootstrapping of the Spring context (before configuration properties beans are
- * bound). Therefore only an {@link ObjectProvider} is passed.
+ * Wires the dummy adapter's process-service and deployment-service beans: ONE
+ * element bean per configured adapter id of the dummy type, registered by the
+ * imported {@link DummyAdapterBeanRegistrar} (the reference implementation of the
+ * per-id bean convention).
  * <p>
  * Additionally registers the adapter's OVERLAY of the shared
  * <code>vanillabp.*</code> tree ({@link DummyAdapterOverlayProperties}) - the
@@ -25,6 +20,7 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
  */
 @AutoConfiguration
 @EnableConfigurationProperties(DummyAdapterOverlayProperties.class)
+@Import(DummyAdapterBeanRegistrar.class)
 public class DummyAdapterProcessServiceConfiguration {
 
   /**
@@ -33,17 +29,5 @@ public class DummyAdapterProcessServiceConfiguration {
    * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox} implementations.
    */
   public static final String PROPERTY_TWO_PHASE_COMMIT = "dummy-adapter.two-phase-commit";
-
-  @Bean
-  public MigratableProcessService<?> dummyMigratableProcessService(
-      final ObjectProvider<MigrationAdapterProperties> properties,
-      final Environment environment,
-      final ObjectProvider<DummyAdapterPhaseTwoListener> phaseTwoListeners) {
-
-    return new MigratableProcessService<>(
-        properties, Boolean.TRUE.equals(
-            environment.getProperty(PROPERTY_TWO_PHASE_COMMIT, Boolean.class, Boolean.FALSE)), phaseTwoListeners);
-
-  }
 
 }

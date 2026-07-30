@@ -1,0 +1,19 @@
+vanillabp:
+  prioritized-adapters:
+    - test
+    - test2
+  adapters:
+    test:
+      type: dummy
+    test2:
+      type: dummy
+  workflow-modules:
+    test-module:
+      prioritized-adapters:
+        - test2
+        - test
+      adapters:
+        test:
+          resources-location: classpath:test-module/processes/dummy
+        test2:
+          resources-location: classpath:test-module/processes/dummy

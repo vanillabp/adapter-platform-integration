@@ -4,6 +4,36 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Adapter config model: per-id beans, canonical location, level resolution (2026-07-30)
+
+Story 26d - three related changes, breaking for adapters and early Camunda 8 users:
+
+- **One process service AND one deployment service per configured adapter id**
+  (multiple ids of one BPMS type = the migration scenario). Spring: adapters
+  register element beans programmatically via a `BeanRegistrar` using the new
+  platform helper `AdapterBeanRegistrarSupport.forEachConfiguredAdapterId`; the
+  adapter id is a constructor parameter. Quarkus: adapters produce ONE bean of
+  type `List<MigratableProcessService<Object>>` /
+  `List<AdapterDeploymentService<Model, Context>>` per adapter (a CDI producer
+  cannot yield N element beans for N runtime-config ids); the platform flattens
+  List beans alongside element beans and keeps them from ArC's unused-bean
+  removal (`keepPerAdapterIdListBeans`). HARD RULE: the List element type is the
+  SPI interface literally (CDI does not match subtypes in type arguments).
+- **Camunda 8 configuration relocated** (BREAKING for early users): the
+  provisional flat namespace `camunda8-adapter.<id>.*` is GONE; the connection
+  keys (`mode`, `rest-address`, `grpc-address`, `prefer-rest-over-grpc`,
+  `tenant-id`, `cluster-id`, `region`, `client-id`, `client-secret`) now live at
+  the canonical per-adapter location `vanillabp.adapters.<id>.*`, contributed via
+  the story-19 overlay pattern on both platforms. The last
+  `getPropertyNames()`-based key parsing was deleted with it.
+- **Level resolution in core:** `MigrationAdapterProperties.resolveForAdapter(
+  module, process, task, adapterId, extractor)` resolves adapter-scoped
+  properties most-specific-wins across task > workflow > workflow-module >
+  adapter. The property model gained the workflow-level `adapters` map and the
+  task-level slot (`workflows.<w>.tasks.<t>.adapters.<id>.*`) - structural
+  preparation for stories 27/21 (workflow-level config is still rejected at
+  startup).
+
 ## `vanillabp.outbox.*` consolidated onto the core model (2026-07-30)
 
 Follow-up of the config-binding consolidation (decision 7): the outbox

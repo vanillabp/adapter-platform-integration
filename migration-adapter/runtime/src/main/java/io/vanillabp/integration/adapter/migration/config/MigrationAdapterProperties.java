@@ -6,6 +6,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -161,6 +162,88 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       prioritizedAdapters = workflow.getPrioritizedAdapters();
     }
     return prioritizedAdapters;
+
+  }
+
+  /**
+   * Resolves an adapter-scoped property with most-specific-wins semantics across the
+   * four levels an adapter-scoped property may be configured at:
+   *
+   * <pre>
+   * vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;workflow&gt;.tasks.&lt;task&gt;.adapters.&lt;id&gt;.&lt;key&gt;  (most specific)
+   * vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;workflow&gt;.adapters.&lt;id&gt;.&lt;key&gt;
+   * vanillabp.workflow-modules.&lt;module&gt;.adapters.&lt;id&gt;.&lt;key&gt;
+   * vanillabp.adapters.&lt;id&gt;.&lt;key&gt;                                                              (least specific)
+   * </pre>
+   *
+   * The levels are walked from most to least specific and the first non-null value
+   * the extractor returns wins (same precedent as
+   * {@link #getPrioritizedAdaptersFor(String, String)}). Levels whose scope ID is
+   * <code>null</code> or not configured are skipped, so the resolver may be used
+   * for adapter-, module-, workflow- and task-scoped lookups alike.
+   * <p>
+   * A scope which is "present but empty" is treated exactly like a missing scope
+   * (the extractor returns <code>null</code> for both) - scope materialization
+   * differs per binder and must not influence the resolution.
+   *
+   * @param <T> The type of the resolved value
+   * @param workflowModuleId The workflow module ID or <code>null</code>
+   * @param bpmnProcessId The BPMN process ID or <code>null</code>
+   * @param taskId The task ID (task definition) or <code>null</code>
+   * @param adapterId The adapter ID
+   * @param valueExtractor Extracts the value from a level's adapter-scoped
+   *          properties; has to return <code>null</code> if the value is not set at
+   *          that level
+   * @return The most specific value configured or <code>null</code>
+   */
+  public <T> T resolveForAdapter(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String taskId,
+      final String adapterId,
+      final Function<AdapterProperties, T> valueExtractor) {
+
+    final var workflowModule = workflowModuleId != null
+        ? workflowModules.get(workflowModuleId)
+        : null;
+    final var workflow = (workflowModule != null) && (bpmnProcessId != null)
+        ? workflowModule.getWorkflows().get(bpmnProcessId)
+        : null;
+    final var task = (workflow != null) && (taskId != null)
+        ? workflow.getTasks().get(taskId)
+        : null;
+
+    if (task != null) {
+      final var value = extractForAdapter(task.getAdapters(), adapterId, valueExtractor);
+      if (value != null) {
+        return value;
+      }
+    }
+    if (workflow != null) {
+      final var value = extractForAdapter(workflow.getAdapters(), adapterId, valueExtractor);
+      if (value != null) {
+        return value;
+      }
+    }
+    if (workflowModule != null) {
+      final var value = extractForAdapter(workflowModule.getAdapters(), adapterId, valueExtractor);
+      if (value != null) {
+        return value;
+      }
+    }
+    return extractForAdapter(adapters, adapterId, valueExtractor);
+
+  }
+
+  private static <T> T extractForAdapter(
+      final Map<String, ? extends AdapterProperties> adaptersOfLevel,
+      final String adapterId,
+      final Function<AdapterProperties, T> valueExtractor) {
+
+    final var adapter = adaptersOfLevel.get(adapterId);
+    return adapter != null
+        ? valueExtractor.apply(adapter)
+        : null;
 
   }
 

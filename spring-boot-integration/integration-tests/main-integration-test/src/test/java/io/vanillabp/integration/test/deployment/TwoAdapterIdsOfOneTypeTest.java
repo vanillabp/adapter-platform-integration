@@ -1,35 +1,77 @@
 package io.vanillabp.integration.test.deployment;
 
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.ResolvableType;
 
 import io.vanillabp.adapter.dummy.springboot.DummyAdapterConfiguration;
-import io.vanillabp.adapter.dummy.springboot.deployment.DummyAdapterDeploymentConfiguration;
 import io.vanillabp.adapter.dummy.springboot.processservice.DummyAdapterProcessServiceConfiguration;
+import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
+import io.vanillabp.integration.adapter.spi.MigratableProcessService;
+import io.vanillabp.integration.processservice.ProcessServiceSpringBean;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
+import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.test.TestPersistenceConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
+import io.vanillabp.integration.test.sample.Aggregate;
 import io.vanillabp.integration.test.sample.SampleWorkflowService;
+import io.vanillabp.integration.test.utils.CapturedOutput;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.springboot.SpringBootTestApplication;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
+import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Documents the current, honest behavior for TWO adapter ids of ONE type (B2
- * regression test at the platform level): the dummy adapter builds a single process
- * service serving the first configured id only, so the election's fail-fast fires at
- * startup with a guiding message naming the unserved adapter id - workflows must
- * never silently start in the wrong BPMS. Full per-adapter-id multiplicity is
- * introduced by the adapter-config-model story (26d), which will turn this failure
- * into a green boot.
+ * Acceptance test of the per-adapter-id bean convention (adapter-config-model story
+ * 26d) - the structural foundation of the migration scenario: TWO adapter ids of ONE
+ * type boot together, the adapter registers one {@code MigratableProcessService} and
+ * one {@code AdapterDeploymentService} element bean PER configured id, BOTH
+ * deployment services receive {@code deployResources}, and a workflow module
+ * prioritizing one id starts its workflows there only.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TwoAdapterIdsOfOneTypeTest {
+
+  /**
+   * Persistence double for the sample aggregate (the stubbed SpringDataUtil of
+   * {@link TestPersistenceConfiguration} fails loudly on any use).
+   */
+  @Configuration
+  static class AggregatePersistenceConfiguration {
+
+    @Bean
+    AggregatePersistenceAware<Aggregate> testAggregatePersistence() {
+
+      return new AggregatePersistenceAware<>() {
+
+        @Override
+        public Class<Aggregate> getAggregateClass() {
+          return Aggregate.class;
+        }
+
+        @Override
+        public Aggregate save(
+            final Aggregate aggregate) {
+          return aggregate;
+        }
+
+        @Override
+        public Object getAggregateId(
+            final Aggregate aggregate) {
+          return "4711";
+        }
+
+      };
+
+    }
+
+  }
 
   private static final String APPLICATION_YAML = """
       vanillabp:
@@ -44,6 +86,9 @@ public class TwoAdapterIdsOfOneTypeTest {
             type: dummy
         workflow-modules:
           test-module:
+            prioritized-adapters:
+              - test2
+              - test
             adapters:
               test:
                 resources-location: classpath*:test-module/processes/dummy
@@ -54,7 +99,8 @@ public class TwoAdapterIdsOfOneTypeTest {
       """;
 
   @Test
-  public void secondIdWithoutProcessServiceFailsFastWithGuidingMessage() throws IOException {
+  public void twoIdsOfOneTypeBootWithPerIdBeans(
+      final CapturedOutput output) throws IOException {
 
     try (var testApp = SpringBootTestApplication.builder()
         .addResource("META-INF/workflow-module")
@@ -62,39 +108,65 @@ public class TwoAdapterIdsOfOneTypeTest {
         .addResource("test-module/processes/dummy/dummy-process.bpmn")
         .hideResource("META-INF/workflow-module")
         .hideResource("application.yaml")
-        .build()) {
+        .build(); var context = testApp.applicationBuilder(
+            DummyAdapterConfiguration.class,
+            DummyAdapterProcessServiceConfiguration.class,
+            WorkflowModuleAutoConfiguration.class,
+            SpringBootMigrationAdapterAutoConfiguration.class,
+            TestPersistenceConfiguration.class,
+            SampleWorkflowService.class,
+            WorkflowModuleConfiguration.class,
+            AggregatePersistenceConfiguration.class,
+            DeploymentTest.TestConfig.class)
+            .run()) {
 
-      final var exception = Assertions.assertThrows(
-          Exception.class,
-          () -> testApp.applicationBuilder(
-              DummyAdapterConfiguration.class,
-              DummyAdapterDeploymentConfiguration.class,
-              DummyAdapterProcessServiceConfiguration.class,
-              WorkflowModuleAutoConfiguration.class,
-              SpringBootMigrationAdapterAutoConfiguration.class,
-              TestPersistenceConfiguration.class,
-              SampleWorkflowService.class,
-              WorkflowModuleConfiguration.class)
-              .run()
-              .close());
+      // one MigratableProcessService element bean per configured adapter id
+      final var processServiceIds = context
+          .getBeanProvider(MigratableProcessService.class)
+          .stream()
+          .map(processService -> ((MigratableProcessService<?>) processService).getAdapterId())
+          .collect(Collectors.toSet());
+      Assertions.assertEquals(java.util.Set.of("test", "test2"), processServiceIds);
 
-      // find the election's guiding message in the failure chain (rendered as a
-      // stack trace since Spring nests the causes over several exception types)
-      final var stringWriter = new StringWriter();
-      exception.printStackTrace(new PrintWriter(stringWriter));
-      final var failure = stringWriter.toString();
+      // one AdapterDeploymentService element bean per configured adapter id
+      final var deploymentServiceIds = context
+          .getBeanProvider(AdapterDeploymentService.class)
+          .stream()
+          .map(deploymentService -> ((AdapterDeploymentService<?, ?>) deploymentService).getAdapterId())
+          .collect(Collectors.toSet());
+      Assertions.assertEquals(java.util.Set.of("test", "test2"), deploymentServiceIds);
 
-      // the dummy adapter's single process service serves ONE of the two configured
-      // ids (which one depends on the adapter-map iteration order) - the OTHER id
-      // is unserved and has to be named by the guiding message
+      // BOTH deployment services received deployResources
+      final var capturedOutput = output.getAll();
       Assertions.assertTrue(
-          failure.contains("No VanillaBP adapter serves the prioritized adapter id 'test"),
-          "expected the unserved adapter id in the guiding message but got: "
-              + failure);
-      Assertions.assertTrue(failure.contains("test-module"));
-      Assertions.assertTrue(failure.contains("SampleWorkflowService"));
-      Assertions.assertTrue(failure.contains("classpath"));
-      Assertions.assertTrue(failure.contains("vanillabp.prioritized-adapters"));
+          capturedOutput.contains("Dummy-Adapter[test]: Deploying resources for test-module"),
+          "expected deployment of id 'test' but got: "
+              + capturedOutput);
+      Assertions.assertTrue(
+          capturedOutput.contains("Dummy-Adapter[test2]: Deploying resources for test-module"),
+          "expected deployment of id 'test2' but got: "
+              + capturedOutput);
+
+      // the module prioritizes id 'test2' - a started workflow runs phase one
+      // there and NEVER touches id 'test'
+      @SuppressWarnings("unchecked")
+      final ProcessService<Aggregate> processService = (ProcessService<Aggregate>) context
+          .getBeanProvider(ResolvableType
+              .forClassWithGenerics(ProcessService.class, Aggregate.class))
+          .getObject();
+      Assertions.assertInstanceOf(ProcessServiceSpringBean.class, processService);
+
+      processService.startWorkflow(new Aggregate());
+
+      final var afterStart = output.getAll();
+      Assertions.assertTrue(
+          afterStart.contains("Dummy-Adapter[test2]: Starting workflow (phase one)"),
+          "expected phase one on the module's first-priority id 'test2' but got: "
+              + afterStart);
+      Assertions.assertFalse(
+          afterStart.contains("Dummy-Adapter[test]: Starting workflow (phase one)"),
+          "id 'test' must never be touched for this module but got: "
+              + afterStart);
 
     }
 

@@ -13,6 +13,7 @@ import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
+import io.vanillabp.integration.adapter.migration.config.TaskAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
 
@@ -67,6 +68,9 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
   @Mapping(target = "prioritizedAdapters", qualifiedByName = "unwrapStringList")
   WorkflowAdapterProperties toCore(
       QuarkusMigrationAdapterProperties.WorkflowProperties workflowProperties);
+
+  TaskAdapterProperties toCore(
+      QuarkusMigrationAdapterProperties.TaskProperties taskProperties);
 
   /**
    * Unwraps optional scalar values ({@code Optional.empty()} becomes {@code null},

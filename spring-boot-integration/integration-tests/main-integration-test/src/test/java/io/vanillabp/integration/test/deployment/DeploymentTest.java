@@ -11,7 +11,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import io.vanillabp.adapter.dummy.springboot.DummyAdapterConfiguration;
-import io.vanillabp.adapter.dummy.springboot.deployment.DummyAdapterDeploymentConfiguration;
 import io.vanillabp.adapter.dummy.springboot.processservice.DummyAdapterProcessServiceConfiguration;
 import io.vanillabp.extension.dummy.springboot.wiring.DummyExtensionWiringConfiguration;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
@@ -65,7 +64,6 @@ public class DeploymentTest {
         .hideResource("META-INF/workflow-module")
         .build(); var context = testApp.applicationBuilder(
             DummyAdapterConfiguration.class,
-            DummyAdapterDeploymentConfiguration.class,
             DummyAdapterProcessServiceConfiguration.class,
             DummyExtensionWiringConfiguration.class,
             WorkflowModuleAutoConfiguration.class,
@@ -82,7 +80,7 @@ public class DeploymentTest {
       final var prepareBpmn = "Dummy-Adapter: Preparing BPMN for test-module";
       final var adapterWiring = "Dummy-Adapter: Wiring BPMN for test-module";
       final var extensionWiring = "Dummy-Extension: Wiring BPMN for test-module";
-      final var deployResources = "Dummy-Adapter: Deploying resources for test-module";
+      final var deployResources = "Dummy-Adapter[test]: Deploying resources for test-module";
       final var appStarted = "seconds (process running for";
       final var adapterStartProcessing = "Dummy-Adapter: Starting workflow processing for test-module";
       final var extensionStartProcessing = "Dummy-Extension: Starting workflow processing for test-module";

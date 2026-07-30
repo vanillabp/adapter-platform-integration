@@ -13,12 +13,17 @@ import lombok.experimental.SuperBuilder;
  * migration adapter. BPMS adapters contribute their own keys to the same
  * properties section (e.g. connection settings) by binding an overlay view of
  * the <code>vanillabp.*</code> tree - those keys are not modeled here.
+ * <p>
+ * Extends {@link AdapterProperties}: this section is the least specific level of
+ * the most-specific-wins resolution of adapter-scoped properties (see
+ * {@link MigrationAdapterProperties#resolveForAdapter}), so it carries the same
+ * per-level keys as the workflow-module, workflow and task levels.
  */
 @Getter
 @Setter
 @NoArgsConstructor
 @SuperBuilder
-public class AdapterConfigProperties {
+public class AdapterConfigProperties extends AdapterProperties {
 
   /**
    * The adapter's type in case of a custom adapter identifier or null in case

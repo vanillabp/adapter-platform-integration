@@ -12,7 +12,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import io.vanillabp.adapter.dummy.springboot.DummyAdapterConfiguration;
-import io.vanillabp.adapter.dummy.springboot.deployment.DummyAdapterDeploymentConfiguration;
 import io.vanillabp.adapter.dummy.springboot.processservice.DummyAdapterProcessServiceConfiguration;
 import io.vanillabp.integration.adapter.AdapterConfigurationBase;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
@@ -232,7 +231,6 @@ public class TwoAdapterTypesDeploymentTest {
         .hideResource("application.yaml")
         .build(); var context = testApp.applicationBuilder(
             DummyAdapterConfiguration.class,
-            DummyAdapterDeploymentConfiguration.class,
             DummyAdapterProcessServiceConfiguration.class,
             SecondAdapterConfiguration.class,
             SecondAdapterBeans.class,
@@ -250,7 +248,7 @@ public class TwoAdapterTypesDeploymentTest {
 
       // both adapters' deployment services have to receive deployResources
       Assertions.assertTrue(
-          capturedOutput.contains("Dummy-Adapter: Deploying resources for test-module"),
+          capturedOutput.contains("Dummy-Adapter[test]: Deploying resources for test-module"),
           "dummy adapter has to deploy. Captured output: "
               + capturedOutput);
       Assertions.assertTrue(

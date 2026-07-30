@@ -34,15 +34,22 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
 
   private record AdapterConfiguration(
                                       Optional<String> type,
-                                      Optional<DeploymentFailurePolicy> deploymentFailure) implements QuarkusMigrationAdapterProperties.AdapterConfiguration {
+                                      Optional<DeploymentFailurePolicy> deploymentFailure,
+                                      Optional<String> resourcesLocation) implements QuarkusMigrationAdapterProperties.AdapterConfiguration {
   }
 
   private record AdapterProperties(
-                                   String resourcesLocation) implements QuarkusMigrationAdapterProperties.AdapterProperties {
+                                   Optional<String> resourcesLocation) implements QuarkusMigrationAdapterProperties.AdapterProperties {
+  }
+
+  private record TaskProperties(
+                                Map<String, QuarkusMigrationAdapterProperties.AdapterProperties> adapters) implements QuarkusMigrationAdapterProperties.TaskProperties {
   }
 
   private record WorkflowProperties(
-                                    Optional<List<String>> prioritizedAdapters) implements QuarkusMigrationAdapterProperties.WorkflowProperties {
+                                    Optional<List<String>> prioritizedAdapters,
+                                    Map<String, QuarkusMigrationAdapterProperties.AdapterProperties> adapters,
+                                    Map<String, QuarkusMigrationAdapterProperties.TaskProperties> tasks) implements QuarkusMigrationAdapterProperties.WorkflowProperties {
   }
 
   private record WorkflowModuleProperties(
@@ -74,13 +81,20 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     final var properties = new Properties(
         Optional.of(List.of("c8-cloud", "c7")), Optional.of("classpath*:vanillabp-processes"), Map.of(
             "c8-cloud", new AdapterConfiguration(
-                Optional.of("camunda8"), Optional.of(DeploymentFailurePolicy.WARN)),
-            "c7", new AdapterConfiguration(Optional.empty(), Optional.empty())), Map.of(
+                Optional.of("camunda8"), Optional.of(DeploymentFailurePolicy.WARN), Optional.of("adapter-level")),
+            "c7", new AdapterConfiguration(Optional.empty(), Optional.empty(), Optional.empty())), Map.of(
                 "loan-approval", new WorkflowModuleProperties(
-                    Optional.of(List.of("c7")), Map.of("c7", new AdapterProperties("classpath:c7-bpmn")), Map
-                        .of("LoanApproval",
-                            new WorkflowProperties(Optional.of(List.of("c8-cloud")))))), new OutboxProperties(
-                                Duration.ofSeconds(1), Duration.ofSeconds(2), 3, false, Duration.ofDays(1)));
+                    Optional.of(List.of("c7")), Map.of("c7",
+                        new AdapterProperties(Optional.of("classpath:c7-bpmn"))), Map
+                            .of("LoanApproval",
+                                new WorkflowProperties(
+                                    Optional.of(List.of("c8-cloud")), Map
+                                        .of("c8-cloud", new AdapterProperties(Optional.of("workflow-level"))), Map
+                                            .of("assessRisk", new TaskProperties(Map
+                                                .of("c8-cloud", new AdapterProperties(Optional
+                                                    .of("task-level"))))))))), new OutboxProperties(
+                                                        Duration.ofSeconds(1), Duration.ofSeconds(2), 3, false, Duration
+                                                            .ofDays(1)));
 
     final var core = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(properties);
 
@@ -97,9 +111,13 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     final var module = core.getWorkflowModules().get("loan-approval");
     assertEquals(List.of("c7"), module.getPrioritizedAdapters());
     assertEquals("classpath:c7-bpmn", module.getAdapters().get("c7").getResourcesLocation());
+    final var workflow = module.getWorkflows().get("LoanApproval");
+    assertEquals(List.of("c8-cloud"), workflow.getPrioritizedAdapters());
+    assertEquals("workflow-level", workflow.getAdapters().get("c8-cloud").getResourcesLocation());
     assertEquals(
-        List.of("c8-cloud"),
-        module.getWorkflows().get("LoanApproval").getPrioritizedAdapters());
+        "task-level",
+        workflow.getTasks().get("assessRisk").getAdapters().get("c8-cloud").getResourcesLocation());
+    assertEquals("adapter-level", core.getAdapters().get("c8-cloud").getResourcesLocation());
 
     assertEquals(Duration.ofSeconds(1), core.getOutbox().getPollInterval());
     assertEquals(Duration.ofSeconds(2), core.getOutbox().getAttemptFrequency());

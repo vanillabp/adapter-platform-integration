@@ -105,6 +105,42 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
+   * Keeps the adapters' per-adapter-id List beans from being removed: adapters
+   * produce ONE bean of type <code>List&lt;MigratableProcessService&gt;</code> /
+   * <code>List&lt;AdapterDeploymentService&gt;</code> with one instance per
+   * configured adapter id (a CDI producer cannot yield N element beans for N
+   * runtime-configured ids). The platform collects them via
+   * <code>Instance&lt;List&lt;...&gt;&gt;</code> lookups only - without this build
+   * item ArC treats the producers as unused and removes them.
+   * <p>
+   * Convention (part of the per-adapter-id contract): the List's element type is
+   * the SPI interface itself (e.g.
+   * <code>List&lt;MigratableProcessService&lt;Object&gt;&gt;</code>), not an
+   * adapter-specific subclass - the type is matched literally here.
+   *
+   * @return The unremovable-bean build item
+   */
+  @BuildStep
+  io.quarkus.arc.deployment.UnremovableBeanBuildItem keepPerAdapterIdListBeans() {
+
+    final var listName = org.jboss.jandex.DotName.createSimple(List.class.getName());
+    final var elementTypes = java.util.Set.of(
+        org.jboss.jandex.DotName.createSimple(
+            io.vanillabp.integration.adapter.spi.MigratableProcessService.class.getName()),
+        org.jboss.jandex.DotName.createSimple(
+            io.vanillabp.integration.adapter.spi.AdapterDeploymentService.class.getName()));
+
+    return new io.quarkus.arc.deployment.UnremovableBeanBuildItem(
+        beanInfo -> beanInfo
+            .getTypes()
+            .stream()
+            .anyMatch(type -> (type.kind() == org.jboss.jandex.Type.Kind.PARAMETERIZED_TYPE) && type.name()
+                .equals(listName) && (type.asParameterizedType().arguments().size() == 1) && elementTypes
+                    .contains(type.asParameterizedType().arguments().getFirst().name())));
+
+  }
+
+  /**
    * Registers the core-owned phase-two router (via {@link PhaseTwoRouterProducer}):
    * the generated process-service beans register themselves with it at bean
    * creation, and the phase-two outbox dispatches committed entries through it. It

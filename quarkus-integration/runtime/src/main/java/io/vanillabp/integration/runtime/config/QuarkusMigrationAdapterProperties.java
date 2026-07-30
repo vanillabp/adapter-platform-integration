@@ -93,17 +93,29 @@ public interface QuarkusMigrationAdapterProperties {
      */
     Optional<DeploymentFailurePolicy> deploymentFailure();
 
+    /**
+     * Where to load BPMN files from, which are specific to the adapter. This
+     * section is the least specific level of the most-specific-wins resolution of
+     * adapter-scoped properties, so it carries the same per-level keys as the
+     * workflow-module, workflow and task levels.
+     */
+    Optional<String> resourcesLocation();
+
   }
 
   /**
-   * The adapter properties.
+   * The adapter properties of a level of the most-specific-wins resolution of
+   * adapter-scoped properties (workflow module, workflow or task).
    */
   interface AdapterProperties {
 
     /**
-     * Where to load BPMN files from, which are specific to the adapter
+     * Where to load BPMN files from, which are specific to the adapter. Optional:
+     * an adapter section of a level may carry only adapter-specific keys (the
+     * missing resources location is validated with a guiding message by the core
+     * where it is actually required).
      */
-    String resourcesLocation();
+    Optional<String> resourcesLocation();
 
   }
 
@@ -202,6 +214,31 @@ public interface QuarkusMigrationAdapterProperties {
      * @see QuarkusMigrationAdapterProperties#prioritizedAdapters()
      */
     Optional<List<String>> prioritizedAdapters();
+
+    /**
+     * The properties of adapters specific to this workflow.
+     */
+    Map<String, AdapterProperties> adapters();
+
+    /**
+     * The properties of the workflow's BPMN tasks. The key is the task ID (task
+     * definition). Structural preparation for task-scoped adapter configuration -
+     * no consumer yet.
+     */
+    Map<String, TaskProperties> tasks();
+
+  }
+
+  /**
+   * The properties of a single BPMN task of a workflow - the MOST specific level of
+   * the most-specific-wins resolution of adapter-scoped properties.
+   */
+  interface TaskProperties {
+
+    /**
+     * The properties of adapters specific to this task.
+     */
+    Map<String, AdapterProperties> adapters();
 
   }
 
