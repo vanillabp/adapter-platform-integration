@@ -41,7 +41,9 @@ public class PhaseTwoRouterTest {
   @DisplayName("Dispatch converts the serialized aggregate ID exactly once and calls the typed method")
   public void dispatchConvertsIdAndCallsTypedMethod() {
 
-    testee.register(processService, Long::valueOf);
+    when(processService.convertAggregateId("42")).thenReturn(42L);
+
+    testee.register(processService);
 
     testee.dispatch(new PhaseTwoCall(
         PhaseTwoOperation.START_WORKFLOW, "test-module", "TestProcess", "42", "test-adapter", Map.of()));
@@ -54,7 +56,7 @@ public class PhaseTwoRouterTest {
   @DisplayName("Dispatch for an unknown BPMN process fails with a guiding message")
   public void dispatchFailsOnUnknownProcess() {
 
-    testee.register(processService, Long::valueOf);
+    testee.register(processService);
 
     final var exception = assertThrowsExactly(
         IllegalStateException.class,

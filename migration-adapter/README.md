@@ -124,8 +124,13 @@ the local transaction, starting is split into two phases
   BPMS only lock/validate.
 - **Phase two** runs after the local commit. For adapters reporting
   `needsTwoPhaseCommitForStartingWorkflows()`, the phase-two call is scheduled via
-  the *transaction outbox* SPI `PhaseTwoOutbox`. If such an adapter is used but no
-  `PhaseTwoOutbox` is available, starting a workflow fails hard.
+  the *transaction outbox* SPI `PhaseTwoOutbox`. The outbox is resolved PER
+  AGGREGATE via the platform's `PhaseTwoOutboxResolver` (user-defined
+  `PhaseTwoOutboxAware` beans first, then the platform's default selection) - AT
+  STARTUP, by `MigrationProcessService.validatePhaseTwoOutboxAtStartup()`: if the
+  first-priority adapter needs a two-phase commit and no outbox resolves, the boot
+  fails with a guiding message naming the remedies (the same message remains as a
+  runtime backstop).
 
 A scheduled call is described by the immutable value type `PhaseTwoCall`
 (operation, workflow module, BPMN process, workflow-aggregate ID in serialized
@@ -140,9 +145,12 @@ ProcessService ──► PhaseTwoOutbox (store) ──► PhaseTwoRouter ──�
 
 The core-owned `PhaseTwoRouter` holds a registry `(workflowModuleId, bpmnProcessId)
 → MigrationProcessService`, filled by the platform integration at bean-creation
-time together with a converter turning the serialized aggregate ID back into the
-aggregate's ID type (the platform knows the persistence layer — conversion happens
-exactly once, in the router). For `START_WORKFLOW` the adapter elected in phase one
+time. The serialized aggregate ID is converted back into the aggregate's ID type by
+the process service itself (`convertAggregateId`, backed by
+`AggregatePersistenceAware.getAggregateIdType()` and the core's
+`AggregateIdRoundTrip` - the type is validated at startup to round-trip losslessly;
+a `null` type means the custom persistence layer owns the serialized form and the
+String is passed through). For `START_WORKFLOW` the adapter elected in phase one
 **is persisted with the outbox entry** and used in phase two — no re-election from
 the then-current priorities. If the adapter was removed from the configuration
 while the entry was still open (stale entry), dispatching fails with a guiding

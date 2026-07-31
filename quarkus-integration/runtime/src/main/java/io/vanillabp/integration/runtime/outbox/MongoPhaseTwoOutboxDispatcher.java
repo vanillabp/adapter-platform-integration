@@ -73,7 +73,28 @@ public class MongoPhaseTwoOutboxDispatcher {
   @Inject
   Instance<PhaseTwoRouter> phaseTwoRouter;
 
-  private PhaseTwoOutboxProperties properties;
+  private volatile PhaseTwoOutboxProperties properties;
+
+  /**
+   * The outbox configuration (<code>vanillabp.outbox.*</code>), loaded lazily so
+   * {@link MongoPhaseTwoOutbox} can resolve its collection even before the startup
+   * event was observed.
+   *
+   * @return The outbox configuration
+   */
+  PhaseTwoOutboxProperties getProperties() {
+
+    if (properties == null) {
+      properties = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(
+          ConfigProvider
+              .getConfig()
+              .unwrap(SmallRyeConfig.class)
+              .getConfigMapping(QuarkusMigrationAdapterProperties.class)
+              .outbox());
+    }
+    return properties;
+
+  }
 
   private ScheduledExecutorService executor;
 
@@ -92,12 +113,11 @@ public class MongoPhaseTwoOutboxDispatcher {
       return;
     }
 
-    properties = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(
-        ConfigProvider
-            .getConfig()
-            .unwrap(SmallRyeConfig.class)
-            .getConfigMapping(QuarkusMigrationAdapterProperties.class)
-            .outbox());
+    getProperties();
+    if (!properties.getMongo().isEnabled()) {
+      log.debug("'vanillabp.outbox.mongo.enabled' is false - the MongoDB-based phase-two outbox stays inactive");
+      return;
+    }
 
     if (properties.isCreateSchema()) {
       outboxCollection().createIndex(
@@ -159,7 +179,9 @@ public class MongoPhaseTwoOutboxDispatcher {
     return mongoClient
         .get()
         .getDatabase(database)
-        .getCollection(MongoPhaseTwoOutbox.COLLECTION);
+        .getCollection(getProperties()
+            .getMongo()
+            .getCollection());
 
   }
 

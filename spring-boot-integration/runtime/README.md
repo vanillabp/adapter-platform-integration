@@ -118,16 +118,33 @@ workflow within the local transaction and dispatches it reliably after the commi
 through the core-owned `PhaseTwoRouter` (see the
 [migration adapter's README](../../migration-adapter/README.md) for the chain and
 the outbox contract — idempotency key, DONE instead of delete, retention). Each
-`ProcessServiceSpringBean` registers itself with the router at bean creation,
-including the converter turning the serialized aggregate ID back into the
-aggregate's ID type: Spring-Data managed aggregates use `SpringDataUtil.getIdType`;
-for aggregates NOT managed by Spring Data (custom `AggregatePersistenceAware`
-implementations) the serialized String is passed through unchanged instead of
-failing. This module provides two
+`ProcessServiceSpringBean` registers itself with the router at bean creation; the
+serialized aggregate ID is converted back to the aggregate's ID type by the CORE
+(`MigrationProcessService.convertAggregateId`, based on
+`AggregatePersistenceAware.getAggregateIdType()` - Spring Data implementations
+answer authoritatively, a `null` ID type means the custom persistence layer owns
+the serialized form and the String is passed through unchanged).
+
+The outbox is selected **per workflow aggregate** (story 26i): the most specific
+`PhaseTwoOutboxAware` bean wins; without one, the platform default matching the
+persistence technology managing the aggregate is used (detected from the
+aggregate's Spring Data repository type - `SpringPhaseTwoOutboxResolver`). Both
+defaults may be active in the SAME application (mixed persistence), each entry
+riding its aggregate's own transaction. Resolution happens AT STARTUP
+(`SmartInitializingSingleton` in the auto-configuration) for every process service
+whose first-priority adapter needs a two-phase commit - a missing outbox fails the
+boot naming the remedies. Every outbox instance needs its OWN store: two
+dispatchers polling the same store would compete and double-dispatch (dedicated
+stores are configured via `vanillabp.outbox.jdbc.table` /
+`vanillabp.outbox.mongo.collection`, or set up as additional user-defined beans -
+see the `outbox-mixed-integration-test` for the recipe).
+
+This module provides two
 default implementations, both configured by the `vanillabp.outbox.*` properties
 (`poll-interval`, `attempt-frequency`, `block-after-attempts`, `create-schema`,
-`retention`) and
-both only active if the application does not define its own `PhaseTwoOutbox` bean:
+`retention`, plus per-default `jdbc.*`/`mongo.*` sections with `enabled` flags and
+store names). The defaults coexist with user-defined `PhaseTwoOutbox` beans -
+disable an unwanted default via its `enabled` flag:
 
 1. **JPA (gruelbox-based):** `GruelboxPhaseTwoOutboxAutoConfiguration` sets up a
    [gruelbox transaction-outbox](https://github.com/gruelbox/transaction-outbox)
@@ -146,7 +163,13 @@ both only active if the application does not define its own `PhaseTwoOutbox` bea
    `TXNO_OUTBOX` is created by gruelbox's auto-DDL — set
    `vanillabp.outbox.create-schema: false` to manage the schema manually (use
    gruelbox's `DefaultPersistor.writeSchema(Writer)` or the DDL from the gruelbox
-   documentation for your database).
+   documentation for your database). NOTE: gruelbox's migrations always target the
+   DEFAULT table, so a custom `vanillabp.outbox.jdbc.table` requires that table
+   (structured like `TXNO_OUTBOX`) to be created manually. The default's beans
+   reference each other BY NAME (`vanillaBpTransactionOutbox`), so additional
+   user-defined gruelbox instances (e.g. a dedicated hot-process outbox) do not
+   suppress the default; with several transaction managers (mixed persistence)
+   the JDBC/JPA one has to be named `transactionManager`.
 2. **MongoDB (own implementation, gruelbox is JDBC-only):** `MongoPhaseTwoOutbox`
    writes entries into the collection `vanillabp-phase-two-outbox` via
    `MongoTemplate` within the current transaction, persisting all `PhaseTwoCall`

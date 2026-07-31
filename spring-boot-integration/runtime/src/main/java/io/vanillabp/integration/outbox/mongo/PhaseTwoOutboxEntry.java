@@ -12,7 +12,7 @@ import lombok.Setter;
 
 /**
  * A single entry of the MongoDB-based phase-two outbox, stored in the collection
- * {@link MongoPhaseTwoOutbox#COLLECTION}. The entry persists the fields of a
+ * the configured collection (<code>vanillabp.outbox.mongo.collection</code>). The entry persists the fields of a
  * {@link io.vanillabp.integration.adapter.spi.PhaseTwoCall} - the workflow
  * aggregate's ID in its serialized (String) form; conversion back to the aggregate's
  * ID type happens in the core's router at dispatch time.

@@ -52,6 +52,13 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
   PhaseTwoOutboxProperties toCore(
       QuarkusMigrationAdapterProperties.PhaseTwoOutboxProperties outboxProperties);
 
+  @Mapping(target = "table", qualifiedByName = "unwrapString")
+  PhaseTwoOutboxProperties.JdbcOutboxProperties toCore(
+      QuarkusMigrationAdapterProperties.JdbcOutboxProperties jdbcOutboxProperties);
+
+  PhaseTwoOutboxProperties.MongoOutboxProperties toCore(
+      QuarkusMigrationAdapterProperties.MongoOutboxProperties mongoOutboxProperties);
+
   AdapterConfigProperties toCore(
       QuarkusMigrationAdapterProperties.AdapterConfiguration adapterConfiguration);
 
@@ -94,6 +101,21 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
    * @param value The optional list
    * @return The unwrapped list or an empty list
    */
+  /**
+   * Unwraps an optional string ({@code Optional.empty()} becomes {@code null},
+   * matching the core model's "platform default" semantic).
+   *
+   * @param value The optional string
+   * @return The unwrapped string or {@code null}
+   */
+  @Named("unwrapString")
+  default String unwrapString(
+      final Optional<String> value) {
+
+    return value.orElse(null);
+
+  }
+
   @Named("unwrapStringList")
   default List<String> unwrapList(
       final Optional<List<String>> value) {

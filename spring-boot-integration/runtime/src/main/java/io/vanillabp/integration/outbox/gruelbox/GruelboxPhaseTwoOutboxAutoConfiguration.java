@@ -6,8 +6,10 @@ import java.util.Map;
 import javax.sql.DataSource;
 
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnSingleCandidate;
@@ -35,15 +37,17 @@ import jakarta.persistence.EntityManagerFactory;
  * Auto-configuration of the default {@link PhaseTwoOutbox} for JPA-based aggregate
  * persistence, backed by the
  * <a href="https://github.com/gruelbox/transaction-outbox">gruelbox
- * transaction-outbox</a>. Only active under the same conditions as the JPA
- * {@link io.vanillabp.integration.utils.SpringDataUtil} (Spring Data JPA on the
- * classpath, exactly one {@link EntityManagerFactory}) and if the application did not
- * define its own {@link PhaseTwoOutbox} bean. It is ordered before the MongoDB
- * implementation: if both JPA and MongoDB are configured, JPA wins deterministically -
- * consistent with the {@link io.vanillabp.integration.utils.SpringDataUtil}
- * auto-configurations.
+ * transaction-outbox</a>. Active whenever Spring Data JPA is on the classpath and
+ * exactly one {@link EntityManagerFactory} exists - it COEXISTS with the MongoDB
+ * default: each workflow aggregate is served by the outbox matching its persistence
+ * (selection per aggregate, see
+ * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutboxAware}), so outbox
+ * entries always ride the aggregate's own transaction even in mixed-persistence
+ * applications. Disable via <code>vanillabp.outbox.jdbc.enabled</code> if the
+ * default (including its table and background dispatcher) is unwanted.
  * <p>
- * The outbox table (<code>TXNO_OUTBOX</code>) is created automatically via gruelbox's
+ * The outbox table (<code>TXNO_OUTBOX</code>, override via
+ * <code>vanillabp.outbox.jdbc.table</code>) is created automatically via gruelbox's
  * schema migration unless <code>vanillabp.outbox.create-schema</code> is set to
  * <code>false</code> (see the module's <code>README.md</code> for managing the schema
  * manually).
@@ -70,9 +74,24 @@ import jakarta.persistence.EntityManagerFactory;
 @ConditionalOnBean({
     DataSource.class, PlatformTransactionManager.class
 })
-@ConditionalOnMissingBean(PhaseTwoOutbox.class)
+@ConditionalOnBooleanProperty(name = "vanillabp.outbox.jdbc.enabled", matchIfMissing = true)
 @EnableConfigurationProperties(VanillaBpConfigurationProperties.class)
 public class GruelboxPhaseTwoOutboxAutoConfiguration {
+
+  /**
+   * The name of the default JPA/gruelbox outbox bean - used by the resolver to
+   * attribute JPA-persisted aggregates to THE default when several outbox beans
+   * exist.
+   */
+  public static final String DEFAULT_OUTBOX_BEAN_NAME = "vanillaBpGruelboxPhaseTwoOutbox";
+
+  /**
+   * The name of the default gruelbox {@link TransactionOutbox} bean. The default's
+   * beans reference each other BY NAME so an application may define additional
+   * gruelbox instances (e.g. a dedicated outbox on its own table for a high-load
+   * process) without suppressing or confusing the default.
+   */
+  public static final String DEFAULT_TRANSACTION_OUTBOX_BEAN_NAME = "vanillaBpTransactionOutbox";
 
   /**
    * The gruelbox {@link TransactionOutbox} enlisting entries in Spring-managed JDBC
@@ -80,31 +99,41 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
    * from the application context.
    *
    * @param applicationContext Used to resolve the scheduled bean at dispatch time
-   * @param transactionManager The Spring transaction manager entries are enlisted with
+   * @param transactionManagers All Spring transaction managers; entries are
+   *          enlisted with the JDBC/JPA one (see
+   *          {@link #selectJdbcTransactionManager(Map)})
    * @param dataSource The data source storing the outbox table
    * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree carrying the
    *          <code>vanillabp.outbox</code> section (registered here as well so the
    *          outbox works in contexts without the full VanillaBP auto-configuration)
    * @return The transaction outbox
    */
-  @Bean
-  @ConditionalOnMissingBean(TransactionOutbox.class)
+  @Bean(DEFAULT_TRANSACTION_OUTBOX_BEAN_NAME)
+  @ConditionalOnMissingBean(name = DEFAULT_TRANSACTION_OUTBOX_BEAN_NAME)
   public TransactionOutbox vanillaBpTransactionOutbox(
       final ApplicationContext applicationContext,
-      final PlatformTransactionManager transactionManager,
+      final Map<String, PlatformTransactionManager> transactionManagers,
       final DataSource dataSource,
       final VanillaBpConfigurationProperties vanillaBpProperties) {
 
     final var properties = vanillaBpProperties.getOutbox();
+    // the gruelbox migration always targets the DEFAULT table (TXNO_OUTBOX) - a
+    // custom table name therefore requires the table to be created manually (see
+    // 'vanillabp.outbox.jdbc.table')
+    final var customTable = properties.getJdbc().getTable();
+    final var persistorBuilder = DefaultPersistor
+        .builder()
+        .dialect(detectDialect(dataSource))
+        .migrate(properties.isCreateSchema() && (customTable == null));
+    if (customTable != null) {
+      persistorBuilder.tableName(customTable);
+    }
     return TransactionOutbox
         .builder()
-        .transactionManager(new SpringTransactionManager(transactionManager, dataSource))
+        .transactionManager(new SpringTransactionManager(
+            selectJdbcTransactionManager(transactionManagers), dataSource))
         .instantiator(new SpringInstantiator(applicationContext))
-        .persistor(DefaultPersistor
-            .builder()
-            .dialect(detectDialect(dataSource))
-            .migrate(properties.isCreateSchema())
-            .build())
+        .persistor(persistorBuilder.build())
         .attemptFrequency(properties.getAttemptFrequency())
         .blockAfterAttempts(properties.getBlockAfterAttempts())
         .retentionThreshold(properties.getRetention())
@@ -117,9 +146,9 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
    * @param transactionOutbox The gruelbox transaction outbox
    * @return The {@link PhaseTwoOutbox} used by the process services
    */
-  @Bean
+  @Bean(DEFAULT_OUTBOX_BEAN_NAME)
   public GruelboxPhaseTwoOutbox vanillaBpGruelboxPhaseTwoOutbox(
-      final TransactionOutbox transactionOutbox) {
+      @Qualifier(DEFAULT_TRANSACTION_OUTBOX_BEAN_NAME) final TransactionOutbox transactionOutbox) {
 
     return new GruelboxPhaseTwoOutbox(transactionOutbox);
 
@@ -162,10 +191,45 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
    */
   @Bean
   public GruelboxPhaseTwoOutboxDispatcher vanillaBpGruelboxPhaseTwoOutboxDispatcher(
-      final TransactionOutbox transactionOutbox,
+      @Qualifier(DEFAULT_TRANSACTION_OUTBOX_BEAN_NAME) final TransactionOutbox transactionOutbox,
       final VanillaBpConfigurationProperties vanillaBpProperties) {
 
     return new GruelboxPhaseTwoOutboxDispatcher(transactionOutbox, vanillaBpProperties.getOutbox());
+
+  }
+
+  /**
+   * Selects the transaction manager the outbox entries are enlisted with: the JDBC
+   * one - the same transaction persisting JPA workflow aggregates. In
+   * mixed-persistence applications a second (e.g. MongoDB) transaction manager
+   * exists; the JDBC/JPA one is identified by Spring Boot's conventional bean name
+   * <code>transactionManager</code>.
+   *
+   * @param transactionManagers All transaction managers, keyed by bean name
+   * @return The JDBC/JPA transaction manager
+   * @throws IllegalStateException If several transaction managers exist and none is
+   *           named <code>transactionManager</code>
+   */
+  private static PlatformTransactionManager selectJdbcTransactionManager(
+      final Map<String, PlatformTransactionManager> transactionManagers) {
+
+    if (transactionManagers.size() == 1) {
+      return transactionManagers
+          .values()
+          .iterator()
+          .next();
+    }
+    final var conventional = transactionManagers.get("transactionManager");
+    if (conventional != null) {
+      return conventional;
+    }
+    throw new IllegalStateException(
+        """
+            Several transaction managers exist (%s), but none is named 'transactionManager'! The \
+            JDBC-based phase-two outbox enlists its entries with the transaction manager persisting \
+            the JPA workflow aggregates - name that one 'transactionManager' (Spring Boot's \
+            convention) or define your own gruelbox TransactionOutbox bean named '%s'."""
+            .formatted(transactionManagers.keySet(), DEFAULT_TRANSACTION_OUTBOX_BEAN_NAME));
 
   }
 

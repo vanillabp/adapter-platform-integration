@@ -57,6 +57,12 @@ public class MongoPhaseTwoOutboxDispatcher {
 
   private final PhaseTwoOutboxProperties properties;
 
+  /**
+   * The collection polled for outbox entries - the same one its
+   * {@link MongoPhaseTwoOutbox} writes to.
+   */
+  private final String collection;
+
   private ScheduledExecutorService poller;
 
   /**
@@ -123,7 +129,7 @@ public class MongoPhaseTwoOutboxDispatcher {
             .inc("attempts", 1)
             .set("nextAttemptAt", now.plus(properties.getAttemptFrequency()));
         final var entry = mongoTemplate.findAndModify(
-            due, claim, PhaseTwoOutboxEntry.class, MongoPhaseTwoOutbox.COLLECTION);
+            due, claim, PhaseTwoOutboxEntry.class, collection);
         if (entry == null) {
           break;
         }
@@ -165,13 +171,13 @@ public class MongoPhaseTwoOutboxDispatcher {
           new Update()
               .set("status", PhaseTwoOutboxEntry.STATUS_DONE)
               .set("doneAt", Instant.now()),
-          MongoPhaseTwoOutbox.COLLECTION);
+          collection);
     } catch (Exception e) {
       if (entry.getAttempts() + 1 >= properties.getBlockAfterAttempts()) {
         mongoTemplate.updateFirst(
             Query.query(Criteria.where("_id").is(entry.getId())),
             new Update().set("status", PhaseTwoOutboxEntry.STATUS_BLOCKED),
-            MongoPhaseTwoOutbox.COLLECTION);
+            collection);
         log.error(
             "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
                 + "failed {} times - the outbox entry '{}' is now blocked and has to be cleaned up manually!",
@@ -208,7 +214,7 @@ public class MongoPhaseTwoOutboxDispatcher {
             .is(PhaseTwoOutboxEntry.STATUS_DONE)
             .and("doneAt")
             .lt(Instant.now().minus(properties.getRetention()))),
-        MongoPhaseTwoOutbox.COLLECTION);
+        collection);
 
   }
 

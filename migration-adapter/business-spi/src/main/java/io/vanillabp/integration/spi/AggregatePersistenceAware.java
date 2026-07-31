@@ -96,6 +96,32 @@ public interface AggregatePersistenceAware<A> {
   }
 
   /**
+   * Determines the type of the aggregate's ID property. VanillaBP uses it at startup
+   * to validate that the ID round-trips losslessly through the phase-two outbox's
+   * String serialization, and at outbox dispatch to convert the serialized ID back
+   * to this type.
+   * <p>
+   * <b>This default does NOT throw</b> (unlike the other defaults): a
+   * <code>null</code> return means the ID type is not determinable - the custom
+   * persistence layer then owns the serialized form (the ID is passed through as a
+   * String and nothing is validated). The default determines the type by reflection
+   * (see {@link AggregateIdTypes}); persistence-framework-backed implementations
+   * (e.g. based on Spring Data) override it with the framework's authoritative
+   * answer. Override it to return <code>null</code> explicitly if your persistence
+   * layer handles the serialized form itself.
+   *
+   * @return The type of the aggregate's ID property or <code>null</code> if not
+   *         determinable
+   */
+  default Class<?> getAggregateIdType() {
+
+    return AggregateIdTypes
+        .determineIdType(getAggregateClass())
+        .orElse(null);
+
+  }
+
+  /**
    * Loads the aggregate by its ID. Used by VanillaBP e.g. when processing BPMN
    * tasks (the aggregate is loaded, the business method is executed and the
    * aggregate is saved within one transaction).

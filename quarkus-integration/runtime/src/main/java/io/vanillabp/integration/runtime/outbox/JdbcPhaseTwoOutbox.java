@@ -20,8 +20,9 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * The default {@link PhaseTwoOutbox} implementation for Quarkus (own code - gruelbox
- * does not support JTA): the outbox entry is written into the table
- * {@link #TABLE_NAME} using a JDBC connection of the Agroal data source. Since the
+ * does not support JTA): the outbox entry is written into the configured table
+ * ({@code vanillabp.outbox.jdbc.table}, default {@link #DEFAULT_TABLE_NAME}) using a
+ * JDBC connection of the Agroal data source. Since the
  * connection is acquired within the still-running JTA transaction, it is enlisted
  * automatically - the entry becomes visible if and only if the transaction commits.
  * <p>
@@ -42,16 +43,35 @@ import lombok.extern.slf4j.Slf4j;
 public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
 
   /**
-   * The table used to store outbox entries.
+   * The default name of the table used to store outbox entries (override via
+   * <code>vanillabp.outbox.jdbc.table</code> - every outbox instance needs its own
+   * table, two dispatchers polling the same table would compete and
+   * double-dispatch).
    */
-  public static final String TABLE_NAME = "VANILLABP_PHASE_TWO_OUTBOX";
+  public static final String DEFAULT_TABLE_NAME = "VANILLABP_PHASE_TWO_OUTBOX";
 
   private static final String INSERT_ENTRY = """
       INSERT INTO %s \
       (ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, AGGREGATE_ID, ADAPTER_ID, \
       IDEMPOTENCY_KEY, STATUS, CREATED_AT, ATTEMPTS, NEXT_ATTEMPT_AT) \
-      VALUES (?, ?, ?, ?, ?, ?, ?, '%s', ?, 0, ?)"""
-      .formatted(TABLE_NAME, JdbcPhaseTwoOutboxDispatcher.STATUS_OPEN);
+      VALUES (?, ?, ?, ?, ?, ?, ?, '%s', ?, 0, ?)""";
+
+  /**
+   * Resolves the configured table name (<code>vanillabp.outbox.jdbc.table</code>,
+   * falling back to {@link #DEFAULT_TABLE_NAME}).
+   *
+   * @param properties The outbox configuration
+   * @return The table name
+   */
+  static String tableName(
+      final io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties properties) {
+
+    final var table = properties
+        .getJdbc()
+        .getTable();
+    return table == null ? DEFAULT_TABLE_NAME : table;
+
+  }
 
   @Inject
   Instance<DataSource> dataSource;
@@ -61,6 +81,21 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
 
   @Inject
   JdbcPhaseTwoOutboxDispatcher dispatcher;
+
+  /**
+   * Whether this default outbox is usable: the extension registers the bean at
+   * build time, but without a configured datasource it cannot store anything - an
+   * unusable default must not be selected for an aggregate (the startup validation
+   * then reports "no outbox available" with the remedies instead of failing at the
+   * first workflow start).
+   *
+   * @return Whether a datasource is available
+   */
+  public boolean isAvailable() {
+
+    return dataSource.isResolvable();
+
+  }
 
   @Override
   public boolean schedule(
@@ -80,7 +115,11 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
     }
 
     final var now = Instant.now();
-    try (var connection = dataSource.get().getConnection(); var statement = connection.prepareStatement(INSERT_ENTRY)) {
+    final var insertEntry = INSERT_ENTRY
+        .formatted(
+            tableName(dispatcher.getProperties()),
+            JdbcPhaseTwoOutboxDispatcher.STATUS_OPEN);
+    try (var connection = dataSource.get().getConnection(); var statement = connection.prepareStatement(insertEntry)) {
       statement.setString(1, UUID.randomUUID().toString());
       statement.setString(2, call.workflowModuleId());
       statement.setString(3, call.bpmnProcessId());

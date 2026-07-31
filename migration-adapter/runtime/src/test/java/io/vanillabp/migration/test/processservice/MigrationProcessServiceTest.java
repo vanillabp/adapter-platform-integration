@@ -1,5 +1,6 @@
 package io.vanillabp.migration.test.processservice;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
@@ -21,6 +22,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
+import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxResolver;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
@@ -38,6 +40,9 @@ public class MigrationProcessServiceTest {
 
   @Mock
   private PhaseTwoOutbox phaseTwoOutbox;
+
+  @Mock
+  private PhaseTwoOutboxResolver phaseTwoOutboxResolver;
 
   /**
    * Creates properties with one configured and prioritized adapter 'test-adapter'.
@@ -144,7 +149,7 @@ public class MigrationProcessServiceTest {
     // configured priorities nevertheless
     final var testee = new MigrationProcessService<>(
         "test-module", "TestProcess", Object.class, createTwoAdapterProperties(), aggregatePersistence, List
-            .of(secondAdapter, processService), phaseTwoOutbox);
+            .of(secondAdapter, processService), phaseTwoOutboxResolver);
 
     final var aggregate = new Object();
     when(aggregatePersistence.save(aggregate)).thenReturn(aggregate);
@@ -224,10 +229,11 @@ public class MigrationProcessServiceTest {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
     when(processService.needsTwoPhaseCommitForStartingWorkflows()).thenReturn(true);
+    when(phaseTwoOutboxResolver.resolveFor(Object.class)).thenReturn(phaseTwoOutbox);
 
     final var testee = new MigrationProcessService<>(
         "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), phaseTwoOutbox);
+            .of(processService), phaseTwoOutboxResolver);
 
     final var aggregate = new Object();
     when(aggregatePersistence.save(aggregate)).thenReturn(aggregate);
@@ -250,7 +256,7 @@ public class MigrationProcessServiceTest {
 
     final var testee = new MigrationProcessService<>(
         "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), phaseTwoOutbox);
+            .of(processService), phaseTwoOutboxResolver);
 
     testee.startWorkflowPhaseTwo(42L, "test-adapter");
 
@@ -266,7 +272,7 @@ public class MigrationProcessServiceTest {
 
     final var testee = new MigrationProcessService<>(
         "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), phaseTwoOutbox);
+            .of(processService), phaseTwoOutboxResolver);
 
     final var exception = assertThrowsExactly(
         IllegalStateException.class,
@@ -291,7 +297,7 @@ public class MigrationProcessServiceTest {
 
     final var testee = new MigrationProcessService<>(
         "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), phaseTwoOutbox);
+            .of(processService), phaseTwoOutboxResolver);
 
     final var aggregate = new Object();
     when(aggregatePersistence.save(aggregate)).thenReturn(aggregate);
@@ -328,6 +334,127 @@ public class MigrationProcessServiceTest {
     assertTrue(exception.getMessage().contains("TestProcess"));
     assertTrue(exception.getMessage().contains("test-module"));
     assertTrue(exception.getMessage().contains("PhaseTwoOutbox"));
+
+  }
+
+  @Test
+  @DisplayName("Startup validation fails with remedies if a two-phase commit is required but no outbox resolves")
+  public void startupValidationFailsIfOutboxRequiredButNotResolvable() {
+
+    when(processService.getAdapterId()).thenReturn("test-adapter");
+    when(processService.needsTwoPhaseCommitForStartingWorkflows()).thenReturn(true);
+    when(phaseTwoOutboxResolver.resolveFor(Object.class)).thenReturn(null);
+    when(phaseTwoOutboxResolver.remediesDescription()).thenReturn("- add the platform's outbox starter, or");
+
+    final var testee = new MigrationProcessService<>(
+        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
+            .of(processService), phaseTwoOutboxResolver);
+
+    final var exception = assertThrowsExactly(
+        IllegalStateException.class,
+        testee::validatePhaseTwoOutboxAtStartup);
+
+    // the message names the adapter, process, module, aggregate, the platform's
+    // remedies and the SPI escape hatches
+    assertTrue(exception.getMessage().contains("test-adapter"));
+    assertTrue(exception.getMessage().contains("TestProcess"));
+    assertTrue(exception.getMessage().contains("test-module"));
+    assertTrue(exception.getMessage().contains(Object.class.getName()));
+    assertTrue(exception.getMessage().contains("add the platform's outbox starter"));
+    assertTrue(exception.getMessage().contains("PhaseTwoOutbox"));
+    assertTrue(exception.getMessage().contains("PhaseTwoOutboxAware"));
+    assertFalse(exception.getMessage().contains("  "), "message must not contain consecutive spaces");
+
+  }
+
+  @Test
+  @DisplayName("Startup validation resolves nothing if no two-phase commit is required")
+  public void startupValidationResolvesNothingWithoutTwoPhaseCommit() {
+
+    when(processService.getAdapterId()).thenReturn("test-adapter");
+    when(processService.needsTwoPhaseCommitForStartingWorkflows()).thenReturn(false);
+
+    final var testee = new MigrationProcessService<>(
+        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
+            .of(processService), phaseTwoOutboxResolver);
+
+    testee.validatePhaseTwoOutboxAtStartup();
+
+    // nothing materializes - an application using only embedded BPMS must not be
+    // forced to have an outbox store
+    verify(phaseTwoOutboxResolver, never()).resolveFor(any());
+
+  }
+
+  @Test
+  @DisplayName("The outbox resolved at startup is reused when starting workflows")
+  public void outboxResolvedAtStartupIsReused() {
+
+    when(processService.getAdapterId()).thenReturn("test-adapter");
+    when(processService.needsTwoPhaseCommitForStartingWorkflows()).thenReturn(true);
+    when(phaseTwoOutboxResolver.resolveFor(Object.class)).thenReturn(phaseTwoOutbox);
+
+    final var testee = new MigrationProcessService<>(
+        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
+            .of(processService), phaseTwoOutboxResolver);
+
+    testee.validatePhaseTwoOutboxAtStartup();
+
+    final var aggregate = new Object();
+    when(aggregatePersistence.save(aggregate)).thenReturn(aggregate);
+    when(aggregatePersistence.getAggregateId(aggregate)).thenReturn(42L);
+    testee.startWorkflow(aggregate);
+
+    verify(phaseTwoOutbox).scheduleStartWorkflow("test-module", "TestProcess", 42L, "test-adapter");
+    // resolved exactly once (at startup), not per workflow start
+    verify(phaseTwoOutboxResolver).resolveFor(Object.class);
+
+  }
+
+  @Test
+  @DisplayName("An unconvertible aggregate-ID type fails at construction with a guiding message")
+  public void unconvertibleAggregateIdTypeFailsAtConstruction() {
+
+    when(processService.getAdapterId()).thenReturn("test-adapter");
+    when(aggregatePersistence.getAggregateIdType()).thenAnswer(invocation -> java.io.InputStream.class);
+
+    final var exception = assertThrowsExactly(
+        IllegalStateException.class,
+        () -> new MigrationProcessService<>(
+            "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
+                .of(processService), phaseTwoOutboxResolver));
+
+    assertTrue(exception.getMessage().contains(Object.class.getName()));
+    assertTrue(exception.getMessage().contains("round-trip losslessly"));
+
+  }
+
+  @Test
+  @DisplayName("The serialized aggregate ID is converted using the persistence's ID type")
+  public void convertAggregateIdUsesPersistenceIdType() {
+
+    when(processService.getAdapterId()).thenReturn("test-adapter");
+    when(aggregatePersistence.getAggregateIdType()).thenAnswer(invocation -> Long.class);
+
+    final var testee = new MigrationProcessService<>(
+        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
+            .of(processService), phaseTwoOutboxResolver);
+
+    assertEquals(42L, testee.convertAggregateId("42"));
+
+  }
+
+  @Test
+  @DisplayName("Without a determinable ID type the serialized aggregate ID is passed through")
+  public void convertAggregateIdPassesThroughWithoutIdType() {
+
+    when(processService.getAdapterId()).thenReturn("test-adapter");
+
+    final var testee = new MigrationProcessService<>(
+        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
+            .of(processService), phaseTwoOutboxResolver);
+
+    assertEquals("custom-id-4711", testee.convertAggregateId("custom-id-4711"));
 
   }
 

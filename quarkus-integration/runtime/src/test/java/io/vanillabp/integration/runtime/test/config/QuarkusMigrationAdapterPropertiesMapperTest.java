@@ -58,12 +58,24 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                           Map<String, QuarkusMigrationAdapterProperties.WorkflowProperties> workflows) implements QuarkusMigrationAdapterProperties.WorkflowModuleProperties {
   }
 
+  private record JdbcOutboxProperties(
+                                      boolean enabled,
+                                      Optional<String> table) implements QuarkusMigrationAdapterProperties.JdbcOutboxProperties {
+  }
+
+  private record MongoOutboxProperties(
+                                       boolean enabled,
+                                       String collection) implements QuarkusMigrationAdapterProperties.MongoOutboxProperties {
+  }
+
   private record OutboxProperties(
                                   Duration pollInterval,
                                   Duration attemptFrequency,
                                   int blockAfterAttempts,
                                   boolean createSchema,
-                                  Duration retention) implements QuarkusMigrationAdapterProperties.PhaseTwoOutboxProperties {
+                                  Duration retention,
+                                  QuarkusMigrationAdapterProperties.JdbcOutboxProperties jdbc,
+                                  QuarkusMigrationAdapterProperties.MongoOutboxProperties mongo) implements QuarkusMigrationAdapterProperties.PhaseTwoOutboxProperties {
   }
 
   private record Properties(
@@ -94,7 +106,9 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                                 .of("c8-cloud", new AdapterProperties(Optional
                                                     .of("task-level"))))))))), new OutboxProperties(
                                                         Duration.ofSeconds(1), Duration.ofSeconds(2), 3, false, Duration
-                                                            .ofDays(1)));
+                                                            .ofDays(1), new JdbcOutboxProperties(false, Optional
+                                                                .of("HOT_OUTBOX")), new MongoOutboxProperties(
+                                                                    false, "hot-outbox")));
 
     final var core = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(properties);
 
@@ -124,6 +138,10 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     assertEquals(3, core.getOutbox().getBlockAfterAttempts());
     assertFalse(core.getOutbox().isCreateSchema());
     assertEquals(Duration.ofDays(1), core.getOutbox().getRetention());
+    assertFalse(core.getOutbox().getJdbc().isEnabled());
+    assertEquals("HOT_OUTBOX", core.getOutbox().getJdbc().getTable());
+    assertFalse(core.getOutbox().getMongo().isEnabled());
+    assertEquals("hot-outbox", core.getOutbox().getMongo().getCollection());
 
   }
 
@@ -148,6 +166,10 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     assertEquals(coreDefaults.getBlockAfterAttempts(), mappedDefaults.getBlockAfterAttempts());
     assertEquals(coreDefaults.isCreateSchema(), mappedDefaults.isCreateSchema());
     assertEquals(coreDefaults.getRetention(), mappedDefaults.getRetention());
+    assertEquals(coreDefaults.getJdbc().isEnabled(), mappedDefaults.getJdbc().isEnabled());
+    assertEquals(coreDefaults.getJdbc().getTable(), mappedDefaults.getJdbc().getTable());
+    assertEquals(coreDefaults.getMongo().isEnabled(), mappedDefaults.getMongo().isEnabled());
+    assertEquals(coreDefaults.getMongo().getCollection(), mappedDefaults.getMongo().getCollection());
 
   }
 

@@ -161,12 +161,18 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
-   * Registers the default implementation of the phase-two outbox (see
+   * Registers the default implementations of the phase-two outbox (see
    * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox}) used for two-phase
-   * workflow starts: the JDBC/Agroal-based one if a JDBC datasource applies, else
-   * the MongoDB-based one if the <code>quarkus-mongodb-client</code> extension is
-   * present. Applications may always provide their own <code>PhaseTwoOutbox</code>
-   * bean instead.
+   * workflow starts: the JDBC/Agroal-based one if a JDBC datasource applies AND the
+   * MongoDB-based one if the <code>quarkus-mongodb-client</code> extension is
+   * present - both may coexist, each workflow aggregate is served by the outbox
+   * matching its persistence (attribution via
+   * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutboxAware} beans, see
+   * {@link io.vanillabp.integration.runtime.processservice.QuarkusPhaseTwoOutboxResolver}).
+   * Unwanted defaults can be deactivated via
+   * <code>vanillabp.outbox.jdbc.enabled</code> /
+   * <code>vanillabp.outbox.mongo.enabled</code>. Applications may always provide
+   * their own <code>PhaseTwoOutbox</code> beans in addition.
    *
    * @param capabilities Capabilities of the project's extensions
    * @param additionalBeans Producer used to register the outbox beans
@@ -184,13 +190,8 @@ public class VanillaBpBuildStepProcessor {
               JdbcPhaseTwoOutboxDispatcher.class)
           .setUnremovable() // don't remove, since it is used under the hoods
           .build());
-      return;
     }
 
-    // MongoDB-based default: only if no JDBC datasource applies (JDBC wins
-    // deterministically when both extensions are present - consistent with the
-    // Spring Boot integration where the JPA outbox is ordered before the MongoDB
-    // one) and the MongoDB client extension is available
     if (capabilities.isPresent(Capability.MONGODB_CLIENT)) {
       additionalBeans.produce(AdditionalBeanBuildItem
           .builder()
@@ -200,6 +201,24 @@ public class VanillaBpBuildStepProcessor {
           .setUnremovable() // don't remove, since it is used under the hoods
           .build());
     }
+
+  }
+
+  /**
+   * Beans implementing {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox}
+   * or {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutboxAware} are not
+   * necessarily injected by application code but looked up dynamically at runtime
+   * (per-aggregate outbox resolution). This build step prevents ArC from removing
+   * them as unused beans.
+   *
+   * @return The unremovable-bean build item covering outboxes and their attributions
+   */
+  @BuildStep
+  io.quarkus.arc.deployment.UnremovableBeanBuildItem preservePhaseTwoOutboxBeans() {
+
+    return io.quarkus.arc.deployment.UnremovableBeanBuildItem.beanTypes(
+        io.vanillabp.integration.adapter.spi.PhaseTwoOutbox.class,
+        io.vanillabp.integration.adapter.spi.PhaseTwoOutboxAware.class);
 
   }
 

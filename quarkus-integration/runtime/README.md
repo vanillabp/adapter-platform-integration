@@ -67,7 +67,21 @@ undeterminable, the String is passed through). The poller uses a plain scheduled
 executor started on `StartupEvent`, so the `quarkus-scheduler` extension is not
 required. The outbox beans are only registered if the Agroal capability is present
 (see `VanillaBpBuildStepProcessor#buildPhaseTwoOutbox`); applications may define
-their own `PhaseTwoOutbox` bean instead.
+their own `PhaseTwoOutbox` beans in addition.
+
+Since story 26i BOTH defaults (JDBC + MongoDB) may coexist and the outbox is
+selected **per workflow aggregate** (`QuarkusPhaseTwoOutboxResolver`): the most
+specific `PhaseTwoOutboxAware` bean wins; without one, the single active outbox is
+used (deactivated - `vanillabp.outbox.jdbc.enabled`/`vanillabp.outbox.mongo.enabled`
+- or unusable defaults are not considered), and with several active outboxes the
+startup fails guiding towards `PhaseTwoOutboxAware` (Quarkus has no platform-side
+knowledge of which persistence manages an aggregate). Resolution happens AT STARTUP
+via an inherited `StartupEvent` observer on `ProcessServiceBaseCdiBean` whenever
+the first-priority adapter needs a two-phase commit - a missing outbox fails the
+boot naming the remedies. Store names are configurable
+(`vanillabp.outbox.jdbc.table`, `vanillabp.outbox.mongo.collection`); every outbox
+instance needs its OWN store (two dispatchers polling the same store would compete
+and double-dispatch).
 
 For applications using MongoDB (`quarkus-mongodb-client`) instead of a JDBC
 datasource, a MongoDB-based default is provided: `MongoPhaseTwoOutbox` writes into

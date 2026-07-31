@@ -4,6 +4,8 @@ import java.util.LinkedList;
 import java.util.List;
 
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.SmartInitializingSingleton;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.ConfigurationPropertiesBinding;
@@ -149,6 +151,48 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   public PhaseTwoRouter vanillaBpPhaseTwoRouter() {
 
     return new PhaseTwoRouter();
+
+  }
+
+  /**
+   * Resolves the phase-two outbox per workflow aggregate (mixed persistence,
+   * dedicated outboxes) - injected into the process-service beans and invoked at
+   * startup by {@link #vanillaBpProcessServiceStartupValidation}.
+   *
+   * @param applicationContext Used to look up outbox/aware beans and repositories
+   * @return The resolver
+   */
+  @Bean
+  public SpringPhaseTwoOutboxResolver vanillaBpPhaseTwoOutboxResolver(
+      final org.springframework.context.ApplicationContext applicationContext) {
+
+    return new SpringPhaseTwoOutboxResolver(applicationContext);
+
+  }
+
+  /**
+   * Startup validation of the process services, run once all singletons exist (so
+   * no persistence infrastructure is materialized mid-bean-construction): for every
+   * process service whose first-priority adapter requires a two-phase commit the
+   * phase-two outbox is resolved (per aggregate - mixed persistence, dedicated
+   * outboxes) - a missing outbox fails the startup with a guiding message instead
+   * of surfacing at the first workflow start.
+   *
+   * @param beanFactory Used to iterate all process-service beans
+   * @return The startup validation hook
+   */
+  @Bean
+  public SmartInitializingSingleton vanillaBpProcessServiceStartupValidation(
+      final ConfigurableListableBeanFactory beanFactory) {
+
+    return () -> beanFactory
+        .getBeanProvider(io.vanillabp.spi.process.ProcessService.class)
+        .stream()
+        .filter(ProcessServiceSpringBean.class::isInstance)
+        .map(ProcessServiceSpringBean.class::cast)
+        .forEach(processService -> processService
+            .getMigrationProcessService()
+            .validatePhaseTwoOutboxAtStartup());
 
   }
 

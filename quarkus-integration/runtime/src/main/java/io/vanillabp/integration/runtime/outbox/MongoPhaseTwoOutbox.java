@@ -25,7 +25,9 @@ import lombok.extern.slf4j.Slf4j;
  * discriminator and the elected adapter ID; deduplication is enforced by a partial
  * unique index on the entry's idempotency key (a duplicate schedule is the
  * contract's no-op). The collection name matches the Spring Boot MongoDB outbox
- * ({@value #COLLECTION}) so both platforms share the same store layout.
+ * (<code>vanillabp.outbox.mongo.collection</code>, default
+ * <code>vanillabp-phase-two-outbox</code>) so both platforms share the same store
+ * layout.
  * <p>
  * <strong>Best-effort window (no MongoDB transaction):</strong> MongoDB is no JTA
  * resource and the Quarkus MongoDB client does not enlist in the Narayana
@@ -47,12 +49,6 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
 
-  /**
-   * The collection used to store outbox entries (same as the Spring Boot MongoDB
-   * outbox).
-   */
-  public static final String COLLECTION = "vanillabp-phase-two-outbox";
-
   public static final String STATUS_OPEN = "OPEN";
 
   public static final String STATUS_DONE = "DONE";
@@ -67,6 +63,21 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
 
   @Inject
   MongoPhaseTwoOutboxDispatcher dispatcher;
+
+  /**
+   * Whether this default outbox is usable: the extension registers the bean at
+   * build time, but without a MongoDB client (and database) it cannot store
+   * anything - an unusable default must not be selected for an aggregate (the
+   * startup validation then reports "no outbox available" with the remedies
+   * instead of failing at the first workflow start).
+   *
+   * @return Whether a MongoDB client is available
+   */
+  public boolean isAvailable() {
+
+    return mongoClient.isResolvable();
+
+  }
 
   @Override
   public boolean schedule(

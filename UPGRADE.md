@@ -4,6 +4,55 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Per-aggregate outbox selection + aggregate-ID type in the persistence SPI (2026-07-31)
+
+Story 26i - two related consolidations, breaking for applications using their own
+`PhaseTwoOutbox` bean and behavior-changing for mixed-persistence classpaths:
+
+- **The phase-two outbox is selected PER AGGREGATE, not per JVM.** New business SPI
+  `io.vanillabp.integration.adapter.spi.PhaseTwoOutboxAware<A>` (most-specific
+  aggregate class wins - same selection as `AggregatePersistenceAware`, now shared
+  via the core's `AwareSelection`). Both platform defaults (JDBC and MongoDB) may
+  COEXIST: the `@ConditionalOnMissingBean(PhaseTwoOutbox.class)` single-bean gate is
+  gone; each aggregate is served by the outbox matching its persistence (Spring:
+  detected from the aggregate's Spring Data repository type; Quarkus: no platform
+  detection - mixed setups attribute aggregates via `PhaseTwoOutboxAware` beans).
+  This fixes the mixed-persistence atomicity bug (a Mongo aggregate's outbox entry
+  used to ride the JPA transaction) and enables a DEDICATED outbox for a high-load
+  process. **Behavior changes:** (a) applications having both JPA and MongoDB on the
+  classpath now get BOTH default outboxes (stores + background dispatchers) - opt
+  out via `vanillabp.outbox.jdbc.enabled` / `vanillabp.outbox.mongo.enabled`;
+  (b) an application-defined `PhaseTwoOutbox` bean no longer suppresses the
+  defaults - disable them via those flags or attribute aggregates via
+  `PhaseTwoOutboxAware`; (c) a single default outbox clearly not matching an
+  aggregate's detectable persistence now fails the startup (it silently broke
+  atomicity before).
+- **Outbox resolved AT STARTUP** (removes 26c's deliberately-left lazy check): per
+  process service, if the first-priority adapter needs a two-phase commit the
+  outbox is resolved once the context is ready (Spring:
+  `SmartInitializingSingleton`; Quarkus: an inherited `StartupEvent` observer on
+  the generated process-service beans - which also makes ALL process-service
+  validations fire at boot on Quarkus, e.g. the unserved-prioritized-adapter-id
+  fail-fast). Missing outbox → boot fails naming all remedies. If no two-phase
+  commit is needed, nothing materializes.
+- **Store names configurable** (`vanillabp.outbox.jdbc.table`,
+  `vanillabp.outbox.mongo.collection`): every outbox instance needs its own store -
+  two dispatchers polling the same store would double-dispatch. Note: the gruelbox
+  schema migration always targets `TXNO_OUTBOX`, so a custom table on Spring must
+  be created manually. The Spring gruelbox default beans now reference each other
+  BY NAME (`vanillaBpTransactionOutbox`), so additional gruelbox instances do not
+  suppress the default; with several transaction managers (mixed persistence) the
+  JDBC one must be named `transactionManager` (Boot's convention).
+- **`AggregatePersistenceAware.getAggregateIdType()`** (default: reflection-based
+  detection via `AggregateIdTypes`, `null` = custom persistence owns the serialized
+  form; Spring Data implementations answer authoritatively). The aggregate-ID
+  round-trip validation and the String→ID conversion moved into the core
+  (`AggregateIdRoundTrip`, one explicit allow-list) - the platform pair
+  (`ProcessServiceSpringBean.validateAggregateIdRoundTrip`/`buildAggregateIdConverter`,
+  Quarkus `AggregateIdConversion`) is deleted, `ProcessServiceSpringBean` lost its
+  `springDataUtilProvider` parameter and `PhaseTwoRouter.register` its converter
+  parameter (`MigrationProcessService.convertAggregateId` replaces it).
+
 ## Startup configuration validation (2026-07-31)
 
 Story 26c - configuration defects surface at startup, never first at runtime:

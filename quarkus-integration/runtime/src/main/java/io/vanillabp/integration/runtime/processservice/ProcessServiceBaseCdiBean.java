@@ -1,15 +1,21 @@
 package io.vanillabp.integration.runtime.processservice;
 
 import java.util.List;
-import java.util.function.Function;
 
+import org.eclipse.microprofile.config.ConfigProvider;
+
+import io.quarkus.runtime.StartupEvent;
+import io.smallrye.config.SmallRyeConfig;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.adapter.migration.processservice.ProcessServiceBase;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.adapter.spi.PhaseTwoOutboxAware;
+import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
@@ -56,13 +62,22 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
   Instance<List<io.vanillabp.integration.adapter.spi.MigratableProcessService<Object>>> migratableProcessServiceLists;
 
   /**
-   * The outbox used to schedule phase two of a two-phase workflow start. Unsatisfied
-   * if no implementation is available (e.g. no datasource configured) - in this case
-   * only adapters not requiring a two-phase commit can start workflows.
+   * The outboxes available at runtime, resolved per aggregate (mixed persistence,
+   * dedicated outboxes) via {@link QuarkusPhaseTwoOutboxResolver}. Unsatisfied if no
+   * implementation is available (e.g. no datasource configured) - in this case only
+   * adapters not requiring a two-phase commit can start workflows.
    */
   @Inject
   @Any
-  Instance<PhaseTwoOutbox> phaseTwoOutbox;
+  Instance<PhaseTwoOutbox> phaseTwoOutboxes;
+
+  /**
+   * Application-provided attributions of aggregates to outboxes (required in
+   * mixed-persistence setups, optional otherwise).
+   */
+  @Inject
+  @Any
+  Instance<PhaseTwoOutboxAware<?>> phaseTwoOutboxAwares;
 
   @Inject
   TransactionSynchronizationRegistry txRegistry;
@@ -86,10 +101,6 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
   @PostConstruct
   public void initialize() {
 
-    // startup check: the aggregate's ID has to round-trip losslessly through the
-    // outbox's String serialization (fails with a guiding message otherwise)
-    AggregateIdConversion.validateIdTypeConvertible(getWorkflowAggregateClass());
-
     // collect element beans plus flattened List beans (see field javadoc)
     @SuppressWarnings("unchecked")
     final List<io.vanillabp.integration.adapter.spi.MigratableProcessService<A>> processServices = java.util.stream.Stream
@@ -103,67 +114,42 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
         .map(processService -> (io.vanillabp.integration.adapter.spi.MigratableProcessService<A>) processService)
         .toList();
 
+    final var outboxProperties = ConfigProvider
+        .getConfig()
+        .unwrap(SmallRyeConfig.class)
+        .getConfigMapping(QuarkusMigrationAdapterProperties.class)
+        .outbox();
     this.migrationProcessService = new MigrationProcessService<>(
-        getWorkflowModuleId(), getBpmnProcessId(), getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, buildLazyPhaseTwoOutbox(
-            getWorkflowModuleId(), getBpmnProcessId(), phaseTwoOutbox));
+        getWorkflowModuleId(), getBpmnProcessId(), getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, new QuarkusPhaseTwoOutboxResolver(
+            phaseTwoOutboxAwares, phaseTwoOutboxes, outboxProperties
+                .jdbc()
+                .enabled(), outboxProperties
+                    .mongo()
+                    .enabled()));
 
     // register as phase-two dispatch target: outbox entries for this workflow
     // module/BPMN process are routed here after the local transaction was committed
     if (phaseTwoRouter.isResolvable()) {
       phaseTwoRouter
           .get()
-          .register(migrationProcessService, buildAggregateIdConverter());
+          .register(migrationProcessService);
     }
 
   }
 
   /**
-   * Builds a {@link PhaseTwoOutbox} resolving the actual outbox bean lazily on
-   * first use, with a guiding message naming all remedies if none is available -
-   * an unconfigured application still boots (only starting a two-phase workflow
-   * fails, with instructions).
+   * Startup validation (observer methods are inherited by the generated
+   * process-service beans): if the first-priority adapter of this process requires
+   * a two-phase commit, the phase-two outbox is resolved AT STARTUP - a missing
+   * outbox fails the boot with a guiding message instead of surfacing at the first
+   * workflow start.
    *
-   * @param workflowModuleId The ID of the workflow module (used for error messages)
-   * @param bpmnProcessId The BPMN process ID (used for error messages)
-   * @param phaseTwoOutbox The CDI instance used to resolve the outbox bean
-   * @return The lazily resolving outbox
+   * @param event The startup event observed
    */
-  private static PhaseTwoOutbox buildLazyPhaseTwoOutbox(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final Instance<PhaseTwoOutbox> phaseTwoOutbox) {
+  public void onStart(
+      @Observes final StartupEvent event) {
 
-    return call -> {
-      if (!phaseTwoOutbox.isResolvable()) {
-        throw new IllegalStateException(
-            """
-                Starting workflows of BPMN process '%s' of workflow module '%s' requires a two-phase commit, \
-                but no PhaseTwoOutbox bean is available! To solve this either
-                - add the 'quarkus-agroal' extension and configure a JDBC datasource (enables the JDBC default),
-                - add the 'quarkus-mongodb-client' extension and configure the MongoDB connection incl. 'quarkus.mongodb.database' (enables the MongoDB default), or
-                - define your own bean implementing io.vanillabp.integration.adapter.spi.PhaseTwoOutbox."""
-                .formatted(bpmnProcessId, workflowModuleId));
-      }
-      return phaseTwoOutbox.get().schedule(call);
-    };
-
-  }
-
-  /**
-   * Builds the converter turning the serialized (String) workflow-aggregate ID of an
-   * outbox entry back into the aggregate's ID type (determined by reflection - see
-   * {@link AggregateIdConversion}). If the type cannot be determined (custom
-   * persistence), the String is passed through unchanged.
-   *
-   * @return The converter registered with the {@link PhaseTwoRouter}
-   */
-  private Function<String, Object> buildAggregateIdConverter() {
-
-    final var aggregateIdType = AggregateIdConversion
-        .determineIdType(getWorkflowAggregateClass());
-    return serializedAggregateId -> aggregateIdType
-        .<Object>map(idType -> AggregateIdConversion.convert(serializedAggregateId, idType))
-        .orElse(serializedAggregateId);
+    migrationProcessService.validatePhaseTwoOutboxAtStartup();
 
   }
 

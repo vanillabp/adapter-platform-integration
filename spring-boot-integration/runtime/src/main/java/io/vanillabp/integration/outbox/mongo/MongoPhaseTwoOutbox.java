@@ -37,14 +37,17 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
 
-  /**
-   * The collection used to store outbox entries.
-   */
-  public static final String COLLECTION = "vanillabp-phase-two-outbox";
-
   private final MongoTemplate mongoTemplate;
 
   private final MongoPhaseTwoOutboxDispatcher dispatcher;
+
+  /**
+   * The collection used to store outbox entries
+   * (<code>vanillabp.outbox.mongo.collection</code>). Every outbox instance needs
+   * its own collection - two dispatchers polling the same collection would compete
+   * and double-dispatch.
+   */
+  private final String collection;
 
   @Override
   public boolean schedule(
@@ -58,7 +61,7 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
     final var idempotencyKey = call.idempotencyKey().orElse(null);
     if ((idempotencyKey != null) && mongoTemplate.exists(
         Query.query(Criteria.where("idempotencyKey").is(idempotencyKey)),
-        COLLECTION)) {
+        collection)) {
       log.debug(
           "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
               + "was already scheduled - skipping",
@@ -78,7 +81,7 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
                     .args(), idempotencyKey, PhaseTwoOutboxEntry.STATUS_OPEN, now, 0, now, null);
 
     try {
-      mongoTemplate.insert(entry, COLLECTION);
+      mongoTemplate.insert(entry, collection);
     } catch (DuplicateKeyException e) {
       log.debug(
           "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "

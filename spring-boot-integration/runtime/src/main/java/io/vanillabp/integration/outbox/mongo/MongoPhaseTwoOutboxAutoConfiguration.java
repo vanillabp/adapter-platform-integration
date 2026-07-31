@@ -3,8 +3,8 @@ package io.vanillabp.integration.outbox.mongo;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.domain.Sort;
@@ -20,12 +20,14 @@ import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfig
 
 /**
  * Auto-configuration of the default {@link PhaseTwoOutbox} for MongoDB-based aggregate
- * persistence. Only active under the same conditions as the MongoDB
- * {@link io.vanillabp.integration.utils.SpringDataUtil} (Spring Data MongoDB on the
- * classpath, a {@link MongoDatabaseFactory} available) and if no other
- * {@link PhaseTwoOutbox} bean was defined. It is ordered after
- * {@link GruelboxPhaseTwoOutboxAutoConfiguration}: if both JPA and MongoDB are
- * configured, JPA wins deterministically.
+ * persistence. Active whenever Spring Data MongoDB is on the classpath and a
+ * {@link MongoDatabaseFactory} is available - it COEXISTS with the JPA/gruelbox
+ * default ({@link GruelboxPhaseTwoOutboxAutoConfiguration}): each workflow aggregate
+ * is served by the outbox matching its persistence (selection per aggregate, see
+ * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutboxAware}), so outbox
+ * entries always ride the aggregate's own transaction even in mixed-persistence
+ * applications. Disable via <code>vanillabp.outbox.mongo.enabled</code> if the
+ * default (including its collection and background dispatcher) is unwanted.
  * <p>
  * Unless <code>vanillabp.outbox.create-schema</code> is set to <code>false</code>, a
  * sparse unique index on the entries' idempotency key is created automatically - the
@@ -44,9 +46,15 @@ import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfig
 @ConditionalOnBean({
     MongoDatabaseFactory.class, MongoTemplate.class
 })
-@ConditionalOnMissingBean(PhaseTwoOutbox.class)
+@ConditionalOnBooleanProperty(name = "vanillabp.outbox.mongo.enabled", matchIfMissing = true)
 @EnableConfigurationProperties(VanillaBpConfigurationProperties.class)
 public class MongoPhaseTwoOutboxAutoConfiguration {
+
+  /**
+   * The name of the default MongoDB outbox bean - used by the resolver to attribute
+   * MongoDB-persisted aggregates to THE default when several outbox beans exist.
+   */
+  public static final String DEFAULT_OUTBOX_BEAN_NAME = "vanillaBpMongoPhaseTwoOutbox";
 
   /**
    * @param mongoTemplate The template used to claim and update entries
@@ -65,7 +73,10 @@ public class MongoPhaseTwoOutboxAutoConfiguration {
       final VanillaBpConfigurationProperties vanillaBpProperties) {
 
     return new MongoPhaseTwoOutboxDispatcher(
-        mongoTemplate, phaseTwoRouter, vanillaBpProperties.getOutbox());
+        mongoTemplate, phaseTwoRouter, vanillaBpProperties.getOutbox(), vanillaBpProperties
+            .getOutbox()
+            .getMongo()
+            .getCollection());
 
   }
 
@@ -77,21 +88,25 @@ public class MongoPhaseTwoOutboxAutoConfiguration {
    *          outbox works in contexts without the full VanillaBP auto-configuration)
    * @return The {@link PhaseTwoOutbox} used by the process services
    */
-  @Bean
+  @Bean(DEFAULT_OUTBOX_BEAN_NAME)
   public MongoPhaseTwoOutbox vanillaBpMongoPhaseTwoOutbox(
       final MongoTemplate mongoTemplate,
       final MongoPhaseTwoOutboxDispatcher dispatcher,
       final VanillaBpConfigurationProperties vanillaBpProperties) {
 
+    final var collection = vanillaBpProperties
+        .getOutbox()
+        .getMongo()
+        .getCollection();
     if (vanillaBpProperties.getOutbox().isCreateSchema()) {
       mongoTemplate
-          .indexOps(MongoPhaseTwoOutbox.COLLECTION)
+          .indexOps(collection)
           .createIndex(new Index()
               .on("idempotencyKey", Sort.Direction.ASC)
               .unique()
               .sparse());
     }
-    return new MongoPhaseTwoOutbox(mongoTemplate, dispatcher);
+    return new MongoPhaseTwoOutbox(mongoTemplate, dispatcher, collection);
 
   }
 

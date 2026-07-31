@@ -1,9 +1,7 @@
 package io.vanillabp.integration.processservice;
 
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -15,9 +13,9 @@ import org.springframework.core.ResolvableType;
 import org.springframework.core.env.Environment;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.processservice.AwareSelection;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
-import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.utils.ClasspathScanner;
 import io.vanillabp.integration.utils.SpringDataUtil;
@@ -167,26 +165,18 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                   SpringBootMigrationAdapterAutoConfiguration.BEANNAME_MIGRATIONADAPERPROPERTIES,
                   MigrationAdapterProperties.class);
 
-              // find persistence support for the aggregate class
+              // find persistence support for the aggregate class (most specific
+              // aggregate class wins - selection shared with the core)
               final List<AggregatePersistenceAware<?>> aggregatePersistenceAwares = supplierContext
                   .beanProvider(AggregatePersistenceAware.class)
                   .stream()
                   .<AggregatePersistenceAware<?>>map(aware -> (AggregatePersistenceAware<?>) aware)
                   .toList();
-              final var aggregatePersistenceAware = (AggregatePersistenceAware<A>) aggregatePersistenceAwares
-                  .stream()
-                  // calculate distance of classes
-                  .map(aware -> Map.entry(
-                      aware,
-                      AggregatePersistenceResolver.inheritanceDistance(
-                          aware.getAggregateClass(),
-                          workflowAggregateType
-                      )))
-                  // filter persistence awares those aggregate type is not assignable to the current aggregate type
-                  .filter(awareEntry -> awareEntry.getValue() != Integer.MAX_VALUE)
-                  // choose the most specific persistence support in terms of inheritance class distance
-                  .min(Comparator.comparingInt(Map.Entry::getValue))
-                  .map(Map.Entry::getKey)
+              final var aggregatePersistenceAware = (AggregatePersistenceAware<A>) AwareSelection
+                  .mostSpecific(
+                      aggregatePersistenceAwares,
+                      AggregatePersistenceAware::getAggregateClass,
+                      workflowAggregateType)
                   // if none found, fall back to persistence support based on Spring Data Util bean
                   .orElseGet(() -> {
                     final var springDataUtil = supplierContext
@@ -210,20 +200,19 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                   .map(processService -> (MigratableProcessService<A>) processService)
                   .toList();
 
-              // resolved lazily on first use (only if an adapter requires a
-              // two-phase commit for starting workflows)
-              final var phaseTwoOutboxProvider = supplierContext
-                  .beanProvider(PhaseTwoOutbox.class);
+              // resolves the outbox per aggregate (mixed persistence, dedicated
+              // outboxes) - invoked at startup by the platform's startup
+              // validation, never mid-bean-construction
+              final var phaseTwoOutboxResolver = supplierContext
+                  .bean(SpringPhaseTwoOutboxResolver.class);
 
               // the bean registers itself with the router as phase-two dispatch
               // target of this workflow module/BPMN process
               final var phaseTwoRouter = supplierContext
                   .bean(PhaseTwoRouter.class);
-              final var springDataUtilProvider = supplierContext
-                  .beanProvider(SpringDataUtil.class);
 
               return new ProcessServiceSpringBean<A>(
-                  workflowModuleId, bpmnProcessId, workflowAggregateType, properties, aggregatePersistenceAware, migratableProcessServices, phaseTwoOutboxProvider, phaseTwoRouter, springDataUtilProvider);
+                  workflowModuleId, bpmnProcessId, workflowAggregateType, properties, aggregatePersistenceAware, migratableProcessServices, phaseTwoOutboxResolver, phaseTwoRouter);
 
             }));
 

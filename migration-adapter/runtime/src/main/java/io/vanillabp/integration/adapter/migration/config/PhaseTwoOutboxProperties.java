@@ -59,4 +59,75 @@ public class PhaseTwoOutboxProperties {
   @Builder.Default
   private Duration retention = Duration.ofDays(7);
 
+  /**
+   * Configuration of the JDBC-based default outbox (Spring Boot: gruelbox over the
+   * data source; Quarkus: the Agroal/JDBC implementation). Both default outboxes
+   * (JDBC and MongoDB) may be active in the same application - each aggregate is
+   * served by the outbox matching its persistence.
+   */
+  @Builder.Default
+  private JdbcOutboxProperties jdbc = new JdbcOutboxProperties();
+
+  /**
+   * Configuration of the MongoDB-based default outbox. Both default outboxes (JDBC
+   * and MongoDB) may be active in the same application - each aggregate is served by
+   * the outbox matching its persistence.
+   */
+  @Builder.Default
+  private MongoOutboxProperties mongo = new MongoOutboxProperties();
+
+  @Getter
+  @Setter
+  @NoArgsConstructor
+  @SuperBuilder
+  public static class JdbcOutboxProperties {
+
+    /**
+     * Whether the JDBC-based default outbox is created when a data source is
+     * available. Disable it if the application defines its own
+     * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox} bean and the
+     * default (including its store and background dispatcher) is unwanted.
+     */
+    @Builder.Default
+    private boolean enabled = true;
+
+    /**
+     * The name of the table storing outbox entries. Every outbox instance needs its
+     * own store - two dispatchers polling the same table would compete and
+     * double-dispatch. <code>null</code> means the platform's default table name
+     * (Spring Boot/gruelbox: <code>TXNO_OUTBOX</code>; Quarkus:
+     * <code>VANILLABP_PHASE_TWO_OUTBOX</code>). NOTE: on Spring Boot the gruelbox
+     * schema migration always targets the default table - a custom name requires
+     * the table (structured like <code>TXNO_OUTBOX</code>) to be created manually.
+     */
+    @Builder.Default
+    private String table = null;
+
+  }
+
+  @Getter
+  @Setter
+  @NoArgsConstructor
+  @SuperBuilder
+  public static class MongoOutboxProperties {
+
+    /**
+     * Whether the MongoDB-based default outbox is created when a MongoDB connection
+     * is available. Disable it if the application defines its own
+     * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox} bean and the
+     * default (including its store and background dispatcher) is unwanted.
+     */
+    @Builder.Default
+    private boolean enabled = true;
+
+    /**
+     * The name of the collection storing outbox entries. Every outbox instance
+     * needs its own store - two dispatchers polling the same collection would
+     * compete and double-dispatch.
+     */
+    @Builder.Default
+    private String collection = "vanillabp-phase-two-outbox";
+
+  }
+
 }

@@ -172,6 +172,79 @@ public interface QuarkusMigrationAdapterProperties {
     @WithDefault("P7D")
     Duration retention();
 
+    /**
+     * The configuration of the JDBC/Agroal-based default outbox.
+     *
+     * @return The JDBC outbox configuration
+     */
+    JdbcOutboxProperties jdbc();
+
+    /**
+     * The configuration of the MongoDB-based default outbox.
+     *
+     * @return The MongoDB outbox configuration
+     */
+    MongoOutboxProperties mongo();
+
+  }
+
+  /**
+   * The configuration of the JDBC/Agroal-based default outbox. Both default
+   * outboxes (JDBC and MongoDB) may be active in the same application - each
+   * workflow aggregate is served by the outbox matching its persistence.
+   */
+  interface JdbcOutboxProperties {
+
+    /**
+     * Whether the JDBC-based default outbox is active when a datasource is
+     * available. Disable it if the application defines its own PhaseTwoOutbox bean
+     * and the default (including its table and background dispatcher) is unwanted.
+     *
+     * @return Whether the JDBC default outbox is active
+     */
+    @WithDefault("true")
+    boolean enabled();
+
+    /**
+     * The name of the table storing outbox entries (default
+     * <code>VANILLABP_PHASE_TWO_OUTBOX</code>). Every outbox instance needs its own
+     * table - two dispatchers polling the same table would compete and
+     * double-dispatch.
+     *
+     * @return The outbox table name
+     */
+    Optional<String> table();
+
+  }
+
+  /**
+   * The configuration of the MongoDB-based default outbox. Both default outboxes
+   * (JDBC and MongoDB) may be active in the same application - each workflow
+   * aggregate is served by the outbox matching its persistence.
+   */
+  interface MongoOutboxProperties {
+
+    /**
+     * Whether the MongoDB-based default outbox is active when a MongoDB client is
+     * available. Disable it if the application defines its own PhaseTwoOutbox bean
+     * and the default (including its collection and background dispatcher) is
+     * unwanted.
+     *
+     * @return Whether the MongoDB default outbox is active
+     */
+    @WithDefault("true")
+    boolean enabled();
+
+    /**
+     * The name of the collection storing outbox entries. Every outbox instance
+     * needs its own collection - two dispatchers polling the same collection would
+     * compete and double-dispatch.
+     *
+     * @return The outbox collection name
+     */
+    @WithDefault("vanillabp-phase-two-outbox")
+    String collection();
+
   }
 
   /**

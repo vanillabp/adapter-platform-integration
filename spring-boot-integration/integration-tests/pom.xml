@@ -20,6 +20,7 @@
     <module>main-integration-test</module>
     <module>outbox-jpa-integration-test</module>
     <module>outbox-mongo-integration-test</module>
+    <module>outbox-mixed-integration-test</module>
     <module>workflowmodule-integration-tests</module>
     <module>fatjar-integration-test</module>
   </modules>

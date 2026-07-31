@@ -44,5 +44,14 @@
       <version>${project.version}</version>
       <scope>test</scope>
     </dependency>
+    <!-- only for testing the annotation-name-based aggregate-ID-type detection
+         (io.vanillabp.integration.spi.AggregateIdTypes matches by name, main code
+         has NO dependency on any persistence API) -->
+    <dependency>
+      <groupId>jakarta.persistence</groupId>
+      <artifactId>jakarta.persistence-api</artifactId>
+      <version>3.2.0</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 </project>

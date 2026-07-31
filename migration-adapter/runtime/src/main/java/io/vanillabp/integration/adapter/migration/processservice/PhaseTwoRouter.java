@@ -2,7 +2,6 @@ package io.vanillabp.integration.adapter.migration.processservice;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Function;
 
 import io.vanillabp.integration.adapter.spi.PhaseTwoCall;
 import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
@@ -20,9 +19,10 @@ import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
  * </pre>
  *
  * The platform integration registers every process-service bean at bean-creation
- * time, together with a converter turning the serialized (String) workflow-aggregate
- * ID back into the aggregate's ID type - the platform knows the persistence layer,
- * so the conversion happens exactly once, here.
+ * time. The serialized (String) workflow-aggregate ID of an outbox entry is
+ * converted back into the aggregate's ID type by the process service itself
+ * ({@link MigrationProcessService#convertAggregateId} - the ID type comes from the
+ * aggregate's persistence support), so the conversion happens exactly once, here.
  */
 public final class PhaseTwoRouter {
 
@@ -31,29 +31,21 @@ public final class PhaseTwoRouter {
                                  String bpmnProcessId) {
   }
 
-  private record Registration(
-                              MigrationProcessService<?> processService,
-                              Function<String, Object> aggregateIdConverter) {
-  }
-
-  private final Map<RegistrationKey, Registration> registrations = new ConcurrentHashMap<>();
+  private final Map<RegistrationKey, MigrationProcessService<?>> registrations = new ConcurrentHashMap<>();
 
   /**
    * Register the process service of a workflow module/BPMN process as dispatch
    * target, called by the platform integration at bean-creation time.
    *
    * @param processService The process service to route calls to
-   * @param aggregateIdConverter Converts the serialized (String) workflow-aggregate
-   *        ID back into the aggregate's ID type
    */
   public void register(
-      final MigrationProcessService<?> processService,
-      final Function<String, Object> aggregateIdConverter) {
+      final MigrationProcessService<?> processService) {
 
     registrations.put(
         new RegistrationKey(
             processService.getWorkflowModuleId(), processService.getBpmnProcessId()),
-        new Registration(processService, aggregateIdConverter));
+        processService);
 
   }
 
@@ -70,9 +62,9 @@ public final class PhaseTwoRouter {
   public void dispatch(
       final PhaseTwoCall call) {
 
-    final var registration = registrations
+    final var processService = registrations
         .get(new RegistrationKey(call.workflowModuleId(), call.bpmnProcessId()));
-    if (registration == null) {
+    if (processService == null) {
       throw new IllegalStateException(
           """
               Cannot dispatch outbox entry (operation '%s', aggregate ID '%s'): BPMN process '%s' of \
@@ -86,13 +78,11 @@ public final class PhaseTwoRouter {
                   call.workflowModuleId()));
     }
 
-    final var workflowAggregateId = registration
-        .aggregateIdConverter()
-        .apply(call.workflowAggregateId());
+    final var workflowAggregateId = processService
+        .convertAggregateId(call.workflowAggregateId());
 
     switch (call.operation()) {
-      case START_WORKFLOW -> registration
-          .processService()
+      case START_WORKFLOW -> processService
           .startWorkflowPhaseTwo(workflowAggregateId, call.adapterId());
     }
 

@@ -46,6 +46,29 @@
       "defaultValue": "7d"
     },
     {
+      "name": "vanillabp.outbox.jdbc.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Whether the JDBC-based default outbox (gruelbox over the data source) is created when a data source is available. Disable it if the application defines its own PhaseTwoOutbox bean and the default (including its store and background dispatcher) is unwanted.",
+      "defaultValue": true
+    },
+    {
+      "name": "vanillabp.outbox.jdbc.table",
+      "type": "java.lang.String",
+      "description": "The name of the table storing outbox entries (default 'TXNO_OUTBOX'). NOTE: the automatic gruelbox schema migration always targets the default table - a custom name requires the table (structured like 'TXNO_OUTBOX') to be created manually. Every outbox instance needs its own store - two dispatchers polling the same table would compete and double-dispatch."
+    },
+    {
+      "name": "vanillabp.outbox.mongo.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Whether the MongoDB-based default outbox is created when a MongoDB connection is available. Disable it if the application defines its own PhaseTwoOutbox bean and the default (including its store and background dispatcher) is unwanted.",
+      "defaultValue": true
+    },
+    {
+      "name": "vanillabp.outbox.mongo.collection",
+      "type": "java.lang.String",
+      "description": "The name of the collection storing outbox entries. Every outbox instance needs its own store - two dispatchers polling the same collection would compete and double-dispatch.",
+      "defaultValue": "vanillabp-phase-two-outbox"
+    },
+    {
       "name": "vanillabp.workflow-modules",
       "type": "java.util.Map<java.lang.String,io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties>",
       "description": "The properties of all workflow modules, keyed by the workflow module's ID: per-module adapter priorities ('prioritized-adapters') and per-module adapter properties ('adapters.<id>.resources-location' for BPMS-specific BPMN)."

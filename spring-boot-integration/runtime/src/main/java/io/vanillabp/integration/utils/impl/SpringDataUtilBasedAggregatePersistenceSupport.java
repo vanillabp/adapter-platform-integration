@@ -46,6 +46,21 @@ public class SpringDataUtilBasedAggregatePersistenceSupport<A> implements Aggreg
   }
 
   @Override
+  public Class<?> getAggregateIdType() {
+
+    // Spring Data is authoritative for the ID type (covers property access,
+    // non-"id"-named IDs etc.); if the aggregate is not a managed entity, null is
+    // the contract's "not determinable" answer (custom persistence layers based on
+    // this class own the serialized form)
+    try {
+      return springDataUtil.getIdType(aggregateClass);
+    } catch (Exception e) {
+      return null;
+    }
+
+  }
+
+  @Override
   public A loadById(
       final Object aggregateId) {
 

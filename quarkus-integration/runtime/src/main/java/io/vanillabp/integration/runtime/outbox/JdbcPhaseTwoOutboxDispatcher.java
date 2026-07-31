@@ -82,31 +82,38 @@ public class JdbcPhaseTwoOutboxDispatcher {
   private static final String SELECT_DUE_ENTRIES = """
       SELECT ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, AGGREGATE_ID, ADAPTER_ID, ATTEMPTS \
       FROM %s \
-      WHERE STATUS = '%s' AND NEXT_ATTEMPT_AT <= ? AND ATTEMPTS < ?"""
-      .formatted(JdbcPhaseTwoOutbox.TABLE_NAME, STATUS_OPEN);
+      WHERE STATUS = '%s' AND NEXT_ATTEMPT_AT <= ? AND ATTEMPTS < ?""";
 
   private static final String CLAIM_ENTRY = """
       UPDATE %s \
       SET ATTEMPTS = ATTEMPTS + 1, NEXT_ATTEMPT_AT = ? \
-      WHERE ID = ? AND ATTEMPTS = ?"""
-      .formatted(JdbcPhaseTwoOutbox.TABLE_NAME);
+      WHERE ID = ? AND ATTEMPTS = ?""";
 
   private static final String MARK_ENTRY_DONE = """
       UPDATE %s \
       SET STATUS = '%s', DONE_AT = ? \
-      WHERE ID = ?"""
-      .formatted(JdbcPhaseTwoOutbox.TABLE_NAME, STATUS_DONE);
+      WHERE ID = ?""";
 
   private static final String MARK_ENTRY_BLOCKED = """
       UPDATE %s \
       SET STATUS = '%s' \
-      WHERE ID = ?"""
-      .formatted(JdbcPhaseTwoOutbox.TABLE_NAME, STATUS_BLOCKED);
+      WHERE ID = ?""";
 
   private static final String DELETE_EXPIRED_DONE_ENTRIES = """
       DELETE FROM %s \
-      WHERE STATUS = '%s' AND DONE_AT < ?"""
-      .formatted(JdbcPhaseTwoOutbox.TABLE_NAME, STATUS_DONE);
+      WHERE STATUS = '%s' AND DONE_AT < ?""";
+
+  private String tableName;
+
+  private String selectDueEntries;
+
+  private String claimEntry;
+
+  private String markEntryDone;
+
+  private String markEntryBlocked;
+
+  private String deleteExpiredDoneEntries;
 
   /**
    * A due outbox entry read from the database.
@@ -135,9 +142,30 @@ public class JdbcPhaseTwoOutboxDispatcher {
   @Inject
   Instance<PhaseTwoRouter> phaseTwoRouter;
 
-  private PhaseTwoOutboxProperties properties;
+  private volatile PhaseTwoOutboxProperties properties;
 
   private ScheduledExecutorService executor;
+
+  /**
+   * The outbox configuration (<code>vanillabp.outbox.*</code>), loaded lazily so
+   * {@link JdbcPhaseTwoOutbox} can resolve its table name even before the startup
+   * event was observed.
+   *
+   * @return The outbox configuration
+   */
+  PhaseTwoOutboxProperties getProperties() {
+
+    if (properties == null) {
+      properties = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(
+          ConfigProvider
+              .getConfig()
+              .unwrap(SmallRyeConfig.class)
+              .getConfigMapping(QuarkusMigrationAdapterProperties.class)
+              .outbox());
+    }
+    return properties;
+
+  }
 
   /**
    * Creates the outbox table (unless disabled) and starts the fixed-delay poller. The
@@ -154,12 +182,18 @@ public class JdbcPhaseTwoOutboxDispatcher {
       return;
     }
 
-    properties = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(
-        ConfigProvider
-            .getConfig()
-            .unwrap(SmallRyeConfig.class)
-            .getConfigMapping(QuarkusMigrationAdapterProperties.class)
-            .outbox());
+    getProperties();
+    if (!properties.getJdbc().isEnabled()) {
+      log.debug("'vanillabp.outbox.jdbc.enabled' is false - the JDBC-based phase-two outbox stays inactive");
+      return;
+    }
+
+    tableName = JdbcPhaseTwoOutbox.tableName(properties);
+    selectDueEntries = SELECT_DUE_ENTRIES.formatted(tableName, STATUS_OPEN);
+    claimEntry = CLAIM_ENTRY.formatted(tableName);
+    markEntryDone = MARK_ENTRY_DONE.formatted(tableName, STATUS_DONE);
+    markEntryBlocked = MARK_ENTRY_BLOCKED.formatted(tableName, STATUS_BLOCKED);
+    deleteExpiredDoneEntries = DELETE_EXPIRED_DONE_ENTRIES.formatted(tableName, STATUS_DONE);
 
     if (properties.isCreateSchema()) {
       createTableIfNotExists();
@@ -204,32 +238,33 @@ public class JdbcPhaseTwoOutboxDispatcher {
     try (var connection = dataSource.get().getConnection()) {
       // existence is checked via JDBC metadata since 'CREATE TABLE IF NOT EXISTS'
       // is not supported by all databases (e.g. Oracle, SQL Server)
-      if (tableExists(connection)) {
+      if (tableExists(connection, tableName)) {
         return;
       }
       try (var statement = connection.createStatement()) {
-        statement.executeUpdate(buildCreateTable(connection));
+        statement.executeUpdate(buildCreateTable(connection, tableName));
       }
     } catch (SQLException e) {
       throw new IllegalStateException(
           """
               Could not create the phase-two outbox table '%s'! Set 'vanillabp.outbox.create-schema' \
               to 'false' and manage the schema manually if the DDL is not suitable for your database."""
-              .formatted(JdbcPhaseTwoOutbox.TABLE_NAME), e);
+              .formatted(tableName), e);
     }
 
   }
 
   private static boolean tableExists(
-      final Connection connection) throws SQLException {
+      final Connection connection,
+      final String tableName) throws SQLException {
 
     final var metaData = connection.getMetaData();
     // unquoted identifiers are folded to upper case by some databases (Oracle, H2)
     // and to lower case by others (PostgreSQL) - check both spellings
-    for (final var tableName : List.of(
-        JdbcPhaseTwoOutbox.TABLE_NAME,
-        JdbcPhaseTwoOutbox.TABLE_NAME.toLowerCase())) {
-      try (var tables = metaData.getTables(null, null, tableName, new String[]{
+    for (final var name : List.of(
+        tableName,
+        tableName.toLowerCase())) {
+      try (var tables = metaData.getTables(null, null, name, new String[]{
           "TABLE"
       })) {
         if (tables.next()) {
@@ -253,7 +288,8 @@ public class JdbcPhaseTwoOutboxDispatcher {
    * @return The CREATE TABLE statement
    */
   private static String buildCreateTable(
-      final Connection connection) throws SQLException {
+      final Connection connection,
+      final String tableName) throws SQLException {
 
     final var product = connection
         .getMetaData()
@@ -282,7 +318,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
         NEXT_ATTEMPT_AT %s NOT NULL, \
         DONE_AT %s)"""
         .formatted(
-            JdbcPhaseTwoOutbox.TABLE_NAME,
+            tableName,
             timestampType,
             timestampType,
             timestampType);
@@ -312,7 +348,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
       final Connection connection) throws SQLException {
 
     final var entries = new ArrayList<Entry>();
-    try (var statement = connection.prepareStatement(SELECT_DUE_ENTRIES)) {
+    try (var statement = connection.prepareStatement(selectDueEntries)) {
       statement.setTimestamp(1, Timestamp.from(Instant.now()));
       statement.setInt(2, properties.getBlockAfterAttempts());
       try (var resultSet = statement.executeQuery()) {
@@ -340,7 +376,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
       final Connection connection,
       final Entry entry) throws SQLException {
 
-    try (var statement = connection.prepareStatement(CLAIM_ENTRY)) {
+    try (var statement = connection.prepareStatement(claimEntry)) {
       statement.setTimestamp(1, Timestamp.from(Instant.now().plus(properties.getAttemptFrequency())));
       statement.setString(2, entry.id());
       statement.setInt(3, entry.attempts());
@@ -377,7 +413,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
                   .of()));
     } catch (Exception e) {
       if (entry.attempts() + 1 >= properties.getBlockAfterAttempts()) {
-        try (var statement = connection.prepareStatement(MARK_ENTRY_BLOCKED)) {
+        try (var statement = connection.prepareStatement(markEntryBlocked)) {
           statement.setString(1, entry.id());
           statement.executeUpdate();
         }
@@ -403,7 +439,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
       }
       return;
     }
-    try (var statement = connection.prepareStatement(MARK_ENTRY_DONE)) {
+    try (var statement = connection.prepareStatement(markEntryDone)) {
       statement.setTimestamp(1, Timestamp.from(Instant.now()));
       statement.setString(2, entry.id());
       statement.executeUpdate();
@@ -420,7 +456,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
   private void cleanupDoneEntries(
       final Connection connection) throws SQLException {
 
-    try (var statement = connection.prepareStatement(DELETE_EXPIRED_DONE_ENTRIES)) {
+    try (var statement = connection.prepareStatement(deleteExpiredDoneEntries)) {
       statement.setTimestamp(1, Timestamp.from(Instant.now().minus(properties.getRetention())));
       statement.executeUpdate();
     }

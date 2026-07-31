@@ -39,12 +39,29 @@ public class MigrationProcessService<A> {
   private final AggregatePersistenceAware<A> aggregatePersistenceSupport;
 
   /**
-   * The outbox used to schedule phase two of a two-phase workflow start. Provided by
-   * the platform integration; may be <code>null</code> if the platform does not
-   * provide one - in this case starting workflows via adapters which report
-   * {@link MigratableProcessService#needsTwoPhaseCommitForStartingWorkflows()} fails.
+   * The type of the aggregate's ID property or <code>null</code> if not determinable
+   * (custom persistence owning the serialized form). Determined once at construction
+   * and validated to round-trip losslessly through the outbox's String serialization
+   * (see {@link AggregateIdRoundTrip}).
    */
-  private final PhaseTwoOutbox phaseTwoOutbox;
+  private final Class<?> aggregateIdType;
+
+  /**
+   * Resolves the outbox used to schedule phase two of a two-phase workflow start.
+   * Provided by the platform integration; may be <code>null</code> in tests - if an
+   * adapter reporting
+   * {@link MigratableProcessService#needsTwoPhaseCommitForStartingWorkflows()} is
+   * first-priority, {@link #validatePhaseTwoOutboxAtStartup()} fails the startup
+   * with a guiding message when no outbox can be resolved.
+   */
+  private final PhaseTwoOutboxResolver phaseTwoOutboxResolver;
+
+  /**
+   * The outbox resolved for this process service's aggregate,
+   * <code>null</code> until resolved (at startup via
+   * {@link #validatePhaseTwoOutboxAtStartup()} or lazily as backstop).
+   */
+  private volatile PhaseTwoOutbox phaseTwoOutbox;
 
   public MigrationProcessService(
       final String workflowModuleId,
@@ -53,7 +70,7 @@ public class MigrationProcessService<A> {
       final MigrationAdapterProperties properties,
       final AggregatePersistenceAware<A> aggregatePersistenceSupport,
       final List<MigratableProcessService<A>> processServices,
-      final PhaseTwoOutbox phaseTwoOutbox) {
+      final PhaseTwoOutboxResolver phaseTwoOutboxResolver) {
 
     this.workflowModuleId = workflowModuleId;
     this.bpmnProcessId = bpmnProcessId;
@@ -87,7 +104,13 @@ public class MigrationProcessService<A> {
                         workflowModuleId,
                         bpmnProcessId))))
         .toList();
-    this.phaseTwoOutbox = phaseTwoOutbox;
+    this.phaseTwoOutboxResolver = phaseTwoOutboxResolver;
+
+    // startup check: the aggregate's ID has to round-trip losslessly through the
+    // outbox's String serialization (fails with a guiding message otherwise); a
+    // null ID type means a custom persistence layer owns the serialized form
+    this.aggregateIdType = aggregatePersistenceSupport.getAggregateIdType();
+    AggregateIdRoundTrip.validateIdTypeConvertible(workflowAggregateClass, aggregateIdType);
 
   }
 
@@ -96,6 +119,79 @@ public class MigrationProcessService<A> {
     return adapterProcessServices
         .getFirst()
         .needsTwoPhaseCommitForStartingWorkflows();
+
+  }
+
+  /**
+   * Validates AT STARTUP that an outbox is available if the first-priority adapter
+   * requires a two-phase commit for starting workflows - a configuration defect must
+   * not surface first at runtime. If the first-priority adapter does not require a
+   * two-phase commit, nothing is resolved and nothing materializes (an application
+   * using only embedded BPMS must not be forced to have an outbox store). Called by
+   * the platform integration once the application context is ready (not
+   * mid-bean-construction, so no persistence infrastructure is materialized early).
+   *
+   * @throws IllegalStateException If an outbox is required but none can be resolved,
+   *           naming the remedies
+   */
+  public void validatePhaseTwoOutboxAtStartup() {
+
+    if (!needsTwoPhaseCommitForStartingWorkflows()) {
+      return;
+    }
+    if (resolvePhaseTwoOutbox() == null) {
+      throw new IllegalStateException(
+          buildNoOutboxMessage(
+              adapterProcessServices
+                  .getFirst()
+                  .getAdapterId()));
+    }
+
+  }
+
+  /**
+   * Converts the serialized (String) workflow-aggregate ID of an outbox entry back
+   * into the aggregate's ID type. If the ID type is not determinable (custom
+   * persistence), the String is passed through unchanged - the custom persistence
+   * layer is responsible for handling the serialized form.
+   *
+   * @param serializedAggregateId The aggregate ID in serialized form
+   * @return The aggregate ID in the aggregate's ID type
+   */
+  public Object convertAggregateId(
+      final String serializedAggregateId) {
+
+    return AggregateIdRoundTrip.convert(serializedAggregateId, aggregateIdType);
+
+  }
+
+  private PhaseTwoOutbox resolvePhaseTwoOutbox() {
+
+    if ((phaseTwoOutbox == null) && (phaseTwoOutboxResolver != null)) {
+      phaseTwoOutbox = phaseTwoOutboxResolver.resolveFor(workflowAggregateClass);
+    }
+    return phaseTwoOutbox;
+
+  }
+
+  private String buildNoOutboxMessage(
+      final String adapterId) {
+
+    return """
+        Adapter '%s' requires a two-phase commit for starting workflows of BPMN process '%s' \
+        of workflow module '%s', but no PhaseTwoOutbox is available for aggregate '%s'! \
+        To solve this either
+        %s
+        - define your own bean implementing io.vanillabp.integration.adapter.spi.PhaseTwoOutbox \
+        (assign it to specific aggregates via a io.vanillabp.integration.adapter.spi.PhaseTwoOutboxAware bean)."""
+        .formatted(
+            adapterId,
+            bpmnProcessId,
+            workflowModuleId,
+            workflowAggregateClass.getName(),
+            phaseTwoOutboxResolver == null
+                ? "- provide a PhaseTwoOutboxResolver (platform integration), or"
+                : phaseTwoOutboxResolver.remediesDescription());
 
   }
 
@@ -129,20 +225,14 @@ public class MigrationProcessService<A> {
     adapter.startWorkflowPhaseOne(workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, attachedAggregate);
 
     if (adapter.needsTwoPhaseCommitForStartingWorkflows()) {
-      if (phaseTwoOutbox == null) {
+      // backstop only: the outbox was already resolved and validated at startup
+      // (validatePhaseTwoOutboxAtStartup) - this fires only if that was skipped
+      final var outbox = resolvePhaseTwoOutbox();
+      if (outbox == null) {
         throw new IllegalStateException(
-            """
-                Adapter '%s' requires a two-phase commit for starting workflows of BPMN process '%s' \
-                of workflow module '%s', but no PhaseTwoOutbox is available! \
-                Provide an implementation of io.vanillabp.integration.adapter.spi.PhaseTwoOutbox \
-                (e.g. by using JPA or MongoDB for persistence of aggregates which enables one of \
-                the default implementations of the platform integration)."""
-                .formatted(
-                    adapter.getAdapterId(),
-                    bpmnProcessId,
-                    workflowModuleId));
+            buildNoOutboxMessage(adapter.getAdapterId()));
       }
-      phaseTwoOutbox.scheduleStartWorkflow(
+      outbox.scheduleStartWorkflow(
           workflowModuleId,
           bpmnProcessId,
           aggregateId,
