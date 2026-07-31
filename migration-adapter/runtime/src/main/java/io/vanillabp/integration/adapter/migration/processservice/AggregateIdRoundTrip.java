@@ -10,7 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Round-trip handling of workflow-aggregate IDs crossing the phase-two outbox: the ID
  * is serialized as a String by
- * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox} implementations and
+ * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} implementations and
  * converted back to the aggregate's ID type at dispatch time. The ID type comes from
  * {@link io.vanillabp.integration.spi.AggregatePersistenceAware#getAggregateIdType()}
  * - if it is <code>null</code> (custom persistence owning the serialized form),

@@ -1,4 +1,4 @@
-package io.vanillabp.integration.adapter.spi;
+package io.vanillabp.integration.spi;
 
 /**
  * Selects the {@link PhaseTwoOutbox} used for aggregates of the given type.
@@ -14,7 +14,7 @@ package io.vanillabp.integration.adapter.spi;
  * Implementations are CDI/Spring beans. The implementation with the most specific
  * aggregate class is chosen, taking superclasses and implemented interfaces into
  * account - the same selection semantics as
- * {@link io.vanillabp.integration.spi.AggregatePersistenceAware}. Without any
+ * {@link AggregatePersistenceAware}. Without any
  * matching implementation the platform integration falls back to its default
  * selection (the outbox matching the persistence technology managing the aggregate,
  * or the single available outbox).

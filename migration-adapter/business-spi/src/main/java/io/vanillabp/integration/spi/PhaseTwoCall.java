@@ -1,4 +1,4 @@
-package io.vanillabp.integration.adapter.spi;
+package io.vanillabp.integration.spi;
 
 import java.util.Map;
 import java.util.Objects;

@@ -6,7 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Converts workflow-aggregate IDs which were serialized as strings by a
- * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox} implementation back to
+ * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} implementation back to
  * their original type (e.g. <code>Long</code> or <code>UUID</code>).
  */
 @Slf4j

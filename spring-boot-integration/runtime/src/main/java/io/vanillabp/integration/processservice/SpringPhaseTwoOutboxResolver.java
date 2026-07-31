@@ -10,10 +10,10 @@ import org.springframework.data.repository.support.Repositories;
 
 import io.vanillabp.integration.adapter.migration.processservice.AwareSelection;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxResolver;
-import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
-import io.vanillabp.integration.adapter.spi.PhaseTwoOutboxAware;
 import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfiguration;
 import io.vanillabp.integration.outbox.mongo.MongoPhaseTwoOutboxAutoConfiguration;
+import io.vanillabp.integration.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.PhaseTwoOutboxAware;
 
 /**
  * Spring Boot implementation of the core's {@link PhaseTwoOutboxResolver}: resolves
@@ -139,7 +139,7 @@ public class SpringPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
         The PhaseTwoOutbox beans %s cannot be attributed to workflow aggregate '%s' (persistence \
         technology detected: %s)! Outbox entries must be enlisted in the transaction persisting the \
         aggregate. To solve this either
-        - provide a bean implementing io.vanillabp.integration.adapter.spi.PhaseTwoOutboxAware for \
+        - provide a bean implementing io.vanillabp.integration.spi.PhaseTwoOutboxAware for \
         this aggregate (returning the outbox matching its persistence), or
         - enable the platform default matching the aggregate's persistence (add the corresponding \
         Spring Data starter; check 'vanillabp.outbox.jdbc.enabled' / 'vanillabp.outbox.mongo.enabled')."""

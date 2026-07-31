@@ -1,7 +1,7 @@
 package io.vanillabp.integration.adapter.migration.processservice;
 
-import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
-import io.vanillabp.integration.adapter.spi.PhaseTwoOutboxAware;
+import io.vanillabp.integration.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.PhaseTwoOutboxAware;
 
 /**
  * Resolves the {@link PhaseTwoOutbox} used for a workflow aggregate, implemented by

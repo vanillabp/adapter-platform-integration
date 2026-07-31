@@ -6,7 +6,7 @@ import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.MongoTransactionManager;
 
 /**
- * Test application for the MongoDB {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox}:
+ * Test application for the MongoDB {@link io.vanillabp.integration.spi.PhaseTwoOutbox}:
  * the dummy adapter is forced to require a two-phase commit for starting workflows
  * (property <code>dummy-adapter.two-phase-commit</code>) and a
  * {@link RecordingPhaseTwoListener} observes (and optionally fails) phase two. A

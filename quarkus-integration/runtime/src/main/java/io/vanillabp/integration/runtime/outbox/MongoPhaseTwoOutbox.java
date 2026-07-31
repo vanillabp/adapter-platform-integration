@@ -8,8 +8,8 @@ import org.bson.Document;
 import com.mongodb.MongoWriteException;
 import com.mongodb.client.MongoClient;
 
-import io.vanillabp.integration.adapter.spi.PhaseTwoCall;
-import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.PhaseTwoCall;
+import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;

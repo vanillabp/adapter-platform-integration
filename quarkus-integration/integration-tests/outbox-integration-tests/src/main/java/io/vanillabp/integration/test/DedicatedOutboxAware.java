@@ -1,7 +1,7 @@
 package io.vanillabp.integration.test;
 
-import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
-import io.vanillabp.integration.adapter.spi.PhaseTwoOutboxAware;
+import io.vanillabp.integration.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.PhaseTwoOutboxAware;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 

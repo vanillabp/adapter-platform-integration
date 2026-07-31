@@ -225,16 +225,19 @@ core.
 
 1. **business-spi:** (artifact `io.vanillabp:vanillabp-integration-spi`)<br>
    Interfaces business code may implement, kept strictly separate from the adapter
-   SPI so business code never sees adapter-implementation interfaces. Currently:
+   SPI so business code never sees adapter-implementation interfaces:
    `io.vanillabp.integration.spi.AggregatePersistenceAware` — the single canonical
-   persistence abstraction used on all platforms. It is provided to applications
+   persistence abstraction used on all platforms — and the outbox contract
+   (`PhaseTwoOutbox` incl. `PhaseTwoCall`/`PhaseTwoOperation`, plus the
+   per-aggregate attribution `PhaseTwoOutboxAware`): custom outboxes are
+   contributed by APPLICATIONS, not by adapters, so these types live here (moved
+   from the adapter SPI in story 26i). It is provided to applications
    transitively through the platform support modules (`vanillabp-spring-boot-support`
    / `vanillabp-quarkus-support`).
 2. **spi:** (artifact `io.vanillabp.adapter:migration-adapter-spi`)<br>
    The adapter-facing SPI to be implemented by BPMS adapters and platform
    integrations: `AdapterDeploymentService` (extends `ExtensionWiringService`),
-   `MigratableProcessService` (incl. `WorkflowAwareness`),
-   `PhaseTwoOutbox` (incl. `PhaseTwoDispatch` and `ProcessServicePhaseTwo`) and
+   `MigratableProcessService` (incl. `WorkflowAwareness`) and
    `ExtensionWiringService`. Adapters report BPMN parsing errors using
    `BpmnParseException`. Depends on `business-spi` (uses
    `AggregatePersistenceAware` in signatures).

@@ -5,8 +5,8 @@ import java.util.Map;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
-import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -182,8 +182,8 @@ public class MigrationProcessService<A> {
         of workflow module '%s', but no PhaseTwoOutbox is available for aggregate '%s'! \
         To solve this either
         %s
-        - define your own bean implementing io.vanillabp.integration.adapter.spi.PhaseTwoOutbox \
-        (assign it to specific aggregates via a io.vanillabp.integration.adapter.spi.PhaseTwoOutboxAware bean)."""
+        - define your own bean implementing io.vanillabp.integration.spi.PhaseTwoOutbox \
+        (assign it to specific aggregates via a io.vanillabp.integration.spi.PhaseTwoOutboxAware bean)."""
         .formatted(
             adapterId,
             bpmnProcessId,

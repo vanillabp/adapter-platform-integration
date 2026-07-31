@@ -61,7 +61,7 @@ public interface QuarkusMigrationAdapterProperties {
 
   /**
    * The configuration of the phase-two outbox used for two-phase workflow starts
-   * (see {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox}).
+   * (see {@link io.vanillabp.integration.spi.PhaseTwoOutbox}).
    *
    * @return The outbox configuration
    */

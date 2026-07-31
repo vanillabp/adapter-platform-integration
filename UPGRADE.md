@@ -9,8 +9,17 @@ applications built on VanillaBP).
 Story 26i - two related consolidations, breaking for applications using their own
 `PhaseTwoOutbox` bean and behavior-changing for mixed-persistence classpaths:
 
+- **Outbox SPI relocated to the business SPI** (breaking for applications
+  implementing a custom outbox): `PhaseTwoOutbox`, `PhaseTwoCall`,
+  `PhaseTwoOperation` and the new `PhaseTwoOutboxAware` moved from the adapter SPI
+  (`io.vanillabp.integration.adapter.spi`, module `migration-adapter-spi`) to the
+  business SPI (`io.vanillabp.integration.spi`, module `vanillabp-integration-spi`,
+  next to `AggregatePersistenceAware`). The split is deliberate: the adapter SPI is
+  for BPMS-adapter implementations, the business SPI for business-process
+  applications - and custom outboxes are contributed by APPLICATIONS. No
+  adapter-facing signature ever referenced these types; only the import changes.
 - **The phase-two outbox is selected PER AGGREGATE, not per JVM.** New business SPI
-  `io.vanillabp.integration.adapter.spi.PhaseTwoOutboxAware<A>` (most-specific
+  `io.vanillabp.integration.spi.PhaseTwoOutboxAware<A>` (most-specific
   aggregate class wins - same selection as `AggregatePersistenceAware`, now shared
   via the core's `AwareSelection`). Both platform defaults (JDBC and MongoDB) may
   COEXIST: the `@ConditionalOnMissingBean(PhaseTwoOutbox.class)` single-bean gate is

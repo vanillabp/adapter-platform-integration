@@ -138,7 +138,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
 
   /**
    * The core-owned router receiving phase-two calls dispatched by a
-   * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox} implementation and
+   * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} implementation and
    * routing them to the {@link io.vanillabp.spi.process.ProcessService} bean
    * responsible for the workflow module and BPMN process given. The process-service
    * beans register themselves (including the aggregate-ID converter) at

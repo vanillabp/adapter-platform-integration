@@ -3,8 +3,8 @@ package io.vanillabp.integration.outbox.gruelbox;
 import com.gruelbox.transactionoutbox.AlreadyScheduledException;
 import com.gruelbox.transactionoutbox.TransactionOutbox;
 
-import io.vanillabp.integration.adapter.spi.PhaseTwoCall;
-import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.PhaseTwoCall;
+import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 

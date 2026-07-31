@@ -10,7 +10,7 @@ import lombok.Setter;
 
 /**
  * A JPA workflow aggregate of a "high-load" process: a
- * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutboxAware} bean assigns it a
+ * {@link io.vanillabp.integration.spi.PhaseTwoOutboxAware} bean assigns it a
  * DEDICATED outbox on its own table (<code>HOT_OUTBOX</code>) to isolate it from the
  * other processes' outbox traffic.
  */

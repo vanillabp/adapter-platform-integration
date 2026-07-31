@@ -26,10 +26,10 @@ import com.gruelbox.transactionoutbox.spring.SpringInstantiator;
 import com.gruelbox.transactionoutbox.spring.SpringTransactionManager;
 
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
-import io.vanillabp.integration.adapter.spi.PhaseTwoCall;
-import io.vanillabp.integration.adapter.spi.PhaseTwoOperation;
-import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
+import io.vanillabp.integration.spi.PhaseTwoCall;
+import io.vanillabp.integration.spi.PhaseTwoOperation;
+import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.utils.config.JpaSpringDataUtilConfiguration;
 import jakarta.persistence.EntityManagerFactory;
 
@@ -41,7 +41,7 @@ import jakarta.persistence.EntityManagerFactory;
  * exactly one {@link EntityManagerFactory} exists - it COEXISTS with the MongoDB
  * default: each workflow aggregate is served by the outbox matching its persistence
  * (selection per aggregate, see
- * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutboxAware}), so outbox
+ * {@link io.vanillabp.integration.spi.PhaseTwoOutboxAware}), so outbox
  * entries always ride the aggregate's own transaction even in mixed-persistence
  * applications. Disable via <code>vanillabp.outbox.jdbc.enabled</code> if the
  * default (including its table and background dispatcher) is unwanted.
@@ -270,7 +270,7 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
         """
             Database '%s' is not supported by the gruelbox-based VanillaBP phase-two outbox! \
             Define your own com.gruelbox.transactionoutbox.TransactionOutbox bean or provide a custom \
-            implementation of io.vanillabp.integration.adapter.spi.PhaseTwoOutbox."""
+            implementation of io.vanillabp.integration.spi.PhaseTwoOutbox."""
             .formatted(productName));
 
   }

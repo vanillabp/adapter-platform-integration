@@ -14,9 +14,9 @@ import org.springframework.data.mongodb.core.index.Index;
 import org.springframework.data.mongodb.repository.MongoRepository;
 
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
-import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfiguration;
+import io.vanillabp.integration.spi.PhaseTwoOutbox;
 
 /**
  * Auto-configuration of the default {@link PhaseTwoOutbox} for MongoDB-based aggregate
@@ -24,7 +24,7 @@ import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfig
  * {@link MongoDatabaseFactory} is available - it COEXISTS with the JPA/gruelbox
  * default ({@link GruelboxPhaseTwoOutboxAutoConfiguration}): each workflow aggregate
  * is served by the outbox matching its persistence (selection per aggregate, see
- * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutboxAware}), so outbox
+ * {@link io.vanillabp.integration.spi.PhaseTwoOutboxAware}), so outbox
  * entries always ride the aggregate's own transaction even in mixed-persistence
  * applications. Disable via <code>vanillabp.outbox.mongo.enabled</code> if the
  * default (including its collection and background dispatcher) is unwanted.

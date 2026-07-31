@@ -26,7 +26,7 @@ public class DummyAdapterProcessServiceConfiguration {
   /**
    * The property forcing the dummy adapter to require a two-phase commit for starting
    * workflows. Used by integration tests of
-   * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox} implementations.
+   * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} implementations.
    */
   public static final String PROPERTY_TWO_PHASE_COMMIT = "dummy-adapter.two-phase-commit";
 

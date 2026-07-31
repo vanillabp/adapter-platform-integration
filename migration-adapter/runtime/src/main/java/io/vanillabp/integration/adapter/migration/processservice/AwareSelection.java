@@ -11,7 +11,7 @@ import java.util.function.Function;
 /**
  * Most-specific-wins selection of "aware" implementations
  * ({@link io.vanillabp.integration.spi.AggregatePersistenceAware},
- * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutboxAware}) for a workflow
+ * {@link io.vanillabp.integration.spi.PhaseTwoOutboxAware}) for a workflow
  * aggregate: among all candidates whose aggregate class the given aggregate type is
  * assignable to, the one with the smallest inheritance distance is chosen -
  * superclasses and implemented interfaces are considered. The selection logic is

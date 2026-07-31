@@ -188,7 +188,7 @@ disable an unwanted default via its `enabled` flag:
 If both JPA and MongoDB are configured, JPA wins deterministically (consistent with
 the `SpringDataUtil` auto-configurations). To use a different outbox (e.g. another
 database or an existing outbox infrastructure), define a bean implementing
-`io.vanillabp.integration.adapter.spi.PhaseTwoOutbox` — both auto-configurations
+`io.vanillabp.integration.spi.PhaseTwoOutbox` — both auto-configurations
 back off.
 
 ### Separating workflow module properties from application properties

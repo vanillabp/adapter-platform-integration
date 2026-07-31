@@ -1,4 +1,4 @@
-package io.vanillabp.integration.adapter.spi;
+package io.vanillabp.integration.spi;
 
 import java.util.Optional;
 
@@ -29,7 +29,7 @@ public enum PhaseTwoOperation {
 
   /**
    * Phase two of starting a workflow - see
-   * {@link MigratableProcessService#startWorkflowPhaseTwo(String, String, Object)}.
+   * {@code MigratableProcessService#startWorkflowPhaseTwo}.
    */
   START_WORKFLOW {
     @Override

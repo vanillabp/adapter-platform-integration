@@ -1,9 +1,9 @@
-package io.vanillabp.integration.adapter.spi;
+package io.vanillabp.integration.spi;
 
 /**
  * Transaction outbox used to reliably execute the second phase of two-phase committed
  * BPMS calls (e.g.
- * {@link MigratableProcessService#startWorkflowPhaseTwo(String, String, Object)})
+ * {@code MigratableProcessService#startWorkflowPhaseTwo})
  * after the local transaction which persisted the workflow aggregate was committed.
  * <p>
  * For every method of <code>io.vanillabp.spi.process.ProcessService</code> requiring a
@@ -51,10 +51,10 @@ package io.vanillabp.integration.adapter.spi;
  * call and marking the entry DONE re-dispatches the entry on recovery. This residual
  * window is accepted (eventual consistency); adapters keep their operations
  * idempotent (see
- * {@link MigratableProcessService#startWorkflowPhaseTwo(String, String, Object)}).
+ * {@code MigratableProcessService#startWorkflowPhaseTwo}).
  * <p>
  * TODO (story 25, fallback election): mitigate the residual window by probing
- * {@link MigratableProcessService#awarenessOfWorkflow(Object)} before re-dispatching
+ * {@code MigratableProcessService#awarenessOfWorkflow} before re-dispatching
  * entries with <code>attempts &gt; 0</code> - on a hit mark DONE instead of
  * re-dispatching. Do not call awareness methods before that story lands.
  * <p>

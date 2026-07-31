@@ -3,8 +3,8 @@ package io.vanillabp.integration.adapter.migration.processservice;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import io.vanillabp.integration.adapter.spi.PhaseTwoCall;
-import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.PhaseTwoCall;
+import io.vanillabp.integration.spi.PhaseTwoOutbox;
 
 /**
  * Core-owned router dispatching {@link PhaseTwoCall}s scheduled via

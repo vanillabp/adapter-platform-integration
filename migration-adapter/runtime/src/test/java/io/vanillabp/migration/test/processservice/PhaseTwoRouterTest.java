@@ -16,8 +16,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
-import io.vanillabp.integration.adapter.spi.PhaseTwoCall;
-import io.vanillabp.integration.adapter.spi.PhaseTwoOperation;
+import io.vanillabp.integration.spi.PhaseTwoCall;
+import io.vanillabp.integration.spi.PhaseTwoOperation;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 @ExtendWith(MockitoExtension.class)

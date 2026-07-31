@@ -1,6 +1,7 @@
 package io.vanillabp.integration.adapter.spi;
 
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.PhaseTwoOutbox;
 
 /**
  * To be implemented by a platform integration adapter.

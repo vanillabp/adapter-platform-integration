@@ -3,8 +3,8 @@ package io.vanillabp.integration.test;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-import io.vanillabp.integration.adapter.spi.PhaseTwoCall;
-import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.PhaseTwoCall;
+import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**

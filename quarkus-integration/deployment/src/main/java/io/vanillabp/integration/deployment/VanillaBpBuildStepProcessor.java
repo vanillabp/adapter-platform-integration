@@ -162,12 +162,12 @@ public class VanillaBpBuildStepProcessor {
 
   /**
    * Registers the default implementations of the phase-two outbox (see
-   * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox}) used for two-phase
+   * {@link io.vanillabp.integration.spi.PhaseTwoOutbox}) used for two-phase
    * workflow starts: the JDBC/Agroal-based one if a JDBC datasource applies AND the
    * MongoDB-based one if the <code>quarkus-mongodb-client</code> extension is
    * present - both may coexist, each workflow aggregate is served by the outbox
    * matching its persistence (attribution via
-   * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutboxAware} beans, see
+   * {@link io.vanillabp.integration.spi.PhaseTwoOutboxAware} beans, see
    * {@link io.vanillabp.integration.runtime.processservice.QuarkusPhaseTwoOutboxResolver}).
    * Unwanted defaults can be deactivated via
    * <code>vanillabp.outbox.jdbc.enabled</code> /
@@ -205,8 +205,8 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
-   * Beans implementing {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox}
-   * or {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutboxAware} are not
+   * Beans implementing {@link io.vanillabp.integration.spi.PhaseTwoOutbox}
+   * or {@link io.vanillabp.integration.spi.PhaseTwoOutboxAware} are not
    * necessarily injected by application code but looked up dynamically at runtime
    * (per-aggregate outbox resolution). This build step prevents ArC from removing
    * them as unused beans.
@@ -217,8 +217,8 @@ public class VanillaBpBuildStepProcessor {
   io.quarkus.arc.deployment.UnremovableBeanBuildItem preservePhaseTwoOutboxBeans() {
 
     return io.quarkus.arc.deployment.UnremovableBeanBuildItem.beanTypes(
-        io.vanillabp.integration.adapter.spi.PhaseTwoOutbox.class,
-        io.vanillabp.integration.adapter.spi.PhaseTwoOutboxAware.class);
+        io.vanillabp.integration.spi.PhaseTwoOutbox.class,
+        io.vanillabp.integration.spi.PhaseTwoOutboxAware.class);
 
   }
 

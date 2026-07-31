@@ -9,7 +9,7 @@ import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
 /**
- * Configuration of the default {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox}
+ * Configuration of the default {@link io.vanillabp.integration.spi.PhaseTwoOutbox}
  * implementations (properties section <code>vanillabp.outbox</code>) - the single
  * source of truth for keys, defaults and documentation, used by all platform
  * implementations (Spring Boot: gruelbox-based JPA and MongoDB; Quarkus: JDBC/Agroal
@@ -54,7 +54,7 @@ public class PhaseTwoOutboxProperties {
    * How long successfully dispatched entries (marked as DONE) are retained before
    * they are deleted asynchronously. Retained entries keep the deduplication window
    * of the idempotency contract open beyond dispatch (see
-   * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox}).
+   * {@link io.vanillabp.integration.spi.PhaseTwoOutbox}).
    */
   @Builder.Default
   private Duration retention = Duration.ofDays(7);
@@ -85,7 +85,7 @@ public class PhaseTwoOutboxProperties {
     /**
      * Whether the JDBC-based default outbox is created when a data source is
      * available. Disable it if the application defines its own
-     * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox} bean and the
+     * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} bean and the
      * default (including its store and background dispatcher) is unwanted.
      */
     @Builder.Default
@@ -114,7 +114,7 @@ public class PhaseTwoOutboxProperties {
     /**
      * Whether the MongoDB-based default outbox is created when a MongoDB connection
      * is available. Disable it if the application defines its own
-     * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox} bean and the
+     * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} bean and the
      * default (including its store and background dispatcher) is unwanted.
      */
     @Builder.Default

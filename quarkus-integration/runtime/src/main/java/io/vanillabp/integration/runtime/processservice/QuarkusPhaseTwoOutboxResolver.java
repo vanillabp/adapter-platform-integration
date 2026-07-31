@@ -4,10 +4,10 @@ import java.util.List;
 
 import io.vanillabp.integration.adapter.migration.processservice.AwareSelection;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxResolver;
-import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
-import io.vanillabp.integration.adapter.spi.PhaseTwoOutboxAware;
 import io.vanillabp.integration.runtime.outbox.JdbcPhaseTwoOutbox;
 import io.vanillabp.integration.runtime.outbox.MongoPhaseTwoOutbox;
+import io.vanillabp.integration.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.PhaseTwoOutboxAware;
 import jakarta.enterprise.inject.Instance;
 
 /**
@@ -86,7 +86,7 @@ public class QuarkusPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
               Several PhaseTwoOutbox beans exist (%s), but none can be attributed to workflow \
               aggregate '%s'! Outbox entries must be enlisted in the transaction persisting the \
               aggregate. To solve this either
-              - provide a bean implementing io.vanillabp.integration.adapter.spi.PhaseTwoOutboxAware \
+              - provide a bean implementing io.vanillabp.integration.spi.PhaseTwoOutboxAware \
               for this aggregate (returning the outbox matching its persistence), or
               - deactivate the unwanted default outbox ('vanillabp.outbox.jdbc.enabled' / \
               'vanillabp.outbox.mongo.enabled')."""

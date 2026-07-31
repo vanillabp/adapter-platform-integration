@@ -23,13 +23,13 @@ import com.gruelbox.transactionoutbox.TransactionOutbox;
 import com.gruelbox.transactionoutbox.spring.SpringInstantiator;
 import com.gruelbox.transactionoutbox.spring.SpringTransactionManager;
 
-import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
-import io.vanillabp.integration.adapter.spi.PhaseTwoOutboxAware;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutbox;
 import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfiguration;
 import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.PhaseTwoOutboxAware;
 import io.vanillabp.integration.utils.impl.MongoDbSpringDataUtil;
 import io.vanillabp.integration.utils.impl.SpringDataUtilBasedAggregatePersistenceSupport;
 import jakarta.persistence.EntityManagerFactory;

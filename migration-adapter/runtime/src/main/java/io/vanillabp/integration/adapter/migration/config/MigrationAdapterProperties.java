@@ -62,7 +62,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   /**
    * Configuration of the default
-   * {@link io.vanillabp.integration.adapter.spi.PhaseTwoOutbox} implementations
+   * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} implementations
    * (properties section <code>vanillabp.outbox</code>).
    */
   @Builder.Default

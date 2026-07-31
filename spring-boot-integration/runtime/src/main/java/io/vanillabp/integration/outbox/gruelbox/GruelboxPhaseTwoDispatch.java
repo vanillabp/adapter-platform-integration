@@ -1,6 +1,6 @@
 package io.vanillabp.integration.outbox.gruelbox;
 
-import io.vanillabp.integration.adapter.spi.PhaseTwoCall;
+import io.vanillabp.integration.spi.PhaseTwoCall;
 
 /**
  * The invocation scheduled through the gruelbox transaction outbox, carrying the
@@ -23,7 +23,7 @@ public interface GruelboxPhaseTwoDispatch {
    * {@link io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter}.
    *
    * @param operation The name of the scheduled {@link
-   *        io.vanillabp.integration.adapter.spi.PhaseTwoOperation}
+   *        io.vanillabp.integration.spi.PhaseTwoOperation}
    * @param workflowModuleId The ID of the workflow module the workflow belongs to
    * @param bpmnProcessId The BPMN process ID of the workflow
    * @param workflowAggregateId The ID of the workflow aggregate in serialized form

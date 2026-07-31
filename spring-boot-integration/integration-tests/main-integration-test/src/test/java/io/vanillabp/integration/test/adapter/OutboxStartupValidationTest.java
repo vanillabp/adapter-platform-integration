@@ -9,8 +9,8 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import io.vanillabp.adapter.dummy.springboot.DummyAdapterConfiguration;
 import io.vanillabp.adapter.dummy.springboot.processservice.DummyAdapterProcessServiceConfiguration;
-import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
+import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.test.TestPersistenceConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.sample.Aggregate;
