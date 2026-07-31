@@ -248,6 +248,45 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
+   * Whether the given adapter is the FIRST entry of the prioritized-adapters list at
+   * ANY level (globally, of any workflow module or of any workflow) - i.e. whether
+   * new workflows may be started via this adapter anywhere. Used to decide how
+   * strictly an adapter's own startup validation may treat configuration defects:
+   * an adapter that is nowhere first may honor its
+   * <code>deployment-failure: warn</code> policy and keep the application booting
+   * (migration scenario: the OLD BPMS is intentionally degraded), whereas an
+   * adapter that is first anywhere always fails the boot on a genuine defect -
+   * new workflows could not be started otherwise.
+   *
+   * @param adapterId The adapter ID
+   * @return Whether the adapter is first priority at any level
+   */
+  public boolean isFirstPriorityAnywhere(
+      final String adapterId) {
+
+    if (isFirstOf(getPrioritizedAdapters(), adapterId)) {
+      return true;
+    }
+    return workflowModules
+        .values()
+        .stream()
+        .anyMatch(workflowModule -> isFirstOf(workflowModule.getPrioritizedAdapters(), adapterId) || workflowModule
+            .getWorkflows()
+            .values()
+            .stream()
+            .anyMatch(workflow -> isFirstOf(workflow.getPrioritizedAdapters(), adapterId)));
+
+  }
+
+  private static boolean isFirstOf(
+      final List<String> prioritizedAdapters,
+      final String adapterId) {
+
+    return !prioritizedAdapters.isEmpty() && prioritizedAdapters.getFirst().equals(adapterId);
+
+  }
+
+  /**
    * Provides the policy how to treat a failing deployment of BPMS resources for the
    * given adapter.
    *

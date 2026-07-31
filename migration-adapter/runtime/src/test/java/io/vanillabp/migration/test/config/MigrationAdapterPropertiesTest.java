@@ -1,6 +1,7 @@
 package io.vanillabp.migration.test.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -391,6 +392,34 @@ public class MigrationAdapterPropertiesTest {
             Workflow-level configuration is not yet supported! Remove these properties:
               vanillabp.workflow-modules.test-module.workflows""",
         exception.getMessage());
+
+  }
+
+  @Test
+  public void testIsFirstPriorityAnywhere() {
+
+    final var properties = new MigrationAdapterProperties();
+    properties.setAdapters(Map.of(
+        "adapter-a", AdapterConfigProperties.ofType("adapter1"),
+        "adapter-b", AdapterConfigProperties.ofType("adapter2"),
+        "adapter-c", AdapterConfigProperties.ofType("adapter2")));
+    properties.setPrioritizedAdapters(List.of("adapter-a", "adapter-b", "adapter-c"));
+    properties.setWorkflowModules(Map.of("test-module", WorkflowModuleAdapterProperties
+        .builder()
+        .workflowModuleId("test-module")
+        .prioritizedAdapters(List.of("adapter-b", "adapter-a"))
+        .workflows(Map.of("testProcess", WorkflowAdapterProperties
+            .builder()
+            .bpmnProcessId("testProcess")
+            .prioritizedAdapters(List.of("adapter-c"))
+            .build()))
+        .build()));
+    properties.validateAndLink();
+
+    assertTrue(properties.isFirstPriorityAnywhere("adapter-a")); // globally first
+    assertTrue(properties.isFirstPriorityAnywhere("adapter-b")); // first of the module
+    assertTrue(properties.isFirstPriorityAnywhere("adapter-c")); // first of a workflow
+    assertFalse(properties.isFirstPriorityAnywhere("adapter-d")); // nowhere first
 
   }
 

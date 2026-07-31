@@ -4,6 +4,33 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Startup configuration validation (2026-07-31)
+
+Story 26c - configuration defects surface at startup, never first at runtime:
+
+- **New core helper `MigrationAdapterProperties.isFirstPriorityAnywhere(adapterId)`**:
+  true if the adapter id is FIRST in the prioritized-adapters list globally, of any
+  workflow module or of any workflow. Rule for adapters: an adapter that is first
+  anywhere always fails the boot on an inconsistent connection configuration; only
+  an adapter that is nowhere first may honor `deployment-failure: warn` and boot
+  degraded (migration scenario: the old BPMS must not block the boot).
+- **Three states of an adapter's config section**: absent → the application boots
+  and a guiding WARN names the exact property keys to add; complete → silent;
+  inconsistent → boot fails naming the missing keys (unless the degrade rule above
+  applies). Messages name property KEYS, never VALUES - credentials are never
+  echoed (asserted by boot tests).
+- **Aggregate-ID round-trip check at ProcessService creation** (both platforms):
+  the aggregate ID crosses the phase-two outbox serialized as a String; an ID type
+  that does not convert from/to String losslessly now fails the startup with a
+  guiding message (Spring: `DefaultConversionService` both directions; Quarkus:
+  supported-type set in `AggregateIdConversion`). Custom
+  `AggregatePersistenceAware` implementations (no determinable ID type) are
+  exempt - they own the serialized form.
+
+Deliberately still lazy (documented, not defects): phase-two outbox resolution
+(optional dependency, guiding message on first use), the PEA mock's VOLATILE
+warning (fires when the engine producer runs).
+
 ## Adapter config model: per-id beans, canonical location, level resolution (2026-07-30)
 
 Story 26d - three related changes, breaking for adapters and early Camunda 8 users:

@@ -40,6 +40,48 @@ public final class AggregateIdConversion {
       "jakarta.persistence.EmbeddedId",
       "org.bson.codecs.pojo.annotations.BsonId");
 
+  /**
+   * ID types which round-trip losslessly through the phase-two outbox's String
+   * serialization (see {@link #convert(String, Class)}).
+   */
+  public static final Set<String> SUPPORTED_ID_TYPES = Set.of(
+      "java.lang.String",
+      "java.lang.Long", "long",
+      "java.lang.Integer", "int",
+      "java.lang.Short", "short",
+      "java.lang.Byte", "byte",
+      "java.lang.Double", "double",
+      "java.lang.Float", "float",
+      "java.lang.Boolean", "boolean",
+      "java.math.BigInteger",
+      "java.math.BigDecimal",
+      "java.util.UUID");
+
+  /**
+   * Validates AT STARTUP that the aggregate's ID type converts String → ID → String
+   * losslessly: the ID crosses the phase-two outbox serialized as a String, so an
+   * unconvertible type would corrupt the dispatch silently. If the ID type cannot
+   * be determined at all (custom persistence), the serialized form is the custom
+   * layer's responsibility and nothing is validated.
+   *
+   * @param workflowAggregateClass The aggregate's class
+   * @throws IllegalStateException If the ID type is known but not convertible,
+   *           naming the aggregate class and the supported ID types
+   */
+  public static void validateIdTypeConvertible(
+      final Class<?> workflowAggregateClass) {
+
+    determineIdType(workflowAggregateClass)
+        .filter(idType -> !SUPPORTED_ID_TYPES.contains(idType.getName()))
+        .ifPresent(idType -> {
+          throw new IllegalStateException(
+              """
+                  The ID of workflow aggregate '%s' is of type '%s', which cannot be converted from/to                   String! The ID crosses the phase-two outbox serialized as a String and must round-trip                   losslessly. Use one of the supported ID types (String, Long, Integer, Short, Byte,                   Double, Float, Boolean, BigInteger, BigDecimal, UUID) or provide a custom                   AggregatePersistenceAware implementation handling the serialized form."""
+                  .formatted(workflowAggregateClass.getName(), idType.getName()));
+        });
+
+  }
+
   private AggregateIdConversion() {
     // utility class
   }

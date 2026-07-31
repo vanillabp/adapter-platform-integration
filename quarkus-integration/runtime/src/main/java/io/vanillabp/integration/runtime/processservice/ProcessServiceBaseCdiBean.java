@@ -86,6 +86,10 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
   @PostConstruct
   public void initialize() {
 
+    // startup check: the aggregate's ID has to round-trip losslessly through the
+    // outbox's String serialization (fails with a guiding message otherwise)
+    AggregateIdConversion.validateIdTypeConvertible(getWorkflowAggregateClass());
+
     // collect element beans plus flattened List beans (see field javadoc)
     @SuppressWarnings("unchecked")
     final List<io.vanillabp.integration.adapter.spi.MigratableProcessService<A>> processServices = java.util.stream.Stream

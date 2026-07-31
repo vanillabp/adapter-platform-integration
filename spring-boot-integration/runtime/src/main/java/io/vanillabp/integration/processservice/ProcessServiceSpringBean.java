@@ -39,12 +39,61 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
         workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, aggregatePersistenceAware, migratableProcessServices, buildLazyPhaseTwoOutbox(
             workflowModuleId, bpmnProcessId, phaseTwoOutboxProvider));
 
+    // startup check: the aggregate's ID has to round-trip losslessly through the
+    // outbox's String serialization (fails with a guiding message otherwise)
+    validateAggregateIdRoundTrip(workflowAggregateClass, springDataUtilProvider);
+
     // register as phase-two dispatch target: outbox entries for this workflow
     // module/BPMN process are routed here after the local transaction was committed
     if (phaseTwoRouter != null) {
       phaseTwoRouter.register(
           migrationProcessService,
           buildAggregateIdConverter(workflowAggregateClass, springDataUtilProvider));
+    }
+
+  }
+
+  /**
+   * Validates AT STARTUP that the aggregate's ID type converts String → ID → String
+   * losslessly: the ID crosses the phase-two outbox serialized as a String, so an
+   * unconvertible type would corrupt the dispatch silently. If the ID type cannot
+   * be determined (no Spring Data, custom persistence), the serialized form is the
+   * custom layer's responsibility and nothing is validated.
+   *
+   * @param workflowAggregateClass The aggregate's class
+   * @param springDataUtilProvider Provider of the persistence utility (may be empty)
+   * @throws IllegalStateException If the ID type is known but not convertible,
+   *           naming the aggregate class and the remedy
+   */
+  private static void validateAggregateIdRoundTrip(
+      final Class<?> workflowAggregateClass,
+      final ObjectProvider<SpringDataUtil> springDataUtilProvider) {
+
+    final var springDataUtil = springDataUtilProvider == null
+        ? null
+        : springDataUtilProvider.getIfAvailable();
+    if (springDataUtil == null) {
+      return;
+    }
+    final Class<?> aggregateIdType;
+    try {
+      aggregateIdType = springDataUtil.getIdType(workflowAggregateClass);
+    } catch (Exception e) {
+      // not managed by Spring Data - the custom persistence layer owns the
+      // serialized form
+      return;
+    }
+    if (aggregateIdType == null) {
+      return;
+    }
+    final var conversionService = org.springframework.core.convert.support.DefaultConversionService
+        .getSharedInstance();
+    if (!conversionService.canConvert(String.class, aggregateIdType) || !conversionService.canConvert(aggregateIdType,
+        String.class)) {
+      throw new IllegalStateException(
+          """
+              The ID of workflow aggregate '%s' is of type '%s', which cannot be converted from/to               String! The ID crosses the phase-two outbox serialized as a String and must round-trip               losslessly. Use a simple ID type convertible from/to String (e.g. String, Long, Integer,               UUID) or provide a custom AggregatePersistenceAware implementation handling the               serialized form."""
+              .formatted(workflowAggregateClass.getName(), aggregateIdType.getName()));
     }
 
   }

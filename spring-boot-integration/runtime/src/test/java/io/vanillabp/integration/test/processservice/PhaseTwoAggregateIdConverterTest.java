@@ -69,6 +69,33 @@ public class PhaseTwoAggregateIdConverterTest {
 
   }
 
+  @org.junit.jupiter.api.Test
+  @org.junit.jupiter.api.DisplayName("An aggregate-ID type not convertible from/to String fails the startup")
+  public void unconvertibleAggregateIdTypeFailsAtStartup() {
+
+    // story 26c: the ID crosses the outbox serialized as a String - an
+    // unconvertible ID type fails at bean creation with a guiding message
+    when(springDataUtil.getIdType(Object.class)).thenAnswer(invocation -> java.io.InputStream.class);
+
+    final var properties = MigrationAdapterProperties
+        .builder()
+        .adapters(Map.of("test-adapter", AdapterConfigProperties.ofType("dummy")))
+        .prioritizedAdapters(List.of("test-adapter"))
+        .build();
+    properties.validateAndLink();
+
+    final var exception = org.junit.jupiter.api.Assertions.assertThrowsExactly(
+        IllegalStateException.class,
+        () -> new ProcessServiceSpringBean<>(
+            "test-module", "TestProcess", Object.class, properties, aggregatePersistenceAware, List
+                .of(migratableProcessService), null, router, springDataUtilProvider));
+
+    org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains(Object.class.getName()));
+    org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("round-trip"));
+    org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("AggregatePersistenceAware"));
+
+  }
+
   private PhaseTwoCall startWorkflowCall(
       final String serializedAggregateId) {
 
