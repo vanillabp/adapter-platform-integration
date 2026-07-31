@@ -1,0 +1,23 @@
+quarkus:
+  datasource:
+    db-kind: h2
+    jdbc:
+      url: jdbc:h2:mem:failure-fail;DB_CLOSE_DELAY=-1
+test:
+  fail-deploy-for: demo2
+vanillabp:
+  prioritized-adapters:
+    - demo1
+    - demo2
+  adapters:
+    demo1:
+      type: dummy
+    demo2:
+      type: dummy
+  workflow-modules:
+    test-module:
+      adapters:
+        demo1:
+          resources-location: classpath:processes/dummy
+        demo2:
+          resources-location: classpath:processes/dummy

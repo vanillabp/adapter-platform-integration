@@ -3,58 +3,42 @@ package io.vanillabp.integration.runtime.deployment;
 import java.util.List;
 
 import io.quarkus.runtime.ShutdownEvent;
-import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.deployment.DeploymentService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
-import jakarta.enterprise.inject.Any;
-import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * Stops workflow processing on graceful shutdown of the application: the core
  * {@link DeploymentService} notifies extensions and adapters in reverse start order
- * (see {@link DeploymentService#stopWorkflowProcessing(List)}). This is the Quarkus
- * counterpart of the Spring Boot integration's <code>SmartLifecycle.stop()</code>.
+ * (see {@link DeploymentService#stopWorkflowProcessing(List)}), afterwards all
+ * process services are stopped. This is the Quarkus counterpart of the Spring Boot
+ * integration's <code>SmartLifecycle.stop()</code>.
  * <p>
- * The {@link DeploymentService} is resolved lazily since the deployment pipeline may
- * not be wired in every application (yet) - in this case there is nothing to stop.
+ * <b>Semantic difference to Spring Boot (documented, accepted):</b> Spring stops
+ * workflow processing <i>before</i> the web server stops serving (lifecycle phase
+ * ordering), whereas the Quarkus {@link ShutdownEvent} fires after the HTTP server
+ * stopped accepting requests.
+ * <p>
+ * The actual pipeline state (built contexts) lives in the
+ * {@link VanillaBpDeploymentRunner}, so shutdown operates on exactly the pipeline
+ * that was started at boot.
  */
-@Slf4j
 @ApplicationScoped
 public class VanillaBpShutdownObserver {
 
   @Inject
-  @Any
-  Instance<DeploymentService> deploymentService;
-
-  @Inject
-  MigrationAdapterProperties properties;
+  VanillaBpDeploymentRunner deploymentRunner;
 
   /**
-   * Stops workflow processing of all workflow modules on shutdown, before the
-   * platform's web or messaging infrastructure is stopped.
+   * Stops workflow processing of all workflow modules on shutdown.
    *
    * @param event The Quarkus shutdown event
    */
   public void onShutdown(
       @Observes final ShutdownEvent event) {
 
-    if (!deploymentService.isResolvable()) {
-      return;
-    }
-
-    final var workflowModuleIds = List.copyOf(
-        properties
-            .getWorkflowModules()
-            .keySet());
-
-    log.info("Stopping workflow processing of workflow modules: {}", workflowModuleIds);
-
-    deploymentService
-        .get()
-        .stopWorkflowProcessing(workflowModuleIds);
+    deploymentRunner.stop();
 
   }
 

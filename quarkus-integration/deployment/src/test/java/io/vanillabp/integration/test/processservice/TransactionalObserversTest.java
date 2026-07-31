@@ -11,6 +11,8 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
 import io.vanillabp.integration.test.adapter.DummyAdapters;
+import io.vanillabp.integration.test.adapter.TestAdapterDeploymentService;
+import io.vanillabp.integration.test.adapter.TestAdapterDeploymentServiceProducer;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.RequestScoped;
@@ -34,6 +36,8 @@ public class TransactionalObserversTest {
       .withApplicationRoot((
           jar) -> jar
               .addClass(DummyAdapters.class)                          // necessary due to anonymous class in DummyAdapters
+              .addClass(TestAdapterDeploymentService.class) // deployment service required per prioritized adapter
+              .addClass(TestAdapterDeploymentServiceProducer.class)
               .addAsResource("application.yaml")                   // load sample application properties
               .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module")          // define workflow module at global classpath
               .addClasses(ObservingBean.class, Actions.class))

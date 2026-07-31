@@ -92,6 +92,50 @@ as possible at **build time**, following Quarkus' extension philosophy:
    platform mapping and the adapter overlays validate the tree together and a typo
    under `vanillabp.*` fails the startup (Quarkus is stricter than Spring Boot
    here - accepted).
+8. **Runtime deployment pipeline:** `VanillaBpDeploymentRunner` (runtime module)
+   observes the `StartupEvent` and drives the core `DeploymentService` for every
+   workflow module found in the classpath:
+   `readBpmn → prepareBpmn → wireBpmn → deployResources → startWorkflowProcessing`,
+   honoring the `deployment-failure` policy and wiring extensions ordered by
+   `getOrder()` - the counterpart of Spring Boot's `SpringBootDeploymentService`.
+   Details:
+   - **BPMN index:** `resources-location` is RUN_TIME configuration and a fast-jar
+     cannot pattern-scan `**/*.bpmn` at runtime, so all `.bpmn` resource paths of
+     all application archives are indexed at build time
+     (`DeploymentPipelineBuildStepProcessor`) and recorded as the synthetic
+     `BpmnResourceIndex` bean, filtered at runtime by the configured location. Only
+     classpath locations are supported (a `file:` location fails with a guiding
+     message). In dev mode the indexed files are hot-reload-watched; adding a NEW
+     BPMN file requires a restart (or touching a watched file).
+   - **Adapters** announce their deployment services via
+     `VanillaBpAdapterDeploymentServiceBuildItem` (mirroring the process-service
+     build item); the announced producer yields ONE bean of type
+     `List<AdapterDeploymentService<Object, Object>>` with one instance per
+     configured adapter id. Both element type parameters are LITERALLY `Object`,
+     regardless of the adapter's model/context classes - CDI's parameterized-type
+     matching of differing type arguments is not reliable across modes, so the
+     platform looks the beans up with the exact type (the pipeline matches models
+     via `getModelType()`/`getProcessContextType()`, never via the generics).
+     Producer methods must be `@Singleton`: deployment/wiring services have no
+     no-arg constructor and are not client-proxyable.
+   - **Extensions** contribute plain `ExtensionWiringService` element beans (kept
+     from ArC's unused-bean removal by the platform); see the
+     [dummy extension](./integration-tests/dummy-extension) as the template.
+   - **Ordering vs. the phase-two outbox:** the runner observes the `StartupEvent`
+     with `@Priority(VanillaBpDeploymentRunner.STARTUP_PRIORITY)`, the outbox
+     dispatchers with `OUTBOX_DISPATCHER_STARTUP_PRIORITY` - a crash-recovered
+     phase-two operation is never dispatched before deployment finished and
+     workflow processing started (Spring Boot enforces the same invariant via
+     `@Order`-ed `ApplicationReadyEvent` listeners).
+   - **Lifecycle semantics vs. Spring Boot (documented, accepted):** Spring deploys
+     during context refresh and starts workflow processing on
+     `ApplicationReadyEvent` (after the web server started serving); on Quarkus
+     both happen in the `StartupEvent` observer, i.e. before the application
+     serves traffic. On shutdown Spring stops workflow processing before the web
+     server stops serving, whereas the Quarkus `ShutdownEvent` fires after the
+     HTTP server stopped accepting requests. Both platforms stop extensions and
+     adapters in reverse start order and stop all process services afterwards
+     (`VanillaBpShutdownObserver` → `VanillaBpDeploymentRunner.stop()`).
 
 ## Hints
 

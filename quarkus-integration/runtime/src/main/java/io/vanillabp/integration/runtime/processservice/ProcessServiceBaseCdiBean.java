@@ -21,7 +21,9 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.transaction.TransactionSynchronizationRegistry;
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A> {
 
   @Inject
@@ -150,6 +152,18 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
       @Observes final StartupEvent event) {
 
     migrationProcessService.validatePhaseTwoOutboxAtStartup();
+
+  }
+
+  /**
+   * Stops this process service on graceful shutdown - invoked by the deployment
+   * runner after workflow processing of adapters and extensions was stopped
+   * (parity with the Spring Boot integration's
+   * <code>ProcessServiceSpringBean.stopService()</code>).
+   */
+  public void stopService() {
+
+    log.info("Stopping process service: {}", migrationProcessService.getWorkflowModuleId());
 
   }
 

@@ -15,10 +15,13 @@ import io.vanillabp.spi.process.ProcessService;
 import jakarta.inject.Inject;
 
 /**
- * Tests that on graceful shutdown of the application the core deployment service's
- * <code>stopWorkflowProcessing</code> is invoked with all workflow modules (driven by
- * the {@link io.quarkus.runtime.ShutdownEvent} observer of the VanillaBP Quarkus
- * integration).
+ * Tests that on graceful shutdown of the application the adapter's
+ * <code>stopWorkflowProcessing</code> is invoked for all deployed workflow modules
+ * (driven by the {@link io.quarkus.runtime.ShutdownEvent} observer of the VanillaBP
+ * Quarkus integration delegating to the deployment runner): a BPMN file below the
+ * configured resources-location makes the pipeline deploy and start the module at
+ * boot, and the {@link TestAdapterDeploymentService} records the shutdown pass in a
+ * system property (visible across the test's classloaders).
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ShutdownObserverTest {
@@ -31,14 +34,16 @@ public class ShutdownObserverTest {
           .addPackage("io.vanillabp.integration.test.samples.sample")  // load sample application classes
           .addAsResource("application.yaml")                   // load sample application properties
           .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
+          .addAsResource("test-bpmn/test.bpmn", "test-module/processes/dummy/test.bpmn") // makes the pipeline deploy + start the module
           .addClass(DummyAdapters.class)                           // necessary due to anonymous class in DummyAdapters
           .addClass(TestMigratableProcessService.class)             // process service of the mocked adapter
-          .addClass(RecordingDeploymentServiceProducer.class))      // records the shutdown pass
+          .addClass(TestAdapterDeploymentService.class) // records the shutdown pass
+          .addClass(TestAdapterDeploymentServiceProducer.class))
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter()) // add mocked adapter
       // the shutdown pass runs when the application is undeployed after all tests
       .setAfterUndeployListener(() -> Assertions.assertEquals(
           "test-module",
-          System.getProperty(RecordingDeploymentServiceProducer.PROPERTY_STOPPED_MODULES)));
+          System.getProperty(TestAdapterDeploymentService.PROPERTY_STOPPED_MODULES)));
 
   @Inject
   @SuppressWarnings("CdiUnsatisfiedInjection")
@@ -50,11 +55,11 @@ public class ShutdownObserverTest {
   @Test
   public void testApplicationIsRunning() {
 
-    System.clearProperty(RecordingDeploymentServiceProducer.PROPERTY_STOPPED_MODULES);
+    System.clearProperty(TestAdapterDeploymentService.PROPERTY_STOPPED_MODULES);
 
     Assertions.assertNotNull(sampleProcessService);
     Assertions.assertNull(
-        System.getProperty(RecordingDeploymentServiceProducer.PROPERTY_STOPPED_MODULES));
+        System.getProperty(TestAdapterDeploymentService.PROPERTY_STOPPED_MODULES));
 
   }
 

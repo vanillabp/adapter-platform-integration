@@ -9,6 +9,8 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
 import io.vanillabp.integration.test.adapter.DummyAdapters;
+import io.vanillabp.integration.test.adapter.TestAdapterDeploymentService;
+import io.vanillabp.integration.test.adapter.TestAdapterDeploymentServiceProducer;
 import io.vanillabp.integration.test.adapter.TestMigratableProcessService;
 import io.vanillabp.integration.test.samples.sample2.Aggregate;
 import io.vanillabp.integration.test.samples.sample2.SampleWorkflowService;
@@ -25,6 +27,8 @@ public class BeanInstantiationTest {
       .setArchiveProducer(() -> ShrinkWrap
           .create(JavaArchive.class)
           .addClass(DummyAdapters.class)                          // necessary due to anonymous class in DummyAdapters
+          .addClass(TestAdapterDeploymentService.class) // deployment service required per prioritized adapter
+          .addClass(TestAdapterDeploymentServiceProducer.class)
           .addClass(TestMigratableProcessService.class)           // process service of the mocked adapter
           .addPackage("io.vanillabp.integration.test.samples.sample")  // load sample application classes
           .addPackage("io.vanillabp.integration.test.samples.sample2") // load sample application classes

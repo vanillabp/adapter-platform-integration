@@ -3,7 +3,9 @@ package io.vanillabp.adapter.dummy.deployment;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
+import io.vanillabp.adapter.dummy.runtime.DummyDeploymentServiceProducer;
 import io.vanillabp.adapter.dummy.runtime.DummyProcessServiceProducer;
+import io.vanillabp.integration.deployment.pipeline.VanillaBpAdapterDeploymentServiceBuildItem;
 import io.vanillabp.integration.deployment.processservice.VanillaBpMigratableProcessServiceBuildItem;
 import lombok.extern.slf4j.Slf4j;
 
@@ -35,6 +37,26 @@ class DummyIntegrationProcessor {
         .builder()
         .adapterType("dummy")
         .migratableProcessServiceBeanClass(DummyProcessServiceProducer.class.getName())
+        .build();
+
+  }
+
+  /**
+   * Builds the {@link VanillaBpAdapterDeploymentServiceBuildItem} build item used
+   * by the VanillaBP Quarkus integration to determine and register the
+   * deployment-service bean of the adapter (consumed by the runtime deployment
+   * pipeline) - the VanillaBP extension registers the announced bean class, no
+   * separate self-registration is needed.
+   *
+   * @return The {@link VanillaBpAdapterDeploymentServiceBuildItem} build item
+   */
+  @BuildStep
+  VanillaBpAdapterDeploymentServiceBuildItem buildDeploymentServices() {
+
+    return VanillaBpAdapterDeploymentServiceBuildItem
+        .builder()
+        .adapterType("dummy")
+        .deploymentServiceBeanClass(DummyDeploymentServiceProducer.class.getName())
         .build();
 
   }

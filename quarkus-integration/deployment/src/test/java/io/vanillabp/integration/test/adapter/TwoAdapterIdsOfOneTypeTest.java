@@ -41,6 +41,8 @@ public class TwoAdapterIdsOfOneTypeTest {
           .addAsResource("two-adapter-ids/application.yaml", "application.yaml")
           .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
           .addClass(DummyAdapters.class)                              // necessary due to anonymous class in DummyAdapters
+          .addClass(TestAdapterDeploymentService.class) // deployment service required per prioritized adapter
+          .addClass(TestAdapterDeploymentServiceProducer.class)
           .addClass(TestMigratableProcessService.class)             // element bean serving id 'test'
           .addClass(Test2ListProcessServiceProducer.class))         // List bean serving id 'test2'
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter());    // add mocked adapter

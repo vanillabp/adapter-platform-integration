@@ -36,6 +36,8 @@ public class TwoAdapterTypesConfigurationTest {
           .addAsResource("two-adapter-types/application.yaml", "application.yaml")
           .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
           .addClass(DummyAdapters.class)                           // necessary due to anonymous class in DummyAdapters
+          .addClass(TestAdapterDeploymentService.class) // deployment service required per prioritized adapter
+          .addClass(TestAdapterDeploymentServiceProducer.class)
           .addClass(TestMigratableProcessService.class)             // process service of the first adapter type
           .addClass(Test2MigratableProcessService.class))           // process service of the second adapter type
       .addBuildChainCustomizer(DummyAdapters.twoDummyAdapters()); // add both mocked adapter types

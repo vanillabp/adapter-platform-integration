@@ -28,6 +28,8 @@ public class AdapterConfigurationTest {
           .addAsResource("application.yaml")                   // load sample application properties
           .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
           .addClass(DummyAdapters.class)                           // necessary due to anonymous class in DummyAdapters
+          .addClass(TestAdapterDeploymentService.class) // deployment service required per prioritized adapter
+          .addClass(TestAdapterDeploymentServiceProducer.class)
           .addClass(TestMigratableProcessService.class))            // process service of the mocked adapter
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter())  // add mocked adapter
       // an environment-variable shaped OVERRIDE of the configured adapter id 'test':

@@ -11,6 +11,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.annotation.Order;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
@@ -45,6 +46,22 @@ import lombok.RequiredArgsConstructor;
  */
 @RequiredArgsConstructor
 public class SpringBootDeploymentService implements SmartLifecycle {
+
+  /**
+   * Order of the {@link ApplicationReadyEvent} listener starting workflow
+   * processing: BEFORE the phase-two outbox dispatchers' pollers
+   * ({@link #OUTBOX_DISPATCHER_LISTENER_ORDER}) - a crash-recovered phase-two
+   * operation must never be dispatched before workflow processing started (the
+   * same invariant is enforced on Quarkus via {@code StartupEvent} observer
+   * priorities).
+   */
+  public static final int START_PROCESSING_LISTENER_ORDER = 0;
+
+  /**
+   * Order of the phase-two outbox dispatchers' {@link ApplicationReadyEvent}
+   * listeners: after {@link #START_PROCESSING_LISTENER_ORDER}.
+   */
+  public static final int OUTBOX_DISPATCHER_LISTENER_ORDER = START_PROCESSING_LISTENER_ORDER + 100;
 
   private final DeploymentService deploymentService;
 
@@ -106,8 +123,11 @@ public class SpringBootDeploymentService implements SmartLifecycle {
   }
 
   /**
-   * Start processing of workflows one the application started.
+   * Start processing of workflows one the application started. Ordered BEFORE the
+   * phase-two outbox dispatchers' listeners (see
+   * {@link #START_PROCESSING_LISTENER_ORDER}).
    */
+  @Order(START_PROCESSING_LISTENER_ORDER)
   @EventListener(ApplicationReadyEvent.class)
   public void startProcessingOfWorkflows() {
 

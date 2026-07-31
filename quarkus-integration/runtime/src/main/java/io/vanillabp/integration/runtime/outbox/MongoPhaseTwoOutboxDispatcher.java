@@ -24,9 +24,11 @@ import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxPropertie
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterPropertiesMapper;
+import io.vanillabp.integration.runtime.deployment.VanillaBpDeploymentRunner;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOperation;
 import jakarta.annotation.PreDestroy;
+import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Instance;
@@ -101,12 +103,16 @@ public class MongoPhaseTwoOutboxDispatcher {
   /**
    * Creates the unique index (unless disabled) and starts the fixed-delay poller.
    * The first run is executed immediately, dispatching committed-but-unprocessed
-   * entries of a previously crashed instance.
+   * entries of a previously crashed instance. The observer priority guarantees that
+   * the deployment pipeline deployed the BPMN resources and started workflow
+   * processing BEFORE any recovered entry is dispatched (see
+   * {@link VanillaBpDeploymentRunner#OUTBOX_DISPATCHER_STARTUP_PRIORITY}).
    *
    * @param event The startup event observed
    */
   void onStart(
-      @Observes final StartupEvent event) {
+      @Observes
+      @Priority(VanillaBpDeploymentRunner.OUTBOX_DISPATCHER_STARTUP_PRIORITY) final StartupEvent event) {
 
     if (!mongoClient.isResolvable()) {
       log.debug("No MongoDB client available - the MongoDB-based phase-two outbox stays inactive");

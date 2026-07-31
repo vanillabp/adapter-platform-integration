@@ -1,0 +1,4 @@
+name: vanillabp-dummy-extension
+artifact: "${project.groupId}:${project.artifactId}:${project.version}"
+dependencies:
+  - vanillabp

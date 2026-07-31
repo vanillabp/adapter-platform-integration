@@ -1,0 +1,19 @@
+quarkus:
+  datasource:
+    db-kind: h2
+    jdbc:
+      url: jdbc:h2:file:./target/outbox-recovery-test/outbox;DB_CLOSE_DELAY=-1
+dummy-adapter:
+  two-phase-commit: true
+vanillabp:
+  adapters:
+    demo:
+      type: dummy
+  workflow-modules:
+    test-module:
+      adapters:
+        demo:
+          resources-location: classpath:processes/dummy
+  outbox:
+    poll-interval: PT0.5S
+    attempt-frequency: PT0.5S

@@ -6,10 +6,12 @@ import java.util.concurrent.TimeUnit;
 
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.annotation.Order;
 
 import com.gruelbox.transactionoutbox.TransactionOutbox;
 
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
+import io.vanillabp.integration.deployment.SpringBootDeploymentService;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,8 +43,12 @@ public class GruelboxPhaseTwoOutboxDispatcher {
 
   /**
    * Starts the fixed-delay poller. The first run is executed immediately, dispatching
-   * committed-but-unprocessed entries of a previously crashed instance.
+   * committed-but-unprocessed entries of a previously crashed instance. The listener
+   * order guarantees that workflow processing started BEFORE any recovered entry is
+   * dispatched (see
+   * {@link SpringBootDeploymentService#OUTBOX_DISPATCHER_LISTENER_ORDER}).
    */
+  @Order(SpringBootDeploymentService.OUTBOX_DISPATCHER_LISTENER_ORDER)
   @EventListener(ApplicationReadyEvent.class)
   public void startPolling() {
 
