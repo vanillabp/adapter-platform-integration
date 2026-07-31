@@ -1,6 +1,7 @@
 package io.vanillabp.integration.runtime.test.processservice;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -69,8 +70,12 @@ public class AggregateIdConversionValidationTest {
 
     assertTrue(exception.getMessage().contains(DateIdAggregate.class.getName()));
     assertTrue(exception.getMessage().contains(Date.class.getName()));
-    assertTrue(exception.getMessage().contains("round-trip"));
+    // phrases spanning the text block's line breaks: guards against broken
+    // continuations gluing words together or inserting indentation whitespace
+    assertTrue(exception.getMessage().contains("converted from/to String!"));
+    assertTrue(exception.getMessage().contains("round-trip losslessly"));
     assertTrue(exception.getMessage().contains("AggregatePersistenceAware"));
+    assertFalse(exception.getMessage().contains("  "), "message must not contain consecutive spaces");
 
   }
 

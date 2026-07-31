@@ -91,8 +91,14 @@ public class PhaseTwoAggregateIdConverterTest {
                 .of(migratableProcessService), null, router, springDataUtilProvider));
 
     org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains(Object.class.getName()));
-    org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("round-trip"));
+    // phrases spanning the text block's line breaks: guards against broken
+    // continuations gluing words together or inserting indentation whitespace
+    org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("converted from/to String!"));
+    org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("round-trip losslessly"));
     org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("AggregatePersistenceAware"));
+    org.junit.jupiter.api.Assertions.assertFalse(
+        exception.getMessage().contains("  "),
+        "message must not contain consecutive spaces");
 
   }
 

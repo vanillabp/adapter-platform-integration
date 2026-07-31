@@ -92,7 +92,11 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
         String.class)) {
       throw new IllegalStateException(
           """
-              The ID of workflow aggregate '%s' is of type '%s', which cannot be converted from/to               String! The ID crosses the phase-two outbox serialized as a String and must round-trip               losslessly. Use a simple ID type convertible from/to String (e.g. String, Long, Integer,               UUID) or provide a custom AggregatePersistenceAware implementation handling the               serialized form."""
+              The ID of workflow aggregate '%s' is of type '%s', which cannot be converted from/to \
+              String! The ID crosses the phase-two outbox serialized as a String and must round-trip \
+              losslessly. Use a simple ID type convertible from/to String (e.g. String, Long, Integer, \
+              UUID) or provide a custom AggregatePersistenceAware implementation handling the \
+              serialized form."""
               .formatted(workflowAggregateClass.getName(), aggregateIdType.getName()));
     }
 

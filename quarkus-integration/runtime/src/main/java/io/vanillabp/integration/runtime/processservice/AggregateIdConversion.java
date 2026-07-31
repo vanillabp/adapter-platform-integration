@@ -76,7 +76,11 @@ public final class AggregateIdConversion {
         .ifPresent(idType -> {
           throw new IllegalStateException(
               """
-                  The ID of workflow aggregate '%s' is of type '%s', which cannot be converted from/to                   String! The ID crosses the phase-two outbox serialized as a String and must round-trip                   losslessly. Use one of the supported ID types (String, Long, Integer, Short, Byte,                   Double, Float, Boolean, BigInteger, BigDecimal, UUID) or provide a custom                   AggregatePersistenceAware implementation handling the serialized form."""
+                  The ID of workflow aggregate '%s' is of type '%s', which cannot be converted from/to \
+                  String! The ID crosses the phase-two outbox serialized as a String and must round-trip \
+                  losslessly. Use one of the supported ID types (String, Long, Integer, Short, Byte, \
+                  Double, Float, Boolean, BigInteger, BigDecimal, UUID) or provide a custom \
+                  AggregatePersistenceAware implementation handling the serialized form."""
                   .formatted(workflowAggregateClass.getName(), idType.getName()));
         });
 
