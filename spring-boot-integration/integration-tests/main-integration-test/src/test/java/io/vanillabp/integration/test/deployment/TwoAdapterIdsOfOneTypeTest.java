@@ -105,7 +105,7 @@ public class TwoAdapterIdsOfOneTypeTest {
     try (var testApp = SpringBootTestApplication.builder()
         .addResource("META-INF/workflow-module")
         .addResource("application.yaml", APPLICATION_YAML)
-        .addResource("test-module/processes/dummy/dummy-process.bpmn")
+        .addResource("test-module/processes/dummy/DummyProcess.bpmn")
         .hideResource("META-INF/workflow-module")
         .hideResource("application.yaml")
         .build(); var context = testApp.applicationBuilder(

@@ -109,6 +109,30 @@ old one.
    new workflow jobs are processed while web/messaging infrastructure is being torn
    down.
 
+### Workflow-task processing
+
+`@WorkflowTask` methods are executed by the core (package `workflowtask`): the
+platform integration registers every `@WorkflowService` class under all BPMN
+process IDs it declares (`bpmnProcess` + `secondaryBpmnProcesses`) with the
+`WorkflowTaskRegistry` (scanning methods and building parameter binders once at
+startup). Adapters interact through the adapter SPI `WorkflowTaskInvoker`:
+
+1. During `wireBpmn`: `validateTaskWiring(module, process, tasks)` - both
+   directions (every BPMN task has a `@WorkflowTask` method, every method matches
+   a task), all defects in ONE guiding exception; throwing from `wireBpmn` honors
+   the deployment-failure policy.
+2. At runtime: `invokeWorkflowTask(module, process, TaskInvocationContext)` - the
+   core resolves the handler (task definition or activity ID, `version` ranges),
+   loads the aggregate by its serialized ID, invokes the method with bound
+   parameters and saves the aggregate, all within one transaction run by the
+   platform's `TransactionRunner` (a new transaction, or the caller's for embedded
+   BPMS - `TaskInvocationContext.runInCurrentTransaction`). Outcomes: normal
+   return = COMPLETED (or COMPLETION_PENDING for `@TaskId` methods - completion
+   arrives via `ProcessService#completeTask`); `TaskException` = BPMN_ERROR with
+   the aggregate changes COMMITTED (the restored V1 contract); any other exception
+   rolls back and propagates - the adapter applies its BPMS' retry semantics and
+   must not complete the task.
+
 An adapter's `AdapterDeploymentService` extends `ExtensionWiringService`
 ("the wiring service with deployment"): preparing/wiring and starting/stopping of
 workflow processing are inherited, reading and deploying of BPMS resources is added.

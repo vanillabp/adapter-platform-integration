@@ -43,7 +43,9 @@ public class DummyDeploymentServiceProducer {
   @Singleton
   public List<AdapterDeploymentService<Object, Object>> dummyAdapterDeploymentServices(
       final MigrationAdapterProperties properties,
-      @Any final Instance<DummyDeploymentListener> deploymentListeners) {
+      @Any final Instance<DummyDeploymentListener> deploymentListeners,
+      final io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry workflowTaskRegistry,
+      @Any final Instance<DummyTaskWiringSource> taskWiringSource) {
 
     return properties
         .adapterTypes()
@@ -53,7 +55,7 @@ public class DummyDeploymentServiceProducer {
         .map(Map.Entry::getKey)
         .sorted()
         .<AdapterDeploymentService<Object, Object>>map(
-            adapterId -> new DummyDeploymentService(adapterId, deploymentListeners))
+            adapterId -> new DummyDeploymentService(adapterId, deploymentListeners, workflowTaskRegistry, taskWiringSource))
         .toList();
 
   }

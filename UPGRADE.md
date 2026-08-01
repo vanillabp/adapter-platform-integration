@@ -4,6 +4,33 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Task processing: core-managed transactions + adapter SPI additions (2026-08-01)
+
+Story 21a - `@WorkflowTask` methods are executed by the core (load aggregate -
+invoke - save, within one transaction). Application-facing:
+
+- **Do not annotate `@WorkflowTask` methods (or their services) with your own
+  `@Transactional`.** VanillaBP manages the transaction, including the V1 contract
+  that a `TaskException` COMMITS the aggregate changes while completing the task
+  with a BPMN error - the V1 pattern
+  `@Transactional(noRollbackFor = TaskException.class)` is built in now and an
+  application-declared transaction boundary around the handler may change the
+  rollback semantics.
+- **`@WorkflowService.secondaryBpmnProcesses` is honored now** (it was ignored by
+  the platform integrations before): every declared BPMN process ID of a class is
+  wired for task processing and phase-two routing. Secondary entries have to name
+  an explicit `bpmnProcessId`.
+- **Several `@WorkflowService` classes declaring the SAME BPMN process for
+  DIFFERENT aggregates:** the class found first wins (V1 semantics), later classes
+  are skipped for that process with a startup warning.
+- **Adapter SPI additions** (BPMS-adapter authors only): new package
+  `io.vanillabp.integration.adapter.spi.workflowtask` (`WorkflowTaskInvoker`,
+  `TaskInvocationContext`, `WorkflowTaskOutcome`, `BpmnTaskSpec`,
+  `MultiInstanceValue`) - adapters validate task wiring during `wireBpmn` and
+  dispatch delivered tasks through the invoker; the three outcomes are mapped by
+  the adapter to its BPMS (complete / complete-with-BPMN-error / leave open plus
+  exception propagation for BPMS-side retries).
+
 ## Per-aggregate outbox selection + aggregate-ID type in the persistence SPI (2026-07-31)
 
 Story 26i - two related consolidations, breaking for applications using their own

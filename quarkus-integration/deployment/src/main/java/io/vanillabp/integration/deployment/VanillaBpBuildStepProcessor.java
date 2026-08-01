@@ -23,6 +23,7 @@ import io.vanillabp.integration.runtime.processservice.PhaseTwoRouterProducer;
 import io.vanillabp.integration.runtime.util.UriSubstitute;
 import io.vanillabp.integration.runtime.util.UriSubstitution;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
+import io.vanillabp.integration.runtime.workflowtask.WorkflowTaskRegistryProducer;
 
 /**
  * Main VanillaBP extension processor, responsible for processing configuration
@@ -155,6 +156,27 @@ public class VanillaBpBuildStepProcessor {
     return AdditionalBeanBuildItem
         .builder()
         .addBeanClass(PhaseTwoRouterProducer.class)
+        .setUnremovable() // don't remove, since it is used under the hoods
+        .build();
+
+  }
+
+  /**
+   * Registers the core-owned registry of <code>&#64;WorkflowTask</code> handlers
+   * (the adapter-facing
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker}):
+   * the generated process-service beans register every workflow service class under
+   * all BPMN process IDs it declares; adapters validate the wiring during
+   * <code>wireBpmn</code> and dispatch task invocations at runtime.
+   *
+   * @return The additional {@link WorkflowTaskRegistryProducer} bean
+   */
+  @BuildStep
+  AdditionalBeanBuildItem buildWorkflowTaskRegistry() {
+
+    return AdditionalBeanBuildItem
+        .builder()
+        .addBeanClass(WorkflowTaskRegistryProducer.class)
         .setUnremovable() // don't remove, since it is used under the hoods
         .build();
 

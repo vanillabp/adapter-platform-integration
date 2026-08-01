@@ -22,10 +22,12 @@ import io.vanillabp.integration.adapter.AdapterConfigurationBase;
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
+import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 import io.vanillabp.integration.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.integration.workflowmodule.WorkflowModules;
+import io.vanillabp.integration.workflowtask.SpringTransactionRunner;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -151,6 +153,28 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   public PhaseTwoRouter vanillaBpPhaseTwoRouter() {
 
     return new PhaseTwoRouter();
+
+  }
+
+  /**
+   * The core-owned registry of <code>&#64;WorkflowTask</code> handlers and
+   * adapter-facing {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker}:
+   * the process-service beans register every workflow service class under all BPMN
+   * process IDs it declares; adapters validate the wiring during
+   * <code>wireBpmn</code> and dispatch task invocations at runtime. Handlers run via
+   * the Spring transaction runner (a lazily resolved
+   * {@link org.springframework.transaction.PlatformTransactionManager} - an
+   * application without transactional persistence still boots and gets a guiding
+   * message when the first task is processed).
+   *
+   * @param transactionManager The application's transaction manager, resolved lazily
+   * @return The workflow-task registry
+   */
+  @Bean
+  public WorkflowTaskRegistry vanillaBpWorkflowTaskRegistry(
+      final org.springframework.beans.factory.ObjectProvider<org.springframework.transaction.PlatformTransactionManager> transactionManager) {
+
+    return new WorkflowTaskRegistry(new SpringTransactionRunner(transactionManager));
 
   }
 

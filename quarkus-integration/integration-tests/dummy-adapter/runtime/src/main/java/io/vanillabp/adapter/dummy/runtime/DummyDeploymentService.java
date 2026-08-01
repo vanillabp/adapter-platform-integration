@@ -9,6 +9,9 @@ import org.slf4j.LoggerFactory;
 
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.adapter.spi.BpmnParseException;
+import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
+import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
+import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import jakarta.enterprise.inject.Instance;
 
 /**
@@ -28,12 +31,46 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
 
   private final Instance<DummyDeploymentListener> listeners;
 
+  /**
+   * The core's task-processing entry point, provided by the platform integration.
+   */
+  private final WorkflowTaskInvoker workflowTaskInvoker;
+
+  /**
+   * Test hook standing in for the BPMN model (see {@link DummyTaskWiringSource}).
+   */
+  private final Instance<DummyTaskWiringSource> taskWiringSource;
+
   public DummyDeploymentService(
       final String adapterId,
-      final Instance<DummyDeploymentListener> listeners) {
+      final Instance<DummyDeploymentListener> listeners,
+      final WorkflowTaskInvoker workflowTaskInvoker,
+      final Instance<DummyTaskWiringSource> taskWiringSource) {
 
     this.adapterId = adapterId;
     this.listeners = listeners;
+    this.workflowTaskInvoker = workflowTaskInvoker;
+    this.taskWiringSource = taskWiringSource;
+
+  }
+
+  /**
+   * Invokes a <code>&#64;WorkflowTask</code> method through the core, like a real
+   * adapter does when its BPMS delivers a task. Triggered by integration tests.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param context The invocation context (as a real adapter would build it)
+   * @return The outcome to be mapped to the BPMS
+   */
+  public WorkflowTaskOutcome invokeTask(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final TaskInvocationContext context) {
+
+    log.info("Dummy-Adapter[{}]: Invoking task '{}' of {}", adapterId, context.getTaskDefinition(), workflowModuleId);
+
+    return workflowTaskInvoker.invokeWorkflowTask(workflowModuleId, bpmnProcessId, context);
 
   }
 
@@ -123,6 +160,19 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
 
     log.info("Dummy-Adapter[{}]: Wiring BPMN process '{}' for {}", adapterId, bpmnProcessId, workflowModuleId);
     notifyListeners("wireBpmn", workflowModuleId, bpmnProcessId);
+
+    // like a real adapter: validate that every task of the "BPMN" (supplied by the
+    // test's DummyTaskWiringSource - the dummy has no real model) has a
+    // @WorkflowTask method and vice versa; throwing here honors the
+    // deployment-failure policy automatically
+    if ((taskWiringSource != null) && taskWiringSource.isResolvable()) {
+      workflowTaskInvoker.validateTaskWiring(
+          workflowModuleId,
+          bpmnProcessId,
+          taskWiringSource
+              .get()
+              .tasksOf(adapterId, workflowModuleId, bpmnProcessId));
+    }
 
   }
 

@@ -4,11 +4,14 @@ import static io.quarkus.gizmo.Type.classType;
 import static io.quarkus.gizmo.Type.parameterizedType;
 
 import java.util.Comparator;
-import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
+import java.util.function.Predicate;
 
+import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.Type;
@@ -42,6 +45,8 @@ public class ProcessServiceBuildStepProcessor {
   public static final String ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_AGGREGATECLASS = "workflowAggregateClass";
   public static final String ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_BPMNPROCESS = "bpmnProcess";
   public static final String ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_BPMNPROCESS_BPMNPROCESSID = "bpmnProcessId";
+
+  public static final String ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_SECONDARYBPMNPROCESSES = "secondaryBpmnProcesses";
 
   /**
    * Beans implementing {@link AggregatePersistenceAware} are not necessarily injected by
@@ -89,8 +94,13 @@ public class ProcessServiceBuildStepProcessor {
             .map(aware -> Map.entry(aware, archive)))
         .toList();
 
-    // scan for classes annotated by @WorkflowService
-    final Set<Type> processServicesBuilt = new HashSet<>();
+    // scan for classes annotated by @WorkflowService and group them by aggregate
+    // type: ONE injectable ProcessService bean per aggregate (the SPI's injection
+    // contract), whose primary BPMN process is the first class found declaring the
+    // aggregate. ALL classes declaring the aggregate and ALL their declared BPMN
+    // process IDs (bpmnProcess + secondaryBpmnProcesses) are recorded for
+    // phase-two routing and @WorkflowTask processing at runtime.
+    final var annotationsByAggregate = new LinkedHashMap<Type, List<AnnotationInstance>>();
     applicationArchivesBuildItem
         // search all archives of the project
         .getAllApplicationArchives()
@@ -99,39 +109,52 @@ public class ProcessServiceBuildStepProcessor {
             .getIndex()
             .getAnnotations(WorkflowService.class)
             .stream())
-        // and build an adapter-aware process service for each workflow aggregate class
-        .forEach(annotation -> {
+        .forEach(annotation -> annotationsByAggregate
+            .computeIfAbsent(
+                annotation
+                    .value(ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_AGGREGATECLASS)
+                    .asClass(),
+                aggregateType -> new LinkedList<>())
+            .add(annotation));
 
-          final var workflowAggregateType = annotation
-              .value(ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_AGGREGATECLASS)
-              .asClass();
-          // if there is more than one @WorkflowService class for a specific BPMN process ID,
-          // then use the one previously built
-          if (processServicesBuilt.contains(workflowAggregateType)) {
-            return;
+    annotationsByAggregate
+        // and build an adapter-aware process service for each workflow aggregate class
+        .forEach((
+            workflowAggregateType,
+            annotations) -> {
+
+          // record every class of this aggregate under all its declared BPMN
+          // process IDs and make sure each class is a CDI bean at runtime
+          final var workflowTaskRegistrations = new LinkedList<String>();
+          for (final var declaringAnnotation : annotations) {
+            final var declaringClass = declaringAnnotation.target().asClass();
+            ensureClassIsBeanBuildItemProducer
+                .produce(EnsureClassIsBeanValidationBuildItem
+                    .builder()
+                    .className(declaringClass.name())
+                    .usageDescription("Workflow service annotated with @"
+                        + WorkflowService.class.getName())
+                    .build());
+            final var declaringModuleId = workflowModulesFound
+                .getWorkflowModuleId(
+                    applicationArchivesBuildItem,
+                    declaringClass);
+            for (final var declaredProcessId : declaredBpmnProcessIds(declaringAnnotation, declaringClass)) {
+              workflowTaskRegistrations.add(
+                  "%s|%s|%s".formatted(declaringModuleId, declaringClass.name(), declaredProcessId));
+            }
           }
 
-          // collect information necessary for bean creation
+          // collect information necessary for bean creation (first class found
+          // provides the primary BPMN process and the bean's identity)
+          final var annotation = annotations.getFirst();
           final var serviceClass = annotation.target().asClass();
-          // ensure service class will be a CDI bean at runtime
-          ensureClassIsBeanBuildItemProducer
-              .produce(EnsureClassIsBeanValidationBuildItem
-                  .builder()
-                  .className(serviceClass.name())
-                  .usageDescription("Workflow service annotated with @"
-                      + WorkflowService.class.getName())
-                  .build());
 
           final var workflowModuleId = workflowModulesFound
               .getWorkflowModuleId(
                   applicationArchivesBuildItem,
                   serviceClass);
-          final var bpmnProcessId = Optional
-              .ofNullable(annotation.value(ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_BPMNPROCESS))
-              .map(AnnotationValue::asNested)
-              .map(a -> a.value(ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_BPMNPROCESS_BPMNPROCESSID))
-              .map(AnnotationValue::asString)
-              .orElse(serviceClass.simpleName());
+          final var bpmnProcessId = primaryBpmnProcessId(annotation, serviceClass);
 
           // find persistence support class for the aggregate class
           final var aggregatePersistenceType = aggregatePersistenceAwares
@@ -177,13 +200,60 @@ public class ProcessServiceBuildStepProcessor {
                   workflowAggregateType.name().packagePrefix(),
                   workflowAggregateType.name().withoutPackagePrefix()),
               aggregatePersistenceType,
-              workflowAggregateType);
-
-          // prevent building more than one process service even if a workflow aggregate class
-          // is used in more than one @WorkflowService annotated service
-          processServicesBuilt.add(workflowAggregateType);
+              workflowAggregateType,
+              String.join(";", workflowTaskRegistrations));
 
         });
+
+  }
+
+  /**
+   * The primary BPMN process ID of a workflow service class:
+   * {@code @WorkflowService.bpmnProcess().bpmnProcessId()} or, by convention, the
+   * class' simple name.
+   */
+  private static String primaryBpmnProcessId(
+      final AnnotationInstance annotation,
+      final ClassInfo serviceClass) {
+
+    return Optional
+        .ofNullable(annotation.value(ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_BPMNPROCESS))
+        .map(AnnotationValue::asNested)
+        .map(a -> a.value(ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_BPMNPROCESS_BPMNPROCESSID))
+        .map(AnnotationValue::asString)
+        .filter(Predicate.not(String::isEmpty))
+        .orElse(serviceClass.simpleName());
+
+  }
+
+  /**
+   * All BPMN process IDs a workflow service class declares: the primary
+   * {@code bpmnProcess} plus every {@code secondaryBpmnProcesses} entry. Secondary
+   * entries have to be explicit - there is no class-name convention for them.
+   */
+  private static List<String> declaredBpmnProcessIds(
+      final AnnotationInstance annotation,
+      final ClassInfo serviceClass) {
+
+    final var bpmnProcessIds = new LinkedList<String>();
+    bpmnProcessIds.add(primaryBpmnProcessId(annotation, serviceClass));
+    final var secondaries = annotation.value(ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_SECONDARYBPMNPROCESSES);
+    if (secondaries != null) {
+      for (final var secondary : secondaries.asNestedArray()) {
+        final var secondaryProcessId = Optional
+            .ofNullable(secondary.value(ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_BPMNPROCESS_BPMNPROCESSID))
+            .map(AnnotationValue::asString)
+            .filter(Predicate.not(String::isEmpty))
+            .orElseThrow(() -> new IllegalStateException(
+                """
+                    A secondaryBpmnProcesses entry of @WorkflowService at '%s' has no bpmnProcessId! \
+                    Secondary BPMN processes have to be declared explicitly, e.g. \
+                    @BpmnProcess(bpmnProcessId = "MyOtherProcess")."""
+                    .formatted(serviceClass.name())));
+        bpmnProcessIds.add(secondaryProcessId);
+      }
+    }
+    return bpmnProcessIds;
 
   }
 
@@ -203,7 +273,8 @@ public class ProcessServiceBuildStepProcessor {
       final String bpmnProcessId,
       final String className,
       final ClassInfo aggregatePersistenceType,
-      final Type workflowAggregateType) {
+      final Type workflowAggregateType,
+      final String workflowTaskRegistrations) {
 
     final var aggregatePersistenceClassName = aggregatePersistenceType.name().toString();
     final var aggregateClassName = workflowAggregateType.name().toString();
@@ -270,6 +341,16 @@ public class ProcessServiceBuildStepProcessor {
     // return "pid";
     getBpmnProcessId.returnValue(
         getBpmnProcessId.load(bpmnProcessId));
+
+    /*
+     * String getWorkflowTaskRegistrations()
+     */
+    final var getWorkflowTaskRegistrations = cc.getMethodCreator(
+        "getWorkflowTaskRegistrations",
+        String.class);
+    // return "module|class|pid;...";
+    getWorkflowTaskRegistrations.returnValue(
+        getWorkflowTaskRegistrations.load(workflowTaskRegistrations));
 
     cc.close();
 

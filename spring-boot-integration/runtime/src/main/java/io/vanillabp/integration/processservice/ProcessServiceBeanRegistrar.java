@@ -1,9 +1,11 @@
 package io.vanillabp.integration.processservice;
 
-import java.util.HashSet;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 import org.springframework.beans.factory.BeanRegistrar;
@@ -14,7 +16,9 @@ import org.springframework.core.env.Environment;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processservice.AwareSelection;
+import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
+import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.utils.ClasspathScanner;
@@ -23,6 +27,7 @@ import io.vanillabp.integration.utils.impl.SpringDataUtilBasedAggregatePersisten
 import io.vanillabp.integration.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.workflowmodule.WorkflowModules;
 import io.vanillabp.spi.process.ProcessService;
+import io.vanillabp.spi.service.MultiInstanceElementResolver;
 import io.vanillabp.spi.service.WorkflowService;
 import lombok.extern.slf4j.Slf4j;
 
@@ -80,37 +85,74 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
               }
           );
 
-      // build ProcessService<A> bean definitions
-      final Set<Class<?>> processServicesBuilt = new HashSet<>();
+      // build ProcessService<A> bean definitions: ONE injectable bean per
+      // aggregate type (the SPI's injection contract), whose primary BPMN process
+      // is the first class found declaring the aggregate. ALL classes declaring
+      // the aggregate and ALL their declared BPMN process IDs (bpmnProcess +
+      // secondaryBpmnProcesses) are additionally registered for phase-two routing
+      // and @WorkflowTask processing.
+      final var classesByAggregate = new LinkedHashMap<Class<?>, List<Class<?>>>();
       workflowServiceClasses
-          .forEach(serviceClass -> {
-            final var annotation = serviceClass.getAnnotation(WorkflowService.class);
-            final var workflowAggregateType = annotation.workflowAggregateClass();
-
-            // if there is more than one @WorkflowService class for a specific BPMN process ID,
-            // then use the one previously built
-            if (processServicesBuilt.contains(workflowAggregateType)) {
-              return;
-            }
-
-            final var bpmnProcessId = Optional.of(annotation
-                .bpmnProcess()
-                .bpmnProcessId())
-                .filter(Predicate.not(String::isEmpty))
-                .orElse(serviceClass.getSimpleName());
-
-            registerProcessServiceBean(
-                registry,
-                workflowServiceClasses,
-                serviceClass,
-                workflowAggregateType,
-                bpmnProcessId);
-            processServicesBuilt.add(workflowAggregateType);
-          });
+          .forEach(serviceClass -> classesByAggregate
+              .computeIfAbsent(
+                  serviceClass.getAnnotation(WorkflowService.class).workflowAggregateClass(),
+                  aggregateType -> new LinkedList<>())
+              .add(serviceClass));
+      classesByAggregate
+          .forEach((
+              workflowAggregateType,
+              serviceClasses) -> registerProcessServiceBean(
+                  registry,
+                  workflowServiceClasses,
+                  serviceClasses,
+                  workflowAggregateType));
 
     } catch (Exception e) {
       throw new IllegalStateException("Could not register ProcessService beans", e);
     }
+
+  }
+
+  /**
+   * The primary BPMN process ID of a workflow service class:
+   * {@code @WorkflowService.bpmnProcess().bpmnProcessId()} or, by convention, the
+   * class' simple name.
+   */
+  static String primaryBpmnProcessId(
+      final Class<?> serviceClass) {
+
+    return Optional.of(serviceClass
+        .getAnnotation(WorkflowService.class)
+        .bpmnProcess()
+        .bpmnProcessId())
+        .filter(Predicate.not(String::isEmpty))
+        .orElse(serviceClass.getSimpleName());
+
+  }
+
+  /**
+   * All BPMN process IDs a workflow service class declares: the primary
+   * {@code bpmnProcess} plus every {@code secondaryBpmnProcesses} entry. Secondary
+   * entries have to be explicit - there is no class-name convention for them.
+   */
+  static List<String> declaredBpmnProcessIds(
+      final Class<?> serviceClass) {
+
+    final var annotation = serviceClass.getAnnotation(WorkflowService.class);
+    final var bpmnProcessIds = new LinkedList<String>();
+    bpmnProcessIds.add(primaryBpmnProcessId(serviceClass));
+    for (final var secondary : annotation.secondaryBpmnProcesses()) {
+      if (secondary.bpmnProcessId().isEmpty()) {
+        throw new IllegalStateException(
+            """
+                A secondaryBpmnProcesses entry of @WorkflowService at '%s' has no bpmnProcessId! \
+                Secondary BPMN processes have to be declared explicitly, e.g. \
+                @BpmnProcess(bpmnProcessId = "MyOtherProcess")."""
+                .formatted(serviceClass.getName()));
+      }
+      bpmnProcessIds.add(secondary.bpmnProcessId());
+    }
+    return bpmnProcessIds;
 
   }
 
@@ -127,9 +169,11 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
   private <A> void registerProcessServiceBean(
       final BeanRegistry registry,
       final List<Class<?>> allWorkflowServiceClasses,
-      final Class<?> serviceClass,
-      final Class<A> workflowAggregateType,
-      final String bpmnProcessId) {
+      final List<Class<?>> serviceClasses,
+      final Class<A> workflowAggregateType) {
+
+    final var serviceClass = serviceClasses.getFirst();
+    final var bpmnProcessId = primaryBpmnProcessId(serviceClass);
 
     final var beanType = ParameterizedTypeReference
         .<ProcessService<A>>forType(ResolvableType
@@ -147,19 +191,7 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
               final var allWorkflowModules = supplierContext.bean(WorkflowModules.class);
               allWorkflowModules.associateWorkflowServices(allWorkflowServiceClasses);
 
-              final var workflowModuleId = allWorkflowModules
-                  .getWorkflowModules()
-                  .stream()
-                  .filter(workflowModule -> workflowModule.isWorkflowServiceKnown(serviceClass))
-                  .findFirst()
-                  .map(WorkflowModule::getId)
-                  .orElseThrow(() -> new IllegalStateException(
-                      """
-                          Workflow service class '%s' does not belong to any workflow module! Every \
-                          @WorkflowService class must be part of a workflow module (a classpath \
-                          entry having a 'META-INF/workflow-module' marker file) or of the global \
-                          workflow module (no marker file anywhere in the application)."""
-                          .formatted(serviceClass.getName())));
+              final var workflowModuleId = workflowModuleOf(allWorkflowModules, serviceClass);
 
               final var properties = supplierContext.bean(
                   SpringBootMigrationAdapterAutoConfiguration.BEANNAME_MIGRATIONADAPERPROPERTIES,
@@ -211,10 +243,72 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
               final var phaseTwoRouter = supplierContext
                   .bean(PhaseTwoRouter.class);
 
-              return new ProcessServiceSpringBean<A>(
+              final var processServiceBean = new ProcessServiceSpringBean<A>(
                   workflowModuleId, bpmnProcessId, workflowAggregateType, properties, aggregatePersistenceAware, migratableProcessServices, phaseTwoOutboxResolver, phaseTwoRouter);
 
+              // register ALL classes declaring this aggregate under ALL their
+              // declared BPMN process IDs: @WorkflowTask handlers per (module,
+              // process) plus phase-two routing for secondary processes
+              final var taskRegistry = supplierContext.bean(WorkflowTaskRegistry.class);
+              // resolver beans (@MultiInstanceElement(resolverBean = ...)) are
+              // looked up lazily among all MultiInstanceElementResolver beans
+              final var resolverBeans = supplierContext.beanProvider(MultiInstanceElementResolver.class);
+              final Function<Class<?>, Object> beanResolver = type -> resolverBeans
+                  .stream()
+                  .filter(type::isInstance)
+                  .findFirst()
+                  .orElse(null);
+              final var processServicesByKey = new HashMap<String, MigrationProcessService<A>>();
+              processServicesByKey.put(
+                  "%s|%s".formatted(workflowModuleId, bpmnProcessId),
+                  processServiceBean.getMigrationProcessService());
+              for (final var declaringClass : serviceClasses) {
+                final var declaringModuleId = workflowModuleOf(allWorkflowModules, declaringClass);
+                for (final var declaredProcessId : declaredBpmnProcessIds(declaringClass)) {
+                  final var processService = processServicesByKey.computeIfAbsent(
+                      "%s|%s".formatted(declaringModuleId, declaredProcessId),
+                      key -> {
+                        final var secondaryProcessService = new MigrationProcessService<A>(
+                            declaringModuleId, declaredProcessId, workflowAggregateType, properties, aggregatePersistenceAware, migratableProcessServices, phaseTwoOutboxResolver);
+                        if (phaseTwoRouter != null) {
+                          phaseTwoRouter.register(secondaryProcessService);
+                        }
+                        return secondaryProcessService;
+                      });
+                  final var declaringBeanProvider = supplierContext.beanProvider(declaringClass);
+                  taskRegistry.registerWorkflowService(
+                      declaringModuleId,
+                      declaredProcessId,
+                      declaringClass,
+                      declaringBeanProvider::getObject,
+                      beanResolver,
+                      processService);
+                }
+              }
+
+              return processServiceBean;
+
             }));
+
+  }
+
+  private static String workflowModuleOf(
+      final WorkflowModules allWorkflowModules,
+      final Class<?> serviceClass) {
+
+    return allWorkflowModules
+        .getWorkflowModules()
+        .stream()
+        .filter(workflowModule -> workflowModule.isWorkflowServiceKnown(serviceClass))
+        .findFirst()
+        .map(WorkflowModule::getId)
+        .orElseThrow(() -> new IllegalStateException(
+            """
+                Workflow service class '%s' does not belong to any workflow module! Every \
+                @WorkflowService class must be part of a workflow module (a classpath \
+                entry having a 'META-INF/workflow-module' marker file) or of the global \
+                workflow module (no marker file anywhere in the application)."""
+                .formatted(serviceClass.getName())));
 
   }
 

@@ -91,6 +91,13 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
   @Inject
   Instance<PhaseTwoRouter> phaseTwoRouter;
 
+  /**
+   * The core-owned registry of <code>&#64;WorkflowTask</code> handlers. Resolved via
+   * {@link Instance} for the same cycle reasons as the other collaborators.
+   */
+  @Inject
+  Instance<io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry> workflowTaskRegistry;
+
   @Getter
   MigrationProcessService<A> migrationProcessService;
 
@@ -99,6 +106,16 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
   public abstract Class<A> getWorkflowAggregateClass();
 
   public abstract String getBpmnProcessId();
+
+  /**
+   * All (workflow module, workflow service class, BPMN process ID) combinations of
+   * the aggregate this process service serves, determined at build time: every
+   * class declaring the aggregate contributes all its declared BPMN process IDs
+   * ({@code @WorkflowService.bpmnProcess} and {@code secondaryBpmnProcesses}).
+   * Encoding: entries {@code <module>|<class name>|<bpmn process id>} joined by
+   * {@code ';'} (generated as a class-file constant - Gizmo-friendly).
+   */
+  public abstract String getWorkflowTaskRegistrations();
 
   @PostConstruct
   public void initialize() {
@@ -121,13 +138,14 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
         .unwrap(SmallRyeConfig.class)
         .getConfigMapping(QuarkusMigrationAdapterProperties.class)
         .outbox();
+    final var phaseTwoOutboxResolver = new QuarkusPhaseTwoOutboxResolver(
+        phaseTwoOutboxAwares, phaseTwoOutboxes, outboxProperties
+            .jdbc()
+            .enabled(), outboxProperties
+                .mongo()
+                .enabled());
     this.migrationProcessService = new MigrationProcessService<>(
-        getWorkflowModuleId(), getBpmnProcessId(), getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, new QuarkusPhaseTwoOutboxResolver(
-            phaseTwoOutboxAwares, phaseTwoOutboxes, outboxProperties
-                .jdbc()
-                .enabled(), outboxProperties
-                    .mongo()
-                    .enabled()));
+        getWorkflowModuleId(), getBpmnProcessId(), getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, phaseTwoOutboxResolver);
 
     // register as phase-two dispatch target: outbox entries for this workflow
     // module/BPMN process are routed here after the local transaction was committed
@@ -135,6 +153,76 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
       phaseTwoRouter
           .get()
           .register(migrationProcessService);
+    }
+
+    registerWorkflowTaskHandlers(processServices, phaseTwoOutboxResolver);
+
+  }
+
+  /**
+   * Registers all workflow service classes of this aggregate under all BPMN process
+   * IDs they declare (build-time facts, see {@link #getWorkflowTaskRegistrations()})
+   * with the core's workflow-task registry. Secondary BPMN processes get their own
+   * {@link MigrationProcessService} (registered for phase-two routing, too); the
+   * primary one is reused.
+   */
+  private void registerWorkflowTaskHandlers(
+      final List<io.vanillabp.integration.adapter.spi.MigratableProcessService<A>> processServices,
+      final QuarkusPhaseTwoOutboxResolver phaseTwoOutboxResolver) {
+
+    if (!workflowTaskRegistry.isResolvable()) {
+      return;
+    }
+    final var registry = workflowTaskRegistry.get();
+    final var processServicesByKey = new java.util.HashMap<String, MigrationProcessService<A>>();
+    processServicesByKey.put(
+        "%s|%s".formatted(getWorkflowModuleId(), getBpmnProcessId()),
+        migrationProcessService);
+    for (final var registration : getWorkflowTaskRegistrations().split(";")) {
+      final var parts = registration.split("\\|");
+      final var moduleId = parts[0];
+      final var serviceClassName = parts[1];
+      final var bpmnProcessId = parts[2];
+      final Class<?> serviceClass;
+      try {
+        serviceClass = Class.forName(
+            serviceClassName,
+            false,
+            Thread.currentThread().getContextClassLoader());
+      } catch (final ClassNotFoundException e) {
+        throw new IllegalStateException(
+            "Workflow service class '%s' recorded at build time was not found at runtime!"
+                .formatted(serviceClassName), e);
+      }
+      final var processService = processServicesByKey.computeIfAbsent(
+          "%s|%s".formatted(moduleId, bpmnProcessId),
+          key -> {
+            final var secondaryProcessService = new MigrationProcessService<>(
+                moduleId, bpmnProcessId, getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, phaseTwoOutboxResolver);
+            if (phaseTwoRouter.isResolvable()) {
+              phaseTwoRouter
+                  .get()
+                  .register(secondaryProcessService);
+            }
+            return secondaryProcessService;
+          });
+      registry.registerWorkflowService(
+          moduleId,
+          bpmnProcessId,
+          serviceClass,
+          () -> jakarta.enterprise.inject.spi.CDI
+              .current()
+              .select(serviceClass)
+              .get(),
+          type -> {
+            final var candidates = jakarta.enterprise.inject.spi.CDI
+                .current()
+                .select(type);
+            return candidates.isResolvable()
+                ? candidates.get()
+                : null;
+          },
+          processService);
     }
 
   }

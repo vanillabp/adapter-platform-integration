@@ -2,11 +2,17 @@ package io.vanillabp.integration.adapter.migration.processservice;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.transaction.TransactionRunner;
+import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskHandler;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
+import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
+import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
+import io.vanillabp.spi.service.TaskException;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -162,6 +168,75 @@ public class MigrationProcessService<A> {
       final String serializedAggregateId) {
 
     return AggregateIdRoundTrip.convert(serializedAggregateId, aggregateIdType);
+
+  }
+
+  /**
+   * Processes a BPMN task: loads the workflow aggregate by the context's serialized
+   * ID, invokes the given <code>&#64;WorkflowTask</code> handler and saves the
+   * aggregate - all within one transaction run by the given
+   * {@link TransactionRunner} (a new transaction, or the caller's if
+   * {@link TaskInvocationContext#runInCurrentTransaction()}).
+   * <p>
+   * The three outcomes of the restored V1 contract:
+   * <ul>
+   * <li>normal return - aggregate saved, transaction commits;
+   * {@link WorkflowTaskOutcome.Kind#COMPLETED} (or
+   * {@link WorkflowTaskOutcome.Kind#COMPLETION_PENDING} for methods declaring a
+   * <code>&#64;TaskId</code> parameter).</li>
+   * <li>{@link TaskException} - aggregate saved anyway, transaction COMMITS,
+   * {@link WorkflowTaskOutcome.Kind#BPMN_ERROR} carries the error code for
+   * error-boundary routing.</li>
+   * <li>any other exception - propagates out of the transactional work, the
+   * transaction rolls back, the exception reaches the adapter: the task is not
+   * completed and BPMS retry semantics apply.</li>
+   * </ul>
+   *
+   * @param handler The handler resolved by the
+   *          {@link io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry}
+   * @param context The invocation context supplied by the adapter
+   * @param transactionRunner The platform's transaction runner
+   * @return The outcome the adapter maps to the BPMS
+   */
+  public WorkflowTaskOutcome executeWorkflowTask(
+      final WorkflowTaskHandler handler,
+      final TaskInvocationContext context,
+      final TransactionRunner transactionRunner) {
+
+    final Supplier<WorkflowTaskOutcome> transactionalWork = () -> {
+      final var aggregateId = convertAggregateId(context.getWorkflowAggregateId());
+      final var workflowAggregate = aggregatePersistenceSupport.loadById(aggregateId);
+      if (workflowAggregate == null) {
+        throw new IllegalStateException(
+            """
+                No workflow aggregate of class '%s' having the ID '%s' was found processing a task \
+                of BPMN process '%s' of workflow module '%s'! The aggregate has a 1:1 relation to \
+                the workflow - it must not be deleted while the workflow is active."""
+                .formatted(
+                    workflowAggregateClass.getName(),
+                    context.getWorkflowAggregateId(),
+                    bpmnProcessId,
+                    workflowModuleId));
+      }
+      try {
+        handler.invoke(workflowAggregate, context);
+        aggregatePersistenceSupport.save(workflowAggregate);
+        return handler.isAsynchronousTask()
+            ? WorkflowTaskOutcome.completionPending()
+            : WorkflowTaskOutcome.completed();
+      } catch (final TaskException taskException) {
+        // the restored V1 contract: a TaskException is a BPMN error, not a
+        // failure - the aggregate changes are persisted and the transaction
+        // commits (V1 applications used @Transactional(noRollbackFor =
+        // TaskException.class) for exactly this)
+        aggregatePersistenceSupport.save(workflowAggregate);
+        return WorkflowTaskOutcome.bpmnError(taskException.getErrorCode(), taskException.getErrorName());
+      }
+    };
+
+    return context.runInCurrentTransaction()
+        ? transactionRunner.inCurrent(transactionalWork)
+        : transactionRunner.requireNew(transactionalWork);
 
   }
 

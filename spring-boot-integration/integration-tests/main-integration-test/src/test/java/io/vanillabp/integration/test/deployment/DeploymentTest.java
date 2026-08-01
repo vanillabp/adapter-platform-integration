@@ -33,7 +33,7 @@ import io.vanillabp.spi.process.ProcessService;
 public class DeploymentTest {
 
   @Configuration
-  static class TestConfig {
+  public static class TestConfig {
 
     @Bean
     public SpringBootDeploymentService springBootDeploymentService(
@@ -60,7 +60,7 @@ public class DeploymentTest {
     try (var testApp = SpringBootTestApplication.builder()
         .addResource("META-INF/workflow-module")
         .addResource("application.yaml")
-        .addResource("test-module/processes/dummy/dummy-process.bpmn")
+        .addResource("test-module/processes/dummy/DummyProcess.bpmn")
         .hideResource("META-INF/workflow-module")
         .build(); var context = testApp.applicationBuilder(
             DummyAdapterConfiguration.class,
@@ -76,7 +76,7 @@ public class DeploymentTest {
 
       final var capturedOutput = output.getAll();
 
-      final var readBpmn = "Dummy-Adapter: Reading BPMN for test-module";
+      final var readBpmn = "Dummy-Adapter[test]: Reading BPMN 'DummyProcess.bpmn' for test-module";
       final var prepareBpmn = "Dummy-Adapter: Preparing BPMN for test-module";
       final var adapterWiring = "Dummy-Adapter: Wiring BPMN for test-module";
       final var extensionWiring = "Dummy-Extension: Wiring BPMN for test-module";

@@ -1,0 +1,164 @@
+package io.vanillabp.integration.adapter.migration.workflowtask;
+
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.List;
+import java.util.function.Supplier;
+
+import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
+import io.vanillabp.spi.service.TaskException;
+
+/**
+ * One <code>&#64;WorkflowTask</code> annotated method wired to a BPMN task: the
+ * target bean, the method and the parameter binders resolved at registration time.
+ * Built by {@link WorkflowTaskScanner}, registered per (workflow module, BPMN
+ * process ID) in the {@link WorkflowTaskRegistry} and invoked by
+ * {@link io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService#executeWorkflowTask}.
+ */
+public class WorkflowTaskHandler {
+
+  /**
+   * Binds one parameter of the handler method per invocation.
+   */
+  interface ParameterBinder {
+
+    Object bind(
+        Object workflowAggregate,
+        TaskInvocationContext context);
+
+  }
+
+  private final Class<?> workflowServiceClass;
+
+  private final Method method;
+
+  private final Supplier<Object> workflowServiceBean;
+
+  private final List<ParameterBinder> parameterBinders;
+
+  /**
+   * The task definition this handler is wired to, or <code>null</code> if wired by
+   * activity ID only.
+   */
+  private final String taskDefinition;
+
+  /**
+   * The BPMN activity ID this handler is wired to, or <code>null</code> if wired by
+   * task definition only.
+   */
+  private final String activityId;
+
+  private final List<VersionRange> versions;
+
+  /**
+   * Whether the method declares a <code>&#64;TaskId</code> parameter: the task is
+   * completed asynchronously later and MUST NOT be completed when the method
+   * returns.
+   */
+  private final boolean asynchronousTask;
+
+  WorkflowTaskHandler(
+      final Class<?> workflowServiceClass,
+      final Method method,
+      final Supplier<Object> workflowServiceBean,
+      final List<ParameterBinder> parameterBinders,
+      final String taskDefinition,
+      final String activityId,
+      final List<VersionRange> versions,
+      final boolean asynchronousTask) {
+
+    this.workflowServiceClass = workflowServiceClass;
+    this.method = method;
+    this.workflowServiceBean = workflowServiceBean;
+    this.parameterBinders = parameterBinders;
+    this.taskDefinition = taskDefinition;
+    this.activityId = activityId;
+    this.versions = versions;
+    this.asynchronousTask = asynchronousTask;
+
+  }
+
+  public String getTaskDefinition() {
+
+    return taskDefinition;
+
+  }
+
+  public String getActivityId() {
+
+    return activityId;
+
+  }
+
+  public boolean isAsynchronousTask() {
+
+    return asynchronousTask;
+
+  }
+
+  public String describe() {
+
+    return "%s#%s".formatted(workflowServiceClass.getName(), method.getName());
+
+  }
+
+  /**
+   * The key(s) this handler is wired by, for guiding messages.
+   */
+  public String describeWiring() {
+
+    if ((taskDefinition != null) && (activityId != null)) {
+      return "task definition '%s' / activity ID '%s'".formatted(taskDefinition, activityId);
+    }
+    if (taskDefinition != null) {
+      return "task definition '%s'".formatted(taskDefinition);
+    }
+    return "activity ID '%s'".formatted(activityId);
+
+  }
+
+  boolean matchesVersion(
+      final String processVersion) {
+
+    return versions
+        .stream()
+        .anyMatch(version -> version.matches(processVersion));
+
+  }
+
+  /**
+   * Invokes the handler method with parameters bound from the aggregate and the
+   * invocation context. {@link TaskException} and other
+   * {@link RuntimeException}s of the method propagate unchanged; checked
+   * exceptions are wrapped.
+   *
+   * @param workflowAggregate The loaded workflow aggregate
+   * @param context The invocation context supplied by the adapter
+   */
+  public void invoke(
+      final Object workflowAggregate,
+      final TaskInvocationContext context) {
+
+    final var arguments = new Object[parameterBinders.size()];
+    for (int i = 0; i < parameterBinders.size(); ++i) {
+      arguments[i] = parameterBinders.get(i).bind(workflowAggregate, context);
+    }
+    try {
+      method.invoke(workflowServiceBean.get(), arguments);
+    } catch (final IllegalAccessException e) {
+      throw new IllegalStateException(
+          "Could not invoke @WorkflowTask method '%s'!".formatted(describe()), e);
+    } catch (final InvocationTargetException e) {
+      if (e.getTargetException() instanceof RuntimeException runtimeException) {
+        throw runtimeException; // incl. TaskException
+      }
+      if (e.getTargetException() instanceof Error error) {
+        throw error;
+      }
+      throw new IllegalStateException(
+          "@WorkflowTask method '%s' threw a checked exception!".formatted(describe()), e.getTargetException());
+    }
+
+  }
+
+}

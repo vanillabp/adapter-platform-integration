@@ -5,10 +5,12 @@ import org.springframework.beans.factory.BeanRegistry;
 import org.springframework.core.env.Environment;
 
 import io.vanillabp.adapter.dummy.springboot.deployment.DeploymentService;
+import io.vanillabp.adapter.dummy.springboot.deployment.DummyTaskWiringSource;
 import io.vanillabp.adapter.dummy.springboot.processservice.DummyAdapterPhaseTwoListener;
 import io.vanillabp.adapter.dummy.springboot.processservice.DummyAdapterProcessServiceConfiguration;
 import io.vanillabp.adapter.dummy.springboot.processservice.MigratableProcessService;
 import io.vanillabp.integration.adapter.AdapterBeanRegistrarSupport;
+import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
 
 /**
  * Registers the dummy adapter's per-adapter-id beans - the reference implementation
@@ -51,7 +53,9 @@ public class DummyAdapterBeanRegistrar implements BeanRegistrar {
           registry.registerBean(
               "DummyAdapter_DeploymentService_%s".formatted(adapterId),
               DeploymentService.class,
-              spec -> spec.supplier(supplierContext -> new DeploymentService(adapterId)));
+              spec -> spec.supplier(supplierContext -> new DeploymentService(
+                  adapterId, supplierContext.bean(WorkflowTaskRegistry.class), supplierContext
+                      .beanProvider(DummyTaskWiringSource.class))));
 
         });
 
