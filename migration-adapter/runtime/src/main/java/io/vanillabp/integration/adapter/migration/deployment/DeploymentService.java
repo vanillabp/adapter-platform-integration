@@ -4,10 +4,12 @@ import java.io.InputStream;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
@@ -63,8 +65,9 @@ public class DeploymentService {
 
   /**
    * A map of workflow module ids and a list of process-contexts to be started after deployment and booting the application.
-   * There is one entry per adapter configured for the workflow module (prioritized adapters), since for BPMS migration
-   * all deployed adapters have to keep processing workflows.
+   * There is one entry per adapter the workflow module was deployed to (the union of the module-level and all
+   * workflow-level prioritized adapters), since for BPMS migration all deployed adapters have to keep processing
+   * workflows.
    */
   private final Map<String, List<ToBeStarted<?>>> bpmsProcessingContexts;
 
@@ -92,7 +95,8 @@ public class DeploymentService {
   /**
    * Deploy all resources of all workflow modules to the BPMS. This is done
    * <ol>
-   *   <li>for each adapter configured for the workflow-module (prioritized adapters)</li>
+   *   <li>for each adapter the workflow module has to be deployed to (union of the module-level
+   *       and all workflow-level prioritized adapters)</li>
    *   <li>reading the BPMN/DMN files</li>
    *   <li>prepare the BPMN by the adapter (setting default behavior etc.)</li>
    *   <li>for each adapter and extension having the same model type and process context type (e.g. all for Camunda 8)</li>
@@ -102,13 +106,33 @@ public class DeploymentService {
    *   <li>deploy the result to the BPMS</li>
    * </ol>
    * <p>
+   * The adapters a workflow module is deployed to are the UNION of the module's
+   * effective prioritized-adapters list and every adapter named in a workflow-level
+   * <code>prioritized-adapters</code> override of that module
+   * ({@link MigrationAdapterProperties#getDeploymentAdaptersFor(String)}): BPMS
+   * election is process-granular while deployment is file-granular, so an adapter
+   * prioritized for a single workflow only still has to receive the module's
+   * resources - otherwise starting that workflow would fail at runtime. Every
+   * adapter of the union receives the module's FULL resources (per-process
+   * filtering was considered and rejected: BPMN files may contain several processes
+   * and adapters deploy whole files - extra processes deployed to an adapter are
+   * inert because workflow starts are routed by the election, and during a BPMS
+   * migration having the module's complete model in both BPMS is even desirable).
+   * <p>
    * A failing deployment aborts booting of the application unless the property
    * <code>vanillabp.adapters.&lt;id&gt;.deployment-failure</code> is set to
    * <code>warn</code> for the failing adapter <i>and</i> the adapter is not the
-   * first-priority adapter of the workflow module: in this case the failure is
-   * logged and the application still starts (e.g. the old BPMS during a migration
-   * being temporarily unreachable). A failure of the first-priority adapter always
-   * fails the boot.
+   * first-priority adapter of the workflow module or of any of the module's
+   * workflows: in this case the failure is logged and the application still starts
+   * (e.g. the old BPMS during a migration being temporarily unreachable). A failure
+   * of an adapter being first priority for the module or for a single workflow
+   * always fails the boot - new workflows could not be started otherwise.
+   * <p>
+   * After all adapters were processed, configured workflow IDs
+   * (<code>vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;bpmnProcessId&gt;</code>)
+   * which match no executable BPMN process found in the module's resources are
+   * reported by a WARN (not a failure - the BPMN may arrive later, e.g. during a
+   * migration) naming the known BPMN process IDs.
    *
    * @param workflowModuleIds The workflow module IDs to deploy
    * @param bpmnResourcesLoader A function that takes a resource location and loads the BPMN resources
@@ -121,12 +145,15 @@ public class DeploymentService {
       final List<String> workflowModuleIds,
       final Function<String, Map<String, InputStream>> bpmnResourcesLoader) {
 
+    final var knownBpmnProcessIds = new HashMap<String, Set<String>>();
+
     // walk through all workflow modules
     workflowModuleIds
         .stream()
-        // for each adapter configured...
+        // for each adapter the module has to be deployed to (union of the
+        // module-level and all workflow-level prioritized adapters)...
         .flatMap(workflowModuleId -> properties
-            .getPrioritizedAdaptersFor(workflowModuleId)
+            .getDeploymentAdaptersFor(workflowModuleId)
             .stream()
             // ...find the right deployment service...
             .map(adapterId -> deploymentServices
@@ -147,18 +174,18 @@ public class DeploymentService {
             deployResourcesOfAdapter(
                 workflowModuleId,
                 deploymentService,
-                bpmnResourcesLoader);
+                bpmnResourcesLoader,
+                knownBpmnProcessIds.computeIfAbsent(workflowModuleId, id -> new HashSet<>()));
           } catch (final RuntimeException e) {
             final var adapterId = deploymentService.getAdapterId();
-            final var firstPriorityAdapter = properties
-                .getPrioritizedAdaptersFor(workflowModuleId)
-                .getFirst();
             final var policy = properties.getDeploymentFailureFor(adapterId);
-            if ((policy == DeploymentFailurePolicy.WARN) && !firstPriorityAdapter.equals(adapterId)) {
+            if ((policy == DeploymentFailurePolicy.WARN) && !properties.isFirstPriorityFor(workflowModuleId,
+                adapterId)) {
               log.warn(
                   "Deployment of workflow module '{}' failed for adapter '{}'! Since "
                       + "'{}.adapters.{}.deployment-failure' is set to 'warn' and the adapter is not "
-                      + "the first-priority adapter, the application starts anyway. Workflows of this "
+                      + "the first-priority adapter of the workflow module or of any of its workflows, "
+                      + "the application starts anyway. Workflows of this "
                       + "workflow module are not processed by adapter '{}'!",
                   workflowModuleId,
                   adapterId,
@@ -172,6 +199,65 @@ public class DeploymentService {
           }
         });
 
+    warnAboutConfiguredWorkflowsUnknownToBpmnResources(workflowModuleIds, knownBpmnProcessIds);
+
+  }
+
+  /**
+   * Reports configured workflow IDs
+   * (<code>vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;bpmnProcessId&gt;</code>)
+   * matching no executable BPMN process found in the module's resources. Only a
+   * WARN, consistent with the handling of configured workflow modules missing in the
+   * classpath: the BPMN may arrive later (e.g. during a BPMS migration), so booting
+   * must not be prevented. Runs after {@link #deployResources(List, Function)}
+   * processed all adapters because BPMN process IDs are known only after the
+   * adapters' <code>readBpmn</code> - IDs found by ANY adapter count as known (the
+   * resources location may differ per adapter).
+   *
+   * @param workflowModuleIds The workflow module IDs deployed
+   * @param knownBpmnProcessIds The executable BPMN process IDs found per workflow
+   *          module
+   */
+  private void warnAboutConfiguredWorkflowsUnknownToBpmnResources(
+      final List<String> workflowModuleIds,
+      final Map<String, Set<String>> knownBpmnProcessIds) {
+
+    workflowModuleIds.forEach(workflowModuleId -> {
+      final var workflowModule = properties.getWorkflowModules().get(workflowModuleId);
+      if ((workflowModule == null) || workflowModule.getWorkflows().isEmpty()) {
+        return;
+      }
+      final var knownProcessIds = knownBpmnProcessIds.getOrDefault(workflowModuleId, Set.of());
+      final var unknownConfiguredWorkflows = workflowModule
+          .getWorkflows()
+          .keySet()
+          .stream()
+          .filter(bpmnProcessId -> !knownProcessIds.contains(bpmnProcessId))
+          .sorted()
+          .toList();
+      if (unknownConfiguredWorkflows.isEmpty()) {
+        return;
+      }
+      final var propPrefix = "\n  %s.workflow-modules.%s.workflows.".formatted(
+          MigrationAdapterProperties.PREFIX,
+          workflowModuleId);
+      log.warn(
+          """
+              Found properties for BPMN processes
+                {}.workflow-modules.{}.workflows.{}
+              which were not found in any BPMN resource of workflow module '{}'! These properties are
+              never used - fix the BPMN process ID or add the BPMN file. This may be intended if the
+              BPMN arrives later (e.g. during a BPMS migration). Executable BPMN process IDs known for
+              this workflow module are: {}.""",
+          MigrationAdapterProperties.PREFIX,
+          workflowModuleId,
+          String.join(propPrefix, unknownConfiguredWorkflows),
+          workflowModuleId,
+          knownProcessIds.isEmpty()
+              ? "none"
+              : "'%s'".formatted(String.join("', '", knownProcessIds.stream().sorted().toList())));
+    });
+
   }
 
   /**
@@ -182,12 +268,15 @@ public class DeploymentService {
    * @param workflowModuleId The workflow module ID
    * @param deploymentService The deployment service to use
    * @param bpmnResourcesLoader A function that takes a resource location and loads the BPMN resources
+   * @param knownBpmnProcessIds Collects the executable BPMN process IDs found (used
+   *     to validate configured workflow IDs after all adapters were processed)
    * @param <PC> The processing context, used to store all information needed by the adapter to deploy the process.
    */
   private <PC> void deployResourcesOfAdapter(
       final String workflowModuleId,
       final AdapterDeploymentService<?, PC> deploymentService,
-      final Function<String, Map<String, InputStream>> bpmnResourcesLoader) {
+      final Function<String, Map<String, InputStream>> bpmnResourcesLoader,
+      final Set<String> knownBpmnProcessIds) {
 
     final var resourcesLocation = properties.getAdapterResourcesLocationFor(
         workflowModuleId,
@@ -205,7 +294,8 @@ public class DeploymentService {
               bpmsProcessingContext.getBpmsProcessingContext(),
               bpmnFileEntry.getKey(), // filename
               bpmnFileEntry.getValue(), // InputStream
-              resourcesLocation.vanillaBpBpmn())
+              resourcesLocation.vanillaBpBpmn(),
+              knownBpmnProcessIds)
               .ifPresentOrElse(
                   bpmsProcessingContext::setBpmsProcessingContext,
                   () -> log.warn(
@@ -272,6 +362,7 @@ public class DeploymentService {
    * @param filename The filename of the BPMN file (used for logging and error messages)
    * @param bpmn The BPMN resource inputstream
    * @param isVanillaBpBpmn Whether the BPMN is VanillaBP's BPMN or is specific to the adapter's BPMS
+   * @param knownBpmnProcessIds Collects the executable BPMN process IDs found
    * @param <BPMN> The BPMN model type
    * @param <PC> The processing context, used to store all information needed by the adapter to deploy the process
    * @return The context used to store all information needed by the adapter to deploy the process
@@ -283,7 +374,8 @@ public class DeploymentService {
       final PC bpmsProcessingContext,
       final String filename,
       final InputStream bpmn,
-      final boolean isVanillaBpBpmn) {
+      final boolean isVanillaBpBpmn,
+      final Set<String> knownBpmnProcessIds) {
 
     // read executable processes from the BPMN file
     final var executableProcesses = deploymentService.readBpmn(
@@ -301,6 +393,7 @@ public class DeploymentService {
     for (final var processIdAndModel : executableProcesses) {
       final var bpmnProcessId = processIdAndModel.getKey();
       final var bpmnModel = processIdAndModel.getValue();
+      knownBpmnProcessIds.add(bpmnProcessId);
       // ...preparing the model...
       context = deploymentService.prepareBpmn(
           workflowModuleId,

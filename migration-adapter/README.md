@@ -26,10 +26,6 @@ Which BPMS is used is configured as a *prioritized list of adapters*
 (`...workflows.<bpmnProcessId>.prioritized-adapters`) — the most specific non-empty
 value wins (see `MigrationAdapterProperties`).
 
-*Note:* Workflow-level configuration (`...workflows.*`) is modeled by the core but not
-yet filled by the platform integrations. Until implemented, configuring it fails hard
-at startup ("not yet supported") instead of silently electing the wrong BPMS.
-
 - **New workflows** are always started using the first (highest-priority) adapter.
 - **Existing workflows** may still live in a previously used BPMS. For operations on
   existing workflows (message correlation, completing tasks) the adapters are asked in
@@ -72,8 +68,18 @@ old one.
 
 `DeploymentService` orchestrates deployment per workflow module:
 
-1. Resolve the prioritized adapters for the module and find the matching
-   `AdapterDeploymentService` by adapter ID.
+1. Resolve the adapters the module has to be deployed to and find the matching
+   `AdapterDeploymentService` by adapter ID. This is the **union** of the module's
+   effective prioritized-adapters list and every adapter named in a workflow-level
+   `prioritized-adapters` override of that module: BPMS election is
+   process-granular while deployment is file-granular, so an adapter prioritized
+   for a single workflow only still has to receive the module's resources —
+   otherwise starting that workflow would fail at runtime. Every adapter of the
+   union receives the module's *full* resources (per-process filtering was
+   considered and rejected: BPMN files may contain several processes and adapters
+   deploy whole files; extra processes deployed to an adapter are inert because
+   workflow starts are routed by the election, and during a BPMS migration having
+   the module's complete model in both BPMS is even desirable).
 2. Load the BPMN resources (either from an adapter-specific `resources-location` or
    the generic VanillaBP BPMN files).
 3. For each file run the pipeline `readBpmn` → `prepareBpmn` (per process) →
@@ -83,7 +89,15 @@ old one.
    Extensions receive the same processing context as the adapter's `wireBpmn`;
    extensions are matched by assignability, so extensions may declare interfaces
    as model or processing-context type.
-4. `deployResources` pushes the result to the BPMS.
+4. `deployResources` pushes the result to the BPMS. A failing deployment aborts
+   booting unless the adapter's `deployment-failure` policy is `warn` *and* the
+   adapter is first priority neither for the module nor for any of its workflows.
+   After all adapters were processed, configured workflow IDs
+   (`vanillabp.workflow-modules.<module>.workflows.<id>`) matching no executable
+   BPMN process found are reported by a WARN naming the known process IDs (not a
+   failure — the BPMN may arrive later, e.g. during a BPMS migration; process IDs
+   are known only after `readBpmn`, which is why this check lives in the pipeline
+   and not in the early properties validation).
 5. Once the application is ready, `startWorkflowProcessing` is called for adapters and
    extensions — only then workflows are actually processed. It is called for *every*
    adapter resources were deployed to (not only the highest-priority one), since

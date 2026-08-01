@@ -20,6 +20,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import io.vanillabp.integration.adapter.AdapterConfigurationBase;
+import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
@@ -213,22 +214,42 @@ public class VanillaBpConfigurationBindingTest {
   }
 
   @Test
-  @DisplayName("Workflow-level configuration is rejected by the core validation")
-  public void workflowLevelConfigurationIsRejected() {
+  @DisplayName("Workflow-level configuration binds and is resolved (formerly rejected)")
+  public void workflowLevelConfigurationIsAccepted() {
 
+    // regression for the former "not yet supported" rejection (story 27)
     contextRunner
         .withPropertyValues(
             "vanillabp.resources-location=classpath*:vanillabp-processes",
+            "vanillabp.prioritized-adapters=test,test2",
             "vanillabp.adapters.test.type=dummy",
-            "vanillabp.workflow-modules.test-module.workflows.MyProcess.prioritized-adapters=test")
+            "vanillabp.adapters.test2.type=dummy",
+            "vanillabp.workflow-modules.test-module.prioritized-adapters=test,test2",
+            "vanillabp.workflow-modules.test-module.workflows.MyProcess.prioritized-adapters=test2,test",
+            "vanillabp.workflow-modules.test-module.workflows.MyProcess.adapters.test2.resources-location=classpath:wf-specific")
         .run(context -> {
 
-          assertNotNull(context.getStartupFailure());
-          assertTrue(rootMessage(context.getStartupFailure())
-              .contains(
-                  """
-                      Workflow-level configuration is not yet supported! Remove these properties:
-                        vanillabp.workflow-modules.test-module.workflows"""));
+          assertNotNull(context.getBean(MigrationAdapterProperties.class));
+          final var properties = context.getBean(MigrationAdapterProperties.class);
+
+          // the workflow-level prioritized-adapters override wins for MyProcess...
+          assertEquals(
+              List.of("test2", "test"),
+              properties.getPrioritizedAdaptersFor("test-module", "MyProcess"));
+          // ...while other workflows use the module-level list
+          assertEquals(
+              List.of("test", "test2"),
+              properties.getPrioritizedAdaptersFor("test-module", "OtherProcess"));
+
+          // adapter-scoped keys bind at the workflow level and resolve most-specific-wins
+          assertEquals(
+              "classpath:wf-specific",
+              properties.resolveForAdapter(
+                  "test-module",
+                  "MyProcess",
+                  null,
+                  "test2",
+                  AdapterProperties::getResourcesLocation));
 
         });
 

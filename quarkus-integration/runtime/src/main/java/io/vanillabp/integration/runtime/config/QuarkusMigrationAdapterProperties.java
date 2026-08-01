@@ -267,10 +267,6 @@ public interface QuarkusMigrationAdapterProperties {
     /**
      * The properties of workflows specific to this workflow module. The key is the
      * BPMN process ID.
-     * <p>
-     * <b>Attention:</b> Workflow-level configuration is not yet supported! It is only
-     * bound so the core validation can detect and reject such configuration on
-     * startup instead of silently ignoring it.
      */
     Map<String, WorkflowProperties> workflows();
 

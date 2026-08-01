@@ -17,8 +17,7 @@ import lombok.experimental.SuperBuilder;
  * {@link MigrationAdapterProperties#resolveForAdapter}).
  * <p>
  * <b>Attention:</b> This level is structural preparation for task-scoped adapter
- * configuration (e.g. a per-task job timeout) - there is no consumer yet, and
- * workflow-level configuration (including tasks) is still rejected at startup.
+ * configuration (e.g. a per-task job timeout) - there is no consumer yet.
  */
 @Getter
 @Setter

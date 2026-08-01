@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -287,6 +288,85 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
+   * Whether the given adapter is the FIRST entry of the prioritized-adapters list
+   * effective for the given workflow module or for ANY workflow of that module -
+   * i.e. whether new workflows of this module may be started via this adapter.
+   * Used by the deployment-failure policy: a deployment failure of an adapter
+   * being first priority for at least one workflow always fails the boot, even if
+   * the adapter is not the module's first-priority adapter (starting that workflow
+   * would fail at runtime otherwise).
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param adapterId The adapter ID
+   * @return Whether the adapter is first priority for the module or any of its
+   *         workflows
+   */
+  public boolean isFirstPriorityFor(
+      final String workflowModuleId,
+      final String adapterId) {
+
+    if (isFirstOf(getPrioritizedAdaptersFor(workflowModuleId), adapterId)) {
+      return true;
+    }
+    final var workflowModule = workflowModules.get(workflowModuleId);
+    if (workflowModule == null) {
+      return false;
+    }
+    return workflowModule
+        .getWorkflows()
+        .keySet()
+        .stream()
+        .anyMatch(bpmnProcessId -> isFirstOf(
+            getPrioritizedAdaptersFor(workflowModuleId, bpmnProcessId),
+            adapterId));
+
+  }
+
+  /**
+   * The adapters which have to receive the given workflow module's deployment: the
+   * union of the module's effective prioritized-adapters list and every adapter
+   * named in a workflow-level <code>prioritized-adapters</code> override of that
+   * module. BPMS election is process-granular while deployment is file-granular -
+   * an adapter prioritized for a single workflow only still needs the module's
+   * resources deployed, otherwise starting that workflow fails at runtime. Order:
+   * the module-level list first, followed by adapters named at the workflow level
+   * only.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @return The adapter IDs to deploy the module's resources to
+   */
+  public List<String> getDeploymentAdaptersFor(
+      final String workflowModuleId) {
+
+    final var deploymentAdapters = new LinkedList<>(getPrioritizedAdaptersFor(workflowModuleId));
+    final var workflowModule = workflowModules.get(workflowModuleId);
+    if (workflowModule != null) {
+      workflowModule
+          .getWorkflows()
+          .values()
+          .stream()
+          .flatMap(workflow -> workflow.getPrioritizedAdapters().stream())
+          .distinct()
+          .filter(adapterId -> !deploymentAdapters.contains(adapterId))
+          .forEach(deploymentAdapters::add);
+    }
+    return deploymentAdapters;
+
+  }
+
+  private Stream<String> unknownAdapterKeys(
+      final Map<String, ? extends AdapterProperties> adaptersOfLevel,
+      final String keyPrefixOfLevel) {
+
+    return adaptersOfLevel
+        .keySet()
+        .stream()
+        .filter(adapterId -> !adapters.containsKey(adapterId))
+        .map(adapterId -> "%s.adapters.%s".formatted(keyPrefixOfLevel, adapterId));
+
+  }
+
+  /**
    * Provides the policy how to treat a failing deployment of BPMS resources for the
    * given adapter.
    *
@@ -380,25 +460,6 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     normalize();
     validateAndLink();
 
-    // TODO: process workflow-level properties instead of rejecting them once
-    //  story 27 implements resolving 'workflows' of WorkflowModuleAdapterProperties.
-    //  Fail hard since silently ignoring them could elect the wrong BPMS without
-    //  any error.
-    final var workflowLevelConfigurations = workflowModules
-        .entrySet()
-        .stream()
-        .filter(workflowModule -> !workflowModule.getValue().getWorkflows().isEmpty())
-        .map(workflowModule -> "%s.workflow-modules.%s.workflows".formatted(PREFIX, workflowModule.getKey()))
-        .sorted()
-        .collect(Collectors.joining("\n  "));
-    if (!workflowLevelConfigurations.isEmpty()) {
-      throw new IllegalStateException(
-          """
-              Workflow-level configuration is not yet supported! Remove these properties:
-                %s"""
-              .formatted(workflowLevelConfigurations));
-    }
-
     if (knownWorkflowModuleIds.isEmpty()) {
       throw new IllegalStateException("No workflow-modules where given!");
     }
@@ -459,19 +520,33 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
           PREFIX, String.join(propPrefix, workflowModulesConfiguredButNotInClasspath));
     }
 
-    // module-adapter entries which are never used (V1-style check): every key under
-    // 'vanillabp.workflow-modules.<module>.adapters.<id>' has to reference a
-    // configured adapter id
+    // adapter entries which are never used (V1-style check): every key under an
+    // 'adapters.<id>' section of any level (workflow module, workflow, task) has
+    // to reference a configured adapter id
     final var unusedModuleAdapterEntries = getWorkflowModules()
         .values()
         .stream()
-        .flatMap(workflowModule -> workflowModule
-            .getAdapters()
-            .keySet()
-            .stream()
-            .filter(adapterId -> !adapters.containsKey(adapterId))
-            .map(adapterId -> "%s.workflow-modules.%s.adapters.%s"
-                .formatted(PREFIX, workflowModule.workflowModuleId, adapterId)))
+        .flatMap(workflowModule -> {
+          final var modulePrefix = "%s.workflow-modules.%s".formatted(PREFIX, workflowModule.workflowModuleId);
+          return Stream.concat(
+              unknownAdapterKeys(workflowModule.getAdapters(), modulePrefix),
+              workflowModule
+                  .getWorkflows()
+                  .values()
+                  .stream()
+                  .flatMap(workflow -> {
+                    final var workflowPrefix = "%s.workflows.%s".formatted(modulePrefix, workflow.getBpmnProcessId());
+                    return Stream.concat(
+                        unknownAdapterKeys(workflow.getAdapters(), workflowPrefix),
+                        workflow
+                            .getTasks()
+                            .entrySet()
+                            .stream()
+                            .flatMap(task -> unknownAdapterKeys(
+                                task.getValue().getAdapters(),
+                                "%s.tasks.%s".formatted(workflowPrefix, task.getKey()))));
+                  }));
+        })
         .sorted()
         .collect(Collectors.joining("\n  "));
     if (!unusedModuleAdapterEntries.isEmpty()) {

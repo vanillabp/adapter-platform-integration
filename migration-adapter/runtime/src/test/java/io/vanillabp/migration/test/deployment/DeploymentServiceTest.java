@@ -21,6 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +42,7 @@ import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.config.WorkflowAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
 import io.vanillabp.integration.adapter.migration.deployment.DeploymentService;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
@@ -928,6 +930,160 @@ public class DeploymentServiceTest {
   }
 
   @Nested
+  @DisplayName("Workflow-level priorities Tests")
+  class WorkflowLevelPrioritiesTests {
+
+    @Test
+    @DisplayName("Adapter named at the workflow level only receives the module's deployment (union)")
+    public void workflowLevelAdapterIsIncludedInDeploymentUnion() {
+
+      // module-level list names adapter-test1 only, one workflow overrides to adapter-test2
+      final var properties = createPropertiesWithWorkflowOverride(
+          List.of("adapter-test1"),
+          "ProcessOnB",
+          List.of("adapter-test2"));
+
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+      when(adapter2DeploymentService.getAdapterId()).thenReturn("adapter-test2");
+
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
+          createDummyBpmnInputStream());
+
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of(Map.entry("ProcessOnB", 42)));
+      when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
+          .thenReturn(100);
+      when(adapter2DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of(Map.entry("ProcessOnB", 4711L)));
+      when(adapter2DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
+          .thenReturn(4200L);
+
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService, adapter2DeploymentService), List.of());
+
+      testee.deployResources(List.of("test-module"), resourcesLoader);
+
+      // Verify: BOTH adapters receive the module's resources although the module-level
+      // list names adapter-test1 only - otherwise starting 'ProcessOnB' via
+      // adapter-test2 would fail at runtime
+      verify(adapter1DeploymentService).deployResources(eq("test-module"), eq(100));
+      verify(adapter2DeploymentService).deployResources(eq("test-module"), eq(4200L));
+
+      testee.startWorkflowProcessing(List.of("test-module"));
+
+      // Verify: BOTH adapters start processing workflows
+      verify(adapter1DeploymentService).startWorkflowProcessing(eq("test-module"), eq(100));
+      verify(adapter2DeploymentService).startWorkflowProcessing(eq("test-module"), eq(4200L));
+
+    }
+
+    @Test
+    @DisplayName("Failure of an adapter being first priority for a single workflow fails the boot even with policy 'warn'")
+    public void workflowLevelFirstPriorityAdapterFailureFailsEvenWithWarnPolicy() {
+
+      // adapter-test2 is NOT first for the module but IS first for one workflow
+      final var properties = createPropertiesWithWorkflowOverride(
+          List.of("adapter-test1", "adapter-test2"),
+          "ProcessOnB",
+          List.of("adapter-test2", "adapter-test1"));
+      properties.getAdapters().get("adapter-test2").setDeploymentFailure(DeploymentFailurePolicy.WARN);
+
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+      when(adapter2DeploymentService.getAdapterId()).thenReturn("adapter-test2");
+
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
+          createDummyBpmnInputStream());
+
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of(Map.entry("ProcessOnB", 42)));
+      when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
+          .thenReturn(100);
+      when(adapter2DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenThrow(new IllegalStateException("BPMS unreachable"));
+
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService, adapter2DeploymentService), List.of());
+
+      // Deployment fails although the policy is 'warn': starting 'ProcessOnB' would
+      // be impossible without adapter-test2
+      final var exception = assertThrows(
+          IllegalStateException.class,
+          () -> testee.deployResources(List.of("test-module"), resourcesLoader));
+      assertTrue(exception.getMessage().contains("BPMS unreachable"));
+
+    }
+
+    @Test
+    @DisplayName("Configured workflow ID matching no BPMN process is reported by a WARN naming the known IDs")
+    public void unknownConfiguredWorkflowIdIsWarned() {
+
+      final var properties = createPropertiesWithWorkflowOverride(
+          List.of("adapter-test1"),
+          "NoSuchProcess",
+          List.of());
+
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
+          createDummyBpmnInputStream());
+
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of(Map.entry("TestProcess", 42)));
+      when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
+          .thenReturn(100);
+
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService), List.of());
+
+      // only a WARN - the BPMN may arrive later (e.g. during a BPMS migration)
+      testee.deployResources(List.of("test-module"), resourcesLoader);
+
+      final var warningLogs = logWatcher.list
+          .stream()
+          .filter(event -> event.getLevel() == Level.WARN)
+          .map(ILoggingEvent::getFormattedMessage)
+          .filter(msg -> msg.contains("vanillabp.workflow-modules.test-module.workflows.NoSuchProcess"))
+          .toList();
+      assertEquals(1, warningLogs.size());
+      assertTrue(warningLogs.getFirst().contains("'TestProcess'"));
+
+    }
+
+    @Test
+    @DisplayName("Configured workflow ID matching a BPMN process is not warned about")
+    public void knownConfiguredWorkflowIdIsNotWarned() {
+
+      final var properties = createPropertiesWithWorkflowOverride(
+          List.of("adapter-test1"),
+          "TestProcess",
+          List.of());
+
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+
+      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
+          createDummyBpmnInputStream());
+
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of(Map.entry("TestProcess", 42)));
+      when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
+          .thenReturn(100);
+
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService), List.of());
+
+      testee.deployResources(List.of("test-module"), resourcesLoader);
+
+      assertTrue(logWatcher.list
+          .stream()
+          .filter(event -> event.getLevel() == Level.WARN)
+          .map(ILoggingEvent::getFormattedMessage)
+          .noneMatch(msg -> msg.contains("workflows.TestProcess")));
+
+    }
+
+  }
+
+  @Nested
   @DisplayName("Adapters as wiring services Tests")
   class AdaptersAsWiringServicesTests {
 
@@ -1002,6 +1158,53 @@ public class DeploymentServiceTest {
   /**
    * Creates properties with multiple configured adapters (in given priority) and a workflow module.
    */
+  /**
+   * Properties of module 'test-module' with the given module-level prioritized
+   * adapters and ONE workflow having its own (possibly empty) prioritized-adapters
+   * override. Adapter sections exist for all adapter ids of both lists.
+   */
+  private MigrationAdapterProperties createPropertiesWithWorkflowOverride(
+      final List<String> moduleAdapterIds,
+      final String bpmnProcessId,
+      final List<String> workflowAdapterIds) {
+
+    final var adapters = new LinkedHashMap<String, AdapterConfigProperties>();
+    final var adapterProperties = new LinkedHashMap<String, AdapterProperties>();
+    for (final var adapterId : Stream
+        .concat(moduleAdapterIds.stream(), workflowAdapterIds.stream())
+        .distinct()
+        .toList()) {
+      adapters.put(adapterId, AdapterConfigProperties.ofType("dummy"));
+      adapterProperties.put(adapterId, AdapterProperties
+          .builder()
+          .resourcesLocation("classpath:test-module/processes/"
+              + adapterId)
+          .build());
+    }
+
+    final var properties = MigrationAdapterProperties
+        .builder()
+        .adapters(adapters)
+        .workflowModules(Map.of(
+            "test-module",
+            WorkflowModuleAdapterProperties
+                .builder()
+                .workflowModuleId("test-module")
+                .prioritizedAdapters(moduleAdapterIds)
+                .adapters(adapterProperties)
+                .workflows(Map.of(bpmnProcessId, WorkflowAdapterProperties
+                    .builder()
+                    .bpmnProcessId(bpmnProcessId)
+                    .prioritizedAdapters(workflowAdapterIds)
+                    .build()))
+                .build()))
+        .build();
+    // Link back-references (workflowModuleId etc.)
+    properties.validateAndLink();
+    return properties;
+
+  }
+
   private MigrationAdapterProperties createPropertiesWithAdapters(
       final String... adapterIds) {
 
