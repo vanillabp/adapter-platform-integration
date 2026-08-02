@@ -63,7 +63,9 @@ public class WorkflowTaskProcessingTest {
 
     return deploymentServices
         .stream()
+        .filter(java.util.Objects::nonNull)
         .flatMap(List::stream)
+        .filter(java.util.Objects::nonNull)
         .filter(DummyDeploymentService.class::isInstance)
         .map(DummyDeploymentService.class::cast)
         .filter(service -> "demo1".equals(service.getAdapterId()))

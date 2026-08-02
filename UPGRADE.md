@@ -29,7 +29,12 @@ invoke - save, within one transaction). Application-facing:
   `MultiInstanceValue`) - adapters validate task wiring during `wireBpmn` and
   dispatch delivered tasks through the invoker; the three outcomes are mapped by
   the adapter to its BPMS (complete / complete-with-BPMN-error / leave open plus
-  exception propagation for BPMS-side retries).
+  exception propagation for BPMS-side retries). Since story 21b the invoker also
+  provides `validateNoUnwiredWorkflowTaskMethods(module)` (per-module reverse
+  wiring check, called at the end of `deployResources` - methods may serve any
+  of their class' declared BPMN processes) and
+  `resolveWorkflowAggregateProperty(...)` (embedded BPMS evaluating BPMN
+  expressions against the workflow aggregate).
 
 ## Per-aggregate outbox selection + aggregate-ID type in the persistence SPI (2026-07-31)
 

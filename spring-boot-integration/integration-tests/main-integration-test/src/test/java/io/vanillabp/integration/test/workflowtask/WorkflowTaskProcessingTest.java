@@ -368,7 +368,8 @@ public class WorkflowTaskProcessingTest {
 
   /**
    * Supplies a task the workflow service does not implement - the boot has to fail
-   * with the guiding two-directional wiring message.
+   * with the guiding wiring message (the reverse direction - methods matching no
+   * task - is validated per module at the end of deployResources).
    */
   @Configuration
   static class BrokenWiringConfiguration {
@@ -430,14 +431,6 @@ public class WorkflowTaskProcessingTest {
               + message);
       Assertions.assertTrue(
           message.contains("@WorkflowTask(taskDefinition = \"notImplemented\")"),
-          "unexpected message: "
-              + message);
-      Assertions.assertTrue(
-          message.contains("@WorkflowTask methods matching no task"),
-          "unexpected message: "
-              + message);
-      Assertions.assertTrue(
-          message.contains("processTask"),
           "unexpected message: "
               + message);
 

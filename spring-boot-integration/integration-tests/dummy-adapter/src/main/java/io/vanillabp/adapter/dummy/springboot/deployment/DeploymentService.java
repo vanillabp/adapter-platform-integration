@@ -142,6 +142,11 @@ public class DeploymentService implements AdapterDeploymentService<Object, Objec
 
     log.info("Dummy-Adapter[{}]: Deploying resources for {}", adapterId, workflowModuleId);
 
+    // like a real adapter: after ALL processes of the module were wired, methods
+    // matching no task of any process are a defect (per-module check)
+    taskWiringSource.ifAvailable(
+        source -> workflowTaskInvoker.validateNoUnwiredWorkflowTaskMethods(workflowModuleId));
+
   }
 
   @Override

@@ -759,33 +759,74 @@ public class WorkflowTaskRegistryTest {
       assertTrue(message.contains("'notImplemented'"));
       assertTrue(message.contains("@WorkflowTask(taskDefinition = \"notImplemented\")"));
       assertTrue(message.contains(SampleService.class.getName()));
-      // the second direction is reported in the SAME exception (all defects at once)
-      assertTrue(message.contains("@WorkflowTask methods matching no task"));
-      assertTrue(message.contains("doSomething"));
 
     }
 
     @Test
-    @DisplayName("A handler without BPMN task fails naming the method")
-    public void unmatchedHandlerFails() {
+    @DisplayName("A handler matching no task of ANY wired process fails the per-module check")
+    public void unmatchedHandlerFailsPerModule() {
+
+      // wiring the process without 'withResolver' marks all other methods wired
+      registry.validateTaskWiring(
+          MODULE,
+          PROCESS,
+          List.of(
+              new BpmnTaskSpec("Activity_1", "doSomething"),
+              new BpmnTaskSpec("Activity_2", "explicitDefinition"),
+              new BpmnTaskSpec("Activity_4711", "x"),
+              new BpmnTaskSpec("Activity_3", "fails"),
+              new BpmnTaskSpec("Activity_5", "bpmnError"),
+              new BpmnTaskSpec("Activity_6", "asyncTask"),
+              new BpmnTaskSpec("Activity_7", "withBindings")));
 
       final var exception = assertThrows(
           IllegalStateException.class,
-          () -> registry.validateTaskWiring(
-              MODULE,
-              PROCESS,
-              List.of(
-                  new BpmnTaskSpec("Activity_1", "doSomething"),
-                  new BpmnTaskSpec("Activity_2", "explicitDefinition"),
-                  new BpmnTaskSpec("Activity_4711", "x"),
-                  new BpmnTaskSpec("Activity_3", "fails"),
-                  new BpmnTaskSpec("Activity_5", "bpmnError"),
-                  new BpmnTaskSpec("Activity_6", "asyncTask"),
-                  new BpmnTaskSpec("Activity_7", "withBindings"))));
+          () -> registry.validateNoUnwiredWorkflowTaskMethods(MODULE));
 
       final var message = exception.getMessage();
       assertTrue(message.contains("withResolver"));
       assertTrue(message.contains("fix the annotation"));
+
+    }
+
+    @Test
+    @DisplayName("A handler wired in ONE of several processes passes the per-module check")
+    public void handlerWiredInAnotherProcessPasses() {
+
+      // 'withResolver' matches in a second process of the module - the method is
+      // legitimate although the first process does not use it
+      registry.validateTaskWiring(
+          MODULE,
+          PROCESS,
+          List.of(
+              new BpmnTaskSpec("Activity_1", "doSomething"),
+              new BpmnTaskSpec("Activity_2", "explicitDefinition"),
+              new BpmnTaskSpec("Activity_4711", "x"),
+              new BpmnTaskSpec("Activity_3", "fails"),
+              new BpmnTaskSpec("Activity_5", "bpmnError"),
+              new BpmnTaskSpec("Activity_6", "asyncTask"),
+              new BpmnTaskSpec("Activity_7", "withBindings")));
+      registry.registerWorkflowService(
+          MODULE,
+          "SecondProcess",
+          SampleService.class,
+          () -> serviceBean,
+          beans::get,
+          createProcessService());
+      registry.validateTaskWiring(
+          MODULE,
+          "SecondProcess",
+          List.of(
+              new BpmnTaskSpec("Activity_1", "doSomething"),
+              new BpmnTaskSpec("Activity_2", "explicitDefinition"),
+              new BpmnTaskSpec("Activity_4711", "x"),
+              new BpmnTaskSpec("Activity_3", "fails"),
+              new BpmnTaskSpec("Activity_5", "bpmnError"),
+              new BpmnTaskSpec("Activity_6", "asyncTask"),
+              new BpmnTaskSpec("Activity_7", "withBindings"),
+              new BpmnTaskSpec("Activity_8", "withResolver")));
+
+      registry.validateNoUnwiredWorkflowTaskMethods(MODULE);
 
     }
 
@@ -818,6 +859,146 @@ public class WorkflowTaskRegistryTest {
     // a @TaskId method stays open even if the BPMS supplies no task ID
     assertEquals(WorkflowTaskOutcome.Kind.COMPLETION_PENDING, outcome.kind());
     assertNull(persistence.aggregates.get("4711").taskId);
+
+  }
+
+  @Test
+  @DisplayName("Aggregate attributes resolve via field access - null for unknowns")
+  public void aggregatePropertyResolution() {
+
+    persistence.aggregates.get("4711").processedBy = "the-status";
+    persistence.aggregates.get("4711").index = 7;
+
+    // field access (package-private fields, no getters on the test aggregate)
+    assertEquals(
+        "the-status",
+        registry.resolveWorkflowAggregateProperty(MODULE, PROCESS, "4711", "processedBy"));
+    assertEquals(
+        7,
+        registry.resolveWorkflowAggregateProperty(MODULE, PROCESS, "4711", "index"));
+
+    // unknown attribute, unknown aggregate, unknown process: null - the engine's
+    // other EL resolvers get their chance
+    assertNull(registry.resolveWorkflowAggregateProperty(MODULE, PROCESS, "4711", "noSuchProperty"));
+    assertNull(registry.resolveWorkflowAggregateProperty(MODULE, PROCESS, "no-such-id", "processedBy"));
+    assertNull(registry.resolveWorkflowAggregateProperty(MODULE, "NoSuchProcess", "4711", "processedBy"));
+
+  }
+
+  public static class GetterAggregate {
+
+    private String id;
+
+    public boolean isFine() {
+      return true;
+    }
+
+    public String getName() {
+      return "from-getter";
+    }
+
+  }
+
+  @Test
+  @DisplayName("Getters and boolean getters win when resolving aggregate attributes")
+  public void aggregatePropertyGetterPrecedence() {
+
+    final var getterPersistence = new AggregatePersistenceAware<GetterAggregate>() {
+
+      @Override
+      public Class<GetterAggregate> getAggregateClass() {
+        return GetterAggregate.class;
+      }
+
+      @Override
+      public GetterAggregate save(
+          final GetterAggregate aggregate) {
+        return aggregate;
+      }
+
+      @Override
+      public Object getAggregateId(
+          final GetterAggregate aggregate) {
+        return aggregate.id;
+      }
+
+      @Override
+      public Class<?> getAggregateIdType() {
+        return String.class;
+      }
+
+      @Override
+      public GetterAggregate loadById(
+          final Object aggregateId) {
+        return new GetterAggregate();
+      }
+
+    };
+    final var properties = MigrationAdapterProperties
+        .builder()
+        .adapters(Map.of("test-adapter", AdapterConfigProperties.ofType("dummy")))
+        .prioritizedAdapters(List.of("test-adapter"))
+        .build();
+    properties.validateAndLink();
+    registry.registerWorkflowService(
+        MODULE,
+        "GetterProcess",
+        GetterAggregate.class, // no @WorkflowTask methods - registration is fine
+        GetterAggregate::new,
+        beans::get,
+        new MigrationProcessService<>(
+            MODULE, "GetterProcess", GetterAggregate.class, properties, getterPersistence, List.of(
+                new NoOpProcessService<GetterAggregate>()), null));
+
+    assertEquals(
+        "from-getter",
+        registry.resolveWorkflowAggregateProperty(MODULE, "GetterProcess", "x", "name"));
+    assertEquals(
+        true,
+        registry.resolveWorkflowAggregateProperty(MODULE, "GetterProcess", "x", "fine"));
+
+  }
+
+  static class NoOpProcessService<T> implements MigratableProcessService<T> {
+
+    @Override
+    public String getAdapterId() {
+      return "test-adapter";
+    }
+
+    @Override
+    public WorkflowAwareness awarenessOfTask(
+        final Object workflowAggregateId,
+        final String taskId) {
+      return WorkflowAwareness.UNKNOWN_TO_BPMS;
+    }
+
+    @Override
+    public WorkflowAwareness awarenessOfWorkflow(
+        final Object workflowAggregateId) {
+      return WorkflowAwareness.UNKNOWN_TO_BPMS;
+    }
+
+    @Override
+    public boolean needsTwoPhaseCommitForStartingWorkflows() {
+      return false;
+    }
+
+    @Override
+    public void startWorkflowPhaseOne(
+        final String workflowModuleId,
+        final String bpmnProcessId,
+        final AggregatePersistenceAware<T> aggregatePersistence,
+        final T workflowAggregate) {
+    }
+
+    @Override
+    public void startWorkflowPhaseTwo(
+        final String workflowModuleId,
+        final String bpmnProcessId,
+        final AggregatePersistenceAware<T> aggregatePersistence,
+        final Object workflowAggregateId) {
+    }
 
   }
 

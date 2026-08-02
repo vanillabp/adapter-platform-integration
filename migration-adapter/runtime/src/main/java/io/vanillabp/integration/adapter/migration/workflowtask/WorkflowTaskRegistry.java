@@ -45,6 +45,12 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
 
     private MigrationProcessService<?> processService;
 
+    /**
+     * Whether {@link #validateTaskWiring} ran for this (module, process) - i.e.
+     * an adapter wired a deployed BPMN process against these handlers.
+     */
+    private volatile boolean wiringValidated = false;
+
   }
 
   private final TransactionRunner transactionRunner;
@@ -165,16 +171,23 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
     final var handlers = entry == null
         ? List.<WorkflowTaskHandler>of()
         : List.copyOf(entry.handlers);
+    if (entry != null) {
+      entry.wiringValidated = true;
+    }
+
+    // mark every matched handler as wired - the reverse direction (methods
+    // matching no task of ANY process of the module) is validated per module via
+    // validateNoUnwiredWorkflowTaskMethods after all processes were wired
+    handlers
+        .stream()
+        .filter(handler -> tasks.stream().anyMatch(task -> matches(handler, task)))
+        .forEach(WorkflowTaskHandler::markWired);
 
     final var unmatchedTasks = tasks
         .stream()
         .filter(task -> handlers.stream().noneMatch(handler -> matches(handler, task)))
         .toList();
-    final var unmatchedHandlers = handlers
-        .stream()
-        .filter(handler -> tasks.stream().noneMatch(task -> matches(handler, task)))
-        .toList();
-    if (unmatchedTasks.isEmpty() && unmatchedHandlers.isEmpty()) {
+    if (unmatchedTasks.isEmpty()) {
       return;
     }
 
@@ -205,15 +218,6 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
                   task.taskDefinition(),
                   task.activityId())));
     }
-    if (!unmatchedHandlers.isEmpty()) {
-      message.append("\n@WorkflowTask methods matching no task of the BPMN process:");
-      unmatchedHandlers.forEach(handler -> message.append(
-          """
-
-                - method '%s' (wired by %s): fix the annotation's taskDefinition/id or remove the \
-              annotation."""
-              .formatted(handler.describe(), handler.describeWiring())));
-    }
     message.append("\nTasks of the BPMN process: ");
     message.append(tasks.isEmpty()
         ? "none"
@@ -229,6 +233,56 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
             .map(handler -> "'%s' (%s)".formatted(handler.describe(), handler.describeWiring()))
             .collect(Collectors.joining(", ")));
     message.append('.');
+    throw new IllegalStateException(message.toString());
+
+  }
+
+  @Override
+  public void validateNoUnwiredWorkflowTaskMethods(
+      final String workflowModuleId) {
+
+    // a method may be registered under several BPMN processes (secondary
+    // processes, several handler objects) - it is unwired only if NO
+    // registration of it was matched by any wired process
+    final var wiredMethods = new java.util.HashSet<String>();
+    final var validatedMethods = new java.util.HashSet<String>();
+    final var unwiredByMethod = new java.util.LinkedHashMap<String, WorkflowTaskHandler>();
+    entries
+        .entrySet()
+        .stream()
+        .filter(entry -> entry.getKey().workflowModuleId().equals(workflowModuleId))
+        .forEach(entry -> entry
+            .getValue().handlers
+            .forEach(handler -> {
+              final var method = handler.describe();
+              if (entry.getValue().wiringValidated) {
+                validatedMethods.add(method);
+              }
+              if (handler.isWired()) {
+                wiredMethods.add(method);
+              } else {
+                unwiredByMethod.putIfAbsent(method, handler);
+              }
+            }));
+    wiredMethods.forEach(unwiredByMethod::remove);
+    // a method whose class' BPMN processes were ALL never wired (no BPMN deployed
+    // - e.g. it arrives later during a migration) is not a defect: only methods
+    // of at least one actually-wired process are reported
+    unwiredByMethod.keySet().retainAll(validatedMethods);
+    if (unwiredByMethod.isEmpty()) {
+      return;
+    }
+    final var message = new StringBuilder(
+        "@WorkflowTask methods of workflow module '%s' matching no task of any wired BPMN process:"
+            .formatted(workflowModuleId));
+    unwiredByMethod
+        .values()
+        .forEach(handler -> message.append(
+            """
+
+                  - method '%s' (wired by %s): fix the annotation's taskDefinition/id, remove the \
+                annotation or add the task to one of the class' BPMN processes."""
+                .formatted(handler.describe(), handler.describeWiring())));
     throw new IllegalStateException(message.toString());
 
   }
@@ -283,6 +337,27 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
                         .map(candidate -> "'%s' (%s)".formatted(candidate.describe(), candidate.describeWiring()))
                         .collect(Collectors.joining(", ")))));
     return entry.processService.executeWorkflowTask(handler, context, transactionRunner);
+
+  }
+
+  @Override
+  public Object resolveWorkflowAggregateProperty(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final String propertyName) {
+
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    if (entry == null) {
+      return null;
+    }
+    // runs within the CALLER's transaction: embedded BPMS evaluate expressions
+    // inside an engine transaction, the aggregate has to join it
+    final var workflowAggregate = entry.processService.loadWorkflowAggregate(workflowAggregateId);
+    if (workflowAggregate == null) {
+      return null;
+    }
+    return AggregatePropertyReader.read(workflowAggregate, propertyName);
 
   }
 

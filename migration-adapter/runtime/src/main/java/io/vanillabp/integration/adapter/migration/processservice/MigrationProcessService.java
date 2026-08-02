@@ -172,6 +172,22 @@ public class MigrationProcessService<A> {
   }
 
   /**
+   * Loads the workflow aggregate by its serialized ID within the CALLER's
+   * transaction - used to resolve aggregate attributes referenced by BPMN
+   * expressions of embedded BPMS (the expression evaluates inside an engine
+   * transaction the aggregate has to join).
+   *
+   * @param serializedAggregateId The aggregate ID in serialized form
+   * @return The aggregate or <code>null</code>
+   */
+  public A loadWorkflowAggregate(
+      final String serializedAggregateId) {
+
+    return aggregatePersistenceSupport.loadById(convertAggregateId(serializedAggregateId));
+
+  }
+
+  /**
    * Processes a BPMN task: loads the workflow aggregate by the context's serialized
    * ID, invokes the given <code>&#64;WorkflowTask</code> handler and saves the
    * aggregate - all within one transaction run by the given

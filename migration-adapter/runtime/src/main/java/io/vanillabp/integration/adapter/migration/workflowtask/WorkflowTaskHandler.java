@@ -57,6 +57,14 @@ public class WorkflowTaskHandler {
    */
   private final boolean asynchronousTask;
 
+  /**
+   * Whether some BPMN task matched this handler during wiring validation - input
+   * for the per-module unwired-methods check (a handler registered under several
+   * BPMN processes via {@code secondaryBpmnProcesses} legitimately matches in only
+   * one of them).
+   */
+  private volatile boolean wired = false;
+
   WorkflowTaskHandler(
       final Class<?> workflowServiceClass,
       final Method method,
@@ -93,6 +101,18 @@ public class WorkflowTaskHandler {
   public boolean isAsynchronousTask() {
 
     return asynchronousTask;
+
+  }
+
+  public void markWired() {
+
+    wired = true;
+
+  }
+
+  public boolean isWired() {
+
+    return wired;
 
   }
 

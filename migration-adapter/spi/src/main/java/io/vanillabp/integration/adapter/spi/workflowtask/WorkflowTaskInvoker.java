@@ -9,9 +9,9 @@ import java.util.Collection;
  * <ol>
  * <li>During <code>wireBpmn</code>:
  * {@link #validateTaskWiring(String, String, Collection)} with the executable BPMN
- * process' tasks - validates both directions (every BPMN task has a
- * <code>&#64;WorkflowTask</code> method, every method matches a task) and fails
- * with guiding messages. Throwing from <code>wireBpmn</code> automatically honors
+ * process' tasks - validates that every BPMN task has a
+ * <code>&#64;WorkflowTask</code> method (the reverse direction runs per module via
+ * {@link #validateNoUnwiredWorkflowTaskMethods}) and fails with guiding messages. Throwing from <code>wireBpmn</code> automatically honors
  * the <code>deployment-failure</code> policy for non-first-priority adapters.</li>
  * <li>At runtime: {@link #invokeWorkflowTask(String, String, TaskInvocationContext)}
  * whenever the BPMS delivers a task - the core resolves the handler, runs it in a
@@ -26,19 +26,37 @@ public interface WorkflowTaskInvoker {
 
   /**
    * Validates that every given BPMN task is served by a
-   * <code>&#64;WorkflowTask</code> method of the process' workflow service(s) and
-   * that every such method matches one of the given tasks. All defects are
-   * collected and reported in ONE exception with guiding messages.
+   * <code>&#64;WorkflowTask</code> method of the process' workflow service(s). All
+   * unmatched tasks are collected and reported in ONE exception with guiding
+   * messages. Additionally every matched method is marked as wired - the input for
+   * {@link #validateNoUnwiredWorkflowTaskMethods(String)}.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
    * @param tasks The tasks of the executable BPMN process to be wired
-   * @throws IllegalStateException If the wiring is incomplete in either direction
+   * @throws IllegalStateException If a BPMN task has no matching method
    */
   void validateTaskWiring(
       String workflowModuleId,
       String bpmnProcessId,
       Collection<BpmnTaskSpec> tasks);
+
+  /**
+   * Validates - after ALL BPMN processes of a workflow module were wired - that
+   * every <code>&#64;WorkflowTask</code> method matched a task of at least ONE of
+   * the module's BPMN processes (a workflow service class may declare several
+   * processes via {@code secondaryBpmnProcesses}, so a method unmatched in one
+   * process may legitimately serve another - this check closes the second
+   * direction the per-process {@link #validateTaskWiring} cannot decide). Called
+   * by the adapter at the END of <code>deployResources</code>; throwing there
+   * honors the <code>deployment-failure</code> policy.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @throws IllegalStateException Naming every method matching no task of any
+   *           wired BPMN process, with the fix
+   */
+  void validateNoUnwiredWorkflowTaskMethods(
+      String workflowModuleId);
 
   /**
    * Processes a BPMN task delivered by the BPMS: resolves the
@@ -61,5 +79,29 @@ public interface WorkflowTaskInvoker {
       String workflowModuleId,
       String bpmnProcessId,
       TaskInvocationContext context);
+
+  /**
+   * Reads an attribute of the workflow aggregate identified by the given
+   * serialized ID - used by embedded BPMS evaluating BPMN expressions against the
+   * workflow aggregate (e.g. a Camunda 7 gateway condition
+   * <code>${riskAcceptable}</code>): the attribute is resolved via getter
+   * (<code>getX()</code>), boolean getter (<code>isX()</code>) or field access, in
+   * this order. The aggregate is loaded within the CALLER's transaction (embedded
+   * BPMS evaluate expressions inside an engine transaction) - callers without an
+   * active transaction get whatever the persistence layer does outside
+   * transactions.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param workflowAggregateId The workflow aggregate's ID in serialized form
+   * @param propertyName The attribute's name
+   * @return The attribute's value or <code>null</code> if the BPMN process is
+   *         unknown, the aggregate does not exist or it has no such attribute
+   */
+  Object resolveWorkflowAggregateProperty(
+      String workflowModuleId,
+      String bpmnProcessId,
+      String workflowAggregateId,
+      String propertyName);
 
 }
