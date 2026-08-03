@@ -341,6 +341,30 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
   }
 
   @Override
+  public String resolveWorkflowAggregateIdName(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    if (entry == null) {
+      throw new IllegalStateException(
+          """
+              No @WorkflowService class is registered for BPMN process '%s' of workflow module \
+              '%s' - the aggregate-ID variable name cannot be determined! Known processes: %s."""
+              .formatted(
+                  bpmnProcessId,
+                  workflowModuleId,
+                  entries
+                      .keySet()
+                      .stream()
+                      .map(key -> "'%s' (module '%s')".formatted(key.bpmnProcessId(), key.workflowModuleId()))
+                      .collect(Collectors.joining(", "))));
+    }
+    return entry.processService.getAggregateIdName();
+
+  }
+
+  @Override
   public Object resolveWorkflowAggregateProperty(
       final String workflowModuleId,
       final String bpmnProcessId,

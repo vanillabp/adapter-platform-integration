@@ -34,7 +34,11 @@ invoke - save, within one transaction). Application-facing:
   wiring check, called at the end of `deployResources` - methods may serve any
   of their class' declared BPMN processes) and
   `resolveWorkflowAggregateProperty(...)` (embedded BPMS evaluating BPMN
-  expressions against the workflow aggregate).
+  expressions against the workflow aggregate). Since story 21c it also provides
+  `resolveWorkflowAggregateIdName(module, process)` - remote BPMS store the
+  aggregate ID as a variable named after the aggregate's ID property
+  (`AggregatePersistenceAware.getAggregateIdName()`), and the adapter needs that
+  name to read the ID back from a delivered task's payload.
 
 ## Per-aggregate outbox selection + aggregate-ID type in the persistence SPI (2026-07-31)
 

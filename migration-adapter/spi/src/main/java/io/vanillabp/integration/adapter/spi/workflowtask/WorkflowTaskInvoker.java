@@ -104,4 +104,20 @@ public interface WorkflowTaskInvoker {
       String workflowAggregateId,
       String propertyName);
 
+  /**
+   * The name of the workflow aggregate's ID property for the given BPMN process -
+   * used by remote BPMS without a business-key concept: they store the aggregate's
+   * ID as a process variable named after the ID property (the start commands write
+   * it, the task workers read it back).
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @return The ID property's name
+   * @throws IllegalStateException If the BPMN process is not served by any
+   *           workflow service (guiding message)
+   */
+  String resolveWorkflowAggregateIdName(
+      String workflowModuleId,
+      String bpmnProcessId);
+
 }

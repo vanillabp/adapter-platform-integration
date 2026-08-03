@@ -180,6 +180,19 @@ public class MigrationProcessService<A> {
    * @param serializedAggregateId The aggregate ID in serialized form
    * @return The aggregate or <code>null</code>
    */
+  /**
+   * The name of the aggregate's ID property (see
+   * {@link AggregatePersistenceAware#getAggregateIdName()}) - remote BPMS store
+   * the aggregate's ID as a process variable of this name.
+   *
+   * @return The ID property's name
+   */
+  public String getAggregateIdName() {
+
+    return aggregatePersistenceSupport.getAggregateIdName();
+
+  }
+
   public A loadWorkflowAggregate(
       final String serializedAggregateId) {
 
