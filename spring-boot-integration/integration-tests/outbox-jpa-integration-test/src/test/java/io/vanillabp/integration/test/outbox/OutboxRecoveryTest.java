@@ -101,8 +101,12 @@ public class OutboxRecoveryTest {
     final Long aggregateId;
 
     // the restarted context has to answer ACTIVE right away - the dispatch-time
-    // election probes again on recovery
+    // election probes again on recovery. WORKFLOW probes answer UNKNOWN on
+    // purpose: they serve the START re-dispatch mitigation (story 25), which
+    // would otherwise consume the recovered START entry instead of dispatching
+    // it - that path has its own test (OutboxRedispatchMitigationTest)
     SteerableTaskAwarenessSource.initialAnswer = io.vanillabp.integration.adapter.spi.WorkflowAwareness.ACTIVE;
+    SteerableTaskAwarenessSource.initialWorkflowAnswer = io.vanillabp.integration.adapter.spi.WorkflowAwareness.UNKNOWN_TO_BPMS;
     try {
 
       // first context: schedule a completion whose dispatch fails - leaving a
@@ -147,6 +151,7 @@ public class OutboxRecoveryTest {
 
     } finally {
       SteerableTaskAwarenessSource.initialAnswer = io.vanillabp.integration.adapter.spi.WorkflowAwareness.UNKNOWN_TO_BPMS;
+      SteerableTaskAwarenessSource.initialWorkflowAnswer = null;
     }
 
   }

@@ -54,11 +54,26 @@ must not silently elect the wrong BPMS. There is an instance-level method
 (`awarenessOfWorkflow`) in addition to the task-level one because message correlation
 has no task ID and task IDs are not unique across BPMSs.
 
-*Note:* The awareness SPI prepares stable signatures for upcoming adapter
-implementations — the actual fallback election runtime is not implemented yet.
-Retry/backoff configuration for undecidable calls was deliberately removed
-("optimize late") and returns per adapter with the first real consumer (the
-complete/cancel-task story).
+The election runtime lives in `WorkflowLocator` (one instance per process service):
+every operation on an EXISTING workflow (complete/cancel task, user task, message
+correlation — in phase one and again at phase-two dispatch) walks the prioritized
+adapters with an operation-specific probe (`awarenessOfTask`,
+`awarenessOfUserTask`, `awarenessOfWorkflow`). `ACTIVE` executes there, `UNKNOWN_TO_BPMS`
+falls through to the next adapter, `COMPLETED` is a warned no-op,
+`BPMS_UNAVAILABLE` retries twice (500&nbsp;ms apart, fixed — "optimize late") and
+then fails naming the adapter — it NEVER falls back. New workflows always start in
+the first-priority adapter (no probing).
+
+Successful elections populate a `WorkflowAdapterCache`
+(business SPI; key = workflow module, BPMN process, serialized aggregate ID →
+adapter ID). The next election probes the cached adapter first. Entries are HINTS,
+not truth: a stale hit (the adapter answers `UNKNOWN_TO_BPMS`) falls through to the
+full walk and repairs the entry; `BPMS_UNAVAILABLE` on a cached adapter follows the
+retry-never-fallback contract. The platform integrations provide a bounded,
+expiring in-memory default (`InMemoryWorkflowAdapterCache`, 10&nbsp;000 entries /
+1&nbsp;h TTL, fixed); an application bean implementing `WorkflowAdapterCache`
+replaces it — cluster setups plug their own shared cache infrastructure this way
+(VanillaBP deliberately ships no distributed implementation).
 
 To migrate, one puts the new BPMS first in the priority list and keeps the old one in
 the list: new instances start in the new BPMS while existing instances complete in the
@@ -224,9 +239,21 @@ The core does not implement (or depend on) any outbox itself — it only defines
   marking the entry DONE re-dispatches the entry on recovery. This is accepted
   (eventual consistency); adapters MUST therefore tolerate repeated
   `startWorkflowPhaseTwo` calls — a second call for an already-started workflow has
-  to return without starting another workflow instance. (Planned mitigation for
-  the election story: probe `awarenessOfWorkflow` before re-dispatching entries
-  with `attempts > 0` — not implemented yet.)
+  to return without starting another workflow instance.
+- **START re-dispatch mitigation (minimizes, does not close, the window):** stores
+  pass "this entry was dispatched before" to
+  `PhaseTwoRouter.dispatch(call, previouslyAttempted)` (the JDBC/MongoDB defaults
+  claim entries by incrementing their attempts counter BEFORE dispatching, so a
+  recovered/retried entry is recognized; the gruelbox default bridges its entry
+  state via a `Submitter` wrapper — there the counter is only incremented on
+  FAILED attempts, so a hard crash still re-dispatches without the probe). A
+  previously attempted START entry probes the recorded adapter's
+  `awarenessOfWorkflowForRedispatch` first: a workflow already known there means
+  the previous dispatch succeeded — the entry is consumed without a second start.
+  The probe's contract is stricter than the election's: NEVER optimistic (a wrong
+  "known" loses a workflow; a wrong "unknown" merely yields the duplicate the
+  residual permits anyway) — adapters that cannot query reliably answer
+  `UNKNOWN_TO_BPMS`.
 
 Default implementations are provided by the platform integrations (configured via
 `vanillabp.outbox.*` — keys, defaults and documentation are modeled ONCE in the

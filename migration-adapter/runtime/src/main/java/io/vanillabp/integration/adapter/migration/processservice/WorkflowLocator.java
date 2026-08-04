@@ -5,15 +5,27 @@ import java.util.function.Function;
 
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
+import io.vanillabp.integration.spi.WorkflowAdapterCache;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Locates the BPMS holding an existing workflow (or one of its tasks) by probing
- * the prioritized adapters in order - the election for operations on EXISTING
- * workflows (new workflows always start in the first-priority adapter). The probe
- * is pluggable per operation because it is context-specific: locating a service
- * task probes {@code awarenessOfTask}, message correlation (story 23) probes
- * {@code awarenessOfWorkflow}, user tasks (story 24) their own awareness.
+ * THE BPMS election for operations on EXISTING workflows (complete/cancel task,
+ * user task, message correlation - new workflows always start in the
+ * first-priority adapter): locates the BPMS holding a workflow (or one of its
+ * tasks) by probing the prioritized adapters in order. The probe is pluggable per
+ * operation because it is context-specific: locating a service task probes
+ * {@code awarenessOfTask}, message correlation probes {@code awarenessOfWorkflow},
+ * user tasks their own awareness - the walk/retry/no-fallback semantics here are
+ * shared by all of them.
+ * <p>
+ * An optional {@link WorkflowAdapterCache} short-cuts the walk: a successful
+ * election puts the (workflow module, BPMN process, aggregate ID) &rarr; adapter
+ * ID association; the next election for the same workflow probes the cached
+ * adapter first. Cache entries are HINTS, not truth - a hit whose adapter answers
+ * {@link WorkflowAwareness#UNKNOWN_TO_BPMS} falls through to the full walk and
+ * repairs the entry. {@link WorkflowAwareness#BPMS_UNAVAILABLE} on a cached
+ * adapter follows the retry-never-fallback contract below (it never falls
+ * through - the unavailable BPMS most probably holds the workflow).
  * <p>
  * Walk contract (see {@code MigratableProcessService}):
  * <ul>
@@ -30,8 +42,6 @@ import lombok.extern.slf4j.Slf4j;
  * Probing runs inside the caller's transaction, so the delays keep that
  * transaction open - another reason to keep them short.</li>
  * </ul>
- * Story 25 turns this collaborator into the cached election (registry-less); the
- * plain walk here stays as its fallback path.
  */
 @Slf4j
 public final class WorkflowLocator {
@@ -47,7 +57,25 @@ public final class WorkflowLocator {
    */
   public static final long UNAVAILABLE_RETRY_DELAY_MILLIS = 500;
 
-  private WorkflowLocator() {
+  private final String workflowModuleId;
+
+  private final String bpmnProcessId;
+
+  /**
+   * The cache of workflow &rarr; adapter associations or <code>null</code> for an
+   * uncached election (plain walk every time).
+   */
+  private final WorkflowAdapterCache cache;
+
+  public WorkflowLocator(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final WorkflowAdapterCache cache) {
+
+    this.workflowModuleId = workflowModuleId;
+    this.bpmnProcessId = bpmnProcessId;
+    this.cache = cache;
+
   }
 
   /**
@@ -68,11 +96,15 @@ public final class WorkflowLocator {
   }
 
   /**
-   * Probes the given adapters in prioritized order.
+   * Elects the adapter holding the given workflow: consults the cache first (if
+   * any), then probes the given adapters in prioritized order.
    *
    * @param <A> The aggregate type
    * @param prioritizedAdapters The adapters in prioritized order
    * @param probe The operation-specific awareness probe
+   * @param workflowAggregateId The ID of the workflow aggregate the probed subject
+   *        belongs to (the cache key; may be in the aggregate's original ID type -
+   *        its serialized form is used)
    * @param subject A short description of the probed subject (e.g.
    *        <code>"task 'x' of workflow aggregate '42'"</code>) used in log and
    *        error messages
@@ -80,31 +112,129 @@ public final class WorkflowLocator {
    * @throws IllegalStateException If an adapter stays
    *         {@link WorkflowAwareness#BPMS_UNAVAILABLE} after the retries
    */
-  public static <A> Location<A> locate(
+  public <A> Location<A> locate(
       final List<MigratableProcessService<A>> prioritizedAdapters,
       final Function<MigratableProcessService<A>, WorkflowAwareness> probe,
+      final Object workflowAggregateId,
+      final String subject) {
+
+    final var serializedAggregateId = workflowAggregateId == null
+        ? null
+        : workflowAggregateId.toString();
+
+    if ((cache != null) && (serializedAggregateId != null)) {
+      final var location = locateViaCache(
+          prioritizedAdapters, probe, serializedAggregateId, subject);
+      if (location != null) {
+        return location;
+      }
+    }
+
+    return walk(prioritizedAdapters, probe, serializedAggregateId, subject);
+
+  }
+
+  /**
+   * Consults the cache: probes the cached adapter first. Returns
+   * <code>null</code> if there is no usable hint or the hint turned out stale -
+   * the caller falls through to the full walk (which repairs the entry).
+   */
+  private <A> Location<A> locateViaCache(
+      final List<MigratableProcessService<A>> prioritizedAdapters,
+      final Function<MigratableProcessService<A>, WorkflowAwareness> probe,
+      final String serializedAggregateId,
+      final String subject) {
+
+    final var cachedAdapterId = cache
+        .get(workflowModuleId, bpmnProcessId, serializedAggregateId)
+        .orElse(null);
+    if (cachedAdapterId == null) {
+      return null;
+    }
+
+    final var cachedAdapter = prioritizedAdapters
+        .stream()
+        .filter(adapter -> adapter.getAdapterId().equals(cachedAdapterId))
+        .findFirst()
+        .orElse(null);
+    if (cachedAdapter == null) {
+      // the cached adapter is no longer part of the prioritized configuration -
+      // drop the hint and let the full walk elect from the current configuration
+      log.debug(
+          "Cached adapter '{}' for {} is no longer a prioritized adapter - dropping the hint",
+          cachedAdapterId,
+          subject);
+      cache.invalidate(workflowModuleId, bpmnProcessId, serializedAggregateId);
+      return null;
+    }
+
+    final var awareness = probeWithRetry(cachedAdapter, probe, subject);
+    switch (awareness) {
+      case ACTIVE -> {
+        return new Location<>(awareness, cachedAdapter);
+      }
+      case COMPLETED -> {
+        // the workflow ended - the hint won't be needed again
+        cache.invalidate(workflowModuleId, bpmnProcessId, serializedAggregateId);
+        return new Location<>(awareness, cachedAdapter);
+      }
+      case UNKNOWN_TO_BPMS -> {
+        // stale hint (hints are not truth): repair by falling through to the
+        // full walk which re-elects and re-populates the cache
+        log.debug(
+            "Cached adapter '{}' does not know {} - the hint is stale, probing all "
+                + "prioritized adapters",
+            cachedAdapterId,
+            subject);
+        cache.invalidate(workflowModuleId, bpmnProcessId, serializedAggregateId);
+        return null;
+      }
+      case BPMS_UNAVAILABLE -> throw unavailable(cachedAdapter, subject);
+    }
+    return null;
+
+  }
+
+  private <A> Location<A> walk(
+      final List<MigratableProcessService<A>> prioritizedAdapters,
+      final Function<MigratableProcessService<A>, WorkflowAwareness> probe,
+      final String serializedAggregateId,
       final String subject) {
 
     for (final var adapter : prioritizedAdapters) {
       final var awareness = probeWithRetry(adapter, probe, subject);
       switch (awareness) {
-        case ACTIVE, COMPLETED -> {
+        case ACTIVE -> {
+          if ((cache != null) && (serializedAggregateId != null)) {
+            cache.put(workflowModuleId, bpmnProcessId, serializedAggregateId, adapter.getAdapterId());
+          }
+          return new Location<>(awareness, adapter);
+        }
+        case COMPLETED -> {
           return new Location<>(awareness, adapter);
         }
         case UNKNOWN_TO_BPMS -> log.debug(
             "Adapter '{}' does not know {} - asking the next prioritized adapter",
             adapter.getAdapterId(),
             subject);
-        case BPMS_UNAVAILABLE -> throw new IllegalStateException(
-            """
-                The BPMS of adapter '%s' is unavailable while locating %s! Falling back to another \
-                adapter is not allowed (the unavailable BPMS might hold it) - the operation was \
-                aborted after %d retries. Retry the business operation once the BPMS is reachable \
-                again."""
-                .formatted(adapter.getAdapterId(), subject, UNAVAILABLE_RETRIES));
+        case BPMS_UNAVAILABLE -> throw unavailable(adapter, subject);
       }
     }
     return new Location<>(WorkflowAwareness.UNKNOWN_TO_BPMS, null);
+
+  }
+
+  private <A> IllegalStateException unavailable(
+      final MigratableProcessService<A> adapter,
+      final String subject) {
+
+    return new IllegalStateException(
+        """
+            The BPMS of adapter '%s' is unavailable while locating %s! Falling back to another \
+            adapter is not allowed (the unavailable BPMS might hold it) - the operation was \
+            aborted after %d retries. Retry the business operation once the BPMS is reachable \
+            again."""
+            .formatted(adapter.getAdapterId(), subject, UNAVAILABLE_RETRIES));
 
   }
 

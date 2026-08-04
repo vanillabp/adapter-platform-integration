@@ -51,12 +51,12 @@ package io.vanillabp.integration.spi;
  * call and marking the entry DONE re-dispatches the entry on recovery. This residual
  * window is accepted (eventual consistency); adapters keep their operations
  * idempotent (see
- * {@code MigratableProcessService#startWorkflowPhaseTwo}).
- * <p>
- * TODO (story 25, fallback election): mitigate the residual window by probing
- * {@code MigratableProcessService#awarenessOfWorkflow} before re-dispatching
- * entries with <code>attempts &gt; 0</code> - on a hit mark DONE instead of
- * re-dispatching. Do not call awareness methods before that story lands.
+ * {@code MigratableProcessService#startWorkflowPhaseTwo}). Since story 25 the
+ * window is MINIMIZED (not closed) for START operations: a store passing
+ * &quot;this entry was dispatched before&quot; to the router's dispatch method
+ * triggers a probe of the recorded adapter's
+ * {@code MigratableProcessService#awarenessOfWorkflowForRedispatch} - a workflow
+ * already known consumes the entry without a second start.
  * <p>
  * <strong>Poison entries:</strong> Entries failing repeatedly are blocked after a
  * configurable number of attempts and left in the store as a monitorable trail - the

@@ -20,6 +20,22 @@ public interface DummyPhaseTwoListener {
       Object workflowAggregateId);
 
   /**
+   * Adapter-id-aware variant called by the dummy (defaults to the id-less
+   * callback) - multi-adapter tests (migration scenario, story 25) override this
+   * one to assert WHICH dummy instance executed phase two.
+   *
+   * @param adapterId The dummy adapter's ID
+   * @param workflowAggregateId The ID of the workflow aggregate
+   */
+  default void startedWorkflowPhaseTwo(
+      final String adapterId,
+      final Object workflowAggregateId) {
+
+    startedWorkflowPhaseTwo(workflowAggregateId);
+
+  }
+
+  /**
    * Called whenever phase two of completing an asynchronous task is executed.
    *
    * @param workflowAggregateId The ID of the workflow aggregate
@@ -28,6 +44,23 @@ public interface DummyPhaseTwoListener {
   default void completedTaskPhaseTwo(
       final Object workflowAggregateId,
       final String taskId) {
+  }
+
+  /**
+   * Adapter-id-aware variant (defaults to the id-less callback) - see
+   * {@link #startedWorkflowPhaseTwo(String, Object)}.
+   *
+   * @param adapterId The dummy adapter's ID
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param taskId The task's ID
+   */
+  default void completedTaskPhaseTwo(
+      final String adapterId,
+      final Object workflowAggregateId,
+      final String taskId) {
+
+    completedTaskPhaseTwo(workflowAggregateId, taskId);
+
   }
 
   /**

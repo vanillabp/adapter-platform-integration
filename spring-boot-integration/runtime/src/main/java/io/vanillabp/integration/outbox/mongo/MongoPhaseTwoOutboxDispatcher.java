@@ -166,11 +166,16 @@ public class MongoPhaseTwoOutboxDispatcher {
             "Unknown operation '%s' of outbox entry '%s'! Maybe it was written by a newer version of your software?"
                 .formatted(entry.getOperation(), entry.getId()));
       }
+      // the entry holds the attempts count BEFORE this claim - a value > 0 means
+      // the entry was dispatched before (recovered/retried): the router then runs
+      // the START re-dispatch mitigation
       phaseTwoRouter
           .getObject()
-          .dispatch(new PhaseTwoCall(
-              operation, entry.getWorkflowModuleId(), entry.getBpmnProcessId(), entry.getAggregateId(), entry
-                  .getAdapterId(), entry.getArgs()));
+          .dispatch(
+              new PhaseTwoCall(
+                  operation, entry.getWorkflowModuleId(), entry.getBpmnProcessId(), entry.getAggregateId(), entry
+                      .getAdapterId(), entry.getArgs()),
+              entry.getAttempts() > 0);
       mongoTemplate.updateFirst(
           Query.query(Criteria.where("_id").is(entry.getId())),
           new Update()

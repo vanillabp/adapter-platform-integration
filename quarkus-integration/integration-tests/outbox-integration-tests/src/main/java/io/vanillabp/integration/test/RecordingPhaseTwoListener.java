@@ -16,6 +16,12 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
 
   private final List<Object> invocations = new CopyOnWriteArrayList<>();
 
+  /**
+   * Recorded phase-two starts as "adapterId:aggregateId" - the migration-scenario
+   * test asserts WHICH adapter instance started the workflow.
+   */
+  private final List<String> startedByAdapter = new CopyOnWriteArrayList<>();
+
   private final AtomicInteger failuresRemaining = new AtomicInteger(0);
 
   @Override
@@ -26,6 +32,50 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
     if (failuresRemaining.getAndUpdate(remaining -> remaining > 0 ? remaining - 1 : 0) > 0) {
       throw new RuntimeException("phase two failed for testing purposes");
     }
+
+  }
+
+  @Override
+  public void startedWorkflowPhaseTwo(
+      final String adapterId,
+      final Object workflowAggregateId) {
+
+    startedByAdapter.add(adapterId
+        + ":"
+        + workflowAggregateId);
+    startedWorkflowPhaseTwo(workflowAggregateId);
+
+  }
+
+  public List<String> getStartedByAdapter() {
+
+    return List.copyOf(startedByAdapter);
+
+  }
+
+  /**
+   * Recorded phase-two task completions as "adapterId:aggregateId:taskId".
+   */
+  private final List<String> completedTasksByAdapter = new CopyOnWriteArrayList<>();
+
+  @Override
+  public void completedTaskPhaseTwo(
+      final String adapterId,
+      final Object workflowAggregateId,
+      final String taskId) {
+
+    completedTasksByAdapter.add(adapterId
+        + ":"
+        + workflowAggregateId
+        + ":"
+        + taskId);
+    completedTaskPhaseTwo(workflowAggregateId, taskId);
+
+  }
+
+  public List<String> getCompletedTasksByAdapter() {
+
+    return List.copyOf(completedTasksByAdapter);
 
   }
 
@@ -177,6 +227,8 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
   public void reset() {
 
     invocations.clear();
+    startedByAdapter.clear();
+    completedTasksByAdapter.clear();
     completedTasks.clear();
     canceledTasks.clear();
     completedUserTasks.clear();

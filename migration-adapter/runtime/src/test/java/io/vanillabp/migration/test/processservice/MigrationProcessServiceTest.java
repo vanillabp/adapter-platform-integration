@@ -289,6 +289,100 @@ public class MigrationProcessServiceTest {
   }
 
   @Test
+  @DisplayName("Re-dispatch mitigation: a previously attempted start entry probes the adapter and skips if the workflow is known")
+  public void redispatchedStartSkipsIfWorkflowIsKnown() {
+
+    when(processService.getAdapterId()).thenReturn("test-adapter");
+    when(processService.awarenessOfWorkflowForRedispatch(42L))
+        .thenReturn(io.vanillabp.integration.adapter.spi.WorkflowAwareness.ACTIVE);
+
+    final var testee = new MigrationProcessService<>(
+        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
+            .of(processService), phaseTwoOutboxResolver);
+
+    testee.startWorkflowPhaseTwo(42L, "test-adapter", true);
+
+    // the previous dispatch already started the workflow - no second start
+    verify(processService, never()).startWorkflowPhaseTwo(any(), any(), any(), any());
+
+  }
+
+  @Test
+  @DisplayName("Re-dispatch mitigation: an unknown workflow proceeds with the (idempotent) start")
+  public void redispatchedStartProceedsIfWorkflowIsUnknown() {
+
+    when(processService.getAdapterId()).thenReturn("test-adapter");
+    when(processService.awarenessOfWorkflowForRedispatch(42L))
+        .thenReturn(io.vanillabp.integration.adapter.spi.WorkflowAwareness.UNKNOWN_TO_BPMS);
+
+    final var testee = new MigrationProcessService<>(
+        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
+            .of(processService), phaseTwoOutboxResolver);
+
+    testee.startWorkflowPhaseTwo(42L, "test-adapter", true);
+
+    verify(processService).startWorkflowPhaseTwo("test-module", "TestProcess", aggregatePersistence, 42L);
+
+  }
+
+  @Test
+  @DisplayName("Re-dispatch mitigation: an unavailable BPMS fails the dispatch - the outbox entry stays pending")
+  public void redispatchedStartFailsIfBpmsIsUnavailable() {
+
+    when(processService.getAdapterId()).thenReturn("test-adapter");
+    when(processService.awarenessOfWorkflowForRedispatch(42L))
+        .thenReturn(io.vanillabp.integration.adapter.spi.WorkflowAwareness.BPMS_UNAVAILABLE);
+
+    final var testee = new MigrationProcessService<>(
+        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
+            .of(processService), phaseTwoOutboxResolver);
+
+    final var exception = assertThrowsExactly(
+        IllegalStateException.class,
+        () -> testee.startWorkflowPhaseTwo(42L, "test-adapter", true));
+
+    assertTrue(exception.getMessage().contains("test-adapter"));
+    assertTrue(exception.getMessage().contains("retried"));
+    verify(processService, never()).startWorkflowPhaseTwo(any(), any(), any(), any());
+
+  }
+
+  @Test
+  @DisplayName("A first-time start dispatch never probes - the mitigation is for re-dispatches only")
+  public void firstStartDispatchNeverProbes() {
+
+    when(processService.getAdapterId()).thenReturn("test-adapter");
+
+    final var testee = new MigrationProcessService<>(
+        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
+            .of(processService), phaseTwoOutboxResolver);
+
+    testee.startWorkflowPhaseTwo(42L, "test-adapter", false);
+
+    verify(processService, never()).awarenessOfWorkflowForRedispatch(any());
+    verify(processService).startWorkflowPhaseTwo("test-module", "TestProcess", aggregatePersistence, 42L);
+
+  }
+
+  @Test
+  @DisplayName("Re-dispatch mitigation applies to starting by message, too")
+  public void redispatchedStartByMessageSkipsIfWorkflowIsKnown() {
+
+    when(processService.getAdapterId()).thenReturn("test-adapter");
+    when(processService.awarenessOfWorkflowForRedispatch(42L))
+        .thenReturn(io.vanillabp.integration.adapter.spi.WorkflowAwareness.COMPLETED);
+
+    final var testee = new MigrationProcessService<>(
+        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
+            .of(processService), phaseTwoOutboxResolver);
+
+    testee.startWorkflowByMessagePhaseTwo(42L, "test-message", "test-adapter", true);
+
+    verify(processService, never()).startWorkflowByMessagePhaseTwo(any(), any(), any(), any(), any());
+
+  }
+
+  @Test
   @DisplayName("startWorkflow does not schedule phase two if the adapter does not require a two-phase commit")
   public void startWorkflowDoesNotSchedulePhaseTwoIfNoTwoPhaseCommitIsRequired() {
 

@@ -112,7 +112,7 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
     if (phaseTwoListeners != null) {
       phaseTwoListeners
           .stream()
-          .forEach(listener -> listener.startedWorkflowPhaseTwo(workflowAggregateId));
+          .forEach(listener -> listener.startedWorkflowPhaseTwo(adapterId, workflowAggregateId));
     }
 
   }
@@ -138,7 +138,7 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
     if (phaseTwoListeners != null) {
       phaseTwoListeners
           .stream()
-          .forEach(listener -> listener.completedTaskPhaseTwo(workflowAggregateId, taskId));
+          .forEach(listener -> listener.completedTaskPhaseTwo(adapterId, workflowAggregateId, taskId));
     }
 
   }

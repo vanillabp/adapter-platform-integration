@@ -256,11 +256,16 @@ public class MongoPhaseTwoOutboxDispatcher {
             key,
             value) -> args.put(key, String.valueOf(value)));
       }
+      // the document holds the attempts count BEFORE this claim - a value > 0
+      // means the entry was dispatched before (recovered/retried): the router
+      // then runs the START re-dispatch mitigation
       phaseTwoRouter
           .get()
-          .dispatch(new PhaseTwoCall(
-              operation, entry.getString("workflowModuleId"), entry.getString("bpmnProcessId"), entry
-                  .getString("aggregateId"), entry.getString("adapterId"), args));
+          .dispatch(
+              new PhaseTwoCall(
+                  operation, entry.getString("workflowModuleId"), entry.getString("bpmnProcessId"), entry
+                      .getString("aggregateId"), entry.getString("adapterId"), args),
+              entry.getInteger("attempts") > 0);
       collection.updateOne(
           Filters.eq("_id", entryId),
           Updates.combine(

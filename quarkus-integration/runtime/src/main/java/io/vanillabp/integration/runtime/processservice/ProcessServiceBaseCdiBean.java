@@ -98,6 +98,14 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
   @Inject
   Instance<io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry> workflowTaskRegistry;
 
+  /**
+   * The cache of workflow&rarr;adapter associations consulted by the BPMS election
+   * (the platform's in-memory default or the application's own bean, e.g.
+   * cluster-shared).
+   */
+  @Inject
+  Instance<io.vanillabp.integration.spi.WorkflowAdapterCache> workflowAdapterCache;
+
   @Getter
   MigrationProcessService<A> migrationProcessService;
 
@@ -144,8 +152,11 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
             .enabled(), outboxProperties
                 .mongo()
                 .enabled());
+    final var electionCache = workflowAdapterCache.isResolvable()
+        ? workflowAdapterCache.get()
+        : null;
     this.migrationProcessService = new MigrationProcessService<>(
-        getWorkflowModuleId(), getBpmnProcessId(), getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, phaseTwoOutboxResolver);
+        getWorkflowModuleId(), getBpmnProcessId(), getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, phaseTwoOutboxResolver, electionCache);
 
     // register as phase-two dispatch target: outbox entries for this workflow
     // module/BPMN process are routed here after the local transaction was committed
@@ -198,7 +209,10 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
           "%s|%s".formatted(moduleId, bpmnProcessId),
           key -> {
             final var secondaryProcessService = new MigrationProcessService<>(
-                moduleId, bpmnProcessId, getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, phaseTwoOutboxResolver);
+                moduleId, bpmnProcessId, getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, phaseTwoOutboxResolver, workflowAdapterCache
+                    .isResolvable()
+                        ? workflowAdapterCache.get()
+                        : null);
             if (phaseTwoRouter.isResolvable()) {
               phaseTwoRouter
                   .get()

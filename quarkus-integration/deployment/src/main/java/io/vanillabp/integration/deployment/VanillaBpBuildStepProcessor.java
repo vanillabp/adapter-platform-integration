@@ -20,6 +20,7 @@ import io.vanillabp.integration.runtime.outbox.MongoPhaseTwoOutbox;
 import io.vanillabp.integration.runtime.outbox.MongoPhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.runtime.processservice.EventualConsistencyTransactionSupport;
 import io.vanillabp.integration.runtime.processservice.PhaseTwoRouterProducer;
+import io.vanillabp.integration.runtime.processservice.WorkflowAdapterCacheProducer;
 import io.vanillabp.integration.runtime.util.UriSubstitute;
 import io.vanillabp.integration.runtime.util.UriSubstitution;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
@@ -157,6 +158,26 @@ public class VanillaBpBuildStepProcessor {
         .builder()
         .addBeanClass(PhaseTwoRouterProducer.class)
         .setUnremovable() // don't remove, since it is used under the hoods
+        .build();
+
+  }
+
+  /**
+   * Registers the default in-memory election cache (workflow&rarr;adapter
+   * associations of the BPMS election, see the core's
+   * <code>WorkflowLocator</code>). An application-provided
+   * <code>WorkflowAdapterCache</code> bean replaces the default (it is a
+   * <code>&#64;DefaultBean</code>).
+   *
+   * @return The additional {@link WorkflowAdapterCacheProducer} bean
+   */
+  @BuildStep
+  AdditionalBeanBuildItem buildWorkflowAdapterCache() {
+
+    return AdditionalBeanBuildItem
+        .builder()
+        .addBeanClass(WorkflowAdapterCacheProducer.class)
+        .setUnremovable() // resolved via Instance lookup only
         .build();
 
   }

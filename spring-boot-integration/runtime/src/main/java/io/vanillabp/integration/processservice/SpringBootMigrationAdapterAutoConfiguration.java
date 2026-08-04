@@ -157,6 +157,25 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   }
 
   /**
+   * The cache of workflow&rarr;adapter associations consulted by the BPMS election
+   * for operations on existing workflows (complete/cancel task, user task, message
+   * correlation): a bounded, expiring in-memory default. Cluster setups wanting
+   * instances to share elections define their own bean implementing
+   * {@link io.vanillabp.integration.spi.WorkflowAdapterCache} backed by their own
+   * cache infrastructure - it replaces this default (entries are hints: a stale
+   * entry costs an extra probe, never correctness).
+   *
+   * @return The default in-memory cache
+   */
+  @Bean
+  @ConditionalOnMissingBean(io.vanillabp.integration.spi.WorkflowAdapterCache.class)
+  public io.vanillabp.integration.spi.WorkflowAdapterCache vanillaBpWorkflowAdapterCache() {
+
+    return new io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCache();
+
+  }
+
+  /**
    * The core-owned registry of <code>&#64;WorkflowTask</code> handlers and
    * adapter-facing {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker}:
    * the process-service beans register every workflow service class under all BPMN

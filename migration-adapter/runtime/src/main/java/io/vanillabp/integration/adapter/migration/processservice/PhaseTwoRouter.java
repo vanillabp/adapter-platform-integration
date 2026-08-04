@@ -62,6 +62,31 @@ public final class PhaseTwoRouter {
   public void dispatch(
       final PhaseTwoCall call) {
 
+    dispatch(call, false);
+
+  }
+
+  /**
+   * Dispatch the given phase-two call to the process service registered for its
+   * workflow module/BPMN process.
+   *
+   * @param call The phase-two call to dispatch
+   * @param previouslyAttempted Whether the outbox entry was dispatched before (a
+   *        recovered or retried entry) - START operations then run the
+   *        re-dispatch mitigation (probe the recorded adapter's workflow
+   *        awareness first; a workflow already known there consumes the entry
+   *        without a second start). Stores which cannot tell pass
+   *        <code>false</code> - the mitigation is best-effort, the residual
+   *        at-least-once window is accepted.
+   * @throws IllegalStateException If no process service is registered for the
+   *         call's workflow module/BPMN process (e.g. the BPMN process is no longer
+   *         part of this application) - the outbox entry stays visible in the
+   *         outbox store for operations
+   */
+  public void dispatch(
+      final PhaseTwoCall call,
+      final boolean previouslyAttempted) {
+
     final var processService = registrations
         .get(new RegistrationKey(call.workflowModuleId(), call.bpmnProcessId()));
     if (processService == null) {
@@ -83,7 +108,7 @@ public final class PhaseTwoRouter {
 
     switch (call.operation()) {
       case START_WORKFLOW -> processService
-          .startWorkflowPhaseTwo(workflowAggregateId, call.adapterId());
+          .startWorkflowPhaseTwo(workflowAggregateId, call.adapterId(), previouslyAttempted);
       case COMPLETE_TASK -> processService
           .completeTaskPhaseTwo(
               workflowAggregateId,
@@ -111,7 +136,8 @@ public final class PhaseTwoRouter {
           .startWorkflowByMessagePhaseTwo(
               workflowAggregateId,
               call.args().get(io.vanillabp.integration.spi.PhaseTwoCall.ARG_MESSAGE_NAME),
-              call.adapterId());
+              call.adapterId(),
+              previouslyAttempted);
     }
 
   }

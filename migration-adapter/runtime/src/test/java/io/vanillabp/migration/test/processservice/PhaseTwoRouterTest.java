@@ -48,7 +48,7 @@ public class PhaseTwoRouterTest {
     testee.dispatch(new PhaseTwoCall(
         PhaseTwoOperation.START_WORKFLOW, "test-module", "TestProcess", "42", "test-adapter", Map.of()));
 
-    verify(processService).startWorkflowPhaseTwo(42L, "test-adapter");
+    verify(processService).startWorkflowPhaseTwo(42L, "test-adapter", false);
 
   }
 

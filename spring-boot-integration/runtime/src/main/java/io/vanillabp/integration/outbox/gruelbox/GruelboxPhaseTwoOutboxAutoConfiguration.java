@@ -21,6 +21,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 
 import com.gruelbox.transactionoutbox.DefaultPersistor;
 import com.gruelbox.transactionoutbox.Dialect;
+import com.gruelbox.transactionoutbox.Submitter;
 import com.gruelbox.transactionoutbox.TransactionOutbox;
 import com.gruelbox.transactionoutbox.spring.SpringInstantiator;
 import com.gruelbox.transactionoutbox.spring.SpringTransactionManager;
@@ -134,6 +135,9 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
             selectJdbcTransactionManager(transactionManagers), dataSource))
         .instantiator(new SpringInstantiator(applicationContext))
         .persistor(persistorBuilder.build())
+        // carries "this entry was attempted before" to the dispatch bean - the
+        // START re-dispatch mitigation's signal (see the submitter's javadoc)
+        .submitter(new GruelboxRedispatchAwareSubmitter(Submitter.withDefaultExecutor()))
         .attemptFrequency(properties.getAttemptFrequency())
         .blockAfterAttempts(properties.getBlockAfterAttempts())
         .retentionThreshold(properties.getRetention())
@@ -175,10 +179,15 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
         adapterId,
         serializedArgs) -> phaseTwoRouter
             .getObject()
-            .dispatch(new PhaseTwoCall(
-                PhaseTwoOperation
-                    .valueOf(operation), workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, PhaseTwoCall
-                        .deserializeArgs(serializedArgs)));
+            .dispatch(
+                new PhaseTwoCall(
+                    PhaseTwoOperation
+                        .valueOf(
+                            operation), workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, PhaseTwoCall
+                                .deserializeArgs(serializedArgs)),
+                // set by the submitter wrapper on this thread - a retried entry
+                // runs the START re-dispatch mitigation
+                GruelboxRedispatchAwareSubmitter.isPreviouslyAttempted());
 
   }
 

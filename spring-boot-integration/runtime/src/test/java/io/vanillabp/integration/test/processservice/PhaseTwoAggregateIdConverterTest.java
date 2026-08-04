@@ -66,7 +66,7 @@ public class PhaseTwoAggregateIdConverterTest {
 
     new ProcessServiceSpringBean<>(
         "test-module", "TestProcess", Object.class, buildProperties(), aggregatePersistenceAware, List
-            .of(migratableProcessService), null, router);
+            .of(migratableProcessService), null, router, null);
 
   }
 

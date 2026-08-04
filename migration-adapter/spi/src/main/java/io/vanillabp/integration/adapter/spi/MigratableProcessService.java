@@ -57,6 +57,39 @@ public interface MigratableProcessService<A> {
       Object workflowAggregateId);
 
   /**
+   * Determine whether the target BPMS is aware of the workflow belonging to the
+   * given workflow aggregate, asked ONLY before re-dispatching a recovered or
+   * retried two-phase START outbox entry (the at-least-once mitigation: if the
+   * workflow is already known, the start already succeeded and the entry is
+   * consumed without starting a second instance).
+   * <p>
+   * <b>Contract - stricter than {@link #awarenessOfWorkflow(Object)}:</b> the
+   * answer must NEVER be optimistic. Answering {@link WorkflowAwareness#ACTIVE}
+   * or {@link WorkflowAwareness#COMPLETED} SKIPS the start - a wrong
+   * &quot;known&quot; therefore LOSES a workflow, whereas a wrong
+   * &quot;unknown&quot; merely produces the duplicate the at-least-once residual
+   * permits anyway. An adapter that cannot query the BPMS reliably (e.g. Camunda 8
+   * without secondary storage, where {@link #awarenessOfWorkflow(Object)}
+   * deliberately answers an optimistic ACTIVE for the election) must override
+   * this method and return {@link WorkflowAwareness#UNKNOWN_TO_BPMS} - the start
+   * proceeds and the adapter's idempotency contract of
+   * {@link #startWorkflowPhaseTwo} applies.
+   * <p>
+   * The default delegates to {@link #awarenessOfWorkflow(Object)} - correct for
+   * adapters whose workflow awareness is an honest engine query.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @return The BPMS' awareness of the workflow - unsure means
+   *         {@link WorkflowAwareness#UNKNOWN_TO_BPMS}
+   */
+  default WorkflowAwareness awarenessOfWorkflowForRedispatch(
+      final Object workflowAggregateId) {
+
+    return awarenessOfWorkflow(workflowAggregateId);
+
+  }
+
+  /**
    * Determine whether the target BPMS is aware of the given USER task. Same
    * contract as {@link #awarenessOfTask(Object, String)} - user tasks have their
    * own probe because their IDs live in a different namespace than service-task

@@ -4,6 +4,37 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## BPMS election: cache + START re-dispatch mitigation (2026-08-04)
+
+Story 25 - the unified election for operations on existing workflows, an optional
+election cache and the at-least-once mitigation for re-dispatched starts.
+
+- **Applications: nothing to change.** Elections now remember which adapter holds a
+  workflow (in-memory, bounded to 10 000 entries / 1 h TTL) - repeated operations on
+  the same workflow skip the probing walk. Entries are hints only: a stale entry
+  costs one extra probe, never correctness.
+- **Cluster setups (optional):** define ONE bean implementing the new business SPI
+  `io.vanillabp.integration.spi.WorkflowAdapterCache` (`get`/`put`/`invalidate`) to
+  replace the in-memory default with your own shared cache infrastructure -
+  instances of a cluster then share elections. VanillaBP deliberately ships no
+  distributed implementation.
+- **Adapter authors:** `MigratableProcessService` gained the DEFAULT method
+  `awarenessOfWorkflowForRedispatch(aggregateId)` (delegates to
+  `awarenessOfWorkflow`). It is probed ONLY before re-dispatching a recovered or
+  retried two-phase START outbox entry; a workflow already known consumes the entry
+  without a second start. STRICTER contract than the election probe: never answer
+  optimistically - "unsure" is `UNKNOWN_TO_BPMS` (the idempotent start proceeds; a
+  duplicate is the accepted residual, a skipped start would LOSE a workflow).
+  Override it if your `awarenessOfWorkflow` is optimistic (Camunda 8 without
+  secondary storage, PEA).
+- **Custom `PhaseTwoOutbox` stores (optional but recommended):** dispatch via the
+  new overload `PhaseTwoRouter.dispatch(call, previouslyAttempted)` and pass
+  `true` for entries dispatched before (e.g. an attempts counter claimed BEFORE
+  dispatching) - enabling the START mitigation for your store. The old
+  single-argument `dispatch(call)` keeps working (mitigation off).
+- The residual at-least-once window is MINIMIZED, not closed - never build on
+  exactly-once starts (see the adapters' READMEs).
+
 ## Message correlation + start-by-message (2026-08-04)
 
 Story 23 - `ProcessService#correlateMessage(aggregate, messageName[, correlationId])`

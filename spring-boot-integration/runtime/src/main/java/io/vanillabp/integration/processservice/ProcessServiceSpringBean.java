@@ -11,6 +11,7 @@ import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.adapter.migration.processservice.ProcessServiceBase;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.WorkflowAdapterCache;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -28,10 +29,11 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
       final AggregatePersistenceAware<A> aggregatePersistenceAware,
       final List<MigratableProcessService<A>> migratableProcessServices,
       final PhaseTwoOutboxResolver phaseTwoOutboxResolver,
-      final PhaseTwoRouter phaseTwoRouter) {
+      final PhaseTwoRouter phaseTwoRouter,
+      final WorkflowAdapterCache workflowAdapterCache) {
 
     migrationProcessService = new MigrationProcessService<A>(
-        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, aggregatePersistenceAware, migratableProcessServices, phaseTwoOutboxResolver);
+        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, aggregatePersistenceAware, migratableProcessServices, phaseTwoOutboxResolver, workflowAdapterCache);
 
     // register as phase-two dispatch target: outbox entries for this workflow
     // module/BPMN process are routed here after the local transaction was committed

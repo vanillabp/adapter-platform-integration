@@ -15,12 +15,31 @@ public class SteerableTaskAwarenessSource implements DummyTaskAwarenessSource {
    */
   public static volatile WorkflowAwareness initialAnswer = WorkflowAwareness.UNKNOWN_TO_BPMS;
 
+  /**
+   * The answer for WORKFLOW-level probes (message correlation, and the START
+   * re-dispatch mitigation of story 25) if it has to differ from the task-level
+   * one - <code>null</code> means "same as {@link #initialAnswer}". Needed by the
+   * recovery test: it wants the recovered START entry to be dispatched again
+   * (workflow unknown) while the recovered COMPLETE_TASK entry elects an adapter
+   * knowing the task.
+   */
+  public static volatile WorkflowAwareness initialWorkflowAnswer = null;
+
   private volatile WorkflowAwareness answer = initialAnswer;
+
+  private volatile WorkflowAwareness workflowAnswer = initialWorkflowAnswer;
 
   public void answerWith(
       final WorkflowAwareness awareness) {
 
     this.answer = awareness;
+
+  }
+
+  public void answerWorkflowProbesWith(
+      final WorkflowAwareness awareness) {
+
+    this.workflowAnswer = awareness;
 
   }
 
@@ -31,6 +50,17 @@ public class SteerableTaskAwarenessSource implements DummyTaskAwarenessSource {
       final String taskId) {
 
     return answer;
+
+  }
+
+  @Override
+  public WorkflowAwareness awarenessOfWorkflow(
+      final String adapterId,
+      final Object workflowAggregateId) {
+
+    return workflowAnswer != null
+        ? workflowAnswer
+        : answer;
 
   }
 

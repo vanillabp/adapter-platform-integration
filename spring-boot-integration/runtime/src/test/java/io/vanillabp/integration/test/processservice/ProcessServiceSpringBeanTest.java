@@ -50,7 +50,7 @@ public class ProcessServiceSpringBeanTest {
 
     testee = new ProcessServiceSpringBean<>(
         "test-module", "TestProcess", Object.class, properties, aggregatePersistenceAware, List
-            .of(migratableProcessService), null, null);
+            .of(migratableProcessService), null, null, null);
 
   }
 

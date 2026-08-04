@@ -413,11 +413,16 @@ public class JdbcPhaseTwoOutboxDispatcher {
             "Unknown operation '%s' of outbox entry '%s'! Maybe it was written by a newer version of your software?"
                 .formatted(entry.operation(), entry.id()));
       }
+      // entry.attempts() holds the count BEFORE this claim - a value > 0 means the
+      // entry was dispatched before (recovered/retried): the router then runs the
+      // START re-dispatch mitigation
       phaseTwoRouter
           .get()
-          .dispatch(new PhaseTwoCall(
-              operation, entry.workflowModuleId(), entry.bpmnProcessId(), entry.aggregateId(), entry
-                  .adapterId(), PhaseTwoCall.deserializeArgs(entry.serializedArgs())));
+          .dispatch(
+              new PhaseTwoCall(
+                  operation, entry.workflowModuleId(), entry.bpmnProcessId(), entry.aggregateId(), entry
+                      .adapterId(), PhaseTwoCall.deserializeArgs(entry.serializedArgs())),
+              entry.attempts() > 0);
     } catch (Exception e) {
       if (entry.attempts() + 1 >= properties.getBlockAfterAttempts()) {
         try (var statement = connection.prepareStatement(markEntryBlocked)) {

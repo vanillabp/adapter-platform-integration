@@ -12,6 +12,7 @@ import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.WorkflowAdapterCache;
 import io.vanillabp.spi.service.TaskException;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -69,6 +70,16 @@ public class MigrationProcessService<A> {
    */
   private volatile PhaseTwoOutbox phaseTwoOutbox;
 
+  /**
+   * The election for operations on existing workflows (see
+   * {@link WorkflowLocator}).
+   */
+  private final WorkflowLocator workflowLocator;
+
+  /**
+   * Creates a process service without an adapter cache (elections probe every
+   * time) - kept for tests; the platform integrations always pass the cache.
+   */
   public MigrationProcessService(
       final String workflowModuleId,
       final String bpmnProcessId,
@@ -77,6 +88,21 @@ public class MigrationProcessService<A> {
       final AggregatePersistenceAware<A> aggregatePersistenceSupport,
       final List<MigratableProcessService<A>> processServices,
       final PhaseTwoOutboxResolver phaseTwoOutboxResolver) {
+
+    this(
+        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, aggregatePersistenceSupport, processServices, phaseTwoOutboxResolver, null);
+
+  }
+
+  public MigrationProcessService(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Class<A> workflowAggregateClass,
+      final MigrationAdapterProperties properties,
+      final AggregatePersistenceAware<A> aggregatePersistenceSupport,
+      final List<MigratableProcessService<A>> processServices,
+      final PhaseTwoOutboxResolver phaseTwoOutboxResolver,
+      final WorkflowAdapterCache workflowAdapterCache) {
 
     this.workflowModuleId = workflowModuleId;
     this.bpmnProcessId = bpmnProcessId;
@@ -117,6 +143,8 @@ public class MigrationProcessService<A> {
     // null ID type means a custom persistence layer owns the serialized form
     this.aggregateIdType = aggregatePersistenceSupport.getAggregateIdType();
     AggregateIdRoundTrip.validateIdTypeConvertible(workflowAggregateClass, aggregateIdType);
+
+    this.workflowLocator = new WorkflowLocator(workflowModuleId, bpmnProcessId, workflowAdapterCache);
 
   }
 
@@ -374,6 +402,31 @@ public class MigrationProcessService<A> {
       final Object workflowAggregateId,
       final String adapterId) {
 
+    startWorkflowPhaseTwo(workflowAggregateId, adapterId, false);
+
+  }
+
+  /**
+   * Executes phase two of starting a workflow - see
+   * {@link #startWorkflowPhaseTwo(Object, String)}. If the outbox entry was
+   * dispatched before (a recovered or retried entry), the re-dispatch mitigation
+   * probes {@link MigratableProcessService#awarenessOfWorkflowForRedispatch} on
+   * the recorded adapter FIRST: a workflow already known there means the previous
+   * dispatch already started it - the entry is consumed without starting a second
+   * instance. The residual at-least-once window (a crash between the remote start
+   * and marking the entry done, before any awareness lag caught up) remains and
+   * is ACCEPTED - this mitigation minimizes duplicates, it does not close the
+   * window.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate (in its original type)
+   * @param adapterId The ID of the adapter elected in phase one
+   * @param previouslyAttempted Whether the outbox entry was dispatched before
+   */
+  public void startWorkflowPhaseTwo(
+      final Object workflowAggregateId,
+      final String adapterId,
+      final boolean previouslyAttempted) {
+
     final var adapter = adapterProcessServices
         .stream()
         .filter(processService -> processService.getAdapterId().equals(adapterId))
@@ -392,7 +445,55 @@ public class MigrationProcessService<A> {
                     bpmnProcessId,
                     workflowModuleId)));
 
+    if (previouslyAttempted && skipRedispatchedStart(adapter, workflowAggregateId, "starting the workflow")) {
+      return;
+    }
     adapter.startWorkflowPhaseTwo(workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId);
+
+  }
+
+  /**
+   * The re-dispatch mitigation: probes whether the recorded adapter already knows
+   * the workflow of a previously attempted START entry.
+   *
+   * @return Whether the start has to be SKIPPED (the workflow already exists -
+   *         the previous dispatch succeeded)
+   * @throws IllegalStateException If the BPMS is unavailable - the outbox entry
+   *         stays pending and is retried
+   */
+  private boolean skipRedispatchedStart(
+      final MigratableProcessService<A> adapter,
+      final Object workflowAggregateId,
+      final String operationDescription) {
+
+    final var awareness = adapter.awarenessOfWorkflowForRedispatch(workflowAggregateId);
+    switch (awareness) {
+      case ACTIVE, COMPLETED -> {
+        log.info(
+            "Skipped re-dispatched phase two of {} of aggregate '{}' (BPMN process '{}' of "
+                + "workflow module '{}'): adapter '{}' already knows the workflow ({}) - the "
+                + "previous dispatch attempt succeeded, the outbox entry is consumed without "
+                + "starting a second instance",
+            operationDescription,
+            workflowAggregateId,
+            bpmnProcessId,
+            workflowModuleId,
+            adapter.getAdapterId(),
+            awareness);
+        return true;
+      }
+      case BPMS_UNAVAILABLE -> throw new IllegalStateException(
+          """
+              The BPMS of adapter '%s' is unavailable while probing whether the workflow of \
+              aggregate '%s' (BPMN process '%s' of workflow module '%s') was already started by a \
+              previous dispatch attempt! The outbox entry stays pending and is retried."""
+              .formatted(adapter.getAdapterId(), workflowAggregateId, bpmnProcessId, workflowModuleId));
+      default -> {
+        // UNKNOWN_TO_BPMS - the previous attempt did not start the workflow (or
+        // the adapter cannot tell): proceed, the adapter's phase two is idempotent
+      }
+    }
+    return false;
 
   }
 
@@ -628,9 +729,10 @@ public class MigrationProcessService<A> {
     final var subject = "workflow of aggregate '%s' (BPMN process '%s' of workflow module '%s')"
         .formatted(aggregateId, bpmnProcessId, workflowModuleId);
 
-    final var location = WorkflowLocator.locate(
+    final var location = workflowLocator.locate(
         adapterProcessServices,
         adapter -> adapter.awarenessOfWorkflow(aggregateId),
+        aggregateId,
         subject);
 
     switch (location.awareness()) {
@@ -690,9 +792,10 @@ public class MigrationProcessService<A> {
     final var subject = "workflow of aggregate '%s' (BPMN process '%s' of workflow module '%s')"
         .formatted(workflowAggregateId, bpmnProcessId, workflowModuleId);
 
-    final var location = WorkflowLocator.locate(
+    final var location = workflowLocator.locate(
         adapterProcessServices,
         adapter -> adapter.awarenessOfWorkflow(workflowAggregateId),
+        workflowAggregateId,
         subject);
 
     switch (location.awareness()) {
@@ -768,6 +871,27 @@ public class MigrationProcessService<A> {
       final String messageName,
       final String adapterId) {
 
+    startWorkflowByMessagePhaseTwo(workflowAggregateId, messageName, adapterId, false);
+
+  }
+
+  /**
+   * Executes phase two of starting a workflow by message - see
+   * {@link #startWorkflowByMessagePhaseTwo(Object, String, String)}; a previously
+   * attempted entry runs the same re-dispatch mitigation as
+   * {@link #startWorkflowPhaseTwo(Object, String, boolean)}.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate (original type)
+   * @param messageName The BPMN message name
+   * @param adapterId The ID of the adapter elected in phase one
+   * @param previouslyAttempted Whether the outbox entry was dispatched before
+   */
+  public void startWorkflowByMessagePhaseTwo(
+      final Object workflowAggregateId,
+      final String messageName,
+      final String adapterId,
+      final boolean previouslyAttempted) {
+
     final var adapter = adapterProcessServices
         .stream()
         .filter(processService -> processService.getAdapterId().equals(adapterId))
@@ -779,6 +903,10 @@ public class MigrationProcessService<A> {
                 + "remove the entry from the outbox store.")
                 .formatted(workflowAggregateId, messageName, adapterId, bpmnProcessId, workflowModuleId)));
 
+    if (previouslyAttempted && skipRedispatchedStart(
+        adapter, workflowAggregateId, "starting the workflow by message '%s'".formatted(messageName))) {
+      return;
+    }
     adapter.startWorkflowByMessagePhaseTwo(
         workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, messageName);
 
@@ -811,9 +939,10 @@ public class MigrationProcessService<A> {
     final var subject = "task '%s' of workflow aggregate '%s' (BPMN process '%s' of workflow module '%s')"
         .formatted(taskId, aggregateId, bpmnProcessId, workflowModuleId);
 
-    final var location = WorkflowLocator.locate(
+    final var location = workflowLocator.locate(
         adapterProcessServices,
         adapter -> awarenessProbe.probe(adapter, aggregateId),
+        aggregateId,
         subject);
 
     switch (location.awareness()) {
@@ -917,9 +1046,10 @@ public class MigrationProcessService<A> {
     final var subject = "task '%s' of workflow aggregate '%s' (BPMN process '%s' of workflow module '%s')"
         .formatted(taskId, workflowAggregateId, bpmnProcessId, workflowModuleId);
 
-    final var location = WorkflowLocator.locate(
+    final var location = workflowLocator.locate(
         adapterProcessServices,
         adapter -> awarenessProbe.probe(adapter, workflowAggregateId),
+        workflowAggregateId,
         subject);
 
     switch (location.awareness()) {
