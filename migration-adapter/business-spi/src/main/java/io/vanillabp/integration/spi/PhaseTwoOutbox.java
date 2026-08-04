@@ -108,4 +108,60 @@ public interface PhaseTwoOutbox {
 
   }
 
+  /**
+   * Schedule phase two of completing an asynchronous task. NO adapter ID is
+   * persisted (unlike workflow starts): the executing adapter is elected at
+   * dispatch time by probing the prioritized adapters - the BPMS holding the task
+   * answers the probe.
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param taskId The ID of the task to complete (as reported to the
+   *        <code>&#64;TaskId</code> parameter)
+   * @return <code>true</code> if scheduled, <code>false</code> if already scheduled
+   *         for this task (no-op)
+   */
+  default boolean scheduleCompleteTask(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Object workflowAggregateId,
+      final String taskId) {
+
+    return schedule(
+        new PhaseTwoCall(
+            PhaseTwoOperation.COMPLETE_TASK, workflowModuleId, bpmnProcessId, workflowAggregateId
+                .toString(), null, java.util.Map.of(PhaseTwoCall.ARG_TASK_ID, taskId)));
+
+  }
+
+  /**
+   * Schedule phase two of canceling an asynchronous task by BPMN error. NO adapter
+   * ID is persisted - see {@link #scheduleCompleteTask}.
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param taskId The ID of the task to cancel
+   * @param bpmnErrorCode The error code to be caught by BPMN error boundary events
+   * @return <code>true</code> if scheduled, <code>false</code> if already scheduled
+   *         for this task (no-op)
+   */
+  default boolean scheduleCancelTask(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Object workflowAggregateId,
+      final String taskId,
+      final String bpmnErrorCode) {
+
+    return schedule(
+        new PhaseTwoCall(
+            PhaseTwoOperation.CANCEL_TASK, workflowModuleId, bpmnProcessId, workflowAggregateId
+                .toString(), null, java.util.Map
+                    .of(
+                        PhaseTwoCall.ARG_TASK_ID, taskId, PhaseTwoCall.ARG_BPMN_ERROR_CODE,
+                        bpmnErrorCode)));
+
+  }
+
 }

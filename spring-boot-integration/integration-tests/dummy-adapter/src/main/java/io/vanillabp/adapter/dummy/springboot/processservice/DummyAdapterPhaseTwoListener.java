@@ -19,4 +19,28 @@ public interface DummyAdapterPhaseTwoListener {
   void startedWorkflowPhaseTwo(
       Object workflowAggregateId);
 
+  /**
+   * Called whenever phase two of completing an asynchronous task is executed.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param taskId The task's ID
+   */
+  default void completedTaskPhaseTwo(
+      final Object workflowAggregateId,
+      final String taskId) {
+  }
+
+  /**
+   * Called whenever phase two of canceling an asynchronous task is executed.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param taskId The task's ID
+   * @param bpmnErrorCode The BPMN error code
+   */
+  default void canceledTaskPhaseTwo(
+      final Object workflowAggregateId,
+      final String taskId,
+      final String bpmnErrorCode) {
+  }
+
 }

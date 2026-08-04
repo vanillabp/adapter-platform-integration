@@ -12,14 +12,18 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
 
   private final Instance<DummyPhaseTwoListener> phaseTwoListeners;
 
+  private final Instance<DummyTaskAwarenessSource> taskAwarenessSources;
+
   public MigratableProcessService(
       final String adapterId,
       final boolean needsTwoPhaseCommitForStartingWorkflows,
-      final Instance<DummyPhaseTwoListener> phaseTwoListeners) {
+      final Instance<DummyPhaseTwoListener> phaseTwoListeners,
+      final Instance<DummyTaskAwarenessSource> taskAwarenessSources) {
 
     this.adapterId = adapterId;
     this.needsTwoPhaseCommitForStartingWorkflows = needsTwoPhaseCommitForStartingWorkflows;
     this.phaseTwoListeners = phaseTwoListeners;
+    this.taskAwarenessSources = taskAwarenessSources;
 
   }
 
@@ -35,6 +39,16 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
       final Object workflowAggregateId,
       final String taskId) {
 
+    // tests steer the answer via DummyTaskAwarenessSource beans; without one the
+    // dummy does not know any task
+    if (taskAwarenessSources != null) {
+      return taskAwarenessSources
+          .stream()
+          .map(source -> source.awarenessOfTask(adapterId, workflowAggregateId, taskId))
+          .filter(java.util.Objects::nonNull)
+          .findFirst()
+          .orElse(WorkflowAwareness.UNKNOWN_TO_BPMS);
+    }
     return WorkflowAwareness.UNKNOWN_TO_BPMS;
 
   }
@@ -74,6 +88,60 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
       phaseTwoListeners
           .stream()
           .forEach(listener -> listener.startedWorkflowPhaseTwo(workflowAggregateId));
+    }
+
+  }
+
+  @Override
+  public void completeTaskPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate,
+      final String taskId) {
+
+  }
+
+  @Override
+  public void completeTaskPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String taskId) {
+
+    if (phaseTwoListeners != null) {
+      phaseTwoListeners
+          .stream()
+          .forEach(listener -> listener.completedTaskPhaseTwo(workflowAggregateId, taskId));
+    }
+
+  }
+
+  @Override
+  public void cancelTaskPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate,
+      final String taskId,
+      final String bpmnErrorCode) {
+
+  }
+
+  @Override
+  public void cancelTaskPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String taskId,
+      final String bpmnErrorCode) {
+
+    if (phaseTwoListeners != null) {
+      phaseTwoListeners
+          .stream()
+          .forEach(listener -> listener.canceledTaskPhaseTwo(workflowAggregateId, taskId, bpmnErrorCode));
     }
 
   }

@@ -27,6 +27,106 @@ public class RecordingPhaseTwoListener implements DummyAdapterPhaseTwoListener {
 
   }
 
+  /**
+   * Recorded phase-two task completions as "aggregateId:taskId".
+   */
+  private final List<String> completedTasks = new CopyOnWriteArrayList<>();
+
+  /**
+   * Recorded phase-two task cancellations as "aggregateId:taskId:errorCode".
+   */
+  private final List<String> canceledTasks = new CopyOnWriteArrayList<>();
+
+  @Override
+  public void completedTaskPhaseTwo(
+      final Object workflowAggregateId,
+      final String taskId) {
+
+    completedTasks.add(workflowAggregateId
+        + ":"
+        + taskId);
+    if (failuresRemaining.getAndUpdate(remaining -> remaining > 0 ? remaining - 1 : 0) > 0) {
+      throw new RuntimeException("phase two failed for testing purposes");
+    }
+
+  }
+
+  @Override
+  public void canceledTaskPhaseTwo(
+      final Object workflowAggregateId,
+      final String taskId,
+      final String bpmnErrorCode) {
+
+    canceledTasks.add(workflowAggregateId
+        + ":"
+        + taskId
+        + ":"
+        + bpmnErrorCode);
+
+  }
+
+  public List<String> getCompletedTasks() {
+
+    return List.copyOf(completedTasks);
+
+  }
+
+  public List<String> getCanceledTasks() {
+
+    return List.copyOf(canceledTasks);
+
+  }
+
+  /**
+   * Waits until at least the given number of phase-two task completions were
+   * recorded.
+   *
+   * @param numberOfCompletions The number of completions to wait for
+   * @param timeoutMillis How long to wait at most
+   * @return All completions recorded so far
+   */
+  public List<String> awaitCompletedTasks(
+      final int numberOfCompletions,
+      final long timeoutMillis) throws InterruptedException {
+
+    final var deadline = System.currentTimeMillis() + timeoutMillis;
+    while (completedTasks.size() < numberOfCompletions) {
+      if (System.currentTimeMillis() > deadline) {
+        throw new AssertionError(
+            "Expected at least %d phase-two task completion(s) within %dms but got %d!"
+                .formatted(numberOfCompletions, timeoutMillis, completedTasks.size()));
+      }
+      Thread.sleep(50);
+    }
+    return getCompletedTasks();
+
+  }
+
+  /**
+   * Waits until at least the given number of phase-two task cancellations were
+   * recorded.
+   *
+   * @param numberOfCancellations The number of cancellations to wait for
+   * @param timeoutMillis How long to wait at most
+   * @return All cancellations recorded so far
+   */
+  public List<String> awaitCanceledTasks(
+      final int numberOfCancellations,
+      final long timeoutMillis) throws InterruptedException {
+
+    final var deadline = System.currentTimeMillis() + timeoutMillis;
+    while (canceledTasks.size() < numberOfCancellations) {
+      if (System.currentTimeMillis() > deadline) {
+        throw new AssertionError(
+            "Expected at least %d phase-two task cancellation(s) within %dms but got %d!"
+                .formatted(numberOfCancellations, timeoutMillis, canceledTasks.size()));
+      }
+      Thread.sleep(50);
+    }
+    return getCanceledTasks();
+
+  }
+
   public void failNextDispatches(
       final int numberOfFailures) {
 
@@ -43,6 +143,8 @@ public class RecordingPhaseTwoListener implements DummyAdapterPhaseTwoListener {
   public void reset() {
 
     invocations.clear();
+    completedTasks.clear();
+    canceledTasks.clear();
     failuresRemaining.set(0);
 
   }

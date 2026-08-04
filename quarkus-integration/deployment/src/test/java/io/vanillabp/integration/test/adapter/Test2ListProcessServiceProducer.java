@@ -66,6 +66,44 @@ public class Test2ListProcessServiceProducer {
           final Object workflowAggregateId) {
       }
 
+      @Override
+      public void completeTaskPhaseOne(
+          final String workflowModuleId,
+          final String bpmnProcessId,
+          final AggregatePersistenceAware<Object> aggregatePersistence,
+          final Object workflowAggregate,
+          final String taskId) {
+      }
+
+      @Override
+      public void completeTaskPhaseTwo(
+          final String workflowModuleId,
+          final String bpmnProcessId,
+          final AggregatePersistenceAware<Object> aggregatePersistence,
+          final Object workflowAggregateId,
+          final String taskId) {
+      }
+
+      @Override
+      public void cancelTaskPhaseOne(
+          final String workflowModuleId,
+          final String bpmnProcessId,
+          final AggregatePersistenceAware<Object> aggregatePersistence,
+          final Object workflowAggregate,
+          final String taskId,
+          final String bpmnErrorCode) {
+      }
+
+      @Override
+      public void cancelTaskPhaseTwo(
+          final String workflowModuleId,
+          final String bpmnProcessId,
+          final AggregatePersistenceAware<Object> aggregatePersistence,
+          final Object workflowAggregateId,
+          final String taskId,
+          final String bpmnErrorCode) {
+      }
+
     });
 
   }

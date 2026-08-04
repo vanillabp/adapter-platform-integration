@@ -47,7 +47,8 @@ public class DummyProcessServiceProducer {
   @Produces
   public List<io.vanillabp.integration.adapter.spi.MigratableProcessService<Object>> dummyMigratableProcessServices(
       final MigrationAdapterProperties properties,
-      @Any final Instance<DummyPhaseTwoListener> phaseTwoListeners) {
+      @Any final Instance<DummyPhaseTwoListener> phaseTwoListeners,
+      @Any final Instance<DummyTaskAwarenessSource> taskAwarenessSources) {
 
     final var needsTwoPhaseCommit = ConfigProvider
         .getConfig()
@@ -61,7 +62,7 @@ public class DummyProcessServiceProducer {
         .filter(adapter -> ADAPTER_TYPE.equals(adapter.getValue()))
         .map(Map.Entry::getKey)
         .sorted().<io.vanillabp.integration.adapter.spi.MigratableProcessService<Object>>map(
-            adapterId -> new MigratableProcessService<>(adapterId, needsTwoPhaseCommit, phaseTwoListeners))
+            adapterId -> new MigratableProcessService<>(adapterId, needsTwoPhaseCommit, phaseTwoListeners, taskAwarenessSources))
         .toList();
 
   }

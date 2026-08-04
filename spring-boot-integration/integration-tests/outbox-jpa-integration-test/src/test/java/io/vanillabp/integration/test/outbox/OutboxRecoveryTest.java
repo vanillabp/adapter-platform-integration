@@ -26,7 +26,10 @@ import io.vanillabp.spi.process.ProcessService;
 @SuppressOutputExtension.SuppressBackgroundOutput
 public class OutboxRecoveryTest {
 
-  private static final String DATASOURCE_URL = "jdbc:h2:mem:outbox-recovery;DB_CLOSE_DELAY=-1";
+  // one database PER TEST: the kept-alive in-memory database outlives a test while
+  // Hibernate recreates the aggregate table on every context start - reused
+  // aggregate IDs would collide with idempotency keys of a previous test's entries
+  private static final String DATASOURCE_URL_PATTERN = "jdbc:h2:mem:outbox-recovery-%s;DB_CLOSE_DELAY=-1";
 
   /**
    * Runs the test application using an own H2 database (not shared with other test
@@ -37,13 +40,14 @@ public class OutboxRecoveryTest {
    * @return The running application context
    */
   private ConfigurableApplicationContext runApplication(
+      final String database,
       final String pollInterval) {
 
     return new SpringApplicationBuilder(TestApplication.class)
         .web(WebApplicationType.NONE)
         .run(
             "--spring.datasource.url="
-                + DATASOURCE_URL,
+                + DATASOURCE_URL_PATTERN.formatted(database),
             "--vanillabp.outbox.poll-interval="
                 + pollInterval,
             "--vanillabp.outbox.attempt-frequency=PT0.5S");
@@ -59,7 +63,7 @@ public class OutboxRecoveryTest {
     // first context: dispatch fails once; no retry happens since the poll interval
     // is huge - this leaves a committed-but-unprocessed entry, like a crash right
     // after the commit would
-    try (var context = runApplication("PT1H")) {
+    try (var context = runApplication("start", "PT1H")) {
       final var listener = context.getBean(RecordingPhaseTwoListener.class);
       listener.failNextDispatches(Integer.MAX_VALUE);
       @SuppressWarnings("unchecked")
@@ -82,10 +86,67 @@ public class OutboxRecoveryTest {
     }
 
     // second context: the initial poll on startup has to recover the entry
-    try (var context = runApplication("PT0.5S")) {
+    try (var context = runApplication("start", "PT0.5S")) {
       final var listener = context.getBean(RecordingPhaseTwoListener.class);
       final var invocations = listener.awaitInvocations(1, 15000);
       assertEquals(aggregateId, invocations.getFirst());
+    }
+
+  }
+
+  @Test
+  @DisplayName("Old and new operations recover together: a COMPLETE_TASK entry survives a restart, too")
+  public void completeTaskEntryIsDispatchedAfterRestart() throws Exception {
+
+    final Long aggregateId;
+
+    // the restarted context has to answer ACTIVE right away - the dispatch-time
+    // election probes again on recovery
+    SteerableTaskAwarenessSource.initialAnswer = io.vanillabp.integration.adapter.spi.WorkflowAwareness.ACTIVE;
+    try {
+
+      // first context: schedule a completion whose dispatch fails - leaving a
+      // committed-but-unprocessed COMPLETE_TASK entry (the crash shape); the
+      // outbox STORE is untouched by story 22, so recovery works for the new
+      // operation exactly like for START_WORKFLOW
+      try (var context = runApplication("tasks", "PT1H")) {
+        final var listener = context.getBean(RecordingPhaseTwoListener.class);
+        listener.failNextDispatches(Integer.MAX_VALUE);
+        @SuppressWarnings("unchecked")
+        final var processService = (ProcessService<Aggregate>) context
+            .getBeanProvider(ResolvableType.forClassWithGenerics(ProcessService.class, Aggregate.class))
+            .getObject();
+        final var transactionTemplate = context.getBean(TransactionTemplate.class);
+        final var attachedAggregate = transactionTemplate.execute(status -> {
+          final var aggregate = new Aggregate();
+          aggregate.setContent("task-recovery-test");
+          return processService.startWorkflow(aggregate);
+        });
+        assertNotNull(attachedAggregate);
+        aggregateId = attachedAggregate.getId();
+        // the start's phase two fails, too - that entry stays as well and proves
+        // both operations dispatch after the restart
+        listener.awaitInvocations(1, 10000);
+        transactionTemplate.executeWithoutResult(status -> processService
+            .completeTask(attachedAggregate, "task-recovered"));
+        Thread.sleep(1000);
+      }
+
+      // second context: BOTH the old (START_WORKFLOW) and the new (COMPLETE_TASK)
+      // entry have to dispatch
+      try (var context = runApplication("tasks", "PT0.5S")) {
+        final var listener = context.getBean(RecordingPhaseTwoListener.class);
+        final var invocations = listener.awaitInvocations(1, 15000);
+        assertEquals(aggregateId, invocations.getFirst());
+        final var completions = listener.awaitCompletedTasks(1, 15000);
+        assertEquals(
+            aggregateId
+                + ":task-recovered",
+            completions.getFirst());
+      }
+
+    } finally {
+      SteerableTaskAwarenessSource.initialAnswer = io.vanillabp.integration.adapter.spi.WorkflowAwareness.UNKNOWN_TO_BPMS;
     }
 
   }

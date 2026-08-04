@@ -27,6 +27,8 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
 
   private final ObjectProvider<DummyAdapterPhaseTwoListener> phaseTwoListeners;
 
+  private final ObjectProvider<DummyTaskAwarenessSource> taskAwarenessSources;
+
   @Override
   public String getAdapterId() {
 
@@ -39,8 +41,19 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
       final Object workflowAggregateId,
       final String taskId) {
 
-    log.info("Dummy-Adapter: Checking awareness of task '{}' of workflow aggregate '{}'", taskId, workflowAggregateId);
+    log.info("Dummy-Adapter[{}]: Checking awareness of task '{}' of workflow aggregate '{}'", adapterId, taskId,
+        workflowAggregateId);
 
+    // tests steer the answer via DummyTaskAwarenessSource beans; without one the
+    // dummy does not know any task
+    if (taskAwarenessSources != null) {
+      return taskAwarenessSources
+          .stream()
+          .map(source -> source.awarenessOfTask(adapterId, workflowAggregateId, taskId))
+          .filter(java.util.Objects::nonNull)
+          .findFirst()
+          .orElse(WorkflowAwareness.UNKNOWN_TO_BPMS);
+    }
     return WorkflowAwareness.UNKNOWN_TO_BPMS;
 
   }
@@ -95,6 +108,95 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
       phaseTwoListeners
           .stream()
           .forEach(listener -> listener.startedWorkflowPhaseTwo(workflowAggregateId));
+    }
+
+  }
+
+  @Override
+  public void completeTaskPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate,
+      final String taskId) {
+
+    log.info(
+        "Dummy-Adapter[{}]: Completing task '{}' (phase one) of BPMN process '{}' of workflow module '{}'",
+        adapterId,
+        taskId,
+        bpmnProcessId,
+        workflowModuleId);
+
+  }
+
+  @Override
+  public void completeTaskPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String taskId) {
+
+    log.info(
+        "Dummy-Adapter[{}]: Completing task '{}' (phase two) of BPMN process '{}' of workflow module '{}' for "
+            + "aggregate '{}'",
+        adapterId,
+        taskId,
+        bpmnProcessId,
+        workflowModuleId,
+        workflowAggregateId);
+
+    if (phaseTwoListeners != null) {
+      phaseTwoListeners
+          .stream()
+          .forEach(listener -> listener.completedTaskPhaseTwo(workflowAggregateId, taskId));
+    }
+
+  }
+
+  @Override
+  public void cancelTaskPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate,
+      final String taskId,
+      final String bpmnErrorCode) {
+
+    log.info(
+        "Dummy-Adapter[{}]: Canceling task '{}' (phase one, error code '{}') of BPMN process '{}' of workflow "
+            + "module '{}'",
+        adapterId,
+        taskId,
+        bpmnErrorCode,
+        bpmnProcessId,
+        workflowModuleId);
+
+  }
+
+  @Override
+  public void cancelTaskPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String taskId,
+      final String bpmnErrorCode) {
+
+    log.info(
+        "Dummy-Adapter[{}]: Canceling task '{}' (phase two, error code '{}') of BPMN process '{}' of workflow "
+            + "module '{}' for aggregate '{}'",
+        adapterId,
+        taskId,
+        bpmnErrorCode,
+        bpmnProcessId,
+        workflowModuleId,
+        workflowAggregateId);
+
+    if (phaseTwoListeners != null) {
+      phaseTwoListeners
+          .stream()
+          .forEach(listener -> listener.canceledTaskPhaseTwo(workflowAggregateId, taskId, bpmnErrorCode));
     }
 
   }

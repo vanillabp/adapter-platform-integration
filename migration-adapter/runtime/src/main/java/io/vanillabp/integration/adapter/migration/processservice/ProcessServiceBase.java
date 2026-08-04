@@ -50,24 +50,6 @@ public abstract class ProcessServiceBase<A> implements ProcessService<A> {
   }
 
   @Override
-  public A startWorkflowByMessage(
-      final A workflowAggregate,
-      final String messageName) {
-
-    throw notYetSupported("startWorkflowByMessage");
-
-  }
-
-  @Override
-  public A startWorkflowByMessage(
-      final A workflowAggregate,
-      final Object message) {
-
-    throw notYetSupported("startWorkflowByMessage");
-
-  }
-
-  @Override
   public A correlateMessage(
       final A workflowAggregate,
       final String messageName) {
@@ -80,25 +62,6 @@ public abstract class ProcessServiceBase<A> implements ProcessService<A> {
   public A correlateMessage(
       final A workflowAggregate,
       final String messageName,
-      final String correlationId) {
-
-    throw notYetSupported("correlateMessage");
-
-  }
-
-  @Override
-  public A correlateMessage(
-      final A workflowAggregate,
-      final Object message) {
-
-    throw notYetSupported("correlateMessage");
-
-  }
-
-  @Override
-  public A correlateMessage(
-      final A workflowAggregate,
-      final Object message,
       final String correlationId) {
 
     throw notYetSupported("correlateMessage");

@@ -58,6 +58,14 @@ public class WorkflowTaskHandler {
   private final boolean asynchronousTask;
 
   /**
+   * The lifecycle events the method subscribes to (union of its
+   * <code>&#64;TaskEvent</code> parameters' filters; only CREATED without such a
+   * parameter). {@link io.vanillabp.spi.service.TaskEvent.Event#ALL} subscribes to
+   * everything.
+   */
+  private final java.util.Set<io.vanillabp.spi.service.TaskEvent.Event> subscribedEvents;
+
+  /**
    * Whether some BPMN task matched this handler during wiring validation - input
    * for the per-module unwired-methods check (a handler registered under several
    * BPMN processes via {@code secondaryBpmnProcesses} legitimately matches in only
@@ -73,7 +81,8 @@ public class WorkflowTaskHandler {
       final String taskDefinition,
       final String activityId,
       final List<VersionRange> versions,
-      final boolean asynchronousTask) {
+      final boolean asynchronousTask,
+      final java.util.Set<io.vanillabp.spi.service.TaskEvent.Event> subscribedEvents) {
 
     this.workflowServiceClass = workflowServiceClass;
     this.method = method;
@@ -83,6 +92,22 @@ public class WorkflowTaskHandler {
     this.activityId = activityId;
     this.versions = versions;
     this.asynchronousTask = asynchronousTask;
+    this.subscribedEvents = subscribedEvents;
+
+  }
+
+  /**
+   * Whether the method subscribes to the given lifecycle event - non-matching
+   * deliveries (e.g. CANCELED to a method without a <code>&#64;TaskEvent</code>
+   * parameter) are skipped by the core without invoking the method.
+   *
+   * @param event The delivered event
+   * @return Whether to invoke the method
+   */
+  public boolean acceptsEvent(
+      final io.vanillabp.spi.service.TaskEvent.Event event) {
+
+    return subscribedEvents.contains(io.vanillabp.spi.service.TaskEvent.Event.ALL) || subscribedEvents.contains(event);
 
   }
 

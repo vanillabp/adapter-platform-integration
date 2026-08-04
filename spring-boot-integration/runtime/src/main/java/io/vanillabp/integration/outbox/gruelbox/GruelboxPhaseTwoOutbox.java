@@ -44,7 +44,8 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
               call.workflowModuleId(),
               call.bpmnProcessId(),
               call.workflowAggregateId(),
-              call.adapterId());
+              call.adapterId(),
+              PhaseTwoCall.serializeArgs(call.args()));
       return true;
     } catch (AlreadyScheduledException e) {
       log.debug(

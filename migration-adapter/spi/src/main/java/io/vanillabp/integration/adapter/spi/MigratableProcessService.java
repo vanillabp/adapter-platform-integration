@@ -160,4 +160,94 @@ public interface MigratableProcessService<A> {
       AggregatePersistenceAware<A> aggregatePersistence,
       Object workflowAggregateId);
 
+  /**
+   * Complete an asynchronous task (a <code>&#64;WorkflowTask</code> method with a
+   * <code>&#64;TaskId</code> parameter returned without completing). Phase one of
+   * the two-phase commit, executed inside the caller's local transaction AFTER the
+   * adapter answered {@link WorkflowAwareness#ACTIVE} for the task.
+   * <p>
+   * Contract (see the two-phase rules): this phase MUST NOT advance the BPMN
+   * process. Embedded BPMS sharing the local transaction complete the task entirely
+   * here (a rollback takes the engine state with it); remote BPMS only perform a
+   * NON-ADVANCING existence check whose sole purpose is to abort the local
+   * transaction early if the task is already gone - ideally registered as a
+   * pre-commit hook (transaction synchronization) to minimize the window between
+   * check and phase two. The actual completion of a remote BPMS happens in
+   * {@link #completeTaskPhaseTwo}.
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param aggregatePersistence The persistence of the workflow-aggregate
+   * @param workflowAggregate The workflow-aggregate
+   * @param taskId The ID of the task to complete
+   */
+  void completeTaskPhaseOne(
+      String workflowModuleId,
+      String bpmnProcessId,
+      AggregatePersistenceAware<A> aggregatePersistence,
+      A workflowAggregate,
+      String taskId);
+
+  /**
+   * Complete an asynchronous task - phase two, dispatched through the outbox after
+   * the local transaction was committed. Only called for adapters requiring a
+   * two-phase commit; embedded BPMS completed the task in phase one already.
+   * <p>
+   * <strong>Idempotency contract:</strong> at-least-once semantics - the task may
+   * already be gone (completed by a previous dispatch attempt, or the workflow
+   * moved on). Adapters MUST treat a missing task as success (log it, return
+   * normally); throwing is reserved for infrastructure failures (the outbox
+   * retries).
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param aggregatePersistence The persistence of the workflow-aggregate
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param taskId The ID of the task to complete
+   */
+  void completeTaskPhaseTwo(
+      String workflowModuleId,
+      String bpmnProcessId,
+      AggregatePersistenceAware<A> aggregatePersistence,
+      Object workflowAggregateId,
+      String taskId);
+
+  /**
+   * Cancel an asynchronous task by BPMN error. Phase one - same transactional
+   * contract as {@link #completeTaskPhaseOne}.
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param aggregatePersistence The persistence of the workflow-aggregate
+   * @param workflowAggregate The workflow-aggregate
+   * @param taskId The ID of the task to cancel
+   * @param bpmnErrorCode The error code to be caught by BPMN error boundary events
+   */
+  void cancelTaskPhaseOne(
+      String workflowModuleId,
+      String bpmnProcessId,
+      AggregatePersistenceAware<A> aggregatePersistence,
+      A workflowAggregate,
+      String taskId,
+      String bpmnErrorCode);
+
+  /**
+   * Cancel an asynchronous task by BPMN error - phase two, same idempotency
+   * contract as {@link #completeTaskPhaseTwo}.
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param aggregatePersistence The persistence of the workflow-aggregate
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param taskId The ID of the task to cancel
+   * @param bpmnErrorCode The error code to be caught by BPMN error boundary events
+   */
+  void cancelTaskPhaseTwo(
+      String workflowModuleId,
+      String bpmnProcessId,
+      AggregatePersistenceAware<A> aggregatePersistence,
+      Object workflowAggregateId,
+      String taskId,
+      String bpmnErrorCode);
+
 }

@@ -59,6 +59,20 @@ class WorkflowTaskScanner {
       final var asynchronousTask = Arrays
           .stream(method.getParameters())
           .anyMatch(parameter -> parameter.isAnnotationPresent(TaskId.class));
+      // the events the method subscribes to: the union of its @TaskEvent
+      // parameters' filters; without a @TaskEvent parameter only CREATED is
+      // delivered (a CANCELED invocation would surprise handlers not asking
+      // for lifecycle events)
+      final var subscribedEvents = java.util.EnumSet.noneOf(TaskEvent.Event.class);
+      Arrays
+          .stream(method.getParameters())
+          .map(parameter -> parameter.getAnnotation(TaskEvent.class))
+          .filter(java.util.Objects::nonNull)
+          .flatMap(taskEvent -> Arrays.stream(taskEvent.value()))
+          .forEach(subscribedEvents::add);
+      if (subscribedEvents.isEmpty()) {
+        subscribedEvents.add(TaskEvent.Event.CREATED);
+      }
       for (final var annotation : annotations) {
         handlers.add(buildHandler(
             workflowServiceClass,
@@ -66,7 +80,8 @@ class WorkflowTaskScanner {
             workflowServiceBean,
             binders,
             annotation,
-            asynchronousTask));
+            asynchronousTask,
+            subscribedEvents));
       }
     }
     return handlers;
@@ -79,7 +94,8 @@ class WorkflowTaskScanner {
       final Supplier<Object> workflowServiceBean,
       final List<ParameterBinder> binders,
       final WorkflowTask annotation,
-      final boolean asynchronousTask) {
+      final boolean asynchronousTask,
+      final java.util.Set<TaskEvent.Event> subscribedEvents) {
 
     final var location = "%s#%s".formatted(workflowServiceClass.getName(), method.getName());
     // a public method of a package-private bean class is not accessible through
@@ -107,7 +123,7 @@ class WorkflowTaskScanner {
         .map(version -> VersionRange.parse(version, location))
         .toList();
     return new WorkflowTaskHandler(
-        workflowServiceClass, method, workflowServiceBean, binders, taskDefinition, activityId, versions, asynchronousTask);
+        workflowServiceClass, method, workflowServiceBean, binders, taskDefinition, activityId, versions, asynchronousTask, subscribedEvents);
 
   }
 

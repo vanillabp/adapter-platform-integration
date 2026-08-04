@@ -97,16 +97,10 @@ public class ProcessServiceSpringBeanTest {
     final var aggregate = new Object();
 
     final var operations = java.util.List.<org.junit.jupiter.api.function.Executable>of(
-        () -> testee.startWorkflowByMessage(aggregate, "TestMessage"),
-        () -> testee.startWorkflowByMessage(aggregate, new Object()),
         () -> testee.correlateMessage(aggregate, "TestMessage"),
         () -> testee.correlateMessage(aggregate, "TestMessage", "correlation-1"),
-        () -> testee.correlateMessage(aggregate, new Object()),
-        () -> testee.correlateMessage(aggregate, new Object(), "correlation-1"),
         () -> testee.completeUserTask(aggregate, "task-1"),
         () -> testee.cancelUserTask(aggregate, "task-1", "error"),
-        () -> testee.completeTask(aggregate, "task-1"),
-        () -> testee.cancelTask(aggregate, "task-1", "error"),
         () -> testee.getProcessDefinitions(aggregate, null),
         () -> testee.getBpmnXml("definition-1"),
         () -> testee.getWorkflowHistory(aggregate, null));

@@ -172,11 +172,13 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
         workflowModuleId,
         bpmnProcessId,
         workflowAggregateId,
-        adapterId) -> phaseTwoRouter
+        adapterId,
+        serializedArgs) -> phaseTwoRouter
             .getObject()
             .dispatch(new PhaseTwoCall(
                 PhaseTwoOperation
-                    .valueOf(operation), workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, Map.of()));
+                    .valueOf(operation), workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, PhaseTwoCall
+                        .deserializeArgs(serializedArgs)));
 
   }
 

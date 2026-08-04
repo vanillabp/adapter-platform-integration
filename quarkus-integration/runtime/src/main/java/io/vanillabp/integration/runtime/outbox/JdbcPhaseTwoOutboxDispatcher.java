@@ -6,7 +6,6 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -82,7 +81,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
   public static final String STATUS_BLOCKED = "BLOCKED";
 
   private static final String SELECT_DUE_ENTRIES = """
-      SELECT ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, AGGREGATE_ID, ADAPTER_ID, ATTEMPTS \
+      SELECT ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, AGGREGATE_ID, ADAPTER_ID, ARGS, ATTEMPTS \
       FROM %s \
       WHERE STATUS = '%s' AND NEXT_ATTEMPT_AT <= ? AND ATTEMPTS < ?""";
 
@@ -135,6 +134,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
                        String operation,
                        String aggregateId,
                        String adapterId,
+                       String serializedArgs,
                        int attempts) {
   }
 
@@ -317,6 +317,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
         OPERATION VARCHAR(255) NOT NULL, \
         AGGREGATE_ID VARCHAR(1024), \
         ADAPTER_ID VARCHAR(255), \
+        ARGS VARCHAR(2048), \
         IDEMPOTENCY_KEY VARCHAR(512) UNIQUE, \
         STATUS VARCHAR(16) NOT NULL, \
         CREATED_AT %s NOT NULL, \
@@ -361,7 +362,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
         while (resultSet.next()) {
           entries.add(new Entry(
               resultSet.getString(1), resultSet.getString(2), resultSet.getString(3), resultSet.getString(4), resultSet
-                  .getString(5), resultSet.getString(6), resultSet.getInt(7)));
+                  .getString(5), resultSet.getString(6), resultSet.getString(7), resultSet.getInt(8)));
         }
       }
     }
@@ -415,8 +416,8 @@ public class JdbcPhaseTwoOutboxDispatcher {
       phaseTwoRouter
           .get()
           .dispatch(new PhaseTwoCall(
-              operation, entry.workflowModuleId(), entry.bpmnProcessId(), entry.aggregateId(), entry.adapterId(), Map
-                  .of()));
+              operation, entry.workflowModuleId(), entry.bpmnProcessId(), entry.aggregateId(), entry
+                  .adapterId(), PhaseTwoCall.deserializeArgs(entry.serializedArgs())));
     } catch (Exception e) {
       if (entry.attempts() + 1 >= properties.getBlockAfterAttempts()) {
         try (var statement = connection.prepareStatement(markEntryBlocked)) {

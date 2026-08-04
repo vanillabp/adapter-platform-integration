@@ -84,6 +84,15 @@ public final class PhaseTwoRouter {
     switch (call.operation()) {
       case START_WORKFLOW -> processService
           .startWorkflowPhaseTwo(workflowAggregateId, call.adapterId());
+      case COMPLETE_TASK -> processService
+          .completeTaskPhaseTwo(
+              workflowAggregateId,
+              call.args().get(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID));
+      case CANCEL_TASK -> processService
+          .cancelTaskPhaseTwo(
+              workflowAggregateId,
+              call.args().get(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID),
+              call.args().get(io.vanillabp.integration.spi.PhaseTwoCall.ARG_BPMN_ERROR_CODE));
     }
 
   }

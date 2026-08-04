@@ -10,9 +10,10 @@ import io.vanillabp.integration.spi.PhaseTwoCall;
  * at dispatch time. Being an interface, it can be proxied by a plain JDK proxy (no
  * ByteBuddy required).
  * <p>
- * <strong>Deviation:</strong> the {@link PhaseTwoCall#args()} map is not transported -
- * it is empty for all operations existing today. Once an operation with arguments is
- * introduced, flatten its arguments into additional {@link String} parameters here.
+ * The {@link PhaseTwoCall#args()} map is transported GENERICALLY in its serialized
+ * form ({@link PhaseTwoCall#serializeArgs(java.util.Map)}) - the store stays
+ * operation-agnostic (stores never interpret arguments; only the core's router
+ * does).
  */
 public interface GruelboxPhaseTwoDispatch {
 
@@ -28,12 +29,15 @@ public interface GruelboxPhaseTwoDispatch {
    * @param bpmnProcessId The BPMN process ID of the workflow
    * @param workflowAggregateId The ID of the workflow aggregate in serialized form
    * @param adapterId The ID of the elected BPMS adapter (may be <code>null</code>)
+   * @param serializedArgs The call's args map in serialized form (may be
+   *        <code>null</code>, see {@link PhaseTwoCall#serializeArgs(java.util.Map)})
    */
   void dispatch(
       String operation,
       String workflowModuleId,
       String bpmnProcessId,
       String workflowAggregateId,
-      String adapterId);
+      String adapterId,
+      String serializedArgs);
 
 }

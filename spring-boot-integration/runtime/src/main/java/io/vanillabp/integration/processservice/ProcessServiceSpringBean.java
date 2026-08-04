@@ -83,6 +83,33 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
 
   }
 
+  @Override
+  public A completeTask(
+      final A workflowAggregate,
+      final String taskId) {
+
+    if (noTransactionIsActive()) {
+      throw newMissingTransactionException();
+    }
+
+    return migrationProcessService.completeTask(workflowAggregate, taskId);
+
+  }
+
+  @Override
+  public A cancelTask(
+      final A workflowAggregate,
+      final String taskId,
+      final String bpmnErrorCode) {
+
+    if (noTransactionIsActive()) {
+      throw newMissingTransactionException();
+    }
+
+    return migrationProcessService.cancelTask(workflowAggregate, taskId, bpmnErrorCode);
+
+  }
+
   public boolean transactionIsActive() {
 
     return !noTransactionIsActive();

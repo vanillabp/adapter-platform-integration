@@ -29,6 +29,51 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
 
   }
 
+  /**
+   * Recorded phase-two task completions as "aggregateId:taskId" and cancellations
+   * as "aggregateId:taskId:errorCode".
+   */
+  private final List<String> completedTasks = new CopyOnWriteArrayList<>();
+
+  private final List<String> canceledTasks = new CopyOnWriteArrayList<>();
+
+  @Override
+  public void completedTaskPhaseTwo(
+      final Object workflowAggregateId,
+      final String taskId) {
+
+    completedTasks.add(workflowAggregateId
+        + ":"
+        + taskId);
+
+  }
+
+  @Override
+  public void canceledTaskPhaseTwo(
+      final Object workflowAggregateId,
+      final String taskId,
+      final String bpmnErrorCode) {
+
+    canceledTasks.add(workflowAggregateId
+        + ":"
+        + taskId
+        + ":"
+        + bpmnErrorCode);
+
+  }
+
+  public List<String> getCompletedTasks() {
+
+    return List.copyOf(completedTasks);
+
+  }
+
+  public List<String> getCanceledTasks() {
+
+    return List.copyOf(canceledTasks);
+
+  }
+
   public void failNextDispatches(
       final int numberOfFailures) {
 
@@ -45,6 +90,8 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
   public void reset() {
 
     invocations.clear();
+    completedTasks.clear();
+    canceledTasks.clear();
     failuresRemaining.set(0);
 
   }

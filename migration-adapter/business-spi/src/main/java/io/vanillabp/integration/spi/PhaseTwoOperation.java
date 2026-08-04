@@ -17,9 +17,11 @@ import java.util.Optional;
  * <li>{@link #START_WORKFLOW}:
  * <code>workflowModuleId|bpmnProcessId|workflowAggregateId</code> - a workflow is
  * started at most once per aggregate.</li>
- * <li>future <i>completeTask</i>/<i>cancelTask</i> operations will additionally
- * include the task id - the same task is completed at most once, but multiple tasks
- * of the same workflow may be completed.</li>
+ * <li>{@link #COMPLETE_TASK} / {@link #CANCEL_TASK}:
+ * <code>workflowModuleId|bpmnProcessId|workflowAggregateId|taskId</code> - the same
+ * task is completed (or canceled) at most once, but multiple tasks of the same
+ * workflow may be completed. The BPMN error code of a cancellation is NOT part of
+ * the key (it is carried in {@link PhaseTwoCall#args()}).</li>
  * <li>future <i>correlateMessage</i> operations WITHOUT a correlation-id return
  * {@link Optional#empty()} - no deduplication is possible because the same message
  * may legitimately be correlated multiple times.</li>
@@ -40,6 +42,46 @@ public enum PhaseTwoOperation {
               call.workflowModuleId(),
               call.bpmnProcessId(),
               call.workflowAggregateId()));
+    }
+  },
+
+  /**
+   * Phase two of completing an asynchronous task - see
+   * {@code MigratableProcessService#completeTaskPhaseTwo}. The task ID travels in
+   * {@link PhaseTwoCall#args()} under {@link PhaseTwoCall#ARG_TASK_ID}. No adapter
+   * ID is persisted - the executing adapter is elected at dispatch time by probing
+   * the prioritized adapters.
+   */
+  COMPLETE_TASK {
+    @Override
+    public Optional<String> idempotencyKey(
+        final PhaseTwoCall call) {
+      return Optional.of(
+          "%s|%s|%s|%s".formatted(
+              call.workflowModuleId(),
+              call.bpmnProcessId(),
+              call.workflowAggregateId(),
+              call.args().get(PhaseTwoCall.ARG_TASK_ID)));
+    }
+  },
+
+  /**
+   * Phase two of canceling an asynchronous task by BPMN error - see
+   * {@code MigratableProcessService#cancelTaskPhaseTwo}. The task ID and the BPMN
+   * error code travel in {@link PhaseTwoCall#args()} under
+   * {@link PhaseTwoCall#ARG_TASK_ID} / {@link PhaseTwoCall#ARG_BPMN_ERROR_CODE};
+   * only the task ID is part of the idempotency key.
+   */
+  CANCEL_TASK {
+    @Override
+    public Optional<String> idempotencyKey(
+        final PhaseTwoCall call) {
+      return Optional.of(
+          "%s|%s|%s|%s".formatted(
+              call.workflowModuleId(),
+              call.bpmnProcessId(),
+              call.workflowAggregateId(),
+              call.args().get(PhaseTwoCall.ARG_TASK_ID)));
     }
   };
 

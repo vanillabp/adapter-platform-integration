@@ -34,9 +34,10 @@ import lombok.extern.slf4j.Slf4j;
  * constraint violation which is turned into the contract's no-op
  * (<code>false</code>).
  * <p>
- * <strong>Deviation:</strong> the {@link PhaseTwoCall#args()} map is not persisted -
- * it is empty for all operations existing today. Once an operation with arguments is
- * introduced, add a column (or columns) for them.
+ * The {@link PhaseTwoCall#args()} map is persisted GENERICALLY in its serialized
+ * form ({@link PhaseTwoCall#serializeArgs(java.util.Map)}, column
+ * <code>ARGS</code>) - the store stays operation-agnostic (stores never interpret
+ * arguments; only the core's router does).
  */
 @ApplicationScoped
 @Slf4j
@@ -52,9 +53,9 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
 
   private static final String INSERT_ENTRY = """
       INSERT INTO %s \
-      (ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, AGGREGATE_ID, ADAPTER_ID, \
+      (ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, AGGREGATE_ID, ADAPTER_ID, ARGS, \
       IDEMPOTENCY_KEY, STATUS, CREATED_AT, ATTEMPTS, NEXT_ATTEMPT_AT) \
-      VALUES (?, ?, ?, ?, ?, ?, ?, '%s', ?, 0, ?)""";
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, '%s', ?, 0, ?)""";
 
   /**
    * Resolves the configured table name (<code>vanillabp.outbox.jdbc.table</code>,
@@ -126,9 +127,10 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
       statement.setString(4, call.operation().name());
       statement.setString(5, call.workflowAggregateId());
       statement.setString(6, call.adapterId());
-      statement.setString(7, call.idempotencyKey().orElse(null));
-      statement.setTimestamp(8, Timestamp.from(now));
+      statement.setString(7, PhaseTwoCall.serializeArgs(call.args()));
+      statement.setString(8, call.idempotencyKey().orElse(null));
       statement.setTimestamp(9, Timestamp.from(now));
+      statement.setTimestamp(10, Timestamp.from(now));
       statement.executeUpdate();
     } catch (SQLException e) {
       // the idempotency key is already present, so the call was scheduled before -

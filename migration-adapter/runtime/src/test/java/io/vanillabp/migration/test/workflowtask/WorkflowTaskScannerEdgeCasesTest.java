@@ -145,6 +145,44 @@ public class WorkflowTaskScannerEdgeCasesTest {
           final Object workflowAggregateId) {
       }
 
+      @Override
+      public void completeTaskPhaseOne(
+          final String workflowModuleId,
+          final String bpmnProcessId,
+          final AggregatePersistenceAware<Aggregate> aggregatePersistence,
+          final Aggregate workflowAggregate,
+          final String taskId) {
+      }
+
+      @Override
+      public void completeTaskPhaseTwo(
+          final String workflowModuleId,
+          final String bpmnProcessId,
+          final AggregatePersistenceAware<Aggregate> aggregatePersistence,
+          final Object workflowAggregateId,
+          final String taskId) {
+      }
+
+      @Override
+      public void cancelTaskPhaseOne(
+          final String workflowModuleId,
+          final String bpmnProcessId,
+          final AggregatePersistenceAware<Aggregate> aggregatePersistence,
+          final Aggregate workflowAggregate,
+          final String taskId,
+          final String bpmnErrorCode) {
+      }
+
+      @Override
+      public void cancelTaskPhaseTwo(
+          final String workflowModuleId,
+          final String bpmnProcessId,
+          final AggregatePersistenceAware<Aggregate> aggregatePersistence,
+          final Object workflowAggregateId,
+          final String taskId,
+          final String bpmnErrorCode) {
+      }
+
     };
     return new MigrationProcessService<>(
         "test-module", "TestProcess", Aggregate.class, properties, persistence, List.of(adapterProcessService), null);

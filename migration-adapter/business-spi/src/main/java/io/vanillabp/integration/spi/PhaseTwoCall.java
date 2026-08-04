@@ -33,6 +33,20 @@ public record PhaseTwoCall(
                            String adapterId,
                            Map<String, String> args) {
 
+  /**
+   * The {@link #args()} key carrying the task ID of
+   * {@link PhaseTwoOperation#COMPLETE_TASK} / {@link PhaseTwoOperation#CANCEL_TASK}
+   * calls. Part of the persisted contract - never change the literal.
+   */
+  public static final String ARG_TASK_ID = "taskId";
+
+  /**
+   * The {@link #args()} key carrying the BPMN error code of
+   * {@link PhaseTwoOperation#CANCEL_TASK} calls. Part of the persisted contract -
+   * never change the literal.
+   */
+  public static final String ARG_BPMN_ERROR_CODE = "bpmnErrorCode";
+
   public PhaseTwoCall {
     Objects.requireNonNull(operation, "operation must not be null");
     Objects.requireNonNull(workflowModuleId, "workflowModuleId must not be null");
@@ -51,6 +65,57 @@ public record PhaseTwoCall(
   public Optional<String> idempotencyKey() {
 
     return operation.idempotencyKey(this);
+
+  }
+
+  /**
+   * Serializes an args map into a single String for stores flattening calls into
+   * scalar columns/parameters (form-encoding: URL-encoded keys/values joined by
+   * <code>=</code> and <code>&amp;</code>). Part of the persisted contract - never
+   * change the encoding for existing operations.
+   *
+   * @param args The args map (may be empty)
+   * @return The serialized form or <code>null</code> for an empty map
+   */
+  public static String serializeArgs(
+      final Map<String, String> args) {
+
+    if ((args == null) || args.isEmpty()) {
+      return null;
+    }
+    return args
+        .entrySet()
+        .stream()
+        .map(entry -> java.net.URLEncoder
+            .encode(entry.getKey(), java.nio.charset.StandardCharsets.UTF_8)
+            + "="
+            + java.net.URLEncoder.encode(entry.getValue(), java.nio.charset.StandardCharsets.UTF_8))
+        .collect(java.util.stream.Collectors.joining("&"));
+
+  }
+
+  /**
+   * Deserializes an args map serialized by {@link #serializeArgs(Map)}.
+   *
+   * @param serializedArgs The serialized form (may be <code>null</code> or blank)
+   * @return The args map (never <code>null</code>)
+   */
+  public static Map<String, String> deserializeArgs(
+      final String serializedArgs) {
+
+    if ((serializedArgs == null) || serializedArgs.isBlank()) {
+      return Map.of();
+    }
+    final var result = new java.util.LinkedHashMap<String, String>();
+    for (final var pair : serializedArgs.split("&")) {
+      final var separator = pair.indexOf('=');
+      result.put(
+          java.net.URLDecoder
+              .decode(pair.substring(0, separator), java.nio.charset.StandardCharsets.UTF_8),
+          java.net.URLDecoder
+              .decode(pair.substring(separator + 1), java.nio.charset.StandardCharsets.UTF_8));
+    }
+    return result;
 
   }
 

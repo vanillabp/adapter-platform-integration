@@ -4,6 +4,50 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Asynchronous task completion + spi-for-java 1.2.0 (2026-08-04)
+
+Story 22 - `ProcessService#completeTask`/`#cancelTask` are implemented; the platform
+now builds against **spi-for-java 1.2.0-SNAPSHOT** (the "Harden SPI" release: the
+message-OBJECT overloads of `startWorkflowByMessage`/`correlateMessage` were removed
+and the query methods became `default`). Application-facing:
+
+- **`completeTask(aggregate, taskId)` / `cancelTask(aggregate, taskId, errorCode)`
+  work now** for asynchronous tasks (`@TaskId` handlers). Both REQUIRE an active
+  transaction (same rule as `startWorkflow`). The BPMS holding the task is located
+  by probing the prioritized adapters (`awarenessOfTask`) - the first real use of
+  the awareness SPI. A task no adapter knows raises the new guiding
+  `io.vanillabp.spi.process.TaskNotFoundException`; a task reported COMPLETED makes
+  the operation a warned no-op (idempotent completion). While a probed BPMS is
+  UNAVAILABLE the walk retries shortly (2 x 500ms, inside the caller's transaction)
+  and then fails naming the adapter - it NEVER falls back to another adapter.
+- **`@TaskEvent` lifecycle delivery:** methods with a `@TaskEvent` parameter
+  subscribing to `CANCELED` (or `ALL`) are invoked when their open task's activity
+  is canceled (Camunda 7: boundary events/instance termination; Camunda 8 and the
+  Process-Engine-API cannot deliver cancellations - see the adapters' READMEs).
+  Methods WITHOUT a `@TaskEvent` parameter only ever receive CREATED deliveries -
+  a CANCELED delivery is skipped entirely (no transaction, no side effects).
+- **Custom outbox stores:** two new `PhaseTwoOperation`s (`COMPLETE_TASK`,
+  `CANCEL_TASK`) flow through the UNCHANGED `schedule(PhaseTwoCall)` contract -
+  stores need no code changes IF they persist `PhaseTwoCall.args()` (the task ID
+  and error code travel there; helpers
+  `PhaseTwoCall.serializeArgs`/`deserializeArgs` define the persisted encoding).
+  The platform's own stores were extended accordingly; the QUARKUS JDBC outbox
+  gained an `ARGS VARCHAR(2048)` column - **existing tables need
+  `ALTER TABLE VANILLABP_PHASE_TWO_OUTBOX ADD ARGS VARCHAR(2048)`** (or drop the
+  table and let `create-schema` recreate it). Unlike workflow starts these
+  operations persist NO adapter ID: the executing adapter is elected at dispatch
+  time by probing.
+- **Adapter authors:** `MigratableProcessService` gained four methods
+  (`completeTaskPhaseOne/Two`, `cancelTaskPhaseOne/Two`). Phase one must never
+  advance the process: embedded BPMS complete entirely in phase one (shared
+  transaction), remote BPMS only run a non-advancing existence check - ideally
+  registered as a PRE-COMMIT synchronization (Camunda 8's
+  `Camunda8PreCommitRegistrar` is the reference). Phase two is at-least-once: a
+  gone task is logged and tolerated, never an error.
+- **Removed SPI overloads:** code calling `startWorkflowByMessage(aggregate,
+  messageObject)` or `correlateMessage(aggregate, messageObject[, correlationId])`
+  has to switch to the String-`messageName` variants (spi-for-java 1.2.0).
+
 ## Task processing: core-managed transactions + adapter SPI additions (2026-08-01)
 
 Story 21a - `@WorkflowTask` methods are executed by the core (load aggregate -
@@ -343,8 +387,11 @@ command). The methods' own documented idempotency key
 (`workflowModuleId + bpmnProcessId + workflowAggregateId`) was previously
 unconstructible. Both values are forwarded from `MigrationProcessService`, which holds
 them as fields. `awarenessOfTask`/`awarenessOfWorkflow` still take only the aggregate
-id — they will gain the same two parameters in the fallback-election story (they are
-not called by the core yet).
+id — story 22 EVALUATED adding module/process parameters while implementing the three
+real adapters and decided the signatures STAY: Camunda 7 locates a task by the
+globally unique execution ID (verified against the business key - no tenant scoping
+needed), Camunda 8 by the globally unique job key, and the Process-Engine-API by the
+task ID alone. No real implementation needed the additional parameters.
 
 ## Phase-two outbox restructured (2026-07-09)
 

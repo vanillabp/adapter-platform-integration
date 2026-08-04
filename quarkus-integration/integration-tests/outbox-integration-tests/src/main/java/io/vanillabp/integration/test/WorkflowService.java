@@ -34,4 +34,21 @@ public class WorkflowService {
 
   }
 
+  public Aggregate completeTask(
+      final Aggregate aggregate,
+      final String taskId) {
+
+    return processService.completeTask(aggregate, taskId);
+
+  }
+
+  public Aggregate cancelTask(
+      final Aggregate aggregate,
+      final String taskId,
+      final String bpmnErrorCode) {
+
+    return processService.cancelTask(aggregate, taskId, bpmnErrorCode);
+
+  }
+
 }

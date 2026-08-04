@@ -48,7 +48,9 @@ public class DummyAdapterBeanRegistrar implements BeanRegistrar {
               MigratableProcessService.class,
               spec -> spec.supplier(supplierContext -> new MigratableProcessService<>(
                   adapterId, needsTwoPhaseCommit, supplierContext
-                      .beanProvider(DummyAdapterPhaseTwoListener.class))));
+                      .beanProvider(DummyAdapterPhaseTwoListener.class), supplierContext
+                          .beanProvider(
+                              io.vanillabp.adapter.dummy.springboot.processservice.DummyTaskAwarenessSource.class))));
 
           registry.registerBean(
               "DummyAdapter_DeploymentService_%s".formatted(adapterId),

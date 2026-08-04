@@ -19,4 +19,11 @@ public class TestApplication {
 
   }
 
+  @Bean
+  public SteerableTaskAwarenessSource steerableTaskAwarenessSource() {
+
+    return new SteerableTaskAwarenessSource();
+
+  }
+
 }
