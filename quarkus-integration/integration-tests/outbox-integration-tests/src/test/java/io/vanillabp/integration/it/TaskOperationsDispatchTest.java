@@ -157,6 +157,134 @@ public class TaskOperationsDispatchTest {
   }
 
   @Test
+  @DisplayName("correlateMessage dispatches phase two after the commit; a correlation id deduplicates")
+  public void correlateMessageDispatchesAfterCommit() throws Exception {
+
+    final var aggregate = startedAggregate("correlate");
+    listener.awaitInvocations(1, 10000);
+    awareness.answerWith(WorkflowAwareness.ACTIVE);
+
+    userTransaction.begin();
+    try {
+      workflowService.correlateMessage(aggregate, "PaymentReceived");
+      // no correlation id: NO idempotency key - both dispatch
+      workflowService.correlateMessage(aggregate, "PaymentReceived");
+      // with correlation id: the duplicate schedule is a no-op
+      workflowService.correlateMessage(aggregate, "ItemShipped", "item-4711");
+      workflowService.correlateMessage(aggregate, "ItemShipped", "item-4711");
+      userTransaction.commit();
+    } catch (final Exception e) {
+      userTransaction.rollback();
+      throw e;
+    }
+
+    final var deadline = System.currentTimeMillis() + 15000;
+    while (listener.getCorrelatedMessages().size() < 3) {
+      assertTrue(
+          System.currentTimeMillis() < deadline,
+          "correlations were not dispatched in time: "
+              + listener.getCorrelatedMessages());
+      Thread.sleep(50);
+    }
+    Thread.sleep(1500);
+    assertEquals(
+        2,
+        listener
+            .getCorrelatedMessages()
+            .stream()
+            .filter(entry -> entry.contains(":PaymentReceived:"))
+            .count(),
+        "without a correlation id both correlations dispatch");
+    assertEquals(
+        1,
+        listener
+            .getCorrelatedMessages()
+            .stream()
+            .filter(entry -> entry.contains(":ItemShipped:"))
+            .count(),
+        "with a correlation id the duplicate schedule is a no-op");
+    assertTrue(listener
+        .getCorrelatedMessages()
+        .contains(aggregate.getId()
+            + ":ItemShipped:item-4711"));
+
+  }
+
+  @Test
+  @DisplayName("Correlating with an unknown workflow raises the guiding WorkflowNotFoundException")
+  public void unknownWorkflowRaisesGuidingException() throws Exception {
+
+    final var aggregate = startedAggregate("correlate-unknown");
+    listener.awaitInvocations(1, 10000);
+    // awareness stays UNKNOWN_TO_BPMS
+
+    userTransaction.begin();
+    try {
+      final var exception = assertThrows(
+          io.vanillabp.spi.process.WorkflowNotFoundException.class,
+          () -> workflowService.correlateMessage(aggregate, "PaymentReceived"));
+      assertTrue(exception.getMessage().contains("PaymentReceived"));
+      assertTrue(
+          exception.getMessage().contains("startWorkflowByMessage"),
+          "expected the start-by-message hint but got: "
+              + exception.getMessage());
+    } finally {
+      userTransaction.rollback();
+    }
+
+  }
+
+  @Test
+  @DisplayName("A COMPLETED workflow makes correlateMessage a warned no-op")
+  public void completedWorkflowCorrelationIsNoOp() throws Exception {
+
+    final var aggregate = startedAggregate("correlate-completed");
+    listener.awaitInvocations(1, 10000);
+    awareness.answerWith(WorkflowAwareness.COMPLETED);
+
+    userTransaction.begin();
+    try {
+      workflowService.correlateMessage(aggregate, "PaymentReceived");
+      userTransaction.commit();
+    } catch (final Exception e) {
+      userTransaction.rollback();
+      throw e;
+    }
+
+    Thread.sleep(1500);
+    assertTrue(listener.getCorrelatedMessages().isEmpty());
+
+  }
+
+  @Test
+  @DisplayName("startWorkflowByMessage uses start semantics and dispatches phase two after the commit")
+  public void startWorkflowByMessageDispatchesAfterCommit() throws Exception {
+
+    userTransaction.begin();
+    final io.vanillabp.integration.test.Aggregate aggregate;
+    try {
+      aggregate = workflowService.startWorkflowByMessage("start-by-message", "OrderPlaced");
+      userTransaction.commit();
+    } catch (final Exception e) {
+      userTransaction.rollback();
+      throw e;
+    }
+
+    final var deadline = System.currentTimeMillis() + 15000;
+    while (listener.getStartedByMessage().isEmpty()) {
+      assertTrue(
+          System.currentTimeMillis() < deadline,
+          "start-by-message was not dispatched in time");
+      Thread.sleep(50);
+    }
+    assertEquals(
+        aggregate.getId()
+            + ":OrderPlaced",
+        listener.getStartedByMessage().getFirst());
+
+  }
+
+  @Test
   @DisplayName("A rollback leaves no completion - and an unknown task raises TaskNotFoundException")
   public void rollbackAndUnknownTask() throws Exception {
 

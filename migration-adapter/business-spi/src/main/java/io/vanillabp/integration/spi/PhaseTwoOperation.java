@@ -22,9 +22,16 @@ import java.util.Optional;
  * task is completed (or canceled) at most once, but multiple tasks of the same
  * workflow may be completed. The BPMN error code of a cancellation is NOT part of
  * the key (it is carried in {@link PhaseTwoCall#args()}).</li>
- * <li>future <i>correlateMessage</i> operations WITHOUT a correlation-id return
- * {@link Optional#empty()} - no deduplication is possible because the same message
- * may legitimately be correlated multiple times.</li>
+ * <li>{@link #CORRELATE_MESSAGE}: WITH a correlation id the key is
+ * <code>workflowModuleId|bpmnProcessId|workflowAggregateId|messageName|correlationId</code>;
+ * WITHOUT one it is {@link Optional#empty()} - no deduplication is possible
+ * because the same message may legitimately be correlated multiple times over an
+ * instance's lifetime (an at-least-once dispatch may then double-correlate; see
+ * the adapters' documentation).</li>
+ * <li>{@link #START_WORKFLOW_BY_MESSAGE}: like {@link #START_WORKFLOW}
+ * (<code>workflowModuleId|bpmnProcessId|workflowAggregateId</code>) - a workflow
+ * is started at most once per aggregate, regardless of the triggering
+ * message.</li>
  * </ul>
  */
 public enum PhaseTwoOperation {
@@ -119,6 +126,53 @@ public enum PhaseTwoOperation {
               call.bpmnProcessId(),
               call.workflowAggregateId(),
               call.args().get(PhaseTwoCall.ARG_TASK_ID)));
+    }
+  },
+
+  /**
+   * Phase two of correlating a message - see
+   * {@code MigratableProcessService#correlateMessagePhaseTwo}. The message name
+   * (and optional correlation id) travel in {@link PhaseTwoCall#args()} under
+   * {@link PhaseTwoCall#ARG_MESSAGE_NAME} / {@link PhaseTwoCall#ARG_CORRELATION_ID}.
+   * No adapter ID is persisted - the executing adapter is elected at dispatch time
+   * by probing the prioritized adapters.
+   */
+  CORRELATE_MESSAGE {
+    @Override
+    public Optional<String> idempotencyKey(
+        final PhaseTwoCall call) {
+      final var correlationId = call.args().get(PhaseTwoCall.ARG_CORRELATION_ID);
+      if (correlationId == null) {
+        // the same message may legitimately be correlated multiple times - no
+        // deduplication possible (documented at-least-once residual)
+        return Optional.empty();
+      }
+      return Optional.of(
+          "%s|%s|%s|%s|%s".formatted(
+              call.workflowModuleId(),
+              call.bpmnProcessId(),
+              call.workflowAggregateId(),
+              call.args().get(PhaseTwoCall.ARG_MESSAGE_NAME),
+              correlationId));
+    }
+  },
+
+  /**
+   * Phase two of starting a workflow BY MESSAGE - see
+   * {@code MigratableProcessService#startWorkflowByMessagePhaseTwo}. Start
+   * semantics apply: the adapter elected in phase one IS persisted with the entry
+   * and the idempotency key equals {@link #START_WORKFLOW}'s (one workflow per
+   * aggregate). The message name travels in {@link PhaseTwoCall#args()}.
+   */
+  START_WORKFLOW_BY_MESSAGE {
+    @Override
+    public Optional<String> idempotencyKey(
+        final PhaseTwoCall call) {
+      return Optional.of(
+          "%s|%s|%s".formatted(
+              call.workflowModuleId(),
+              call.bpmnProcessId(),
+              call.workflowAggregateId()));
     }
   };
 

@@ -338,4 +338,89 @@ public interface MigratableProcessService<A> {
       String taskId,
       String bpmnErrorCode);
 
+  /**
+   * Correlate a message with the workflow of the given aggregate - phase one,
+   * executed inside the caller's transaction AFTER the adapter answered
+   * {@link WorkflowAwareness#ACTIVE} for the workflow. Embedded BPMS correlate
+   * entirely here (a rollback takes the correlation with it); remote BPMS must
+   * not advance anything - at most a non-advancing check. PAYLOAD DOCTRINE: no
+   * message content is ever transmitted - the aggregate is the single source of
+   * truth; only the message name and the optional correlation id travel.
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param aggregatePersistence The persistence of the workflow-aggregate
+   * @param workflowAggregate The workflow-aggregate
+   * @param messageName The BPMN message name
+   * @param correlationId The correlation id or <code>null</code> (adapters use
+   *        the aggregate ID as the technical correlation key; the correlation id
+   *        additionally disambiguates BETWEEN waiting occurrences of the same
+   *        message)
+   */
+  void correlateMessagePhaseOne(
+      String workflowModuleId,
+      String bpmnProcessId,
+      AggregatePersistenceAware<A> aggregatePersistence,
+      A workflowAggregate,
+      String messageName,
+      String correlationId);
+
+  /**
+   * Correlate a message - phase two, dispatched through the outbox after the
+   * commit. At-least-once: WITHOUT a correlation id the entry has no idempotency
+   * key and a redelivered dispatch may double-correlate (documented); adapters
+   * use an engine-side deduplication where one exists (e.g. Camunda 8 message
+   * id). A workflow gone by dispatch time is tolerated (logged).
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param aggregatePersistence The persistence of the workflow-aggregate
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param messageName The BPMN message name
+   * @param correlationId The correlation id or <code>null</code>
+   */
+  void correlateMessagePhaseTwo(
+      String workflowModuleId,
+      String bpmnProcessId,
+      AggregatePersistenceAware<A> aggregatePersistence,
+      Object workflowAggregateId,
+      String messageName,
+      String correlationId);
+
+  /**
+   * Start a new workflow by a message start event - phase one; start semantics
+   * apply ({@link #startWorkflowPhaseOne}: embedded BPMS start entirely here,
+   * remote BPMS validate only).
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param aggregatePersistence The persistence of the workflow-aggregate
+   * @param workflowAggregate The workflow-aggregate
+   * @param messageName The BPMN message name of the message start event
+   */
+  void startWorkflowByMessagePhaseOne(
+      String workflowModuleId,
+      String bpmnProcessId,
+      AggregatePersistenceAware<A> aggregatePersistence,
+      A workflowAggregate,
+      String messageName);
+
+  /**
+   * Start a new workflow by a message start event - phase two; idempotency
+   * contract like {@link #startWorkflowPhaseTwo} (at most one workflow per
+   * aggregate).
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param aggregatePersistence The persistence of the workflow-aggregate
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param messageName The BPMN message name of the message start event
+   */
+  void startWorkflowByMessagePhaseTwo(
+      String workflowModuleId,
+      String bpmnProcessId,
+      AggregatePersistenceAware<A> aggregatePersistence,
+      Object workflowAggregateId,
+      String messageName);
+
 }

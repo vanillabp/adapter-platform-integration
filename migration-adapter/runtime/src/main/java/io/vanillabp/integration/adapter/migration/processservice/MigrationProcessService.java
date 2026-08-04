@@ -602,6 +602,188 @@ public class MigrationProcessService<A> {
 
   }
 
+  /**
+   * Correlates a message with the aggregate's workflow: the aggregate is saved,
+   * the BPMS running the workflow is located by probing
+   * {@code awarenessOfWorkflow}, and the correlation runs in phase one (embedded)
+   * or is scheduled through the outbox (remote). PAYLOAD DOCTRINE: no message
+   * content travels to the BPMS - only the message name and the optional
+   * correlation id.
+   *
+   * @param workflowAggregate The workflow aggregate
+   * @param messageName The BPMN message name
+   * @param correlationId The correlation id or <code>null</code>
+   * @return The attached workflow aggregate
+   */
+  public A correlateMessage(
+      final A workflowAggregate,
+      final String messageName,
+      final String correlationId) {
+
+    final var attachedAggregate = aggregatePersistenceSupport
+        .save(workflowAggregate);
+    final var aggregateId = aggregatePersistenceSupport
+        .getAggregateId(attachedAggregate);
+
+    final var subject = "workflow of aggregate '%s' (BPMN process '%s' of workflow module '%s')"
+        .formatted(aggregateId, bpmnProcessId, workflowModuleId);
+
+    final var location = WorkflowLocator.locate(
+        adapterProcessServices,
+        adapter -> adapter.awarenessOfWorkflow(aggregateId),
+        subject);
+
+    switch (location.awareness()) {
+      case COMPLETED -> {
+        // the workflow already ended - correlating is a no-op with warning
+        log.warn(
+            "Ignored correlating message '{}' with {}: adapter '{}' reports the workflow as "
+                + "already completed",
+            messageName,
+            subject,
+            location.adapter().getAdapterId());
+        return attachedAggregate;
+      }
+      case UNKNOWN_TO_BPMS -> throw new io.vanillabp.spi.process.WorkflowNotFoundException(
+          ("No configured BPMS knows the %s - message '%s' cannot be correlated (probed adapters, "
+              + "in prioritized order: %s)! Likely causes: the workflow was never started, was "
+              + "started through another system, or already ended long ago. To START a workflow "
+              + "by a message use startWorkflowByMessage instead.")
+              .formatted(subject, messageName, prioritizedAdapters));
+      default -> {
+        // ACTIVE - fall through
+      }
+    }
+
+    final var adapter = location.adapter();
+    adapter.correlateMessagePhaseOne(
+        workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, attachedAggregate, messageName,
+        correlationId);
+
+    if (adapter.needsTwoPhaseCommitForStartingWorkflows()) {
+      final var outbox = resolvePhaseTwoOutbox();
+      if (outbox == null) {
+        throw new IllegalStateException(
+            buildNoOutboxMessage(adapter.getAdapterId()));
+      }
+      outbox.scheduleCorrelateMessage(workflowModuleId, bpmnProcessId, aggregateId, messageName, correlationId);
+    }
+
+    return attachedAggregate;
+
+  }
+
+  /**
+   * Executes phase two of correlating a message - dispatch-time election via
+   * probing (like task operations); a workflow gone by now is a stale entry
+   * (logged, consumed).
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate (original type)
+   * @param messageName The BPMN message name
+   * @param correlationId The correlation id or <code>null</code>
+   */
+  public void correlateMessagePhaseTwo(
+      final Object workflowAggregateId,
+      final String messageName,
+      final String correlationId) {
+
+    final var subject = "workflow of aggregate '%s' (BPMN process '%s' of workflow module '%s')"
+        .formatted(workflowAggregateId, bpmnProcessId, workflowModuleId);
+
+    final var location = WorkflowLocator.locate(
+        adapterProcessServices,
+        adapter -> adapter.awarenessOfWorkflow(workflowAggregateId),
+        subject);
+
+    switch (location.awareness()) {
+      case UNKNOWN_TO_BPMS, COMPLETED -> log.warn(
+          "Skipped phase two of correlating message '{}' with {}: the workflow is gone (stale "
+              + "outbox entry); the entry is consumed",
+          messageName,
+          subject);
+      default -> location
+          .adapter()
+          .correlateMessagePhaseTwo(
+              workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, messageName,
+              correlationId);
+    }
+
+  }
+
+  /**
+   * Starts a new workflow by a message start event - start semantics like
+   * {@link #startWorkflow(Object)}: the FIRST prioritized adapter starts, its ID
+   * is persisted with the outbox entry, and a workflow is started at most once
+   * per aggregate.
+   *
+   * @param workflowAggregate The workflow aggregate
+   * @param messageName The BPMN message name of the message start event
+   * @return The attached workflow aggregate
+   */
+  public A startWorkflowByMessage(
+      final A workflowAggregate,
+      final String messageName) {
+
+    final var attachedAggregate = aggregatePersistenceSupport
+        .save(workflowAggregate);
+    final var aggregateId = aggregatePersistenceSupport
+        .getAggregateId(attachedAggregate);
+    if ((aggregateId == null) || aggregateId.toString().isBlank()) {
+      throw new IllegalStateException(
+          ("The ID of the workflow aggregate of class '%s' is null or blank after saving! The ID "
+              + "identifies the workflow in the BPMS and is part of the start's idempotency key - "
+              + "assign it before calling startWorkflowByMessage or use a generated ID.")
+              .formatted(workflowAggregateClass.getName()));
+    }
+
+    final var adapter = adapterProcessServices
+        .getFirst();
+    adapter.startWorkflowByMessagePhaseOne(
+        workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, attachedAggregate, messageName);
+
+    if (adapter.needsTwoPhaseCommitForStartingWorkflows()) {
+      final var outbox = resolvePhaseTwoOutbox();
+      if (outbox == null) {
+        throw new IllegalStateException(
+            buildNoOutboxMessage(adapter.getAdapterId()));
+      }
+      outbox.scheduleStartWorkflowByMessage(
+          workflowModuleId, bpmnProcessId, aggregateId, messageName, adapter.getAdapterId());
+    }
+
+    return attachedAggregate;
+
+  }
+
+  /**
+   * Executes phase two of starting a workflow by message - the adapter persisted
+   * with the entry is used (start semantics, no re-election).
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate (original type)
+   * @param messageName The BPMN message name
+   * @param adapterId The ID of the adapter elected in phase one
+   */
+  public void startWorkflowByMessagePhaseTwo(
+      final Object workflowAggregateId,
+      final String messageName,
+      final String adapterId) {
+
+    final var adapter = adapterProcessServices
+        .stream()
+        .filter(processService -> processService.getAdapterId().equals(adapterId))
+        .findFirst()
+        .orElseThrow(() -> new IllegalStateException(
+            ("Cannot execute phase two of starting the workflow of aggregate '%s' by message '%s': "
+                + "adapter '%s' is not (or no longer) configured for BPMN process '%s' of workflow "
+                + "module '%s'! The outbox entry is stale - restore the adapter's configuration or "
+                + "remove the entry from the outbox store.")
+                .formatted(workflowAggregateId, messageName, adapterId, bpmnProcessId, workflowModuleId)));
+
+    adapter.startWorkflowByMessagePhaseTwo(
+        workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, messageName);
+
+  }
+
   @FunctionalInterface
   private interface TaskAwarenessProbe<A> {
 

@@ -217,4 +217,66 @@ public interface PhaseTwoOutbox {
 
   }
 
+  /**
+   * Schedule phase two of correlating a message. NO adapter ID is persisted - the
+   * executing adapter is elected at dispatch time by probing (the BPMS holding
+   * the workflow instance answers). WITHOUT a correlation id the entry carries NO
+   * idempotency key - the same message may legitimately be correlated multiple
+   * times (an at-least-once dispatch may then double-correlate).
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param messageName The BPMN message name
+   * @param correlationId The correlation id or <code>null</code>
+   * @return <code>true</code> if scheduled, <code>false</code> if an entry with
+   *         the same idempotency key was already scheduled (no-op; only possible
+   *         WITH a correlation id)
+   */
+  default boolean scheduleCorrelateMessage(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Object workflowAggregateId,
+      final String messageName,
+      final String correlationId) {
+
+    final var args = new java.util.LinkedHashMap<String, String>();
+    args.put(PhaseTwoCall.ARG_MESSAGE_NAME, messageName);
+    if (correlationId != null) {
+      args.put(PhaseTwoCall.ARG_CORRELATION_ID, correlationId);
+    }
+    return schedule(
+        new PhaseTwoCall(
+            PhaseTwoOperation.CORRELATE_MESSAGE, workflowModuleId, bpmnProcessId, workflowAggregateId
+                .toString(), null, args));
+
+  }
+
+  /**
+   * Schedule phase two of starting a workflow BY MESSAGE. Start semantics: the
+   * adapter elected in phase one is persisted and used in phase two, and a
+   * workflow is started at most once per aggregate.
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param messageName The BPMN message name of the message start event
+   * @param adapterId The ID of the BPMS adapter elected in phase one
+   * @return <code>true</code> if scheduled, <code>false</code> if already
+   *         scheduled for this aggregate (no-op)
+   */
+  default boolean scheduleStartWorkflowByMessage(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Object workflowAggregateId,
+      final String messageName,
+      final String adapterId) {
+
+    return schedule(
+        new PhaseTwoCall(
+            PhaseTwoOperation.START_WORKFLOW_BY_MESSAGE, workflowModuleId, bpmnProcessId, workflowAggregateId
+                .toString(), adapterId, java.util.Map.of(PhaseTwoCall.ARG_MESSAGE_NAME, messageName)));
+
+  }
+
 }

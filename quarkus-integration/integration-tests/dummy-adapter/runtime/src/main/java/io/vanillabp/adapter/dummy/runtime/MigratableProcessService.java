@@ -74,6 +74,14 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
   public WorkflowAwareness awarenessOfWorkflow(
       final Object workflowAggregateId) {
 
+    if (taskAwarenessSources != null) {
+      return taskAwarenessSources
+          .stream()
+          .map(source -> source.awarenessOfWorkflow(adapterId, workflowAggregateId))
+          .filter(java.util.Objects::nonNull)
+          .findFirst()
+          .orElse(WorkflowAwareness.UNKNOWN_TO_BPMS);
+    }
     return WorkflowAwareness.UNKNOWN_TO_BPMS;
 
   }
@@ -213,6 +221,60 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
       phaseTwoListeners
           .stream()
           .forEach(listener -> listener.canceledUserTaskPhaseTwo(workflowAggregateId, taskId, bpmnErrorCode));
+    }
+
+  }
+
+  @Override
+  public void correlateMessagePhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate,
+      final String messageName,
+      final String correlationId) {
+
+  }
+
+  @Override
+  public void correlateMessagePhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String messageName,
+      final String correlationId) {
+
+    if (phaseTwoListeners != null) {
+      phaseTwoListeners
+          .stream()
+          .forEach(listener -> listener.correlatedMessagePhaseTwo(workflowAggregateId, messageName, correlationId));
+    }
+
+  }
+
+  @Override
+  public void startWorkflowByMessagePhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate,
+      final String messageName) {
+
+  }
+
+  @Override
+  public void startWorkflowByMessagePhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String messageName) {
+
+    if (phaseTwoListeners != null) {
+      phaseTwoListeners
+          .stream()
+          .forEach(listener -> listener.startedWorkflowByMessagePhaseTwo(workflowAggregateId, messageName));
     }
 
   }

@@ -102,6 +102,16 @@ public final class PhaseTwoRouter {
               workflowAggregateId,
               call.args().get(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID),
               call.args().get(io.vanillabp.integration.spi.PhaseTwoCall.ARG_BPMN_ERROR_CODE));
+      case CORRELATE_MESSAGE -> processService
+          .correlateMessagePhaseTwo(
+              workflowAggregateId,
+              call.args().get(io.vanillabp.integration.spi.PhaseTwoCall.ARG_MESSAGE_NAME),
+              call.args().get(io.vanillabp.integration.spi.PhaseTwoCall.ARG_CORRELATION_ID));
+      case START_WORKFLOW_BY_MESSAGE -> processService
+          .startWorkflowByMessagePhaseTwo(
+              workflowAggregateId,
+              call.args().get(io.vanillabp.integration.spi.PhaseTwoCall.ARG_MESSAGE_NAME),
+              call.adapterId());
     }
 
   }

@@ -79,8 +79,19 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
   public WorkflowAwareness awarenessOfWorkflow(
       final Object workflowAggregateId) {
 
-    log.info("Dummy-Adapter: Checking awareness of workflow of workflow aggregate '{}'", workflowAggregateId);
+    log.info(
+        "Dummy-Adapter[{}]: Checking awareness of workflow of workflow aggregate '{}'",
+        adapterId,
+        workflowAggregateId);
 
+    if (taskAwarenessSources != null) {
+      return taskAwarenessSources
+          .stream()
+          .map(source -> source.awarenessOfWorkflow(adapterId, workflowAggregateId))
+          .filter(java.util.Objects::nonNull)
+          .findFirst()
+          .orElse(WorkflowAwareness.UNKNOWN_TO_BPMS);
+    }
     return WorkflowAwareness.UNKNOWN_TO_BPMS;
 
   }
@@ -303,6 +314,96 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
       phaseTwoListeners
           .stream()
           .forEach(listener -> listener.canceledUserTaskPhaseTwo(workflowAggregateId, taskId, bpmnErrorCode));
+    }
+
+  }
+
+  @Override
+  public void correlateMessagePhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate,
+      final String messageName,
+      final String correlationId) {
+
+    log.info(
+        "Dummy-Adapter[{}]: Correlating message '{}' (phase one, correlation id '{}') of BPMN process '{}' of "
+            + "workflow module '{}'",
+        adapterId,
+        messageName,
+        correlationId,
+        bpmnProcessId,
+        workflowModuleId);
+
+  }
+
+  @Override
+  public void correlateMessagePhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String messageName,
+      final String correlationId) {
+
+    log.info(
+        "Dummy-Adapter[{}]: Correlating message '{}' (phase two, correlation id '{}') of BPMN process '{}' of "
+            + "workflow module '{}' for aggregate '{}'",
+        adapterId,
+        messageName,
+        correlationId,
+        bpmnProcessId,
+        workflowModuleId,
+        workflowAggregateId);
+
+    if (phaseTwoListeners != null) {
+      phaseTwoListeners
+          .stream()
+          .forEach(listener -> listener.correlatedMessagePhaseTwo(workflowAggregateId, messageName, correlationId));
+    }
+
+  }
+
+  @Override
+  public void startWorkflowByMessagePhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate,
+      final String messageName) {
+
+    log.info(
+        "Dummy-Adapter[{}]: Starting workflow by message '{}' (phase one) of BPMN process '{}' of workflow "
+            + "module '{}'",
+        adapterId,
+        messageName,
+        bpmnProcessId,
+        workflowModuleId);
+
+  }
+
+  @Override
+  public void startWorkflowByMessagePhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String messageName) {
+
+    log.info(
+        "Dummy-Adapter[{}]: Starting workflow by message '{}' (phase two) of BPMN process '{}' of workflow "
+            + "module '{}' for aggregate '{}'",
+        adapterId,
+        messageName,
+        bpmnProcessId,
+        workflowModuleId,
+        workflowAggregateId);
+
+    if (phaseTwoListeners != null) {
+      phaseTwoListeners
+          .stream()
+          .forEach(listener -> listener.startedWorkflowByMessagePhaseTwo(workflowAggregateId, messageName));
     }
 
   }

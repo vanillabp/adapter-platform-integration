@@ -150,6 +150,136 @@ public class TaskOperationsDispatchTest {
   }
 
   @Test
+  @DisplayName("correlateMessage dispatches phase two after the commit (with and without correlation id)")
+  public void correlateMessageDispatchesAfterCommit() throws Exception {
+
+    final var aggregate = startedAggregate("correlate");
+    awareness.answerWith(WorkflowAwareness.ACTIVE);
+
+    transactionTemplate.executeWithoutResult(status -> {
+      processService.correlateMessage(aggregate, "PaymentReceived");
+      processService.correlateMessage(aggregate, "ItemShipped", "item-4711");
+    });
+
+    final var deadline = System.currentTimeMillis() + 10000;
+    while (listener.getCorrelatedMessages().size() < 2) {
+      assertTrue(
+          System.currentTimeMillis() < deadline,
+          "correlations were not dispatched in time: "
+              + listener.getCorrelatedMessages());
+      Thread.sleep(50);
+    }
+    assertTrue(listener
+        .getCorrelatedMessages()
+        .contains(aggregate.getId()
+            + ":PaymentReceived:null"));
+    assertTrue(listener
+        .getCorrelatedMessages()
+        .contains(aggregate.getId()
+            + ":ItemShipped:item-4711"));
+
+  }
+
+  @Test
+  @DisplayName("The same message WITHOUT a correlation id may be scheduled twice; WITH one it deduplicates")
+  public void correlationIdempotency() throws Exception {
+
+    final var aggregate = startedAggregate("correlate-dedup");
+    awareness.answerWith(WorkflowAwareness.ACTIVE);
+
+    transactionTemplate.executeWithoutResult(status -> {
+      // no correlation id: NO idempotency key - both dispatch
+      processService.correlateMessage(aggregate, "Ping");
+      processService.correlateMessage(aggregate, "Ping");
+      // with correlation id: second schedule is a no-op
+      processService.correlateMessage(aggregate, "Pong", "p-1");
+      processService.correlateMessage(aggregate, "Pong", "p-1");
+    });
+
+    final var deadline = System.currentTimeMillis() + 10000;
+    while (listener.getCorrelatedMessages().size() < 3) {
+      assertTrue(
+          System.currentTimeMillis() < deadline,
+          "correlations were not dispatched in time: "
+              + listener.getCorrelatedMessages());
+      Thread.sleep(50);
+    }
+    Thread.sleep(1500);
+    final var pings = listener
+        .getCorrelatedMessages()
+        .stream()
+        .filter(entry -> entry.contains(":Ping:"))
+        .count();
+    final var pongs = listener
+        .getCorrelatedMessages()
+        .stream()
+        .filter(entry -> entry.contains(":Pong:"))
+        .count();
+    assertEquals(2, pings, "without a correlation id both correlations dispatch");
+    assertEquals(1, pongs, "with a correlation id the duplicate schedule is a no-op");
+
+  }
+
+  @Test
+  @DisplayName("Correlating with an unknown workflow raises the guiding WorkflowNotFoundException")
+  public void unknownWorkflowRaisesGuidingException() {
+
+    final var aggregate = startedAggregate("correlate-unknown");
+    // awareness stays UNKNOWN_TO_BPMS
+
+    final var exception = assertThrowsExactly(
+        io.vanillabp.spi.process.WorkflowNotFoundException.class,
+        () -> transactionTemplate.executeWithoutResult(status -> processService
+            .correlateMessage(aggregate, "PaymentReceived")));
+    assertTrue(exception.getMessage().contains("PaymentReceived"));
+    assertTrue(
+        exception.getMessage().contains("startWorkflowByMessage"),
+        "expected the start-by-message hint but got: "
+            + exception.getMessage());
+
+  }
+
+  @Test
+  @DisplayName("A COMPLETED workflow makes correlateMessage a warned no-op")
+  public void completedWorkflowCorrelationIsNoOp() throws Exception {
+
+    final var aggregate = startedAggregate("correlate-completed");
+    awareness.answerWith(WorkflowAwareness.COMPLETED);
+
+    transactionTemplate.executeWithoutResult(status -> processService
+        .correlateMessage(aggregate, "PaymentReceived"));
+
+    Thread.sleep(1500);
+    assertTrue(listener.getCorrelatedMessages().isEmpty());
+
+  }
+
+  @Test
+  @DisplayName("startWorkflowByMessage uses start semantics: first adapter, persisted adapter id")
+  public void startWorkflowByMessageDispatchesAfterCommit() throws Exception {
+
+    final var attached = transactionTemplate.execute(status -> {
+      final var aggregate = new Aggregate();
+      aggregate.setContent("start-by-message");
+      return processService.startWorkflowByMessage(aggregate, "OrderPlaced");
+    });
+    assertNotNull(attached);
+
+    final var deadline = System.currentTimeMillis() + 10000;
+    while (listener.getStartedByMessage().isEmpty()) {
+      assertTrue(
+          System.currentTimeMillis() < deadline,
+          "start-by-message was not dispatched in time");
+      Thread.sleep(50);
+    }
+    assertEquals(
+        attached.getId()
+            + ":OrderPlaced",
+        listener.getStartedByMessage().getFirst());
+
+  }
+
+  @Test
   @DisplayName("A rollback leaves no outbox entry - phase two of the completion never runs")
   public void rollbackLeavesNoCompletion() throws Exception {
 

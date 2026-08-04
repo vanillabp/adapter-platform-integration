@@ -106,6 +106,47 @@ public class RecordingPhaseTwoListener implements DummyAdapterPhaseTwoListener {
 
   }
 
+  private final List<String> correlatedMessages = new CopyOnWriteArrayList<>();
+
+  private final List<String> startedByMessage = new CopyOnWriteArrayList<>();
+
+  @Override
+  public void correlatedMessagePhaseTwo(
+      final Object workflowAggregateId,
+      final String messageName,
+      final String correlationId) {
+
+    correlatedMessages.add(workflowAggregateId
+        + ":"
+        + messageName
+        + ":"
+        + correlationId);
+
+  }
+
+  @Override
+  public void startedWorkflowByMessagePhaseTwo(
+      final Object workflowAggregateId,
+      final String messageName) {
+
+    startedByMessage.add(workflowAggregateId
+        + ":"
+        + messageName);
+
+  }
+
+  public List<String> getCorrelatedMessages() {
+
+    return List.copyOf(correlatedMessages);
+
+  }
+
+  public List<String> getStartedByMessage() {
+
+    return List.copyOf(startedByMessage);
+
+  }
+
   public List<String> getCompletedTasks() {
 
     return List.copyOf(completedTasks);
@@ -188,6 +229,8 @@ public class RecordingPhaseTwoListener implements DummyAdapterPhaseTwoListener {
     canceledTasks.clear();
     completedUserTasks.clear();
     canceledUserTasks.clear();
+    correlatedMessages.clear();
+    startedByMessage.clear();
     failuresRemaining.set(0);
 
   }

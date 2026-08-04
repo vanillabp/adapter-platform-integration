@@ -103,7 +103,7 @@ public interface WorkflowTaskInvoker {
       String bpmnProcessId,
       String workflowAggregateId,
       String propertyName);
-  
+
   /**
    * Whether a <code>&#64;WorkflowTask</code> method is registered for the given
    * task definition (or BPMN activity ID) - used for OPTIONAL notifications
@@ -120,7 +120,7 @@ public interface WorkflowTaskInvoker {
       String workflowModuleId,
       String bpmnProcessId,
       String taskDefinitionOrActivityId);
-  
+
   /**
    * The name of the workflow aggregate's ID property for the given BPMN process -
    * used by remote BPMS without a business-key concept: they store the aggregate's

@@ -47,6 +47,21 @@ public record PhaseTwoCall(
    */
   public static final String ARG_BPMN_ERROR_CODE = "bpmnErrorCode";
 
+  /**
+   * The {@link #args()} key carrying the message name of
+   * {@link PhaseTwoOperation#CORRELATE_MESSAGE} /
+   * {@link PhaseTwoOperation#START_WORKFLOW_BY_MESSAGE} calls. Part of the
+   * persisted contract - never change the literal.
+   */
+  public static final String ARG_MESSAGE_NAME = "messageName";
+
+  /**
+   * The {@link #args()} key carrying the optional correlation id of
+   * {@link PhaseTwoOperation#CORRELATE_MESSAGE} calls. Part of the persisted
+   * contract - never change the literal.
+   */
+  public static final String ARG_CORRELATION_ID = "correlationId";
+
   public PhaseTwoCall {
     Objects.requireNonNull(operation, "operation must not be null");
     Objects.requireNonNull(workflowModuleId, "workflowModuleId must not be null");

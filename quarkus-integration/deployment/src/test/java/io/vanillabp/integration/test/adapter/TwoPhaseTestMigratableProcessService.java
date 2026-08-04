@@ -148,4 +148,42 @@ public class TwoPhaseTestMigratableProcessService implements MigratableProcessSe
       final String bpmnErrorCode) {
   }
 
+  @Override
+  public void correlateMessagePhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<Object> aggregatePersistence,
+      final Object workflowAggregate,
+      final String messageName,
+      final String correlationId) {
+  }
+
+  @Override
+  public void correlateMessagePhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<Object> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String messageName,
+      final String correlationId) {
+  }
+
+  @Override
+  public void startWorkflowByMessagePhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<Object> aggregatePersistence,
+      final Object workflowAggregate,
+      final String messageName) {
+  }
+
+  @Override
+  public void startWorkflowByMessagePhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<Object> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String messageName) {
+  }
+
 }

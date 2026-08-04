@@ -67,4 +67,28 @@ public interface DummyAdapterPhaseTwoListener {
       final String bpmnErrorCode) {
   }
 
+  /**
+   * Called whenever phase two of correlating a message is executed.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param messageName The BPMN message name
+   * @param correlationId The correlation id or <code>null</code>
+   */
+  default void correlatedMessagePhaseTwo(
+      final Object workflowAggregateId,
+      final String messageName,
+      final String correlationId) {
+  }
+
+  /**
+   * Called whenever phase two of starting a workflow by message is executed.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param messageName The BPMN message name
+   */
+  default void startedWorkflowByMessagePhaseTwo(
+      final Object workflowAggregateId,
+      final String messageName) {
+  }
+
 }

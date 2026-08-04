@@ -51,6 +51,33 @@ public class WorkflowService {
 
   }
 
+  public Aggregate correlateMessage(
+      final Aggregate aggregate,
+      final String messageName) {
+
+    return processService.correlateMessage(aggregate, messageName);
+
+  }
+
+  public Aggregate correlateMessage(
+      final Aggregate aggregate,
+      final String messageName,
+      final String correlationId) {
+
+    return processService.correlateMessage(aggregate, messageName, correlationId);
+
+  }
+
+  public Aggregate startWorkflowByMessage(
+      final String content,
+      final String messageName) {
+
+    final var aggregate = new Aggregate();
+    aggregate.setContent(content);
+    return processService.startWorkflowByMessage(aggregate, messageName);
+
+  }
+
   public Aggregate completeUserTask(
       final Aggregate aggregate,
       final String taskId) {

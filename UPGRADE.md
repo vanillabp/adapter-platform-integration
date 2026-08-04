@@ -4,6 +4,42 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Message correlation + start-by-message (2026-08-04)
+
+Story 23 - `ProcessService#correlateMessage(aggregate, messageName[, correlationId])`
+and `#startWorkflowByMessage(aggregate, messageName)` are implemented.
+Application-facing:
+
+- **Payload doctrine (codified):** message CONTENT never travels to the BPMS - the
+  aggregate is the single source of truth. Correlation transports the message name
+  and the optional correlation id, nothing else; start-by-message additionally sets
+  only the technical aggregate-ID variable.
+- **Correlation targets the BPMS the instance runs in** (probing
+  `awarenessOfWorkflow` through the `WorkflowLocator`); a workflow no adapter knows
+  raises the guiding `WorkflowNotFoundException` (hinting at
+  `startWorkflowByMessage`); a COMPLETED workflow makes correlating a warned no-op.
+  Start-by-message uses START semantics: first-priority adapter, its ID persisted
+  with the outbox entry, at most one workflow per aggregate.
+- **Idempotency (persisted contract):** WITH a correlation id the outbox entry's
+  key is `module|process|aggregateId|messageName|correlationId` (duplicate
+  schedules are no-ops; Camunda 8 additionally deduplicates redeliveries
+  engine-side via the message id); WITHOUT one there is NO key - the same message
+  may legitimately be correlated multiple times, and an at-least-once redelivery
+  may double-correlate (documented per adapter).
+- **Correlation-id semantics per adapter:** the technical correlation key is the
+  AGGREGATE ID by default. Camunda 7 disambiguates BETWEEN waiting occurrences via
+  the V1 local-variable convention `<primary bpmnProcessId>-<messageName>`;
+  Camunda 8 uses the correlation id AS the correlation key (the model's
+  subscription must then reference the matching variable).
+- **Camunda 8 subscription wiring:** `wireBpmn` INJECTS the
+  `zeebe:subscription correlationKey` expression `=<aggregate-ID variable>` into
+  message subscriptions lacking one - message catch events correlate via the
+  aggregate ID without manual model tweaks; existing expressions stay untouched
+  (V1 models deploy byte-identically).
+- **Adapter authors:** `MigratableProcessService` gained
+  `correlateMessagePhaseOne/Two` and `startWorkflowByMessagePhaseOne/Two`;
+  `awarenessOfWorkflow` is now called by the core (correlation probing).
+
 ## User tasks (2026-08-04)
 
 Story 24 - `ProcessService#completeUserTask`/`#cancelUserTask` are implemented and

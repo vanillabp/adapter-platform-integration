@@ -321,6 +321,46 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
 
   }
 
+  @Override
+  public A correlateMessage(
+      final A workflowAggregate,
+      final String messageName) {
+
+    if (noTransactionIsActive()) {
+      throw newMissingTransactionException();
+    }
+
+    return migrationProcessService.correlateMessage(workflowAggregate, messageName, null);
+
+  }
+
+  @Override
+  public A correlateMessage(
+      final A workflowAggregate,
+      final String messageName,
+      final String correlationId) {
+
+    if (noTransactionIsActive()) {
+      throw newMissingTransactionException();
+    }
+
+    return migrationProcessService.correlateMessage(workflowAggregate, messageName, correlationId);
+
+  }
+
+  @Override
+  public A startWorkflowByMessage(
+      final A workflowAggregate,
+      final String messageName) {
+
+    if (noTransactionIsActive()) {
+      throw newMissingTransactionException();
+    }
+
+    return migrationProcessService.startWorkflowByMessage(workflowAggregate, messageName);
+
+  }
+
   @SuppressWarnings("unchecked")
   private AggregatePersistenceAware<A> getAggregatePersistence() {
 

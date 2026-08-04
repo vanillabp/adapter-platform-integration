@@ -50,25 +50,6 @@ public abstract class ProcessServiceBase<A> implements ProcessService<A> {
   }
 
   @Override
-  public A correlateMessage(
-      final A workflowAggregate,
-      final String messageName) {
-
-    throw notYetSupported("correlateMessage");
-
-  }
-
-  @Override
-  public A correlateMessage(
-      final A workflowAggregate,
-      final String messageName,
-      final String correlationId) {
-
-    throw notYetSupported("correlateMessage");
-
-  }
-
-  @Override
   public A completeUserTask(
       final A workflowAggregate,
       final String taskId) {

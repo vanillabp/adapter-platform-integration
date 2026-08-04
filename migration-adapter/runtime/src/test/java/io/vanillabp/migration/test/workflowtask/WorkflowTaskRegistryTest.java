@@ -413,6 +413,44 @@ public class WorkflowTaskRegistryTest {
           final String bpmnErrorCode) {
       }
 
+      @Override
+      public void correlateMessagePhaseOne(
+          final String workflowModuleId,
+          final String bpmnProcessId,
+          final AggregatePersistenceAware<Aggregate> aggregatePersistence,
+          final Aggregate workflowAggregate,
+          final String messageName,
+          final String correlationId) {
+      }
+
+      @Override
+      public void correlateMessagePhaseTwo(
+          final String workflowModuleId,
+          final String bpmnProcessId,
+          final AggregatePersistenceAware<Aggregate> aggregatePersistence,
+          final Object workflowAggregateId,
+          final String messageName,
+          final String correlationId) {
+      }
+
+      @Override
+      public void startWorkflowByMessagePhaseOne(
+          final String workflowModuleId,
+          final String bpmnProcessId,
+          final AggregatePersistenceAware<Aggregate> aggregatePersistence,
+          final Aggregate workflowAggregate,
+          final String messageName) {
+      }
+
+      @Override
+      public void startWorkflowByMessagePhaseTwo(
+          final String workflowModuleId,
+          final String bpmnProcessId,
+          final AggregatePersistenceAware<Aggregate> aggregatePersistence,
+          final Object workflowAggregateId,
+          final String messageName) {
+      }
+
     };
     return new MigrationProcessService<>(
         MODULE, PROCESS, Aggregate.class, properties, persistence, List.of(adapterProcessService), null);
@@ -1164,6 +1202,44 @@ public class WorkflowTaskRegistryTest {
         final Object workflowAggregateId,
         final String taskId,
         final String bpmnErrorCode) {
+    }
+
+    @Override
+    public void correlateMessagePhaseOne(
+        final String workflowModuleId,
+        final String bpmnProcessId,
+        final AggregatePersistenceAware<T> aggregatePersistence,
+        final T workflowAggregate,
+        final String messageName,
+        final String correlationId) {
+    }
+
+    @Override
+    public void correlateMessagePhaseTwo(
+        final String workflowModuleId,
+        final String bpmnProcessId,
+        final AggregatePersistenceAware<T> aggregatePersistence,
+        final Object workflowAggregateId,
+        final String messageName,
+        final String correlationId) {
+    }
+
+    @Override
+    public void startWorkflowByMessagePhaseOne(
+        final String workflowModuleId,
+        final String bpmnProcessId,
+        final AggregatePersistenceAware<T> aggregatePersistence,
+        final T workflowAggregate,
+        final String messageName) {
+    }
+
+    @Override
+    public void startWorkflowByMessagePhaseTwo(
+        final String workflowModuleId,
+        final String bpmnProcessId,
+        final AggregatePersistenceAware<T> aggregatePersistence,
+        final Object workflowAggregateId,
+        final String messageName) {
     }
 
   }
