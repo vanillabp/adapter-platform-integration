@@ -25,4 +25,22 @@ public interface DummyTaskAwarenessSource {
       Object workflowAggregateId,
       String taskId);
 
+  /**
+   * The awareness the dummy adapter reports for a USER task - defaults to the
+   * service-task answer.
+   *
+   * @param adapterId The dummy adapter's ID
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param taskId The user task's ID
+   * @return The awareness or <code>null</code> to let another source answer
+   */
+  default WorkflowAwareness awarenessOfUserTask(
+      final String adapterId,
+      final Object workflowAggregateId,
+      final String taskId) {
+
+    return awarenessOfTask(adapterId, workflowAggregateId, taskId);
+
+  }
+
 }

@@ -121,6 +121,42 @@ public class TaskOperationsDispatchTest {
   }
 
   @Test
+  @DisplayName("completeUserTask and cancelUserTask dispatch phase two after the commit")
+  public void userTaskOperationsDispatchAfterCommit() throws Exception {
+
+    final var aggregate = startedAggregate("user-task-ops");
+    listener.awaitInvocations(1, 10000);
+    awareness.answerWith(WorkflowAwareness.ACTIVE);
+
+    userTransaction.begin();
+    try {
+      workflowService.completeUserTask(aggregate, "utask-91");
+      workflowService.cancelUserTask(aggregate, "utask-92", "APPROVAL_WITHDRAWN");
+      userTransaction.commit();
+    } catch (final Exception e) {
+      userTransaction.rollback();
+      throw e;
+    }
+
+    final var deadline = System.currentTimeMillis() + 15000;
+    while (listener.getCompletedUserTasks().isEmpty() || listener.getCanceledUserTasks().isEmpty()) {
+      assertTrue(
+          System.currentTimeMillis() < deadline,
+          "user-task operations were not dispatched in time");
+      Thread.sleep(50);
+    }
+    assertEquals(
+        aggregate.getId()
+            + ":utask-91",
+        listener.getCompletedUserTasks().getFirst());
+    assertEquals(
+        aggregate.getId()
+            + ":utask-92:APPROVAL_WITHDRAWN",
+        listener.getCanceledUserTasks().getFirst());
+
+  }
+
+  @Test
   @DisplayName("A rollback leaves no completion - and an unknown task raises TaskNotFoundException")
   public void rollbackAndUnknownTask() throws Exception {
 

@@ -57,6 +57,21 @@ public interface MigratableProcessService<A> {
       Object workflowAggregateId);
 
   /**
+   * Determine whether the target BPMS is aware of the given USER task. Same
+   * contract as {@link #awarenessOfTask(Object, String)} - user tasks have their
+   * own probe because their IDs live in a different namespace than service-task
+   * IDs (e.g. Camunda 7 task ID vs. execution ID, Camunda 8 user-task key vs. job
+   * key).
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate the task belongs to
+   * @param taskId The user task's ID
+   * @return The BPMS' awareness of the user task
+   */
+  WorkflowAwareness awarenessOfUserTask(
+      Object workflowAggregateId,
+      String taskId);
+
+  /**
    * @return Whether the adapter needs a local transaction for starting a workflow properly.
    */
   boolean needsTwoPhaseCommitForStartingWorkflows();
@@ -243,6 +258,79 @@ public interface MigratableProcessService<A> {
    * @param bpmnErrorCode The error code to be caught by BPMN error boundary events
    */
   void cancelTaskPhaseTwo(
+      String workflowModuleId,
+      String bpmnProcessId,
+      AggregatePersistenceAware<A> aggregatePersistence,
+      Object workflowAggregateId,
+      String taskId,
+      String bpmnErrorCode);
+
+  /**
+   * Complete a USER task - phase one, same transactional contract as
+   * {@link #completeTaskPhaseOne} (embedded: complete entirely here; remote:
+   * non-advancing existence check only).
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param aggregatePersistence The persistence of the workflow-aggregate
+   * @param workflowAggregate The workflow-aggregate
+   * @param taskId The ID of the user task to complete
+   */
+  void completeUserTaskPhaseOne(
+      String workflowModuleId,
+      String bpmnProcessId,
+      AggregatePersistenceAware<A> aggregatePersistence,
+      A workflowAggregate,
+      String taskId);
+
+  /**
+   * Complete a USER task - phase two, same idempotency contract as
+   * {@link #completeTaskPhaseTwo} (at-least-once; a gone task is tolerated).
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param aggregatePersistence The persistence of the workflow-aggregate
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param taskId The ID of the user task to complete
+   */
+  void completeUserTaskPhaseTwo(
+      String workflowModuleId,
+      String bpmnProcessId,
+      AggregatePersistenceAware<A> aggregatePersistence,
+      Object workflowAggregateId,
+      String taskId);
+
+  /**
+   * Cancel a USER task by BPMN error - phase one, same transactional contract as
+   * {@link #cancelTaskPhaseOne}.
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param aggregatePersistence The persistence of the workflow-aggregate
+   * @param workflowAggregate The workflow-aggregate
+   * @param taskId The ID of the user task to cancel
+   * @param bpmnErrorCode The error code to be caught by BPMN error boundary events
+   */
+  void cancelUserTaskPhaseOne(
+      String workflowModuleId,
+      String bpmnProcessId,
+      AggregatePersistenceAware<A> aggregatePersistence,
+      A workflowAggregate,
+      String taskId,
+      String bpmnErrorCode);
+
+  /**
+   * Cancel a USER task by BPMN error - phase two, same idempotency contract as
+   * {@link #cancelTaskPhaseTwo}.
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param aggregatePersistence The persistence of the workflow-aggregate
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param taskId The ID of the user task to cancel
+   * @param bpmnErrorCode The error code to be caught by BPMN error boundary events
+   */
+  void cancelUserTaskPhaseTwo(
       String workflowModuleId,
       String bpmnProcessId,
       AggregatePersistenceAware<A> aggregatePersistence,

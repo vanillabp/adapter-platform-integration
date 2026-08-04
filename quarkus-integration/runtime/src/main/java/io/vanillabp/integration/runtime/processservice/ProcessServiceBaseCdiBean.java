@@ -294,6 +294,33 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
 
   }
 
+  @Override
+  public A completeUserTask(
+      final A workflowAggregate,
+      final String taskId) {
+
+    if (noTransactionIsActive()) {
+      throw newMissingTransactionException();
+    }
+
+    return migrationProcessService.completeUserTask(workflowAggregate, taskId);
+
+  }
+
+  @Override
+  public A cancelUserTask(
+      final A workflowAggregate,
+      final String taskId,
+      final String bpmnErrorCode) {
+
+    if (noTransactionIsActive()) {
+      throw newMissingTransactionException();
+    }
+
+    return migrationProcessService.cancelUserTask(workflowAggregate, taskId, bpmnErrorCode);
+
+  }
+
   @SuppressWarnings("unchecked")
   private AggregatePersistenceAware<A> getAggregatePersistence() {
 

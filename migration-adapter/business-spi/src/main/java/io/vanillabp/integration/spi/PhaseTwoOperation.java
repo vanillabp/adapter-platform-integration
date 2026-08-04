@@ -83,6 +83,43 @@ public enum PhaseTwoOperation {
               call.workflowAggregateId(),
               call.args().get(PhaseTwoCall.ARG_TASK_ID)));
     }
+  },
+
+  /**
+   * Phase two of completing a USER task - see
+   * {@code MigratableProcessService#completeUserTaskPhaseTwo}. Same shape as
+   * {@link #COMPLETE_TASK} (task ID in {@link PhaseTwoCall#ARG_TASK_ID}, no
+   * adapter ID persisted).
+   */
+  COMPLETE_USER_TASK {
+    @Override
+    public Optional<String> idempotencyKey(
+        final PhaseTwoCall call) {
+      return Optional.of(
+          "%s|%s|%s|%s".formatted(
+              call.workflowModuleId(),
+              call.bpmnProcessId(),
+              call.workflowAggregateId(),
+              call.args().get(PhaseTwoCall.ARG_TASK_ID)));
+    }
+  },
+
+  /**
+   * Phase two of canceling a USER task by BPMN error - see
+   * {@code MigratableProcessService#cancelUserTaskPhaseTwo}. Same shape as
+   * {@link #CANCEL_TASK}.
+   */
+  CANCEL_USER_TASK {
+    @Override
+    public Optional<String> idempotencyKey(
+        final PhaseTwoCall call) {
+      return Optional.of(
+          "%s|%s|%s|%s".formatted(
+              call.workflowModuleId(),
+              call.bpmnProcessId(),
+              call.workflowAggregateId(),
+              call.args().get(PhaseTwoCall.ARG_TASK_ID)));
+    }
   };
 
   /**

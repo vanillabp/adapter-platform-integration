@@ -4,6 +4,42 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## User tasks (2026-08-04)
+
+Story 24 - `ProcessService#completeUserTask`/`#cancelUserTask` are implemented and
+`@WorkflowTask` methods may be wired to BPMN USER tasks as OPTIONAL notification
+handlers. Application-facing:
+
+- **User-task task definitions by convention:** Camunda 7 - the task's
+  `camunda:formKey`; Camunda 8 and the Process-Engine-API - the
+  `zeebe:formDefinition` EXTERNAL form reference (the V1 conventions). The handler
+  receives `CREATED` when the task shows up (with the task's ID as `@TaskId` - the
+  handle for `completeUserTask`/`cancelUserTask`) and - where the BPMS can deliver
+  it - `CANCELED` when the task's activity is canceled (C7: yes; C8: yes via the
+  V1-compatible `canceling` task listener; PEA: no - see the adapter READMEs).
+- **User-task handlers are OPTIONAL:** a user task WITHOUT a matching
+  `@WorkflowTask` method does not fail the wiring validation (it is simply
+  processed through forms/task lists); a matching method still counts as wired.
+  Notification handlers must NOT throw `TaskException` (there is nothing to
+  complete by BPMN error - a guiding error explains this).
+- **`completeUserTask`/`cancelUserTask`** follow story 22's flow: active
+  transaction required, adapter elected by probing (`awarenessOfUserTask`),
+  embedded BPMS execute in phase one, remote BPMS after the commit via the outbox
+  (operations `COMPLETE_USER_TASK`/`CANCEL_USER_TASK` - stores transporting
+  `PhaseTwoCall.args()` need NO changes). LIMITATION: `cancelUserTask` is
+  UNSUPPORTED on Camunda 8.8 (the engine has no command to cancel a
+  Camunda-managed user task by BPMN error; a guiding error explains it - expected
+  to arrive with the 8.10 listener support).
+- **V1 BPMN compatibility (Camunda 8):** the adapter adds the SAME
+  `zeebe:taskListener`s as V1 (`creating`/`canceling`, type
+  `io.vanillabp.userTask:<external form reference>`, `retries="0"`, same insertion
+  order) - upgrading a V1 application produces a byte-identical BPMN, so no new
+  process version is deployed.
+- **Adapter authors:** `MigratableProcessService` gained `awarenessOfUserTask` and
+  the four user-task phase methods; `BpmnTaskSpec` gained the `optional` component
+  (`BpmnTaskSpec.userTask(...)` factory); `WorkflowTaskInvoker` gained
+  `workflowTaskHandlerExists(...)` for optional notifications.
+
 ## Asynchronous task completion + spi-for-java 1.2.0 (2026-08-04)
 
 Story 22 - `ProcessService#completeTask`/`#cancelTask` are implemented; the platform

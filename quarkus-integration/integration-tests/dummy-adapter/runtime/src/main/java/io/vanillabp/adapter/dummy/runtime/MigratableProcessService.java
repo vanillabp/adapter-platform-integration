@@ -54,6 +54,23 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
   }
 
   @Override
+  public WorkflowAwareness awarenessOfUserTask(
+      final Object workflowAggregateId,
+      final String taskId) {
+
+    if (taskAwarenessSources != null) {
+      return taskAwarenessSources
+          .stream()
+          .map(source -> source.awarenessOfUserTask(adapterId, workflowAggregateId, taskId))
+          .filter(java.util.Objects::nonNull)
+          .findFirst()
+          .orElse(WorkflowAwareness.UNKNOWN_TO_BPMS);
+    }
+    return WorkflowAwareness.UNKNOWN_TO_BPMS;
+
+  }
+
+  @Override
   public WorkflowAwareness awarenessOfWorkflow(
       final Object workflowAggregateId) {
 
@@ -142,6 +159,60 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
       phaseTwoListeners
           .stream()
           .forEach(listener -> listener.canceledTaskPhaseTwo(workflowAggregateId, taskId, bpmnErrorCode));
+    }
+
+  }
+
+  @Override
+  public void completeUserTaskPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate,
+      final String taskId) {
+
+  }
+
+  @Override
+  public void completeUserTaskPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String taskId) {
+
+    if (phaseTwoListeners != null) {
+      phaseTwoListeners
+          .stream()
+          .forEach(listener -> listener.completedUserTaskPhaseTwo(workflowAggregateId, taskId));
+    }
+
+  }
+
+  @Override
+  public void cancelUserTaskPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate,
+      final String taskId,
+      final String bpmnErrorCode) {
+
+  }
+
+  @Override
+  public void cancelUserTaskPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String taskId,
+      final String bpmnErrorCode) {
+
+    if (phaseTwoListeners != null) {
+      phaseTwoListeners
+          .stream()
+          .forEach(listener -> listener.canceledUserTaskPhaseTwo(workflowAggregateId, taskId, bpmnErrorCode));
     }
 
   }

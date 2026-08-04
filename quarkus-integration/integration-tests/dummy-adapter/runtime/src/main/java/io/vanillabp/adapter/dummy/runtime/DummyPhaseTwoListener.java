@@ -43,4 +43,28 @@ public interface DummyPhaseTwoListener {
       final String bpmnErrorCode) {
   }
 
+  /**
+   * Called whenever phase two of completing a USER task is executed.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param taskId The user task's ID
+   */
+  default void completedUserTaskPhaseTwo(
+      final Object workflowAggregateId,
+      final String taskId) {
+  }
+
+  /**
+   * Called whenever phase two of canceling a USER task is executed.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param taskId The user task's ID
+   * @param bpmnErrorCode The BPMN error code
+   */
+  default void canceledUserTaskPhaseTwo(
+      final Object workflowAggregateId,
+      final String taskId,
+      final String bpmnErrorCode) {
+  }
+
 }

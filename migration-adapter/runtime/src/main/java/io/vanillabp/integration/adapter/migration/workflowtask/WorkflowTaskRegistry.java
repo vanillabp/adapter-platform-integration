@@ -183,8 +183,12 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
         .filter(handler -> tasks.stream().anyMatch(task -> matches(handler, task)))
         .forEach(WorkflowTaskHandler::markWired);
 
+    // OPTIONAL tasks (user tasks - story 24) never fail the validation: a user
+    // task without a notification handler is processed through forms/task lists;
+    // matching handlers were still marked wired above
     final var unmatchedTasks = tasks
         .stream()
+        .filter(task -> !task.optional())
         .filter(task -> handlers.stream().noneMatch(handler -> matches(handler, task)))
         .toList();
     if (unmatchedTasks.isEmpty()) {
@@ -337,6 +341,23 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
                         .map(candidate -> "'%s' (%s)".formatted(candidate.describe(), candidate.describeWiring()))
                         .collect(Collectors.joining(", ")))));
     return entry.processService.executeWorkflowTask(handler, context, transactionRunner);
+
+  }
+
+  @Override
+  public boolean workflowTaskHandlerExists(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String taskDefinitionOrActivityId) {
+
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    if (entry == null) {
+      return false;
+    }
+    return entry.handlers
+        .stream()
+        .anyMatch(candidate -> sameWiring(candidate.getTaskDefinition(),
+            taskDefinitionOrActivityId) || sameWiring(candidate.getActivityId(), taskDefinitionOrActivityId));
 
   }
 

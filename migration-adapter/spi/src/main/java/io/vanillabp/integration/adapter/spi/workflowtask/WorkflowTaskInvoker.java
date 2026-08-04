@@ -103,7 +103,24 @@ public interface WorkflowTaskInvoker {
       String bpmnProcessId,
       String workflowAggregateId,
       String propertyName);
-
+  
+  /**
+   * Whether a <code>&#64;WorkflowTask</code> method is registered for the given
+   * task definition (or BPMN activity ID) - used for OPTIONAL notifications
+   * (user-task lifecycle events, story 24): the adapter checks before invoking so
+   * a user task without a handler is silently skipped instead of raising the
+   * guiding no-handler error meant for mandatory service tasks.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param taskDefinitionOrActivityId The task definition or BPMN activity ID
+   * @return Whether a matching method is registered
+   */
+  boolean workflowTaskHandlerExists(
+      String workflowModuleId,
+      String bpmnProcessId,
+      String taskDefinitionOrActivityId);
+  
   /**
    * The name of the workflow aggregate's ID property for the given BPMN process -
    * used by remote BPMS without a business-key concept: they store the aggregate's

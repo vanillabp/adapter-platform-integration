@@ -183,6 +183,51 @@ public class WorkflowTaskScannerEdgeCasesTest {
           final String bpmnErrorCode) {
       }
 
+      @Override
+      public io.vanillabp.integration.adapter.spi.WorkflowAwareness awarenessOfUserTask(
+          final Object workflowAggregateId,
+          final String taskId) {
+        return io.vanillabp.integration.adapter.spi.WorkflowAwareness.UNKNOWN_TO_BPMS;
+      }
+
+      @Override
+      public void completeUserTaskPhaseOne(
+          final String workflowModuleId,
+          final String bpmnProcessId,
+          final AggregatePersistenceAware<Aggregate> aggregatePersistence,
+          final Aggregate workflowAggregate,
+          final String taskId) {
+      }
+
+      @Override
+      public void completeUserTaskPhaseTwo(
+          final String workflowModuleId,
+          final String bpmnProcessId,
+          final AggregatePersistenceAware<Aggregate> aggregatePersistence,
+          final Object workflowAggregateId,
+          final String taskId) {
+      }
+
+      @Override
+      public void cancelUserTaskPhaseOne(
+          final String workflowModuleId,
+          final String bpmnProcessId,
+          final AggregatePersistenceAware<Aggregate> aggregatePersistence,
+          final Aggregate workflowAggregate,
+          final String taskId,
+          final String bpmnErrorCode) {
+      }
+
+      @Override
+      public void cancelUserTaskPhaseTwo(
+          final String workflowModuleId,
+          final String bpmnProcessId,
+          final AggregatePersistenceAware<Aggregate> aggregatePersistence,
+          final Object workflowAggregateId,
+          final String taskId,
+          final String bpmnErrorCode) {
+      }
+
     };
     return new MigrationProcessService<>(
         "test-module", "TestProcess", Aggregate.class, properties, persistence, List.of(adapterProcessService), null);

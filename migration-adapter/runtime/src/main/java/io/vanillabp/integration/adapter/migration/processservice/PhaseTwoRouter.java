@@ -93,6 +93,15 @@ public final class PhaseTwoRouter {
               workflowAggregateId,
               call.args().get(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID),
               call.args().get(io.vanillabp.integration.spi.PhaseTwoCall.ARG_BPMN_ERROR_CODE));
+      case COMPLETE_USER_TASK -> processService
+          .completeUserTaskPhaseTwo(
+              workflowAggregateId,
+              call.args().get(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID));
+      case CANCEL_USER_TASK -> processService
+          .cancelUserTaskPhaseTwo(
+              workflowAggregateId,
+              call.args().get(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID),
+              call.args().get(io.vanillabp.integration.spi.PhaseTwoCall.ARG_BPMN_ERROR_CODE));
     }
 
   }

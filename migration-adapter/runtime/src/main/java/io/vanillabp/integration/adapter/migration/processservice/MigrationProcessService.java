@@ -420,6 +420,9 @@ public class MigrationProcessService<A> {
         "completing",
         (
             adapter,
+            aggregateId) -> adapter.awarenessOfTask(aggregateId, taskId),
+        (
+            adapter,
             attachedAggregate) -> adapter
                 .completeTaskPhaseOne(
                     workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, attachedAggregate, taskId),
@@ -448,6 +451,9 @@ public class MigrationProcessService<A> {
         workflowAggregate,
         taskId,
         "canceling",
+        (
+            adapter,
+            aggregateId) -> adapter.awarenessOfTask(aggregateId, taskId),
         (
             adapter,
             attachedAggregate) -> adapter
@@ -479,10 +485,137 @@ public class MigrationProcessService<A> {
 
   }
 
+  /**
+   * Completes a USER task - same flow as {@link #completeTask(Object, String)}
+   * but probing {@code awarenessOfUserTask} and executing the user-task SPI
+   * methods (user-task IDs live in a different namespace than service-task IDs).
+   *
+   * @param workflowAggregate The workflow aggregate
+   * @param taskId The user task's ID
+   * @return The attached workflow aggregate
+   */
+  public A completeUserTask(
+      final A workflowAggregate,
+      final String taskId) {
+
+    return executeTaskOperation(
+        workflowAggregate,
+        taskId,
+        "completing user",
+        (
+            adapter,
+            aggregateId) -> adapter.awarenessOfUserTask(aggregateId, taskId),
+        (
+            adapter,
+            attachedAggregate) -> adapter
+                .completeUserTaskPhaseOne(
+                    workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, attachedAggregate, taskId),
+        (
+            outbox,
+            aggregateId) -> outbox
+                .scheduleCompleteUserTask(workflowModuleId, bpmnProcessId, aggregateId, taskId));
+
+  }
+
+  /**
+   * Cancels a USER task by BPMN error - same flow as
+   * {@link #cancelTask(Object, String, String)}.
+   *
+   * @param workflowAggregate The workflow aggregate
+   * @param taskId The user task's ID
+   * @param bpmnErrorCode The error code to be caught by BPMN error boundary events
+   * @return The attached workflow aggregate
+   */
+  public A cancelUserTask(
+      final A workflowAggregate,
+      final String taskId,
+      final String bpmnErrorCode) {
+
+    return executeTaskOperation(
+        workflowAggregate,
+        taskId,
+        "canceling user",
+        (
+            adapter,
+            aggregateId) -> adapter.awarenessOfUserTask(aggregateId, taskId),
+        (
+            adapter,
+            attachedAggregate) -> adapter
+                .cancelUserTaskPhaseOne(
+                    workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, attachedAggregate, taskId,
+                    bpmnErrorCode),
+        (
+            outbox,
+            aggregateId) -> outbox
+                .scheduleCancelUserTask(workflowModuleId, bpmnProcessId, aggregateId, taskId, bpmnErrorCode));
+
+  }
+
+  /**
+   * Executes phase two of completing a user task - see
+   * {@link #completeTaskPhaseTwo(Object, String)}.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate (original type)
+   * @param taskId The user task's ID
+   */
+  public void completeUserTaskPhaseTwo(
+      final Object workflowAggregateId,
+      final String taskId) {
+
+    executeTaskPhaseTwo(
+        workflowAggregateId,
+        taskId,
+        "completing user",
+        (
+            adapter,
+            aggregateId) -> adapter.awarenessOfUserTask(aggregateId, taskId),
+        adapter -> adapter
+            .completeUserTaskPhaseTwo(
+                workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, taskId));
+
+  }
+
+  /**
+   * Executes phase two of canceling a user task - see
+   * {@link #cancelTaskPhaseTwo(Object, String, String)}.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate (original type)
+   * @param taskId The user task's ID
+   * @param bpmnErrorCode The error code to be caught by BPMN error boundary events
+   */
+  public void cancelUserTaskPhaseTwo(
+      final Object workflowAggregateId,
+      final String taskId,
+      final String bpmnErrorCode) {
+
+    executeTaskPhaseTwo(
+        workflowAggregateId,
+        taskId,
+        "canceling user",
+        (
+            adapter,
+            aggregateId) -> adapter.awarenessOfUserTask(aggregateId, taskId),
+        adapter -> adapter
+            .cancelUserTaskPhaseTwo(
+                workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, taskId,
+                bpmnErrorCode));
+
+  }
+
+  @FunctionalInterface
+  private interface TaskAwarenessProbe<A> {
+
+    io.vanillabp.integration.adapter.spi.WorkflowAwareness probe(
+        MigratableProcessService<A> adapter,
+        Object workflowAggregateId);
+
+  }
+
   private A executeTaskOperation(
       final A workflowAggregate,
       final String taskId,
       final String operationDescription,
+      final TaskAwarenessProbe<A> awarenessProbe,
       final PhaseOneAction<A> phaseOne,
       final OutboxAction outboxAction) {
 
@@ -498,7 +631,7 @@ public class MigrationProcessService<A> {
 
     final var location = WorkflowLocator.locate(
         adapterProcessServices,
-        adapter -> adapter.awarenessOfTask(aggregateId, taskId),
+        adapter -> awarenessProbe.probe(adapter, aggregateId),
         subject);
 
     switch (location.awareness()) {
@@ -556,6 +689,9 @@ public class MigrationProcessService<A> {
         workflowAggregateId,
         taskId,
         "completing",
+        (
+            adapter,
+            aggregateId) -> adapter.awarenessOfTask(aggregateId, taskId),
         adapter -> adapter
             .completeTaskPhaseTwo(
                 workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, taskId));
@@ -579,6 +715,9 @@ public class MigrationProcessService<A> {
         workflowAggregateId,
         taskId,
         "canceling",
+        (
+            adapter,
+            aggregateId) -> adapter.awarenessOfTask(aggregateId, taskId),
         adapter -> adapter
             .cancelTaskPhaseTwo(
                 workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, taskId,
@@ -590,6 +729,7 @@ public class MigrationProcessService<A> {
       final Object workflowAggregateId,
       final String taskId,
       final String operationDescription,
+      final TaskAwarenessProbe<A> awarenessProbe,
       final java.util.function.Consumer<MigratableProcessService<A>> phaseTwo) {
 
     final var subject = "task '%s' of workflow aggregate '%s' (BPMN process '%s' of workflow module '%s')"
@@ -597,7 +737,7 @@ public class MigrationProcessService<A> {
 
     final var location = WorkflowLocator.locate(
         adapterProcessServices,
-        adapter -> adapter.awarenessOfTask(workflowAggregateId, taskId),
+        adapter -> awarenessProbe.probe(adapter, workflowAggregateId),
         subject);
 
     switch (location.awareness()) {

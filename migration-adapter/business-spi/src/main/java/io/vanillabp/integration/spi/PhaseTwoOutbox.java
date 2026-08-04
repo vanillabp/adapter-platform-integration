@@ -164,4 +164,57 @@ public interface PhaseTwoOutbox {
 
   }
 
+  /**
+   * Schedule phase two of completing a USER task - same contract as
+   * {@link #scheduleCompleteTask}.
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param taskId The ID of the user task to complete
+   * @return <code>true</code> if scheduled, <code>false</code> if already scheduled
+   *         for this task (no-op)
+   */
+  default boolean scheduleCompleteUserTask(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Object workflowAggregateId,
+      final String taskId) {
+
+    return schedule(
+        new PhaseTwoCall(
+            PhaseTwoOperation.COMPLETE_USER_TASK, workflowModuleId, bpmnProcessId, workflowAggregateId
+                .toString(), null, java.util.Map.of(PhaseTwoCall.ARG_TASK_ID, taskId)));
+
+  }
+
+  /**
+   * Schedule phase two of canceling a USER task by BPMN error - same contract as
+   * {@link #scheduleCancelTask}.
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param taskId The ID of the user task to cancel
+   * @param bpmnErrorCode The error code to be caught by BPMN error boundary events
+   * @return <code>true</code> if scheduled, <code>false</code> if already scheduled
+   *         for this task (no-op)
+   */
+  default boolean scheduleCancelUserTask(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Object workflowAggregateId,
+      final String taskId,
+      final String bpmnErrorCode) {
+
+    return schedule(
+        new PhaseTwoCall(
+            PhaseTwoOperation.CANCEL_USER_TASK, workflowModuleId, bpmnProcessId, workflowAggregateId
+                .toString(), null, java.util.Map
+                    .of(
+                        PhaseTwoCall.ARG_TASK_ID, taskId, PhaseTwoCall.ARG_BPMN_ERROR_CODE,
+                        bpmnErrorCode)));
+
+  }
+
 }

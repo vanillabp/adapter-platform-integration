@@ -106,6 +106,50 @@ public class TaskOperationsDispatchTest {
   }
 
   @Test
+  @DisplayName("completeUserTask and cancelUserTask dispatch phase two after the commit")
+  public void userTaskOperationsDispatchAfterCommit() throws Exception {
+
+    final var aggregate = startedAggregate("user-task-ops");
+    awareness.answerWith(WorkflowAwareness.ACTIVE);
+
+    transactionTemplate.executeWithoutResult(status -> {
+      processService.completeUserTask(aggregate, "utask-1");
+      processService.cancelUserTask(aggregate, "utask-2", "APPROVAL_WITHDRAWN");
+    });
+
+    final var deadline = System.currentTimeMillis() + 10000;
+    while (listener.getCompletedUserTasks().isEmpty() || listener.getCanceledUserTasks().isEmpty()) {
+      assertTrue(
+          System.currentTimeMillis() < deadline,
+          "user-task operations were not dispatched in time");
+      Thread.sleep(50);
+    }
+    assertEquals(
+        aggregate.getId()
+            + ":utask-1",
+        listener.getCompletedUserTasks().getFirst());
+    assertEquals(
+        aggregate.getId()
+            + ":utask-2:APPROVAL_WITHDRAWN",
+        listener.getCanceledUserTasks().getFirst());
+
+  }
+
+  @Test
+  @DisplayName("An unknown user task raises the guiding TaskNotFoundException")
+  public void unknownUserTaskRaisesGuidingException() {
+
+    final var aggregate = startedAggregate("unknown-user-task");
+
+    final var exception = assertThrowsExactly(
+        TaskNotFoundException.class,
+        () -> transactionTemplate.executeWithoutResult(status -> processService
+            .completeUserTask(aggregate, "utask-unknown")));
+    assertTrue(exception.getMessage().contains("utask-unknown"));
+
+  }
+
+  @Test
   @DisplayName("A rollback leaves no outbox entry - phase two of the completion never runs")
   public void rollbackLeavesNoCompletion() throws Exception {
 
