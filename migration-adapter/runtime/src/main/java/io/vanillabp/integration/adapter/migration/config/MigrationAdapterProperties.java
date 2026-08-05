@@ -457,6 +457,47 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       final List<String> adaptersLoaded,
       final List<String> knownWorkflowModuleIds) {
 
+    validateProperties(adaptersLoaded, knownWorkflowModuleIds, null);
+
+  }
+
+  /**
+   * Appends a platform-specific note to a guiding message, if there is one.
+   *
+   * @param message The platform-neutral message
+   * @param platformConfigurationNote The note or null
+   * @return The message, followed by the note in an own paragraph
+   */
+  private static String appendPlatformNote(
+      final String message,
+      final String platformConfigurationNote) {
+
+    if ((platformConfigurationNote == null) || platformConfigurationNote.isBlank()) {
+      return message;
+    }
+    return "%s\n%s".formatted(message, platformConfigurationNote);
+
+  }
+
+  /**
+   * Validates the configuration. Identical on all platforms, except for the
+   * <code>platformConfigurationNote</code>: platforms whose configuration binding
+   * behaves in a way a developer cannot guess from the properties alone pass a
+   * sentence naming that behavior, which is appended to those messages a developer
+   * could otherwise misread (see
+   * {@link io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties#adapterTypes()}
+   * for the id-is-the-type convention this concerns).
+   *
+   * @param adaptersLoaded The adapter types found in the classpath
+   * @param knownWorkflowModuleIds The workflow module IDs found in the classpath
+   * @param platformConfigurationNote A platform-specific note appended to
+   *     "nothing configured" messages, or null
+   */
+  public void validateProperties(
+      final List<String> adaptersLoaded,
+      final List<String> knownWorkflowModuleIds,
+      final String platformConfigurationNote) {
+
     normalize();
     validateAndLink();
 
@@ -467,13 +508,22 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     if (adapters.isEmpty()) {
       final var missingConfigSections = adaptersLoaded
           .stream()
-          .map(adapter -> "%s.adapters.xxx.type=%s".formatted(PREFIX, adapter))
+          .map(adapter -> "%s.adapters.%s.type=%s".formatted(PREFIX, adapter, adapter))
           .collect(Collectors.joining("\n  "));
+      final var conventionHint = adaptersLoaded
+          .stream()
+          .findFirst()
+          .map(
+              adapter -> "\n\nHint: naming the adapter id after the adapter type makes 'type' unnecessary (e.g. '%s.adapters.%s')."
+                  .formatted(PREFIX, adapter))
+          .orElse("");
       throw new IllegalStateException(
-          """
-              No adapters configured! Add properties sections for your BPMS (e.g. xxx) having type set to adapters found in classpath:
-                %s"""
-              .formatted(missingConfigSections));
+          appendPlatformNote(
+              """
+                  No adapters configured! Add a properties section for each BPMS used, having 'type' set to an adapter type found in classpath:
+                    %s%s"""
+                  .formatted(missingConfigSections, conventionHint),
+              platformConfigurationNote));
     }
 
     final var adaptersNotInClasspath = adapterTypes()
@@ -498,11 +548,13 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
         .collect(Collectors.joining("\n  "));
     if (!unconfiguredModules.isEmpty()) {
       throw new IllegalStateException(
-          """
-              Unconfigured VanillaBP workflow modules were found in classpath:
-                %s
-              Add property keys '%s.workflow-modules.*' to configure them."""
-              .formatted(unconfiguredModules, PREFIX));
+          appendPlatformNote(
+              """
+                  Unconfigured VanillaBP workflow modules were found in classpath:
+                    %s
+                  Add property keys '%s.workflow-modules.*' to configure them."""
+                  .formatted(unconfiguredModules, PREFIX),
+              platformConfigurationNote));
     }
 
     // unknown workflow-module properties

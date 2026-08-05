@@ -15,9 +15,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.ClassPathResource;
 
 import io.vanillabp.integration.adapter.AdapterConfigurationBase;
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
@@ -321,6 +324,46 @@ public class VanillaBpConfigurationBindingTest {
           assertEquals(Duration.ofMinutes(5), overlayAdapter.getJobTimeout());
 
         });
+
+  }
+
+  @Test
+  @DisplayName("An adapter section consisting of nothing but the id configures that adapter")
+  public void bareAdapterIdIsBoundAndDefaultsToItsType() {
+
+    // 'withPropertyValues' cannot express a key WITHOUT children, so the YAML is
+    // loaded as a property source - which is exactly the shape a real application
+    // uses (and the shape Quarkus' binding drops, see
+    // QuarkusMigrationAdapterTransformer.QUARKUS_EMPTY_SECTION_NOTE)
+    contextRunner
+        .withInitializer(VanillaBpConfigurationBindingTest::loadBareAdapterIdYaml)
+        .run(context -> {
+
+          final var properties = context.getBean(MigrationAdapterProperties.class);
+
+          // the type defaults to the adapter id ...
+          assertEquals(Map.of("dummy", "dummy"), properties.adapterTypes());
+          // ... and the single adapter configured is the prioritized one
+          assertEquals(List.of("dummy"), properties.getPrioritizedAdapters());
+          assertEquals(DeploymentFailurePolicy.FAIL, properties.getDeploymentFailureFor("dummy"));
+
+        });
+
+  }
+
+  private static void loadBareAdapterIdYaml(
+      final ConfigurableApplicationContext context) {
+
+    try {
+      new YamlPropertySourceLoader()
+          .load("bare-adapter-id", new ClassPathResource("bare-adapter-id/vanillabp.yaml"))
+          .forEach(propertySource -> context
+              .getEnvironment()
+              .getPropertySources()
+              .addFirst(propertySource));
+    } catch (Exception e) {
+      throw new IllegalStateException("Could not load the test's YAML", e);
+    }
 
   }
 

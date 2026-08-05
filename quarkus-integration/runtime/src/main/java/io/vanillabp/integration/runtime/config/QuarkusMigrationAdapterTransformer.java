@@ -34,6 +34,23 @@ public class QuarkusMigrationAdapterTransformer {
   public static final String PREFIX_ADAPTER_PACKAGE = "io.vanillabp.adapter.";
 
   /**
+   * Quarkus' configuration binding derives the keys of a properties map from the
+   * property NAMES below its prefix. A section consisting of nothing but its id
+   * (YAML <code>&lt;id&gt;:</code> or <code>&lt;id&gt;: {}</code>) contributes no
+   * property name and is therefore dropped silently - and spelling it as a property
+   * with an empty value (<code>&lt;id&gt;=</code>) is rejected by SmallRye
+   * ("does not map to any root"). So unlike on Spring Boot, the id-is-the-type
+   * convention ({@link MigrationAdapterProperties#adapterTypes()}) cannot be used
+   * with an otherwise empty section here. Since the id never reaches the runtime,
+   * this cannot be detected - the developer has to learn it from the message.
+   */
+  public static final String QUARKUS_EMPTY_SECTION_NOTE = """
+      Note for Quarkus: a properties section needs AT LEAST ONE property - a section consisting of its id alone \
+      (e.g. '%s.adapters.<id>:' in YAML) contributes no property name and is therefore ignored by the \
+      configuration binding. For adapters set 'type=<adapter type>', even if the id already is the type."""
+      .formatted(PREFIX);
+
+  /**
    * The properties to transform
    */
   private final QuarkusMigrationAdapterProperties properties;
@@ -99,7 +116,10 @@ public class QuarkusMigrationAdapterTransformer {
         .stream()
         .map(WorkflowModule::getId)
         .toList();
-    result.validateProperties(adapterTypesProvidedByExtensions, knownWorkflowModuleIds);
+    result.validateProperties(
+        adapterTypesProvidedByExtensions,
+        knownWorkflowModuleIds,
+        QUARKUS_EMPTY_SECTION_NOTE);
     if (propertyNames != null) {
       result.validateEnvironmentVariableUsage(propertyNames);
     }

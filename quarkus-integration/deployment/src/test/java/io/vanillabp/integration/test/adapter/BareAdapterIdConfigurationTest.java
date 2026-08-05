@@ -13,17 +13,25 @@ import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterTransforme
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
+/**
+ * An adapter section consisting of nothing but the adapter id relies on the
+ * convention "the adapter id IS the adapter type". It configures the adapter on
+ * Spring Boot, but NOT on Quarkus: the configuration binding derives the keys of a
+ * properties map from the property NAMES below its prefix, and a section without any
+ * property contributes no name (spelling it as an empty-valued property is rejected
+ * by SmallRye with "does not map to any root"). The id therefore never reaches the
+ * runtime and the situation cannot be detected - so the guiding message names the
+ * behavior, which is what this test pins.
+ */
 @ExtendWith(SuppressOutputExtension.class)
-public class NoAdapterConfigurationTest {
+public class BareAdapterIdConfigurationTest {
 
-  // Start the unit test with the extension loaded, and sample classes
   @RegisterExtension
   static final QuarkusUnitTest unitTest = new QuarkusUnitTest()
       .setArchiveProducer(() -> ShrinkWrap
           .create(JavaArchive.class)
           .addPackage("io.vanillabp.integration.test.samples.sample")  // load sample application classes
-          // load sample application properties
-          .addAsResource("no-adapter/application.yaml", "application.yaml")
+          .addAsResource("bare-adapter-id/application.yaml", "application.yaml")
           .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
           .addClass(DummyAdapters.class))                              // necessary due to anonymous class in DummyAdapters
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter())     // add mocked adapter
@@ -36,7 +44,7 @@ public class NoAdapterConfigurationTest {
               """ + QuarkusMigrationAdapterTransformer.QUARKUS_EMPTY_SECTION_NOTE));
 
   @Test
-  public void testAdapterConfiguration() {
+  public void testBareAdapterIdIsReportedGuiding() {
     // should never be executed due to the expected build exception
   }
 

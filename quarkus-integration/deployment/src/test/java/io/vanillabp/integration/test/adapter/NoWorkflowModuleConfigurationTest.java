@@ -9,6 +9,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
+import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterTransformer;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
@@ -30,7 +31,8 @@ public class NoWorkflowModuleConfigurationTest {
           """
               Unconfigured VanillaBP workflow modules were found in classpath:
                 test-module
-              Add property keys 'vanillabp.workflow-modules.*' to configure them."""));
+              Add property keys 'vanillabp.workflow-modules.*' to configure them.
+              """ + QuarkusMigrationAdapterTransformer.QUARKUS_EMPTY_SECTION_NOTE));
 
   @Test
   public void testAdapterConfiguration() {

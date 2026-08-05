@@ -1,0 +1,8 @@
+vanillabp:
+  adapters:
+    dummy: null
+  workflow-modules:
+    test-module:
+      adapters:
+        dummy:
+          resources-location: classpath:test-module/processes/dummy

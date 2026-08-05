@@ -358,9 +358,11 @@ public class MigrationAdapterPropertiesTest {
 
     assertEquals(
         """
-            No adapters configured! Add properties sections for your BPMS (e.g. xxx) having type set to adapters found in classpath:
-              vanillabp.adapters.xxx.type=adapter1
-              vanillabp.adapters.xxx.type=adapter2""",
+            No adapters configured! Add a properties section for each BPMS used, having 'type' set to an adapter type found in classpath:
+              vanillabp.adapters.adapter1.type=adapter1
+              vanillabp.adapters.adapter2.type=adapter2
+
+            Hint: naming the adapter id after the adapter type makes 'type' unnecessary (e.g. 'vanillabp.adapters.adapter1').""",
         exception.getMessage());
 
   }
