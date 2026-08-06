@@ -4,6 +4,43 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Aggregate sync with the BPMS (2026-08-06)
+
+Story 28 - `@SyncWithBPMS` / `@NoSyncWithBPMS` are implemented. Both annotations
+are NEW in spi-for-java (they were documented in the wiki but never shipped), so
+nothing existing changes its meaning.
+
+- **Applications:** which attributes of a workflow aggregate the BPMS gets to see
+  is now controlled by the two annotations. They may be placed on the aggregate
+  class, on attributes and on (intention-revealing) getters. **Inheritance:** every
+  attribute inherits the behavior of its owner until it says otherwise - a nested
+  object's attributes inherit from the attribute holding them, a collection's
+  elements from the collection, and a DTO carrying no annotation of its own
+  behaves exactly like the attribute it is used for (annotating the DTO class
+  narrows it wherever it is used).
+- **The outermost default belongs to the ADAPTER**, because the mechanics do: an
+  embedded engine reading the aggregate LIVE shares nothing by default (Camunda 7)
+  and writes whatever IS shared as pure operator context; a remote engine shares
+  everything by default (Camunda 8, Process-Engine-API), because a BPMN expression
+  can only see what VanillaBP pushed as a process variable.
+- **The technical aggregate-ID variable is untouched by the model:** a BPMS
+  without a business key (Camunda 8, Process-Engine-API) ALWAYS receives the
+  aggregate's ID under the name of its ID attribute
+  (`AggregatePersistenceAware#getAggregateIdName()`) - that is how VanillaBP finds
+  the workflow again. Excluding it is not possible.
+- **Sync points** (remote BPMS): starting a workflow (also by message), completing
+  or canceling an asynchronous task, completing or canceling a user task, and
+  correlating a message. ALL shared values travel at EVERY sync point - a
+  changed-values-only optimization is deliberately not done (it would make the
+  BPMS' copy a second source of truth). Message CONTENT still never travels
+  (payload doctrine); what travels is the aggregate state.
+- **Nothing is read back:** process variables never update the aggregate. The only
+  variables VanillaBP reads are those a `@TaskParam` explicitly asks for.
+- **Adapter authors:** the adapter SPI gained `AggregateSyncMode` (the adapter's
+  default) and `WorkflowAggregateSync` (the core-owned model, provided as a
+  platform bean); call `syncedValues(aggregate, YOUR_DEFAULT)` at your sync points
+  and add the technical ID variable yourself.
+
 ## Convention over configuration (2026-08-06)
 
 Story 34 - an application configures only what DEVIATES from the convention.

@@ -127,6 +127,24 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   }
 
   /**
+   * The core-owned sync model (story 28): turns a workflow aggregate into the
+   * values shared with the BPMS, honoring
+   * {@code @SyncWithBPMS}/{@code @NoSyncWithBPMS} and the adapter's default. One
+   * instance per application - BPMS adapters receive it and decide what to do with
+   * the values (push them as process variables, or write them as operator context
+   * only).
+   *
+   * @return The sync support
+   */
+  @Bean
+  @ConditionalOnMissingBean
+  public static io.vanillabp.integration.adapter.spi.WorkflowAggregateSync vanillaBpWorkflowAggregateSync() {
+
+    return new io.vanillabp.integration.adapter.migration.sync.AggregateSyncSupport();
+
+  }
+
+  /**
    * The classpath-root prefix of the application's MAIN artifact: the JAR or
    * directory the <code>&#64;SpringBootApplication</code> class was loaded from.
    * A workflow module descriptor found in that very root belongs to the

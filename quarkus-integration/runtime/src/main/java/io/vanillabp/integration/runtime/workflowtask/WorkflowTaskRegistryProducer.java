@@ -26,4 +26,20 @@ public class WorkflowTaskRegistryProducer {
 
   }
 
+
+  /**
+   * The core-owned sync model (story 28): turns a workflow aggregate into the
+   * values shared with the BPMS, honoring
+   * {@code @SyncWithBPMS}/{@code @NoSyncWithBPMS} and the adapter's default.
+   *
+   * @return The sync support
+   */
+  @jakarta.enterprise.inject.Produces
+  @jakarta.inject.Singleton
+  public io.vanillabp.integration.adapter.spi.WorkflowAggregateSync workflowAggregateSync() {
+
+    return new io.vanillabp.integration.adapter.migration.sync.AggregateSyncSupport();
+
+  }
+
 }
