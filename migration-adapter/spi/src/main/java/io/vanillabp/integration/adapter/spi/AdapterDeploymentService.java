@@ -84,4 +84,34 @@ public interface AdapterDeploymentService<BPMN, PC> extends ExtensionWiringServi
       String workflowModuleId,
       PC bpmsProcessingContext) throws IllegalStateException;
 
+
+  /**
+   * Validates that several configured adapter ids of THIS adapter type address
+   * DIFFERENT systems (story 34). Two instances of one BPMS type only make sense
+   * if they do - and whether two configurations differ is BPMS knowledge, so the
+   * decision belongs to the adapter:
+   * <ul>
+   * <li>an embedded engine: different databases/schemas (e.g. Camunda 7's
+   * <code>data-source-name</code> or <code>table-prefix</code>),</li>
+   * <li>a remote BPMS: different endpoints or different credentials addressing
+   * the same endpoint (e.g. Camunda 8's addresses respectively the combination of
+   * cluster and client id).</li>
+   * </ul>
+   * Called ONCE per adapter type at startup (before any deployment) on the first
+   * deployment service of that type, and only if more than one id of the type is
+   * configured. Ids which cannot be told apart must fail the boot with a guiding
+   * message naming the property which makes them distinct.
+   * <p>
+   * The default does nothing - an adapter whose instances cannot be compared (the
+   * connection is provided by the application) should say so in its documentation
+   * rather than pretend.
+   *
+   * @param adapterIdsOfThisType The configured adapter ids of this adapter's type,
+   *          in the order they are prioritized
+   */
+  default void validateDistinctAdapterInstances(
+      final List<String> adapterIdsOfThisType) {
+
+  }
+
 }

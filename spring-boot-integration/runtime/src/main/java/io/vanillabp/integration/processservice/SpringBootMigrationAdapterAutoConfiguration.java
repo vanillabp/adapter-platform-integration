@@ -1,5 +1,6 @@
 package io.vanillabp.integration.processservice;
 
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -7,9 +8,11 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.ConfigurationPropertiesBinding;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
@@ -17,14 +20,15 @@ import org.springframework.core.convert.converter.Converter;
 import org.springframework.core.env.AbstractEnvironment;
 import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.env.Environment;
+import org.springframework.util.ClassUtils;
 
 import io.vanillabp.integration.adapter.AdapterConfigurationBase;
+import io.vanillabp.integration.adapter.migration.config.ClasspathFacts;
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
-import io.vanillabp.integration.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.integration.workflowmodule.WorkflowModules;
 import io.vanillabp.integration.workflowtask.SpringTransactionRunner;
@@ -86,7 +90,8 @@ public class SpringBootMigrationAdapterAutoConfiguration {
       final VanillaBpConfigurationProperties properties,
       final Environment environment,
       final WorkflowModules allWorkflowModules,
-      final ObjectProvider<AdapterConfigurationBase> adapterConfigurations) {
+      final ObjectProvider<AdapterConfigurationBase> adapterConfigurations,
+      final ApplicationContext applicationContext) {
 
     // ObjectProvider (not a required List): without any adapter on the classpath the
     // bean creation still runs and the guiding message
@@ -100,16 +105,54 @@ public class SpringBootMigrationAdapterAutoConfiguration {
           "No adapters found in classpath! Add dependencies providing VanillaBP adapters.");
     }
 
-    final var workflowModuleIds = allWorkflowModules
+    // convention over configuration (story 34): the classpath facts are what the
+    // conventions are derived from - which workflow module descriptor comes from
+    // the application's MAIN artifact decides the conventional resources location
+    final var mainArtifactRootPrefix = mainArtifactRootPrefix(applicationContext);
+    final var workflowModules = allWorkflowModules
         .getWorkflowModules()
         .stream()
-        .map(WorkflowModule::getId)
+        .map(workflowModule -> new ClasspathFacts.WorkflowModuleInfo(
+            workflowModule.getId(), (mainArtifactRootPrefix != null) && mainArtifactRootPrefix
+                .equals(workflowModule.getSourceUri())))
         .toList();
 
-    properties.validateProperties(adaptersLoaded, workflowModuleIds);
+    properties.validateProperties(
+        new ClasspathFacts(adaptersLoaded, workflowModules),
+        null);
     properties.validateEnvironmentVariableUsage(rawPropertyNames(environment));
 
     return properties;
+
+  }
+
+  /**
+   * The classpath-root prefix of the application's MAIN artifact: the JAR or
+   * directory the <code>&#64;SpringBootApplication</code> class was loaded from.
+   * A workflow module descriptor found in that very root belongs to the
+   * application itself (and not to a workflow module shipped as its own
+   * artifact), which decides the conventional resources location.
+   * <p>
+   * Bean TYPES are inspected (never instances), so nothing is instantiated early.
+   * An application without such a class (e.g. a plain
+   * <code>&#64;Configuration</code> test context) yields <code>null</code> - every
+   * workflow module is then treated as an own artifact, the conservative choice.
+   *
+   * @param applicationContext The application context
+   * @return The classpath-root prefix or <code>null</code>
+   */
+  private static String mainArtifactRootPrefix(
+      final ApplicationContext applicationContext) {
+
+    return Arrays
+        .stream(applicationContext.getBeanNamesForAnnotation(SpringBootApplication.class))
+        .map(applicationContext::getType)
+        .filter(java.util.Objects::nonNull)
+        .map(ClassUtils::getUserClass)
+        .map(WorkflowModuleAutoConfiguration::determineClasspathRootPrefix)
+        .filter(java.util.Objects::nonNull)
+        .findFirst()
+        .orElse(null);
 
   }
 

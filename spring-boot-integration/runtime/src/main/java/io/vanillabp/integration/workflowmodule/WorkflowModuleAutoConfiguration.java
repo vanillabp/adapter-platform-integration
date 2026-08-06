@@ -110,7 +110,7 @@ public class WorkflowModuleAutoConfiguration {
    * @param clazz The class
    * @return The classpath-root prefix or {@code null} if it cannot be determined
    */
-  static @Nullable String determineClasspathRootPrefix(
+  public static @Nullable String determineClasspathRootPrefix(
       final Class<?> clazz) {
 
     final var classResourcePath = clazz.getName().replace('.', '/')

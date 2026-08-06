@@ -1,22 +1,27 @@
 package io.vanillabp.integration.test.adapter;
 
-import static io.vanillabp.integration.test.utils.AssertException.exceptionHavingMessage;
-
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
-import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterTransformer;
+import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import jakarta.inject.Inject;
 
+/**
+ * Convention over configuration (story 34): a workflow module found in the
+ * classpath needs NO <code>vanillabp.workflow-modules.&lt;id&gt;</code> section at
+ * all - the section is derived and its BPMN is read from the conventional
+ * location.
+ */
 @ExtendWith(SuppressOutputExtension.class)
 public class NoWorkflowModuleConfigurationTest {
 
-  // Start the unit test with the extension loaded, and sample classes
   @RegisterExtension
   static final QuarkusUnitTest unitTest = new QuarkusUnitTest()
       .setArchiveProducer(() -> ShrinkWrap
@@ -25,18 +30,27 @@ public class NoWorkflowModuleConfigurationTest {
           // load sample application properties
           .addAsResource("no-workflow-module/application.yaml", "application.yaml")
           .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
-          .addClass(DummyAdapters.class))                              // necessary due to anonymous class in DummyAdapters
-      .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter())     // add mocked adapter
-      .assertException(exceptionHavingMessage(IllegalStateException.class,
-          """
-              Unconfigured VanillaBP workflow modules were found in classpath:
-                test-module
-              Add property keys 'vanillabp.workflow-modules.*' to configure them.
-              """ + QuarkusMigrationAdapterTransformer.QUARKUS_EMPTY_SECTION_NOTE));
+          .addClass(DummyAdapters.class)                               // necessary due to anonymous class in DummyAdapters
+          .addClass(TestAdapterDeploymentService.class)                // deployment service required per prioritized adapter
+          .addClass(TestAdapterDeploymentServiceProducer.class)
+          .addClass(TestMigratableProcessService.class))               // process service of the mocked adapter
+      .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter());    // add mocked adapter
+
+  @Inject
+  MigrationAdapterProperties properties;
 
   @Test
-  public void testAdapterConfiguration() {
-    // should never be executed due to the expected build exception
+  public void testWorkflowModuleNeedsNoConfiguration() {
+
+    Assertions.assertTrue(
+        properties.getWorkflowModules().containsKey("test-module"),
+        () -> "expected a derived section for the workflow module found in classpath but got: "
+            + properties.getWorkflowModules().keySet());
+    Assertions.assertEquals(
+        "classpath*:processes/test",
+        properties.getAdapterResourcesLocationFor("test-module", "test").location(),
+        "the BPMN location follows the convention");
+
   }
 
 }

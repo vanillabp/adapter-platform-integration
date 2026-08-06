@@ -1,8 +1,12 @@
 package io.vanillabp.integration.test.adapter;
 
+import java.util.List;
+import java.util.Map;
+
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -14,40 +18,49 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * A section for a workflow module which is NOT in the classpath stays a WARN (the
- * module may arrive later), while the module actually found in the classpath needs
- * no section at all - its own one is derived (story 34).
+ * Story 34's headline on Quarkus: an application with ONE adapter extension and ONE
+ * workflow module needs no <code>vanillabp.*</code> property at all - the archive
+ * of this test carries no configuration file whatsoever.
  */
 @ExtendWith(SuppressOutputExtension.class)
-public class UnconfiguredWorkflowModuleConfigurationTest {
+public class ZeroConfigurationTest {
 
   @RegisterExtension
   static final QuarkusUnitTest unitTest = new QuarkusUnitTest()
       .setArchiveProducer(() -> ShrinkWrap
           .create(JavaArchive.class)
           .addPackage("io.vanillabp.integration.test.samples.sample")  // load sample application classes
-          // load sample application properties
-          .addAsResource("unconfigured-workflow-module/application.yaml", "application.yaml")
+          // NO application.yaml: the classpath is the configuration
           .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
           .addClass(DummyAdapters.class)                               // necessary due to anonymous class in DummyAdapters
           .addClass(TestAdapterDeploymentService.class)                // deployment service required per prioritized adapter
           .addClass(TestAdapterDeploymentServiceProducer.class)
-          .addClass(TestMigratableProcessService.class))               // process service of the mocked adapter
+          .addClass(DerivedAdapterIdProcessService.class))             // process service of the DERIVED adapter id
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter());    // add mocked adapter
 
   @Inject
   MigrationAdapterProperties properties;
 
   @Test
-  public void testConfiguredAndDerivedWorkflowModulesCoexist() {
+  @DisplayName("One adapter extension, one workflow module, ZERO properties: everything is derived")
+  public void zeroConfigurationIsDerivedFromTheClasspath() {
 
-    // the configured module which is not in the classpath is kept (a WARN reports it)
-    Assertions.assertTrue(properties.getWorkflowModules().containsKey("my-module"));
-    // the module found in the classpath got its section derived
+    Assertions.assertEquals(
+        Map.of("dummy", "dummy"),
+        properties.adapterTypes(),
+        "the single adapter type of the classpath becomes the one configured adapter");
+    Assertions.assertEquals(List.of("dummy"), properties.getPrioritizedAdapters());
     Assertions.assertTrue(
         properties.getWorkflowModules().containsKey("test-module"),
-        () -> "expected a derived section for the workflow module found in classpath but got: "
+        () -> "the workflow module found in classpath needs no section but got: "
             + properties.getWorkflowModules().keySet());
+    // the application IS the workflow module here (the test archive is the root
+    // application archive), so its BPMN lives below 'processes/<adapter id>'
+    Assertions.assertEquals(
+        "classpath*:processes/dummy",
+        properties
+            .getAdapterResourcesLocationFor("test-module", "dummy")
+            .location());
 
   }
 

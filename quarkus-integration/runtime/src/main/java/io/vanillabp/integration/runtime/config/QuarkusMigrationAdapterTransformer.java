@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+import io.vanillabp.integration.adapter.migration.config.ClasspathFacts;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import lombok.Builder;
@@ -112,13 +113,17 @@ public class QuarkusMigrationAdapterTransformer {
     // run the core validation - one validation, in core, identical on all
     // platforms (adapter types are the capability suffixes of the VanillaBP
     // adapter extensions loaded)
-    final var knownWorkflowModuleIds = workflowModulesFound
+    // convention over configuration (story 34): the classpath facts are what the
+    // conventions are derived from - a GLOBAL workflow module is one declared by
+    // the root application archive (the application IS the workflow module),
+    // which decides the conventional resources location
+    final var knownWorkflowModules = workflowModulesFound
         .stream()
-        .map(WorkflowModule::getId)
+        .map(workflowModule -> new ClasspathFacts.WorkflowModuleInfo(
+            workflowModule.getId(), workflowModule.isGlobal()))
         .toList();
     result.validateProperties(
-        adapterTypesProvidedByExtensions,
-        knownWorkflowModuleIds,
+        new ClasspathFacts(adapterTypesProvidedByExtensions, knownWorkflowModules),
         QUARKUS_EMPTY_SECTION_NOTE);
     if (propertyNames != null) {
       result.validateEnvironmentVariableUsage(propertyNames);

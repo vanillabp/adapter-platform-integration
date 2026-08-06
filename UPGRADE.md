@@ -4,6 +4,47 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Convention over configuration (2026-08-06)
+
+Story 34 - an application configures only what DEVIATES from the convention.
+Everything documented before keeps working unchanged: explicit sections are never
+overruled, the validation rules are the same for written and derived entries.
+
+- **One adapter dependency + one workflow module = ZERO `vanillabp.*` properties.**
+  The single adapter type found in the classpath becomes the one configured adapter
+  (its id IS the type) and, being the only one, the prioritized adapter; every
+  workflow module found in the classpath needs no section any more.
+- **Several BPMS: `vanillabp.prioritized-adapters` alone is enough** as long as the
+  ids ARE adapter types - the adapter sections are derived from that list. Several
+  adapter types with NO order configured fail the boot with a message naming the
+  types found (it used to ask for adapter sections).
+- **A CUSTOM adapter id can never be derived** (it carries no information about its
+  type): it still needs `vanillabp.adapters.<id>.type`.
+- **`resources-location` is optional now.** BPMN is read from
+  `classpath*:<workflow-module-id>/processes/<adapter-id>` - respectively
+  `classpath*:processes/<adapter-id>` if the application's own artifact declares the
+  single workflow module. An explicit
+  `vanillabp.workflow-modules.<module>.adapters.<id>.resources-location` still wins,
+  followed by the global `vanillabp.resources-location`. Applications which
+  configured a location keep working; those which did not stop failing the boot.
+- **Two adapter ids of one type have to be DISTINGUISHABLE** - what that means is
+  decided by the adapter through the new SPI hook
+  `AdapterDeploymentService#validateDistinctAdapterInstances(List<String>)`
+  (default: no check). Camunda 7: different datasources OR different
+  `table-prefix` (a NEW key letting two engines share one database); Camunda 8:
+  different addresses, respectively the combination of `cluster-id` and
+  `client-id`; Process-Engine-API: more than one id of that type fails (its engine
+  comes from the application and cannot be told apart).
+- **Several datasources demand an explicit one:** an adapter needing a datasource
+  (Camunda 7) fails the boot when the application provides more than one and the id
+  has no `data-source-name` - not even a `@Primary` bean decides it. Exactly one
+  datasource keeps working without configuration.
+- **Adapter authors (Spring Boot):**
+  `AdapterBeanRegistrarSupport.forEachConfiguredAdapterId` now also yields the
+  DERIVED id (= the adapter type) when no adapter section is configured, so
+  per-adapter-id beans exist in a zero-configuration application. Adapters reading
+  the core `MigrationAdapterProperties` (Quarkus) see the derived entries anyway.
+
 ## Viewer/history API (2026-08-06)
 
 Story 26 - `ProcessService#getProcessDefinitions`, `#getBpmnXml` and

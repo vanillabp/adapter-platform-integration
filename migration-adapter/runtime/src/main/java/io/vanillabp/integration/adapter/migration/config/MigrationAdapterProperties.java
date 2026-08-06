@@ -2,6 +2,7 @@ package io.vanillabp.integration.adapter.migration.config;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -90,17 +91,146 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
+   * The base location BPMN resources of a workflow module are read from when
+   * neither an adapter-specific nor the global <code>resources-location</code> is
+   * configured - derived from the classpath facts by
+   * {@link #normalize(ClasspathFacts)} (story 34's convention). Key is the
+   * workflow module ID, value the location WITHOUT the adapter ID (which is
+   * appended per adapter, see
+   * {@link #getAdapterResourcesLocationFor(String, String)}).
+   */
+  @Builder.Default
+  private Map<String, String> conventionalResourcesLocations = Map.of();
+
+  /**
    * Applies convention-over-configuration defaults to the bound properties:
    * if exactly one adapter is configured, the property
    * <code>vanillabp.prioritized-adapters</code> may be omitted and defaults to that
    * adapter. Invoked by {@link #validateProperties(List, List)}; has to be invoked
    * explicitly if properties objects are used without running validation.
+   * <p>
+   * The classpath-based derivations (adapter sections, workflow-module sections,
+   * resources locations) need facts about the application and are therefore
+   * applied by {@link #normalize(ClasspathFacts)} only.
    */
   public void normalize() {
 
     if (getPrioritizedAdapters().isEmpty() && (adapters.size() == 1)) {
       setPrioritizedAdapters(List.copyOf(adapters.keySet()));
     }
+
+  }
+
+  /**
+   * Convention over configuration (story 34): derives everything the platform
+   * already knows from the classpath, so an application only configures what
+   * DEVIATES from the convention. Runs BEFORE the validation - a derived entry is
+   * validated exactly like a hand-written one.
+   * <ol>
+   * <li><b>Adapter sections:</b> nothing configured and exactly ONE adapter type in
+   * the classpath &rarr; that type becomes the one adapter (id = type). Several
+   * types are never guessed - the validation asks for
+   * <code>vanillabp.prioritized-adapters</code>. An id listed in
+   * <code>prioritized-adapters</code> without a section is derived if it IS an
+   * adapter type; a CUSTOM id can never be derived (it carries no information
+   * about its type - the developer has to write <code>type</code>).</li>
+   * <li><b>Workflow-module sections:</b> a module found in the classpath without a
+   * section gets an empty one - a module needs no configuration any more.</li>
+   * <li><b>Resources locations:</b> the location BPMN is read from follows the
+   * convention documented at
+   * {@link #getAdapterResourcesLocationFor(String, String)}.</li>
+   * </ol>
+   *
+   * @param facts What the platform knows about the application without any
+   *          property (see {@link ClasspathFacts})
+   */
+  public void normalize(
+      final ClasspathFacts facts) {
+
+    deriveAdapterSections(facts);
+
+    normalize();
+
+    deriveWorkflowModuleSections(facts);
+    deriveConventionalResourcesLocations(facts);
+
+  }
+
+  /**
+   * Derives the adapter sections which carry no information beyond what the
+   * classpath already tells (see {@link #normalize(ClasspathFacts)}).
+   */
+  private void deriveAdapterSections(
+      final ClasspathFacts facts) {
+
+    final var adapterTypes = facts.adapterTypes();
+
+    if (adapters.isEmpty() && (adapterTypes.size() == 1)) {
+      // the single adapter dependency IS the configuration
+      final var adapterType = adapterTypes.getFirst();
+      adapters = new LinkedHashMap<>(Map.of(adapterType, AdapterConfigProperties.ofType(adapterType)));
+      return;
+    }
+
+    // ids named in 'prioritized-adapters' which ARE adapter types need no section
+    final var derivableIds = getPrioritizedAdapters()
+        .stream()
+        .filter(adapterId -> !adapters.containsKey(adapterId))
+        .filter(adapterTypes::contains)
+        .distinct()
+        .toList();
+    if (derivableIds.isEmpty()) {
+      return;
+    }
+    final var derived = new LinkedHashMap<>(adapters);
+    derivableIds.forEach(adapterId -> derived.put(adapterId, AdapterConfigProperties.ofType(adapterId)));
+    adapters = derived;
+
+  }
+
+  /**
+   * Derives an empty section for every workflow module found in the classpath
+   * which has none (see {@link #normalize(ClasspathFacts)}).
+   */
+  private void deriveWorkflowModuleSections(
+      final ClasspathFacts facts) {
+
+    final var missingSections = facts
+        .workflowModuleIds()
+        .stream()
+        .filter(workflowModuleId -> !workflowModules.containsKey(workflowModuleId))
+        .toList();
+    if (missingSections.isEmpty()) {
+      return;
+    }
+    final var derived = new LinkedHashMap<>(workflowModules);
+    missingSections.forEach(
+        workflowModuleId -> derived.put(workflowModuleId, new WorkflowModuleAdapterProperties()));
+    workflowModules = derived;
+
+  }
+
+  /**
+   * Derives the conventional resources location of every workflow module found in
+   * the classpath (see {@link #getAdapterResourcesLocationFor(String, String)} for
+   * the convention itself).
+   */
+  private void deriveConventionalResourcesLocations(
+      final ClasspathFacts facts) {
+
+    final var modules = facts.workflowModules();
+    final var singleModuleOfMainArtifact = (modules.size() == 1) && modules
+        .getFirst()
+        .fromMainArtifact();
+
+    final var locations = new LinkedHashMap<String, String>();
+    modules.forEach(
+        module -> locations.put(
+            module.id(),
+            singleModuleOfMainArtifact
+                ? "classpath*:processes"
+                : "classpath*:%s/processes".formatted(module.id())));
+    conventionalResourcesLocations = locations;
 
   }
 
@@ -384,7 +514,26 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Provides the resources location according to the given properties.
+   * Provides the resources location according to the given properties, resolved in
+   * this order (story 34):
+   * <ol>
+   * <li>the adapter-specific location
+   * <code>vanillabp.workflow-modules.&lt;module&gt;.adapters.&lt;id&gt;.resources-location</code>,</li>
+   * <li>the global <code>vanillabp.resources-location</code> for BPMN which is NOT
+   * specific to a BPMS,</li>
+   * <li>the <b>convention</b> - what the classpath facts imply:
+   * <table border="1">
+   * <caption>Conventional locations</caption>
+   * <tr><th>Situation</th><th>Location</th></tr>
+   * <tr><td>several workflow modules, or a single one shipped as its own
+   * artifact</td>
+   * <td><code>classpath*:&lt;workflow-module-id&gt;/processes/&lt;adapter-id&gt;</code></td></tr>
+   * <tr><td>exactly one workflow module, declared by the application's MAIN
+   * artifact</td>
+   * <td><code>classpath*:processes/&lt;adapter-id&gt;</code></td></tr>
+   * </table>
+   * A conventional location is adapter-specific like a configured one.</li>
+   * </ol>
    *
    * @param workflowModuleId The workflow module ID
    * @param adapterId The adapter ID
@@ -395,28 +544,34 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       final String workflowModuleId,
       final String adapterId) {
 
-    var isVanillaBpmn = true;
-    var resourcesLocation = getResourcesLocation();
     final var workflowModule = getWorkflowModules().get(workflowModuleId);
     if (workflowModule != null) {
       final var adapter = workflowModule.getAdapters().get(adapterId);
       if ((adapter != null) && (adapter.getResourcesLocation() != null) && !adapter.getResourcesLocation().isBlank()) {
-        resourcesLocation = adapter.getResourcesLocation();
-        isVanillaBpmn = false;
+        return new ResourcesLocation(adapter.getResourcesLocation(), false);
       }
     }
 
-    if ((resourcesLocation == null) || resourcesLocation.isBlank()) {
-      throw new IllegalStateException(
-          """
-              Neither property '%s.workflow-modules.%s.adapters.%s.resources-location' for resources specific to the BPMS
-              nor property '%s.resources-location' for VanillaBP resources (not specific to the BPMS) is set!
-
-              If using first option then the location needs to be specific to the adapter in order to avoid future
-              problems once you wish to migrate to another adapter. Sample: 'classpath*:/workflow-resources/%s'"""
-              .formatted(PREFIX, workflowModuleId, adapterId, PREFIX, adapterId));
+    final var globalResourcesLocation = getResourcesLocation();
+    if ((globalResourcesLocation != null) && !globalResourcesLocation.isBlank()) {
+      return new ResourcesLocation(globalResourcesLocation, true);
     }
-    return new ResourcesLocation(resourcesLocation, isVanillaBpmn);
+
+    final var conventionalLocation = conventionalResourcesLocations.get(workflowModuleId);
+    if (conventionalLocation != null) {
+      return new ResourcesLocation(
+          "%s/%s".formatted(conventionalLocation, adapterId), false);
+    }
+
+    throw new IllegalStateException(
+        """
+            Neither property '%s.workflow-modules.%s.adapters.%s.resources-location' for resources specific to the BPMS
+            nor property '%s.resources-location' for VanillaBP resources (not specific to the BPMS) is set, and the
+            workflow module '%s' is not known in the classpath, so no location can be derived by convention!
+
+            If using the first option then the location needs to be specific to the adapter in order to avoid future
+            problems once you wish to migrate to another adapter. Sample: 'classpath*:/workflow-resources/%s'"""
+            .formatted(PREFIX, workflowModuleId, adapterId, PREFIX, workflowModuleId, adapterId));
 
   }
 
@@ -498,31 +653,71 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       final List<String> knownWorkflowModuleIds,
       final String platformConfigurationNote) {
 
-    normalize();
+    validateProperties(
+        ClasspathFacts.of(adaptersLoaded, knownWorkflowModuleIds),
+        platformConfigurationNote);
+
+  }
+
+  /**
+   * Validates the configuration, having derived everything derivable from the
+   * classpath facts before (see {@link #normalize(ClasspathFacts)}) - the
+   * validation rules are identical for configured and derived entries.
+   *
+   * @param facts What the platform knows about the application without any
+   *          property
+   * @param platformConfigurationNote A platform-specific note appended to
+   *     "nothing configured" messages, or null
+   */
+  public void validateProperties(
+      final ClasspathFacts facts,
+      final String platformConfigurationNote) {
+
+    final var adaptersLoaded = facts.adapterTypes();
+    final var knownWorkflowModuleIds = facts.workflowModuleIds();
+
+    normalize(facts);
     validateAndLink();
 
     if (knownWorkflowModuleIds.isEmpty()) {
       throw new IllegalStateException("No workflow-modules where given!");
     }
 
+    if (adapters.isEmpty() && adaptersLoaded.isEmpty()) {
+      throw new IllegalStateException(
+          "No adapters configured and none found in classpath! Add a dependency providing a VanillaBP adapter.");
+    }
+
     if (adapters.isEmpty()) {
-      final var missingConfigSections = adaptersLoaded
+      // several adapter types in the classpath (exactly one would have been derived
+      // by normalize): which one starts new workflows - and in which order existing
+      // workflows are looked up - cannot be guessed
+      // deterministic order: the classpath order of extensions/beans is not stable
+      final var sortedAdapterTypes = adaptersLoaded
           .stream()
-          .map(adapter -> "%s.adapters.%s.type=%s".formatted(PREFIX, adapter, adapter))
-          .collect(Collectors.joining("\n  "));
-      final var conventionHint = adaptersLoaded
-          .stream()
-          .findFirst()
-          .map(
-              adapter -> "\n\nHint: naming the adapter id after the adapter type makes 'type' unnecessary (e.g. '%s.adapters.%s')."
-                  .formatted(PREFIX, adapter))
-          .orElse("");
+          .sorted()
+          .toList();
       throw new IllegalStateException(
           appendPlatformNote(
               """
-                  No adapters configured! Add a properties section for each BPMS used, having 'type' set to an adapter type found in classpath:
-                    %s%s"""
-                  .formatted(missingConfigSections, conventionHint),
+                  Several VanillaBP adapters were found in classpath:
+                    %s
+                  Name the order in which they are used by the property '%s.prioritized-adapters' - the first one \
+                  starts new workflows, the others are asked for workflows started earlier (BPMS migration).
+                  Sample:
+                    %s.prioritized-adapters:
+                  %s
+                  An adapter id which IS an adapter type needs no further configuration; a custom id needs a section \
+                  '%s.adapters.<id>.type=<adapter type>'."""
+                  .formatted(
+                      String.join("\n  ", sortedAdapterTypes),
+                      PREFIX,
+                      PREFIX,
+                      sortedAdapterTypes
+                          .stream()
+                          .map("    - %s"::formatted)
+                          .collect(Collectors.joining("\n")),
+                      PREFIX),
               platformConfigurationNote));
     }
 
@@ -541,21 +736,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
               .formatted(adaptersNotInClasspath, adaptersLoaded));
     }
 
-    // every workflow module found in the classpath has to be configured
-    final var unconfiguredModules = knownWorkflowModuleIds
-        .stream()
-        .filter(module -> !getWorkflowModules().containsKey(module))
-        .collect(Collectors.joining("\n  "));
-    if (!unconfiguredModules.isEmpty()) {
-      throw new IllegalStateException(
-          appendPlatformNote(
-              """
-                  Unconfigured VanillaBP workflow modules were found in classpath:
-                    %s
-                  Add property keys '%s.workflow-modules.*' to configure them."""
-                  .formatted(unconfiguredModules, PREFIX),
-              platformConfigurationNote));
-    }
+    // a workflow module found in the classpath needs NO configuration any more
+    // (story 34): normalize(facts) derived an empty section for it, and its BPMN
+    // resources are found by the resources-location convention
 
     // unknown workflow-module properties
     final var workflowModulesConfiguredButNotInClasspath = new LinkedList<>(getWorkflowModules().keySet());
@@ -643,12 +826,19 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     // adapter configured
     if (adapters.size() == 1) {
       final var adapterId = adapters.keySet().iterator().next();
+      // only CONFIGURED adapter-specific locations are worth the hint - a location
+      // derived by convention is adapter-specific by construction (story 34)
       final var specificBpmnResources = workflowModules
-          .keySet()
+          .entrySet()
           .stream()
-          .map(workflowModuleId -> Map.entry(workflowModuleId,
-              getAdapterResourcesLocationFor(workflowModuleId, adapterId)))
-          .filter(entry -> !entry.getValue().vanillaBpBpmn())
+          .filter(entry -> {
+            final var adapter = entry
+                .getValue()
+                .getAdapters()
+                .get(adapterId);
+            return (adapter != null) && (adapter.getResourcesLocation() != null) && !adapter.getResourcesLocation()
+                .isBlank();
+          })
           .map(Map.Entry::getKey)
           .toList();
       if (!specificBpmnResources.isEmpty()) {

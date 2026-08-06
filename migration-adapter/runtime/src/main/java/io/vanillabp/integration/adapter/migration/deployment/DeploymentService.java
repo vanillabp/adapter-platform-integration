@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -145,6 +146,10 @@ public class DeploymentService {
       final List<String> workflowModuleIds,
       final Function<String, Map<String, InputStream>> bpmnResourcesLoader) {
 
+    // several ids of one adapter type only make sense if they address DIFFERENT
+    // systems - which the ADAPTER decides (story 34)
+    validateDistinctAdapterInstances();
+
     final var knownBpmnProcessIds = new HashMap<String, Set<String>>();
 
     // walk through all workflow modules
@@ -200,6 +205,49 @@ public class DeploymentService {
         });
 
     warnAboutConfiguredWorkflowsUnknownToBpmnResources(workflowModuleIds, knownBpmnProcessIds);
+
+  }
+
+  /**
+   * Asks each adapter type whose ids are configured more than once whether those
+   * ids actually address DIFFERENT systems
+   * ({@link AdapterDeploymentService#validateDistinctAdapterInstances(List)}).
+   * Two instances of one BPMS sharing the same database/endpoint/credentials are
+   * the same instance - configuring them as separate adapters is a defect the
+   * adapter reports with a guiding message.
+   */
+  private void validateDistinctAdapterInstances() {
+
+    final var deploymentServicesByType = new LinkedHashMap<String, List<AdapterDeploymentService<?, ?>>>();
+    deploymentServices
+        .forEach(deploymentService -> deploymentServicesByType
+            .computeIfAbsent(deploymentService.getAdapterType(), type -> new LinkedList<>())
+            .add(deploymentService));
+
+    deploymentServicesByType.forEach((
+        adapterType,
+        servicesOfType) -> {
+      if (servicesOfType.size() < 2) {
+        return;
+      }
+      // in the order they are prioritized - the adapter's message may name them
+      final var prioritizedIdsOfType = properties
+          .getPrioritizedAdapters()
+          .stream()
+          .filter(adapterId -> servicesOfType
+              .stream()
+              .anyMatch(service -> service.getAdapterId().equals(adapterId)))
+          .toList();
+      servicesOfType
+          .getFirst()
+          .validateDistinctAdapterInstances(
+              prioritizedIdsOfType.size() == servicesOfType.size()
+                  ? prioritizedIdsOfType
+                  : servicesOfType
+                      .stream()
+                      .map(AdapterDeploymentService::getAdapterId)
+                      .toList());
+    });
 
   }
 

@@ -66,14 +66,29 @@ public final class AdapterBeanRegistrarSupport {
         .bind(MigrationAdapterProperties.PREFIX, Bindable.of(VanillaBpConfigurationProperties.class))
         .orElseGet(VanillaBpConfigurationProperties::new);
 
-    properties
+    final var configuredIds = properties
         .adapterTypes()
         .entrySet()
         .stream()
         .filter(entry -> adapterType.equals(entry.getValue()))
         .map(Map.Entry::getKey)
         .sorted()
-        .forEach(adapterIdConsumer);
+        .toList();
+    if (!configuredIds.isEmpty()) {
+      configuredIds.forEach(adapterIdConsumer);
+      return;
+    }
+
+    // convention over configuration (story 34): the core derives adapter sections
+    // from the classpath - the registrar cannot see the OTHER adapter types on the
+    // classpath, but it does not have to: it registers its own type's beans for the
+    // id which the core would derive (the id IS the type). If the derivation does
+    // not apply (e.g. several adapter types and no order configured), the core's
+    // validation fails the boot anyway and the extra beans are never used.
+    if (properties.getAdapters().isEmpty() && (properties.getPrioritizedAdapters().isEmpty() || properties
+        .getPrioritizedAdapters().contains(adapterType))) {
+      adapterIdConsumer.accept(adapterType);
+    }
 
   }
 

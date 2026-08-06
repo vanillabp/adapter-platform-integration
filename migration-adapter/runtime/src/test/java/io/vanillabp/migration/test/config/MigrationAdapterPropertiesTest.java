@@ -19,6 +19,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
+import io.vanillabp.integration.adapter.migration.config.ClasspathFacts;
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.TaskAdapterProperties;
@@ -80,8 +81,10 @@ public class MigrationAdapterPropertiesTest {
   }
 
   @Test
-  public void testNoResourceLocationGiven() {
+  public void testNoResourceLocationGivenIsDerivedByConvention() {
 
+    // story 34: no resources-location configured is the NORMAL case - the location
+    // follows the convention '<workflow module>/processes/<adapter id>'
     final var properties = new MigrationAdapterProperties();
     properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
     properties.setWorkflowModules(Map.of("fake-module", WorkflowModuleAdapterProperties
@@ -90,18 +93,63 @@ public class MigrationAdapterPropertiesTest {
         .build()));
     properties.setPrioritizedAdapters(List.of("adapter-test"));
 
-    final var exception = assertThrowsExactly(
-        IllegalStateException.class,
-        () -> properties.validateProperties(adaptersLoaded, List.of("fake-module"))
-    );
-    assertEquals(
-        """
-            Neither property 'vanillabp.workflow-modules.fake-module.adapters.adapter-test.resources-location' for resources specific to the BPMS
-            nor property 'vanillabp.resources-location' for VanillaBP resources (not specific to the BPMS) is set!
+    properties.validateProperties(adaptersLoaded, List.of("fake-module"));
 
-            If using first option then the location needs to be specific to the adapter in order to avoid future
-            problems once you wish to migrate to another adapter. Sample: 'classpath*:/workflow-resources/adapter-test'""",
-        exception.getMessage());
+    final var resourcesLocation = properties.getAdapterResourcesLocationFor("fake-module", "adapter-test");
+    assertEquals("classpath*:fake-module/processes/adapter-test", resourcesLocation.location());
+    assertFalse(resourcesLocation.vanillaBpBpmn(), "a derived location is adapter-specific");
+
+  }
+
+  @Test
+  public void testResourcesLocationOfTheApplicationsOwnWorkflowModule() {
+
+    // the single workflow module declared by the application's MAIN artifact: its
+    // BPMN lives below 'processes/' - no module id in the path
+    final var properties = new MigrationAdapterProperties();
+    properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
+    properties.setPrioritizedAdapters(List.of("adapter-test"));
+
+    properties.validateProperties(
+        new ClasspathFacts(
+            adaptersLoaded, List.of(new ClasspathFacts.WorkflowModuleInfo("the-app", true))),
+        null);
+
+    assertEquals(
+        "classpath*:processes/adapter-test",
+        properties
+            .getAdapterResourcesLocationFor("the-app", "adapter-test")
+            .location());
+
+  }
+
+  @Test
+  public void testConfiguredResourcesLocationsWinOverTheConvention() {
+
+    final var properties = new MigrationAdapterProperties();
+    properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
+    properties.setPrioritizedAdapters(List.of("adapter-test"));
+    properties.setResourcesLocation("classpath*:global-bpmn");
+    properties.setWorkflowModules(Map.of(
+        "configured-module", WorkflowModuleAdapterProperties
+            .builder()
+            .workflowModuleId("configured-module")
+            .adapters(Map.of("adapter-test", AdapterProperties
+                .builder()
+                .resourcesLocation("classpath*:specific")
+                .build()))
+            .build()));
+
+    properties.validateProperties(adaptersLoaded, List.of("configured-module", "global-module"));
+
+    // the adapter-specific location wins over everything
+    final var specific = properties.getAdapterResourcesLocationFor("configured-module", "adapter-test");
+    assertEquals("classpath*:specific", specific.location());
+    assertFalse(specific.vanillaBpBpmn());
+    // the global location wins over the convention (VanillaBP-neutral BPMN)
+    final var global = properties.getAdapterResourcesLocationFor("global-module", "adapter-test");
+    assertEquals("classpath*:global-bpmn", global.location());
+    assertTrue(global.vanillaBpBpmn());
 
   }
 
@@ -356,14 +404,67 @@ public class MigrationAdapterPropertiesTest {
         IllegalStateException.class,
         () -> properties.validateProperties(List.of("adapter1", "adapter2"), List.of("test-module")));
 
-    assertEquals(
-        """
-            No adapters configured! Add a properties section for each BPMS used, having 'type' set to an adapter type found in classpath:
-              vanillabp.adapters.adapter1.type=adapter1
-              vanillabp.adapters.adapter2.type=adapter2
+    // story 34: SEVERAL adapter types in the classpath are never guessed - the
+    // message asks for the ORDER, not for adapter sections
+    assertTrue(
+        exception.getMessage().contains("Several VanillaBP adapters were found in classpath"),
+        exception::getMessage);
+    assertTrue(exception.getMessage().contains("adapter1"), exception::getMessage);
+    assertTrue(exception.getMessage().contains("adapter2"), exception::getMessage);
+    assertTrue(exception.getMessage().contains("vanillabp.prioritized-adapters"), exception::getMessage);
 
-            Hint: naming the adapter id after the adapter type makes 'type' unnecessary (e.g. 'vanillabp.adapters.adapter1').""",
-        exception.getMessage());
+  }
+
+  @Test
+  public void testSingleAdapterTypeInClasspathNeedsNoConfigurationAtAll() {
+
+    // story 34's headline: one adapter dependency, one workflow module, no property
+    final var properties = new MigrationAdapterProperties();
+
+    properties.validateProperties(List.of("only-adapter"), List.of("test-module"));
+
+    assertEquals(Map.of("only-adapter", "only-adapter"), properties.adapterTypes());
+    assertEquals(List.of("only-adapter"), properties.getPrioritizedAdapters());
+    assertTrue(
+        properties.getWorkflowModules().containsKey("test-module"),
+        "a workflow module found in classpath needs no section any more");
+    assertEquals(
+        "classpath*:test-module/processes/only-adapter",
+        properties
+            .getAdapterResourcesLocationFor("test-module", "only-adapter")
+            .location());
+
+  }
+
+  @Test
+  public void testAdapterSectionsAreDerivedFromPrioritizedAdapters() {
+
+    // several BPMS: naming the ORDER is enough as long as the ids ARE adapter types
+    final var properties = new MigrationAdapterProperties();
+    properties.setPrioritizedAdapters(List.of("adapter2", "adapter1"));
+
+    properties.validateProperties(List.of("adapter1", "adapter2"), List.of("test-module"));
+
+    assertEquals(
+        Map.of("adapter1", "adapter1", "adapter2", "adapter2"),
+        properties.adapterTypes());
+    assertEquals(List.of("adapter2", "adapter1"), properties.getPrioritizedAdapters());
+
+  }
+
+  @Test
+  public void testCustomAdapterIdWithoutTypeIsNeverDerived() {
+
+    // a custom id carries no information about its type - it cannot be derived
+    final var properties = new MigrationAdapterProperties();
+    properties.setPrioritizedAdapters(List.of("my-bpms"));
+
+    final var exception = assertThrowsExactly(
+        IllegalStateException.class,
+        () -> properties.validateProperties(List.of("adapter1"), List.of("test-module")));
+
+    assertTrue(exception.getMessage().contains("my-bpms"), exception::getMessage);
+    assertTrue(exception.getMessage().contains("vanillabp.adapters"), exception::getMessage);
 
   }
 

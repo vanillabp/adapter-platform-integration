@@ -9,14 +9,18 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
-import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterTransformer;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
+/**
+ * A CUSTOM adapter id (an id which is not an adapter type) can never be derived:
+ * it carries no information about the adapter type it belongs to. Naming it in
+ * <code>prioritized-adapters</code> without a section therefore still fails the
+ * boot - with a message naming the property to add (story 34).
+ */
 @ExtendWith(SuppressOutputExtension.class)
 public class NoAdapterConfigurationTest {
 
-  // Start the unit test with the extension loaded, and sample classes
   @RegisterExtension
   static final QuarkusUnitTest unitTest = new QuarkusUnitTest()
       .setArchiveProducer(() -> ShrinkWrap
@@ -29,11 +33,9 @@ public class NoAdapterConfigurationTest {
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter())     // add mocked adapter
       .assertException(exceptionHavingMessage(IllegalStateException.class,
           """
-              No adapters configured! Add a properties section for each BPMS used, having 'type' set to an adapter type found in classpath:
-                vanillabp.adapters.dummy.type=dummy
-
-              Hint: naming the adapter id after the adapter type makes 'type' unnecessary (e.g. 'vanillabp.adapters.dummy').
-              """ + QuarkusMigrationAdapterTransformer.QUARKUS_EMPTY_SECTION_NOTE));
+              There are VanillaBP adapters referenced not found in any property section 'vanillabp.adapters.*':
+                vanillabp.prioritized-adapters => unknown
+              """));
 
   @Test
   public void testAdapterConfiguration() {
