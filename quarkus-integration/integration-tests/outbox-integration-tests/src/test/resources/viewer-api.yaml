@@ -1,0 +1,21 @@
+quarkus:
+  datasource:
+    db-kind: h2
+    jdbc:
+      url: jdbc:h2:mem:viewer-api;DB_CLOSE_DELAY=-1
+vanillabp:
+  prioritized-adapters:
+    - new-bpms
+    - old-bpms
+  adapters:
+    new-bpms:
+      type: dummy
+    old-bpms:
+      type: dummy
+  workflow-modules:
+    test-module:
+      adapters:
+        new-bpms:
+          resources-location: classpath:test-module/processes/dummy
+        old-bpms:
+          resources-location: classpath:test-module/processes/dummy

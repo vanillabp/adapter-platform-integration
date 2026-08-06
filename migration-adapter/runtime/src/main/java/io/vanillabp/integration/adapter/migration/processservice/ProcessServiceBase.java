@@ -1,13 +1,6 @@
 package io.vanillabp.integration.adapter.migration.processservice;
 
-import java.io.InputStream;
-import java.util.List;
-
-import io.vanillabp.spi.process.ProcessDefinition;
-import io.vanillabp.spi.process.ProcessDefinitionNotFoundException;
 import io.vanillabp.spi.process.ProcessService;
-import io.vanillabp.spi.process.WorkflowHistory;
-import io.vanillabp.spi.process.WorkflowNotFoundException;
 
 /**
  * Platform-neutral base of the platform integrations' {@link ProcessService} beans.
@@ -84,32 +77,6 @@ public abstract class ProcessServiceBase<A> implements ProcessService<A> {
       final String bpmnErrorCode) {
 
     throw notYetSupported("cancelTask");
-
-  }
-
-  @Override
-  public List<ProcessDefinition> getProcessDefinitions(
-      final A workflowAggregate,
-      final String historyContext) throws WorkflowNotFoundException {
-
-    throw notYetSupported("getProcessDefinitions");
-
-  }
-
-  @Override
-  public InputStream getBpmnXml(
-      final String processDefinitionId) throws ProcessDefinitionNotFoundException {
-
-    throw notYetSupported("getBpmnXml");
-
-  }
-
-  @Override
-  public WorkflowHistory getWorkflowHistory(
-      final A workflowAggregate,
-      final String historyContext) throws WorkflowNotFoundException {
-
-    throw notYetSupported("getWorkflowHistory");
 
   }
 

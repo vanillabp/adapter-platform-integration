@@ -179,6 +179,37 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
 
   }
 
+  /**
+   * The viewer/history API is READ-ONLY: no transaction is required (nothing is
+   * persisted, the aggregate is only asked for its ID) - see
+   * {@link MigrationProcessService#getProcessDefinitions(Object, String)}.
+   */
+  @Override
+  public List<io.vanillabp.spi.process.ProcessDefinition> getProcessDefinitions(
+      final A workflowAggregate,
+      final String historyContext) {
+
+    return migrationProcessService.getProcessDefinitions(workflowAggregate, historyContext);
+
+  }
+
+  @Override
+  public java.io.InputStream getBpmnXml(
+      final String processDefinitionId) {
+
+    return migrationProcessService.getBpmnXml(processDefinitionId);
+
+  }
+
+  @Override
+  public io.vanillabp.spi.process.WorkflowHistory getWorkflowHistory(
+      final A workflowAggregate,
+      final String historyContext) {
+
+    return migrationProcessService.getWorkflowHistory(workflowAggregate, historyContext);
+
+  }
+
   public boolean transactionIsActive() {
 
     return !noTransactionIsActive();

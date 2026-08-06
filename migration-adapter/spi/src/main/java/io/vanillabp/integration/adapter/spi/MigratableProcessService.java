@@ -1,7 +1,12 @@
 package io.vanillabp.integration.adapter.spi;
 
+import java.io.InputStream;
+import java.util.List;
+
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
+import io.vanillabp.spi.process.ProcessDefinition;
+import io.vanillabp.spi.process.WorkflowHistory;
 
 /**
  * To be implemented by a platform integration adapter.
@@ -455,5 +460,112 @@ public interface MigratableProcessService<A> {
       AggregatePersistenceAware<A> aggregatePersistence,
       Object workflowAggregateId,
       String messageName);
+
+  /**
+   * The viewer/history API - read-only, no phases: the adapter holding the
+   * workflow (elected by probing {@link #awarenessOfWorkflow(Object)}) answers.
+   * <p>
+   * Returns the process definitions used by the workflow of the given aggregate:
+   * the definition the workflow itself runs on (its {@code usedByElements} is
+   * <code>null</code>) plus the definitions of the call activities of that
+   * definition in the version which WOULD BE executed next (their
+   * {@code usedByElements} name the call-activity element ids using them). See the
+   * <code>ProcessService</code> javadoc of the spi-for-java for the full semantics.
+   * <p>
+   * <b>Definition ids are adapter-native here.</b> The core namespaces them per
+   * adapter id before handing them to the application (a definition id has to stay
+   * resolvable by {@link #getBpmnXml(String, String, String)} of the right adapter
+   * even though that method gets no aggregate to elect by) and un-namespaces them
+   * again on the way back.
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param aggregatePersistence The persistence of the workflow-aggregate
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param historyContext <code>null</code> for the workflow's primary process or
+   *        a value reported as
+   *        {@code WorkflowElementHistory#secondaryWorkflowHistoryContext()} by
+   *        {@link #getWorkflowHistory} for a call activity already executed
+   * @return The process definitions - an EMPTY list means "this adapter does not
+   *         know the workflow" (the core turns that into the SPI's
+   *         {@code WorkflowNotFoundException})
+   */
+  default List<ProcessDefinition> getProcessDefinitions(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String historyContext) {
+
+    throw viewerApiNotImplemented("getProcessDefinitions");
+
+  }
+
+  /**
+   * Returns the BPMN XML of a process definition of THIS adapter.
+   * <p>
+   * The definition id is the adapter-native part of the id reported by
+   * {@link #getProcessDefinitions} (the core strips its adapter namespace before
+   * calling).
+   *
+   * @param workflowModuleId The ID of the workflow module the definition belongs to
+   * @param bpmnProcessId The BPMN process ID of the process service asked
+   * @param processDefinitionId The ADAPTER-NATIVE process definition id
+   * @return The BPMN XML - <code>null</code> if this adapter does not know the
+   *         definition (the core turns that into the SPI's
+   *         {@code ProcessDefinitionNotFoundException})
+   */
+  default InputStream getBpmnXml(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String processDefinitionId) {
+
+    throw viewerApiNotImplemented("getBpmnXml");
+
+  }
+
+  /**
+   * Returns the execution history of the workflow of the given aggregate.
+   * <p>
+   * The returned {@code WorkflowHistory#processDefinitionId()} is
+   * ADAPTER-NATIVE (namespaced by the core, see {@link #getProcessDefinitions}).
+   * A BPMS not recording an element history reports
+   * {@code WorkflowHistory#elementsHistory()} as <code>null</code> - which is the
+   * SPI's documented answer for "not supported by the underlying BPMS", NOT an
+   * error. The same holds for a BPMS whose history is eventually consistent and
+   * has not caught up yet: report what is visible, never an error.
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param aggregatePersistence The persistence of the workflow-aggregate
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param historyContext <code>null</code> for the workflow's primary process or
+   *        the secondary history context of a call activity already executed
+   * @return The history - <code>null</code> means "this adapter does not know the
+   *         workflow" (the core turns that into the SPI's
+   *         {@code WorkflowNotFoundException})
+   */
+  default WorkflowHistory getWorkflowHistory(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String historyContext) {
+
+    throw viewerApiNotImplemented("getWorkflowHistory");
+
+  }
+
+  private UnsupportedOperationException viewerApiNotImplemented(
+      final String operation) {
+
+    return new UnsupportedOperationException(
+        ("The VanillaBP adapter '%s' does not implement '%s' of the viewer/history API! Either the "
+            + "adapter predates that API or its BPMS cannot serve it - use an adapter which does, "
+            + "or do not call the viewer/history methods of ProcessService for workflows running "
+            + "in this BPMS.")
+            .formatted(getAdapterId(), operation));
+
+  }
 
 }

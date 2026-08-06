@@ -95,4 +95,28 @@ public class WorkflowService {
 
   }
 
+
+  public java.util.List<io.vanillabp.spi.process.ProcessDefinition> getProcessDefinitions(
+      final Aggregate aggregate,
+      final String historyContext) {
+
+    return processService.getProcessDefinitions(aggregate, historyContext);
+
+  }
+
+  public java.io.InputStream getBpmnXml(
+      final String processDefinitionId) {
+
+    return processService.getBpmnXml(processDefinitionId);
+
+  }
+
+  public io.vanillabp.spi.process.WorkflowHistory getWorkflowHistory(
+      final Aggregate aggregate,
+      final String historyContext) {
+
+    return processService.getWorkflowHistory(aggregate, historyContext);
+
+  }
+
 }

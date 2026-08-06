@@ -91,23 +91,31 @@ public class ProcessServiceSpringBeanTest {
   }
 
   @Test
-  @DisplayName("Not yet implemented operations throw UnsupportedOperationException saying so")
-  public void notYetImplementedOperationsThrow() {
+  @DisplayName("The viewer/history API needs no transaction and reports unknown subjects guiding")
+  public void viewerApiOperationsNeedNoTransaction() {
 
     final var aggregate = new Object();
+    when(aggregatePersistenceAware.getAggregateId(aggregate)).thenReturn("4711");
+    when(migratableProcessService.awarenessOfWorkflow("4711"))
+        .thenReturn(io.vanillabp.integration.adapter.spi.WorkflowAwareness.UNKNOWN_TO_BPMS);
 
-    final var operations = java.util.List.<org.junit.jupiter.api.function.Executable>of(
+    // no transaction is active (see cleanupTransactionState) - reads must not
+    // require one; the workflow being unknown is what raises the SPI's exception
+    final var workflowOperations = java.util.List.<org.junit.jupiter.api.function.Executable>of(
         () -> testee.getProcessDefinitions(aggregate, null),
-        () -> testee.getBpmnXml("definition-1"),
         () -> testee.getWorkflowHistory(aggregate, null));
-
-    for (final var operation : operations) {
+    for (final var operation : workflowOperations) {
       final var exception = assertThrowsExactly(
-          UnsupportedOperationException.class,
+          io.vanillabp.spi.process.WorkflowNotFoundException.class,
           operation);
-      // a silent no-op would hide the missing implementation - the message says so
-      assertTrue(exception.getMessage().contains("not yet supported by VanillaBP 2"));
+      assertTrue(exception.getMessage().contains("4711"));
     }
+
+    // a definition id not following '<adapter id>#<BPMS specific id>'
+    final var definitionException = assertThrowsExactly(
+        io.vanillabp.spi.process.ProcessDefinitionNotFoundException.class,
+        () -> testee.getBpmnXml("definition-1"));
+    assertTrue(definitionException.getMessage().contains("definition-1"));
 
   }
 

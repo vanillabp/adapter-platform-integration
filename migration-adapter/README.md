@@ -266,6 +266,37 @@ applications may define their own `PhaseTwoOutbox` bean instead):
 | Spring Boot | MongoDB                  | own implementation using `MongoTemplate` (`spring-boot-integration`)                     |
 | Quarkus     | JDBC datasource (Agroal) | own JDBC/JTA-based implementation (`quarkus-integration`; gruelbox does not support JTA) |
 
+### Viewer/history API (read path)
+
+`ProcessService#getProcessDefinitions`, `#getBpmnXml` and `#getWorkflowHistory` are
+read-only: no aggregate is saved, no transaction is required and no workflow is
+advanced. The BPMS answering is elected by the same probing/caching
+`WorkflowLocator` walk as every other operation on an existing workflow — with one
+difference: `COMPLETED` is a REGULAR result (viewers show ended workflows), only a
+workflow unknown to EVERY adapter raises the SPI's `WorkflowNotFoundException`.
+
+**Composite process definition ids.** `getBpmnXml(processDefinitionId)` addresses a
+process DEFINITION, not a workflow — there is no aggregate to elect a BPMS by. The
+core therefore namespaces every adapter-native definition id it hands out (also the
+one inside `WorkflowHistory#processDefinitionId()`):
+
+```
+<adapter id>#<adapter-native definition id>
+```
+
+Split at the FIRST `#` (adapter ids are configuration keys and never contain one;
+native ids may, e.g. Camunda 7's `MyProcess:1:8a9c…`). The scheme is modeled in
+`ProcessDefinitionIds` and is a stable contract: applications may store such ids
+(e.g. in a viewer's URL). Adapters only ever see their native ids — the core strips
+the namespace before calling `MigratableProcessService#getBpmnXml` and routes to the
+adapter named by it (unknown adapter, malformed id or unknown definition →
+`ProcessDefinitionNotFoundException`, each with a guiding message).
+
+Adapters answer "I do not know this workflow" with an empty list / `null`; a BPMS
+without an element history reports `elementsHistory()` as `null` (the SPI's
+"not supported by the underlying BPMS"), and an eventually consistent BPMS reports
+what is visible instead of raising an error.
+
 ### Aggregate persistence
 
 The core does not know any persistence technology.

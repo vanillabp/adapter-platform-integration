@@ -8,6 +8,7 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
 import io.vanillabp.integration.adapter.migration.transaction.TransactionRunner;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskHandler;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
+import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
@@ -909,6 +910,194 @@ public class MigrationProcessService<A> {
     }
     adapter.startWorkflowByMessagePhaseTwo(
         workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, messageName);
+
+  }
+
+  /**
+   * The viewer/history API: returns the process definitions used by the workflow
+   * of the given aggregate. Read-only - the aggregate is NOT saved (unlike every
+   * operation advancing a workflow); the BPMS holding the workflow is elected by
+   * probing {@code awarenessOfWorkflow} like message correlation does, but a
+   * COMPLETED workflow is a perfectly valid subject here (viewers show ended
+   * workflows).
+   * <p>
+   * The adapter-native definition ids are namespaced with the answering adapter's
+   * id (see {@link ProcessDefinitionIds}) so {@link #getBpmnXml(String)} - which
+   * has no aggregate to elect by - stays resolvable.
+   *
+   * @param workflowAggregate The workflow aggregate
+   * @param historyContext <code>null</code> for the primary process or a
+   *        secondary history context of a call activity
+   * @return The process definitions
+   */
+  public List<io.vanillabp.spi.process.ProcessDefinition> getProcessDefinitions(
+      final A workflowAggregate,
+      final String historyContext) {
+
+    final var aggregateId = aggregatePersistenceSupport
+        .getAggregateId(workflowAggregate);
+    final var location = locateForReading(aggregateId, "process definitions");
+    final var adapter = location.adapter();
+
+    final var definitions = adapter.getProcessDefinitions(
+        workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, aggregateId, historyContext);
+    if ((definitions == null) || definitions.isEmpty()) {
+      throw new io.vanillabp.spi.process.WorkflowNotFoundException(
+          workflowUnknownMessage(aggregateId, adapter.getAdapterId(), "process definitions", historyContext));
+    }
+
+    return definitions
+        .stream()
+        .map(definition -> new io.vanillabp.spi.process.ProcessDefinition(
+            ProcessDefinitionIds.compose(adapter.getAdapterId(), definition.id()), definition
+                .bpmnProcessId(), definition.version(), definition.usedByElements()))
+        .toList();
+
+  }
+
+  /**
+   * The viewer/history API: returns the BPMN XML of a process definition
+   * previously reported by
+   * {@link #getProcessDefinitions(Object, String)}. The composite definition id
+   * names the adapter which can resolve it - there is no aggregate to elect by.
+   *
+   * @param processDefinitionId The composite process definition id
+   * @return The BPMN XML
+   */
+  public java.io.InputStream getBpmnXml(
+      final String processDefinitionId) {
+
+    final var parsed = ProcessDefinitionIds.parse(processDefinitionId);
+    if (parsed == null) {
+      throw new io.vanillabp.spi.process.ProcessDefinitionNotFoundException(
+          ("The process definition id '%s' does not follow VanillaBP's scheme "
+              + "'<adapter id>%s<BPMS specific id>'! Pass an id reported by getProcessDefinitions "
+              + "(or WorkflowHistory#processDefinitionId) of BPMN process '%s' of workflow module "
+              + "'%s' unchanged - it is opaque to the application.")
+              .formatted(
+                  processDefinitionId,
+                  ProcessDefinitionIds.SEPARATOR,
+                  bpmnProcessId,
+                  workflowModuleId));
+    }
+
+    final var adapter = adapterProcessServices
+        .stream()
+        .filter(processService -> processService.getAdapterId().equals(parsed.adapterId()))
+        .findFirst()
+        .orElseThrow(() -> new io.vanillabp.spi.process.ProcessDefinitionNotFoundException(
+            ("The process definition id '%s' addresses the adapter '%s' which is not (or no longer) "
+                + "configured for BPMN process '%s' of workflow module '%s' (configured adapters, "
+                + "in prioritized order: %s)! Either the id was kept from an earlier configuration "
+                + "or it belongs to another workflow.")
+                .formatted(
+                    processDefinitionId,
+                    parsed.adapterId(),
+                    bpmnProcessId,
+                    workflowModuleId,
+                    prioritizedAdapters)));
+
+    final var bpmnXml = adapter.getBpmnXml(
+        workflowModuleId, bpmnProcessId, parsed.nativeProcessDefinitionId());
+    if (bpmnXml == null) {
+      throw new io.vanillabp.spi.process.ProcessDefinitionNotFoundException(
+          ("The adapter '%s' does not know the process definition '%s' (of BPMN process '%s' of "
+              + "workflow module '%s')! Likely causes: the definition was deleted in the BPMS, or "
+              + "the id was kept from a previous deployment the BPMS no longer holds.")
+              .formatted(
+                  parsed.adapterId(),
+                  parsed.nativeProcessDefinitionId(),
+                  bpmnProcessId,
+                  workflowModuleId));
+    }
+    return bpmnXml;
+
+  }
+
+  /**
+   * The viewer/history API: returns the execution history of the workflow of the
+   * given aggregate - same election and read-only semantics as
+   * {@link #getProcessDefinitions(Object, String)}.
+   *
+   * @param workflowAggregate The workflow aggregate
+   * @param historyContext <code>null</code> for the primary process or a
+   *        secondary history context of a call activity
+   * @return The workflow history
+   */
+  public io.vanillabp.spi.process.WorkflowHistory getWorkflowHistory(
+      final A workflowAggregate,
+      final String historyContext) {
+
+    final var aggregateId = aggregatePersistenceSupport
+        .getAggregateId(workflowAggregate);
+    final var location = locateForReading(aggregateId, "the workflow history");
+    final var adapter = location.adapter();
+
+    final var history = adapter.getWorkflowHistory(
+        workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, aggregateId, historyContext);
+    if (history == null) {
+      throw new io.vanillabp.spi.process.WorkflowNotFoundException(
+          workflowUnknownMessage(aggregateId, adapter.getAdapterId(), "the workflow history", historyContext));
+    }
+
+    return new io.vanillabp.spi.process.WorkflowHistory(
+        ProcessDefinitionIds.compose(adapter.getAdapterId(), history.processDefinitionId()), history
+            .startTime(), history.endTime(), history.elementsHistory());
+
+  }
+
+  /**
+   * Elects the adapter answering a READ operation of the viewer/history API.
+   * Unlike operations advancing a workflow, {@link WorkflowAwareness#COMPLETED} is
+   * a regular result here (an ended workflow still has definitions and a history);
+   * only a subject unknown to EVERY adapter raises the SPI's
+   * {@code WorkflowNotFoundException}.
+   */
+  private WorkflowLocator.Location<A> locateForReading(
+      final Object aggregateId,
+      final String subjectOfRead) {
+
+    final var subject = "workflow of aggregate '%s' (BPMN process '%s' of workflow module '%s')"
+        .formatted(aggregateId, bpmnProcessId, workflowModuleId);
+
+    final var location = workflowLocator.locate(
+        adapterProcessServices,
+        adapter -> adapter.awarenessOfWorkflow(aggregateId),
+        aggregateId,
+        subject);
+
+    if (location.awareness() == WorkflowAwareness.UNKNOWN_TO_BPMS) {
+      throw new io.vanillabp.spi.process.WorkflowNotFoundException(
+          ("No configured BPMS knows the %s - %s cannot be determined (probed adapters, in "
+              + "prioritized order: %s)! Likely causes: the workflow was never started, was "
+              + "started through another system, or its history was already cleaned up in the "
+              + "BPMS.")
+              .formatted(subject, subjectOfRead, prioritizedAdapters));
+    }
+    return location;
+
+  }
+
+  private String workflowUnknownMessage(
+      final Object aggregateId,
+      final String adapterId,
+      final String subjectOfRead,
+      final String historyContext) {
+
+    return ("The adapter '%s' cannot provide %s of the workflow of aggregate '%s' (BPMN process "
+        + "'%s' of workflow module '%s'%s)! The BPMS reported the workflow as known but has no "
+        + "data for it - for BPMS cleaning up history this means the retention period has "
+        + "passed; for eventually consistent BPMS it may also mean the data is not yet "
+        + "visible.")
+        .formatted(
+            adapterId,
+            subjectOfRead,
+            aggregateId,
+            bpmnProcessId,
+            workflowModuleId,
+            historyContext == null
+                ? ""
+                : ", history context '%s'".formatted(historyContext));
 
   }
 

@@ -14,16 +14,20 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
 
   private final Instance<DummyTaskAwarenessSource> taskAwarenessSources;
 
+  private final Instance<DummyViewerSource> viewerSources;
+
   public MigratableProcessService(
       final String adapterId,
       final boolean needsTwoPhaseCommitForStartingWorkflows,
       final Instance<DummyPhaseTwoListener> phaseTwoListeners,
-      final Instance<DummyTaskAwarenessSource> taskAwarenessSources) {
+      final Instance<DummyTaskAwarenessSource> taskAwarenessSources,
+      final Instance<DummyViewerSource> viewerSources) {
 
     this.adapterId = adapterId;
     this.needsTwoPhaseCommitForStartingWorkflows = needsTwoPhaseCommitForStartingWorkflows;
     this.phaseTwoListeners = phaseTwoListeners;
     this.taskAwarenessSources = taskAwarenessSources;
+    this.viewerSources = viewerSources;
 
   }
 
@@ -276,6 +280,67 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
           .stream()
           .forEach(listener -> listener.startedWorkflowByMessagePhaseTwo(workflowAggregateId, messageName));
     }
+
+  }
+
+
+  @Override
+  public java.util.List<io.vanillabp.spi.process.ProcessDefinition> getProcessDefinitions(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String historyContext) {
+
+    if (viewerSources == null) {
+      return java.util.List.of();
+    }
+    return viewerSources
+        .stream()
+        .map(source -> source.getProcessDefinitions(adapterId, workflowAggregateId, historyContext))
+        .filter(java.util.Objects::nonNull)
+        .findFirst()
+        .orElseGet(java.util.List::of);
+
+  }
+
+  @Override
+  public java.io.InputStream getBpmnXml(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String processDefinitionId) {
+
+    if (viewerSources == null) {
+      return null;
+    }
+    return viewerSources
+        .stream()
+        .map(source -> source.getBpmnXml(adapterId, processDefinitionId))
+        .filter(java.util.Objects::nonNull)
+        .findFirst()
+        .map(xml -> (java.io.InputStream) new java.io.ByteArrayInputStream(
+            xml.getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+        .orElse(null);
+
+  }
+
+  @Override
+  public io.vanillabp.spi.process.WorkflowHistory getWorkflowHistory(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String historyContext) {
+
+    if (viewerSources == null) {
+      return null;
+    }
+    return viewerSources
+        .stream()
+        .map(source -> source.getWorkflowHistory(adapterId, workflowAggregateId, historyContext))
+        .filter(java.util.Objects::nonNull)
+        .findFirst()
+        .orElse(null);
 
   }
 

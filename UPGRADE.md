@@ -4,6 +4,41 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Viewer/history API (2026-08-06)
+
+Story 26 - `ProcessService#getProcessDefinitions`, `#getBpmnXml` and
+`#getWorkflowHistory` are implemented (they were stubs raising
+`UnsupportedOperationException` before).
+
+- **Applications:** the three methods are READ-ONLY - no transaction is required,
+  nothing is persisted and the workflow is not advanced. Semantics are the V1 ones
+  documented in the SPI's README (definitions incl. call activities, BPMN XML,
+  element history, `secondaryWorkflowHistoryContext` to dig into call activities).
+  An ENDED workflow stays viewable as long as its BPMS holds the data.
+- **Process definition ids are opaque and NAMESPACED:**
+  `<adapter id>#<BPMS specific id>` (also inside
+  `WorkflowHistory#processDefinitionId()`). `getBpmnXml` addresses a process
+  DEFINITION, not a workflow - there is no aggregate to elect the BPMS by, so the
+  id itself has to name the adapter which can resolve it (essential in migration
+  setups where several BPMS serve the same BPMN process). Never parse or compose
+  such ids; pass them back unchanged. A malformed id, an id of an unconfigured
+  adapter or an unknown definition raises the guiding
+  `ProcessDefinitionNotFoundException`.
+- **Election:** reads are routed to the BPMS holding the workflow by the same
+  probing/caching election as the other operations - with COMPLETED workflows
+  being a REGULAR result here (viewers show ended workflows). A workflow no BPMS
+  knows raises `WorkflowNotFoundException`.
+- **Adapter authors:** `MigratableProcessService` gained three DEFAULT methods -
+  `getProcessDefinitions(module, process, persistence, aggregateId, historyContext)`,
+  `getBpmnXml(module, process, processDefinitionId)` and
+  `getWorkflowHistory(module, process, persistence, aggregateId, historyContext)`.
+  Their ids are ADAPTER-NATIVE (the core namespaces them). The defaults throw an
+  `UnsupportedOperationException` naming the adapter - implement them, and answer
+  "I do not know this workflow" with an empty list / `null` (the core turns that
+  into the SPI exceptions). A BPMS without an element history reports
+  `WorkflowHistory#elementsHistory()` as `null`, and an eventually consistent BPMS
+  reports what is visible - never an error for a lag.
+
 ## BPMS election: cache + START re-dispatch mitigation (2026-08-04)
 
 Story 25 - the unified election for operations on existing workflows, an optional
