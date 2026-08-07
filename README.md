@@ -60,17 +60,54 @@ Top-level modules (by directory name) are:
 This repository contains the following VanillaBP functionality:
 
 1. Platform integration:
-   1. Loading VanillaBP configuration using the platform’s native configuration mechanisms.
+   1. Loading VanillaBP configuration using the platform’s native configuration mechanisms, including the
+      per-workflow-module configuration files and the conventions that make an explicit configuration optional.
    2. Detecting [workflow modules](https://github.com/vanillabp/adapter-platform-integration/wiki/Workflow-modules).
-   3. Deploying BPMS resources (e.g. BPMN files, DMN files, etc.).
+   3. Running the deployment pipeline of each workflow module (`readBpmn` → `prepareBpmn` → `wireBpmn` →
+      `deployResources` → `startWorkflowProcessing`) for every configured adapter and
+      [extension](https://github.com/vanillabp/adapter-platform-integration/wiki/Extensions). BPMN only — there is
+      no DMN model type yet.
    4. Detecting services annotated with [@WorkflowService](https://github.com/vanillabp/spi-for-java#wire-up-a-process).
    5. Building a [ProcessService](https://github.com/vanillabp/spi-for-java#start-a-workflow) for each deployed process, to be used by workflow services.
-   6. Creating event listeners for tasks to be [implemented by individual workflow services](https://github.com/vanillabp/spi-for-java#wire-up-a-task).
+   6. Executing [@WorkflowTask](https://github.com/vanillabp/spi-for-java#wire-up-a-task) methods on behalf of the
+      adapters: resolving the handler, loading the workflow aggregate, binding the parameters, running the method in
+      a transaction, saving the aggregate and mapping the outcome (completed / BPMN error / left open).
+   7. Turning a workflow aggregate into the values a BPMS gets to see
+      (`@SyncWithBPMS`/`@NoSyncWithBPMS`) — one model, used by every adapter.
+   8. Reliable second phases for remote BPMS: the transaction outbox, its idempotency contract and the dispatch
+      router.
+   9. The read-only viewer/history API across all BPMS, incl. namespacing process-definition ids per adapter.
 2. Support for migration across BPMS:
    1. Migrating within the same BPMS:
       1. From on-premise to SaaS.
       2. Between different versions.
    2. Migrating from one BPMS to another.
+   3. Electing the BPMS holding a particular workflow by probing the configured adapters in priority order, and
+      remembering the answer.
+
+### Rules and decisions worth knowing before contributing
+
+These are the conventions the current implementation follows. Keeping to them is what makes a new feature reach all
+platforms at once — the details and their reasoning are in each module's `README.md` and in
+[`UPGRADE.md`](./UPGRADE.md), which records every breaking change and why it was made.
+
+1. **Features are implemented in `migration-adapter`** (plain Java). A platform integration only does what only it
+   can do: read configuration, scan/analyze business code, create beans, run transactions. If a feature needs
+   platform-specific behavior, express it as an interface the core owns (e.g. `TransactionRunner`).
+2. **Two SPIs, deliberately separated.** The *business SPI* (`vanillabp-integration-spi`) is what applications
+   implement (aggregate persistence, custom outbox, election cache). The *adapter SPI* (`migration-adapter-spi`) is
+   what BPMS adapters implement. A type never lives in both.
+3. **One adapter instance per configured adapter id**, not per adapter type — that is the basis of the migration
+   feature, and the reason process and deployment services exist per id.
+4. **Validate at startup, guide in the message.** A configuration defect surfaces when the application boots, and
+   the message names the property keys to add. An unconfigured application should still start and be led to a
+   working setup by its own log.
+5. **At-least-once, never pretended exactly-once.** Everything dispatched through the outbox may be dispatched
+   again; operations are keyed for idempotency and residual windows are documented rather than hidden.
+6. **Never read state back from the BPMS into the aggregate.** The aggregate is the single source of truth; the only
+   values read from a BPMS are those a `@TaskParam` explicitly asks for.
+7. **Tests: acceptance tests first**, per platform, with the dummy adapter as the BPMS double; coverage is measured
+   separately per platform (>90%). A story is proven by its acceptance test, not by unit coverage.
 
 ### Building
 
