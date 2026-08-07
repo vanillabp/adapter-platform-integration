@@ -101,6 +101,27 @@ public interface QuarkusMigrationAdapterProperties {
      */
     Optional<String> resourcesLocation();
 
+    /**
+     * How the identifiers of a workflow module are kept apart from those of other
+     * workflow modules (<code>none</code>, <code>by-adapter</code>,
+     * <code>use-prefix</code>; see
+     * {@link io.vanillabp.integration.adapter.spi.NameClashAvoidance}). Adapter-scoped:
+     * the most specific configured value wins (workflow &gt; workflow module &gt;
+     * adapter), the default is <code>by-adapter</code>.
+     *
+     * @return The name-clash-avoidance mode
+     */
+    Optional<io.vanillabp.integration.adapter.spi.NameClashAvoidance> nameClashAvoidance();
+
+    /**
+     * Whether a task definition is scoped by the BPMN process ID in addition to the
+     * workflow module ID (only relevant for <code>use-prefix</code>). Defaults to
+     * <code>true</code>.
+     *
+     * @return Whether task definitions are scoped per BPMN process
+     */
+    Optional<Boolean> prefixTaskDefinitionsPerProcess();
+
   }
 
   /**
@@ -116,6 +137,27 @@ public interface QuarkusMigrationAdapterProperties {
      * where it is actually required).
      */
     Optional<String> resourcesLocation();
+
+    /**
+     * How the identifiers of a workflow module are kept apart from those of other
+     * workflow modules (<code>none</code>, <code>by-adapter</code>,
+     * <code>use-prefix</code>; see
+     * {@link io.vanillabp.integration.adapter.spi.NameClashAvoidance}). Adapter-scoped:
+     * the most specific configured value wins (workflow &gt; workflow module &gt;
+     * adapter), the default is <code>by-adapter</code>.
+     *
+     * @return The name-clash-avoidance mode
+     */
+    Optional<io.vanillabp.integration.adapter.spi.NameClashAvoidance> nameClashAvoidance();
+
+    /**
+     * Whether a task definition is scoped by the BPMN process ID in addition to the
+     * workflow module ID (only relevant for <code>use-prefix</code>). Defaults to
+     * <code>true</code>.
+     *
+     * @return Whether task definitions are scoped per BPMN process
+     */
+    Optional<Boolean> prefixTaskDefinitionsPerProcess();
 
   }
 

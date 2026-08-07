@@ -237,6 +237,24 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   }
 
   /**
+   * The core-owned name-clash-avoidance model (story 35): resolves the mode per
+   * workflow module/workflow and adapter and composes the identifiers a BPMS sees.
+   * One instance per application - BPMS adapters receive it and apply it to their
+   * model and their commands.
+   *
+   * @param properties The VanillaBP configuration
+   * @return The name-clash-avoidance support
+   */
+  @Bean
+  @ConditionalOnMissingBean
+  public io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport vanillaBpNameClashAvoidanceSupport(
+      final io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties properties) {
+
+    return new io.vanillabp.integration.adapter.migration.scoping.NameClashAvoidanceService(properties);
+
+  }
+
+  /**
    * The core-owned registry of <code>&#64;WorkflowTask</code> handlers and
    * adapter-facing {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker}:
    * the process-service beans register every workflow service class under all BPMN

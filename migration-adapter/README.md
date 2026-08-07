@@ -141,6 +141,39 @@ old one.
    new workflow jobs are processed while web/messaging infrastructure is being torn
    down.
 
+### Name-clash avoidance (`NameClashAvoidanceSupport`)
+
+One adapter-scoped property decides how a workflow module's identifiers are kept
+apart from another module's: `name-clash-avoidance` = `BY_ADAPTER` (default,
+VanillaBP 1's behavior — the BPMS' own isolation, e.g. a tenant named after the
+module) | `USE_PREFIX` (no tenant; VanillaBP prefixes the identifiers, separator
+`__`) | `NONE`. The core owns both the resolution (most-specific-wins across
+workflow > workflow module > adapter) and the composition of the strings
+(`NameClashAvoidanceService implements NameClashAvoidanceSupport`, handed to every
+adapter as a platform bean). An adapter only decides WHERE to apply the result:
+
+- in `prepareBpmn`, on its own model type — only the adapter knows it. Note the
+  pipeline calls `prepareBpmn` once per PROCESS while all processes of a file share
+  ONE model, so a model must be rewritten **once per file** (the adapters guard this
+  by checking whether the file is already in the processing context);
+- at every runtime boundary, outbound (`scoped*`) and inbound (`plain*`). Inbound
+  always strips a KNOWN prefix, never "everything up to the first separator".
+
+The result is transparent: registries, `ProcessService` calls, BPMN files and
+configuration keep the PLAIN identifiers; only the BPMS sees scoped ones. Which
+identifiers actually need scoping is BPMS-specific and documented in each adapter's
+wiki (Camunda 7 does not prefix task definitions — they are process-local
+expressions; Camunda 8 must prefix job types — they are subscribed cluster-wide).
+
+Two guardrails belong to adapters:
+`validateNativeIsolationSupported(adapterId, workflowModuleId, bpmsDescription)` is
+called while DEPLOYING by an adapter whose BPMS has no isolation of its own (it
+rejects `BY_ADAPTER`; `validateDistinctAdapterInstances` is the wrong place, the core
+invokes that only for more than one id of a type), and
+`validateNoCollidingProcessIds(adapterId, deployedProcesses)` is called once the
+deployed processes are known. Changing the mode is a BPMS **migration**, not a
+property change — hence a differing mode makes two adapter ids of one type distinct.
+
 ### Workflow-task processing
 
 `@WorkflowTask` methods are executed by the core (package `workflowtask`): the

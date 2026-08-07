@@ -716,4 +716,43 @@ public class MigrationAdapterPropertiesTest {
 
   }
 
+
+  @Test
+  @org.junit.jupiter.api.DisplayName("A workflow module id containing the prefix separator fails - but only when prefixing is used")
+  public void moduleIdsAreValidatedAgainstThePrefixSeparator() {
+
+    final var withPrefixing = MigrationAdapterProperties
+        .builder()
+        .adapters(java.util.Map.of("c8", adapterUsingPrefixes()))
+        .prioritizedAdapters(java.util.List.of("c8"))
+        .workflowModules(java.util.Map.<String, WorkflowModuleAdapterProperties>of(
+            "loan__approval", new WorkflowModuleAdapterProperties()))
+        .build();
+    final var exception = org.junit.jupiter.api.Assertions.assertThrows(
+        IllegalStateException.class,
+        withPrefixing::validateWorkflowModuleIdsAgainstPrefixing);
+    org.junit.jupiter.api.Assertions.assertTrue(
+        exception.getMessage().contains("'loan__approval'") && exception.getMessage().contains("'__'"),
+        exception::getMessage);
+
+    // the very same module id is fine as long as nothing uses prefixes
+    MigrationAdapterProperties
+        .builder()
+        .adapters(java.util.Map.of("c8", AdapterConfigProperties.ofType("camunda8")))
+        .prioritizedAdapters(java.util.List.of("c8"))
+        .workflowModules(java.util.Map.<String, WorkflowModuleAdapterProperties>of(
+            "loan__approval", new WorkflowModuleAdapterProperties()))
+        .build()
+        .validateWorkflowModuleIdsAgainstPrefixing();
+
+  }
+
+  private static AdapterConfigProperties adapterUsingPrefixes() {
+
+    final var adapter = AdapterConfigProperties.ofType("camunda8");
+    adapter.setNameClashAvoidance(io.vanillabp.integration.adapter.spi.NameClashAvoidance.USE_PREFIX);
+    return adapter;
+
+  }
+
 }

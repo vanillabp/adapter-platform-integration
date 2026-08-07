@@ -258,6 +258,75 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   }
 
+  /**
+   * A workflow module id must not contain the separator VanillaBP uses to scope
+   * identifiers ({@link io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport#SEPARATOR})
+   * - a prefixed identifier could no longer be read back reliably. Only checked
+   * when prefixing is configured ANYWHERE, so existing applications which do not
+   * use it are not affected.
+   *
+   * @throws IllegalStateException Naming the offending module ids and the separator
+   */
+  public void validateWorkflowModuleIdsAgainstPrefixing() {
+
+    if (!isPrefixingConfiguredAnywhere()) {
+      return;
+    }
+    final var separator = io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.SEPARATOR;
+    final var offending = workflowModules
+        .keySet()
+        .stream()
+        .filter(workflowModuleId -> workflowModuleId.contains(separator))
+        .sorted()
+        .collect(Collectors.joining("', '", "'", "'"));
+    if (offending.equals("''")) {
+      return;
+    }
+    throw new IllegalStateException(
+        ("The workflow module id(s) %s contain '%s'! VanillaBP uses it to separate a prefix from "
+            + "the identifier it scopes (name-clash-avoidance 'use-prefix' is configured), so a "
+            + "prefixed identifier could no longer be read back. Rename the workflow module(s) or "
+            + "choose another name-clash-avoidance mode.")
+            .formatted(offending, separator));
+
+  }
+
+  /**
+   * Whether {@link io.vanillabp.integration.adapter.spi.NameClashAvoidance#USE_PREFIX}
+   * is configured at any level for any adapter.
+   */
+  private boolean isPrefixingConfiguredAnywhere() {
+
+    final var usePrefix = io.vanillabp.integration.adapter.spi.NameClashAvoidance.USE_PREFIX;
+    if (adapters
+        .values()
+        .stream()
+        .anyMatch(adapter -> adapter.getNameClashAvoidance() == usePrefix)) {
+      return true;
+    }
+    return workflowModules
+        .values()
+        .stream()
+        .anyMatch(module -> anyUsesPrefix(module.getAdapters()) || module
+            .getWorkflows()
+            .values()
+            .stream()
+            .anyMatch(workflow -> anyUsesPrefix(workflow.getAdapters())));
+
+  }
+
+  private static boolean anyUsesPrefix(
+      final Map<String, ? extends AdapterProperties> adaptersOfLevel) {
+
+    return (adaptersOfLevel != null) && adaptersOfLevel
+        .values()
+        .stream()
+        .anyMatch(
+            adapter -> adapter
+                .getNameClashAvoidance() == io.vanillabp.integration.adapter.spi.NameClashAvoidance.USE_PREFIX);
+
+  }
+
   public List<String> getPrioritizedAdaptersFor(
       final String workflowModuleId) {
 
@@ -678,6 +747,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
     normalize(facts);
     validateAndLink();
+    validateWorkflowModuleIdsAgainstPrefixing();
 
     if (knownWorkflowModuleIds.isEmpty()) {
       throw new IllegalStateException("No workflow-modules where given!");

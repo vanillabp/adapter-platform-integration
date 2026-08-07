@@ -35,11 +35,15 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
   private record AdapterConfiguration(
                                       Optional<String> type,
                                       Optional<DeploymentFailurePolicy> deploymentFailure,
-                                      Optional<String> resourcesLocation) implements QuarkusMigrationAdapterProperties.AdapterConfiguration {
+                                      Optional<String> resourcesLocation,
+                                      Optional<io.vanillabp.integration.adapter.spi.NameClashAvoidance> nameClashAvoidance,
+                                      Optional<Boolean> prefixTaskDefinitionsPerProcess) implements QuarkusMigrationAdapterProperties.AdapterConfiguration {
   }
 
   private record AdapterProperties(
-                                   Optional<String> resourcesLocation) implements QuarkusMigrationAdapterProperties.AdapterProperties {
+                                   Optional<String> resourcesLocation,
+                                   Optional<io.vanillabp.integration.adapter.spi.NameClashAvoidance> nameClashAvoidance,
+                                   Optional<Boolean> prefixTaskDefinitionsPerProcess) implements QuarkusMigrationAdapterProperties.AdapterProperties {
   }
 
   private record TaskProperties(
@@ -93,22 +97,32 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     final var properties = new Properties(
         Optional.of(List.of("c8-cloud", "c7")), Optional.of("classpath*:vanillabp-processes"), Map.of(
             "c8-cloud", new AdapterConfiguration(
-                Optional.of("camunda8"), Optional.of(DeploymentFailurePolicy.WARN), Optional.of("adapter-level")),
-            "c7", new AdapterConfiguration(Optional.empty(), Optional.empty(), Optional.empty())), Map.of(
-                "loan-approval", new WorkflowModuleProperties(
-                    Optional.of(List.of("c7")), Map.of("c7",
-                        new AdapterProperties(Optional.of("classpath:c7-bpmn"))), Map
-                            .of("LoanApproval",
-                                new WorkflowProperties(
-                                    Optional.of(List.of("c8-cloud")), Map
-                                        .of("c8-cloud", new AdapterProperties(Optional.of("workflow-level"))), Map
-                                            .of("assessRisk", new TaskProperties(Map
-                                                .of("c8-cloud", new AdapterProperties(Optional
-                                                    .of("task-level"))))))))), new OutboxProperties(
-                                                        Duration.ofSeconds(1), Duration.ofSeconds(2), 3, false, Duration
-                                                            .ofDays(1), new JdbcOutboxProperties(false, Optional
-                                                                .of("HOT_OUTBOX")), new MongoOutboxProperties(
-                                                                    false, "hot-outbox")));
+                Optional.of("camunda8"), Optional.of(DeploymentFailurePolicy.WARN), Optional
+                    .of("adapter-level"), Optional
+                        .of(io.vanillabp.integration.adapter.spi.NameClashAvoidance.USE_PREFIX), Optional.of(false)),
+            "c7", new AdapterConfiguration(
+                Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty())), Map.of(
+                    "loan-approval", new WorkflowModuleProperties(
+                        Optional.of(List.of("c7")), Map.of("c7",
+                            new AdapterProperties(Optional.of("classpath:c7-bpmn"), Optional
+                                .of(io.vanillabp.integration.adapter.spi.NameClashAvoidance.NONE), Optional
+                                    .empty())), Map
+                                        .of("LoanApproval",
+                                            new WorkflowProperties(
+                                                Optional.of(List.of("c8-cloud")), Map
+                                                    .of("c8-cloud", new AdapterProperties(Optional
+                                                        .of("workflow-level"), Optional
+                                                            .empty(), Optional.of(true))), Map
+                                                                .of("assessRisk", new TaskProperties(Map
+                                                                    .of("c8-cloud", new AdapterProperties(Optional
+                                                                        .of("task-level"), Optional.empty(), Optional
+                                                                            .empty())))))))), new OutboxProperties(
+                                                                                Duration.ofSeconds(1), Duration
+                                                                                    .ofSeconds(2), 3, false, Duration
+                                                                                        .ofDays(
+                                                                                            1), new JdbcOutboxProperties(false, Optional
+                                                                                                .of("HOT_OUTBOX")), new MongoOutboxProperties(
+                                                                                                    false, "hot-outbox")));
 
     final var core = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(properties);
 

@@ -37,6 +37,22 @@ public class WorkflowTaskRegistryProducer {
 
 
   /**
+   * The core-owned name-clash-avoidance model (story 35): resolves the mode per
+   * workflow module/workflow and adapter and composes the identifiers a BPMS sees.
+   *
+   * @param properties The VanillaBP configuration
+   * @return The name-clash-avoidance support
+   */
+  @jakarta.enterprise.inject.Produces
+  @jakarta.inject.Singleton
+  public io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport nameClashAvoidanceSupport(
+      final io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties properties) {
+
+    return new io.vanillabp.integration.adapter.migration.scoping.NameClashAvoidanceService(properties);
+
+  }
+
+  /**
    * The core-owned sync model (story 28): turns a workflow aggregate into the
    * values shared with the BPMS, honoring
    * {@code @SyncWithBPMS}/{@code @NoSyncWithBPMS} and the adapter's default.

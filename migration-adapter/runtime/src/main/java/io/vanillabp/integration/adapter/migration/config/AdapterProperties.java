@@ -16,4 +16,25 @@ public class AdapterProperties {
    */
   private String resourcesLocation;
 
+  /**
+   * How the identifiers of a workflow module are kept apart from those of other
+   * workflow modules (see
+   * {@link io.vanillabp.integration.adapter.spi.NameClashAvoidance}). Adapter-scoped
+   * and therefore resolvable per workflow module and workflow; <code>null</code>
+   * means "not configured at this level" (the default is
+   * {@link io.vanillabp.integration.adapter.spi.NameClashAvoidance#BY_ADAPTER}).
+   */
+  private io.vanillabp.integration.adapter.spi.NameClashAvoidance nameClashAvoidance;
+
+  /**
+   * Whether a task definition is scoped by the BPMN process ID in addition to the
+   * workflow module ID (only relevant for
+   * {@link io.vanillabp.integration.adapter.spi.NameClashAvoidance#USE_PREFIX}).
+   * Defaults to <code>true</code>: reusing one task implementation across processes
+   * is an anti-pattern, so a task definition belongs to its process. Set it to
+   * <code>false</code> if an application does it deliberately. <code>null</code>
+   * means "not configured at this level".
+   */
+  private Boolean prefixTaskDefinitionsPerProcess;
+
 }

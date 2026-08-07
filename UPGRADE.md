@@ -4,6 +4,59 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Name-clash avoidance: tenants, prefixes - and a Camunda 8 fix (2026-08-07)
+
+Story 35 - how a workflow module's identifiers are kept apart from those of other
+modules becomes ONE explicit setting, and Camunda 8 regains the behavior it had in
+VanillaBP 1.
+
+- **New adapter-scoped property `name-clash-avoidance`** =
+  `by-adapter` (**default**) | `use-prefix` | `none`, resolvable most-specific-wins
+  across workflow > workflow module > adapter
+  (`vanillabp.adapters.<id>.name-clash-avoidance`, respectively the same key below
+  `vanillabp.workflow-modules.<m>.adapters.<id>` and `...workflows.<w>.adapters.<id>`).
+  `by-adapter` uses the BPMS' own isolation - Camunda 7 and Camunda 8 deploy a module
+  under a TENANT named after it (overridable by the adapter's `tenant-id`, which is
+  NEW for Camunda 7). `use-prefix` prefixes the identifiers with the module id
+  instead and uses NO tenant (BPMS are licensed per tenant). `none` scopes nothing.
+- **BREAKING for early VanillaBP 2 adopters of Camunda 8:** that adapter deployed
+  everything into the default tenant and documented module isolation as relying on
+  unique BPMN process ids. With the default `by-adapter` a module is deployed into
+  its own tenant again - VanillaBP 1's behavior, and the reason this is a fix rather
+  than a feature. Set `name-clash-avoidance: none` to keep the early-V2 behavior. A
+  cluster WITHOUT multi-tenancy rejects tenant ids: use `use-prefix` or `none` there.
+- **BREAKING for the Process-Engine-API adapter:** that BPMS has no isolation of its
+  own, so the DEFAULT mode cannot be served - the boot fails with a guiding message
+  naming the workflow module and the alternatives (`use-prefix`, `none`). Existing
+  applications have to choose actively; nothing is silently deployed into one scope.
+- **What prefixing rewrites** (transparent - business code, `ProcessService` calls,
+  BPMN files and configuration keep the PLAIN identifiers, separator `__`): BPMN
+  process ids, call-activity references, message and signal names, escalation and
+  error codes, plus task definitions - the latter additionally scoped by their BPMN
+  process (`prefix-task-definitions-per-process: false` switches that part off).
+  Camunda 7 deliberately does NOT prefix task definitions: they are process-local
+  there (an expression evaluated by VanillaBP's EL resolver), whereas Camunda 8 job
+  types are subscribed to cluster-wide.
+- **Switching the mode is a BPMS MIGRATION, not a property change** - the identifiers
+  the BPMS knows change, so workflows started earlier would not be found. Configure a
+  SECOND adapter id differing only in this setting and put it first in
+  `prioritized-adapters` (documented as a recipe in the wiki). Consequently a
+  differing mode now makes two Camunda 8 adapter ids DISTINCT
+  (`validateDistinctAdapterInstances`), which previously failed the boot as "the same
+  cluster twice". Camunda 7 additionally needs its own `table-prefix`/datasource for
+  the second id - two embedded engines must not share engine tables, mode or not.
+- **Two new startup validations:** a workflow module id must not contain the
+  separator `__` (checked when prefixing is configured anywhere), and two different
+  processes must not produce the same prefixed identifier - both fail naming what to
+  rename.
+- **Adapter authors:** the adapter SPI gained `NameClashAvoidance` and
+  `NameClashAvoidanceSupport` (provided as a platform bean, implemented once by the
+  core). Apply it in `prepareBpmn` to your model and at every runtime boundary; never
+  build the prefixed strings yourself. An adapter whose BPMS has no native isolation
+  calls `validateNativeIsolationSupported(adapterId, workflowModuleId, description)`
+  while deploying - note that the core's `validateDistinctAdapterInstances` hook is
+  only invoked for MORE THAN ONE id of a type and is therefore the wrong place for it.
+
 ## Aggregate sync: derived class mode and the completion push (2026-08-07)
 
 Story 28b completes story 28 (below). Two behavior changes - read them if an
