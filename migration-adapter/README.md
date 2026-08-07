@@ -9,6 +9,23 @@ to adapters of supported BPMSs is done by this module which is used by platform
 integrations  as a dependency. This ensures the same behavior of VanillaBP on
 different platforms.
 
+## Two kinds of plug-ins: adapters and extensions
+
+Everything that takes part in deploying a workflow module implements
+`ExtensionWiringService<BPMN, PC>`. There are two kinds of implementations, and telling
+them apart is the first thing to understand about this module:
+
+|                     |                                                                                 **BPMS adapter**                                                                                 |                                                                                      **Extension**                                                                                      |
+|---------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Interface           | `AdapterDeploymentService<BPMN, PC>` — which *extends* `ExtensionWiringService`                                                                                                  | `ExtensionWiringService<BPMN, PC>`                                                                                                                                                      |
+| What it is for      | connecting VanillaBP to ONE business process management system: it owns the BPMN model type, reads and deploys the models and executes every workflow operation against its BPMS | integrating something ADDITIONAL into the deployment: it sees the models the adapter sees and wires its own concerns against them, but it never talks to the BPMS on VanillaBP's behalf |
+| Owns the model?     | yes — it reads, prepares and deploys it                                                                                                                                          | no — it only inspects (and may enrich) what the adapter read                                                                                                                            |
+| How many per module | one per configured adapter id (several BPMS side by side = the migration scenario)                                                                                               | any number                                                                                                                                                                              |
+| Examples            | `camunda7`, `camunda8`, `process-engine-api`                                                                                                                                     | the [VanillaBP Business Cockpit](https://github.com/vanillabp/business-cockpit)                                                                                                         |
+
+An adapter is therefore "the wiring service that owns the model", which is why the
+sections below describe the pipeline once and note where extensions join it.
+
 ## Features
 
 The migration adapter is "an adapter aware of other adapters": it is the single point
@@ -309,13 +326,62 @@ it regardless of running on Spring Boot or Quarkus.
 
 ### Extensions
 
-Extensions (e.g. the VanillaBP Business Cockpit) integrate into the deployment
-pipeline via `ExtensionWiringService`: they get their own `wireBpmn` and
-`startWorkflowProcessing` callbacks, ordered by `getOrder()` and filtered by matching
-BPMN-model- and processing-context-types of the current adapter. An extension may
-define its own SPI (e.g. annotations to be picked up from business code) — such an SPI
-lives in the extension's `wireBpmn` implementation and is not part of the VanillaBP
-core.
+An extension participates in two steps of the [deployment pipeline](#deployment-pipeline)
+through `ExtensionWiringService<BPMN, PC>`:
+
+|                           Method                            |                 Called                  |                                       Purpose                                        |
+|-------------------------------------------------------------|-----------------------------------------|--------------------------------------------------------------------------------------|
+| `getModelType()`                                            | at wiring time                          | the BPMN model type this extension understands, e.g. Camunda 7's `BpmnModelInstance` |
+| `getProcessContextType()`                                   | at wiring time                          | the adapter's processing-context type this extension expects                         |
+| `getOrder()`                                                | once, at startup                        | ordering among all wiring services of the same model type (default `0`)              |
+| `wireBpmn(module, filename, bpmnProcessId, model, context)` | per executable BPMN process             | inspect the model and wire the extension's own concerns against it                   |
+| `startWorkflowProcessing(module, context)`                  | after the module was deployed           | start whatever consumes that wiring (listeners, workers, …)                          |
+| `stopWorkflowProcessing(module, context)`                   | on graceful shutdown (default: nothing) | stop it again                                                                        |
+
+**Matching — an extension is either asked, or it is not.** An extension takes part in a
+module's deployment only if BOTH declared types are assignable from the adapter's types:
+the model type AND the processing-context type. A Camunda 7 extension therefore stays
+untouched while a Camunda 8 module is deployed, and an extension declared against
+`Object`/`Object` sees every BPMS. This is also the trade-off to be aware of: an extension
+that wants to CONTRIBUTE to the adapter's processing context has to declare that adapter's
+context type and thereby becomes BPMS-specific, whereas an extension that only reads the
+model can stay generic.
+
+**Ordering.** All wiring services of a module — adapters and extensions — are sorted by
+`getOrder()` ascending, once at startup. Order matters whenever two of them touch the same
+model: VanillaBP's own wiring decides which BPMN elements are served by `@WorkflowTask`
+methods, so an extension reacting to that result has to run afterwards (the Business
+Cockpit's listeners are consistently ordered last). Shutdown is the mirror image:
+`stopWorkflowProcessing` runs on the extensions first (in reverse wiring order), then on
+the adapters, so nothing is stopped while something else still feeds it.
+
+**An extension may define its own SPI.** `wireBpmn` is where an extension's own
+annotations become alive — the Business Cockpit finds `@UserTaskDetailsProvider` methods
+there, just as VanillaBP finds `@WorkflowTask` methods. Such an SPI belongs to the
+extension, **never to the VanillaBP core**: the core knows nothing about user-task details,
+and an application not using that extension must not see its annotations.
+
+**Registration** is platform-specific and the dummy extensions of both platform
+integrations' test modules are the templates:
+
+- *Spring Boot* — contribute a bean of type `ExtensionWiringService`, usually from an
+  auto-configuration ordered after `SpringBootMigrationAdapterAutoConfiguration`. All
+  beans of that type are collected; since the adapters' deployment services are wiring
+  services too, they appear in the same collection and the platform filters them where
+  only extensions are meant.
+- *Quarkus* — the extension is a Quarkus extension: its runtime module `@Produces` the
+  wiring service (`@Singleton`, because such services usually have no no-arg constructor
+  and are therefore not client-proxyable), its deployment module registers that producer
+  via `AdditionalBeanBuildItem` with `setUnremovable()` — the platform looks the beans up
+  through `Instance`, so ArC would otherwise remove them. Unlike adapters, extensions
+  announce no build item.
+
+**Configuration** is the extension's own: on Quarkus as an overlay
+`@ConfigMapping(prefix = "vanillabp")` if it wants to live under the `vanillabp.*` tree, on
+Spring Boot as a second `@ConfigurationProperties("vanillabp")` class. VanillaBP's own
+configuration is available as the injectable core object `MigrationAdapterProperties`
+(adapter ids, workflow modules, prioritized adapters), which is usually all an extension
+needs to know about the setup.
 
 ## Modules
 
