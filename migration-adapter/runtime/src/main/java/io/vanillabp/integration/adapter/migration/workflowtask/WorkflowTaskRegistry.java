@@ -55,12 +55,30 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
 
   private final TransactionRunner transactionRunner;
 
+  /**
+   * The core's sync model - used to answer
+   * {@link #syncedWorkflowAggregateValues(String, String, String, io.vanillabp.integration.adapter.spi.AggregateSyncMode)}
+   * for adapters holding no aggregate, and to VALIDATE the model of every
+   * registered workflow-aggregate class at startup. May be <code>null</code>
+   * (tests): no values are then shared and nothing is validated.
+   */
+  private final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync;
+
   private final Map<RegistryKey, RegistryEntry> entries = new ConcurrentHashMap<>();
 
   public WorkflowTaskRegistry(
       final TransactionRunner transactionRunner) {
 
+    this(transactionRunner, null);
+
+  }
+
+  public WorkflowTaskRegistry(
+      final TransactionRunner transactionRunner,
+      final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync) {
+
     this.transactionRunner = transactionRunner;
+    this.aggregateSync = aggregateSync;
 
   }
 
@@ -86,6 +104,14 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
       final Supplier<Object> workflowServiceBean,
       final Function<Class<?>, Object> beanResolver,
       final MigrationProcessService<?> processService) {
+
+    // STARTUP validation of the sync model (story 28b): an aggregate whose
+    // attributes are annotated both ways without the class stating its own mode is
+    // ambiguous - the developer learns it when the application boots, not when the
+    // first workflow reaches a sync point
+    if (aggregateSync != null) {
+      aggregateSync.validateSyncModel(processService.getWorkflowAggregateClass());
+    }
 
     final var entry = entries.computeIfAbsent(
         new RegistryKey(workflowModuleId, bpmnProcessId),
@@ -382,6 +408,58 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
                       .collect(Collectors.joining(", "))));
     }
     return entry.processService.getAggregateIdName();
+
+  }
+
+  @Override
+  public Map<String, Object> syncedWorkflowAggregateValues(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final io.vanillabp.integration.adapter.spi.AggregateSyncMode adapterDefault) {
+
+    if (aggregateSync == null) {
+      return Map.of();
+    }
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    if (entry == null) {
+      log.warn(
+          """
+              No @WorkflowService class is registered for BPMN process '{}' of workflow module \
+              '{}' - the values shared with the BPMS cannot be determined; only the technical \
+              aggregate-ID variable is sent.""",
+          bpmnProcessId,
+          workflowModuleId);
+      return Map.of();
+    }
+    // the caller's transaction (the one the @WorkflowTask ran in) is COMMITTED at
+    // this point - the aggregate is loaded in a new one. A failure must never
+    // prevent the task from being completed: the BPMS would redeliver it forever.
+    try {
+      return transactionRunner.requireNew(() -> {
+        final var workflowAggregate = entry.processService.loadWorkflowAggregate(workflowAggregateId);
+        if (workflowAggregate == null) {
+          log.warn(
+              "The workflow aggregate '{}' of BPMN process '{}' of workflow module '{}' could not "
+                  + "be loaded - only the technical aggregate-ID variable is sent to the BPMS",
+              workflowAggregateId,
+              bpmnProcessId,
+              workflowModuleId);
+          return Map.<String, Object>of();
+        }
+        return aggregateSync.syncedValues(workflowAggregate, adapterDefault);
+      });
+    } catch (final RuntimeException e) {
+      log.warn(
+          "Could not determine the values of the workflow aggregate '{}' of BPMN process '{}' of "
+              + "workflow module '{}' shared with the BPMS - only the technical aggregate-ID "
+              + "variable is sent",
+          workflowAggregateId,
+          bpmnProcessId,
+          workflowModuleId,
+          e);
+      return Map.of();
+    }
 
   }
 

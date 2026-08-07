@@ -17,12 +17,21 @@ import jakarta.inject.Singleton;
 @ApplicationScoped
 public class WorkflowTaskRegistryProducer {
 
+  /**
+   * The one sync-model instance of the application - handed to adapters as
+   * {@link io.vanillabp.integration.adapter.spi.WorkflowAggregateSync} AND to the
+   * registry (which validates the model of every registered workflow-aggregate
+   * class at startup and answers the shared values of aggregates an adapter does
+   * not hold).
+   */
+  private final io.vanillabp.integration.adapter.migration.sync.AggregateSyncSupport aggregateSync = new io.vanillabp.integration.adapter.migration.sync.AggregateSyncSupport();
+
   @Produces
   @Singleton
   @Unremovable
   public WorkflowTaskRegistry workflowTaskRegistry() {
 
-    return new WorkflowTaskRegistry(new QuarkusTransactionRunner());
+    return new WorkflowTaskRegistry(new QuarkusTransactionRunner(), aggregateSync);
 
   }
 
@@ -38,7 +47,7 @@ public class WorkflowTaskRegistryProducer {
   @jakarta.inject.Singleton
   public io.vanillabp.integration.adapter.spi.WorkflowAggregateSync workflowAggregateSync() {
 
-    return new io.vanillabp.integration.adapter.migration.sync.AggregateSyncSupport();
+    return aggregateSync;
 
   }
 

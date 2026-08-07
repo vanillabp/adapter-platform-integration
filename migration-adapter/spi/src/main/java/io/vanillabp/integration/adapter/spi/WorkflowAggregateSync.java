@@ -34,4 +34,25 @@ public interface WorkflowAggregateSync {
       Object workflowAggregate,
       AggregateSyncMode adapterDefault);
 
+  /**
+   * Validates the sync model of one workflow-aggregate class AND of every type
+   * reachable from its attributes: as long as an aggregate carries no annotation at
+   * all the adapter decides, but as soon as the application annotates something the
+   * intent has to be unambiguous - attributes annotated BOTH ways without the class
+   * stating its own mode cannot be interpreted.
+   * <p>
+   * Called by the PLATFORM INTEGRATION at startup, once per registered
+   * workflow-aggregate class (not by adapters): a defect must abort the boot, not
+   * surface at the first sync point. Types reachable only at runtime (e.g. a
+   * subclass assigned to a supertype attribute, or nested deeper than the model
+   * follows) still fail with the same message when they are first shared.
+   *
+   * @param workflowAggregateClass The workflow-aggregate class (may be
+   *          <code>null</code>)
+   * @throws IllegalStateException Naming every ambiguous class, its conflicting
+   *           attributes and the fix
+   */
+  void validateSyncModel(
+      Class<?> workflowAggregateClass);
+
 }

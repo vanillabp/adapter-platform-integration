@@ -63,11 +63,28 @@ public class WorkflowTaskRegistryTest {
 
     int total;
 
+    /**
+     * Excluded from what the BPMS sees - which (story 28b) derives opt-out for the
+     * whole class: everything else IS shared.
+     */
+    @io.vanillabp.spi.service.NoSyncWithBPMS
     String parameterValue;
 
     String taskId;
 
     TaskEvent.Event event;
+
+    public String getId() {
+      return id;
+    }
+
+    public String getProcessedBy() {
+      return processedBy;
+    }
+
+    public String getParameterValue() {
+      return parameterValue;
+    }
 
   }
 
@@ -108,6 +125,12 @@ public class WorkflowTaskRegistryTest {
 
     boolean saved = false;
 
+    /**
+     * Makes {@link #loadById(Object)} fail - the sync seam has to answer with an
+     * empty map instead of breaking a task completion.
+     */
+    boolean failLoad = false;
+
     @Override
     public Class<Aggregate> getAggregateClass() {
       return Aggregate.class;
@@ -135,6 +158,9 @@ public class WorkflowTaskRegistryTest {
     @Override
     public Aggregate loadById(
         final Object aggregateId) {
+      if (failLoad) {
+        throw new IllegalStateException("loading the aggregate failed");
+      }
       return aggregates.get(aggregateId);
     }
 
@@ -1269,6 +1295,96 @@ public class WorkflowTaskRegistryTest {
 
     assertTrue(exception.getMessage().contains("latest"));
     assertTrue(exception.getMessage().contains("Supported formats"));
+
+  }
+
+  /**
+   * Story 28b: the registry is the seam through which an adapter holding no
+   * aggregate (a task worker of a remote BPMS completing a job) obtains the values
+   * shared with the BPMS - and the place where the sync model of every registered
+   * workflow-aggregate class is validated at STARTUP.
+   */
+  @Nested
+  @DisplayName("Aggregate sync (story 28b)")
+  class AggregateSync {
+
+    private WorkflowTaskRegistry registryWithSync() {
+
+      final var withSync = new WorkflowTaskRegistry(
+          transactionRunner, new io.vanillabp.integration.adapter.migration.sync.AggregateSyncSupport());
+      withSync.registerWorkflowService(
+          MODULE,
+          PROCESS,
+          SampleService.class,
+          () -> serviceBean,
+          beans::get,
+          createProcessService());
+      return withSync;
+
+    }
+
+    @Test
+    @DisplayName("The shared values are read in an OWN transaction, the ID variable is not among them")
+    public void sharedValuesAreReadInAnOwnTransaction() {
+
+      transactionRunner.requireNewUsed = false;
+
+      final var values = registryWithSync().syncedWorkflowAggregateValues(
+          MODULE,
+          PROCESS,
+          "4711",
+          io.vanillabp.integration.adapter.spi.AggregateSyncMode.FULL);
+
+      // 'parameterValue' is annotated @NoSyncWithBPMS, which derives opt-out for
+      // the whole aggregate class (story 28b)
+      assertEquals("4711", values.get("id"));
+      assertFalse(values.containsKey("parameterValue"), "@NoSyncWithBPMS excludes an attribute");
+      assertTrue(
+          transactionRunner.requireNewUsed,
+          "the task's transaction is committed - the aggregate has to be loaded in a new one");
+
+    }
+
+    @Test
+    @DisplayName("Without a sync model nothing is shared")
+    public void withoutASyncModelNothingIsShared() {
+
+      assertEquals(
+          Map.of(),
+          registry.syncedWorkflowAggregateValues(
+              MODULE, PROCESS, "4711", io.vanillabp.integration.adapter.spi.AggregateSyncMode.FULL));
+
+    }
+
+    @Test
+    @DisplayName("An unknown BPMN process, a missing aggregate and a failing load never break the completion")
+    public void failuresAreLoggedAndAnsweredEmpty() {
+
+      final var withSync = registryWithSync();
+
+      assertEquals(
+          Map.of(),
+          withSync.syncedWorkflowAggregateValues(
+              MODULE, "UnknownProcess", "4711", io.vanillabp.integration.adapter.spi.AggregateSyncMode.FULL),
+          "an unknown BPMN process is reported, not thrown");
+      assertEquals(
+          Map.of(),
+          withSync.syncedWorkflowAggregateValues(
+              MODULE, PROCESS, "0815", io.vanillabp.integration.adapter.spi.AggregateSyncMode.FULL),
+          "a missing aggregate is reported, not thrown");
+
+      persistence.failLoad = true;
+      try {
+        assertEquals(
+            Map.of(),
+            withSync.syncedWorkflowAggregateValues(
+                MODULE, PROCESS, "4711", io.vanillabp.integration.adapter.spi.AggregateSyncMode.FULL),
+            "a failing load is reported, not thrown");
+      } finally {
+        persistence.failLoad = false;
+      }
+
+    }
 
   }
 

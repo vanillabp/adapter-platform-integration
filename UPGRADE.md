@@ -4,6 +4,45 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Aggregate sync: derived class mode and the completion push (2026-08-07)
+
+Story 28b completes story 28 (below). Two behavior changes - read them if an
+application already uses `@SyncWithBPMS` / `@NoSyncWithBPMS`.
+
+- **The class mode is DERIVED when only ATTRIBUTES are annotated.** Story 28 let the
+  ADAPTER's default decide for a class carrying no annotation of its own, even when
+  its attributes were annotated. Now the first annotation anywhere hands control to
+  the application: attributes marked `@SyncWithBPMS` imply `@NoSyncWithBPMS` on the
+  class (opt-in), attributes marked `@NoSyncWithBPMS` imply `@SyncWithBPMS` on the
+  class (opt-out). **What flips for a story-28-era aggregate without a class
+  annotation:**
+  - only `@SyncWithBPMS` attributes, remote BPMS (default `FULL`): used to share
+    everything, now shares ONLY the annotated attributes;
+  - only `@NoSyncWithBPMS` attributes, embedded BPMS (default `NONE`): used to
+    share nothing, now shares everything EXCEPT the annotated attributes.
+    Annotate the class explicitly to keep the old behavior. The rule applies per
+    TYPE, so a nested DTO derives its own mode the same way (a DTO with neither its
+    own nor derivable annotations still inherits from the attribute holding it).
+- **Mixing both annotations on the attributes of a class that states no mode itself
+  FAILS THE BOOT** with a message naming the class, the conflicting attributes and
+  the fix. The check runs at STARTUP for every registered workflow aggregate and
+  every type reachable from its attributes (up to the model's nesting limit); a type
+  reachable only at runtime fails with the same message when it is first shared.
+- **A `@WorkflowTask` is a sync point now (remote BPMS).** Camunda 8 and the
+  Process-Engine-API push the shared values when they report a task as completed
+  (and when a `TaskException` becomes a BPMN error) - a gateway right behind a
+  service task used to evaluate the values of the last `ProcessService`-driven sync
+  point, i.e. stale data. The values are read AFTER the local transaction committed,
+  in an own transaction; a failing read never prevents the completion (the task is
+  then completed with the technical aggregate-ID variable only). USER-TASK lifecycle
+  listener jobs deliberately push nothing - see the Camunda 8 wiki.
+- **Adapter authors:** the adapter SPI `WorkflowTaskInvoker` gained
+  `syncedWorkflowAggregateValues(module, process, serializedAggregateId,
+  adapterDefault)` for exactly that situation - a task worker holding no aggregate;
+  it never throws and returns an empty map on any failure. `WorkflowAggregateSync`
+  gained `validateSyncModel(Class)`, called by the PLATFORM at startup (adapters do
+  not call it).
+
 ## Aggregate sync with the BPMS (2026-08-06)
 
 Story 28 - `@SyncWithBPMS` / `@NoSyncWithBPMS` are implemented. Both annotations

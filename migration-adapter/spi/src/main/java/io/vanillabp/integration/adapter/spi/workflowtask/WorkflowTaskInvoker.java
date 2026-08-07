@@ -122,6 +122,38 @@ public interface WorkflowTaskInvoker {
       String taskDefinitionOrActivityId);
 
   /**
+   * The values of a workflow aggregate SHARED WITH THE BPMS
+   * ({@code @SyncWithBPMS}/{@code @NoSyncWithBPMS}, see
+   * {@link io.vanillabp.integration.adapter.spi.WorkflowAggregateSync}) - for
+   * adapters holding no aggregate at that moment. The typical caller is the task
+   * worker of a REMOTE BPMS completing a task after a
+   * <code>&#64;WorkflowTask</code> method ran: the engine only sees what the
+   * adapter pushes, so a gateway right after the task would otherwise evaluate the
+   * values of the last sync point (story 28b).
+   * <p>
+   * The aggregate is loaded in its OWN transaction - the task's transaction is
+   * committed at that point (the at-least-once order load-invoke-save-commit-
+   * complete stays untouched). <b>This method never throws:</b> a BPMN process
+   * which is not registered, a missing aggregate or a failing load are logged and
+   * answered with an empty map, so the completion of the task still happens (with
+   * the technical aggregate-ID variable only - which the adapter adds itself, it is
+   * never part of these values).
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param workflowAggregateId The workflow aggregate's ID in serialized form
+   * @param adapterDefault The adapter's default for aggregates carrying no
+   *          annotation of their own
+   * @return The shared values by attribute name - possibly empty, never
+   *         <code>null</code>
+   */
+  java.util.Map<String, Object> syncedWorkflowAggregateValues(
+      String workflowModuleId,
+      String bpmnProcessId,
+      String workflowAggregateId,
+      io.vanillabp.integration.adapter.spi.AggregateSyncMode adapterDefault);
+
+  /**
    * The name of the workflow aggregate's ID property for the given BPMN process -
    * used by remote BPMS without a business-key concept: they store the aggregate's
    * ID as a process variable named after the ID property (the start commands write

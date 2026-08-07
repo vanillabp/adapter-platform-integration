@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 import io.vanillabp.integration.adapter.spi.AggregateSyncMode;
@@ -29,19 +30,43 @@ import lombok.extern.slf4j.Slf4j;
  * says otherwise:
  *
  * <ol>
- * <li>the outermost default is the ADAPTER's ({@link AggregateSyncMode}),</li>
- * <li>an annotation on the aggregate CLASS ({@code @SyncWithBPMS} /
- * {@code @NoSyncWithBPMS}) overrides it for all of its attributes,</li>
+ * <li>the outermost default is the ADAPTER's ({@link AggregateSyncMode}) - it
+ * applies as long as the aggregate carries NO annotation at all,</li>
+ * <li>the mode of a class is its own annotation ({@code @SyncWithBPMS} /
+ * {@code @NoSyncWithBPMS}) or, if it has none, the mode DERIVED from its
+ * attributes (see below) - it overrides the adapter's default for all of its
+ * attributes,</li>
  * <li>an annotation on an attribute (field or getter) overrides it for that
  * attribute AND everything below it - a nested object's attributes and a
  * collection's elements inherit from the attribute they belong to,</li>
- * <li>an annotation on a nested TYPE overrides what that type's members inherited
- * through the attribute (so a DTO may narrow what it exposes wherever it is
- * used).</li>
+ * <li>a nested TYPE decides its own mode the same way (own annotation, else
+ * derived from its attributes) and thereby overrides what its members inherited
+ * through the attribute holding it (so a DTO may narrow what it exposes wherever
+ * it is used).</li>
  * </ol>
  *
- * A DTO carrying no annotation therefore behaves exactly like the attribute
- * holding it - it is never "fully shared" on its own account.
+ * A DTO carrying neither its own nor derivable annotations therefore behaves
+ * exactly like the attribute holding it - it is never "fully shared" on its own
+ * account.
+ *
+ * <h2>Deriving a class' mode from its attributes (story 28b)</h2>
+ *
+ * The moment the FIRST sync annotation appears anywhere on a type, the application
+ * has taken control - the adapter's default no longer applies to it. If only
+ * ATTRIBUTES are annotated, the class' mode is the OPPOSITE of what they state,
+ * because that is what a developer writing only one of the two annotations means:
+ *
+ * <ul>
+ * <li>attributes marked {@code @SyncWithBPMS} imply {@code @NoSyncWithBPMS} on the
+ * class (opt-in: share exactly the named attributes),</li>
+ * <li>attributes marked {@code @NoSyncWithBPMS} imply {@code @SyncWithBPMS} on the
+ * class (opt-out: share everything but the named attributes),</li>
+ * <li>BOTH kinds among the attributes of a class carrying none itself is
+ * AMBIGUOUS - which of them is the exception cannot be derived. This is a defect
+ * reported with a guiding message; {@link #validateSyncModel(Class)} raises it at
+ * STARTUP for every registered workflow-aggregate class (and every nested type
+ * reachable from it), so it never surfaces at the first sync point.</li>
+ * </ul>
  *
  * <h2>Which attributes exist</h2>
  *
@@ -65,6 +90,16 @@ import lombok.extern.slf4j.Slf4j;
  *
  * The result is deliberately made of plain JDK types: every BPMS' variable
  * serialization (and Camunda 8's FEEL) copes with them.
+ *
+ * <h2>Cycles</h2>
+ *
+ * Bidirectional relations are the NORMAL case of an entity model (an order holds
+ * its items, every item points back to its order). An object already on the
+ * current path is therefore not expanded again - which would repeat the whole
+ * subtree once per nesting level - but replaced by a reference to it (its type and
+ * identity; deliberately not {@code toString()}, which recurses on exactly these
+ * graphs). Independently of that, nesting is followed at most {@link #MAX_DEPTH}
+ * levels deep.
  */
 @Slf4j
 public class AggregateSyncSupport implements WorkflowAggregateSync {
@@ -80,6 +115,12 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
    * sync points are hot paths).
    */
   private final Map<Class<?>, List<Property>> propertiesByClass = new ConcurrentHashMap<>();
+
+  /**
+   * The base mode per class - its own annotation or the mode derived from its
+   * attributes; {@link Optional#empty()} means "inherits" (see the class comment).
+   */
+  private final Map<Class<?>, Optional<Boolean>> baseModeByClass = new ConcurrentHashMap<>();
 
   /**
    * One readable attribute of a class: its name, how to read it and whether the
@@ -115,11 +156,180 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
     if (workflowAggregate == null) {
       return Map.of();
     }
-    final var inherited = annotationOf(workflowAggregate.getClass());
-    final var effective = inherited != null
-        ? inherited
+    final var declared = baseModeOf(workflowAggregate.getClass());
+    final var effective = declared != null
+        ? declared
         : adapterDefault == AggregateSyncMode.FULL;
-    return valuesOf(workflowAggregate, effective, 0);
+    return valuesOf(
+        workflowAggregate,
+        effective,
+        0,
+        java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>()));
+
+  }
+
+  @Override
+  public void validateSyncModel(
+      final Class<?> workflowAggregateClass) {
+
+    if (workflowAggregateClass == null) {
+      return;
+    }
+    final var defects = new LinkedList<String>();
+    validateType(workflowAggregateClass, 0, new java.util.HashSet<>(), defects);
+    if (defects.isEmpty()) {
+      return;
+    }
+    throw new IllegalStateException(String.join("\n", defects));
+
+  }
+
+  /**
+   * Derives the mode of one type and of every type reachable from its attributes,
+   * collecting the defects instead of throwing on the first one (one boot reports
+   * every gap it can detect).
+   *
+   * @param clazz The type to validate
+   * @param depth The current nesting depth
+   * @param visited The types already validated (cyclic type graphs)
+   * @param defects Collects the guiding messages
+   */
+  private void validateType(
+      final Class<?> clazz,
+      final int depth,
+      final java.util.Set<Class<?>> visited,
+      final List<String> defects) {
+
+    if (!visited.add(clazz)) {
+      return;
+    }
+    try {
+      baseModeOf(clazz);
+    } catch (final IllegalStateException e) {
+      defects.add(e.getMessage());
+    }
+    if (depth >= MAX_DEPTH) {
+      // the documented limit: nested types are followed at most MAX_DEPTH levels
+      // deep. A type reached only deeper (or only at runtime, e.g. a subclass
+      // assigned to a supertype attribute) still fails loudly and understandably
+      // at the first sync point - with the very same message.
+      log.debug(
+          "Stopped validating the sync model at depth {} (class '{}') - nested types are followed "
+              + "at most {} levels deep",
+          depth,
+          clazz.getName(),
+          MAX_DEPTH);
+      return;
+    }
+    propertiesOf(clazz)
+        .stream()
+        .flatMap(property -> attributeTypes(property.getter().getGenericReturnType()))
+        .distinct()
+        .forEach(attributeType -> validateType(attributeType, depth + 1, visited, defects));
+
+  }
+
+  /**
+   * The types an attribute may hold values of - the declared type itself plus the
+   * type arguments of a generic type (a {@code List<Item>} holds {@code Item}s).
+   * Types whose values are never followed (JDK value types, primitives, enums) are
+   * left out.
+   *
+   * @param type The attribute's generic type
+   * @return The types to validate
+   */
+  private static java.util.stream.Stream<Class<?>> attributeTypes(
+      final java.lang.reflect.Type type) {
+
+    if (type instanceof Class<?> clazz) {
+      if (clazz.isArray()) {
+        return attributeTypes(clazz.getComponentType());
+      }
+      return clazz.isPrimitive() || clazz.isEnum() || isJdkValueType(clazz)
+          ? java.util.stream.Stream.empty()
+          : java.util.stream.Stream.of(clazz);
+    }
+    if (type instanceof java.lang.reflect.ParameterizedType parameterized) {
+      return java.util.stream.Stream
+          .concat(
+              attributeTypes(parameterized.getRawType()),
+              java.util.Arrays
+                  .stream(parameterized.getActualTypeArguments())
+                  .flatMap(AggregateSyncSupport::attributeTypes));
+    }
+    if (type instanceof java.lang.reflect.GenericArrayType genericArray) {
+      return attributeTypes(genericArray.getGenericComponentType());
+    }
+    // wildcards and type variables carry no annotations of their own - the type
+    // actually used at runtime is validated at the first sync point
+    return java.util.stream.Stream.empty();
+
+  }
+
+  /**
+   * The base mode of a type: its own annotation, else the mode DERIVED from its
+   * attributes (see the class comment), else <code>null</code> - "inherits".
+   *
+   * @param clazz The type
+   * @return {@code true}/{@code false} or <code>null</code> if it inherits
+   * @throws IllegalStateException If the type's attributes are annotated both ways
+   *           without the class stating its own mode (guiding message)
+   */
+  private Boolean baseModeOf(
+      final Class<?> clazz) {
+
+    return baseModeByClass
+        .computeIfAbsent(clazz, this::determineBaseMode)
+        .orElse(null);
+
+  }
+
+  private Optional<Boolean> determineBaseMode(
+      final Class<?> clazz) {
+
+    final var declared = annotationOf(clazz);
+    if (declared != null) {
+      return Optional.of(declared);
+    }
+    final var synced = annotatedAttributes(clazz, Boolean.TRUE);
+    final var notSynced = annotatedAttributes(clazz, Boolean.FALSE);
+    if (!synced.isEmpty() && !notSynced.isEmpty()) {
+      throw new IllegalStateException(
+          """
+              The class '%s' has attributes annotated with @SyncWithBPMS (%s) AND attributes \
+              annotated with @NoSyncWithBPMS (%s), but does not state its own mode - whether the \
+              remaining attributes are shared with the BPMS cannot be derived! Annotate the CLASS \
+              explicitly:
+                @NoSyncWithBPMS shares ONLY the @SyncWithBPMS attributes (opt-in),
+                @SyncWithBPMS shares EVERYTHING EXCEPT the @NoSyncWithBPMS attributes (opt-out)."""
+              .formatted(
+                  clazz.getName(),
+                  String.join(", ", synced),
+                  String.join(", ", notSynced)));
+    }
+    if (!synced.isEmpty()) {
+      // opt-in: naming what IS shared means the rest is not
+      return Optional.of(Boolean.FALSE);
+    }
+    if (!notSynced.isEmpty()) {
+      // opt-out: naming what is NOT shared means the rest is
+      return Optional.of(Boolean.TRUE);
+    }
+    // no annotation anywhere: the adapter decides (root) / the holding attribute
+    // decides (nested type)
+    return Optional.empty();
+
+  }
+
+  private List<String> annotatedAttributes(
+      final Class<?> clazz,
+      final Boolean annotation) {
+
+    return propertiesOf(clazz)
+        .stream()
+        .filter(property -> annotation.equals(property.synced()))
+        .map(property -> "'%s'".formatted(property.name()))
+        .toList();
 
   }
 
@@ -129,21 +339,30 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
    * @param owner The object
    * @param inherited Whether its attributes are shared unless annotated otherwise
    * @param depth The current nesting depth
+   * @param ancestors The objects on the current path (cycle detection)
    */
   private Map<String, Object> valuesOf(
       final Object owner,
       final boolean inherited,
-      final int depth) {
+      final int depth,
+      final java.util.Set<Object> ancestors) {
 
     final var values = new LinkedHashMap<String, Object>();
-    for (final var property : propertiesOf(owner.getClass())) {
-      final var synced = property.synced() != null
-          ? property.synced()
-          : inherited;
-      if (!synced) {
-        continue;
+    ancestors.add(owner);
+    try {
+      for (final var property : propertiesOf(owner.getClass())) {
+        final var synced = property.synced() != null
+            ? property.synced()
+            : inherited;
+        if (!synced) {
+          continue;
+        }
+        values.put(property.name(), convert(property.read(owner), synced, depth + 1, ancestors));
       }
-      values.put(property.name(), convert(property.read(owner), synced, depth + 1));
+    } finally {
+      // the set holds the objects of the CURRENT path only: the same object
+      // appearing in two sibling branches is shared twice, a cycle is cut
+      ancestors.remove(owner);
     }
     return values;
 
@@ -156,11 +375,13 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
    * @param value The value
    * @param inherited What nested attributes inherit
    * @param depth The current nesting depth
+   * @param ancestors The objects on the current path (cycle detection)
    */
   private Object convert(
       final Object value,
       final boolean inherited,
-      final int depth) {
+      final int depth,
+      final java.util.Set<Object> ancestors) {
 
     if ((value == null) || (value instanceof String) || (value instanceof Number) || (value instanceof Boolean) || (value instanceof Character)) {
       return value;
@@ -171,14 +392,14 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
     if (value instanceof Collection<?> collection) {
       return collection
           .stream()
-          .map(element -> convert(element, inherited, depth))
+          .map(element -> convert(element, inherited, depth, ancestors))
           .toList();
     }
     if (value.getClass().isArray()) {
       final var elements = new LinkedList<Object>();
       final var length = java.lang.reflect.Array.getLength(value);
       for (var index = 0; index < length; ++index) {
-        elements.add(convert(java.lang.reflect.Array.get(value, index), inherited, depth));
+        elements.add(convert(java.lang.reflect.Array.get(value, index), inherited, depth, ancestors));
       }
       return List.copyOf(elements);
     }
@@ -186,7 +407,7 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
       final var converted = new LinkedHashMap<String, Object>();
       map.forEach((
           key,
-          mapValue) -> converted.put(String.valueOf(key), convert(mapValue, inherited, depth)));
+          mapValue) -> converted.put(String.valueOf(key), convert(mapValue, inherited, depth, ancestors)));
       return converted;
     }
 
@@ -197,9 +418,24 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
       return String.valueOf(value);
     }
 
+    if (ancestors.contains(value)) {
+      // a CYCLE - the bidirectional relations of ordinary entities (order -> item
+      // -> order) are the normal case, not an exotic one. Following it would
+      // duplicate the whole subtree once per level until MAX_DEPTH, so it is cut
+      // right here.
+      log.debug(
+          "Cut a cycle while collecting the values shared with the BPMS: '{}' is already part of "
+              + "the current path (depth {})",
+          value
+              .getClass()
+              .getName(),
+          depth);
+      return referenceTo(value);
+    }
+
     if (depth >= MAX_DEPTH) {
-      // cyclic or absurdly deep object graph: stop following and share a
-      // representation instead of looping forever
+      // absurdly deep object graph: stop following and share a representation
+      // instead of descending forever
       log.debug(
           "Stopped collecting values shared with the BPMS at depth {} (class '{}') - "
               + "nested objects are followed at most {} levels deep",
@@ -208,7 +444,7 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
               .getClass()
               .getName(),
           MAX_DEPTH);
-      return String.valueOf(value);
+      return referenceTo(value);
     }
 
     final var properties = propertiesOf(value.getClass());
@@ -217,12 +453,34 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
       // every BPMS understands the string form
       return String.valueOf(value);
     }
-    // a nested TYPE's own annotation overrides what its members inherited through
-    // the attribute holding it
-    final var ofType = annotationOf(value.getClass());
+    // a nested TYPE's own mode (its annotation or the one derived from its
+    // attributes) overrides what its members inherited through the attribute
+    // holding it
+    final var ofType = baseModeOf(value.getClass());
     return valuesOf(value, ofType != null
         ? ofType
-        : inherited, depth);
+        : inherited, depth, ancestors);
+
+  }
+
+  /**
+   * The stand-in for an object which is NOT followed (a cycle was cut, or the
+   * nesting limit was reached): its type and identity. Deliberately not
+   * {@code toString()} - the very object graphs this guards against are the ones
+   * whose generated {@code toString()} recurses (Lombok on bidirectional
+   * relations), and a task completion must not fail over a log-grade value.
+   *
+   * @param value The object not followed
+   * @return A stable, harmless representation
+   */
+  private static String referenceTo(
+      final Object value) {
+
+    return "%s@%s".formatted(
+        value
+            .getClass()
+            .getName(),
+        Integer.toHexString(System.identityHashCode(value)));
 
   }
 

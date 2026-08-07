@@ -1,7 +1,6 @@
 package io.vanillabp.migration.test.sync;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -24,6 +23,12 @@ import io.vanillabp.spi.service.SyncWithBPMS;
  * with the BPMS. The rule under test is the inheritance chain - adapter default,
  * aggregate class, attribute, nested type - where every level only overrides what
  * it explicitly says.
+ * <p>
+ * Since story 28b the CLASS level is DERIVED where the application annotated only
+ * attributes: the adapter's default applies as long as an aggregate carries no
+ * annotation at all, the first annotation hands control to the application (the
+ * class mode is then the opposite of what its attributes state) and mixing both
+ * annotations without a class annotation is an ambiguity reported at startup.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AggregateSyncSupportTest {
@@ -55,19 +60,12 @@ public class AggregateSyncSupportTest {
 
     private ItemSize size = ItemSize.BIG;
 
-    @NoSyncWithBPMS
-    private String creditCardNumber = "4711";
-
     public String getContent() {
       return content;
     }
 
     public ItemSize getSize() {
       return size;
-    }
-
-    public String getCreditCardNumber() {
-      return creditCardNumber;
     }
 
     public boolean isShippedAsBigItem() {
@@ -77,20 +75,83 @@ public class AggregateSyncSupportTest {
   }
 
   @Test
-  @DisplayName("The adapter's default decides for an aggregate carrying no annotation")
+  @DisplayName("The adapter's default decides for an aggregate carrying no annotation at all")
   public void theAdapterDefaultDecides() {
 
     final var aggregate = new PlainAggregate();
 
-    // a remote BPMS shares everything - except what is excluded explicitly
+    // a remote BPMS shares everything
     final var shared = full(aggregate);
     assertEquals("hello", shared.get("content"));
     assertEquals("BIG", shared.get("size"), "enums are shared by name");
     assertEquals(Boolean.TRUE, shared.get("shippedAsBigItem"), "getters are attributes like any other");
-    assertFalse(shared.containsKey("creditCardNumber"), "@NoSyncWithBPMS excludes an attribute");
 
     // an embedded BPMS reads the aggregate live and shares nothing by default
     assertEquals(Map.of(), none(aggregate));
+
+  }
+
+  public static class OptOutByAttributeAggregate {
+
+    private String content = "hello";
+
+    @NoSyncWithBPMS
+    private String creditCardNumber = "4711";
+
+    public String getContent() {
+      return content;
+    }
+
+    public String getCreditCardNumber() {
+      return creditCardNumber;
+    }
+
+  }
+
+  @Test
+  @DisplayName("One @NoSyncWithBPMS attribute makes the CLASS opt-out - the adapter's default no longer applies")
+  public void oneExcludedAttributeDerivesOptOut() {
+
+    // story 28b: the first annotation hands control to the application. Naming
+    // what is NOT shared means everything else IS - even on an adapter defaulting
+    // to NONE (the flip against story 28, where the aggregate would have shared
+    // NOTHING on such an adapter).
+    final var expected = Map.<String, Object>of("content", "hello");
+    assertEquals(expected, full(new OptOutByAttributeAggregate()));
+    assertEquals(expected, none(new OptOutByAttributeAggregate()));
+
+  }
+
+  public static class OptInByAttributeAggregate {
+
+    private ItemSize size = ItemSize.NORMAL;
+
+    private String secret = "s3cr3t";
+
+    public ItemSize getSize() {
+      return size;
+    }
+
+    public String getSecret() {
+      return secret;
+    }
+
+    @SyncWithBPMS
+    public boolean isShippedAsNormalItem() {
+      return size == ItemSize.NORMAL;
+    }
+
+  }
+
+  @Test
+  @DisplayName("One @SyncWithBPMS attribute makes the CLASS opt-in - nothing else is shared")
+  public void oneSharedAttributeDerivesOptIn() {
+
+    // naming what IS shared means the rest is not - the flip against story 28,
+    // where a remote BPMS (default FULL) would have received 'secret', too
+    final var expected = Map.<String, Object>of("shippedAsNormalItem", Boolean.TRUE);
+    assertEquals(expected, full(new OptInByAttributeAggregate()));
+    assertEquals(expected, none(new OptInByAttributeAggregate()));
 
   }
 
@@ -224,6 +285,127 @@ public class AggregateSyncSupportTest {
 
   }
 
+  public static class DerivingItem {
+
+    private long itemId = 7;
+
+    private String internalNote = "not for the BPMS";
+
+    @SyncWithBPMS
+    public long getItemId() {
+      return itemId;
+    }
+
+    public String getInternalNote() {
+      return internalNote;
+    }
+
+  }
+
+  @NoSyncWithBPMS
+  public static class DerivingNestedAggregate {
+
+    @SyncWithBPMS
+    public DerivingItem getItem() {
+      return new DerivingItem();
+    }
+
+  }
+
+  @Test
+  @DisplayName("A nested type derives its own mode from its attributes, too")
+  public void nestedTypesDeriveTheirOwnMode() {
+
+    final var shared = full(new DerivingNestedAggregate());
+
+    // the attribute is shared, but the DTO's own (derived) opt-in narrows what it
+    // exposes - under story 28 it would have inherited "share everything"
+    assertEquals(Map.of("item", Map.of("itemId", 7L)), shared);
+
+  }
+
+  public static class AmbiguousAggregate {
+
+    @SyncWithBPMS
+    private String customerName = "ACME";
+
+    @NoSyncWithBPMS
+    private String creditCardNumber = "4711";
+
+    private String status = "new";
+
+    public String getCustomerName() {
+      return customerName;
+    }
+
+    public String getCreditCardNumber() {
+      return creditCardNumber;
+    }
+
+    public String getStatus() {
+      return status;
+    }
+
+  }
+
+  @Test
+  @DisplayName("Mixing both annotations on attributes without a class annotation is ambiguous")
+  public void mixedAttributeAnnotationsAreAmbiguous() {
+
+    final var exception = assertThrowsExactly(
+        IllegalStateException.class,
+        () -> new AggregateSyncSupport().validateSyncModel(AmbiguousAggregate.class));
+
+    final var message = exception.getMessage();
+    assertTrue(message.contains(AmbiguousAggregate.class.getName()), () -> message);
+    assertTrue(message.contains("'customerName'"), () -> message);
+    assertTrue(message.contains("'creditCardNumber'"), () -> message);
+    assertTrue(message.contains("@NoSyncWithBPMS shares ONLY"), () -> message);
+    assertTrue(message.contains("@SyncWithBPMS shares EVERYTHING EXCEPT"), () -> message);
+
+    // the very same message reaches a developer whose type is only reachable at
+    // runtime (the startup walk cannot see it) - the model itself refuses to guess
+    assertTrue(
+        assertThrowsExactly(IllegalStateException.class, () -> full(new AmbiguousAggregate()))
+            .getMessage()
+            .contains("does not state its own mode"));
+
+  }
+
+  public static class HoldingAmbiguousItems {
+
+    public List<AmbiguousAggregate> getItems() {
+      return List.of();
+    }
+
+  }
+
+  @Test
+  @DisplayName("The startup validation walks the attribute graph incl. generic element types")
+  public void validationWalksNestedTypes() {
+
+    final var exception = assertThrowsExactly(
+        IllegalStateException.class,
+        () -> new AggregateSyncSupport().validateSyncModel(HoldingAmbiguousItems.class));
+
+    assertTrue(exception.getMessage().contains(AmbiguousAggregate.class.getName()), exception::getMessage);
+
+  }
+
+  @Test
+  @DisplayName("A valid model - and no model at all - passes the startup validation")
+  public void validModelsPassTheValidation() {
+
+    final var testee = new AggregateSyncSupport();
+    testee.validateSyncModel(PlainAggregate.class);
+    testee.validateSyncModel(OptInByAttributeAggregate.class);
+    testee.validateSyncModel(NestedAggregate.class);
+    testee.validateSyncModel(CyclicAggregate.class);
+    testee.validateSyncModel(ValueTypesAggregate.class);
+    testee.validateSyncModel(null);
+
+  }
+
   public static class ValueTypesAggregate {
 
     public String getText() {
@@ -284,6 +466,71 @@ public class AggregateSyncSupportTest {
         self = this;
       }
       return self;
+    }
+
+  }
+
+  public static class BidirectionalOrder {
+
+    private final List<BidirectionalItem> items = new java.util.LinkedList<>();
+
+    public BidirectionalOrder(
+        final int itemCount) {
+      for (var index = 0; index < itemCount; ++index) {
+        items.add(new BidirectionalItem(this, index));
+      }
+    }
+
+    public List<BidirectionalItem> getItems() {
+      return items;
+    }
+
+  }
+
+  public static class BidirectionalItem {
+
+    private final BidirectionalOrder order;
+
+    private final int position;
+
+    BidirectionalItem(
+        final BidirectionalOrder order,
+        final int position) {
+      this.order = order;
+      this.position = position;
+    }
+
+    /**
+     * The back reference every ordinary JPA entity has.
+     */
+    public BidirectionalOrder getOrder() {
+      return order;
+    }
+
+    public int getPosition() {
+      return position;
+    }
+
+  }
+
+  @Test
+  @DisplayName("A bidirectional relation (the normal entity case) is cut at the back reference")
+  public void bidirectionalRelationsAreCutAtTheBackReference() {
+
+    final var shared = full(new BidirectionalOrder(3));
+
+    @SuppressWarnings("unchecked")
+    final var items = (List<Map<String, Object>>) shared.get("items");
+    assertEquals(3, items.size());
+    for (final var item : items) {
+      assertEquals(Set.of("order", "position"), item.keySet());
+      // the back reference is NOT followed: it would repeat the whole order (and
+      // with it all of its items) once per nesting level
+      assertTrue(
+          item.get("order") instanceof String reference && reference
+              .startsWith(BidirectionalOrder.class.getName()),
+          () -> "expected the cycle to be cut but got: "
+              + item.get("order"));
     }
 
   }

@@ -388,6 +388,80 @@ public class WorkflowTaskProcessingTest {
 
   }
 
+  /**
+   * An aggregate whose sync model is ambiguous (story 28b): attributes annotated
+   * both ways while the class states no mode of its own.
+   */
+  public static class AmbiguousSyncAggregate {
+
+    @io.vanillabp.spi.service.SyncWithBPMS
+    private String customerName;
+
+    @io.vanillabp.spi.service.NoSyncWithBPMS
+    private String creditCardNumber;
+
+    public String getCustomerName() {
+      return customerName;
+    }
+
+    public String getCreditCardNumber() {
+      return creditCardNumber;
+    }
+
+  }
+
+  @Test
+  public void aggregateSyncIsProvidedAndValidatedByThePlatform() throws IOException {
+
+    TaskProcessingConfiguration.AGGREGATES.clear();
+
+    try (var testApp = buildTestApp(); var context = runTestApplication(testApp)) {
+
+      final var dummyAdapter = context.getBean("DummyAdapter_DeploymentService_test", DeploymentService.class);
+      final var invoker = context.getBean(
+          io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry.class);
+
+      // the @WorkflowTask method changed the aggregate; an adapter completing the
+      // task afterwards asks the core for the values shared with its BPMS - the
+      // aggregate is loaded in its OWN transaction (the task's one is committed)
+      storeAggregate("4720");
+      dummyAdapter.invokeTask(MODULE, PROCESS, context("processTask", "4720"));
+
+      final var shared = invoker.syncedWorkflowAggregateValues(
+          MODULE,
+          PROCESS,
+          "4720",
+          io.vanillabp.integration.adapter.spi.AggregateSyncMode.FULL);
+      Assertions.assertEquals("processed", shared.get("status"), "the value the task produced is shared");
+      Assertions.assertEquals("4720", shared.get("id"));
+      Assertions.assertFalse(
+          shared.containsKey("taskId"),
+          "a @NoSyncWithBPMS attribute is never shared");
+
+      // an unknown BPMN process or aggregate never breaks a task completion
+      Assertions.assertEquals(
+          Map.of(),
+          invoker.syncedWorkflowAggregateValues(
+              MODULE, "UnknownProcess", "4720", io.vanillabp.integration.adapter.spi.AggregateSyncMode.FULL));
+
+      // the platform provides the model as a bean and validates aggregates with it
+      final var syncModel = context.getBean(io.vanillabp.integration.adapter.spi.WorkflowAggregateSync.class);
+      final var ambiguous = Assertions.assertThrows(
+          IllegalStateException.class,
+          () -> syncModel.validateSyncModel(AmbiguousSyncAggregate.class));
+      Assertions.assertTrue(
+          ambiguous.getMessage().contains("does not state its own mode"),
+          "unexpected message: "
+              + ambiguous.getMessage());
+      Assertions.assertTrue(
+          ambiguous.getMessage().contains("'creditCardNumber'"),
+          "unexpected message: "
+              + ambiguous.getMessage());
+
+    }
+
+  }
+
   @Test
   public void incompleteWiringFailsTheBootWithGuidingMessages() throws IOException {
 

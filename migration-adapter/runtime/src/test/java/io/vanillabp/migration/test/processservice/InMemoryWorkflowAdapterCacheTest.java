@@ -65,12 +65,15 @@ public class InMemoryWorkflowAdapterCacheTest {
   @DisplayName("Entries expire after the time-to-live")
   public void expiry() throws Exception {
 
-    final var cache = new InMemoryWorkflowAdapterCache(10, Duration.ofMillis(50));
+    // a TTL of a few hundred milliseconds, not tens: under load (a full build runs
+    // tests in parallel with other JVMs) the get right after the put would
+    // otherwise race the expiry and fail spuriously
+    final var cache = new InMemoryWorkflowAdapterCache(10, Duration.ofMillis(500));
 
     cache.put(MODULE, PROCESS, "42", "adapter-a");
     assertEquals("adapter-a", cache.get(MODULE, PROCESS, "42").orElseThrow());
 
-    Thread.sleep(80);
+    Thread.sleep(800);
     assertTrue(cache.get(MODULE, PROCESS, "42").isEmpty(), "the entry must expire");
 
   }

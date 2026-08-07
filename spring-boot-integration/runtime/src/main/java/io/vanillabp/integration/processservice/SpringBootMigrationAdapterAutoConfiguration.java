@@ -248,13 +248,17 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    * message when the first task is processed).
    *
    * @param transactionManager The application's transaction manager, resolved lazily
+   * @param aggregateSync The core's sync model - validated per registered
+   *          workflow-aggregate class at startup (story 28b) and used to answer the
+   *          shared values of an aggregate an adapter does not hold
    * @return The workflow-task registry
    */
   @Bean
   public WorkflowTaskRegistry vanillaBpWorkflowTaskRegistry(
-      final org.springframework.beans.factory.ObjectProvider<org.springframework.transaction.PlatformTransactionManager> transactionManager) {
+      final org.springframework.beans.factory.ObjectProvider<org.springframework.transaction.PlatformTransactionManager> transactionManager,
+      final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync) {
 
-    return new WorkflowTaskRegistry(new SpringTransactionRunner(transactionManager));
+    return new WorkflowTaskRegistry(new SpringTransactionRunner(transactionManager), aggregateSync);
 
   }
 
