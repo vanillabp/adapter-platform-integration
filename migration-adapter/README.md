@@ -416,6 +416,39 @@ configuration is available as the injectable core object `MigrationAdapterProper
 (adapter ids, workflow modules, prioritized adapters), which is usually all an extension
 needs to know about the setup.
 
+### Adapter/platform version guard (`AdapterPlatformVersion`)
+
+Applications pin the VanillaBP versions themselves, usually by importing
+`io.vanillabp:vanillabp-bom`. Maven resolves a version managed by the application
+*before* the version an adapter requires transitively, silently and even if that means a
+DOWNGRADE — no conflict is reported and the build stays green. An adapter newer than the
+platform integration then fails at runtime with `NoSuchMethodError` /
+`NoClassDefFoundError` deep inside the adapter.
+
+Two consequences shape the guard:
+
+- **The check belongs to the ADAPTER, not to the platform integration.** Only the adapter
+  knows the platform version it was compiled against, and a too old platform integration
+  cannot contain a check that was added later. The platform side only provides the
+  mechanism.
+- **The version numbers have to travel in the JARs.** `migration-adapter-spi` carries
+  `META-INF/vanillabp/platform-version.properties` (filled by resource filtering), each
+  adapter core carries `META-INF/vanillabp/adapter-<adapter-type>.properties` with its own
+  version and the platform version it was built against
+  (`platform.version=${adapter-platform.version}`). The per-adapter-type file name keeps
+  the descriptors apart when several adapters are on the classpath — the normal case
+  during a BPMS migration.
+
+Adapters call `AdapterPlatformVersion.requireCompatiblePlatform(adapterType, someCoreClass)`
+in the constructor of their `AdapterDeploymentService` implementation, which runs once per
+configured adapter id on both platforms; results are cached per adapter type, failures are
+not. Versions are compared by their numeric parts with the qualifier ignored, so
+`2.0.0-SNAPSHOT` satisfies a required `2.0.0`; versions that cannot be parsed count as
+compatible — the guard must never break a build it does not understand. When it does fail,
+the message names the required version and every artifact to raise (starting with the
+BOM), following the [configuration/error-message principle](#features) of guiding the
+developer instead of just reporting.
+
 ## Modules
 
 1. **business-spi:** (artifact `io.vanillabp:vanillabp-integration-spi`)<br>
@@ -434,8 +467,9 @@ needs to know about the setup.
    integrations: `AdapterDeploymentService` (extends `ExtensionWiringService`),
    `MigratableProcessService` (incl. `WorkflowAwareness`) and
    `ExtensionWiringService`. Adapters report BPMN parsing errors using
-   `BpmnParseException`. Depends on `business-spi` (uses
-   `AggregatePersistenceAware` in signatures).
+   `BpmnParseException` and guard themselves against a too old platform integration
+   using [`AdapterPlatformVersion`](#adapterplatform-version-guard-adapterplatformversion).
+   Depends on `business-spi` (uses `AggregatePersistenceAware` in signatures).
 3. **runtime:**<br>
    This module implements the runtime behavior according to the
    features [listed above](#features), mainly `DeploymentService`

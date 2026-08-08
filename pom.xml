@@ -30,6 +30,7 @@
   </developers>
 
   <modules>
+    <module>bom</module>
     <module>build-tools/mapstruct-fluent-accessors</module>
     <module>test-utils</module>
     <module>migration-adapter</module>
@@ -49,6 +50,7 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    <!-- Keep in sync with the property 'spi-for-java.version' of bom/pom.xml. -->
     <vanillabp.version>1.2.0-SNAPSHOT</vanillabp.version>
     <version.java>21</version.java>
     <lombok.version>1.18.46</lombok.version>

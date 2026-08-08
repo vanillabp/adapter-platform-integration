@@ -42,17 +42,22 @@ Each `README.md` file lists information about its submodules and links to their 
 
 Top-level modules (by directory name) are:
 
-1. **migration-adapter:**<br>
+1. **bom:**<br>
+   The BOM (artifact `io.vanillabp:vanillabp-bom`) applications import to get aligned versions of all VanillaBP
+   artifacts. BPMS adapters are deliberately not part of it — they are released independently. Note that its parent is
+   the release parent and *not* this aggregator: importing a BOM imports its *effective* dependency management, so
+   inheriting from here would pin Lombok, SLF4J, Testcontainers, … in every application.
+2. **migration-adapter:**<br>
    Core VanillaBP functionality shared across all platforms. The goal is to implement as much logic as possible in
    plain Java, without platform-specific dependencies. This helps deliver new features to all platforms with minimal
    effort. [Details...](./migration-adapter)
-2. **spring-boot-integration:**<br>
+3. **spring-boot-integration:**<br>
    Support for using VanillaBP in Spring Boot applications. [Details...](./spring-boot-integration)
-3. **quarkus-integration:**<br>
+4. **quarkus-integration:**<br>
    Support for using VanillaBP in Quarkus applications. [Details...](./quarkus-integration)
-4. **test-coverage-report:**<br>
+5. **test-coverage-report:**<br>
    A module that generates test coverage reports. Click the [platform's badge](#documentation-and-supported-platforms)  to open the respective report.
-5. **test-utils:**<br>
+6. **test-utils:**<br>
    A small module providing utilities used by tests across all platforms.
 
 ### Implementation

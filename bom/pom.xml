@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!-- ATTENTION: The parent is the release parent and NOT 'adapter-platform-integration'
+       on purpose. Importing a BOM imports its EFFECTIVE dependencyManagement, which
+       includes all entries inherited from its parents. Inheriting from
+       'adapter-platform-integration' would therefore silently pin the versions of
+       Lombok, SLF4J, Testcontainers, ... in every application importing this BOM. The
+       release parent has no dependencyManagement at all. -->
+  <parent>
+    <groupId>io.vanillabp</groupId>
+    <artifactId>release-parent</artifactId>
+    <version>1.1.0</version>
+  </parent>
+
+  <groupId>io.vanillabp</groupId>
+  <artifactId>vanillabp-bom</artifactId>
+  <version>2.0.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+  <name>VanillaBP BOM</name>
+  <description>Aligned versions of all VanillaBP artifacts an application uses. BPMS adapters are NOT part of this BOM - they are released independently and are added as explicit dependencies.</description>
+
+  <licenses>
+    <license>
+      <name>Apache License, Version 2.0</name>
+      <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <id>VanillaBP</id>
+      <organization>Phactum Softwareentwicklung GmbH</organization>
+      <organizationUrl>https://www.phactum.at</organizationUrl>
+    </developer>
+  </developers>
+
+  <distributionManagement>
+    <snapshotRepository>
+      <id>github</id>
+      <name>Github Packages</name>
+      <url>https://maven.pkg.github.com/vanillabp/adapter-platform-integration</url>
+    </snapshotRepository>
+  </distributionManagement>
+
+  <properties>
+    <!-- Keep in sync with the property 'vanillabp.version' of the aggregator pom. The
+         BOM cannot inherit it (see the comment on the parent above). -->
+    <spi-for-java.version>1.2.0-SNAPSHOT</spi-for-java.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- This pom is formatted by the aggregator's Spotless run (it includes
+         '**/pom.xml'), but the plugin itself is not inherited here (see the parent
+         comment above), so a directly invoked spotless goal has to skip this module. -->
+    <spotless.check.skip>true</spotless.check.skip>
+    <spotless.apply.skip>true</spotless.apply.skip>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <!-- The API used by business code (workflow modules). -->
+      <dependency>
+        <groupId>io.vanillabp</groupId>
+        <artifactId>spi-for-java</artifactId>
+        <version>${spi-for-java.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.vanillabp</groupId>
+        <artifactId>vanillabp-integration-spi</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <!-- Spring Boot integration. -->
+      <dependency>
+        <groupId>io.vanillabp</groupId>
+        <artifactId>vanillabp-spring-boot-integration</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.vanillabp</groupId>
+        <artifactId>vanillabp-spring-boot-support</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <!-- Quarkus integration. -->
+      <dependency>
+        <groupId>io.vanillabp</groupId>
+        <artifactId>vanillabp-quarkus-integration</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.vanillabp</groupId>
+        <artifactId>vanillabp-quarkus-integration-deployment</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.vanillabp</groupId>
+        <artifactId>vanillabp-quarkus-support</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <!-- Migration adapter: the runtime plus the SPI implemented by BPMS adapters. -->
+      <dependency>
+        <groupId>io.vanillabp.adapter</groupId>
+        <artifactId>migration-adapter</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.vanillabp.adapter</groupId>
+        <artifactId>migration-adapter-spi</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <!-- Optional helpers. -->
+      <dependency>
+        <groupId>io.vanillabp</groupId>
+        <artifactId>vanillabp-mapstruct-fluent-accessors</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.vanillabp</groupId>
+        <artifactId>test-utils</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+</project>
