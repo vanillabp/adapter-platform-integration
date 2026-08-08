@@ -10,6 +10,7 @@
 
   <artifactId>vanillabp-spring-boot-support</artifactId>
   <name>VanillaBP Spring Boot support</name>
+  <description>Spring Boot support classes for application modules which must not depend on a specific BPMS adapter.</description>
 
   <licenses>
     <license>

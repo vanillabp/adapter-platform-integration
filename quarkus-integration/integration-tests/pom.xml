@@ -25,6 +25,11 @@
     <module>outbox-mongo-integration-tests</module>
   </modules>
 
+  <properties>
+    <!-- test-only modules: nothing to publish -->
+    <maven.deploy.skip>true</maven.deploy.skip>
+  </properties>
+
   <dependencyManagement>
     <dependencies>
       <dependency>

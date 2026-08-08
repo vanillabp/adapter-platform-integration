@@ -12,6 +12,7 @@
   <artifactId>migration-adapter-parent</artifactId>
   <packaging>pom</packaging>
   <name>Migration adapter</name>
+  <description>Aggregator of the platform-neutral VanillaBP core: the adapter SPI, the business SPI and the runtime implementing them.</description>
 
   <modules>
     <module>business-spi</module>

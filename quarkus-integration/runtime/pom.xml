@@ -10,6 +10,7 @@
 
   <artifactId>vanillabp-quarkus-integration</artifactId>
   <name>Quarkus integration - Extension runtime</name>
+  <description>Runtime part of the VanillaBP Quarkus extension: CDI beans wiring workflow modules, workflow services and BPMS adapters.</description>
 
   <dependencies>
     <dependency>

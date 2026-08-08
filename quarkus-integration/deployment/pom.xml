@@ -10,6 +10,7 @@
 
   <artifactId>vanillabp-quarkus-integration-deployment</artifactId>
   <name>Quarkus integration - Extension deployment</name>
+  <description>Deployment (build-time) part of the VanillaBP Quarkus extension: workflow module detection, bean discovery and build items.</description>
 
   <dependencies>
     <dependency>

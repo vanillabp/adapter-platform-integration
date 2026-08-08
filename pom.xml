@@ -5,13 +5,15 @@
   <parent>
     <groupId>io.vanillabp</groupId>
     <artifactId>release-parent</artifactId>
-    <version>1.1.0</version>
+    <version>1.1.1</version>
   </parent>
 
   <artifactId>adapter-platform-integration</artifactId>
   <version>2.0.0-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>VanillaBP adapter platform integration</name>
+  <description>Platform integrations for the VanillaBP SPI: the platform-neutral migration adapter plus its Spring Boot and Quarkus integrations.</description>
+  <url>https://www.vanillabp.io</url>
 
   <licenses>
     <license>
@@ -38,6 +40,12 @@
     <module>quarkus-integration</module>
     <module>test-coverage-report</module>
   </modules>
+
+  <scm>
+    <connection>scm:git:https://github.com/vanillabp/adapter-platform-integration.git</connection>
+    <developerConnection>scm:git:https://github.com/vanillabp/adapter-platform-integration.git</developerConnection>
+    <url>http://github.com/vanillabp/adapter-platform-integration/tree/main</url>
+  </scm>
 
   <distributionManagement>
     <snapshotRepository>

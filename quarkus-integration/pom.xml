@@ -11,6 +11,7 @@
   <artifactId>quarkus-integration-parent</artifactId>
   <packaging>pom</packaging>
   <name>Quarkus Integration</name>
+  <description>Aggregator of the VanillaBP Quarkus extension and its integration tests.</description>
 
   <modules>
     <module>quarkus-support</module>

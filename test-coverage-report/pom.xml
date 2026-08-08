@@ -11,9 +11,15 @@
   <artifactId>test-coverage-report</artifactId>
   <packaging>pom</packaging>
   <name>Test coverage report</name>
+  <description>Aggregator of the per-platform test coverage reports. Coverage is measured separately for each platform since a platform's tests never cover the other platform's code.</description>
 
   <modules>
     <module>quarkus</module>
     <module>spring-boot</module>
   </modules>
+
+  <properties>
+    <!-- nothing to deploy - reports are published on Github pages -->
+    <maven.deploy.skip>true</maven.deploy.skip>
+  </properties>
 </project>

@@ -10,6 +10,7 @@
 
   <artifactId>test-utils</artifactId>
   <name>Test utils</name>
+  <description>Small utilities used by VanillaBP tests across all platforms (free ports, output suppression, coverage forwarding).</description>
 
   <licenses>
     <license>

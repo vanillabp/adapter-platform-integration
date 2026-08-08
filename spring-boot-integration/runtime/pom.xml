@@ -10,6 +10,7 @@
 
   <artifactId>vanillabp-spring-boot-integration</artifactId>
   <name>VanillaBP Spring Boot integration</name>
+  <description>VanillaBP support for Spring Boot applications: autoconfiguration, workflow module detection and JPA/MongoDB aggregate persistence.</description>
 
   <licenses>
     <license>

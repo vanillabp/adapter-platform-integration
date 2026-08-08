@@ -11,6 +11,7 @@
   <artifactId>spring-boot-integration-parent</artifactId>
   <packaging>pom</packaging>
   <name>Spring Boot Integration</name>
+  <description>Aggregator of the VanillaBP Spring Boot integration and its integration tests.</description>
 
   <licenses>
     <license>
