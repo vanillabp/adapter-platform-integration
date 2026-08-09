@@ -46,12 +46,12 @@ import io.vanillabp.spi.process.ProcessService;
  * to its original type.</li>
  * </ul>
  */
+@ExtendWith(SuppressOutputExtension.class)
+@SuppressOutputExtension.SuppressBackgroundOutput
 @SpringBootTest(classes = {
     TestApplication.class, MixedPersistenceOutboxTest.MongoConnectionTestConfiguration.class
 })
 @Testcontainers
-@ExtendWith(SuppressOutputExtension.class)
-@SuppressOutputExtension.SuppressBackgroundOutput
 public class MixedPersistenceOutboxTest {
 
   private static final String COUNT_JDBC_OUTBOX_ENTRIES = "select count(*) from TXNO_OUTBOX";

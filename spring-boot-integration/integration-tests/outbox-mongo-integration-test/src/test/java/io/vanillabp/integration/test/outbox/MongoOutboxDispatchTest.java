@@ -46,12 +46,12 @@ import io.vanillabp.spi.process.ProcessService;
  *       poller.</li>
  * </ul>
  */
+@ExtendWith(SuppressOutputExtension.class)
+@SuppressOutputExtension.SuppressBackgroundOutput
 @SpringBootTest(classes = {
     TestApplication.class, MongoOutboxDispatchTest.MongoOutboxTestConfiguration.class
 })
 @Testcontainers
-@ExtendWith(SuppressOutputExtension.class)
-@SuppressOutputExtension.SuppressBackgroundOutput
 public class MongoOutboxDispatchTest {
 
   private static final String OUTBOX_COLLECTION = "vanillabp-phase-two-outbox";
