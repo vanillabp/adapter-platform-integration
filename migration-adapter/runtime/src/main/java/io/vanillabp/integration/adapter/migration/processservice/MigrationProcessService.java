@@ -292,6 +292,7 @@ public class MigrationProcessService<A> {
       try {
         handler.invoke(workflowAggregate, context);
         aggregatePersistenceSupport.save(workflowAggregate);
+        failIfRollbackOnly(handler, context, transactionRunner);
         return handler.isAsynchronousTask()
             ? WorkflowTaskOutcome.completionPending()
             : WorkflowTaskOutcome.completed();
@@ -301,6 +302,7 @@ public class MigrationProcessService<A> {
         // commits (V1 applications used @Transactional(noRollbackFor =
         // TaskException.class) for exactly this)
         aggregatePersistenceSupport.save(workflowAggregate);
+        failIfRollbackOnly(handler, context, transactionRunner);
         return WorkflowTaskOutcome.bpmnError(taskException.getErrorCode(), taskException.getErrorName());
       }
     };
@@ -308,6 +310,46 @@ public class MigrationProcessService<A> {
     return context.runInCurrentTransaction()
         ? transactionRunner.inCurrent(transactionalWork)
         : transactionRunner.requireNew(transactionalWork);
+
+  }
+
+  /**
+   * The startup check cannot see a transactional proxy three calls down the handler's
+   * call chain, the transaction's state can. Asked on both paths, the normal one
+   * included: a handler swallowing an exception thrown by a nested transactional bean
+   * returns normally and would otherwise report the task as completed while nothing
+   * was persisted.
+   * <p>
+   * Throwing costs nothing that is not lost already, since the transaction cannot
+   * commit either way. What it buys is that the failure the BPMS reports names the
+   * cause instead of leaving the developer with Arjuna's or Spring's wording one layer
+   * away from it.
+   */
+  private void failIfRollbackOnly(
+      final WorkflowTaskHandler handler,
+      final TaskInvocationContext context,
+      final TransactionRunner transactionRunner) {
+
+    if (!transactionRunner.isRollbackOnly()) {
+      return;
+    }
+    throw new IllegalStateException(
+        """
+            The transaction of workflow task '%s' (BPMN process '%s' of workflow module '%s') was \
+            marked rollback-only while the @WorkflowTask method '%s' was running, so neither the \
+            changes to the workflow aggregate nor the state of the BPMS can be committed! A \
+            transaction annotation of the application, on the method or on any bean it called, saw \
+            an exception and requested the rollback; VanillaBP's TaskException is the usual \
+            candidate, since it is a business outcome for VanillaBP but an ordinary \
+            RuntimeException for the transaction interceptor. To solve this either remove that \
+            annotation from the call path of the workflow task or exclude \
+            io.vanillabp.spi.service.TaskException from its rollback rules (noRollbackFor for the \
+            Spring annotation, dontRollbackOn for the jakarta.transaction one)."""
+            .formatted(
+                context.getTaskDefinition(),
+                bpmnProcessId,
+                workflowModuleId,
+                handler.describe()));
 
   }
 

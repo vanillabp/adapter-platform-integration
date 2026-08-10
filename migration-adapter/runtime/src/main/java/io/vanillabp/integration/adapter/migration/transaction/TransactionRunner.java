@@ -39,4 +39,18 @@ public interface TransactionRunner {
   <T> T inCurrent(
       Supplier<T> work);
 
+  /**
+   * Whether the transaction of the work currently running was marked rollback-only,
+   * which no longer allows a commit. Only a transaction annotation of the
+   * application can do that to VanillaBP's transaction, and the mark cannot be
+   * cleared, in neither Spring nor JTA.
+   * <p>
+   * Valid only while work handed to {@link #requireNew(Supplier)} or
+   * {@link #inCurrent(Supplier)} is running; outside of that the answer is
+   * <code>false</code>.
+   *
+   * @return <code>true</code> if the current transaction can no longer commit
+   */
+  boolean isRollbackOnly();
+
 }

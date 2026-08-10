@@ -35,6 +35,8 @@ import io.vanillabp.spi.service.WorkflowTask;
  */
 class WorkflowTaskScanner {
 
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(WorkflowTaskScanner.class);
+
   private WorkflowTaskScanner() {
   }
 
@@ -45,12 +47,17 @@ class WorkflowTaskScanner {
       final Function<Class<?>, Object> beanResolver) {
 
     final var handlers = new LinkedList<WorkflowTaskHandler>();
+    // transaction annotations of the application covering a handler break the
+    // TaskException contract and cannot be worked around at runtime - all offending
+    // methods of this class are reported in one exception below
+    final var transactionDefects = new LinkedList<String>();
     for (final var method : workflowServiceClass.getMethods()) {
       // @WorkflowTask is repeatable: one method may serve several tasks
       final var annotations = method.getAnnotationsByType(WorkflowTask.class);
       if (annotations.length == 0) {
         continue;
       }
+      checkApplicationTransactions(workflowServiceClass, method, transactionDefects);
       final var binders = buildParameterBinders(
           workflowServiceClass,
           method,
@@ -84,7 +91,35 @@ class WorkflowTaskScanner {
             subscribedEvents));
       }
     }
+    if (!transactionDefects.isEmpty()) {
+      throw new IllegalStateException(
+          ApplicationTransactionCheck.buildFailureMessage(transactionDefects, workflowServiceClass));
+    }
     return handlers;
+
+  }
+
+  private static void checkApplicationTransactions(
+      final Class<?> workflowServiceClass,
+      final Method method,
+      final List<String> defects) {
+
+    final var findings = ApplicationTransactionCheck.inspect(workflowServiceClass, method);
+    if (findings.defect() != null) {
+      defects.add(findings.defect());
+    }
+    if (findings.obsoleteAnnotation() != null) {
+      log.warn(
+          """
+              The @WorkflowTask method '{}#{}' carries 'javax.transaction.Transactional' ({}), \
+              which is honored by neither Spring Framework 7 nor Quarkus 3 since the move to the \
+              Jakarta namespace - the transaction boundary it declares does not exist. Use \
+              'jakarta.transaction.Transactional' where you really want one; on a workflow task \
+              method you want none, since VanillaBP runs the method in a transaction of its own.""",
+          workflowServiceClass.getName(),
+          method.getName(),
+          findings.obsoleteAnnotation());
+    }
 
   }
 

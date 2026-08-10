@@ -6,6 +6,7 @@ import io.quarkus.arc.Arc;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.vanillabp.integration.adapter.migration.transaction.TransactionRunner;
 import jakarta.transaction.Status;
+import jakarta.transaction.TransactionSynchronizationRegistry;
 
 /**
  * The Quarkus implementation of the core's {@link TransactionRunner} used to run
@@ -15,6 +16,15 @@ import jakarta.transaction.Status;
  * request context is active, and Panache/Hibernate session access requires one.
  */
 public class QuarkusTransactionRunner implements TransactionRunner {
+
+  private final TransactionSynchronizationRegistry transactionRegistry;
+
+  public QuarkusTransactionRunner(
+      final TransactionSynchronizationRegistry transactionRegistry) {
+
+    this.transactionRegistry = transactionRegistry;
+
+  }
 
   @Override
   public <T> T requireNew(
@@ -30,11 +40,10 @@ public class QuarkusTransactionRunner implements TransactionRunner {
   public <T> T inCurrent(
       final Supplier<T> work) {
 
-    // STATUS_NO_TRANSACTION is the only status reported for a thread without a transaction;
-    // every other status means one is associated with this thread, no matter whether it was
-    // already marked for rollback. This is what QuarkusTransaction#isActive used to report
-    // despite its name, and that method is marked for removal in favor of #getStatus.
-    if (QuarkusTransaction.getStatus() == Status.STATUS_NO_TRANSACTION) {
+    // STATUS_NO_TRANSACTION is the only status reported for a thread without a
+    // transaction; every other status means one is associated with this thread, no
+    // matter whether it was already marked for rollback
+    if (transactionRegistry.getTransactionStatus() == Status.STATUS_NO_TRANSACTION) {
       throw new IllegalStateException(
           """
               A @WorkflowTask handler was to be run within the caller's transaction but no \
@@ -43,6 +52,16 @@ public class QuarkusTransactionRunner implements TransactionRunner {
               valid for embedded BPMS invoking handlers inside the engine's transaction.""");
     }
     return withRequestContext(work);
+
+  }
+
+  @Override
+  public boolean isRollbackOnly() {
+
+    // getRollbackOnly() is only defined while a transaction is associated with the
+    // thread, so the status is asked first
+    return (transactionRegistry.getTransactionStatus() != Status.STATUS_NO_TRANSACTION) && transactionRegistry
+        .getRollbackOnly();
 
   }
 

@@ -26,12 +26,19 @@ public class WorkflowTaskRegistryProducer {
    */
   private final io.vanillabp.integration.adapter.migration.sync.AggregateSyncSupport aggregateSync = new io.vanillabp.integration.adapter.migration.sync.AggregateSyncSupport();
 
+  /**
+   * @param transactionRegistry Used to read the state of the transaction a
+   *          <code>&#64;WorkflowTask</code> handler runs in (a rollback-only mark set
+   *          by a transaction annotation of the application)
+   * @return The registry
+   */
   @Produces
   @Singleton
   @Unremovable
-  public WorkflowTaskRegistry workflowTaskRegistry() {
+  public WorkflowTaskRegistry workflowTaskRegistry(
+      final jakarta.transaction.TransactionSynchronizationRegistry transactionRegistry) {
 
-    return new WorkflowTaskRegistry(new QuarkusTransactionRunner(), aggregateSync);
+    return new WorkflowTaskRegistry(new QuarkusTransactionRunner(transactionRegistry), aggregateSync);
 
   }
 

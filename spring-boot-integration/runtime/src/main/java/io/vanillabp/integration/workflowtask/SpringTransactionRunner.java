@@ -5,6 +5,7 @@ import java.util.function.Supplier;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import io.vanillabp.integration.adapter.migration.transaction.TransactionRunner;
@@ -20,6 +21,8 @@ import io.vanillabp.integration.adapter.migration.transaction.TransactionRunner;
 public class SpringTransactionRunner implements TransactionRunner {
 
   private final ObjectProvider<PlatformTransactionManager> transactionManager;
+
+  private final ThreadLocal<TransactionStatus> currentStatus = new ThreadLocal<>();
 
   public SpringTransactionRunner(
       final ObjectProvider<PlatformTransactionManager> transactionManager) {
@@ -44,6 +47,17 @@ public class SpringTransactionRunner implements TransactionRunner {
 
   }
 
+  @Override
+  public boolean isRollbackOnly() {
+
+    final var status = currentStatus.get();
+    // Spring reports the mark for a PARTICIPATING transaction as well, which is the
+    // silent case: the commit of the participating transaction returns normally
+    // while nothing can be committed
+    return (status != null) && status.isRollbackOnly();
+
+  }
+
   private <T> T run(
       final Supplier<T> work,
       final int propagation) {
@@ -59,7 +73,22 @@ public class SpringTransactionRunner implements TransactionRunner {
     }
     final var transactionTemplate = new TransactionTemplate(manager);
     transactionTemplate.setPropagationBehavior(propagation);
-    return transactionTemplate.execute(status -> work.get());
+    return transactionTemplate.execute(status -> {
+      // the status is the only way to read the rollback-only mark, and it is
+      // available inside the callback only - handlers run on adapter threads, so a
+      // thread local is enough to reach it from the core's check
+      final var previous = currentStatus.get();
+      currentStatus.set(status);
+      try {
+        return work.get();
+      } finally {
+        if (previous == null) {
+          currentStatus.remove();
+        } else {
+          currentStatus.set(previous);
+        }
+      }
+    });
 
   }
 

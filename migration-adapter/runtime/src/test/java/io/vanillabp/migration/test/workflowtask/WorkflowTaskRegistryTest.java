@@ -99,6 +99,12 @@ public class WorkflowTaskRegistryTest {
 
     boolean inCurrentUsed = false;
 
+    /**
+     * Mimics a transaction annotation of the application having marked the
+     * transaction rollback-only while the handler ran.
+     */
+    boolean rollbackOnly = false;
+
     @Override
     public <T> T requireNew(
         final Supplier<T> work) {
@@ -114,6 +120,13 @@ public class WorkflowTaskRegistryTest {
 
       inCurrentUsed = true;
       return work.get();
+
+    }
+
+    @Override
+    public boolean isRollbackOnly() {
+
+      return rollbackOnly;
 
     }
 
@@ -532,6 +545,41 @@ public class WorkflowTaskRegistryTest {
       // the V1 contract: aggregate changes commit although the handler threw
       assertEquals("bpmnError", persistence.aggregates.get("4711").processedBy);
       assertTrue(persistence.saved);
+
+    }
+
+    @Test
+    @DisplayName("A rollback-only transaction fails the task with a guiding message (story 40b)")
+    public void rollbackOnlyTransactionFailsGuiding() {
+
+      // what a transaction annotation of the application does to VanillaBP's
+      // transaction as soon as an exception passes it, e.g. a TaskException
+      transactionRunner.rollbackOnly = true;
+
+      final var exception = assertThrows(
+          IllegalStateException.class,
+          () -> registry.invokeWorkflowTask(MODULE, PROCESS, context("doSomething")));
+
+      assertTrue(exception.getMessage().contains("marked rollback-only"), exception.getMessage());
+      assertTrue(exception.getMessage().contains("doSomething"), exception.getMessage());
+      assertTrue(exception.getMessage().contains(PROCESS), exception.getMessage());
+      assertTrue(exception.getMessage().contains(MODULE), exception.getMessage());
+      assertTrue(exception.getMessage().contains("TaskException"), exception.getMessage());
+
+    }
+
+    @Test
+    @DisplayName("A rollback-only transaction fails the TaskException path too, instead of reporting a BPMN error")
+    public void rollbackOnlyTransactionFailsTheTaskExceptionPath() {
+
+      transactionRunner.rollbackOnly = true;
+
+      final var exception = assertThrows(
+          IllegalStateException.class,
+          () -> registry.invokeWorkflowTask(MODULE, PROCESS, context("bpmnError")));
+
+      assertTrue(exception.getMessage().contains("marked rollback-only"), exception.getMessage());
+      assertTrue(exception.getMessage().contains("bpmnError"), exception.getMessage());
 
     }
 

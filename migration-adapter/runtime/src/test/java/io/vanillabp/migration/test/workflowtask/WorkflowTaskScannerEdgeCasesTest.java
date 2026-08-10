@@ -681,4 +681,525 @@ public class WorkflowTaskScannerEdgeCasesTest {
 
   }
 
+  /**
+   * The startup check of story 40b. The annotations are matched by type name, so the
+   * stand-ins in this module's test sources (see
+   * {@link org.springframework.transaction.annotation.Transactional}) exercise exactly
+   * what the real ones do; the real annotations are used by the acceptance tests of
+   * both platform integrations.
+   */
+  @Nested
+  @DisplayName("Transaction annotations of the application")
+  class ApplicationTransactions {
+
+    private IllegalStateException assertRejected(
+        final Class<?> serviceClass,
+        final Object bean) {
+
+      final var e = assertThrows(IllegalStateException.class, () -> register(serviceClass, bean));
+      assertTrue(
+          e.getMessage().contains("covered by a transaction annotation of the application"),
+          e.getMessage());
+      assertTrue(e.getMessage().contains("noRollbackFor = TaskException.class"), e.getMessage());
+      assertTrue(e.getMessage().contains("dontRollbackOn = TaskException.class"), e.getMessage());
+      return e;
+
+    }
+
+    @Test
+    @DisplayName("Spring's @Transactional on the method fails the startup naming method and annotation")
+    public void springOnMethod() {
+
+      class Service {
+
+        @WorkflowTask(taskDefinition = "task")
+        @org.springframework.transaction.annotation.Transactional
+        public void task(
+            final Aggregate aggregate) {
+        }
+
+      }
+      final var e = assertRejected(Service.class, new Service());
+      assertTrue(e.getMessage().contains("#task"), e.getMessage());
+      assertTrue(
+          e.getMessage().contains("org.springframework.transaction.annotation.Transactional"),
+          e.getMessage());
+      assertTrue(e.getMessage().contains("declared on the method"), e.getMessage());
+
+    }
+
+    @Test
+    @DisplayName("Spring's @Transactional on the class fails the startup naming the class")
+    public void springOnClass() {
+
+      final var e = assertRejected(SpringOnClassService.class, new SpringOnClassService());
+      assertTrue(e.getMessage().contains("declared on the class"), e.getMessage());
+      assertTrue(e.getMessage().contains(SpringOnClassService.class.getName()), e.getMessage());
+
+    }
+
+    @Test
+    @DisplayName("noRollbackFor covering TaskException is accepted (the version-1 pattern)")
+    public void springNoRollbackForTaskException() {
+
+      class Service {
+
+        @WorkflowTask(taskDefinition = "task")
+        @org.springframework.transaction.annotation.Transactional(
+            noRollbackFor = io.vanillabp.spi.service.TaskException.class)
+        public void task(
+            final Aggregate aggregate) {
+        }
+
+      }
+      register(Service.class, new Service());
+
+    }
+
+    @Test
+    @DisplayName("noRollbackFor naming a superclass of TaskException is accepted")
+    public void springNoRollbackForSuperclass() {
+
+      class Service {
+
+        @WorkflowTask(taskDefinition = "task")
+        @org.springframework.transaction.annotation.Transactional(noRollbackFor = RuntimeException.class)
+        public void task(
+            final Aggregate aggregate) {
+        }
+
+      }
+      register(Service.class, new Service());
+
+    }
+
+    @Test
+    @DisplayName("noRollbackForClassName matching TaskException by name is accepted")
+    public void springNoRollbackForClassName() {
+
+      class Service {
+
+        @WorkflowTask(taskDefinition = "task")
+        @org.springframework.transaction.annotation.Transactional(noRollbackForClassName = "TaskException")
+        public void task(
+            final Aggregate aggregate) {
+        }
+
+      }
+      register(Service.class, new Service());
+
+    }
+
+    @Test
+    @DisplayName("Propagations not joining VanillaBP's transaction are accepted")
+    public void springNonJoiningPropagations() {
+
+      class RequiresNew {
+
+        @WorkflowTask(taskDefinition = "task")
+        @org.springframework.transaction.annotation.Transactional(
+            propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+        public void task(
+            final Aggregate aggregate) {
+        }
+
+      }
+      class NestedPropagation {
+
+        @WorkflowTask(taskDefinition = "task")
+        @org.springframework.transaction.annotation.Transactional(
+            propagation = org.springframework.transaction.annotation.Propagation.NESTED)
+        public void task(
+            final Aggregate aggregate) {
+        }
+
+      }
+      class Never {
+
+        @WorkflowTask(taskDefinition = "task")
+        @org.springframework.transaction.annotation.Transactional(
+            propagation = org.springframework.transaction.annotation.Propagation.NEVER)
+        public void task(
+            final Aggregate aggregate) {
+        }
+
+      }
+      class NotSupported {
+
+        @WorkflowTask(taskDefinition = "task")
+        @org.springframework.transaction.annotation.Transactional(
+            propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+        public void task(
+            final Aggregate aggregate) {
+        }
+
+      }
+      register(RequiresNew.class, new RequiresNew());
+      setUpRegistry();
+      register(NestedPropagation.class, new NestedPropagation());
+      setUpRegistry();
+      register(Never.class, new Never());
+      setUpRegistry();
+      register(NotSupported.class, new NotSupported());
+
+    }
+
+    @Test
+    @DisplayName("SUPPORTS and MANDATORY join VanillaBP's transaction and fail the startup")
+    public void springJoiningPropagations() {
+
+      class Supports {
+
+        @WorkflowTask(taskDefinition = "task")
+        @org.springframework.transaction.annotation.Transactional(
+            propagation = org.springframework.transaction.annotation.Propagation.SUPPORTS)
+        public void task(
+            final Aggregate aggregate) {
+        }
+
+      }
+      class Mandatory {
+
+        @WorkflowTask(taskDefinition = "task")
+        @org.springframework.transaction.annotation.Transactional(
+            propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+        public void task(
+            final Aggregate aggregate) {
+        }
+
+      }
+      assertRejected(Supports.class, new Supports());
+      setUpRegistry();
+      assertRejected(Mandatory.class, new Mandatory());
+
+    }
+
+    @Test
+    @DisplayName("The JTA @Transactional fails the startup as well")
+    public void jakartaTransactional() {
+
+      class Service {
+
+        @WorkflowTask(taskDefinition = "task")
+        @jakarta.transaction.Transactional
+        public void task(
+            final Aggregate aggregate) {
+        }
+
+      }
+      final var e = assertRejected(Service.class, new Service());
+      assertTrue(e.getMessage().contains("jakarta.transaction.Transactional"), e.getMessage());
+
+    }
+
+    @Test
+    @DisplayName("dontRollbackOn covering TaskException is accepted, also through a superclass")
+    public void jakartaDontRollbackOn() {
+
+      class Exact {
+
+        @WorkflowTask(taskDefinition = "task")
+        @jakarta.transaction.Transactional(dontRollbackOn = io.vanillabp.spi.service.TaskException.class)
+        public void task(
+            final Aggregate aggregate) {
+        }
+
+      }
+      class Superclass {
+
+        @WorkflowTask(taskDefinition = "task")
+        @jakarta.transaction.Transactional(dontRollbackOn = RuntimeException.class)
+        public void task(
+            final Aggregate aggregate) {
+        }
+
+      }
+      register(Exact.class, new Exact());
+      setUpRegistry();
+      register(Superclass.class, new Superclass());
+
+    }
+
+    @Test
+    @DisplayName("A more specific rollbackFor beats noRollbackFor and fails the startup")
+    public void springRollbackForWins() {
+
+      class Service {
+
+        @WorkflowTask(taskDefinition = "task")
+        @org.springframework.transaction.annotation.Transactional(
+            rollbackFor = io.vanillabp.spi.service.TaskException.class,
+            noRollbackFor = RuntimeException.class)
+        public void task(
+            final Aggregate aggregate) {
+        }
+
+      }
+      assertRejected(Service.class, new Service());
+
+    }
+
+    @Test
+    @DisplayName("A more specific rollbackOn beats dontRollbackOn and fails the startup")
+    public void jakartaRollbackOnWins() {
+
+      class Service {
+
+        @WorkflowTask(taskDefinition = "task")
+        @jakarta.transaction.Transactional(
+            rollbackOn = io.vanillabp.spi.service.TaskException.class,
+            dontRollbackOn = RuntimeException.class)
+        public void task(
+            final Aggregate aggregate) {
+        }
+
+      }
+      assertRejected(Service.class, new Service());
+
+    }
+
+    @Test
+    @DisplayName("The JTA @Transactional with REQUIRES_NEW is accepted")
+    public void jakartaRequiresNew() {
+
+      class Service {
+
+        @WorkflowTask(taskDefinition = "task")
+        @jakarta.transaction.Transactional(jakarta.transaction.Transactional.TxType.REQUIRES_NEW)
+        public void task(
+            final Aggregate aggregate) {
+        }
+
+      }
+      register(Service.class, new Service());
+
+    }
+
+    @Test
+    @DisplayName("@TransactionAttribute has no rollback rules: joining fails, REQUIRES_NEW is accepted")
+    public void ejbTransactionAttribute() {
+
+      class Joining {
+
+        @WorkflowTask(taskDefinition = "task")
+        @jakarta.ejb.TransactionAttribute
+        public void task(
+            final Aggregate aggregate) {
+        }
+
+      }
+      class Own {
+
+        @WorkflowTask(taskDefinition = "task")
+        @jakarta.ejb.TransactionAttribute(jakarta.ejb.TransactionAttributeType.REQUIRES_NEW)
+        public void task(
+            final Aggregate aggregate) {
+        }
+
+      }
+      final var e = assertRejected(Joining.class, new Joining());
+      assertTrue(e.getMessage().contains("jakarta.ejb.TransactionAttribute"), e.getMessage());
+      setUpRegistry();
+      register(Own.class, new Own());
+
+    }
+
+    @Test
+    @DisplayName("An annotation inherited from an interface fails the startup naming the interface")
+    public void annotationOnInterface() {
+
+      final var e = assertRejected(InterfaceImplementingService.class, new InterfaceImplementingService());
+      assertTrue(e.getMessage().contains("declared on the interface"), e.getMessage());
+      assertTrue(e.getMessage().contains(TransactionalWorkflow.class.getName()), e.getMessage());
+
+    }
+
+    @Test
+    @DisplayName("An annotation inherited from a superclass fails the startup")
+    public void annotationOnSuperclass() {
+
+      final var e = assertRejected(SubclassService.class, new SubclassService());
+      assertTrue(e.getMessage().contains(TransactionalBaseService.class.getName()), e.getMessage());
+
+    }
+
+    @Test
+    @DisplayName("A custom annotation meta-annotated with @Transactional fails the startup naming it")
+    public void metaAnnotation() {
+
+      class Service {
+
+        @WorkflowTask(taskDefinition = "task")
+        @UnitOfWork
+        public void task(
+            final Aggregate aggregate) {
+        }
+
+      }
+      final var e = assertRejected(Service.class, new Service());
+      assertTrue(e.getMessage().contains(UnitOfWork.class.getName()), e.getMessage());
+
+    }
+
+    @Test
+    @DisplayName("An accepted annotation on the method overrides a joining one on the class")
+    public void methodOverridesClass() {
+
+      register(MethodOverridesClassService.class, new MethodOverridesClassService());
+
+    }
+
+    @Test
+    @DisplayName("An annotation on a method without @WorkflowTask is none of VanillaBP's business")
+    public void annotationOnOtherMethod() {
+
+      class Service {
+
+        @WorkflowTask(taskDefinition = "task")
+        public void task(
+            final Aggregate aggregate) {
+        }
+
+        @org.springframework.transaction.annotation.Transactional
+        public void startTheWorkflow() {
+        }
+
+      }
+      register(Service.class, new Service());
+
+    }
+
+    @Test
+    @DisplayName("javax.transaction.Transactional boots with a WARN: it declares no boundary at all")
+    public void obsoleteJavaxAnnotation() {
+
+      class Service {
+
+        @WorkflowTask(taskDefinition = "task")
+        @javax.transaction.Transactional
+        public void task(
+            final Aggregate aggregate) {
+        }
+
+      }
+      final var logWatcher = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+      logWatcher.start();
+      final var scannerLog = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory
+          .getLogger("io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskScanner");
+      scannerLog.addAppender(logWatcher);
+      try {
+        register(Service.class, new Service());
+      } finally {
+        scannerLog.detachAndStopAllAppenders();
+      }
+
+      final var warnings = logWatcher.list
+          .stream()
+          .map(event -> event
+              .getFormattedMessage()
+              .toString())
+          .toList();
+      assertTrue(
+          warnings
+              .stream()
+              .anyMatch(warning -> warning.contains("javax.transaction.Transactional") && warning
+                  .contains("Jakarta namespace")),
+          warnings.toString());
+
+    }
+
+    @Test
+    @DisplayName("All offending methods of a class are reported in one exception")
+    public void allOffendingMethodsReported() {
+
+      final var e = assertRejected(TwoOffendingMethodsService.class, new TwoOffendingMethodsService());
+      assertTrue(e.getMessage().contains("#first"), e.getMessage());
+      assertTrue(e.getMessage().contains("#second"), e.getMessage());
+
+    }
+
+  }
+
+  @org.springframework.transaction.annotation.Transactional
+  public static class SpringOnClassService {
+
+    @WorkflowTask(taskDefinition = "task")
+    public void task(
+        final Aggregate aggregate) {
+    }
+
+  }
+
+  @org.springframework.transaction.annotation.Transactional
+  public interface TransactionalWorkflow {
+
+    void task(
+        Aggregate aggregate);
+
+  }
+
+  public static class InterfaceImplementingService implements TransactionalWorkflow {
+
+    @Override
+    @WorkflowTask(taskDefinition = "task")
+    public void task(
+        final Aggregate aggregate) {
+    }
+
+  }
+
+  @org.springframework.transaction.annotation.Transactional
+  public static class TransactionalBaseService {
+
+  }
+
+  public static class SubclassService extends TransactionalBaseService {
+
+    @WorkflowTask(taskDefinition = "task")
+    public void task(
+        final Aggregate aggregate) {
+    }
+
+  }
+
+  /**
+   * A custom annotation carrying the transaction boundary, a common house style a
+   * purely name-based scan would miss.
+   */
+  @java.lang.annotation.Target({
+      java.lang.annotation.ElementType.METHOD, java.lang.annotation.ElementType.TYPE
+  })
+  @java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME)
+  @org.springframework.transaction.annotation.Transactional
+  public @interface UnitOfWork {
+
+  }
+
+  @org.springframework.transaction.annotation.Transactional
+  public static class MethodOverridesClassService {
+
+    @WorkflowTask(taskDefinition = "task")
+    @org.springframework.transaction.annotation.Transactional(
+        propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void task(
+        final Aggregate aggregate) {
+    }
+
+  }
+
+  @org.springframework.transaction.annotation.Transactional
+  public static class TwoOffendingMethodsService {
+
+    @WorkflowTask(taskDefinition = "first")
+    public void first(
+        final Aggregate aggregate) {
+    }
+
+    @WorkflowTask(taskDefinition = "second")
+    public void second(
+        final Aggregate aggregate) {
+    }
+
+  }
+
 }
