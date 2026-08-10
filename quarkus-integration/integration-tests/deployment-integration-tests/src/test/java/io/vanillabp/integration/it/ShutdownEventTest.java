@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import io.quarkus.test.QuarkusUnitTest;
+import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.integration.test.deployment.Aggregate;
 import io.vanillabp.integration.test.deployment.AggregatePersistence;
 import io.vanillabp.integration.test.deployment.FileRecordingStopListener;
@@ -36,7 +36,7 @@ public class ShutdownEventTest {
       .toAbsolutePath();
 
   @RegisterExtension
-  static final QuarkusUnitTest unitTest = new QuarkusUnitTest()
+  static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .setBeforeAllCustomizer(() -> {
         try {
           Files.deleteIfExists(STOP_EVENTS_FILE);

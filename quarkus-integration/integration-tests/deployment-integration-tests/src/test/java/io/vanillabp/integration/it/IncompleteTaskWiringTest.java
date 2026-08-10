@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import io.quarkus.test.QuarkusUnitTest;
+import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.integration.test.deployment.RequestScopedProbe;
 import io.vanillabp.integration.test.deployment.TaskAggregate;
 import io.vanillabp.integration.test.deployment.TaskAggregatePersistence;
@@ -27,7 +27,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 public class IncompleteTaskWiringTest {
 
   @RegisterExtension
-  static final QuarkusUnitTest unitTest = new QuarkusUnitTest()
+  static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .withApplicationRoot(jar -> jar
           .addAsResource("task-processing/application.yaml", "application.yaml")
           .addClass(TaskAggregate.class)

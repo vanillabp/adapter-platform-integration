@@ -17,7 +17,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
 
-import io.quarkus.test.QuarkusUnitTest;
+import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.integration.test.Aggregate;
 import io.vanillabp.integration.test.AggregatePersistence;
 import io.vanillabp.integration.test.RecordingPhaseTwoListener;
@@ -49,7 +49,7 @@ import jakarta.transaction.UserTransaction;
 public class MongoOutboxDispatchTest {
 
   @RegisterExtension
-  static final QuarkusUnitTest unitTest = new QuarkusUnitTest()
+  static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .withApplicationRoot(jar -> jar
           .addAsResource("application.yaml")
           .addClass(Aggregate.class)

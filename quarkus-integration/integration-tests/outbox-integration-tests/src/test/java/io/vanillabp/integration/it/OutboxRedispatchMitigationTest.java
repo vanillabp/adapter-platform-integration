@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import io.quarkus.test.QuarkusUnitTest;
+import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import io.vanillabp.integration.test.Aggregate;
 import io.vanillabp.integration.test.AggregatePersistence;
@@ -33,7 +33,7 @@ import jakarta.transaction.UserTransaction;
 public class OutboxRedispatchMitigationTest {
 
   @RegisterExtension
-  static final QuarkusUnitTest unitTest = new QuarkusUnitTest()
+  static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .setArchiveProducer(() -> ShrinkWrap
           .create(JavaArchive.class)
           .addAsResource("redispatch-mitigation.yaml", "application.yaml")

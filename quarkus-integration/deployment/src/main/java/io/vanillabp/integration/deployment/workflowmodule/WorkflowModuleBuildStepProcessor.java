@@ -68,7 +68,7 @@ public class WorkflowModuleBuildStepProcessor {
 
     final var workflowModules = applicationArchivesBuildItem
         // search all archives of the project
-        .getAllApplicationArchives()
+        .getAllArchives()
         .stream()
         .flatMap(archive -> Optional
             // for META-INF/workflow-module files
@@ -393,7 +393,7 @@ public class WorkflowModuleBuildStepProcessor {
     // search archives for config files
 
     applicationArchives
-        .getAllApplicationArchives()
+        .getAllArchives()
         // traverse all archives
         .forEach(archive -> archive
             .accept(openPathTree -> openPathTree

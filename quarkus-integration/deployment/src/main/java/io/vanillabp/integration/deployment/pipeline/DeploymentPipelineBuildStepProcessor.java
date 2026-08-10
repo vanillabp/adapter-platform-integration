@@ -126,7 +126,7 @@ public class DeploymentPipelineBuildStepProcessor {
     // sorted + deduplicated: the same path may show up in more than one archive
     final var bpmnResourcePaths = new TreeSet<String>();
     applicationArchives
-        .getAllApplicationArchives()
+        .getAllArchives()
         .forEach(archive -> archive
             .accept(openPathTree -> openPathTree
                 .walk(visit -> Optional

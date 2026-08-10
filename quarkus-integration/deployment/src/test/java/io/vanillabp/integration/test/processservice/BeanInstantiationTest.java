@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import io.quarkus.test.QuarkusUnitTest;
+import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.integration.test.adapter.DummyAdapters;
 import io.vanillabp.integration.test.adapter.TestAdapterDeploymentService;
 import io.vanillabp.integration.test.adapter.TestAdapterDeploymentServiceProducer;
@@ -23,7 +23,7 @@ public class BeanInstantiationTest {
 
   // Start the unit test with the extension loaded, and sample classes
   @RegisterExtension
-  static final QuarkusUnitTest unitTest = new QuarkusUnitTest()
+  static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .setArchiveProducer(() -> ShrinkWrap
           .create(JavaArchive.class)
           .addClass(DummyAdapters.class)                          // necessary due to anonymous class in DummyAdapters

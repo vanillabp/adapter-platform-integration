@@ -5,6 +5,7 @@ import java.util.function.Supplier;
 import io.quarkus.arc.Arc;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.vanillabp.integration.adapter.migration.transaction.TransactionRunner;
+import jakarta.transaction.Status;
 
 /**
  * The Quarkus implementation of the core's {@link TransactionRunner} used to run
@@ -29,7 +30,11 @@ public class QuarkusTransactionRunner implements TransactionRunner {
   public <T> T inCurrent(
       final Supplier<T> work) {
 
-    if (!QuarkusTransaction.isActive()) {
+    // STATUS_NO_TRANSACTION is the only status reported for a thread without a transaction;
+    // every other status means one is associated with this thread, no matter whether it was
+    // already marked for rollback. This is what QuarkusTransaction#isActive used to report
+    // despite its name, and that method is marked for removal in favor of #getStatus.
+    if (QuarkusTransaction.getStatus() == Status.STATUS_NO_TRANSACTION) {
       throw new IllegalStateException(
           """
               A @WorkflowTask handler was to be run within the caller's transaction but no \

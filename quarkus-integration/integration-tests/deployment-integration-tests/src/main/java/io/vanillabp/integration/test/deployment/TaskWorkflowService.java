@@ -13,6 +13,7 @@ import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.transaction.Status;
 
 /**
  * The workflow service of the task-processing acceptance test (story 21a): one
@@ -37,7 +38,7 @@ public class TaskWorkflowService {
   public void processTask(
       final TaskAggregate aggregate) {
 
-    if (!QuarkusTransaction.isActive()) {
+    if (QuarkusTransaction.getStatus() == Status.STATUS_NO_TRANSACTION) {
       throw new IllegalStateException("no JTA transaction active in @WorkflowTask handler");
     }
     // throws ContextNotActiveException if the platform did not activate the

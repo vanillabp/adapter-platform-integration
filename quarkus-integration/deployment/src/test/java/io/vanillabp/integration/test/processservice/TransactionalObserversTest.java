@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import io.quarkus.test.QuarkusUnitTest;
+import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.integration.test.adapter.DummyAdapters;
 import io.vanillabp.integration.test.adapter.TestAdapterDeploymentService;
 import io.vanillabp.integration.test.adapter.TestAdapterDeploymentServiceProducer;
@@ -32,7 +32,7 @@ import lombok.Getter;
 public class TransactionalObserversTest {
 
   @RegisterExtension
-  static final QuarkusUnitTest config = new QuarkusUnitTest()
+  static final QuarkusExtensionTest config = new QuarkusExtensionTest()
       .withApplicationRoot((
           jar) -> jar
               .addClass(DummyAdapters.class)                          // necessary due to anonymous class in DummyAdapters

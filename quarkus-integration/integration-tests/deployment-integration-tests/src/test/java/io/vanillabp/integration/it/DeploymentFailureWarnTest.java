@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import io.quarkus.test.QuarkusUnitTest;
+import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.integration.test.deployment.Aggregate;
 import io.vanillabp.integration.test.deployment.AggregatePersistence;
 import io.vanillabp.integration.test.deployment.FailDeploymentListener;
@@ -33,7 +33,7 @@ import jakarta.inject.Inject;
 public class DeploymentFailureWarnTest {
 
   @RegisterExtension
-  static final QuarkusUnitTest unitTest = new QuarkusUnitTest()
+  static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .withApplicationRoot(jar -> jar
           .addAsResource("failure-warn/application.yaml", "application.yaml")
           .addClass(Aggregate.class)

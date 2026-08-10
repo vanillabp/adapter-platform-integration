@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import io.quarkus.test.QuarkusUnitTest;
+import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.service.BpmnProcess;
@@ -30,7 +30,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 public class AmbiguousSyncModelTest {
 
   @RegisterExtension
-  static final QuarkusUnitTest unitTest = new QuarkusUnitTest()
+  static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .withApplicationRoot(jar -> jar
           .addAsResource("task-processing/application.yaml", "application.yaml")
           .addClass(AmbiguousAggregate.class)

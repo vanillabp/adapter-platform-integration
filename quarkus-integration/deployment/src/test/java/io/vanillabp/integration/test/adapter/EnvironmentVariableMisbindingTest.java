@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import io.quarkus.test.QuarkusUnitTest;
+import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
@@ -24,7 +24,7 @@ public class EnvironmentVariableMisbindingTest {
 
   // Start the unit test with the extension loaded, and sample classes
   @RegisterExtension
-  static final QuarkusUnitTest unitTest = new QuarkusUnitTest()
+  static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .setArchiveProducer(() -> ShrinkWrap
           .create(JavaArchive.class)
           .addPackage("io.vanillabp.integration.test.samples.sample")  // load sample application classes

@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import io.quarkus.test.QuarkusUnitTest;
+import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.adapter.dummy.runtime.DummyDeploymentService;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.adapter.spi.workflowtask.MultiInstanceValue;
@@ -41,7 +41,7 @@ import jakarta.inject.Inject;
 public class WorkflowTaskProcessingTest {
 
   @RegisterExtension
-  static final QuarkusUnitTest unitTest = new QuarkusUnitTest()
+  static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .withApplicationRoot(jar -> jar
           .addAsResource("task-processing/application.yaml", "application.yaml")
           .addClass(TaskAggregate.class)

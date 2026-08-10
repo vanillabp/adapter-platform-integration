@@ -84,7 +84,7 @@ public class ProcessServiceBuildStepProcessor {
 
     final var aggregatePersistenceAwares = applicationArchivesBuildItem
         // search all archives of the project
-        .getAllApplicationArchives()
+        .getAllArchives()
         .stream()
         .flatMap(archive -> archive
             // collect each archive's known implementations
@@ -100,10 +100,13 @@ public class ProcessServiceBuildStepProcessor {
     // aggregate. ALL classes declaring the aggregate and ALL their declared BPMN
     // process IDs (bpmnProcess + secondaryBpmnProcesses) are recorded for
     // phase-two routing and @WorkflowTask processing at runtime.
+    // "First class found" needs a stable archive order to be reproducible, which is
+    // why getAllArchives is used: it lists the root archive first and the remaining
+    // archives in the order Quarkus resolved them.
     final var annotationsByAggregate = new LinkedHashMap<Type, List<AnnotationInstance>>();
     applicationArchivesBuildItem
         // search all archives of the project
-        .getAllApplicationArchives()
+        .getAllArchives()
         .stream()
         .flatMap(archive -> archive
             .getIndex()
