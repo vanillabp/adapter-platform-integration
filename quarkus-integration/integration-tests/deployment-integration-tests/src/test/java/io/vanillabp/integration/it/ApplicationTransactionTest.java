@@ -1,6 +1,7 @@
 package io.vanillabp.integration.it;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -115,7 +116,11 @@ public class ApplicationTransactionTest {
     assertTrue(failure.getMessage().contains(taskDefinition), failure.getMessage());
     assertTrue(failure.getMessage().contains(PROCESS), failure.getMessage());
     assertTrue(failure.getMessage().contains(MODULE), failure.getMessage());
-    assertTrue(failure.getMessage().contains("dontRollbackOn"), failure.getMessage());
+    // the rollback rule as it is written on THIS platform: Quarkus honors the JTA
+    // annotation, and Spring's only with the extension quarkus-spring-tx, which this
+    // application does not have - so its attribute must not be offered here
+    assertTrue(failure.getMessage().contains("dontRollbackOn = TaskException.class"), failure.getMessage());
+    assertFalse(failure.getMessage().contains("noRollbackFor"), failure.getMessage());
 
   }
 

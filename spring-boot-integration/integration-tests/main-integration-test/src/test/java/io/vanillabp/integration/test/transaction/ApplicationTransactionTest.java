@@ -259,8 +259,11 @@ public class ApplicationTransactionTest {
         failure.getMessage().contains(PROCESS) && failure.getMessage().contains(MODULE),
         "unexpected message: "
             + failure.getMessage());
+    // the rollback rules as they are written on THIS platform: Spring Boot honors its
+    // own annotation AND the JTA one, so both attributes are legitimate options here
     Assertions.assertTrue(
-        failure.getMessage().contains("noRollbackFor"),
+        failure.getMessage().contains("noRollbackFor = TaskException.class") && failure.getMessage()
+            .contains("dontRollbackOn = TaskException.class"),
         "unexpected message: "
             + failure.getMessage());
 

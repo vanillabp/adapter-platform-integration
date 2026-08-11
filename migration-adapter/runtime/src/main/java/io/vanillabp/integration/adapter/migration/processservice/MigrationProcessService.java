@@ -254,12 +254,15 @@ public class MigrationProcessService<A> {
    *          {@link io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry}
    * @param context The invocation context supplied by the adapter
    * @param transactionRunner The platform's transaction runner
+   * @param rollbackRuleRemedies How a rollback rule excluding a {@link TaskException} is
+   *          written on this platform, named by the failure of the rollback-only check
    * @return The outcome the adapter maps to the BPMS
    */
   public WorkflowTaskOutcome executeWorkflowTask(
       final WorkflowTaskHandler handler,
       final TaskInvocationContext context,
-      final TransactionRunner transactionRunner) {
+      final TransactionRunner transactionRunner,
+      final List<String> rollbackRuleRemedies) {
 
     // lifecycle-event filter: a delivery of an event the method does not
     // subscribe to (e.g. CANCELED to a method without a @TaskEvent parameter) is
@@ -292,7 +295,7 @@ public class MigrationProcessService<A> {
       try {
         handler.invoke(workflowAggregate, context);
         aggregatePersistenceSupport.save(workflowAggregate);
-        failIfRollbackOnly(handler, context, transactionRunner);
+        failIfRollbackOnly(handler, context, transactionRunner, rollbackRuleRemedies);
         return handler.isAsynchronousTask()
             ? WorkflowTaskOutcome.completionPending()
             : WorkflowTaskOutcome.completed();
@@ -302,7 +305,7 @@ public class MigrationProcessService<A> {
         // commits (V1 applications used @Transactional(noRollbackFor =
         // TaskException.class) for exactly this)
         aggregatePersistenceSupport.save(workflowAggregate);
-        failIfRollbackOnly(handler, context, transactionRunner);
+        failIfRollbackOnly(handler, context, transactionRunner, rollbackRuleRemedies);
         return WorkflowTaskOutcome.bpmnError(taskException.getErrorCode(), taskException.getErrorName());
       }
     };
@@ -328,7 +331,8 @@ public class MigrationProcessService<A> {
   private void failIfRollbackOnly(
       final WorkflowTaskHandler handler,
       final TaskInvocationContext context,
-      final TransactionRunner transactionRunner) {
+      final TransactionRunner transactionRunner,
+      final List<String> rollbackRuleRemedies) {
 
     if (!transactionRunner.isRollbackOnly()) {
       return;
@@ -343,13 +347,32 @@ public class MigrationProcessService<A> {
             candidate, since it is a business outcome for VanillaBP but an ordinary \
             RuntimeException for the transaction interceptor. To solve this either remove that \
             annotation from the call path of the workflow task or exclude \
-            io.vanillabp.spi.service.TaskException from its rollback rules (noRollbackFor for the \
-            Spring annotation, dontRollbackOn for the jakarta.transaction one)."""
+            io.vanillabp.spi.service.TaskException from its rollback rules%s"""
             .formatted(
                 context.getTaskDefinition(),
                 bpmnProcessId,
                 workflowModuleId,
-                handler.describe()));
+                handler.describe(),
+                describeRollbackRuleRemedies(rollbackRuleRemedies)));
+
+  }
+
+  /**
+   * How the rollback rules are written on THIS platform, supplied by the platform
+   * integration (an annotation Quarkus does not honor is none of the developer's options
+   * there). The names of the annotations' attributes are unknown to the core, and the
+   * annotation which marked the transaction cannot be identified at all: it sits on some
+   * bean of the call chain, not on the handler.
+   */
+  private static String describeRollbackRuleRemedies(
+      final List<String> rollbackRuleRemedies) {
+
+    if ((rollbackRuleRemedies == null) || rollbackRuleRemedies.isEmpty()) {
+      return ".";
+    }
+    return ": "
+        + String.join(" or ", rollbackRuleRemedies)
+        + ".";
 
   }
 

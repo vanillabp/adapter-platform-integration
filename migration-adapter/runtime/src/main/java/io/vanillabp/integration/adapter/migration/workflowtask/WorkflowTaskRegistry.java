@@ -75,6 +75,14 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
    */
   private final List<TransactionAnnotationSpec> transactionAnnotations;
 
+  /**
+   * How a rollback rule excluding a {@code TaskException} is written on THIS platform,
+   * derived from the specs of the annotations it actually honors. Handed to the runtime
+   * check, which cannot identify the annotation that marked the transaction (it sits on
+   * some bean of the handler's call chain) and therefore names the developer's options.
+   */
+  private final List<String> rollbackRuleRemedies;
+
   public WorkflowTaskRegistry(
       final TransactionRunner transactionRunner) {
 
@@ -98,6 +106,13 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
     this.transactionRunner = transactionRunner;
     this.aggregateSync = aggregateSync;
     this.transactionAnnotations = transactionAnnotations;
+    this.rollbackRuleRemedies = transactionAnnotations
+        .stream()
+        .filter(TransactionAnnotationSpec::honored)
+        .map(TransactionAnnotationSpec::remedy)
+        .filter(java.util.Objects::nonNull)
+        .distinct()
+        .toList();
 
   }
 
@@ -386,7 +401,11 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
                         .stream()
                         .map(candidate -> "'%s' (%s)".formatted(candidate.describe(), candidate.describeWiring()))
                         .collect(Collectors.joining(", ")))));
-    return entry.processService.executeWorkflowTask(handler, context, transactionRunner);
+    return entry.processService.executeWorkflowTask(
+        handler,
+        context,
+        transactionRunner,
+        rollbackRuleRemedies);
 
   }
 
