@@ -57,7 +57,9 @@ public class WorkflowTaskScannerEdgeCasesTest {
   @BeforeEach
   public void setUpRegistry() {
 
-    registry = new WorkflowTaskRegistry(new WorkflowTaskRegistryTest.RecordingTransactionRunner());
+    registry = new WorkflowTaskRegistry(
+        new WorkflowTaskRegistryTest.RecordingTransactionRunner(), null, TransactionAnnotationSpecs
+            .ofATypicalPlatform());
     final var aggregate = new Aggregate();
     aggregate.id = "4711";
     aggregates.put("4711", aggregate);
@@ -692,6 +694,31 @@ public class WorkflowTaskScannerEdgeCasesTest {
   @DisplayName("Transaction annotations of the application")
   class ApplicationTransactions {
 
+    /**
+     * Registers the workflow service and returns the warnings the scanner logged while
+     * doing so (the module's logback-test.xml has no appender on purpose).
+     */
+    private List<String> registerCollectingWarnings(
+        final Class<?> serviceClass,
+        final Object bean) {
+
+      final var logWatcher = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+      logWatcher.start();
+      final var scannerLog = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory
+          .getLogger("io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskScanner");
+      scannerLog.addAppender(logWatcher);
+      try {
+        register(serviceClass, bean);
+      } finally {
+        scannerLog.detachAndStopAllAppenders();
+      }
+      return logWatcher.list
+          .stream()
+          .map(event -> event.getFormattedMessage())
+          .toList();
+
+    }
+
     private IllegalStateException assertRejected(
         final Class<?> serviceClass,
         final Object bean) {
@@ -700,8 +727,10 @@ public class WorkflowTaskScannerEdgeCasesTest {
       assertTrue(
           e.getMessage().contains("covered by a transaction annotation of the application"),
           e.getMessage());
-      assertTrue(e.getMessage().contains("noRollbackFor = TaskException.class"), e.getMessage());
-      assertTrue(e.getMessage().contains("dontRollbackOn = TaskException.class"), e.getMessage());
+      // the way out that always exists, no matter which annotation was found
+      assertTrue(
+          e.getMessage().contains("remove the annotation from the workflow task method"),
+          e.getMessage());
       return e;
 
     }
@@ -725,6 +754,9 @@ public class WorkflowTaskScannerEdgeCasesTest {
           e.getMessage().contains("org.springframework.transaction.annotation.Transactional"),
           e.getMessage());
       assertTrue(e.getMessage().contains("declared on the method"), e.getMessage());
+      // the remedy of the OFFENDING annotation, not of every known one
+      assertTrue(e.getMessage().contains("noRollbackFor = TaskException.class"), e.getMessage());
+      assertTrue(!e.getMessage().contains("dontRollbackOn = TaskException.class"), e.getMessage());
 
     }
 
@@ -889,6 +921,7 @@ public class WorkflowTaskScannerEdgeCasesTest {
       }
       final var e = assertRejected(Service.class, new Service());
       assertTrue(e.getMessage().contains("jakarta.transaction.Transactional"), e.getMessage());
+      assertTrue(e.getMessage().contains("dontRollbackOn = TaskException.class"), e.getMessage());
 
     }
 
@@ -999,6 +1032,8 @@ public class WorkflowTaskScannerEdgeCasesTest {
       }
       final var e = assertRejected(Joining.class, new Joining());
       assertTrue(e.getMessage().contains("jakarta.ejb.TransactionAttribute"), e.getMessage());
+      // no rollback rules exist on this annotation, so no rule is offered
+      assertTrue(e.getMessage().contains("has no rollback rules"), e.getMessage());
       setUpRegistry();
       register(Own.class, new Own());
 
@@ -1082,28 +1117,45 @@ public class WorkflowTaskScannerEdgeCasesTest {
         }
 
       }
-      final var logWatcher = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
-      logWatcher.start();
-      final var scannerLog = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory
-          .getLogger("io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskScanner");
-      scannerLog.addAppender(logWatcher);
-      try {
-        register(Service.class, new Service());
-      } finally {
-        scannerLog.detachAndStopAllAppenders();
-      }
+      final var warnings = registerCollectingWarnings(Service.class, new Service());
 
-      final var warnings = logWatcher.list
-          .stream()
-          .map(event -> event
-              .getFormattedMessage()
-              .toString())
-          .toList();
       assertTrue(
           warnings
               .stream()
               .anyMatch(warning -> warning.contains("javax.transaction.Transactional") && warning
                   .contains("Jakarta namespace")),
+          warnings.toString());
+
+    }
+
+    @Test
+    @DisplayName("An annotation the platform does not honor only warns, on Quarkus that is Spring's")
+    public void annotationNotHonoredByThePlatform() {
+
+      class Service {
+
+        @WorkflowTask(taskDefinition = "task")
+        @org.springframework.transaction.annotation.Transactional
+        public void task(
+            final Aggregate aggregate) {
+        }
+
+      }
+      // the platform reports Spring's annotation as ineffective, e.g. Quarkus without
+      // the extension quarkus-spring-tx: failing the boot over an annotation that does
+      // nothing would be wrong
+      registry = new WorkflowTaskRegistry(
+          new WorkflowTaskRegistryTest.RecordingTransactionRunner(), null, TransactionAnnotationSpecs
+              .ofAPlatformWithoutSpringSupport());
+
+      final var warnings = registerCollectingWarnings(Service.class, new Service());
+
+      assertTrue(
+          warnings
+              .stream()
+              .anyMatch(warning -> warning
+                  .contains("org.springframework.transaction.annotation.Transactional") && warning
+                      .contains("does not map Spring's annotation")),
           warnings.toString());
 
     }

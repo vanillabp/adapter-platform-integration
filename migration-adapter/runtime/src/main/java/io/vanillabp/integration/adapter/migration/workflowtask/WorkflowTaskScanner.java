@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -44,20 +45,27 @@ class WorkflowTaskScanner {
       final Class<?> workflowServiceClass,
       final Class<?> workflowAggregateClass,
       final Supplier<Object> workflowServiceBean,
-      final Function<Class<?>, Object> beanResolver) {
+      final Function<Class<?>, Object> beanResolver,
+      final List<TransactionAnnotationSpec> transactionAnnotations) {
 
     final var handlers = new LinkedList<WorkflowTaskHandler>();
     // transaction annotations of the application covering a handler break the
     // TaskException contract and cannot be worked around at runtime - all offending
     // methods of this class are reported in one exception below
     final var transactionDefects = new LinkedList<String>();
+    final var transactionRemedies = new java.util.LinkedHashSet<String>();
     for (final var method : workflowServiceClass.getMethods()) {
       // @WorkflowTask is repeatable: one method may serve several tasks
       final var annotations = method.getAnnotationsByType(WorkflowTask.class);
       if (annotations.length == 0) {
         continue;
       }
-      checkApplicationTransactions(workflowServiceClass, method, transactionDefects);
+      checkApplicationTransactions(
+          workflowServiceClass,
+          method,
+          transactionAnnotations,
+          transactionDefects,
+          transactionRemedies);
       final var binders = buildParameterBinders(
           workflowServiceClass,
           method,
@@ -93,7 +101,10 @@ class WorkflowTaskScanner {
     }
     if (!transactionDefects.isEmpty()) {
       throw new IllegalStateException(
-          ApplicationTransactionCheck.buildFailureMessage(transactionDefects, workflowServiceClass));
+          ApplicationTransactionCheck.buildFailureMessage(
+              transactionDefects,
+              transactionRemedies,
+              workflowServiceClass));
     }
     return handlers;
 
@@ -102,23 +113,31 @@ class WorkflowTaskScanner {
   private static void checkApplicationTransactions(
       final Class<?> workflowServiceClass,
       final Method method,
-      final List<String> defects) {
+      final List<TransactionAnnotationSpec> transactionAnnotations,
+      final List<String> defects,
+      final Set<String> remedies) {
 
-    final var findings = ApplicationTransactionCheck.inspect(workflowServiceClass, method);
+    final var findings = ApplicationTransactionCheck.inspect(
+        workflowServiceClass,
+        method,
+        transactionAnnotations);
     if (findings.defect() != null) {
       defects.add(findings.defect());
+      if (findings.remedy() != null) {
+        remedies.add(findings.remedy());
+      }
     }
-    if (findings.obsoleteAnnotation() != null) {
+    if (findings.notHonored() != null) {
       log.warn(
           """
-              The @WorkflowTask method '{}#{}' carries 'javax.transaction.Transactional' ({}), \
-              which is honored by neither Spring Framework 7 nor Quarkus 3 since the move to the \
-              Jakarta namespace - the transaction boundary it declares does not exist. Use \
-              'jakarta.transaction.Transactional' where you really want one; on a workflow task \
-              method you want none, since VanillaBP runs the method in a transaction of its own.""",
+              The @WorkflowTask method '{}#{}' carries a transaction annotation this platform does \
+              NOT honor: {} So the transaction boundary it declares does not exist. On a workflow \
+              task method you want none anyway, since VanillaBP runs the method in a transaction of \
+              its own - but check the rest of your application for the same annotation, where it \
+              silently does nothing as well.""",
           workflowServiceClass.getName(),
           method.getName(),
-          findings.obsoleteAnnotation());
+          findings.notHonored());
     }
 
   }

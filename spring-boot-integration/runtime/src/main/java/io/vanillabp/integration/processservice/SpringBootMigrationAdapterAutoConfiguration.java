@@ -276,7 +276,9 @@ public class SpringBootMigrationAdapterAutoConfiguration {
       final org.springframework.beans.factory.ObjectProvider<org.springframework.transaction.PlatformTransactionManager> transactionManager,
       final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync) {
 
-    return new WorkflowTaskRegistry(new SpringTransactionRunner(transactionManager), aggregateSync);
+    return new WorkflowTaskRegistry(
+        new SpringTransactionRunner(transactionManager), aggregateSync, io.vanillabp.integration.workflowtask.SpringTransactionAnnotations
+            .specs());
 
   }
 

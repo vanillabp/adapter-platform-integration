@@ -30,15 +30,20 @@ public class WorkflowTaskRegistryProducer {
    * @param transactionRegistry Used to read the state of the transaction a
    *          <code>&#64;WorkflowTask</code> handler runs in (a rollback-only mark set
    *          by a transaction annotation of the application)
+   * @param springTransactionSupport Whether Spring's <code>&#64;Transactional</code> has
+   *          an effect on this application, decided at build time
    * @return The registry
    */
   @Produces
   @Singleton
   @Unremovable
   public WorkflowTaskRegistry workflowTaskRegistry(
-      final jakarta.transaction.TransactionSynchronizationRegistry transactionRegistry) {
+      final jakarta.transaction.TransactionSynchronizationRegistry transactionRegistry,
+      final SpringTransactionSupport springTransactionSupport) {
 
-    return new WorkflowTaskRegistry(new QuarkusTransactionRunner(transactionRegistry), aggregateSync);
+    return new WorkflowTaskRegistry(
+        new QuarkusTransactionRunner(transactionRegistry), aggregateSync, QuarkusTransactionAnnotations
+            .specs(springTransactionSupport.honored()));
 
   }
 

@@ -173,10 +173,15 @@ public class TransactionAnnotationBootTest {
           reported.contains("org.springframework.transaction.annotation.Transactional"),
           "the offending annotation is not named: "
               + reported);
+      // the remedy of the OFFENDING annotation: Spring's, not the one of every
+      // annotation Spring Boot happens to honor
       Assertions.assertTrue(
-          reported.contains("noRollbackFor = TaskException.class") && reported
-              .contains("dontRollbackOn = TaskException.class"),
-          "the remedies are missing: "
+          reported.contains("noRollbackFor = TaskException.class"),
+          "the remedy is missing: "
+              + reported);
+      Assertions.assertTrue(
+          reported.contains("remove the annotation from the workflow task method"),
+          "the remedy is missing: "
               + reported);
 
     }

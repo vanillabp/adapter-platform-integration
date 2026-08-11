@@ -66,10 +66,19 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
 
   private final Map<RegistryKey, RegistryEntry> entries = new ConcurrentHashMap<>();
 
+  /**
+   * The transaction annotations of the running platform (story 40b), supplied by the
+   * platform integration: which annotations create a transaction boundary here, and
+   * which of them this platform does not honor at all. An EMPTY list switches the
+   * startup check off, which is what test doubles registering workflow services
+   * directly use.
+   */
+  private final List<TransactionAnnotationSpec> transactionAnnotations;
+
   public WorkflowTaskRegistry(
       final TransactionRunner transactionRunner) {
 
-    this(transactionRunner, null);
+    this(transactionRunner, null, List.of());
 
   }
 
@@ -77,8 +86,18 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
       final TransactionRunner transactionRunner,
       final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync) {
 
+    this(transactionRunner, aggregateSync, List.of());
+
+  }
+
+  public WorkflowTaskRegistry(
+      final TransactionRunner transactionRunner,
+      final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync,
+      final List<TransactionAnnotationSpec> transactionAnnotations) {
+
     this.transactionRunner = transactionRunner;
     this.aggregateSync = aggregateSync;
+    this.transactionAnnotations = transactionAnnotations;
 
   }
 
@@ -140,7 +159,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
           workflowServiceClass,
           processService.getWorkflowAggregateClass(),
           workflowServiceBean,
-          beanResolver);
+          beanResolver,
+          transactionAnnotations);
       handlers.forEach(handler -> failOnDuplicateWiring(workflowModuleId, bpmnProcessId, entry, handler));
       entry.handlers.addAll(handlers);
       entry.workflowServiceClasses.add(workflowServiceClass);

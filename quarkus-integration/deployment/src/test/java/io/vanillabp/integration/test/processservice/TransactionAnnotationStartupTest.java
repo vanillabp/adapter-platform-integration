@@ -61,10 +61,14 @@ public class TransactionAnnotationStartupTest {
             failure.contains("jakarta.transaction.Transactional"),
             "the offending annotation is not named: "
                 + failure);
+        // the remedy of the OFFENDING annotation, which on Quarkus is the JTA one
         Assertions.assertTrue(
-            failure.contains("noRollbackFor = TaskException.class") && failure
-                .contains("dontRollbackOn = TaskException.class"),
-            "the remedies are missing: "
+            failure.contains("dontRollbackOn = TaskException.class"),
+            "the remedy is missing: "
+                + failure);
+        Assertions.assertTrue(
+            failure.contains("remove the annotation from the workflow task method"),
+            "the remedy is missing: "
                 + failure);
 
       });
