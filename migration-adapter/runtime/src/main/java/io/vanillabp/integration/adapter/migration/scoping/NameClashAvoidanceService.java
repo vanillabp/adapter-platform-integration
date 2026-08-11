@@ -3,10 +3,16 @@ package io.vanillabp.integration.adapter.migration.scoping;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidance;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
 
@@ -21,8 +27,16 @@ import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
  * across workflow &gt; workflow module &gt; adapter
  * ({@link MigrationAdapterProperties#resolveForAdapter}) - which is what allows two
  * adapter ids to carry DIFFERENT modes for the same workflow module, the basis of
- * the migration path documented on {@link NameClashAvoidance}. The default is
- * {@link NameClashAvoidance#BY_ADAPTER}, VanillaBP 1's behavior.
+ * the migration path documented on {@link NameClashAvoidance}. Without any
+ * configuration the ADAPTER's default applies
+ * ({@link AdapterDeploymentService#defaultNameClashAvoidance()}):
+ * {@link NameClashAvoidance#BY_ADAPTER} - VanillaBP 1's behavior - for a BPMS which
+ * isolates out of the box, {@link NameClashAvoidance#NONE} for one which has to be
+ * set up for it first (Camunda 8 rejects tenant ids unless multi-tenancy is enabled).
+ * A resolved {@link NameClashAvoidance#NONE} is therefore reported once per workflow
+ * module and adapter by the adapter's own WARN
+ * ({@link AdapterDeploymentService#warnAboutUnscopedIdentifiers(String, boolean)}) -
+ * it protects nothing, and only the adapter knows what its BPMS offers instead.
  *
  * <h2>Composition and its inverse</h2>
  *
@@ -36,10 +50,48 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
 
   private final MigrationAdapterProperties properties;
 
+  /**
+   * The adapters' deployment services, resolved LAZILY: every adapter receives this
+   * service, so it has to be constructible before any adapter exists. The result is
+   * cached once it is non-empty (an empty resolution means the adapter beans were
+   * not created yet).
+   */
+  private final Supplier<Collection<AdapterDeploymentService<?, ?>>> deploymentServices;
+
+  private volatile Map<String, AdapterDeploymentService<?, ?>> deploymentServicesByAdapterId;
+
+  /**
+   * The (workflow module, adapter) pairs already reported as unscoped - the mode is
+   * resolved on every runtime boundary, the WARN belongs to startup.
+   */
+  private final Set<String> unscopedReported = ConcurrentHashMap.newKeySet();
+
+  /**
+   * Without the adapters' deployment services every adapter's default is
+   * {@link NameClashAvoidance#BY_ADAPTER} and no adapter can report an unscoped
+   * workflow module - for tests and for platforms not passing them.
+   *
+   * @param properties The VanillaBP configuration
+   */
   public NameClashAvoidanceService(
       final MigrationAdapterProperties properties) {
 
+    this(properties, List::of);
+
+  }
+
+  /**
+   * @param properties The VanillaBP configuration
+   * @param deploymentServices The adapters' deployment services, asked for their
+   *          default mode and for reporting a workflow module whose identifiers are
+   *          not scoped. Invoked on first use, never during construction.
+   */
+  public NameClashAvoidanceService(
+      final MigrationAdapterProperties properties,
+      final Supplier<Collection<AdapterDeploymentService<?, ?>>> deploymentServices) {
+
     this.properties = properties;
+    this.deploymentServices = deploymentServices;
 
   }
 
@@ -49,18 +101,92 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
       final String bpmnProcessId,
       final String adapterId) {
 
-    if (properties == null) {
-      return NameClashAvoidance.BY_ADAPTER;
-    }
-    final var configured = properties.resolveForAdapter(
-        workflowModuleId,
-        bpmnProcessId,
-        null,
-        adapterId,
-        AdapterProperties::getNameClashAvoidance);
-    return configured != null
+    final var configured = properties != null
+        ? properties.resolveForAdapter(
+            workflowModuleId,
+            bpmnProcessId,
+            null,
+            adapterId,
+            AdapterProperties::getNameClashAvoidance)
+        : null;
+    final var mode = configured != null
         ? configured
+        : defaultModeFor(adapterId);
+    if (mode == NameClashAvoidance.NONE) {
+      reportUnscopedIdentifiers(adapterId, workflowModuleId, configured == null);
+    }
+    return mode;
+
+  }
+
+  /**
+   * The mode applying to the given adapter without any configuration - the adapter's
+   * own default, {@link NameClashAvoidance#BY_ADAPTER} for an adapter which is
+   * unknown here (see {@link #deploymentServices}).
+   */
+  private NameClashAvoidance defaultModeFor(
+      final String adapterId) {
+
+    final var deploymentService = deploymentServiceOf(adapterId);
+    final var adapterDefault = deploymentService != null
+        ? deploymentService.defaultNameClashAvoidance()
+        : null;
+    return adapterDefault != null
+        ? adapterDefault
         : NameClashAvoidance.BY_ADAPTER;
+
+  }
+
+  /**
+   * Lets the adapter report the workflow module as unscoped, once per workflow module
+   * and adapter id. Resolving a mode without a workflow module (e.g. while comparing
+   * two adapter instances) reports nothing - the per-module resolutions of the
+   * deployment do.
+   */
+  private void reportUnscopedIdentifiers(
+      final String adapterId,
+      final String workflowModuleId,
+      final boolean fromDefault) {
+
+    if ((workflowModuleId == null) || (adapterId == null)) {
+      return;
+    }
+    final var deploymentService = deploymentServiceOf(adapterId);
+    if (deploymentService == null) {
+      return;
+    }
+    if (!unscopedReported.add("%s@%s".formatted(workflowModuleId, adapterId))) {
+      return;
+    }
+    deploymentService.warnAboutUnscopedIdentifiers(workflowModuleId, fromDefault);
+
+  }
+
+  private AdapterDeploymentService<?, ?> deploymentServiceOf(
+      final String adapterId) {
+
+    var byAdapterId = deploymentServicesByAdapterId;
+    if (byAdapterId == null) {
+      synchronized (this) {
+        byAdapterId = deploymentServicesByAdapterId;
+        if (byAdapterId == null) {
+          final var collected = new LinkedHashMap<String, AdapterDeploymentService<?, ?>>();
+          final var resolved = deploymentServices.get();
+          if (resolved != null) {
+            resolved
+                .stream()
+                .filter(java.util.Objects::nonNull)
+                .forEach(service -> collected.putIfAbsent(service.getAdapterId(), service));
+          }
+          byAdapterId = collected;
+          if (!collected.isEmpty()) {
+            // an empty result means the adapters were not created yet - ask again
+            deploymentServicesByAdapterId = collected;
+          }
+        }
+      }
+    }
+    return byAdapterId.get(adapterId);
 
   }
 
@@ -347,14 +473,15 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   }
 
   /**
-   * Whether the adapter has NO mode configured at all - the default
-   * ({@link NameClashAvoidance#BY_ADAPTER}) then applies, which an adapter without
-   * native isolation cannot serve either.
+   * Whether the adapter has NO mode configured at all AND defaults to
+   * {@link NameClashAvoidance#BY_ADAPTER} - which an adapter without native isolation
+   * cannot serve either. An adapter defaulting to another mode is unaffected.
    */
   private Collection<String> unconfiguredLevels(
       final String adapterId) {
 
-    if ((properties == null) || (valueOfAdapterLevel(adapterId) != null)) {
+    if ((properties == null) || (valueOfAdapterLevel(adapterId) != null) || (defaultModeFor(
+        adapterId) != NameClashAvoidance.BY_ADAPTER)) {
       return java.util.List.of();
     }
     return java.util.List.of("vanillabp.adapters.%s (nothing configured, the default applies)".formatted(adapterId));

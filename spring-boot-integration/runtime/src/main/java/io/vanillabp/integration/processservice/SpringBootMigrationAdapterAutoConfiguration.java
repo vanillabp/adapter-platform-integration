@@ -241,16 +241,25 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    * workflow module/workflow and adapter and composes the identifiers a BPMS sees.
    * One instance per application - BPMS adapters receive it and apply it to their
    * model and their commands.
+   * <p>
+   * The adapters' deployment services are streamed LAZILY (they receive this bean, so
+   * they cannot be injected here): the mode applying without configuration is the
+   * adapter's own, and an unscoped workflow module is reported by the adapter itself.
    *
    * @param properties The VanillaBP configuration
+   * @param deploymentServices The adapters' deployment services, resolved on first use
    * @return The name-clash-avoidance support
    */
   @Bean
   @ConditionalOnMissingBean
   public io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport vanillaBpNameClashAvoidanceSupport(
-      final io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties properties) {
+      final io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties properties,
+      final org.springframework.beans.factory.ObjectProvider<io.vanillabp.integration.adapter.spi.AdapterDeploymentService<?, ?>> deploymentServices) {
 
-    return new io.vanillabp.integration.adapter.migration.scoping.NameClashAvoidanceService(properties);
+    return new io.vanillabp.integration.adapter.migration.scoping.NameClashAvoidanceService(
+        properties, () -> deploymentServices
+            .stream()
+            .toList());
 
   }
 

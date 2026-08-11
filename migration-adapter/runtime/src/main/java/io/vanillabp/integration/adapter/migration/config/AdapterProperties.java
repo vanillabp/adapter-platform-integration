@@ -21,8 +21,8 @@ public class AdapterProperties {
    * workflow modules (see
    * {@link io.vanillabp.integration.adapter.spi.NameClashAvoidance}). Adapter-scoped
    * and therefore resolvable per workflow module and workflow; <code>null</code>
-   * means "not configured at this level" (the default is
-   * {@link io.vanillabp.integration.adapter.spi.NameClashAvoidance#BY_ADAPTER}).
+   * means "not configured at this level" (the adapter's own default applies then, see
+   * {@link io.vanillabp.integration.adapter.spi.AdapterDeploymentService#defaultNameClashAvoidance()}).
    */
   private io.vanillabp.integration.adapter.spi.NameClashAvoidance nameClashAvoidance;
 

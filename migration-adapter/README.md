@@ -144,13 +144,32 @@ old one.
 ### Name-clash avoidance (`NameClashAvoidanceSupport`)
 
 One adapter-scoped property decides how a workflow module's identifiers are kept
-apart from another module's: `name-clash-avoidance` = `BY_ADAPTER` (default,
-VanillaBP 1's behavior — the BPMS' own isolation, e.g. a tenant named after the
-module) | `USE_PREFIX` (no tenant; VanillaBP prefixes the identifiers, separator
-`__`) | `NONE`. The core owns both the resolution (most-specific-wins across
-workflow > workflow module > adapter) and the composition of the strings
+apart from another module's: `name-clash-avoidance` = `BY_ADAPTER` (VanillaBP 1's
+behavior — the BPMS' own isolation, e.g. a tenant named after the module) |
+`USE_PREFIX` (no tenant; VanillaBP prefixes the identifiers, separator `__`) |
+`NONE`. The core owns both the resolution (most-specific-wins across workflow >
+workflow module > adapter) and the composition of the strings
 (`NameClashAvoidanceService implements NameClashAvoidanceSupport`, handed to every
-adapter as a platform bean). An adapter only decides WHERE to apply the result:
+adapter as a platform bean).
+
+Without any configuration the ADAPTER's default applies
+(`AdapterDeploymentService#defaultNameClashAvoidance`, `BY_ADAPTER` unless
+overridden): a BPMS which isolates out of the box keeps version 1's behavior, while
+Camunda 8 defaults to `NONE` because a cluster started from the stock image has
+multi-tenancy switched off and rejects a deploy command carrying a tenant id, so an
+application configuring nothing would not even boot. The platform integrations
+therefore hand the adapters' deployment services to the service as a lazily resolved
+supplier (adapters receive the service themselves, so they cannot be injected).
+
+Since `NONE` protects nothing, the core has the ADAPTER report it once per workflow
+module and adapter id while the mode is resolved, i.e. at startup
+(`AdapterDeploymentService#warnAboutUnscopedIdentifiers`). What can be used instead
+is BPMS knowledge: Camunda 8 offers prefixing, a tenant per module on a
+multi-tenancy cluster or a cluster per module, Camunda 7 offers prefixing, a tenant
+per module or an engine per module (`data-source-name`, `table-prefix`). The default
+implementation names what every BPMS can offer.
+
+An adapter only decides WHERE to apply the result:
 
 - in `prepareBpmn`, on its own model type — only the adapter knows it. Note the
   pipeline calls `prepareBpmn` once per PROCESS while all processes of a file share

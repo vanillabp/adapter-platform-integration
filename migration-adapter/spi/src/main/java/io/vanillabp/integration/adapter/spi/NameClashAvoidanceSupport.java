@@ -36,8 +36,8 @@ public interface NameClashAvoidanceSupport {
   /**
    * The mode configured for the given workflow module (and, if given, workflow) of
    * the given adapter - the most specific configured value wins (workflow >
-   * workflow module > adapter), the default is
-   * {@link NameClashAvoidance#BY_ADAPTER}.
+   * workflow module > adapter). Without any configuration the adapter's own default
+   * applies ({@link AdapterDeploymentService#defaultNameClashAvoidance()}).
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID or <code>null</code> to resolve the

@@ -51,16 +51,40 @@ public class WorkflowTaskRegistryProducer {
   /**
    * The core-owned name-clash-avoidance model (story 35): resolves the mode per
    * workflow module/workflow and adapter and composes the identifiers a BPMS sees.
+   * <p>
+   * The adapters' deployment services are looked up LAZILY (they receive this bean, so
+   * they cannot be injected here): the mode applying without configuration is the
+   * adapter's own, and an unscoped workflow module is reported by the adapter itself.
+   * Both bean shapes of the platform contract are accepted - element beans and beans
+   * of type <code>List&lt;AdapterDeploymentService&lt;Object, Object&gt;&gt;</code>
+   * (one instance per configured adapter id), see
+   * {@link io.vanillabp.integration.runtime.deployment.VanillaBpDeploymentRunner}.
    *
    * @param properties The VanillaBP configuration
+   * @param deploymentServices The adapters' deployment services as element beans
+   * @param deploymentServiceLists The adapters' deployment services as per-adapter-id
+   *          lists
    * @return The name-clash-avoidance support
    */
   @jakarta.enterprise.inject.Produces
   @jakarta.inject.Singleton
   public io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport nameClashAvoidanceSupport(
-      final io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties properties) {
+      final io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties properties,
+      @jakarta.enterprise.inject.Any final jakarta.enterprise.inject.Instance<io.vanillabp.integration.adapter.spi.AdapterDeploymentService<?, ?>> deploymentServices,
+      @jakarta.enterprise.inject.Any final jakarta.enterprise.inject.Instance<java.util.List<io.vanillabp.integration.adapter.spi.AdapterDeploymentService<Object, Object>>> deploymentServiceLists) {
 
-    return new io.vanillabp.integration.adapter.migration.scoping.NameClashAvoidanceService(properties);
+    return new io.vanillabp.integration.adapter.migration.scoping.NameClashAvoidanceService(
+        properties, () -> java.util.stream.Stream
+            .concat(
+                deploymentServices.stream(),
+                deploymentServiceLists
+                    .stream()
+                    .filter(java.util.Objects::nonNull)
+                    .flatMap(java.util.List::stream))
+            .filter(
+                java.util.Objects::nonNull).<io.vanillabp.integration.adapter.spi.AdapterDeploymentService<?, ?>>map(
+                    service -> service)
+            .toList());
 
   }
 

@@ -11,6 +11,7 @@ import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mockito;
 
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
@@ -18,6 +19,7 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
 import io.vanillabp.integration.adapter.migration.config.WorkflowAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
 import io.vanillabp.integration.adapter.migration.scoping.NameClashAvoidanceService;
+import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidance;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
@@ -40,7 +42,7 @@ public class NameClashAvoidanceServiceTest {
    * Properties with a mode at the adapter level and, optionally, overrides per
    * workflow module and workflow.
    */
-  private static NameClashAvoidanceService serviceWith(
+  private static MigrationAdapterProperties propertiesWith(
       final NameClashAvoidance adapterLevel,
       final NameClashAvoidance moduleLevel,
       final NameClashAvoidance workflowLevel,
@@ -68,7 +70,18 @@ public class NameClashAvoidanceServiceTest {
         .workflowModules(Map.of(MODULE, module))
         .build();
     properties.validateAndLink();
-    return new NameClashAvoidanceService(properties);
+    return properties;
+
+  }
+
+  private static NameClashAvoidanceService serviceWith(
+      final NameClashAvoidance adapterLevel,
+      final NameClashAvoidance moduleLevel,
+      final NameClashAvoidance workflowLevel,
+      final Boolean prefixTaskDefinitionsPerProcess) {
+
+    return new NameClashAvoidanceService(
+        propertiesWith(adapterLevel, moduleLevel, workflowLevel, prefixTaskDefinitionsPerProcess));
 
   }
 
@@ -76,6 +89,43 @@ public class NameClashAvoidanceServiceTest {
       final NameClashAvoidance adapterLevel) {
 
     return serviceWith(adapterLevel, null, null, null);
+
+  }
+
+  /**
+   * An adapter of the id {@link #ADAPTER} declaring the given default mode
+   * (<code>null</code> for an adapter which declares none).
+   */
+  @SuppressWarnings("unchecked")
+  private static AdapterDeploymentService<Object, Object> adapterDeclaring(
+      final NameClashAvoidance defaultMode) {
+
+    final AdapterDeploymentService<Object, Object> deploymentService = Mockito
+        .mock(AdapterDeploymentService.class);
+    Mockito
+        .lenient()
+        .when(deploymentService.getAdapterId())
+        .thenReturn(ADAPTER);
+    Mockito
+        .lenient()
+        .when(deploymentService.defaultNameClashAvoidance())
+        .thenReturn(defaultMode);
+    return deploymentService;
+
+  }
+
+  /**
+   * A service knowing the adapter's deployment service - the shape both platform
+   * integrations wire up (the adapter is asked for its default mode and reports a
+   * workflow module whose identifiers are not scoped).
+   */
+  private static NameClashAvoidanceService serviceWith(
+      final NameClashAvoidance adapterLevel,
+      final AdapterDeploymentService<Object, Object> deploymentService) {
+
+    return new NameClashAvoidanceService(
+        propertiesWith(adapterLevel, null, null,
+            null), () -> List.<AdapterDeploymentService<?, ?>>of(deploymentService));
 
   }
 
@@ -258,6 +308,80 @@ public class NameClashAvoidanceServiceTest {
     // ... and a module using a supported mode passes even though another one does not
     serviceWith(NameClashAvoidance.BY_ADAPTER, NameClashAvoidance.USE_PREFIX, null, null)
         .validateNativeIsolationSupported(ADAPTER, MODULE, "the Process-Engine-API");
+
+  }
+
+  @Test
+  @DisplayName("Without configuration the ADAPTER's own default applies")
+  public void adapterDefaultApplies() {
+
+    // an adapter whose BPMS has to be set up for isolation first (Camunda 8)
+    assertEquals(
+        NameClashAvoidance.NONE,
+        serviceWith(null, adapterDeclaring(NameClashAvoidance.NONE)).modeFor(MODULE, PROCESS, ADAPTER));
+    // ... which a configured mode still overrules
+    assertEquals(
+        NameClashAvoidance.USE_PREFIX,
+        serviceWith(NameClashAvoidance.USE_PREFIX, adapterDeclaring(NameClashAvoidance.NONE))
+            .modeFor(MODULE, PROCESS, ADAPTER));
+    // an adapter declaring no default keeps version 1's behavior ...
+    assertEquals(
+        NameClashAvoidance.BY_ADAPTER,
+        serviceWith(null, adapterDeclaring(null)).modeFor(MODULE, PROCESS, ADAPTER));
+    // ... as does an adapter unknown to the service (tests, platforms not wiring them)
+    assertEquals(NameClashAvoidance.BY_ADAPTER, serviceWith(null).modeFor(MODULE, PROCESS, ADAPTER));
+
+  }
+
+  @Test
+  @DisplayName("NONE is reported by the ADAPTER, once per workflow module and adapter id")
+  public void noneIsReportedByTheAdapter() {
+
+    final var byDefault = adapterDeclaring(NameClashAvoidance.NONE);
+    final var testee = serviceWith(null, byDefault);
+
+    // the mode is resolved again at every boundary, the WARN belongs to startup
+    testee.modeFor(MODULE, PROCESS, ADAPTER);
+    testee.modeFor(MODULE, PROCESS, ADAPTER);
+    Mockito
+        .verify(byDefault, Mockito.times(1))
+        .warnAboutUnscopedIdentifiers(MODULE, true);
+
+    // every workflow module is reported on its own ...
+    testee.modeFor("other-module", null, ADAPTER);
+    Mockito
+        .verify(byDefault, Mockito.times(1))
+        .warnAboutUnscopedIdentifiers("other-module", true);
+    // ... while resolving the mode without one reports nothing (e.g. comparing two
+    // adapter instances) - the per-module resolutions of the deployment do
+    testee.modeFor(null, null, ADAPTER);
+    Mockito
+        .verify(byDefault, Mockito.never())
+        .warnAboutUnscopedIdentifiers(Mockito.isNull(), Mockito.anyBoolean());
+
+    // a CONFIGURED 'none' is reported as well, but as a deliberate choice
+    final var configured = adapterDeclaring(NameClashAvoidance.BY_ADAPTER);
+    serviceWith(NameClashAvoidance.NONE, configured).modeFor(MODULE, PROCESS, ADAPTER);
+    Mockito
+        .verify(configured)
+        .warnAboutUnscopedIdentifiers(MODULE, false);
+
+    // the other modes protect the identifiers, so there is nothing to report
+    final var prefixing = adapterDeclaring(NameClashAvoidance.NONE);
+    serviceWith(NameClashAvoidance.USE_PREFIX, prefixing).modeFor(MODULE, PROCESS, ADAPTER);
+    Mockito
+        .verify(prefixing, Mockito.never())
+        .warnAboutUnscopedIdentifiers(Mockito.anyString(), Mockito.anyBoolean());
+
+  }
+
+  @Test
+  @DisplayName("An adapter without native isolation defaulting to NONE is not asked to choose")
+  public void unconfiguredLevelsHonorTheAdapterDefault() {
+
+    // nothing configured, so BY_ADAPTER never applies - no boot failure to raise
+    serviceWith(null, adapterDeclaring(NameClashAvoidance.NONE))
+        .validateNativeIsolationSupported(ADAPTER, null, "the Process-Engine-API");
 
   }
 
