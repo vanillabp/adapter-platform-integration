@@ -146,26 +146,31 @@ public interface NameClashAvoidanceSupport {
       String adapterId);
 
   /**
-   * The tenant a workflow module is deployed to under
-   * {@link NameClashAvoidance#BY_ADAPTER} - the workflow module ID unless the
-   * adapter configured an explicit name.
+   * Fails with a guiding message if the adapter carries configuration which only
+   * {@link NameClashAvoidance#BY_ADAPTER} could honor, although BY_ADAPTER applies at
+   * no level of this adapter: the BPMS' own isolation is never asked for, so the
+   * setting has no effect and the two contradict each other. Either the setting is
+   * meant and the mode has to say so, or the mode is meant and the setting is dead
+   * configuration - silently ignoring it is the one outcome nobody asked for.
    * <p>
-   * Adapters of a BPMS WITHOUT tenants must not call this; they reject
-   * {@link NameClashAvoidance#BY_ADAPTER} at startup instead (see
-   * {@link #validateNativeIsolationSupported}).
+   * WHICH setting that is belongs to the ADAPTER, because the isolation mechanism does
+   * (a tenant, a namespace, a database of its own - the core knows none of them). The
+   * adapter decides that something is configured and hands over the property key it
+   * would have to ignore; the core answers which modes apply and how to reconcile them.
+   * Called while deploying (i.e. at startup), before anything reaches the BPMS.
    *
-   * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The BPMN process ID or <code>null</code>
    * @param adapterId The adapter ID
-   * @param configuredTenantId The tenant name configured for the adapter or
-   *          <code>null</code>
-   * @return The tenant ID, or <code>null</code> if the mode does not use one
+   * @param byAdapterOnlyPropertyKey The full property key of the configured setting
+   *          which only BY_ADAPTER could use, e.g.
+   *          <code>vanillabp.adapters.myengine.tenant-id</code> - the message tells the
+   *          developer to remove exactly this one. <code>null</code>/blank checks
+   *          nothing
+   * @throws IllegalStateException Naming that property, the modes which apply and both
+   *           ways out
    */
-  String tenantIdFor(
-      String workflowModuleId,
-      String bpmnProcessId,
+  void validateNoneNameClashStrategy(
       String adapterId,
-      String configuredTenantId);
+      String byAdapterOnlyPropertyKey);
 
   /**
    * Fails with a guiding message if the mode resolved for the given workflow module

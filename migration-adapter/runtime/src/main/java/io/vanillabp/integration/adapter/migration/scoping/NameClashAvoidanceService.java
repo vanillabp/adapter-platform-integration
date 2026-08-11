@@ -305,20 +305,96 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   }
 
   @Override
-  public String tenantIdFor(
-      final String workflowModuleId,
-      final String bpmnProcessId,
+  public void validateNoneNameClashStrategy(
       final String adapterId,
-      final String configuredTenantId) {
+      final String byAdapterOnlyPropertyKey) {
 
-    if (modeFor(workflowModuleId, bpmnProcessId, adapterId) != NameClashAvoidance.BY_ADAPTER) {
-      // NONE: no tenant at all; USE_PREFIX: the prefix IS the isolation - using a
-      // tenant on top would defeat the purpose (BPMS are licensed per tenant)
-      return null;
+    if ((byAdapterOnlyPropertyKey == null) || byAdapterOnlyPropertyKey.isBlank()) {
+      return;
     }
-    return (configuredTenantId != null) && !configuredTenantId.isBlank()
-        ? configuredTenantId
-        : workflowModuleId;
+    if (appliesByAdapterAnywhere(adapterId)) {
+      return;
+    }
+    throw new IllegalStateException(
+        """
+            The property '%s' is configured, but nothing can use it: it takes effect only \
+            where the name-clash-avoidance mode is 'by-adapter' - the BPMS' own isolation - \
+            and the mode applying to adapter '%s' is %s. The two contradict each other, so \
+            choose the one you mean:
+              - remove '%s' if the workflow modules are not meant to be kept apart by the BPMS itself, or
+              - vanillabp.adapters.%s.name-clash-avoidance: by-adapter   # let the BPMS keep them apart
+            The mode may also be set per workflow module \
+            (vanillabp.workflow-modules.<module>.adapters.%s.name-clash-avoidance), which is \
+            enough to put the property to use for that module."""
+            .formatted(
+                byAdapterOnlyPropertyKey,
+                adapterId,
+                modesApplying(adapterId),
+                byAdapterOnlyPropertyKey,
+                adapterId,
+                adapterId));
+
+  }
+
+  /**
+   * Whether {@link NameClashAvoidance#BY_ADAPTER} applies anywhere for the given
+   * adapter, i.e. whether any workflow module is kept apart by the BPMS itself:
+   * configured at some level, or the adapter's default while at least one level leaves
+   * the mode unconfigured.
+   */
+  private boolean appliesByAdapterAnywhere(
+      final String adapterId) {
+
+    if (properties == null) {
+      return true; // nothing is known about the configuration, so nothing is claimed
+    }
+    if (!levelsConfiguring(adapterId, NameClashAvoidance.BY_ADAPTER).isEmpty()) {
+      return true;
+    }
+    if (valueOfAdapterLevel(adapterId) != null) {
+      return false; // configured, and it is not BY_ADAPTER (that was checked above)
+    }
+    if (defaultModeFor(adapterId) != NameClashAvoidance.BY_ADAPTER) {
+      return false;
+    }
+    // the adapter's default applies wherever no level overrides it
+    final var modules = properties.getWorkflowModules();
+    return modules.isEmpty() || modules
+        .values()
+        .stream()
+        .anyMatch(module -> valueOf(module.getAdapters(), adapterId) == null);
+
+  }
+
+  /**
+   * The modes applying to the given adapter, for messages: the values configured at any
+   * level plus the adapter's default where nothing is configured.
+   */
+  private String modesApplying(
+      final String adapterId) {
+
+    final var modes = new java.util.TreeSet<String>();
+    for (final var mode : NameClashAvoidance.values()) {
+      if (!levelsConfiguring(adapterId, mode).isEmpty()) {
+        modes.add(nameOf(mode));
+      }
+    }
+    if ((properties == null) || (valueOfAdapterLevel(adapterId) == null)) {
+      modes.add(nameOf(defaultModeFor(adapterId)));
+    }
+    return modes
+        .stream()
+        .collect(Collectors.joining("' and '", "'", "'"));
+
+  }
+
+  private static String nameOf(
+      final NameClashAvoidance mode) {
+
+    return mode
+        .name()
+        .toLowerCase()
+        .replace('_', '-');
 
   }
 

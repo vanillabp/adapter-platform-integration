@@ -136,11 +136,8 @@ public class NameClashAvoidanceServiceTest {
     final var testee = serviceWith(null);
 
     assertEquals(NameClashAvoidance.BY_ADAPTER, testee.modeFor(MODULE, PROCESS, ADAPTER));
-    // the tenant of BY_ADAPTER is the workflow module id ...
-    assertEquals(MODULE, testee.tenantIdFor(MODULE, PROCESS, ADAPTER, null));
-    // ... unless the adapter configured a name
-    assertEquals("banking", testee.tenantIdFor(MODULE, PROCESS, ADAPTER, "banking"));
-    // and nothing is prefixed
+    // nothing is prefixed - what BY_ADAPTER means for a BPMS (a tenant, a namespace)
+    // is the adapter's business
     assertEquals(PROCESS, testee.scopedProcessId(MODULE, PROCESS, ADAPTER));
 
   }
@@ -170,7 +167,7 @@ public class NameClashAvoidanceServiceTest {
   }
 
   @Test
-  @DisplayName("NONE scopes nothing and uses no tenant")
+  @DisplayName("NONE scopes nothing")
   public void noneScopesNothing() {
 
     final var testee = serviceWith(NameClashAvoidance.NONE);
@@ -178,13 +175,11 @@ public class NameClashAvoidanceServiceTest {
     assertEquals(PROCESS, testee.scopedProcessId(MODULE, PROCESS, ADAPTER));
     assertEquals("PaymentReceived", testee.scopedIdentifier(MODULE, "PaymentReceived", ADAPTER));
     assertEquals("scoreApplicant", testee.scopedTaskDefinition(MODULE, PROCESS, "scoreApplicant", ADAPTER));
-    assertNull(testee.tenantIdFor(MODULE, PROCESS, ADAPTER, null));
-    assertNull(testee.tenantIdFor(MODULE, PROCESS, ADAPTER, "banking"), "an explicit tenant does not revive tenants");
 
   }
 
   @Test
-  @DisplayName("USE_PREFIX composes module (and process for task definitions) - and uses no tenant")
+  @DisplayName("USE_PREFIX composes module (and process for task definitions)")
   public void prefixComposesIdentifiers() {
 
     final var testee = serviceWith(NameClashAvoidance.USE_PREFIX);
@@ -196,7 +191,6 @@ public class NameClashAvoidanceServiceTest {
         "loan-approval__RiskAssessment__scoreApplicant",
         testee.scopedTaskDefinition(MODULE, PROCESS, "scoreApplicant", ADAPTER),
         "task definitions are scoped per process by default");
-    assertNull(testee.tenantIdFor(MODULE, PROCESS, ADAPTER, "banking"), "the prefix IS the isolation - no tenant");
     // null identifiers stay null (an adapter may pass an absent value)
     assertNull(testee.scopedIdentifier(MODULE, null, ADAPTER));
     assertNull(testee.scopedTaskDefinition(MODULE, PROCESS, null, ADAPTER));
@@ -376,6 +370,43 @@ public class NameClashAvoidanceServiceTest {
   }
 
   @Test
+  @DisplayName("Configuration only BY_ADAPTER could use fails the boot naming both ways out")
+  public void byAdapterOnlyConfigurationWithoutByAdapterIsRejected() {
+
+    // what the setting IS stays with the adapter - here the Camunda tenant
+    final var tenantKey = "vanillabp.adapters.c8.tenant-id";
+
+    // the adapter defaults to NONE and nothing is configured, so the BPMS isolates nothing
+    final var exception = assertThrowsExactly(
+        IllegalStateException.class,
+        () -> serviceWith(null, adapterDeclaring(NameClashAvoidance.NONE))
+            .validateNoneNameClashStrategy(ADAPTER, tenantKey));
+    final var message = exception.getMessage();
+    assertTrue(message.contains(tenantKey), () -> message);
+    assertTrue(message.contains("'none'"), () -> message);
+    assertTrue(message.contains("name-clash-avoidance: by-adapter"), () -> message);
+
+    // prefixing does not use the BPMS' own isolation either
+    assertThrowsExactly(
+        IllegalStateException.class,
+        () -> serviceWith(NameClashAvoidance.USE_PREFIX).validateNoneNameClashStrategy(ADAPTER, tenantKey));
+
+    // configured at the adapter level ...
+    serviceWith(NameClashAvoidance.BY_ADAPTER).validateNoneNameClashStrategy(ADAPTER, tenantKey);
+    // ... or for a single workflow module: the property is put to use there
+    serviceWith(NameClashAvoidance.NONE, NameClashAvoidance.BY_ADAPTER, null, null)
+        .validateNoneNameClashStrategy(ADAPTER, tenantKey);
+    // ... or by the adapter's default while no level overrides it
+    serviceWith(null, adapterDeclaring(NameClashAvoidance.BY_ADAPTER))
+        .validateNoneNameClashStrategy(ADAPTER, tenantKey);
+
+    // the adapter passes nothing, so there is nothing to contradict
+    serviceWith(NameClashAvoidance.NONE).validateNoneNameClashStrategy(ADAPTER, null);
+    serviceWith(NameClashAvoidance.NONE).validateNoneNameClashStrategy(ADAPTER, "  ");
+
+  }
+
+  @Test
   @DisplayName("An adapter without native isolation defaulting to NONE is not asked to choose")
   public void unconfiguredLevelsHonorTheAdapterDefault() {
 
@@ -393,7 +424,6 @@ public class NameClashAvoidanceServiceTest {
 
     assertEquals(NameClashAvoidance.BY_ADAPTER, testee.modeFor(MODULE, PROCESS, ADAPTER));
     assertEquals(PROCESS, testee.scopedProcessId(MODULE, PROCESS, ADAPTER));
-    assertEquals(MODULE, testee.tenantIdFor(MODULE, PROCESS, ADAPTER, null));
 
   }
 
