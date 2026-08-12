@@ -407,6 +407,11 @@ applications may define their own `PhaseTwoOutbox` bean instead):
 A signal is the one BPMS operation which is not about a workflow, so it is the one
 place where neither election nor aggregate applies:
 
+- The scope is the WORKFLOW MODULE of the calling process service: each adapter
+  broadcasts through ITS own client with ITS tenant, and the signal name is scoped
+  like every other identifier of the module (prefixed in `use-prefix`). Crossing
+  module boundaries is deliberately left to the application - a module is a scope,
+  and which modules a signal is meant for is a business question.
 - `MigrationProcessService.sendSignal(name)` fans out over the DEPLOYMENT UNION of the
   workflow module (`getDeploymentAdaptersFor`, story 27), not over the prioritized
   adapters of the calling process service. During a migration the subscriptions are

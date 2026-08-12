@@ -30,7 +30,12 @@ changes behavior.
   commit, and the **Process-Engine-API** uses its `SignalApi` after the commit (that
   API exists, so this needed no gap entry).
 - A broadcast reaches the DEPLOYMENT UNION of the workflow module, not only the
-  first-priority adapter of the calling process service.
+  first-priority adapter of the calling process service. Its SCOPE is that workflow
+  module: every adapter broadcasts through its own client with its own tenant, and
+  the signal name carries the module's prefix where the module prefixes identifiers.
+  A signal meant for several workflow modules is sent through the `ProcessService` of
+  each of them - with the mode `none` nothing separates the modules in the BPMS
+  anyway, which is the price of that mode.
 
 ## Workflows the BPMS starts itself (2026-08-12)
 
