@@ -402,6 +402,48 @@ applications may define their own `PhaseTwoOutbox` bean instead):
 | Spring Boot | MongoDB                  | own implementation using `MongoTemplate` (`spring-boot-integration`)                     |
 | Quarkus     | JDBC datasource (Agroal) | own JDBC/JTA-based implementation (`quarkus-integration`; gruelbox does not support JTA) |
 
+### Workflows the BPMS starts itself (`BpmsInitiatedStartInvoker`)
+
+A timer, signal or conditional start event produces a workflow nobody asked for - and
+therefore a workflow without a workflow aggregate, which is the one thing every other
+mechanism needs: tasks are routed by the aggregate's ID, expressions read its
+attributes. The core builds it, adapters only report and write back.
+
+Adapters use the SPI (`io.vanillabp.integration.adapter.spi.workflowstart`) twice:
+
+- `validateBpmsInitiatedStarts(module, process, specs)` during `wireBpmn`, with the
+  start events of the deployed process the BPMS fires on its own. The core registers
+  them and reports an application method serving a process (or a start event) which
+  has none. Signal names are reported PLAIN - scoping stays invisible above the BPMS
+  boundary (story 35). Throwing honors the `deployment-failure` policy.
+- `startWorkflowByBpms(module, process, context)` when the BPMS reports such a start.
+  The context carries values only: start event id, kind, trigger time, the BPMS' own
+  identity of the start, the variables the model set, and whether the aggregate has to
+  be built in the CALLER's transaction (embedded BPMS) or in a new one (remote BPMS).
+
+What the core does, in one transaction: derive the ID, reuse an aggregate already
+carrying it (a repeated notification builds nothing twice), otherwise instantiate the
+class, write the ID and the variables into it, run the optional
+`@WorkflowStartedByBpms` method and save. The result carries the aggregate's ID, the
+name of its ID attribute and the variables the adapter writes back - the ID variable
+plus the values shared per `@SyncWithBPMS` where the adapter asks for them
+(`AggregateSyncMode`).
+
+The ID rules live in `BpmsInitiatedStartId`: what the BPMS identifies the start by
+wins (a remote BPMS' instance key, stable across redeliveries), then a timer's trigger
+time, then a generated ID - and where none of them fits the ID attribute's type,
+nothing is assigned and the persistence layer generates one while saving.
+
+The `@WorkflowStartedByBpms` methods are scanned by `BpmsInitiatedStartScanner` and
+held by `BpmsInitiatedStarts`, to which `WorkflowTaskRegistry` delegates the second
+adapter-facing interface. Both scanners walk the same classes and share the value
+conversion; folding them into ONE pluggable handler contract is the subject of the
+extension-enablement story.
+
+An adapter whose BPMS cannot report such a start implements none of this and fails the
+deployment of such a process with a guiding message instead - a workflow which could
+never obtain an aggregate is better refused than deployed.
+
 ### Viewer/history API (read path)
 
 `ProcessService#getProcessDefinitions`, `#getBpmnXml` and `#getWorkflowHistory` are

@@ -7,7 +7,7 @@ package io.vanillabp.integration.adapter.migration.workflowtask;
  * which is not numeric only matches <code>*</code> or an exactly equal
  * specification.
  */
-class VersionRange {
+public class VersionRange {
 
   private final String spec;
 
@@ -18,7 +18,7 @@ class VersionRange {
 
   }
 
-  static VersionRange parse(
+  public static VersionRange parse(
       final String spec,
       final String describedLocation) {
 
@@ -40,7 +40,7 @@ class VersionRange {
 
   }
 
-  boolean matches(
+  public boolean matches(
       final String processVersion) {
 
     if ((processVersion == null) || spec.equals("*")) {

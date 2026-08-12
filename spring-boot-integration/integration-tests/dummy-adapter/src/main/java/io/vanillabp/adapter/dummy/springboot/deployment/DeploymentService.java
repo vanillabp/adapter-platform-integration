@@ -9,6 +9,9 @@ import org.springframework.beans.factory.ObjectProvider;
 import io.vanillabp.adapter.dummy.springboot.DummyAdapterConfiguration;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.adapter.spi.BpmnParseException;
+import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartContext;
+import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker;
+import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartResult;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
@@ -30,6 +33,18 @@ public class DeploymentService implements AdapterDeploymentService<Object, Objec
    * Test hook standing in for the BPMN model (see {@link DummyTaskWiringSource}).
    */
   private final ObjectProvider<DummyTaskWiringSource> taskWiringSource;
+
+  /**
+   * The core's entry point for workflows the BPMS starts on its own, provided by the
+   * platform integration.
+   */
+  private final BpmsInitiatedStartInvoker bpmsInitiatedStartInvoker;
+
+  /**
+   * Test hook standing in for the start events of the BPMN model (see
+   * {@link DummyBpmsInitiatedStartSource}).
+   */
+  private final ObjectProvider<DummyBpmsInitiatedStartSource> bpmsInitiatedStartSource;
 
   @Override
   public Class<Object> getModelType() {
@@ -112,6 +127,39 @@ public class DeploymentService implements AdapterDeploymentService<Object, Objec
             workflowModuleId,
             bpmnProcessId,
             source.tasksOf(adapterId, workflowModuleId, bpmnProcessId)));
+
+    // like a real adapter: report the start events the BPMS fires on its own, so the
+    // core can check the application's @WorkflowStartedByBpms methods against them
+    bpmsInitiatedStartSource.ifAvailable(
+        source -> bpmsInitiatedStartInvoker.validateBpmsInitiatedStarts(
+            workflowModuleId,
+            bpmnProcessId,
+            source.startEventsOf(adapterId, workflowModuleId, bpmnProcessId)));
+
+  }
+
+  /**
+   * Reports a workflow the BPMS started on its own, like a real adapter does from a
+   * process-start listener. Triggered by integration tests.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param context The notification (as a real adapter would build it)
+   * @return The aggregate's ID and the variables to write back into the BPMS
+   */
+  public BpmsInitiatedStartResult startWorkflowByBpms(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final BpmsInitiatedStartContext context) {
+
+    log.info(
+        "Dummy-Adapter[{}]: The BPMS started '{}' of {} by start event '{}'",
+        adapterId,
+        bpmnProcessId,
+        workflowModuleId,
+        context.getStartEventId());
+
+    return bpmsInitiatedStartInvoker.startWorkflowByBpms(workflowModuleId, bpmnProcessId, context);
 
   }
 

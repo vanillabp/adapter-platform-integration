@@ -230,6 +230,55 @@ public class MigrationProcessService<A> {
   }
 
   /**
+   * The type of the workflow aggregate's ID attribute, or <code>null</code> if the
+   * persistence layer does not report one (it then owns the serialized form).
+   *
+   * @return The ID type or <code>null</code>
+   */
+  public Class<?> getAggregateIdType() {
+
+    return aggregateIdType;
+
+  }
+
+  /**
+   * Loads the workflow aggregate by its ID in the aggregate's own ID type - used
+   * where the ID was not serialized in the first place (a workflow the BPMS started
+   * on its own).
+   *
+   * @param workflowAggregateId The ID in the aggregate's ID type
+   * @return The aggregate or <code>null</code> if there is none
+   */
+  public A loadWorkflowAggregateById(
+      final Object workflowAggregateId) {
+
+    return aggregatePersistenceSupport.loadById(workflowAggregateId);
+
+  }
+
+  /**
+   * @param workflowAggregate The aggregate to persist
+   * @return The persisted aggregate (attached, in case of an ORM)
+   */
+  public A saveWorkflowAggregate(
+      final A workflowAggregate) {
+
+    return aggregatePersistenceSupport.save(workflowAggregate);
+
+  }
+
+  /**
+   * @param workflowAggregate The aggregate to investigate
+   * @return Its ID
+   */
+  public Object getWorkflowAggregateId(
+      final A workflowAggregate) {
+
+    return aggregatePersistenceSupport.getAggregateId(workflowAggregate);
+
+  }
+
+  /**
    * Processes a BPMN task: loads the workflow aggregate by the context's serialized
    * ID, invokes the given <code>&#64;WorkflowTask</code> handler and saves the
    * aggregate - all within one transaction run by the given

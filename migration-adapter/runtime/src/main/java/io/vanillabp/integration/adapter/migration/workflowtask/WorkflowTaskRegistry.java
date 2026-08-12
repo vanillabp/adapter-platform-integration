@@ -14,21 +14,33 @@ import org.slf4j.LoggerFactory;
 
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.transaction.TransactionRunner;
+import io.vanillabp.integration.adapter.migration.workflowstart.BpmsInitiatedStarts;
+import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartContext;
+import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker;
+import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartResult;
+import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartSpec;
 import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 
 /**
- * The core-owned registry of <code>&#64;WorkflowTask</code> handlers per (workflow
- * module, BPMN process ID) and the implementation of the adapter-facing
- * {@link WorkflowTaskInvoker}. The platform integration registers every workflow
- * service class under all BPMN process IDs it declares
- * ({@code @WorkflowService.bpmnProcess} and {@code secondaryBpmnProcesses});
+ * The core-owned registry of the annotated handler methods of the application per
+ * (workflow module, BPMN process ID), and the implementation of the adapter-facing
+ * {@link WorkflowTaskInvoker} and {@link BpmsInitiatedStartInvoker}. The platform
+ * integration registers every workflow service class under all BPMN process IDs it
+ * declares ({@code @WorkflowService.bpmnProcess} and {@code secondaryBpmnProcesses});
  * adapters validate the wiring during <code>wireBpmn</code> and dispatch task
  * invocations at runtime.
+ * <p>
+ * <code>&#64;WorkflowTask</code> methods are held here; the
+ * <code>&#64;WorkflowStartedByBpms</code> methods of the same classes are held by
+ * {@link BpmsInitiatedStarts}, to which the second interface delegates. Both
+ * mechanisms scan the same classes and share the value conversion - generalizing
+ * them into ONE pluggable handler contract is the subject of the extension-enablement
+ * story.
  */
-public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
+public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedStartInvoker {
 
   private static final Logger log = LoggerFactory.getLogger(WorkflowTaskRegistry.class);
 
@@ -65,6 +77,12 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
   private final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync;
 
   private final Map<RegistryKey, RegistryEntry> entries = new ConcurrentHashMap<>();
+
+  /**
+   * The <code>&#64;WorkflowStartedByBpms</code> methods of the same workflow service
+   * classes - what a workflow started by the BPMS itself needs (story 41).
+   */
+  private final BpmsInitiatedStarts bpmsInitiatedStarts = new BpmsInitiatedStarts();
 
   /**
    * The transaction annotations of the running platform (story 40b), supplied by the
@@ -181,6 +199,14 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
       entry.workflowServiceClasses.add(workflowServiceClass);
       entry.processService = processService;
     }
+
+    bpmsInitiatedStarts
+        .registerWorkflowService(
+            workflowModuleId,
+            bpmnProcessId,
+            workflowServiceClass,
+            processService.getWorkflowAggregateClass(),
+            workflowServiceBean);
 
   }
 
@@ -406,6 +432,63 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
         context,
         transactionRunner,
         rollbackRuleRemedies);
+
+  }
+
+  @Override
+  public void validateBpmsInitiatedStarts(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Collection<BpmsInitiatedStartSpec> startEvents) {
+
+    bpmsInitiatedStarts.validate(workflowModuleId, bpmnProcessId, startEvents);
+
+  }
+
+  @Override
+  public BpmsInitiatedStartResult startWorkflowByBpms(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final BpmsInitiatedStartContext context) {
+
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    if ((entry == null) || (entry.processService == null)) {
+      throw new IllegalStateException(
+          """
+              No @WorkflowService class is registered for BPMN process '%s' of workflow module \
+              '%s' - the BPMS started a workflow of it (start event '%s') but there is nothing to \
+              build its workflow aggregate! Known processes: %s."""
+              .formatted(
+                  bpmnProcessId,
+                  workflowModuleId,
+                  context.getStartEventId(),
+                  entries
+                      .keySet()
+                      .stream()
+                      .map(key -> "'%s' (module '%s')".formatted(key.bpmnProcessId(), key.workflowModuleId()))
+                      .collect(Collectors.joining(", "))));
+    }
+
+    final var result = bpmsInitiatedStarts.start(entry.processService, context, transactionRunner);
+    if ((aggregateSync == null) || (context
+        .getAggregateSyncMode() == io.vanillabp.integration.adapter.spi.AggregateSyncMode.NONE)) {
+      return result;
+    }
+
+    // the aggregate values shared with a remote BPMS (story 28) - read AFTER the
+    // start's transaction committed, which is why an embedded BPMS (joining the
+    // caller's transaction, sync mode NONE) never gets here
+    final var variables = new java.util.LinkedHashMap<>(result.variables());
+    variables
+        .putAll(
+            syncedWorkflowAggregateValues(
+                workflowModuleId,
+                bpmnProcessId,
+                result.workflowAggregateId(),
+                context.getAggregateSyncMode()));
+    variables.put(result.workflowAggregateIdName(), result.workflowAggregateId());
+    return new BpmsInitiatedStartResult(
+        result.workflowAggregateId(), result.workflowAggregateIdName(), variables, result.created());
 
   }
 

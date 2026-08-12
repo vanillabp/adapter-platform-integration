@@ -4,6 +4,35 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Workflows the BPMS starts itself (2026-08-12)
+
+Story 41 - a timer, signal or conditional start event produces a workflow without a
+workflow aggregate, which VanillaBP now builds. Additive: nothing existing changes
+behavior.
+
+- **New in `spi-for-java` 1.2.0:** the annotation `@WorkflowStartedByBpms` and the
+  value record `BpmsStartTrigger`. Both are OPTIONAL - without them VanillaBP builds
+  the aggregate on its own (see the wiki page "Starting workflows").
+- **New adapter SPI** `io.vanillabp.integration.adapter.spi.workflowstart`:
+  `BpmsInitiatedStartInvoker` (implemented by the core, offered to adapters like
+  `WorkflowTaskInvoker` - the same bean implements both), plus
+  `BpmsInitiatedStartSpec`, `BpmsInitiatedStartContext` and
+  `BpmsInitiatedStartResult`. An adapter which does not implement it keeps working;
+  processes with such start events simply cannot run on it.
+- **Camunda 7:** an execution listener on the start event builds the aggregate inside
+  the engine's transaction and sets the instance's business key from it.
+- **Camunda 8:** an execution listener is added to the start event while deploying
+  (event type `end` - the cluster rejects `start` listeners there), and its job
+  completion writes the aggregate-ID variable plus the shared aggregate values. A
+  model deployed by an earlier VanillaBP 2 build is redeployed with that listener, so
+  it produces a new process version.
+- **Process-Engine-API:** deploying a process with such a start event now fails with a
+  guiding message (gap 16) - the API never reports a start the application did not
+  ask for.
+- The workflow-aggregate class needs a constructor without arguments to be built by
+  VanillaBP. Where it has none, a `@WorkflowStartedByBpms` method returning the
+  aggregate does the job; the failure message says both.
+
 ## Phase-two operations become a registry (2026-08-12)
 
 Story 45 - the closed enum `PhaseTwoOperation` becomes an open registry, so
