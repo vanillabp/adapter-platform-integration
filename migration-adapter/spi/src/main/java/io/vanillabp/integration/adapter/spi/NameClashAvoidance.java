@@ -23,7 +23,12 @@ public enum NameClashAvoidance {
   /**
    * Nothing is scoped - the application guarantees that its identifiers are unique
    * across all of its workflow modules. The least surprising choice for an
-   * application consisting of exactly one workflow module.
+   * application consisting of exactly one workflow module, and the default of
+   * adapters whose BPMS cannot isolate without being set up for it (Camunda 8).
+   * <p>
+   * Since this mode protects nothing, every adapter reports it at startup per
+   * workflow module and names its own alternatives
+   * ({@link AdapterDeploymentService#warnAboutUnscopedIdentifiers(String, boolean)}).
    */
   NONE,
 
@@ -31,7 +36,8 @@ public enum NameClashAvoidance {
    * The BPMS' own isolation mechanism is used - for Camunda 7 and Camunda 8 a
    * TENANT named after the workflow module (the name is overridable by the
    * adapter's <code>tenant-id</code>). This is what VanillaBP 1 did, which is why
-   * it is the default.
+   * it is the default of every adapter whose BPMS isolates out of the box
+   * ({@link AdapterDeploymentService#defaultNameClashAvoidance()}).
    * <p>
    * An adapter whose BPMS has no such mechanism rejects this mode at startup with a
    * guiding message instead of silently deploying everything into one scope.

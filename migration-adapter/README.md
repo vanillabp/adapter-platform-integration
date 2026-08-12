@@ -144,13 +144,49 @@ old one.
 ### Name-clash avoidance (`NameClashAvoidanceSupport`)
 
 One adapter-scoped property decides how a workflow module's identifiers are kept
-apart from another module's: `name-clash-avoidance` = `BY_ADAPTER` (default,
-VanillaBP 1's behavior — the BPMS' own isolation, e.g. a tenant named after the
-module) | `USE_PREFIX` (no tenant; VanillaBP prefixes the identifiers, separator
-`__`) | `NONE`. The core owns both the resolution (most-specific-wins across
-workflow > workflow module > adapter) and the composition of the strings
+apart from another module's: `name-clash-avoidance` = `BY_ADAPTER` (VanillaBP 1's
+behavior — the BPMS' own isolation, e.g. a tenant named after the module) |
+`USE_PREFIX` (no tenant; VanillaBP prefixes the identifiers, separator `__`) |
+`NONE`. The core owns both the resolution (most-specific-wins across workflow >
+workflow module > adapter) and the composition of the strings
 (`NameClashAvoidanceService implements NameClashAvoidanceSupport`, handed to every
-adapter as a platform bean). An adapter only decides WHERE to apply the result:
+adapter as a platform bean).
+
+Without any configuration the ADAPTER's default applies
+(`AdapterDeploymentService#defaultNameClashAvoidance`, `BY_ADAPTER` unless
+overridden). Both Camunda adapters override it with `NONE`: a Camunda 8 cluster
+started from the stock image has multi-tenancy switched off and rejects a deploy
+command carrying a tenant id, and Camunda 7 offers more than one mechanism (a tenant,
+prefixes, an engine per module), so neither presumes one. The platform integrations
+hand the adapters' deployment services to the service as a lazily resolved supplier
+(adapters receive the service themselves, so they cannot be injected).
+
+`BY_ADAPTER` means "the BPMS' own isolation", and what that IS the core does not know
+(a tenant, a namespace, a database of its own). It therefore computes none of it: the
+adapters derive the tenant themselves from the resolved mode (`Camunda8Scoping` and
+`Camunda7Scoping`, duplicated on purpose - the rule is one line and the concept is
+theirs). The core answers `modeFor` and nothing else.
+
+The same split holds for validating: an adapter which carries configuration only
+BY_ADAPTER could honor hands the PROPERTY KEY to `validateNoneNameClashStrategy`, and
+the core answers whether BY_ADAPTER applies anywhere for that adapter - if it does
+not, the boot fails naming the property, the modes which do apply and the two ways to
+reconcile them. Both Camunda adapters pass their `tenant-id` this way.
+
+And for asking the BPMS itself: Camunda 8 looks the tenant up in the cluster before
+deploying (a cluster without multi-tenancy, or an unknown tenant, becomes a message
+naming the property to change), while Camunda 7 has nothing to ask - a tenant id is an
+attribute of the deployment there and the engine creates nothing.
+
+Since `NONE` protects nothing, the core has the ADAPTER report it once per workflow
+module and adapter id while the mode is resolved, i.e. at startup
+(`AdapterDeploymentService#warnAboutUnscopedIdentifiers`). What can be used instead
+is BPMS knowledge: Camunda 8 offers prefixing, a tenant per module on a
+multi-tenancy cluster or a cluster per module, Camunda 7 offers prefixing, a tenant
+per module or an engine per module (`data-source-name`, `table-prefix`). The default
+implementation names what every BPMS can offer.
+
+An adapter only decides WHERE to apply the result:
 
 - in `prepareBpmn`, on its own model type — only the adapter knows it. Note the
   pipeline calls `prepareBpmn` once per PROCESS while all processes of a file share

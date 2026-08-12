@@ -114,4 +114,75 @@ public interface AdapterDeploymentService<BPMN, PC> extends ExtensionWiringServi
 
   }
 
+  /**
+   * The {@link NameClashAvoidance} mode which applies to this adapter as long as the
+   * application configures none at any level. {@link NameClashAvoidance#BY_ADAPTER}
+   * - version 1's behavior - unless the adapter's BPMS makes another mode the better
+   * starting point: the Camunda 8 adapter defaults to
+   * {@link NameClashAvoidance#NONE} because a cluster started from the stock image
+   * has multi-tenancy switched off and rejects tenant ids, so an application
+   * configuring nothing would not even boot.
+   * <p>
+   * Whichever mode an adapter picks, the core keeps the choice visible:
+   * {@link NameClashAvoidance#NONE} is reported at startup by
+   * {@link #warnAboutUnscopedIdentifiers(String, boolean)}.
+   *
+   * @return The mode applying without configuration, never <code>null</code>
+   */
+  default NameClashAvoidance defaultNameClashAvoidance() {
+
+    return NameClashAvoidance.BY_ADAPTER;
+
+  }
+
+  /**
+   * Reports that a workflow module reaches this adapter's BPMS with
+   * {@link NameClashAvoidance#NONE}, so nothing keeps its identifiers apart from
+   * those of the other workflow modules. Called by the core once per workflow module
+   * and adapter id as soon as the mode is resolved (i.e. while deploying, at
+   * startup), no matter whether the mode was configured or is the adapter's
+   * {@link #defaultNameClashAvoidance() default}.
+   * <p>
+   * The message belongs to the ADAPTER because the alternatives do: Camunda 8 can
+   * prefix, use tenants (on a cluster with multi-tenancy enabled) or give a workflow
+   * module a cluster of its own, whereas Camunda 7 can prefix, use tenants or run a
+   * separate engine per module (<code>data-source-name</code>,
+   * <code>table-prefix</code>). The default names what every BPMS can offer -
+   * adapters override it to name their own options.
+   *
+   * @param workflowModuleId The workflow module whose identifiers are not scoped
+   * @param fromDefault Whether the mode is this adapter's default (nothing is
+   *          configured) rather than a configured value
+   */
+  default void warnAboutUnscopedIdentifiers(
+      final String workflowModuleId,
+      final boolean fromDefault) {
+
+    org.slf4j.LoggerFactory
+        .getLogger(getClass())
+        .warn(
+            """
+                Workflow module '{}' is deployed to adapter '{}' with name-clash-avoidance 'none'{}, \
+                so its BPMN process ids, message names and task definitions reach the BPMS as they \
+                are. Nothing protects them: a second workflow module using the same identifier \
+                addresses the same processes and tasks, and neither VanillaBP nor the BPMS can tell. \
+                Keep 'none' only as long as your identifiers are unique across ALL workflow modules \
+                of this application, otherwise choose:
+                  vanillabp.adapters.{}.name-clash-avoidance: use-prefix   # VanillaBP prefixes the identifiers with the workflow module id
+                  vanillabp.adapters.{}.name-clash-avoidance: by-adapter   # the BPMS' own isolation mechanism
+                The same key may be set per workflow module \
+                (vanillabp.workflow-modules.{}.adapters.{}.name-clash-avoidance). The mode is not a \
+                runtime switch - changing it once workflows are running is a BPMS migration.""",
+            workflowModuleId,
+            getAdapterId(),
+            fromDefault
+                ? " (nothing is configured, so the adapter's default applies)"
+                : "",
+            getAdapterId(),
+            getAdapterId(),
+            workflowModuleId,
+            getAdapterId());
+
+  }
+
 }
