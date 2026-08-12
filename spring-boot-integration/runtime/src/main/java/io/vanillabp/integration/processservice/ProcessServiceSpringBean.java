@@ -140,6 +140,18 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
   }
 
   @Override
+  public void sendSignal(
+      final String signalName) {
+
+    if (noTransactionIsActive()) {
+      throw newMissingTransactionExceptionForSignal();
+    }
+
+    migrationProcessService.sendSignal(signalName);
+
+  }
+
+  @Override
   public A correlateMessage(
       final A workflowAggregate,
       final String messageName) {

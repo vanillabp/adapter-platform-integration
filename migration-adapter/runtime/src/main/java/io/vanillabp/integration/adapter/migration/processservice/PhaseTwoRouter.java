@@ -243,6 +243,34 @@ public final class PhaseTwoRouter {
 
     operations
         .registerCoreOperation(
+            PhaseTwoOperation.SEND_SIGNAL,
+            (
+                call,
+                previouslyAttempted) -> {
+              // a broadcast is not about one workflow: no aggregate ID is converted
+              // and no process service has to hold an aggregate - only the routing
+              // by (module, process) applies
+              final var processService = registrations
+                  .get(new RegistrationKey(call.workflowModuleId(), call.bpmnProcessId()));
+              if (processService == null) {
+                throw new IllegalStateException(
+                    """
+                        Cannot dispatch outbox entry (operation '%s', signal '%s'): BPMN process '%s' of \
+                        workflow module '%s' is not (or no longer) part of this application! If the \
+                        process was removed on purpose, remove the entry from the outbox store - it \
+                        stays visible there for operations."""
+                        .formatted(
+                            call.operation(),
+                            call.args().get(PhaseTwoCall.ARG_SIGNAL_NAME),
+                            call.bpmnProcessId(),
+                            call.workflowModuleId()));
+              }
+              processService
+                  .sendSignalPhaseTwo(call.args().get(PhaseTwoCall.ARG_SIGNAL_NAME), call.adapterId());
+            });
+
+    operations
+        .registerCoreOperation(
             PhaseTwoOperation.START_WORKFLOW_BY_MESSAGE,
             (
                 call,

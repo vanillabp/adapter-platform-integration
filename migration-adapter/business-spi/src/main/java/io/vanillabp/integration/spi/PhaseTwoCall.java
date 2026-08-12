@@ -24,7 +24,8 @@ import java.util.Optional;
  *        {@link PhaseTwoOperation#name()})
  * @param workflowModuleId The ID of the workflow module the workflow belongs to
  * @param bpmnProcessId The BPMN process ID of the workflow
- * @param workflowAggregateId The workflow-aggregate ID in serialized (String) form
+ * @param workflowAggregateId The workflow-aggregate ID in serialized (String) form,
+ *        or <code>null</code> for an operation which is not about one workflow
  * @param adapterId The ID of the elected BPMS adapter - set for
  *        {@link PhaseTwoOperation#START_WORKFLOW} (the adapter elected in phase one
  *        is persisted and used in phase two), <code>null</code> for probing
@@ -74,11 +75,19 @@ public record PhaseTwoCall(
    */
   public static final String ARG_CORRELATION_ID = "correlationId";
 
+  /**
+   * The {@link #args()} key carrying the signal name of
+   * {@link PhaseTwoOperation#SEND_SIGNAL} calls. Part of the persisted contract -
+   * never change the literal.
+   */
+  public static final String ARG_SIGNAL_NAME = "signalName";
+
   public PhaseTwoCall {
     Objects.requireNonNull(operation, "operation must not be null");
     Objects.requireNonNull(workflowModuleId, "workflowModuleId must not be null");
     Objects.requireNonNull(bpmnProcessId, "bpmnProcessId must not be null");
-    Objects.requireNonNull(workflowAggregateId, "workflowAggregateId must not be null");
+    // no requireNonNull: an operation which is not about ONE workflow carries no
+    // aggregate ID (a broadcast signal, story 42)
     args = args == null ? Map.of() : Map.copyOf(args);
     idempotencyKey = idempotencyKey == null ? Optional.empty() : idempotencyKey;
   }

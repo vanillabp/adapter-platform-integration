@@ -271,6 +271,33 @@ public interface PhaseTwoOutbox {
   }
 
   /**
+   * Schedule phase two of broadcasting a BPMN signal. The broadcasting adapter IS
+   * persisted with the entry: a broadcast reaches every BPMS the workflow module
+   * was deployed to, so one entry per BPMS is scheduled and each is dispatched to
+   * the BPMS it was written for. There is NO idempotency key - a signal has nothing
+   * to deduplicate by, so a redelivered entry broadcasts again.
+   *
+   * @param workflowModuleId The ID of the workflow module the signal belongs to
+   * @param bpmnProcessId The BPMN process ID whose process service was called
+   * @param signalName The PLAIN BPMN signal name
+   * @param adapterId The ID of the BPMS adapter to broadcast to
+   * @return <code>true</code> - a signal is never deduplicated
+   */
+  default boolean scheduleSendSignal(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String signalName,
+      final String adapterId) {
+
+    return schedule(
+        PhaseTwoCall
+            .of(
+                PhaseTwoOperation.SEND_SIGNAL, workflowModuleId, bpmnProcessId, null, adapterId, java.util.Map
+                    .of(PhaseTwoCall.ARG_SIGNAL_NAME, signalName)));
+
+  }
+
+  /**
    * Schedule phase two of starting a workflow BY MESSAGE. Start semantics: the
    * adapter elected in phase one is persisted and used in phase two, and a
    * workflow is started at most once per aggregate.

@@ -49,7 +49,8 @@ public class PhaseTwoOperationContractTest {
                 "COMPLETE_USER_TASK",
                 "CANCEL_USER_TASK",
                 "CORRELATE_MESSAGE",
-                "START_WORKFLOW_BY_MESSAGE"),
+                "START_WORKFLOW_BY_MESSAGE",
+                "SEND_SIGNAL"),
         PhaseTwoOperation.coreOperationNames());
 
   }
@@ -130,6 +131,20 @@ public class PhaseTwoOperationContractTest {
         call(
             PhaseTwoOperation.CORRELATE_MESSAGE,
             Map.of(PhaseTwoCall.ARG_MESSAGE_NAME, "OrderReceived")).idempotencyKey().isEmpty());
+
+  }
+
+  @Test
+  @DisplayName("A broadcast signal has nothing to deduplicate by")
+  public void sendSignalHasNoKey() {
+
+    assertTrue(
+        PhaseTwoCall
+            .of(
+                PhaseTwoOperation.SEND_SIGNAL, "test-module", "TestProcess", null, "test-adapter", Map
+                    .of(PhaseTwoCall.ARG_SIGNAL_NAME, "OrderReceived"))
+            .idempotencyKey()
+            .isEmpty());
 
   }
 

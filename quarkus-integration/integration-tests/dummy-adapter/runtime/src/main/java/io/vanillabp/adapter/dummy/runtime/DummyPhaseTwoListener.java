@@ -124,4 +124,17 @@ public interface DummyPhaseTwoListener {
       final String messageName) {
   }
 
+
+  /**
+   * Called whenever a signal is broadcast - in phase one for an adapter without a
+   * two-phase commit, in phase two for one with it.
+   *
+   * @param signalName The PLAIN BPMN signal name
+   * @param phaseTwo Whether this was phase two (after the commit)
+   */
+  default void broadcastSignal(
+      final String signalName,
+      final boolean phaseTwo) {
+  }
+
 }

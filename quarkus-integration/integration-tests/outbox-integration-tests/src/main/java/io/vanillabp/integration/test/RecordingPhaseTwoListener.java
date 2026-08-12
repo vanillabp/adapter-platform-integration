@@ -47,6 +47,29 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
 
   }
 
+  /**
+   * The signals broadcast so far, as "signalName/phase" - a broadcast of a remote
+   * BPMS may only happen in phase two, after the commit.
+   */
+  private final List<String> broadcastSignals = new CopyOnWriteArrayList<>();
+
+  @Override
+  public void broadcastSignal(
+      final String signalName,
+      final boolean phaseTwo) {
+
+    broadcastSignals.add("%s/%s".formatted(signalName, phaseTwo
+        ? "phase-two"
+        : "phase-one"));
+
+  }
+
+  public List<String> getBroadcastSignals() {
+
+    return List.copyOf(broadcastSignals);
+
+  }
+
   public List<String> getStartedByAdapter() {
 
     return List.copyOf(startedByAdapter);

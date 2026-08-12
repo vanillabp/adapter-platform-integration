@@ -119,4 +119,18 @@ public class WorkflowService {
 
   }
 
+
+  /**
+   * Broadcasts a signal - a broadcast is not addressed to a workflow, so no
+   * aggregate is involved.
+   *
+   * @param signalName The BPMN signal name
+   */
+  public void sendSignal(
+      final String signalName) {
+
+    processService.sendSignal(signalName);
+
+  }
+
 }

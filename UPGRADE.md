@@ -4,6 +4,34 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Broadcasting BPMN signals (2026-08-12)
+
+Story 42 - `ProcessService.sendSignal(String)` exists now. Additive; nothing existing
+changes behavior.
+
+- **New in `spi-for-java` 1.2.0:** `sendSignal(String signalName)` as a default method
+  throwing until an adapter implements it. Broadcast only - there is deliberately no
+  overload limiting a signal to one workflow, because Camunda 8 cannot do that and an
+  API which quietly means something else per BPMS is worse than none.
+- **New adapter SPI methods** `MigratableProcessService#sendSignalPhaseOne` /
+  `#sendSignalPhaseTwo`, both `default` and both throwing a guiding
+  `UnsupportedOperationException` - an adapter whose BPMS has no signals says so
+  instead of swallowing a broadcast.
+- **New core operation `SEND_SIGNAL`** in the operation registry (story 45), WITHOUT
+  an idempotency key: a signal has nothing to deduplicate by, so a redelivered outbox
+  entry broadcasts again. The broadcasting adapter IS persisted with the entry,
+  because a broadcast goes to every BPMS the workflow module was deployed to and each
+  of them gets its own entry.
+- **`PhaseTwoCall.workflowAggregateId()` may be `null`** from now on: an operation
+  which is not about one workflow carries no aggregate ID. Custom outbox stores have
+  to tolerate that (the shipped ones do - the JDBC store's `AGGREGATE_ID` column was
+  nullable already).
+- **Camunda 7** broadcasts inside the caller's transaction, **Camunda 8** after the
+  commit, and the **Process-Engine-API** uses its `SignalApi` after the commit (that
+  API exists, so this needed no gap entry).
+- A broadcast reaches the DEPLOYMENT UNION of the workflow module, not only the
+  first-priority adapter of the calling process service.
+
 ## Workflows the BPMS starts itself (2026-08-12)
 
 Story 41 - a timer, signal or conditional start event produces a workflow without a

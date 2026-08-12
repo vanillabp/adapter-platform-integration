@@ -44,6 +44,15 @@ public class MigrationProcessService<A> {
 
   private final List<MigratableProcessService<A>> adapterProcessServices;
 
+  /**
+   * The process services of every adapter the workflow module is DEPLOYED to (the
+   * union of story 27), which is more than the prioritized adapters of this process
+   * whenever another workflow of the module elects a different BPMS. A broadcast
+   * signal goes to all of them: while a migration runs, workflows waiting for the
+   * signal legitimately live in more than one BPMS.
+   */
+  private final List<MigratableProcessService<A>> deploymentAdapterProcessServices;
+
   private final AggregatePersistenceAware<A> aggregatePersistenceSupport;
 
   /**
@@ -136,6 +145,16 @@ public class MigrationProcessService<A> {
                         workflowModuleId,
                         workflowModuleId,
                         bpmnProcessId))))
+        .toList();
+    this.deploymentAdapterProcessServices = properties
+        .getDeploymentAdaptersFor(workflowModuleId)
+        .stream()
+        .map(adapterId -> processServices
+            .stream()
+            .filter(processService -> processService.getAdapterId().equals(adapterId))
+            .findFirst()
+            .orElse(null))
+        .filter(java.util.Objects::nonNull)
         .toList();
     this.phaseTwoOutboxResolver = phaseTwoOutboxResolver;
 
@@ -887,6 +906,96 @@ public class MigrationProcessService<A> {
     }
 
     return attachedAggregate;
+
+  }
+
+  /**
+   * Broadcasts a BPMN signal to every BPMS the workflow module is deployed to.
+   * <p>
+   * A signal is not addressed to a workflow, so nothing is probed and no aggregate
+   * is loaded or saved. Embedded BPMS broadcast inside the caller's transaction
+   * (a rollback takes the broadcast with it), remote BPMS get an outbox entry each
+   * and broadcast after the commit.
+   * <p>
+   * Every deployed BPMS is asked, not only the first-priority one: during a
+   * migration the workflows waiting for the signal are spread across them, and a
+   * broadcast reaching half of them would be worse than none.
+   *
+   * @param signalName The PLAIN BPMN signal name
+   */
+  public void sendSignal(
+      final String signalName) {
+
+    if ((signalName == null) || signalName.isBlank()) {
+      throw new IllegalArgumentException(
+          """
+              No signal name given (BPMN process '%s' of workflow module '%s')! Pass the signal name \
+              as it is modelled - VanillaBP applies the name scoping of the workflow module."""
+              .formatted(bpmnProcessId, workflowModuleId));
+    }
+
+    final var targets = deploymentAdapterProcessServices.isEmpty()
+        ? adapterProcessServices
+        : deploymentAdapterProcessServices;
+
+    RuntimeException failure = null;
+    for (final var adapter : targets) {
+      try {
+        adapter.sendSignalPhaseOne(workflowModuleId, bpmnProcessId, signalName);
+        if (adapter.needsTwoPhaseCommitForStartingWorkflows()) {
+          final var outbox = resolvePhaseTwoOutbox();
+          if (outbox == null) {
+            throw new IllegalStateException(
+                buildNoOutboxMessage(adapter.getAdapterId()));
+          }
+          outbox.scheduleSendSignal(workflowModuleId, bpmnProcessId, signalName, adapter.getAdapterId());
+        }
+      } catch (final RuntimeException e) {
+        // every BPMS is asked before the first failure is reported: a broadcast
+        // which stopped at the first unreachable BPMS would leave the others
+        // waiting, and the outbox retries what was scheduled anyway
+        log.error(
+            "Broadcasting signal '{}' of workflow module '{}' to adapter '{}' failed",
+            signalName,
+            workflowModuleId,
+            adapter.getAdapterId(),
+            e);
+        if (failure == null) {
+          failure = e;
+        }
+      }
+    }
+    if (failure != null) {
+      throw failure;
+    }
+
+  }
+
+  /**
+   * Executes phase two of broadcasting a signal, dispatched by the
+   * {@link PhaseTwoRouter} after the local transaction was committed. The adapter
+   * of the entry is the one the broadcast was scheduled for - there is no
+   * election, a broadcast is not about a workflow.
+   *
+   * @param signalName The PLAIN BPMN signal name
+   * @param adapterId The ID of the adapter to broadcast to
+   */
+  public void sendSignalPhaseTwo(
+      final String signalName,
+      final String adapterId) {
+
+    final var adapter = deploymentAdapterProcessServices
+        .stream()
+        .filter(candidate -> candidate.getAdapterId().equals(adapterId))
+        .findFirst()
+        .orElseThrow(() -> new IllegalStateException(
+            """
+                Cannot broadcast signal '%s' of BPMN process '%s' (workflow module '%s'): the adapter \
+                '%s' the outbox entry was written for is not configured (any more)! Either restore the \
+                adapter's configuration or remove the entry from the outbox store."""
+                .formatted(signalName, bpmnProcessId, workflowModuleId, adapterId)));
+
+    adapter.sendSignalPhaseTwo(workflowModuleId, bpmnProcessId, signalName);
 
   }
 

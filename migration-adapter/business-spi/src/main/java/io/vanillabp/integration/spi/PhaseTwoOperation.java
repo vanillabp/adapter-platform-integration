@@ -37,6 +37,8 @@ import java.util.Optional;
  * because the same message may legitimately be correlated multiple times over an
  * instance's lifetime (an at-least-once dispatch may then double-correlate; see
  * the adapters' documentation).</li>
+ * <li>{@link #SEND_SIGNAL}: {@link Optional#empty()} - a broadcast signal has no
+ * key to deduplicate by.</li>
  * <li>{@link #START_WORKFLOW_BY_MESSAGE}: like {@link #START_WORKFLOW}
  * (<code>workflowModuleId|bpmnProcessId|workflowAggregateId</code>) - a workflow
  * is started at most once per aggregate, regardless of the triggering
@@ -166,6 +168,18 @@ public record PhaseTwoOperation(
       "START_WORKFLOW_BY_MESSAGE", call -> START_WORKFLOW.idempotencyKey().derive(call));
 
   /**
+   * Phase two of broadcasting a BPMN signal - see
+   * {@code MigratableProcessService#sendSignalPhaseTwo}. The signal name travels in
+   * {@link PhaseTwoCall#args()} under {@link PhaseTwoCall#ARG_SIGNAL_NAME}, the
+   * broadcasting adapter IS persisted with the entry (a broadcast goes to every
+   * BPMS the workflow module was deployed to, so each of them gets its own entry).
+   * NO idempotency key: a signal has nothing to deduplicate by, and the same signal
+   * may legitimately be broadcast again and again.
+   */
+  public static final PhaseTwoOperation SEND_SIGNAL = new PhaseTwoOperation(
+      "SEND_SIGNAL", call -> Optional.empty());
+
+  /**
    * All operations owned by the VanillaBP core. Their names are reserved: an
    * extension registering one of them is rejected by
    * {@link PhaseTwoOperationRegistry#register(PhaseTwoOperation, PhaseTwoOperationDispatch)}.
@@ -178,7 +192,8 @@ public record PhaseTwoOperation(
           COMPLETE_USER_TASK,
           CANCEL_USER_TASK,
           CORRELATE_MESSAGE,
-          START_WORKFLOW_BY_MESSAGE);
+          START_WORKFLOW_BY_MESSAGE,
+          SEND_SIGNAL);
 
   public PhaseTwoOperation {
     Objects.requireNonNull(name, "name must not be null");

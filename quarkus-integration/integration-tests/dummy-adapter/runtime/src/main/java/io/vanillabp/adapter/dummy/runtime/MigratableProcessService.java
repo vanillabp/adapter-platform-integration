@@ -230,6 +230,35 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
   }
 
   @Override
+  public void sendSignalPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String signalName) {
+
+    // like an embedded BPMS: without a two-phase commit the broadcast happens here
+    if (!needsTwoPhaseCommitForStartingWorkflows && (phaseTwoListeners != null)) {
+      phaseTwoListeners
+          .stream()
+          .forEach(listener -> listener.broadcastSignal(signalName, false));
+    }
+
+  }
+
+  @Override
+  public void sendSignalPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String signalName) {
+
+    if (phaseTwoListeners != null) {
+      phaseTwoListeners
+          .stream()
+          .forEach(listener -> listener.broadcastSignal(signalName, true));
+    }
+
+  }
+
+  @Override
   public void correlateMessagePhaseOne(
       final String workflowModuleId,
       final String bpmnProcessId,

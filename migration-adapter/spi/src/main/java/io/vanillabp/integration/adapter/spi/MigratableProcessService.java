@@ -462,6 +462,68 @@ public interface MigratableProcessService<A> {
       String messageName);
 
   /**
+   * Broadcast a BPMN signal - phase one, executed inside the caller's transaction.
+   * A signal is not addressed to a workflow, so nothing is probed and no aggregate
+   * is involved: an EMBEDDED BPMS broadcasts here (a rollback takes the broadcast
+   * with it), a remote BPMS does nothing and broadcasts in
+   * {@link #sendSignalPhaseTwo} after the commit.
+   * <p>
+   * The signal name arrives as the application modelled it; scoping identifiers is
+   * the adapter's business (see
+   * {@link io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport}).
+   * <p>
+   * The default throws: an adapter whose BPMS has no signals says so instead of
+   * silently swallowing a broadcast.
+   *
+   * @param workflowModuleId The ID of the workflow module the signal belongs to
+   * @param bpmnProcessId The BPMN process ID whose process service was called
+   * @param signalName The PLAIN BPMN signal name
+   */
+  default void sendSignalPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String signalName) {
+
+    throw signalsNotSupported(signalName, workflowModuleId);
+
+  }
+
+  /**
+   * Broadcast a BPMN signal - phase two, dispatched through the outbox after the
+   * local transaction was committed. Only called for adapters requiring a two-phase
+   * commit; embedded BPMS broadcast in phase one already.
+   * <p>
+   * <strong>Idempotency contract:</strong> there is NONE. A signal carries no key a
+   * BPMS could deduplicate by, so a redelivered entry broadcasts a second time -
+   * documented, and the reason a signal is a poor fit for exactly-once thinking.
+   *
+   * @param workflowModuleId The ID of the workflow module the signal belongs to
+   * @param bpmnProcessId The BPMN process ID whose process service was called
+   * @param signalName The PLAIN BPMN signal name
+   */
+  default void sendSignalPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String signalName) {
+
+    throw signalsNotSupported(signalName, workflowModuleId);
+
+  }
+
+  private UnsupportedOperationException signalsNotSupported(
+      final String signalName,
+      final String workflowModuleId) {
+
+    return new UnsupportedOperationException(
+        ("The VanillaBP adapter '%s' cannot broadcast the signal '%s' of workflow module '%s': its "
+            + "BPMS has no signals, or the adapter predates them. Remove the adapter from the "
+            + "prioritized adapters of this workflow module, or replace the signal by a message "
+            + "correlated to the workflow which waits for it.")
+            .formatted(getAdapterId(), signalName, workflowModuleId));
+
+  }
+
+  /**
    * The viewer/history API - read-only, no phases: the adapter holding the
    * workflow (elected by probing {@link #awarenessOfWorkflow(Object)}) answers.
    * <p>

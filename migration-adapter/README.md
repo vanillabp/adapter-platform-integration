@@ -402,6 +402,24 @@ applications may define their own `PhaseTwoOutbox` bean instead):
 | Spring Boot | MongoDB                  | own implementation using `MongoTemplate` (`spring-boot-integration`)                     |
 | Quarkus     | JDBC datasource (Agroal) | own JDBC/JTA-based implementation (`quarkus-integration`; gruelbox does not support JTA) |
 
+### Broadcasting signals
+
+A signal is the one BPMS operation which is not about a workflow, so it is the one
+place where neither election nor aggregate applies:
+
+- `MigrationProcessService.sendSignal(name)` fans out over the DEPLOYMENT UNION of the
+  workflow module (`getDeploymentAdaptersFor`, story 27), not over the prioritized
+  adapters of the calling process service. During a migration the subscriptions are
+  spread across the BPMS, and a partial broadcast is worse than none.
+- Every adapter is asked before the first failure is reported: a broadcast which
+  stopped at the first unreachable BPMS would leave the others waiting.
+- Embedded adapters broadcast in `sendSignalPhaseOne` (inside the caller's
+  transaction), remote ones get one `SEND_SIGNAL` outbox entry EACH, carrying their
+  adapter id - dispatch goes to exactly that adapter, without probing. There is no
+  idempotency key: nothing about a signal can be deduplicated.
+- The call carries no aggregate ID, which is why `PhaseTwoCall` allows it to be
+  absent. The router's `SEND_SIGNAL` dispatch therefore does not convert one.
+
 ### Workflows the BPMS starts itself (`BpmsInitiatedStartInvoker`)
 
 A timer, signal or conditional start event produces a workflow nobody asked for - and
