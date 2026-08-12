@@ -298,6 +298,56 @@ completing tasks, ...) will instead probe the prioritized adapters at dispatch t
 (their calls carry no adapter ID); each such operation gets its own typed
 `schedule*` default method in `PhaseTwoOutbox` building the `PhaseTwoCall`.
 
+#### Which operations exist: the operation registry
+
+An operation is not a hardcoded case in the router but an entry of the
+`PhaseTwoOperationRegistry` (business SPI), consisting of three things:
+
+- its **name**, which the store persists and which is therefore a contract: never
+  rename an operation, never change what an existing name means,
+- its **idempotency-key derivation** (`PhaseTwoOperation.IdempotencyKey`, a function
+  of the `PhaseTwoCall`), which is just as persisted as the name, and
+- its **dispatch** (`PhaseTwoOperationDispatch`), which is not persisted at all: it
+  is registered at startup by whoever owns the operation.
+
+VanillaBP's own operations (`START_WORKFLOW`, `COMPLETE_TASK`, `CANCEL_TASK`,
+`COMPLETE_USER_TASK`, `CANCEL_USER_TASK`, `CORRELATE_MESSAGE`,
+`START_WORKFLOW_BY_MESSAGE`) are constants of `PhaseTwoOperation`, registered by the
+`PhaseTwoRouter` while it is built. Their dispatch is the process-service routing
+described above. Their names and key rules are pinned by a test, because since they
+stopped being enum constants nothing else guarantees them.
+
+An **extension** contributes operations of its own, which is why the registry exists.
+It builds them with `PhaseTwoOperation.extensionOperation(name, key)`, which enforces
+a namespace (`my-extension:MY_OPERATION`), and registers them together with its own
+dispatch:
+
+```java
+registry.register(
+    PhaseTwoOperation.extensionOperation(
+        "my-extension:NOTIFY",
+        call -> Optional.of(call.workflowAggregateId() + "|" + call.args().get("event"))),
+    (call, previouslyAttempted) -> notify(call));
+```
+
+The registry is offered as a bean by both platform integrations (Spring Boot:
+`vanillaBpPhaseTwoOperationRegistry`; Quarkus: a `@Singleton` producer). Scheduling
+works as for core operations: build the call with
+`PhaseTwoCall.of(operation, ...)` and hand it to the `PhaseTwoOutbox`, inside the
+business transaction. Dispatch then goes straight to the extension's handler: the
+aggregate-ID-to-adapter election of the core operations does not apply, and no
+process service has to be registered for the call's BPMN process.
+
+Rules the registry enforces at registration time, each with a guiding message: an
+operation is registered exactly once, an extension name is namespaced, and the core's
+names are reserved. At dispatch time an unregistered name is an error naming the
+operation and listing the registered ones. The entry stays in the store (like a
+stale adapter ID of a START entry), so an extension temporarily missing from the
+application does not silently lose its scheduled work.
+
+Stores never look into the registry: they persist name, args and key and stay
+operation-agnostic.
+
 The core does not implement (or depend on) any outbox itself — it only defines the
 `PhaseTwoOutbox` contract (stores implement exactly one method,
 `schedule(PhaseTwoCall)`):

@@ -2,8 +2,11 @@ package io.vanillabp.integration.adapter.migration.processservice;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 
 import io.vanillabp.integration.spi.PhaseTwoCall;
+import io.vanillabp.integration.spi.PhaseTwoOperation;
+import io.vanillabp.integration.spi.PhaseTwoOperationRegistry;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 
 /**
@@ -23,6 +26,13 @@ import io.vanillabp.integration.spi.PhaseTwoOutbox;
  * converted back into the aggregate's ID type by the process service itself
  * ({@link MigrationProcessService#convertAggregateId} - the ID type comes from the
  * aggregate's persistence support), so the conversion happens exactly once, here.
+ * <p>
+ * WHICH operations exist is not hardcoded here: the router owns a
+ * {@link PhaseTwoOperationRegistry} and registers the dispatch of VanillaBP's core
+ * operations into it while it is built. An extension registers its own operations
+ * in the same registry (see {@link #getOperations()}) and receives their calls in
+ * its own {@link io.vanillabp.integration.spi.PhaseTwoOperationDispatch} - the
+ * process-service routing below applies to core operations only.
  */
 public final class PhaseTwoRouter {
 
@@ -32,6 +42,38 @@ public final class PhaseTwoRouter {
   }
 
   private final Map<RegistrationKey, MigrationProcessService<?>> registrations = new ConcurrentHashMap<>();
+
+  private final PhaseTwoOperationRegistry operations;
+
+  public PhaseTwoRouter() {
+
+    this(new PhaseTwoOperationRegistry());
+
+  }
+
+  /**
+   * @param operations The registry to register the core operations in and to
+   *        resolve dispatched operations from
+   */
+  public PhaseTwoRouter(
+      final PhaseTwoOperationRegistry operations) {
+
+    this.operations = operations;
+    registerCoreOperations();
+
+  }
+
+  /**
+   * The registry of phase-two operations - extensions register their own
+   * operations here (the platform integrations offer it as a bean).
+   *
+   * @return The operation registry used by this router
+   */
+  public PhaseTwoOperationRegistry getOperations() {
+
+    return operations;
+
+  }
 
   /**
    * Register the process service of a workflow module/BPMN process as dispatch
@@ -87,6 +129,151 @@ public final class PhaseTwoRouter {
       final PhaseTwoCall call,
       final boolean previouslyAttempted) {
 
+    final var dispatch = operations
+        .dispatchFor(call.operation())
+        .orElseThrow(() -> new IllegalStateException(
+            """
+                Cannot dispatch outbox entry (operation '%s', aggregate ID '%s'): no phase-two \
+                operation of that name is registered! Registered operations: %s. Either the entry was \
+                written by a newer version of your software, or the extension contributing the \
+                operation is no longer part of this application - the entry stays in the outbox store \
+                for operations until the operation is available again or the entry is removed."""
+                .formatted(
+                    call.operation(),
+                    call.workflowAggregateId(),
+                    String.join(", ", operations.registeredNames()))));
+
+    dispatch.dispatch(call, previouslyAttempted);
+
+  }
+
+  /**
+   * Registers the dispatch of VanillaBP's core operations: each of them routes to
+   * the process service of the call's workflow module and BPMN process.
+   */
+  private void registerCoreOperations() {
+
+    operations
+        .registerCoreOperation(
+            PhaseTwoOperation.START_WORKFLOW,
+            (
+                call,
+                previouslyAttempted) -> withProcessService(
+                    call,
+                    (
+                        processService,
+                        workflowAggregateId) -> processService
+                            .startWorkflowPhaseTwo(
+                                workflowAggregateId,
+                                call.adapterId(),
+                                previouslyAttempted)));
+
+    operations
+        .registerCoreOperation(
+            PhaseTwoOperation.COMPLETE_TASK,
+            (
+                call,
+                previouslyAttempted) -> withProcessService(
+                    call,
+                    (
+                        processService,
+                        workflowAggregateId) -> processService
+                            .completeTaskPhaseTwo(
+                                workflowAggregateId,
+                                call.args().get(PhaseTwoCall.ARG_TASK_ID))));
+
+    operations
+        .registerCoreOperation(
+            PhaseTwoOperation.CANCEL_TASK,
+            (
+                call,
+                previouslyAttempted) -> withProcessService(
+                    call,
+                    (
+                        processService,
+                        workflowAggregateId) -> processService
+                            .cancelTaskPhaseTwo(
+                                workflowAggregateId,
+                                call.args().get(PhaseTwoCall.ARG_TASK_ID),
+                                call.args().get(PhaseTwoCall.ARG_BPMN_ERROR_CODE))));
+
+    operations
+        .registerCoreOperation(
+            PhaseTwoOperation.COMPLETE_USER_TASK,
+            (
+                call,
+                previouslyAttempted) -> withProcessService(
+                    call,
+                    (
+                        processService,
+                        workflowAggregateId) -> processService
+                            .completeUserTaskPhaseTwo(
+                                workflowAggregateId,
+                                call.args().get(PhaseTwoCall.ARG_TASK_ID))));
+
+    operations
+        .registerCoreOperation(
+            PhaseTwoOperation.CANCEL_USER_TASK,
+            (
+                call,
+                previouslyAttempted) -> withProcessService(
+                    call,
+                    (
+                        processService,
+                        workflowAggregateId) -> processService
+                            .cancelUserTaskPhaseTwo(
+                                workflowAggregateId,
+                                call.args().get(PhaseTwoCall.ARG_TASK_ID),
+                                call.args().get(PhaseTwoCall.ARG_BPMN_ERROR_CODE))));
+
+    operations
+        .registerCoreOperation(
+            PhaseTwoOperation.CORRELATE_MESSAGE,
+            (
+                call,
+                previouslyAttempted) -> withProcessService(
+                    call,
+                    (
+                        processService,
+                        workflowAggregateId) -> processService
+                            .correlateMessagePhaseTwo(
+                                workflowAggregateId,
+                                call.args().get(PhaseTwoCall.ARG_MESSAGE_NAME),
+                                call.args().get(PhaseTwoCall.ARG_CORRELATION_ID))));
+
+    operations
+        .registerCoreOperation(
+            PhaseTwoOperation.START_WORKFLOW_BY_MESSAGE,
+            (
+                call,
+                previouslyAttempted) -> withProcessService(
+                    call,
+                    (
+                        processService,
+                        workflowAggregateId) -> processService
+                            .startWorkflowByMessagePhaseTwo(
+                                workflowAggregateId,
+                                call.args().get(PhaseTwoCall.ARG_MESSAGE_NAME),
+                                call.adapterId(),
+                                previouslyAttempted)));
+
+  }
+
+  /**
+   * Resolves the process service of the call's workflow module and BPMN process,
+   * converts the serialized aggregate ID and hands both to the given action - the
+   * shared part of every core operation's dispatch.
+   *
+   * @param call The call being dispatched
+   * @param action What to do with the process service and the converted aggregate
+   *        ID
+   * @throws IllegalStateException If no process service is registered for the
+   *         call's workflow module/BPMN process
+   */
+  private void withProcessService(
+      final PhaseTwoCall call,
+      final BiConsumer<MigrationProcessService<?>, Object> action) {
+
     final var processService = registrations
         .get(new RegistrationKey(call.workflowModuleId(), call.bpmnProcessId()));
     if (processService == null) {
@@ -103,42 +290,10 @@ public final class PhaseTwoRouter {
                   call.workflowModuleId()));
     }
 
-    final var workflowAggregateId = processService
-        .convertAggregateId(call.workflowAggregateId());
-
-    switch (call.operation()) {
-      case START_WORKFLOW -> processService
-          .startWorkflowPhaseTwo(workflowAggregateId, call.adapterId(), previouslyAttempted);
-      case COMPLETE_TASK -> processService
-          .completeTaskPhaseTwo(
-              workflowAggregateId,
-              call.args().get(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID));
-      case CANCEL_TASK -> processService
-          .cancelTaskPhaseTwo(
-              workflowAggregateId,
-              call.args().get(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID),
-              call.args().get(io.vanillabp.integration.spi.PhaseTwoCall.ARG_BPMN_ERROR_CODE));
-      case COMPLETE_USER_TASK -> processService
-          .completeUserTaskPhaseTwo(
-              workflowAggregateId,
-              call.args().get(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID));
-      case CANCEL_USER_TASK -> processService
-          .cancelUserTaskPhaseTwo(
-              workflowAggregateId,
-              call.args().get(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID),
-              call.args().get(io.vanillabp.integration.spi.PhaseTwoCall.ARG_BPMN_ERROR_CODE));
-      case CORRELATE_MESSAGE -> processService
-          .correlateMessagePhaseTwo(
-              workflowAggregateId,
-              call.args().get(io.vanillabp.integration.spi.PhaseTwoCall.ARG_MESSAGE_NAME),
-              call.args().get(io.vanillabp.integration.spi.PhaseTwoCall.ARG_CORRELATION_ID));
-      case START_WORKFLOW_BY_MESSAGE -> processService
-          .startWorkflowByMessagePhaseTwo(
-              workflowAggregateId,
-              call.args().get(io.vanillabp.integration.spi.PhaseTwoCall.ARG_MESSAGE_NAME),
-              call.adapterId(),
-              previouslyAttempted);
-    }
+    action
+        .accept(
+            processService,
+            processService.convertAggregateId(call.workflowAggregateId()));
 
   }
 

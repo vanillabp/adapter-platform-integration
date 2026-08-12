@@ -124,7 +124,7 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
       statement.setString(1, UUID.randomUUID().toString());
       statement.setString(2, call.workflowModuleId());
       statement.setString(3, call.bpmnProcessId());
-      statement.setString(4, call.operation().name());
+      statement.setString(4, call.operation());
       statement.setString(5, call.workflowAggregateId());
       statement.setString(6, call.adapterId());
       statement.setString(7, PhaseTwoCall.serializeArgs(call.args()));

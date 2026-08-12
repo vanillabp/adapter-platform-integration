@@ -13,6 +13,12 @@ package io.vanillabp.integration.spi;
  * happens through the core's <code>PhaseTwoRouter</code> which routes the call to the
  * <code>MigrationProcessService</code> of the workflow module/BPMN process.
  * <p>
+ * An EXTENSION uses the same outbox for after-commit work of its own: it registers
+ * an operation in the {@link PhaseTwoOperationRegistry}, builds its calls with
+ * {@link PhaseTwoCall#of(PhaseTwoOperation, String, String, String, String, java.util.Map)}
+ * and schedules them here - the store treats them like any other entry, and the
+ * router dispatches them to the extension's own handler.
+ * <p>
  * Implementations are provided by the platform integrations (e.g. based on JDBC, JPA
  * or MongoDB) or by the business application itself, since the platform-neutral core
  * must not depend on any particular persistence technology.
@@ -102,9 +108,11 @@ public interface PhaseTwoOutbox {
       final String adapterId) {
 
     return schedule(
-        new PhaseTwoCall(
-            PhaseTwoOperation.START_WORKFLOW, workflowModuleId, bpmnProcessId, workflowAggregateId
-                .toString(), adapterId, null));
+        PhaseTwoCall
+            .of(
+                PhaseTwoOperation.START_WORKFLOW, workflowModuleId, bpmnProcessId, workflowAggregateId
+                    .toString(),
+                adapterId, null));
 
   }
 
@@ -129,9 +137,11 @@ public interface PhaseTwoOutbox {
       final String taskId) {
 
     return schedule(
-        new PhaseTwoCall(
-            PhaseTwoOperation.COMPLETE_TASK, workflowModuleId, bpmnProcessId, workflowAggregateId
-                .toString(), null, java.util.Map.of(PhaseTwoCall.ARG_TASK_ID, taskId)));
+        PhaseTwoCall
+            .of(
+                PhaseTwoOperation.COMPLETE_TASK, workflowModuleId, bpmnProcessId, workflowAggregateId
+                    .toString(),
+                null, java.util.Map.of(PhaseTwoCall.ARG_TASK_ID, taskId)));
 
   }
 
@@ -155,9 +165,11 @@ public interface PhaseTwoOutbox {
       final String bpmnErrorCode) {
 
     return schedule(
-        new PhaseTwoCall(
-            PhaseTwoOperation.CANCEL_TASK, workflowModuleId, bpmnProcessId, workflowAggregateId
-                .toString(), null, java.util.Map
+        PhaseTwoCall
+            .of(
+                PhaseTwoOperation.CANCEL_TASK, workflowModuleId, bpmnProcessId, workflowAggregateId
+                    .toString(),
+                null, java.util.Map
                     .of(
                         PhaseTwoCall.ARG_TASK_ID, taskId, PhaseTwoCall.ARG_BPMN_ERROR_CODE,
                         bpmnErrorCode)));
@@ -182,9 +194,11 @@ public interface PhaseTwoOutbox {
       final String taskId) {
 
     return schedule(
-        new PhaseTwoCall(
-            PhaseTwoOperation.COMPLETE_USER_TASK, workflowModuleId, bpmnProcessId, workflowAggregateId
-                .toString(), null, java.util.Map.of(PhaseTwoCall.ARG_TASK_ID, taskId)));
+        PhaseTwoCall
+            .of(
+                PhaseTwoOperation.COMPLETE_USER_TASK, workflowModuleId, bpmnProcessId, workflowAggregateId
+                    .toString(),
+                null, java.util.Map.of(PhaseTwoCall.ARG_TASK_ID, taskId)));
 
   }
 
@@ -208,9 +222,11 @@ public interface PhaseTwoOutbox {
       final String bpmnErrorCode) {
 
     return schedule(
-        new PhaseTwoCall(
-            PhaseTwoOperation.CANCEL_USER_TASK, workflowModuleId, bpmnProcessId, workflowAggregateId
-                .toString(), null, java.util.Map
+        PhaseTwoCall
+            .of(
+                PhaseTwoOperation.CANCEL_USER_TASK, workflowModuleId, bpmnProcessId, workflowAggregateId
+                    .toString(),
+                null, java.util.Map
                     .of(
                         PhaseTwoCall.ARG_TASK_ID, taskId, PhaseTwoCall.ARG_BPMN_ERROR_CODE,
                         bpmnErrorCode)));
@@ -246,9 +262,11 @@ public interface PhaseTwoOutbox {
       args.put(PhaseTwoCall.ARG_CORRELATION_ID, correlationId);
     }
     return schedule(
-        new PhaseTwoCall(
-            PhaseTwoOperation.CORRELATE_MESSAGE, workflowModuleId, bpmnProcessId, workflowAggregateId
-                .toString(), null, args));
+        PhaseTwoCall
+            .of(
+                PhaseTwoOperation.CORRELATE_MESSAGE, workflowModuleId, bpmnProcessId, workflowAggregateId
+                    .toString(),
+                null, args));
 
   }
 
@@ -273,9 +291,12 @@ public interface PhaseTwoOutbox {
       final String adapterId) {
 
     return schedule(
-        new PhaseTwoCall(
-            PhaseTwoOperation.START_WORKFLOW_BY_MESSAGE, workflowModuleId, bpmnProcessId, workflowAggregateId
-                .toString(), adapterId, java.util.Map.of(PhaseTwoCall.ARG_MESSAGE_NAME, messageName)));
+        PhaseTwoCall
+            .of(
+                PhaseTwoOperation.START_WORKFLOW_BY_MESSAGE, workflowModuleId, bpmnProcessId, workflowAggregateId
+                    .toString(),
+                adapterId, java.util.Map
+                    .of(PhaseTwoCall.ARG_MESSAGE_NAME, messageName)));
 
   }
 

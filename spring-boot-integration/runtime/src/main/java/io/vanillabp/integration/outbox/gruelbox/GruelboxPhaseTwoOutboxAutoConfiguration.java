@@ -29,7 +29,6 @@ import com.gruelbox.transactionoutbox.spring.SpringTransactionManager;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 import io.vanillabp.integration.spi.PhaseTwoCall;
-import io.vanillabp.integration.spi.PhaseTwoOperation;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.utils.config.JpaSpringDataUtilConfiguration;
 import jakarta.persistence.EntityManagerFactory;
@@ -60,8 +59,9 @@ import jakarta.persistence.EntityManagerFactory;
  * request ID (<code>vanillabp.outbox.retention</code> maps to gruelbox's retention
  * threshold; expired entries are deleted by the background flush), and blocking after
  * <code>vanillabp.outbox.block-after-attempts</code> failed attempts is gruelbox's
- * native blocklisting. The {@link PhaseTwoCall#args()} map is NOT transported (empty
- * for all operations existing today - see {@link GruelboxPhaseTwoDispatch}).
+ * native blocklisting. The {@link PhaseTwoCall#args()} map travels in its serialized
+ * form because gruelbox's invocation serializer only accepts scalar parameter types
+ * (see {@link GruelboxPhaseTwoDispatch}).
  */
 @AutoConfiguration(
     after = JpaSpringDataUtilConfiguration.class,
@@ -180,11 +180,10 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
         serializedArgs) -> phaseTwoRouter
             .getObject()
             .dispatch(
-                new PhaseTwoCall(
-                    PhaseTwoOperation
-                        .valueOf(
-                            operation), workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, PhaseTwoCall
-                                .deserializeArgs(serializedArgs)),
+                PhaseTwoCall
+                    .forDispatch(
+                        operation, workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, PhaseTwoCall
+                            .deserializeArgs(serializedArgs)),
                 // set by the submitter wrapper on this thread - a retried entry
                 // runs the START re-dispatch mitigation
                 GruelboxRedispatchAwareSubmitter.isPreviouslyAttempted());

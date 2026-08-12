@@ -4,6 +4,47 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Phase-two operations become a registry (2026-08-12)
+
+Story 45 - the closed enum `PhaseTwoOperation` becomes an open registry, so
+extensions can use the outbox for crash-safe after-commit work of their own and new
+core operations no longer edit a shared enum plus a `switch`.
+
+- **`PhaseTwoOperation` is no longer an enum** but a record of a persisted NAME and
+  its idempotency-key derivation. The seven core operations stay constants of that
+  class under UNCHANGED names and UNCHANGED key rules (`START_WORKFLOW`,
+  `COMPLETE_TASK`, `CANCEL_TASK`, `COMPLETE_USER_TASK`, `CANCEL_USER_TASK`,
+  `CORRELATE_MESSAGE`, `START_WORKFLOW_BY_MESSAGE`), pinned by a test now that the
+  compiler no longer guarantees them. Entries written by an earlier build keep
+  dispatching and deduplicating.
+- **`PhaseTwoCall` carries the operation by name** (`String operation()`) and the
+  derived idempotency key as a component. Build calls with
+  `PhaseTwoCall.of(operation, ...)` when scheduling and with
+  `PhaseTwoCall.forDispatch(name, ...)` when a store rebuilds one from a persisted
+  entry - the canonical constructor changed, so custom stores or extensions
+  constructing calls directly have to switch to the factories.
+- **Breaking for custom `PhaseTwoOutbox` stores** in exactly two places: persist
+  `call.operation()` instead of `call.operation().name()`, and stop resolving the
+  persisted name (no more `PhaseTwoOperation.valueOf`) - hand it to the router as a
+  String. Nothing else about the store contract changed; stores still never
+  interpret operations.
+- **Unknown operations are the router's business now.** An entry whose operation is
+  not registered fails with a guiding message naming the operation and listing the
+  registered ones; the entry stays in the store and its retry/blocking behavior is
+  unchanged. This covers the new case of an extension having been removed from the
+  application.
+- **New: extensions register their own operations.** `PhaseTwoOperation`
+  `.extensionOperation(name, key)` enforces a namespace (`my-extension:NOTIFY`), and
+  `PhaseTwoOperationRegistry.register(operation, dispatch)` adds it. The registry is
+  a bean on both platforms (Spring Boot `vanillaBpPhaseTwoOperationRegistry`,
+  Quarkus a `@Singleton` producer). An extension operation is dispatched to its own
+  handler, without the aggregate-to-adapter election of the core operations.
+- **No schema change.** The persisted encoding is still the operation's name; the
+  namespaced names of extensions are longer, but the column widths of the shipped
+  stores already accommodate them (the Quarkus JDBC store's `OPERATION` column is
+  `VARCHAR(255)`, MongoDB is schemaless, gruelbox serializes the name into its
+  invocation). Applications running a SNAPSHOT need no migration.
+
 ## Name-clash avoidance: tenants, prefixes - and a Camunda 8 fix (2026-08-07)
 
 Story 35 - how a workflow module's identifiers are kept apart from those of other

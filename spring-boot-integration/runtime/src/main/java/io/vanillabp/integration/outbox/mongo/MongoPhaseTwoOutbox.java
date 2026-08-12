@@ -75,9 +75,8 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
     final var now = Instant.now();
     final var entry = new PhaseTwoOutboxEntry(
         UUID.randomUUID()
-            .toString(), call.workflowModuleId(), call.bpmnProcessId(), call
-                .operation()
-                .name(), call.workflowAggregateId(), call.adapterId(), call
+            .toString(), call.workflowModuleId(), call.bpmnProcessId(), call.operation(), call
+                .workflowAggregateId(), call.adapterId(), call
                     .args(), idempotencyKey, PhaseTwoOutboxEntry.STATUS_OPEN, now, 0, now, null);
 
     try {
