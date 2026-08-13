@@ -519,10 +519,16 @@ public interface MigratableProcessService<A> {
    * <p>
    * WHICH values are pushed is not decided here: it is the sync model of the
    * aggregate, the same one a task completion uses. WHERE they land is: without a
-   * task ID they belong to the workflow's global scope, with one to the scope of
-   * that task instance - which is what multi-instance needs, where a global write
-   * would be a lost update between sibling instances. A task-scoped write must NOT
-   * additionally touch the global scope.
+   * task ID they belong to the workflow's global scope, with one to the scope the
+   * task RUNS IN - the process, an embedded subprocess, or the one iteration of a
+   * multi-instance embedded subprocess. That is what multi-instance work needs,
+   * where a global write would be a lost update between the iterations.
+   * <p>
+   * The task's OWN scope is not meant, and adapters have to go around it: engines
+   * give a task a scope of its own where the model asks for one (a boundary event,
+   * an instance of a multi-instance activity), and values written there serve that
+   * one activity and vanish with it. A task-scoped write must NOT additionally touch
+   * the global scope either.
    * <p>
    * The default throws: an adapter whose BPMS cannot update a running instance says
    * so instead of pretending the push happened.

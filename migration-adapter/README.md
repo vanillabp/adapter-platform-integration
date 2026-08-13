@@ -457,10 +457,11 @@ Two decisions are worth knowing:
   DISPATCHED, so a redelivered entry writes the then-current state. A key could only ever
   drop a push, never save one.
 - **The task id decides the scope and nothing else.** Without one the values belong to the
-  workflow's global scope, with one to that task instance - and a task-scoped push must NOT
-  additionally write the global scope, or the sibling instances of a multi-instance
-  activity would see what another instance pushed. The adapters enforce that, the core only
-  transports the id (in `ARG_TASK_ID`).
+  workflow's global scope, with one to the scope that task RUNS in (process, embedded
+  subprocess, or one iteration of a multi-instance embedded subprocess) - never the task's
+  own scope, and never additionally the global one, or the other iterations would see what
+  one of them pushed. Which execution or element instance that is, is the adapter's
+  business; the core only transports the id (in `ARG_TASK_ID`).
 
 There is no ordering guarantee between outbox entries: the dispatchers select by due time
 (`NEXT_ATTEMPT_AT <= now`) without an `ORDER BY`, so a push and a task completion scheduled

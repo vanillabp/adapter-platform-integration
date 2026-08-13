@@ -1058,6 +1058,23 @@ public class WorkflowTaskRegistryTest {
   }
 
   @Test
+  @DisplayName("An attribute is reported from the CLASS, without loading an aggregate")
+  public void aggregatePropertyExistence() {
+
+    // what an embedded BPMS asks while resolving an expression: is this name an
+    // attribute of the workflow aggregate, or does it mean something else entirely?
+    assertTrue(registry.workflowAggregateHasProperty(MODULE, PROCESS, "processedBy"));
+    assertTrue(registry.workflowAggregateHasProperty(MODULE, PROCESS, "index"));
+
+    assertFalse(registry.workflowAggregateHasProperty(MODULE, PROCESS, "noSuchProperty"));
+    assertFalse(registry.workflowAggregateHasProperty(MODULE, "NoSuchProcess", "processedBy"));
+
+    // no aggregate has to exist for the answer - the ID never enters the question
+    assertTrue(persistence.aggregates.containsKey("4711"));
+
+  }
+
+  @Test
   @DisplayName("Aggregate attributes resolve via field access - null for unknowns")
   public void aggregatePropertyResolution() {
 

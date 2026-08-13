@@ -640,6 +640,20 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
   }
 
   @Override
+  public boolean workflowAggregateHasProperty(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String propertyName) {
+
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    if ((entry == null) || (entry.processService == null)) {
+      return false;
+    }
+    return AggregatePropertyReader.has(entry.processService.getWorkflowAggregateClass(), propertyName);
+
+  }
+
+  @Override
   public Object resolveWorkflowAggregateProperty(
       final String workflowModuleId,
       final String bpmnProcessId,

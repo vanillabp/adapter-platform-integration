@@ -98,6 +98,25 @@ public interface WorkflowTaskInvoker {
    * @return The attribute's value or <code>null</code> if the BPMN process is
    *         unknown, the aggregate does not exist or it has no such attribute
    */
+  /**
+   * Whether the workflow aggregate of the given BPMN process HAS such an attribute
+   * - answered from the aggregate's class, so no aggregate is loaded. Embedded BPMS
+   * use it while resolving a BPMN expression: a name may mean an attribute of the
+   * workflow aggregate or something of the adapter's own (Camunda 7 resolves the
+   * delegate expression of a task through the same resolver), and only the aggregate
+   * class can tell which name is whose.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param propertyName The attribute's name
+   * @return Whether the aggregate class declares that attribute (getter, boolean
+   *         getter or field); <code>false</code> if the BPMN process is unknown
+   */
+  boolean workflowAggregateHasProperty(
+      String workflowModuleId,
+      String bpmnProcessId,
+      String propertyName);
+
   Object resolveWorkflowAggregateProperty(
       String workflowModuleId,
       String bpmnProcessId,

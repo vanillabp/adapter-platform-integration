@@ -17,6 +17,52 @@ class AggregatePropertyReader {
   private AggregatePropertyReader() {
   }
 
+  /**
+   * Whether the aggregate CLASS declares such an attribute - the same resolution
+   * order as {@link #read}, but without loading an aggregate. Adapters ask this
+   * while resolving a BPMN expression, to tell an attribute of the workflow
+   * aggregate from a name meaning something else.
+   *
+   * @param aggregateClass The workflow aggregate's class
+   * @param propertyName The attribute's name
+   * @return Whether the class has such a getter, boolean getter or field
+   */
+  static boolean has(
+      final Class<?> aggregateClass,
+      final String propertyName) {
+
+    if ((aggregateClass == null) || (propertyName == null) || propertyName.isEmpty()) {
+      return false;
+    }
+    final var capitalized = Character.toUpperCase(propertyName.charAt(0)) + propertyName.substring(1);
+
+    try {
+      aggregateClass.getMethod("get"
+          + capitalized);
+      return true;
+    } catch (final NoSuchMethodException e) {
+      // fall through to the boolean getter
+    }
+    try {
+      aggregateClass.getMethod("is"
+          + capitalized);
+      return true;
+    } catch (final NoSuchMethodException e) {
+      // fall through to field access
+    }
+    var currentClass = aggregateClass;
+    while ((currentClass != null) && (currentClass != Object.class)) {
+      try {
+        currentClass.getDeclaredField(propertyName);
+        return true;
+      } catch (final NoSuchFieldException e) {
+        currentClass = currentClass.getSuperclass();
+      }
+    }
+    return false;
+
+  }
+
   static Object read(
       final Object workflowAggregate,
       final String propertyName) {

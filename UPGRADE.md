@@ -11,10 +11,13 @@ nothing existing changes behavior.
 
 - **New in `spi-for-java` 1.2.0:** `aggregateChanged(aggregate)` writes the values
   shared with the BPMS at the workflow's global scope, `aggregateChanged(aggregate,
-  taskId)` writes them in the scope of that task instance - which is what
-  multi-instance needs. The task-scoped overload does NOT additionally write the
-  global scope: a local value shadows the global one there anyway, and writing both
-  would change what the sibling instances see.
+  taskId)` writes them in the scope that task RUNS in - the process, an embedded
+  subprocess, or the one iteration of a multi-instance embedded subprocess. NOT the
+  task's own scope: engines create one where the model asks for it (a boundary event,
+  an instance of a multi-instance activity), values written there serve that activity
+  alone and vanish with it. The task-scoped overload does not additionally write the
+  global scope either: an inner value shadows the global one there anyway, and writing
+  both would change what the other iterations see.
 - **What travels is the sync model of story 28** (`@SyncWithBPMS`), the same values a
   task completion pushes. The method names no variables.
 - **New adapter SPI methods** `MigratableProcessService#aggregateChangedPhaseOne` /
@@ -26,18 +29,30 @@ nothing existing changes behavior.
   could only drop a push, never save one. The adapter is elected at dispatch time by
   probing, like message correlation.
 - **Camunda 7** writes inside the caller's transaction: `setVariables` at the process
-  instance, `setVariablesLocal` at the parked execution of a task. This is what makes
-  **conditional events** usable at all there - the engine looks at their conditions
-  when a variable of their scope changes. Where an application shares nothing (this
+  instance, `setVariablesLocal` at the execution of the scope a task runs in (found by
+  walking the execution tree, skipping an activity's own scope and the multi-instance
+  body). This is what makes **conditional events** usable at all there - the engine
+  looks at their conditions when a variable of their scope or of a parent scope
+  changes, so an event subprocess with a conditional start event reacts. Where an application shares nothing (this
   adapter's opt-in default), a technical variable `vanillabpAggregateChanged` is
   written so the change happens.
 - **Camunda 8** sends `SetVariables` after the commit, for the process instance
-  respectively the element instance of the task. It **needs secondary storage**: the
+  respectively the element instance of the scope the task runs in (the API reports
+  children of a scope but no parents, so the adapter walks down from the process
+  instance to find it). It **needs secondary storage**: the
   cluster has no business key, so only the query API translates an aggregate ID into
   the keys the command takes. Without it the adapter fails with a guiding message.
   Conditional events do not exist in Camunda 8 - that stays true.
 - **Process-Engine-API:** not supported (gap 18). The API modifies the payload of a
   TASK, never that of a running instance, so both phases throw with a guiding message.
+- **Also fixed:** the Camunda 7 EL resolver returned the task's activity behavior for
+  ANY name evaluated while an execution sat at a wired task - including the condition of
+  a conditional event reading the workflow aggregate, which failed with "condition
+  expression returns non-Boolean". A name which IS a task definition still means the
+  task; otherwise an attribute of the workflow aggregate wins. The new adapter-SPI
+  method `WorkflowTaskInvoker#workflowAggregateHasProperty` answers that from the
+  aggregate CLASS, without loading an aggregate. Adapters implementing the SPI have to
+  implement it.
 - **Fixed on the way:** the Camunda 8 adapter searched process instances by the
   aggregate-ID variable WITHOUT quoting the value. Variable values are stored as JSON,
   so a String value never matched and every probe of a cluster WITH secondary storage
