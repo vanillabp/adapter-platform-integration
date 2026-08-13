@@ -4,6 +4,28 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Camunda 8: workflows were never found on clusters with secondary storage (2026-08-13)
+
+Story 52 - a defect fix. Nothing to change in your code or configuration.
+
+The adapter searched process instances by the aggregate-ID variable and passed the ID as
+a plain string. Camunda 8 compares a variable against its stored JSON, so a String value
+has to carry its quotes: the filter matched nothing, `awarenessOfWorkflow` answered
+`UNKNOWN_TO_BPMS` for every workflow, and everything electing its BPMS by probing failed
+with a guiding `WorkflowNotFoundException` - `completeTask`, `cancelTask`, the user-task
+operations, `correlateMessage`, `aggregateChanged`, the viewer and the START re-dispatch
+mitigation. On a cluster without secondary storage none of this showed, because the search
+throws there and the adapter answers optimistically `ACTIVE`.
+
+Which is also why it survived: the adapter's Docker tests all ran on such a cluster, so
+what they exercised was the fallback and never the query. `Camunda8SecondaryStorageIT`
+brings its own Elasticsearch now and correlates a message with a workflow located by
+probing; it fails with the old filter, carrying the exception the field reported.
+
+The encoding lives in one place (`Camunda8VariableFilters`), used by the process service
+and the viewer. It quotes unconditionally because VanillaBP writes the ID as a string
+whatever type the aggregate's ID attribute has - a unit test pins the two halves together.
+
 ## Telling the BPMS that the aggregate changed (2026-08-13)
 
 Story 44 - `ProcessService.aggregateChanged` exists now, in two overloads. Additive;
