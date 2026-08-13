@@ -186,6 +186,9 @@ public class WorkflowEndedHandlers {
       final WorkflowEndedContext context,
       final TransactionRunner transactionRunner) {
 
+    // the notification proves which BPMS held this workflow
+    processService.rememberWorkflowAdapter(context.getWorkflowAggregateId(), context.getAdapterId());
+
     final var registered = handlers
         .get(
             new RegistryKey(processService.getWorkflowModuleId(), processService.getBpmnProcessId()));

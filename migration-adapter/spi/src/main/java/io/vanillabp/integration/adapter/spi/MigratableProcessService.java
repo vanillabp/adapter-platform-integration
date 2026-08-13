@@ -54,11 +54,20 @@ public interface MigratableProcessService<A> {
    * adapter of the prioritized list. For workflows {@link WorkflowAwareness#ACTIVE}
    * means &quot;the workflow is active&quot; and {@link WorkflowAwareness#COMPLETED}
    * means &quot;the workflow has ended&quot;.
+   * <p>
+   * The aggregate persistence is passed because an adapter of a BPMS without a
+   * business key finds the workflow by the process variable carrying the
+   * aggregate's ID, and that variable is named after the aggregate's ID attribute
+   * ({@link AggregatePersistenceAware#getAggregateIdName()}). The name therefore
+   * has to be known at PROBE time: the election runs before any other SPI method
+   * of an operation, so an adapter must never derive it from a previous call.
    *
+   * @param aggregatePersistence The workflow aggregate's persistence support
    * @param workflowAggregateId The ID of the workflow aggregate
    * @return The BPMS' awareness of the workflow
    */
   WorkflowAwareness awarenessOfWorkflow(
+      AggregatePersistenceAware<A> aggregatePersistence,
       Object workflowAggregateId);
 
   /**
@@ -68,29 +77,52 @@ public interface MigratableProcessService<A> {
    * workflow is already known, the start already succeeded and the entry is
    * consumed without starting a second instance).
    * <p>
-   * <b>Contract - stricter than {@link #awarenessOfWorkflow(Object)}:</b> the
+   * <b>Contract - stricter than
+   * {@link #awarenessOfWorkflow(AggregatePersistenceAware, Object)}:</b> the
    * answer must NEVER be optimistic. Answering {@link WorkflowAwareness#ACTIVE}
    * or {@link WorkflowAwareness#COMPLETED} SKIPS the start - a wrong
    * &quot;known&quot; therefore LOSES a workflow, whereas a wrong
    * &quot;unknown&quot; merely produces the duplicate the at-least-once residual
    * permits anyway. An adapter that cannot query the BPMS reliably (e.g. Camunda 8
-   * without secondary storage, where {@link #awarenessOfWorkflow(Object)}
-   * deliberately answers an optimistic ACTIVE for the election) must override
-   * this method and return {@link WorkflowAwareness#UNKNOWN_TO_BPMS} - the start
-   * proceeds and the adapter's idempotency contract of
-   * {@link #startWorkflowPhaseTwo} applies.
+   * without secondary storage, where
+   * {@link #awarenessOfWorkflow(AggregatePersistenceAware, Object)} deliberately
+   * answers an optimistic ACTIVE for the election) must override this method and
+   * return {@link WorkflowAwareness#UNKNOWN_TO_BPMS} - the start proceeds and the
+   * adapter's idempotency contract of {@link #startWorkflowPhaseTwo} applies.
    * <p>
-   * The default delegates to {@link #awarenessOfWorkflow(Object)} - correct for
+   * The default delegates to
+   * {@link #awarenessOfWorkflow(AggregatePersistenceAware, Object)} - correct for
    * adapters whose workflow awareness is an honest engine query.
    *
+   * @param aggregatePersistence The workflow aggregate's persistence support
    * @param workflowAggregateId The ID of the workflow aggregate
    * @return The BPMS' awareness of the workflow - unsure means
    *         {@link WorkflowAwareness#UNKNOWN_TO_BPMS}
    */
   default WorkflowAwareness awarenessOfWorkflowForRedispatch(
+      final AggregatePersistenceAware<A> aggregatePersistence,
       final Object workflowAggregateId) {
 
-    return awarenessOfWorkflow(workflowAggregateId);
+    return awarenessOfWorkflow(aggregatePersistence, workflowAggregateId);
+
+  }
+
+  /**
+   * How long this BPMS may need until a workflow it holds becomes findable by
+   * {@link #awarenessOfWorkflow(AggregatePersistenceAware, Object)}, and how often
+   * to ask meanwhile.
+   * <p>
+   * The default is {@link WorkflowVisibilityDelay#none()}: a BPMS answering from the
+   * transaction which created the instance never needs a second look. An adapter
+   * whose probe reads an eventually consistent model reports a window, and the core
+   * waits it out where it has a reason to believe this adapter holds the workflow -
+   * never for a workflow nobody ever heard of.
+   *
+   * @return The delay - never <code>null</code>
+   */
+  default WorkflowVisibilityDelay workflowVisibilityDelay() {
+
+    return WorkflowVisibilityDelay.none();
 
   }
 
@@ -608,7 +640,7 @@ public interface MigratableProcessService<A> {
 
   /**
    * The viewer/history API - read-only, no phases: the adapter holding the
-   * workflow (elected by probing {@link #awarenessOfWorkflow(Object)}) answers.
+   * workflow (elected by probing {@link #awarenessOfWorkflow(AggregatePersistenceAware, Object)}) answers.
    * <p>
    * Returns the process definitions used by the workflow of the given aggregate:
    * the definition the workflow itself runs on (its {@code usedByElements} is

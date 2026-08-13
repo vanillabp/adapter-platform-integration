@@ -270,7 +270,12 @@ public class BpmsInitiatedStarts {
             .findFirst()
             .orElse(null);
 
-    return BpmsInitiatedStartExecution.run(processService, handler, context, transactionRunner);
+    final var result = BpmsInitiatedStartExecution.run(processService, handler, context, transactionRunner);
+    // the BPMS just built this workflow through us - it holds it
+    if (result != null) {
+      processService.rememberWorkflowAdapter(result.workflowAggregateId(), context.getAdapterId());
+    }
+    return result;
 
   }
 

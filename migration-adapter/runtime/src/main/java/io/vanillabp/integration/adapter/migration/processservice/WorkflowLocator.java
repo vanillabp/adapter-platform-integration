@@ -20,12 +20,21 @@ import lombok.extern.slf4j.Slf4j;
  * <p>
  * An optional {@link WorkflowAdapterCache} short-cuts the walk: a successful
  * election puts the (workflow module, BPMN process, aggregate ID) &rarr; adapter
- * ID association; the next election for the same workflow probes the cached
- * adapter first. Cache entries are HINTS, not truth - a hit whose adapter answers
- * {@link WorkflowAwareness#UNKNOWN_TO_BPMS} falls through to the full walk and
- * repairs the entry. {@link WorkflowAwareness#BPMS_UNAVAILABLE} on a cached
- * adapter follows the retry-never-fallback contract below (it never falls
- * through - the unavailable BPMS most probably holds the workflow).
+ * ID association, and so do the moments VanillaBP knows the answer for certain
+ * ({@link #remember(Object, String)}: phase two of a start, and every inbound
+ * delivery). The next election for the same workflow probes the cached adapter
+ * first. Cache entries are HINTS, not truth - a hit whose adapter answers
+ * {@link WorkflowAwareness#UNKNOWN_TO_BPMS} for longer than that adapter's
+ * {@code workflowVisibilityDelay} falls through to the full walk and repairs the
+ * entry. {@link WorkflowAwareness#BPMS_UNAVAILABLE} on a cached adapter follows
+ * the retry-never-fallback contract below (it never falls through - the
+ * unavailable BPMS most probably holds the workflow).
+ * <p>
+ * A hint is also what turns the meaning of an unknown answer around: an adapter
+ * which SHOULD hold the workflow and does not report it is a reason to look again
+ * (an eventually consistent BPMS needs a moment after the start), while the same
+ * answer without any hint is a workflow nobody ever heard of, which fails
+ * immediately.
  * <p>
  * Walk contract (see {@code MigratableProcessService}):
  * <ul>
@@ -75,6 +84,31 @@ public final class WorkflowLocator {
     this.workflowModuleId = workflowModuleId;
     this.bpmnProcessId = bpmnProcessId;
     this.cache = cache;
+
+  }
+
+  /**
+   * Records that the given adapter holds the workflow of the given aggregate,
+   * called where VanillaBP knows it without probing anybody: after phase two of a
+   * start (the adapter which created the instance is recorded with the outbox
+   * entry) and on every inbound delivery (a job for that workflow arrived from
+   * that BPMS). Both are exactly the moments shortly before an application
+   * operates on the workflow, which is what makes the hint worth having.
+   * <p>
+   * Without a cache the call does nothing.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate (any type - its
+   *        serialized form is the key)
+   * @param adapterId The ID of the adapter holding the workflow
+   */
+  public void remember(
+      final Object workflowAggregateId,
+      final String adapterId) {
+
+    if ((cache == null) || (workflowAggregateId == null) || (adapterId == null)) {
+      return;
+    }
+    cache.put(workflowModuleId, bpmnProcessId, workflowAggregateId.toString(), adapterId);
 
   }
 
@@ -168,7 +202,7 @@ public final class WorkflowLocator {
       return null;
     }
 
-    final var awareness = probeWithRetry(cachedAdapter, probe, subject);
+    final var awareness = probeWithVisibilityDelay(cachedAdapter, probe, subject);
     switch (awareness) {
       case ACTIVE -> {
         return new Location<>(awareness, cachedAdapter);
@@ -235,6 +269,65 @@ public final class WorkflowLocator {
             aborted after %d retries. Retry the business operation once the BPMS is reachable \
             again."""
             .formatted(adapter.getAdapterId(), subject, UNAVAILABLE_RETRIES));
+
+  }
+
+  /**
+   * Probes an adapter VanillaBP has a reason to believe holds the workflow (a cache
+   * hint): an {@link WorkflowAwareness#UNKNOWN_TO_BPMS} answer is asked again until
+   * the adapter's {@code workflowVisibilityDelay} window is used up.
+   * <p>
+   * That window is what an eventually consistent BPMS needs before a workflow it
+   * just created shows up in the read model its probe searches - the ordinary
+   * "start a workflow, then correlate the message which lets it continue" runs into
+   * it. Waiting only happens HERE, on a hinted adapter: an unknown workflow without
+   * a hint stays a fast failure, which is what a wrong ID has to be.
+   */
+  private static <A> WorkflowAwareness probeWithVisibilityDelay(
+      final MigratableProcessService<A> adapter,
+      final Function<MigratableProcessService<A>, WorkflowAwareness> probe,
+      final String subject) {
+
+    var awareness = probeWithRetry(adapter, probe, subject);
+    if (awareness != WorkflowAwareness.UNKNOWN_TO_BPMS) {
+      return awareness;
+    }
+
+    final var delay = adapter.workflowVisibilityDelay();
+    if ((delay == null) || !delay.isWaiting()) {
+      return awareness;
+    }
+
+    final var deadline = System.nanoTime() + delay.window().toNanos();
+    final var intervalMillis = Math.max(1L, delay.interval().toMillis());
+    log.debug(
+        "Adapter '{}' should hold {} but does not report it (yet) - asking again for up to {}",
+        adapter.getAdapterId(),
+        subject,
+        delay.window());
+    while (System.nanoTime() < deadline) {
+      try {
+        Thread.sleep(intervalMillis);
+      } catch (final InterruptedException e) {
+        Thread.currentThread().interrupt();
+        return awareness;
+      }
+      awareness = probeWithRetry(adapter, probe, subject);
+      if (awareness != WorkflowAwareness.UNKNOWN_TO_BPMS) {
+        log.debug(
+            "Adapter '{}' reports {} as {} after waiting for its BPMS to catch up",
+            adapter.getAdapterId(),
+            subject,
+            awareness);
+        return awareness;
+      }
+    }
+    log.debug(
+        "Adapter '{}' still does not know {} after {} - treating the hint as stale",
+        adapter.getAdapterId(),
+        subject,
+        delay.window());
+    return awareness;
 
   }
 

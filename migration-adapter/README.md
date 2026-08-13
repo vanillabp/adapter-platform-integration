@@ -56,7 +56,7 @@ value wins (see `MigrationAdapterProperties`).
 
 Asking a BPMS whether it knows a workflow or task has four possible answers
 (`MigratableProcessService.awarenessOfTask(workflowAggregateId, taskId)` /
-`awarenessOfWorkflow(workflowAggregateId)`):
+`awarenessOfWorkflow(aggregatePersistence, workflowAggregateId)`):
 
 |       Value        |                            Meaning                            |        Migration adapter's reaction         |
 |--------------------|---------------------------------------------------------------|---------------------------------------------|
@@ -92,9 +92,77 @@ expiring in-memory default (`InMemoryWorkflowAdapterCache`, 10&nbsp;000 entries 
 replaces it — cluster setups plug their own shared cache infrastructure this way
 (VanillaBP deliberately ships no distributed implementation).
 
+The workflow probe takes the aggregate's persistence because a BPMS without a business
+key finds the workflow by the process variable carrying the aggregate's ID, and that
+variable is named after the aggregate's ID attribute
+(`AggregatePersistenceAware.getAggregateIdName()`). The election runs BEFORE every other
+SPI method of an operation, so an adapter must never derive the name from a previous
+call - Camunda 8 did exactly that until story 54 and searched under a placeholder name,
+which found nothing on a cluster with secondary storage and reported every workflow as
+unknown.
+
 To migrate, one puts the new BPMS first in the priority list and keeps the old one in
 the list: new instances start in the new BPMS while existing instances complete in the
 old one.
+
+### Waiting for a workflow to become visible (story 54)
+
+An election which asks a BPMS answering from an eventually consistent read model
+(Camunda 8 searches its query API, fed by an exporter) gets an honest "unknown" for a
+workflow started moments ago. Turning that into `WorkflowNotFoundException` names causes
+which are all wrong, and it hits the most ordinary sequence there is: start a workflow,
+then correlate the message which lets it continue.
+
+Three pieces solve it, and the split matters:
+
+1. **The adapter contributes the window, the core does the waiting.**
+   `MigratableProcessService.workflowVisibilityDelay()` (a `default` returning
+   `WorkflowVisibilityDelay.none()`, so no adapter breaks) answers how long an
+   `UNKNOWN_TO_BPMS` may still turn into `ACTIVE` and how often to ask. Camunda 7 answers
+   from the very transaction which created the instance and reports none; Camunda 8
+   reports `vanillabp.adapters.<id>.workflow-visibility-timeout` (default 10 seconds,
+   zero switches it off). Eventual consistency is the core's business, the timing is the
+   adapter's.
+2. **The waiting is bounded by a hint, never blanket.** `WorkflowLocator` waits only
+   while probing an adapter the `WorkflowAdapterCache` names for that workflow. A
+   workflow nobody ever heard of has no hint and fails as fast as before - which a wrong
+   ID has to, since waiting the full window on every typo would turn a programming error
+   into a timeout.
+3. **The cache is filled where VanillaBP knows the answer without asking**
+   (`MigrationProcessService.rememberWorkflowAdapter`): when a start is SCHEDULED (the
+   elected adapter is decided then), again after its phase two, and on every inbound
+   delivery - a task, a user task, a `@WorkflowEnded` notification, a BPMS-initiated
+   start. For the latter the inbound contexts carry the adapter's id
+   (`TaskInvocationContext.getAdapterId()` and its siblings, `default null`, implemented
+   by all three adapters). A delivery PROVES which BPMS holds the workflow.
+
+   Recording at SCHEDULING time is what makes the sequence work at all: on a remote BPMS
+   the instance is created after the commit, so a correlation in the very next
+   transaction runs its election before phase two ever ran. Without the early hint it
+   would find nothing to wait for. The price is the usual one of a hint: a rolled-back
+   start leaves an entry behind, and the next operation on that aggregate ID waits out
+   the window before failing.
+
+**What was deliberately NOT built: an outbox query.** A `START_WORKFLOW` entry still
+`OPEN` would prove "too early rather than unknown", and one `DONE` a moment ago would
+prove "exactly the window we are waiting for". It was left out:
+
+- the outbox can only ever contribute the POSITIVE half. A workflow does not have to have
+  been started by this VanillaBP: a version-1 application which migrated, a start by
+  another system, a BPMS-initiated start (which writes no entry at all) and a cleaned-up
+  `DONE` entry all leave the outbox silent while the workflow runs perfectly well;
+- it would need a new query method in EVERY store implementation (gruelbox, the Spring
+  and Quarkus JDBC stores, MongoDB, and any store an application wrote itself) - the SPI
+  `PhaseTwoOutbox` has exactly one method today, `schedule`;
+- what it would buy over the cache is one case: the start ran on ANOTHER node of a
+  cluster, whose in-memory cache the correlating node does not share. That case is the
+  one the `WorkflowAdapterCache` bean exists for - an application running clustered
+  plugs its shared cache in, which is cheaper than teaching every outbox store a query.
+
+The residual is therefore honest and documented: on a cluster WITHOUT a shared cache, an
+operation reaching a node which neither started the workflow nor received a delivery for
+it can still fail while the BPMS catches up. Retrying the business operation works, and
+so does a shared cache.
 
 ### Deployment pipeline
 

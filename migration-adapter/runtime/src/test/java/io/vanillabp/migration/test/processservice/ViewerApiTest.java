@@ -84,8 +84,8 @@ public class ViewerApiTest {
     final var processService = createProcessService();
     when(aggregatePersistence.getAggregateId(aggregate)).thenReturn("42");
     // the first adapter does not know the workflow, the second one runs it
-    when(firstAdapter.awarenessOfWorkflow("42")).thenReturn(WorkflowAwareness.UNKNOWN_TO_BPMS);
-    when(secondAdapter.awarenessOfWorkflow("42")).thenReturn(WorkflowAwareness.ACTIVE);
+    when(firstAdapter.awarenessOfWorkflow(aggregatePersistence, "42")).thenReturn(WorkflowAwareness.UNKNOWN_TO_BPMS);
+    when(secondAdapter.awarenessOfWorkflow(aggregatePersistence, "42")).thenReturn(WorkflowAwareness.ACTIVE);
     when(secondAdapter.getProcessDefinitions(
         eq("test-module"), eq("TestProcess"), any(), eq("42"), eq(null)))
         .thenReturn(
@@ -110,7 +110,7 @@ public class ViewerApiTest {
 
     final var processService = createProcessService();
     when(aggregatePersistence.getAggregateId(aggregate)).thenReturn("42");
-    when(firstAdapter.awarenessOfWorkflow("42")).thenReturn(WorkflowAwareness.COMPLETED);
+    when(firstAdapter.awarenessOfWorkflow(aggregatePersistence, "42")).thenReturn(WorkflowAwareness.COMPLETED);
     when(firstAdapter.getWorkflowHistory(
         eq("test-module"), eq("TestProcess"), any(), eq("42"), eq(null)))
         .thenReturn(
@@ -129,8 +129,8 @@ public class ViewerApiTest {
 
     final var processService = createProcessService();
     when(aggregatePersistence.getAggregateId(aggregate)).thenReturn("42");
-    when(firstAdapter.awarenessOfWorkflow("42")).thenReturn(WorkflowAwareness.UNKNOWN_TO_BPMS);
-    when(secondAdapter.awarenessOfWorkflow("42")).thenReturn(WorkflowAwareness.UNKNOWN_TO_BPMS);
+    when(firstAdapter.awarenessOfWorkflow(aggregatePersistence, "42")).thenReturn(WorkflowAwareness.UNKNOWN_TO_BPMS);
+    when(secondAdapter.awarenessOfWorkflow(aggregatePersistence, "42")).thenReturn(WorkflowAwareness.UNKNOWN_TO_BPMS);
 
     final var exception = assertThrowsExactly(
         WorkflowNotFoundException.class,
@@ -149,7 +149,7 @@ public class ViewerApiTest {
 
     final var processService = createProcessService();
     when(aggregatePersistence.getAggregateId(aggregate)).thenReturn("42");
-    when(firstAdapter.awarenessOfWorkflow("42")).thenReturn(WorkflowAwareness.ACTIVE);
+    when(firstAdapter.awarenessOfWorkflow(aggregatePersistence, "42")).thenReturn(WorkflowAwareness.ACTIVE);
     when(firstAdapter.getWorkflowHistory(
         eq("test-module"), eq("TestProcess"), any(), eq("42"), eq("some-context")))
         .thenReturn(null);

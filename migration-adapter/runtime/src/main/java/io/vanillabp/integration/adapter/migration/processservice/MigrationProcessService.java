@@ -332,6 +332,10 @@ public class MigrationProcessService<A> {
       final TransactionRunner transactionRunner,
       final List<String> rollbackRuleRemedies) {
 
+    // a delivery proves which BPMS holds this workflow - recorded before anything
+    // else, so it also holds for a delivery the handler does not subscribe to
+    rememberWorkflowAdapter(context.getWorkflowAggregateId(), context.getAdapterId());
+
     // lifecycle-event filter: a delivery of an event the method does not
     // subscribe to (e.g. CANCELED to a method without a @TaskEvent parameter) is
     // skipped entirely - no transaction, no aggregate access, no side effects
@@ -381,6 +385,36 @@ public class MigrationProcessService<A> {
     return context.runInCurrentTransaction()
         ? transactionRunner.inCurrent(transactionalWork)
         : transactionRunner.requireNew(transactionalWork);
+
+  }
+
+  /**
+   * Records which adapter holds the workflow of the given aggregate, for the
+   * moments VanillaBP knows it without asking anybody: scheduling a start (the
+   * elected adapter is decided then), phase two of that start, and every inbound
+   * delivery (a task, a user task, the end of a workflow, a start the BPMS
+   * performed).
+   * <p>
+   * Recording at SCHEDULING time is what makes an operation following the start
+   * right away work at all: on a remote BPMS the instance is created after the
+   * commit, so an operation in the next transaction would otherwise find no hint
+   * and fail instead of waiting. The entry is a hint like every other one - a
+   * rolled-back start leaves one behind, at the price of one waited-out window the
+   * next time somebody asks for that aggregate ID.
+   * <p>
+   * The next operation on that workflow probes the recorded adapter first, and an
+   * adapter whose BPMS is eventually consistent gets a second look there instead of
+   * an immediate failure. Nothing is recorded where the caller knows no adapter id
+   * (an adapter written before the inbound contexts carried it).
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param adapterId The ID of the adapter holding the workflow or <code>null</code>
+   */
+  public void rememberWorkflowAdapter(
+      final Object workflowAggregateId,
+      final String adapterId) {
+
+    workflowLocator.remember(workflowAggregateId, adapterId);
 
   }
 
@@ -518,6 +552,12 @@ public class MigrationProcessService<A> {
           adapter.getAdapterId());
     }
 
+    // the workflow belongs to this adapter from now on, which the next operation on
+    // it has to know BEFORE phase two ran: on a remote BPMS the start is dispatched
+    // asynchronously, so an operation following right away would otherwise find no
+    // hint at all and fail instead of waiting for the BPMS to catch up
+    rememberWorkflowAdapter(aggregateId, adapter.getAdapterId());
+
     return attachedAggregate;
 
   }
@@ -583,6 +623,10 @@ public class MigrationProcessService<A> {
       return;
     }
     adapter.startWorkflowPhaseTwo(workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId);
+    // the workflow exists now, and this adapter created it: the next operation on it
+    // (the classic one is correlating the message which lets it continue) probes this
+    // adapter first and waits out its BPMS' visibility delay instead of failing
+    rememberWorkflowAdapter(workflowAggregateId, adapterId);
 
   }
 
@@ -600,7 +644,7 @@ public class MigrationProcessService<A> {
       final Object workflowAggregateId,
       final String operationDescription) {
 
-    final var awareness = adapter.awarenessOfWorkflowForRedispatch(workflowAggregateId);
+    final var awareness = adapter.awarenessOfWorkflowForRedispatch(aggregatePersistenceSupport, workflowAggregateId);
     switch (awareness) {
       case ACTIVE, COMPLETED -> {
         log.info(
@@ -865,7 +909,7 @@ public class MigrationProcessService<A> {
 
     final var location = workflowLocator.locate(
         adapterProcessServices,
-        adapter -> adapter.awarenessOfWorkflow(aggregateId),
+        adapter -> adapter.awarenessOfWorkflow(aggregatePersistenceSupport, aggregateId),
         aggregateId,
         subject);
 
@@ -882,10 +926,9 @@ public class MigrationProcessService<A> {
       }
       case UNKNOWN_TO_BPMS -> throw new io.vanillabp.spi.process.WorkflowNotFoundException(
           ("No configured BPMS knows the %s - message '%s' cannot be correlated (probed adapters, "
-              + "in prioritized order: %s)! Likely causes: the workflow was never started, was "
-              + "started through another system, or already ended long ago. To START a workflow "
-              + "by a message use startWorkflowByMessage instead.")
-              .formatted(subject, messageName, prioritizedAdapters));
+              + "in prioritized order: %s)! Likely causes: %s To START a workflow by a message "
+              + "use startWorkflowByMessage instead.")
+              .formatted(subject, messageName, prioritizedAdapters, likelyCausesOfUnknownWorkflow()));
       default -> {
         // ACTIVE - fall through
       }
@@ -939,7 +982,7 @@ public class MigrationProcessService<A> {
 
     final var location = workflowLocator.locate(
         adapterProcessServices,
-        adapter -> adapter.awarenessOfWorkflow(aggregateId),
+        adapter -> adapter.awarenessOfWorkflow(aggregatePersistenceSupport, aggregateId),
         aggregateId,
         subject);
 
@@ -957,9 +1000,8 @@ public class MigrationProcessService<A> {
       case UNKNOWN_TO_BPMS -> throw new io.vanillabp.spi.process.WorkflowNotFoundException(
           ("No configured BPMS knows the %s - the changed aggregate cannot be pushed (probed "
               + "adapters, in prioritized order: %s)! The aggregate itself was saved. Likely "
-              + "causes: the workflow was never started, was started through another system, or "
-              + "already ended long ago.")
-              .formatted(subject, prioritizedAdapters));
+              + "causes: %s")
+              .formatted(subject, prioritizedAdapters, likelyCausesOfUnknownWorkflow()));
       default -> {
         // ACTIVE - fall through
       }
@@ -1000,7 +1042,7 @@ public class MigrationProcessService<A> {
 
     final var location = workflowLocator.locate(
         adapterProcessServices,
-        adapter -> adapter.awarenessOfWorkflow(workflowAggregateId),
+        adapter -> adapter.awarenessOfWorkflow(aggregatePersistenceSupport, workflowAggregateId),
         workflowAggregateId,
         subject);
 
@@ -1126,7 +1168,7 @@ public class MigrationProcessService<A> {
 
     final var location = workflowLocator.locate(
         adapterProcessServices,
-        adapter -> adapter.awarenessOfWorkflow(workflowAggregateId),
+        adapter -> adapter.awarenessOfWorkflow(aggregatePersistenceSupport, workflowAggregateId),
         workflowAggregateId,
         subject);
 
@@ -1186,6 +1228,8 @@ public class MigrationProcessService<A> {
           workflowModuleId, bpmnProcessId, aggregateId, messageName, adapter.getAdapterId());
     }
 
+    rememberWorkflowAdapter(aggregateId, adapter.getAdapterId());
+
     return attachedAggregate;
 
   }
@@ -1241,6 +1285,7 @@ public class MigrationProcessService<A> {
     }
     adapter.startWorkflowByMessagePhaseTwo(
         workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, messageName);
+    rememberWorkflowAdapter(workflowAggregateId, adapterId);
 
   }
 
@@ -1393,7 +1438,7 @@ public class MigrationProcessService<A> {
 
     final var location = workflowLocator.locate(
         adapterProcessServices,
-        adapter -> adapter.awarenessOfWorkflow(aggregateId),
+        adapter -> adapter.awarenessOfWorkflow(aggregatePersistenceSupport, aggregateId),
         aggregateId,
         subject);
 
@@ -1406,6 +1451,33 @@ public class MigrationProcessService<A> {
               .formatted(subject, subjectOfRead, prioritizedAdapters));
     }
     return location;
+
+  }
+
+
+  /**
+   * The tail of a "no BPMS knows this workflow" message: the causes which really
+   * apply. A remote BPMS answering from an eventually consistent read model gets one
+   * more, because "not visible yet" is a state a workflow can be in without anything
+   * being wrong - VanillaBP already waited out the window that BPMS asked for (see
+   * {@code WorkflowVisibilityDelay}) where it had a reason to expect the workflow
+   * there.
+   *
+   * @return The cause list, ending in a full stop
+   */
+  private String likelyCausesOfUnknownWorkflow() {
+
+    final var eventuallyConsistent = adapterProcessServices
+        .stream()
+        .anyMatch(adapter -> {
+          final var delay = adapter.workflowVisibilityDelay();
+          return (delay != null) && delay.isWaiting();
+        });
+    return eventuallyConsistent
+        ? "the workflow was never started, was started through another system, already ended long "
+            + "ago, or was started so recently that the BPMS has not made it searchable yet."
+        : "the workflow was never started, was started through another system, or already ended "
+            + "long ago.";
 
   }
 

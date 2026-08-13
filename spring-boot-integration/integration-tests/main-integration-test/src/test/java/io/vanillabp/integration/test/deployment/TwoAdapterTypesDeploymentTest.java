@@ -171,6 +171,7 @@ public class TwoAdapterTypesDeploymentTest {
 
     @Override
     public WorkflowAwareness awarenessOfWorkflow(
+        final io.vanillabp.integration.spi.AggregatePersistenceAware<Object> aggregatePersistence,
         final Object workflowAggregateId) {
       return WorkflowAwareness.UNKNOWN_TO_BPMS;
     }

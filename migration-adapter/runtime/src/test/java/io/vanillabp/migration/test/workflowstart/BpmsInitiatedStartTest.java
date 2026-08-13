@@ -331,6 +331,7 @@ public class BpmsInitiatedStartTest {
 
       @Override
       public WorkflowAwareness awarenessOfWorkflow(
+          final io.vanillabp.integration.spi.AggregatePersistenceAware<A> aggregatePersistence,
           final Object workflowAggregateId) {
         return WorkflowAwareness.UNKNOWN_TO_BPMS;
       }

@@ -4,6 +4,51 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## An operation right after a start waits for the BPMS to catch up (2026-08-13)
+
+Story 54. Two changes, one of them a defect that made Camunda 8 unusable on any cluster
+with secondary storage.
+
+**`awarenessOfWorkflow` takes the aggregate persistence now.** The adapter SPI methods
+`MigratableProcessService.awarenessOfWorkflow` and `awarenessOfWorkflowForRedispatch`
+carry `AggregatePersistenceAware<A>` as their first parameter. A BPMS without a business
+key finds a workflow by the process variable holding the aggregate's ID, and that variable
+is named after the aggregate's ID attribute - a name the probe has to know, since the
+election runs before every other SPI method of an operation. The Camunda 8 adapter used to
+remember the name from whichever call carried a persistence before, and started out with a
+placeholder: the probe searched for `id` while the cluster stored `loanRequestId`, found
+nothing and reported EVERY workflow as unknown. Anything electing its BPMS by that probe
+(completing or canceling a task, user-task operations, message correlation,
+`aggregateChanged`, the viewer, the re-dispatch mitigation) failed with
+`WorkflowNotFoundException` on a cluster with secondary storage. Adapters outside this
+repository have to add the parameter; there is no compatible overload on purpose, so
+nobody keeps implementing the broken shape.
+
+**Waiting for a workflow to become visible.** A BPMS answering from an eventually
+consistent read model reports a workflow it created moments ago as unknown, which used to
+end in `WorkflowNotFoundException` naming causes that all did not apply - in the most
+ordinary sequence there is, "start a workflow, then correlate the message which lets it
+continue". Now:
+
+- adapters may report a window (`MigratableProcessService.workflowVisibilityDelay()`, a
+  `default` returning none, so nothing breaks). Camunda 8 reports
+  `vanillabp.adapters.<id>.workflow-visibility-timeout`, 10 seconds by default, zero
+  switches it off; Camunda 7 and the Process-Engine-API report none;
+- the core waits that window out while probing an adapter its `WorkflowAdapterCache` names
+  for the workflow, and nowhere else. A workflow nobody ever started still fails
+  immediately;
+- the cache is filled where VanillaBP knows the answer without probing: after phase two of
+  a start, and on every inbound delivery. The inbound contexts
+  (`TaskInvocationContext`, `WorkflowEndedContext`, `BpmsInitiatedStartContext`) carry
+  `getAdapterId()` for that, a `default` returning `null` - an adapter which does not
+  implement it keeps working, its deliveries just record nothing;
+- the guiding message of `WorkflowNotFoundException` names "not searchable yet" as a cause
+  where a configured BPMS is eventually consistent.
+
+An application on several nodes should provide a shared `WorkflowAdapterCache` bean: a
+node which neither started the workflow nor received a delivery for it has nothing to wait
+on and fails as before.
+
 ## `version` decides which method serves a task (2026-08-13)
 
 Story 48 - the `version` attribute of `@WorkflowTask`, `@WorkflowStartedByBpms` and

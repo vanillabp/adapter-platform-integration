@@ -59,4 +59,21 @@ public interface DummyTaskAwarenessSource {
 
   }
 
+
+  /**
+   * The visibility window the dummy adapter reports (story 54): how long the core
+   * keeps asking a hinted adapter which answers
+   * {@link WorkflowAwareness#UNKNOWN_TO_BPMS}. <code>null</code> means none, which
+   * is what an adapter of an immediately consistent BPMS reports.
+   *
+   * @param adapterId The dummy adapter's ID
+   * @return The delay or <code>null</code>
+   */
+  default io.vanillabp.integration.adapter.spi.WorkflowVisibilityDelay workflowVisibilityDelay(
+      final String adapterId) {
+
+    return null;
+
+  }
+
 }

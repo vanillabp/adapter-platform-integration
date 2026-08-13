@@ -123,4 +123,23 @@ public interface TaskInvocationContext {
 
   }
 
+
+  /**
+   * The ID of the adapter delivering this task. A delivery PROVES that this BPMS holds
+   * the workflow, which is why VanillaBP records the association: the next operation
+   * on that workflow probes the recorded adapter first, and an eventually consistent
+   * BPMS which does not report the workflow yet gets a second look instead of an
+   * immediate failure (see {@code WorkflowVisibilityDelay}).
+   * <p>
+   * The default is <code>null</code>, which records nothing - an adapter written
+   * before this existed keeps working unchanged.
+   *
+   * @return The adapter's ID or <code>null</code>
+   */
+  default String getAdapterId() {
+
+    return null;
+
+  }
+
 }

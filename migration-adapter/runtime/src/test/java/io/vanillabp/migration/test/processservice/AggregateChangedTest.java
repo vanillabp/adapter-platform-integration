@@ -61,6 +61,7 @@ public class AggregateChangedTest {
 
     @Override
     public WorkflowAwareness awarenessOfWorkflow(
+        final io.vanillabp.integration.spi.AggregatePersistenceAware<Object> aggregatePersistence,
         final Object workflowAggregateId) {
       return awareness;
     }
@@ -294,6 +295,7 @@ public class AggregateChangedTest {
 
       @Override
       public WorkflowAwareness awarenessOfWorkflow(
+          final io.vanillabp.integration.spi.AggregatePersistenceAware<Object> aggregatePersistence,
           final Object workflowAggregateId) {
         return WorkflowAwareness.ACTIVE;
       }

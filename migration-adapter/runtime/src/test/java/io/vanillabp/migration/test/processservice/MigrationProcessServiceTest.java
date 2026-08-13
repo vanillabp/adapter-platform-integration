@@ -293,7 +293,7 @@ public class MigrationProcessServiceTest {
   public void redispatchedStartSkipsIfWorkflowIsKnown() {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
-    when(processService.awarenessOfWorkflowForRedispatch(42L))
+    when(processService.awarenessOfWorkflowForRedispatch(aggregatePersistence, 42L))
         .thenReturn(io.vanillabp.integration.adapter.spi.WorkflowAwareness.ACTIVE);
 
     final var testee = new MigrationProcessService<>(
@@ -312,7 +312,7 @@ public class MigrationProcessServiceTest {
   public void redispatchedStartProceedsIfWorkflowIsUnknown() {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
-    when(processService.awarenessOfWorkflowForRedispatch(42L))
+    when(processService.awarenessOfWorkflowForRedispatch(aggregatePersistence, 42L))
         .thenReturn(io.vanillabp.integration.adapter.spi.WorkflowAwareness.UNKNOWN_TO_BPMS);
 
     final var testee = new MigrationProcessService<>(
@@ -330,7 +330,7 @@ public class MigrationProcessServiceTest {
   public void redispatchedStartFailsIfBpmsIsUnavailable() {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
-    when(processService.awarenessOfWorkflowForRedispatch(42L))
+    when(processService.awarenessOfWorkflowForRedispatch(aggregatePersistence, 42L))
         .thenReturn(io.vanillabp.integration.adapter.spi.WorkflowAwareness.BPMS_UNAVAILABLE);
 
     final var testee = new MigrationProcessService<>(
@@ -359,7 +359,7 @@ public class MigrationProcessServiceTest {
 
     testee.startWorkflowPhaseTwo(42L, "test-adapter", false);
 
-    verify(processService, never()).awarenessOfWorkflowForRedispatch(any());
+    verify(processService, never()).awarenessOfWorkflowForRedispatch(any(), any());
     verify(processService).startWorkflowPhaseTwo("test-module", "TestProcess", aggregatePersistence, 42L);
 
   }
@@ -369,7 +369,7 @@ public class MigrationProcessServiceTest {
   public void redispatchedStartByMessageSkipsIfWorkflowIsKnown() {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
-    when(processService.awarenessOfWorkflowForRedispatch(42L))
+    when(processService.awarenessOfWorkflowForRedispatch(aggregatePersistence, 42L))
         .thenReturn(io.vanillabp.integration.adapter.spi.WorkflowAwareness.COMPLETED);
 
     final var testee = new MigrationProcessService<>(
@@ -567,5 +567,71 @@ public class MigrationProcessServiceTest {
     assertFalse(testee.needsTwoPhaseCommitForStartingWorkflows());
 
   }
+
+
+  @Test
+  @DisplayName("Phase two of a start records which adapter holds the workflow - no probing needed")
+  public void phaseTwoOfAStartFillsTheAdapterCache() {
+
+    when(processService.getAdapterId()).thenReturn("test-adapter");
+    final var cache = new io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCache();
+
+    final var testee = new MigrationProcessService<>(
+        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
+            .of(processService), phaseTwoOutboxResolver, cache);
+    testee.startWorkflowPhaseTwo(42L, "test-adapter", false);
+
+    // the next operation on that workflow probes this adapter first, which is what
+    // lets it wait out an eventually consistent BPMS instead of failing
+    assertEquals(
+        "test-adapter", cache.get("test-module", "TestProcess", "42").orElseThrow());
+
+  }
+
+  @Test
+  @DisplayName("An inbound delivery records which adapter holds the workflow")
+  public void anInboundDeliveryFillsTheAdapterCache() {
+
+    when(processService.getAdapterId()).thenReturn("test-adapter");
+    final var cache = new io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCache();
+    final var testee = new MigrationProcessService<>(
+        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
+            .of(processService), phaseTwoOutboxResolver, cache);
+
+    // a handler which does not subscribe to the delivered event: the delivery still
+    // proves where the workflow lives, which is why the recording happens first
+    final var handler = org.mockito.Mockito
+        .mock(io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskHandler.class);
+    when(handler.acceptsEvent(any())).thenReturn(false);
+    testee.executeWorkflowTask(
+        handler, new io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext() {
+
+          @Override
+          public String getAdapterId() {
+            return "test-adapter";
+          }
+
+          @Override
+          public String getTaskDefinition() {
+            return "someTask";
+          }
+
+          @Override
+          public String getWorkflowAggregateId() {
+            return "42";
+          }
+
+          @Override
+          public io.vanillabp.spi.service.TaskEvent.Event getTaskEvent() {
+            return io.vanillabp.spi.service.TaskEvent.Event.CANCELED;
+          }
+
+        }, null, List.of());
+
+    assertEquals(
+        "test-adapter", cache.get("test-module", "TestProcess", "42").orElseThrow());
+
+  }
+
 
 }

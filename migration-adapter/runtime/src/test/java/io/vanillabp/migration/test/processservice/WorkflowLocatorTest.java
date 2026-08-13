@@ -47,6 +47,13 @@ public class WorkflowLocatorTest {
 
     final AtomicInteger probes = new AtomicInteger();
 
+    /**
+     * What this adapter reports as the window its BPMS needs before a workflow it
+     * holds becomes findable - none unless a test sets one.
+     */
+    private io.vanillabp.integration.adapter.spi.WorkflowVisibilityDelay visibilityDelay = io.vanillabp.integration.adapter.spi.WorkflowVisibilityDelay
+        .none();
+
     ProbeAdapter(
         final String adapterId,
         final WorkflowAwareness... answers) {
@@ -54,6 +61,20 @@ public class WorkflowLocatorTest {
       this.adapterId = adapterId;
       this.answers = List.of(answers);
 
+    }
+
+    ProbeAdapter waitingFor(
+        final java.time.Duration window) {
+
+      this.visibilityDelay = new io.vanillabp.integration.adapter.spi.WorkflowVisibilityDelay(
+          window, java.time.Duration.ofMillis(5));
+      return this;
+
+    }
+
+    @Override
+    public io.vanillabp.integration.adapter.spi.WorkflowVisibilityDelay workflowVisibilityDelay() {
+      return visibilityDelay;
     }
 
     WorkflowAwareness answer() {
@@ -77,6 +98,7 @@ public class WorkflowLocatorTest {
 
     @Override
     public WorkflowAwareness awarenessOfWorkflow(
+        final io.vanillabp.integration.spi.AggregatePersistenceAware<Object> aggregatePersistence,
         final Object workflowAggregateId) {
       return answer();
     }
@@ -348,7 +370,7 @@ public class WorkflowLocatorTest {
     final var location = new WorkflowLocator(MODULE, PROCESS, null)
         .locate(
             List.<MigratableProcessService<Object>>of(adapter),
-            candidate -> candidate.awarenessOfWorkflow(Map.of()),
+            candidate -> candidate.awarenessOfWorkflow(null, Map.of()),
             "42",
             "workflow of aggregate '42'");
 
@@ -457,5 +479,101 @@ public class WorkflowLocatorTest {
     assertEquals("first", cache.get(MODULE, PROCESS, "42").orElseThrow(), "the entry must be repaired");
 
   }
+
+
+  @Test
+  @DisplayName("A hinted adapter which does not know the workflow YET is asked again until it does")
+  public void hintedAdapterIsAskedAgainWithinItsVisibilityWindow() {
+
+    // the everyday sequence on an eventually consistent BPMS: the workflow was
+    // started moments ago (which is why the hint exists), and the read model the
+    // probe searches has not caught up
+    final var cache = new InMemoryWorkflowAdapterCache();
+    cache.put(MODULE, PROCESS, "42", "remote");
+    final var remote = new ProbeAdapter(
+        "remote", WorkflowAwareness.UNKNOWN_TO_BPMS, WorkflowAwareness.UNKNOWN_TO_BPMS, WorkflowAwareness.ACTIVE)
+        .waitingFor(java.time.Duration.ofSeconds(2));
+
+    final var location = locate(cache, remote);
+
+    assertEquals(WorkflowAwareness.ACTIVE, location.awareness());
+    assertSame(remote, location.adapter());
+    assertEquals(3, remote.probes.get(), "the probe is repeated until the workflow shows up");
+    assertEquals(
+        "remote", cache.get(MODULE, PROCESS, "42").orElseThrow(), "the hint stays");
+
+  }
+
+  @Test
+  @DisplayName("A workflow nobody knows fails IMMEDIATELY - no window is waited out without a hint")
+  public void unknownWorkflowWithoutHintFailsFast() {
+
+    // a wrong ID must not turn into a timeout: the waiting happens on a hinted
+    // adapter only, and there is no hint here
+    final var remote = new ProbeAdapter("remote", WorkflowAwareness.UNKNOWN_TO_BPMS)
+        .waitingFor(java.time.Duration.ofSeconds(30));
+
+    final var startedAt = System.nanoTime();
+    final var location = locate(new InMemoryWorkflowAdapterCache(), remote);
+    final var elapsed = java.time.Duration.ofNanos(System.nanoTime() - startedAt);
+
+    assertEquals(WorkflowAwareness.UNKNOWN_TO_BPMS, location.awareness());
+    assertEquals(1, remote.probes.get(), "the adapter is asked exactly once");
+    assertTrue(
+        elapsed.toSeconds() < 5,
+        "the walk must not wait for the window, but took "
+            + elapsed);
+
+  }
+
+  @Test
+  @DisplayName("A hint which stays unknown for the whole window falls through to the walk")
+  public void hintedAdapterGivingUpFallsThroughToTheWalk() {
+
+    final var cache = new InMemoryWorkflowAdapterCache();
+    cache.put(MODULE, PROCESS, "42", "remote");
+    final var remote = new ProbeAdapter("remote", WorkflowAwareness.UNKNOWN_TO_BPMS)
+        .waitingFor(java.time.Duration.ofMillis(30));
+    final var embedded = new ProbeAdapter("embedded", WorkflowAwareness.ACTIVE);
+
+    final var location = locate(cache, remote, embedded);
+
+    assertEquals(WorkflowAwareness.ACTIVE, location.awareness());
+    assertSame(embedded, location.adapter(), "the workflow really lives in the other BPMS");
+    assertEquals(
+        "embedded", cache.get(MODULE, PROCESS, "42").orElseThrow(), "the stale hint is repaired");
+
+  }
+
+  @Test
+  @DisplayName("An unavailable BPMS keeps its own contract - the visibility window changes nothing")
+  public void unavailableAdapterIsNotSubjectToTheWindow() {
+
+    final var cache = new InMemoryWorkflowAdapterCache();
+    cache.put(MODULE, PROCESS, "42", "remote");
+    final var remote = new ProbeAdapter("remote", WorkflowAwareness.BPMS_UNAVAILABLE)
+        .waitingFor(java.time.Duration.ofSeconds(30));
+
+    assertThrows(
+        IllegalStateException.class,
+        () -> locate(cache, remote));
+    // the fixed unavailable-policy applies (1 probe + 2 retries), and nothing waits
+    // for a workflow to become visible: an unreachable BPMS answers nothing at all
+    assertEquals(3, remote.probes.get());
+
+  }
+
+  @Test
+  @DisplayName("remember() records what VanillaBP knows without probing anybody")
+  public void rememberRecordsTheAdapterWithoutProbing() {
+
+    final var cache = new InMemoryWorkflowAdapterCache();
+
+    new WorkflowLocator(MODULE, PROCESS, cache).remember(42L, "remote");
+
+    assertEquals("remote", cache.get(MODULE, PROCESS, "42").orElseThrow());
+
+  }
+
 
 }

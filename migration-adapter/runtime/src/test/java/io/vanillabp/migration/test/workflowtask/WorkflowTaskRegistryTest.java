@@ -344,6 +344,7 @@ public class WorkflowTaskRegistryTest {
 
       @Override
       public WorkflowAwareness awarenessOfWorkflow(
+          final io.vanillabp.integration.spi.AggregatePersistenceAware<Aggregate> aggregatePersistence,
           final Object workflowAggregateId) {
         return WorkflowAwareness.UNKNOWN_TO_BPMS;
       }
@@ -1187,6 +1188,7 @@ public class WorkflowTaskRegistryTest {
 
     @Override
     public WorkflowAwareness awarenessOfWorkflow(
+        final io.vanillabp.integration.spi.AggregatePersistenceAware<T> aggregatePersistence,
         final Object workflowAggregateId) {
       return WorkflowAwareness.UNKNOWN_TO_BPMS;
     }

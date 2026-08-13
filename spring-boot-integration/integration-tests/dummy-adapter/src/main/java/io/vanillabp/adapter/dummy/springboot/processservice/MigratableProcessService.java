@@ -79,6 +79,7 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
 
   @Override
   public WorkflowAwareness awarenessOfWorkflow(
+      final io.vanillabp.integration.spi.AggregatePersistenceAware<A> aggregatePersistence,
       final Object workflowAggregateId) {
 
     log.info(
@@ -95,6 +96,22 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
           .orElse(WorkflowAwareness.UNKNOWN_TO_BPMS);
     }
     return WorkflowAwareness.UNKNOWN_TO_BPMS;
+
+  }
+
+
+  @Override
+  public io.vanillabp.integration.adapter.spi.WorkflowVisibilityDelay workflowVisibilityDelay() {
+
+    if (taskAwarenessSources == null) {
+      return io.vanillabp.integration.adapter.spi.WorkflowVisibilityDelay.none();
+    }
+    return taskAwarenessSources
+        .stream()
+        .map(source -> source.workflowVisibilityDelay(adapterId))
+        .filter(java.util.Objects::nonNull)
+        .findFirst()
+        .orElseGet(io.vanillabp.integration.adapter.spi.WorkflowVisibilityDelay::none);
 
   }
 

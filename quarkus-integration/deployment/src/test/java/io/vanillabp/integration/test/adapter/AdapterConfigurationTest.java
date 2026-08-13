@@ -93,7 +93,7 @@ public class AdapterConfigurationTest {
         migratableProcessService.awarenessOfTask("42", "task-id"));
     Assertions.assertEquals(
         WorkflowAwareness.UNKNOWN_TO_BPMS,
-        migratableProcessService.awarenessOfWorkflow("42"));
+        migratableProcessService.awarenessOfWorkflow(null, "42"));
 
   }
 
