@@ -34,6 +34,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.springboot.SpringBootTestApplication;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.service.BpmsStartTrigger;
+import io.vanillabp.spi.service.WorkflowEnd;
 
 /**
  * Acceptance test of workflows the BPMS starts on its own (story 41), with the dummy
@@ -331,6 +332,68 @@ public class BpmsInitiatedStartTest {
           .get(signalStart.workflowAggregateId());
       Assertions.assertEquals("SIGNAL/OrderReceived", signalAggregate.getStartedBy());
       Assertions.assertEquals("SOUTH", signalAggregate.getRegion());
+
+    }
+
+  }
+
+  @Test
+  public void theEndOfAWorkflowIsReportedToTheApplication() throws IOException {
+
+    WorkflowStartConfiguration.AGGREGATES.clear();
+
+    try (var testApp = buildTestApp(); var context = runTestApplication(
+        testApp,
+        WorkflowStartConfiguration.class,
+        StartEventsConfiguration.class)) {
+
+      final var dummyAdapter = context
+          .getBean("DummyAdapter_DeploymentService_test", DeploymentService.class);
+
+      // the model pays for the notification only where the application asked for
+      // one: the workflow service of 'TimerProcess' has a @WorkflowEnded method,
+      // the other processes of the module have none
+      Assertions
+          .assertEquals(
+              List.of(PROCESS),
+              dummyAdapter.getProcessesWithEndListener(),
+              "an end listener may only be attached where a @WorkflowEnded method exists");
+
+      final var aggregate = new WorkflowStartAggregate();
+      aggregate.setId("4711");
+      WorkflowStartConfiguration.AGGREGATES.put("4711", aggregate);
+
+      dummyAdapter
+          .notifyWorkflowEnded(
+              MODULE,
+              PROCESS,
+              new io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedContext() {
+
+                @Override
+                public String getWorkflowAggregateId() {
+                  return "4711";
+                }
+
+                @Override
+                public WorkflowEnd.Kind getKind() {
+                  return WorkflowEnd.Kind.COMPLETED;
+                }
+
+                @Override
+                public java.time.Instant getEndTime() {
+                  return TRIGGER_TIME;
+                }
+
+                @Override
+                public String getEndEventId() {
+                  return "Event_Done";
+                }
+
+              });
+
+      // the method ran against the loaded aggregate and its change was saved
+      Assertions
+          .assertEquals("COMPLETED/Event_Done", WorkflowStartConfiguration.AGGREGATES.get("4711").getRegion());
 
     }
 

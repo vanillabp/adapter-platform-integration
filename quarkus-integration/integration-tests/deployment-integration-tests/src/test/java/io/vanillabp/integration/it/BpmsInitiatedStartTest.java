@@ -26,6 +26,7 @@ import io.vanillabp.integration.test.deployment.StartProcessStartEventSource;
 import io.vanillabp.integration.test.deployment.StartWorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.service.BpmsStartTrigger;
+import io.vanillabp.spi.service.WorkflowEnd;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
@@ -122,6 +123,8 @@ public class BpmsInitiatedStartTest {
   public void bpmsInitiatedStartsBuildTheirAggregate() {
 
     final var dummyAdapter = dummyAdapter();
+    // the tests of this class share one application and therefore one store
+    final var aggregatesBefore = persistence.count();
 
     // (a) a timer start without any application code
     final var timerStart = dummyAdapter
@@ -152,7 +155,7 @@ public class BpmsInitiatedStartTest {
         .startWorkflowByBpms(
             MODULE, PROCESS, context(BpmsStartTrigger.Kind.TIMER, "DailyTimer", Map.of("region", "north")));
     assertFalse(repeated.created());
-    assertEquals(1, persistence.count());
+    assertEquals(aggregatesBefore + 1, persistence.count(), "nothing may be created twice");
     assertEquals("changed meanwhile", persistence.stored(TRIGGER_TIME.toString()).getRegion());
 
     // (c) the signal start passes through the application's method
@@ -165,6 +168,55 @@ public class BpmsInitiatedStartTest {
     final var signalAggregate = persistence.stored(signalStart.workflowAggregateId());
     assertEquals("SIGNAL/OrderReceived", signalAggregate.getStartedBy());
     assertEquals("SOUTH", signalAggregate.getRegion());
+
+  }
+
+
+  @Test
+  @DisplayName("The end of a workflow is reported, and only processes asking for it get a listener")
+  public void theEndOfAWorkflowIsReported() {
+
+    final var dummyAdapter = dummyAdapter();
+
+    // the model pays for the notification only where the application asked for one
+    assertEquals(
+        List.of(PROCESS),
+        dummyAdapter.getProcessesWithEndListener(),
+        "an end listener may only be attached where a @WorkflowEnded method exists");
+
+    final var aggregate = new StartAggregate();
+    aggregate.setId("ended-4711");
+    persistence.put(aggregate);
+
+    dummyAdapter
+        .notifyWorkflowEnded(
+            MODULE,
+            PROCESS,
+            new io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedContext() {
+
+              @Override
+              public String getWorkflowAggregateId() {
+                return "ended-4711";
+              }
+
+              @Override
+              public WorkflowEnd.Kind getKind() {
+                return WorkflowEnd.Kind.TERMINATED;
+              }
+
+              @Override
+              public java.time.Instant getEndTime() {
+                return TRIGGER_TIME;
+              }
+
+              @Override
+              public String getEndEventId() {
+                return null;
+              }
+
+            });
+
+    assertEquals("ended:TERMINATED/null", persistence.stored("ended-4711").getStartedBy());
 
   }
 

@@ -4,6 +4,33 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Telling the application that a workflow ended (2026-08-13)
+
+Story 43 - `@WorkflowEnded` exists now. Additive; nothing existing changes behavior,
+and a model without such a method is deployed exactly as before.
+
+- **New in `spi-for-java` 1.2.0:** the annotation `@WorkflowEnded` and the value
+  record `WorkflowEnd` (kind, time, end event id). The method takes the workflow
+  aggregate and optionally a `WorkflowEnd`, returns void, and VanillaBP saves the
+  aggregate afterwards.
+- **New adapter SPI** `io.vanillabp.integration.adapter.spi.workflowend`:
+  `WorkflowEndedInvoker` (implemented by the same core bean as the other two
+  invokers) with `workflowEndedHandlerExists` - adapters ask it while wiring, so a
+  listener is attached ONLY where a method exists - and `workflowEnded`.
+- **Camunda 7:** an END execution listener at the process scope, inside the engine's
+  transaction. It distinguishes `COMPLETED` from `TERMINATED` by the execution's
+  delete reason and reports the end event reached.
+- **Camunda 8:** an `end` execution listener on the process element plus a worker for
+  its job. The cluster runs end listeners of completed instances only, so this
+  adapter reports `COMPLETED` and never `TERMINATED`, and it does not report which
+  end event was reached. A model of a process with such a method is redeployed with
+  the listener and therefore produces a new process version.
+- **Process-Engine-API:** not supported (gap 17). A method for a process running
+  there yields a WARN naming it - deliberately not a boot failure, since the workflow
+  itself runs normally and only the notification is missing.
+- The notification is at-least-once, and an aggregate deleted meanwhile is logged and
+  skipped instead of failing the BPMS' transaction.
+
 ## Broadcasting BPMN signals (2026-08-12)
 
 Story 42 - `ProcessService.sendSignal(String)` exists now. Additive; nothing existing

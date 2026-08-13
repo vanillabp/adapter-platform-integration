@@ -3,6 +3,8 @@ package io.vanillabp.integration.test.workflowstart;
 import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.BpmsStartTrigger;
 import io.vanillabp.spi.service.TaskParam;
+import io.vanillabp.spi.service.WorkflowEnd;
+import io.vanillabp.spi.service.WorkflowEnded;
 import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowStartedByBpms;
 
@@ -16,6 +18,18 @@ import io.vanillabp.spi.service.WorkflowStartedByBpms;
     workflowAggregateClass = WorkflowStartAggregate.class,
     bpmnProcess = @BpmnProcess(bpmnProcessId = "TimerProcess"))
 public class WorkflowStartWorkflowService {
+
+  /**
+   * Story 43: the same workflow service also wants to know when a workflow ended.
+   */
+  @WorkflowEnded
+  public void workflowEnded(
+      final WorkflowStartAggregate aggregate,
+      final WorkflowEnd end) {
+
+    aggregate.setRegion("%s/%s".formatted(end.kind(), end.endEventId()));
+
+  }
 
   @WorkflowStartedByBpms(id = "SignalStart")
   public void aggregateOfSignalStart(

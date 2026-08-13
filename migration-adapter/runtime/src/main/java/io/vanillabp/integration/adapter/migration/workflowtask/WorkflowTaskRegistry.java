@@ -14,7 +14,10 @@ import org.slf4j.LoggerFactory;
 
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.transaction.TransactionRunner;
+import io.vanillabp.integration.adapter.migration.workflowend.WorkflowEndedHandlers;
 import io.vanillabp.integration.adapter.migration.workflowstart.BpmsInitiatedStarts;
+import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedContext;
+import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartContext;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartResult;
@@ -35,12 +38,13 @@ import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
  * <p>
  * <code>&#64;WorkflowTask</code> methods are held here; the
  * <code>&#64;WorkflowStartedByBpms</code> methods of the same classes are held by
- * {@link BpmsInitiatedStarts}, to which the second interface delegates. Both
+ * {@link BpmsInitiatedStarts} and the <code>&#64;WorkflowEnded</code> methods by
+ * {@link WorkflowEndedHandlers}, to which the other two interfaces delegate. Both
  * mechanisms scan the same classes and share the value conversion - generalizing
  * them into ONE pluggable handler contract is the subject of the extension-enablement
  * story.
  */
-public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedStartInvoker {
+public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedStartInvoker, WorkflowEndedInvoker {
 
   private static final Logger log = LoggerFactory.getLogger(WorkflowTaskRegistry.class);
 
@@ -83,6 +87,12 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
    * classes - what a workflow started by the BPMS itself needs (story 41).
    */
   private final BpmsInitiatedStarts bpmsInitiatedStarts = new BpmsInitiatedStarts();
+
+  /**
+   * The <code>&#64;WorkflowEnded</code> methods of the same workflow service classes
+   * (story 43).
+   */
+  private final WorkflowEndedHandlers workflowEndedHandlers = new WorkflowEndedHandlers();
 
   /**
    * The transaction annotations of the running platform (story 40b), supplied by the
@@ -201,6 +211,14 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
     }
 
     bpmsInitiatedStarts
+        .registerWorkflowService(
+            workflowModuleId,
+            bpmnProcessId,
+            workflowServiceClass,
+            processService.getWorkflowAggregateClass(),
+            workflowServiceBean);
+
+    workflowEndedHandlers
         .registerWorkflowService(
             workflowModuleId,
             bpmnProcessId,
@@ -489,6 +507,42 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
     variables.put(result.workflowAggregateIdName(), result.workflowAggregateId());
     return new BpmsInitiatedStartResult(
         result.workflowAggregateId(), result.workflowAggregateIdName(), variables, result.created());
+
+  }
+
+  @Override
+  public boolean workflowEndedHandlerExists(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return workflowEndedHandlers.handlerExists(workflowModuleId, bpmnProcessId);
+
+  }
+
+  @Override
+  public void workflowEnded(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final WorkflowEndedContext context) {
+
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    if ((entry == null) || (entry.processService == null)) {
+      throw new IllegalStateException(
+          """
+              No @WorkflowService class is registered for BPMN process '%s' of workflow module \
+              '%s' - the end of workflow '%s' cannot be reported! Known processes: %s."""
+              .formatted(
+                  bpmnProcessId,
+                  workflowModuleId,
+                  context.getWorkflowAggregateId(),
+                  entries
+                      .keySet()
+                      .stream()
+                      .map(key -> "'%s' (module '%s')".formatted(key.bpmnProcessId(), key.workflowModuleId()))
+                      .collect(Collectors.joining(", "))));
+    }
+
+    workflowEndedHandlers.workflowEnded(entry.processService, context, transactionRunner);
 
   }
 

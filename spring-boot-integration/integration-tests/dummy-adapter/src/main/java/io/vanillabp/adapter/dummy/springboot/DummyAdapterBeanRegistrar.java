@@ -62,7 +62,8 @@ public class DummyAdapterBeanRegistrar implements BeanRegistrar {
                   adapterId, supplierContext.bean(WorkflowTaskRegistry.class), supplierContext
                       .beanProvider(DummyTaskWiringSource.class), supplierContext
                           .bean(WorkflowTaskRegistry.class), supplierContext
-                              .beanProvider(DummyBpmsInitiatedStartSource.class))));
+                              .beanProvider(DummyBpmsInitiatedStartSource.class), supplierContext
+                                  .bean(WorkflowTaskRegistry.class))));
 
         });
 

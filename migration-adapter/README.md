@@ -402,6 +402,24 @@ applications may define their own `PhaseTwoOutbox` bean instead):
 | Spring Boot | MongoDB                  | own implementation using `MongoTemplate` (`spring-boot-integration`)                     |
 | Quarkus     | JDBC datasource (Agroal) | own JDBC/JTA-based implementation (`quarkus-integration`; gruelbox does not support JTA) |
 
+### Telling the application that a workflow ended (`WorkflowEndedInvoker`)
+
+The counterpart of the BPMS-initiated start, and the one handler kind whose whole
+point is that nothing depends on it:
+
+- Adapters ask `workflowEndedHandlerExists(module, process)` while wiring and attach
+  their listener only where the answer is yes. A model must not pay for a
+  notification the application did not ask for, which is why the question exists at
+  all instead of a plain "always attach".
+- `workflowEnded(module, process, context)` loads the aggregate, calls the method and
+  saves it, in the caller's transaction (embedded BPMS) or a new one (remote BPMS).
+- A missing aggregate is NOT an error: an application may delete the aggregate of a
+  workflow which ended, and a redelivered notification would find nothing either.
+  Both cases are logged and skipped.
+- What the context reports about the KIND of end is the adapter's honest answer, not
+  a normalized fiction: Camunda 7 tells a cancellation from a regular end by the
+  execution's delete reason, Camunda 8 never sees a cancelled instance's end.
+
 ### Broadcasting signals
 
 A signal is the one BPMS operation which is not about a workflow, so it is the one

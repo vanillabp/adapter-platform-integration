@@ -9,6 +9,8 @@ import org.springframework.beans.factory.ObjectProvider;
 import io.vanillabp.adapter.dummy.springboot.DummyAdapterConfiguration;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.adapter.spi.BpmnParseException;
+import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedContext;
+import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartContext;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartResult;
@@ -45,6 +47,52 @@ public class DeploymentService implements AdapterDeploymentService<Object, Objec
    * {@link DummyBpmsInitiatedStartSource}).
    */
   private final ObjectProvider<DummyBpmsInitiatedStartSource> bpmsInitiatedStartSource;
+
+  /**
+   * The core's entry point for workflows which ended, provided by the platform
+   * integration.
+   */
+  private final WorkflowEndedInvoker workflowEndedInvoker;
+
+  /**
+   * Which BPMN processes got an end listener attached - a real adapter modifies its
+   * model here, the dummy records the decision so a test can assert that a process
+   * without a handler pays nothing.
+   */
+  private final java.util.List<String> processesWithEndListener = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+  /**
+   * @return The BPMN processes an end listener was attached to
+   */
+  public java.util.List<String> getProcessesWithEndListener() {
+
+    return java.util.List.copyOf(processesWithEndListener);
+
+  }
+
+  /**
+   * Reports that a workflow ended, like a real adapter does from its process-end
+   * listener. Triggered by integration tests.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param context The notification (as a real adapter would build it)
+   */
+  public void notifyWorkflowEnded(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final WorkflowEndedContext context) {
+
+    log.info(
+        "Dummy-Adapter[{}]: Workflow '{}' of {} ended ({})",
+        adapterId,
+        context.getWorkflowAggregateId(),
+        workflowModuleId,
+        context.getKind());
+
+    workflowEndedInvoker.workflowEnded(workflowModuleId, bpmnProcessId, context);
+
+  }
 
   @Override
   public Class<Object> getModelType() {
@@ -135,6 +183,17 @@ public class DeploymentService implements AdapterDeploymentService<Object, Objec
             workflowModuleId,
             bpmnProcessId,
             source.startEventsOf(adapterId, workflowModuleId, bpmnProcessId)));
+
+    // like a real adapter: a model pays for the end notification only where the
+    // application asked for one
+    if (workflowEndedInvoker.workflowEndedHandlerExists(workflowModuleId, bpmnProcessId)) {
+      processesWithEndListener.add(bpmnProcessId);
+      log.info(
+          "Dummy-Adapter[{}]: attaching an end listener to BPMN process '{}' of {}",
+          adapterId,
+          bpmnProcessId,
+          workflowModuleId);
+    }
 
   }
 
