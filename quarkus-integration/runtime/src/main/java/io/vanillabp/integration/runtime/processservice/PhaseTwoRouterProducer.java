@@ -1,6 +1,7 @@
 package io.vanillabp.integration.runtime.processservice;
 
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
+import io.vanillabp.integration.spi.PhaseTwoOperationRegistry;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Singleton;
@@ -19,6 +20,23 @@ public class PhaseTwoRouterProducer {
   public PhaseTwoRouter phaseTwoRouter() {
 
     return new PhaseTwoRouter();
+
+  }
+
+  /**
+   * The router's registry of phase-two operations - injectable so an extension can
+   * register operations of its own (VanillaBP's core operations are registered by
+   * the router itself).
+   *
+   * @param phaseTwoRouter The router owning the registry
+   * @return The operation registry
+   */
+  @Produces
+  @Singleton
+  public PhaseTwoOperationRegistry phaseTwoOperationRegistry(
+      final PhaseTwoRouter phaseTwoRouter) {
+
+    return phaseTwoRouter.getOperations();
 
   }
 

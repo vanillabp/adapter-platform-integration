@@ -4,6 +4,256 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## `version` decides which method serves a task (2026-08-13)
+
+Story 48 - the `version` attribute of `@WorkflowTask`, `@WorkflowStartedByBpms` and
+`@WorkflowEnded` is evaluated now. It exists since VanillaBP 1 and was never implemented
+there, so every method served every version; VanillaBP 2 parsed the ranges but no adapter
+reported a version, which came to the same. Applications not using the attribute are
+unaffected.
+
+The version meant is the version of the deployed process DEFINITION as the BPMS counts it
+(Camunda 7 and Camunda 8 count integers upwards per BPMN process id), not a version an
+application invents. A boundary may also name a version TAG of the model
+(`camunda:versionTag`, `zeebe:versionTag`).
+
+Three things flip for an application which already carries the attribute:
+
+- Disjoint ranges really are disjoint now. A version served by NO method fails the
+  delivery with a message naming that version, where before the first method ran.
+- Two methods wired to one BPMN element with OVERLAPPING ranges fail the boot, naming both
+  methods. The duplicate check compared `matchesVersion(null)`, which is `true` for every
+  specification, so it never fired; and the workflow-task registry compared newly scanned
+  handlers only against the already registered ones, so two methods of the SAME class were
+  never compared at all.
+- A non-numeric specification is a version TAG now instead of a boot failure. `version =
+  "latest"` used to fail with "unsupported version specification" and is a tag named
+  `latest` today. `>=3` and `<=3` are supported as documented in version 1's README (they
+  were never implemented either).
+
+New in the adapter SPI (`io.vanillabp.integration.adapter.spi.version`):
+`ProcessVersionCatalog` with `DeployedProcessVersion` and the ready-made
+`CachingProcessVersionCatalog`, plus two default methods on `WorkflowTaskInvoker`:
+`registerProcessVersions(...)` during `wireBpmn` and `resolveProcessVersions(module)` at
+the end of `deployResources`. Both are optional: an adapter which registers nothing keeps
+working, and only specifications naming a version tag need a catalog at all. Adapters
+outside this repository do not have to change.
+
+What it costs: nothing for specifications made of numbers - they are compared to the
+version the adapter reports with the task. A specification naming a tag makes VanillaBP ask
+the BPMS once per process while the application starts (after the deployment, so a tag
+deployed by this very start is included) and again only for a version it has never seen,
+which is what a rolling deployment produces while another node is ahead. Camunda 7 answers
+from its definition query, Camunda 8 needs its query API (secondary storage) for tags, and
+the Process-Engine-API can only report the tag of the current task (GAPS 19).
+
+## Camunda 8: workflows were never found on clusters with secondary storage (2026-08-13)
+
+Story 52 - a defect fix. Nothing to change in your code or configuration.
+
+The adapter searched process instances by the aggregate-ID variable and passed the ID as
+a plain string. Camunda 8 compares a variable against its stored JSON, so a String value
+has to carry its quotes: the filter matched nothing, `awarenessOfWorkflow` answered
+`UNKNOWN_TO_BPMS` for every workflow, and everything electing its BPMS by probing failed
+with a guiding `WorkflowNotFoundException` - `completeTask`, `cancelTask`, the user-task
+operations, `correlateMessage`, `aggregateChanged`, the viewer and the START re-dispatch
+mitigation. On a cluster without secondary storage none of this showed, because the search
+throws there and the adapter answers optimistically `ACTIVE`.
+
+Which is also why it survived: the adapter's Docker tests all ran on such a cluster, so
+what they exercised was the fallback and never the query. `Camunda8SecondaryStorageIT`
+brings its own Elasticsearch now and correlates a message with a workflow located by
+probing; it fails with the old filter, carrying the exception the field reported.
+
+The encoding lives in one place (`Camunda8VariableFilters`), used by the process service
+and the viewer. It quotes unconditionally because VanillaBP writes the ID as a string
+whatever type the aggregate's ID attribute has - a unit test pins the two halves together.
+
+## Telling the BPMS that the aggregate changed (2026-08-13)
+
+Story 44 - `ProcessService.aggregateChanged` exists now, in two overloads. Additive;
+nothing existing changes behavior.
+
+- **New in `spi-for-java` 1.2.0:** `aggregateChanged(aggregate)` writes the values
+  shared with the BPMS at the workflow's global scope, `aggregateChanged(aggregate,
+  taskId)` writes them in the scope that task RUNS in - the process, an embedded
+  subprocess, or the one iteration of a multi-instance embedded subprocess. NOT the
+  task's own scope: engines create one where the model asks for it (a boundary event,
+  an instance of a multi-instance activity), values written there serve that activity
+  alone and vanish with it. The task-scoped overload does not additionally write the
+  global scope either: an inner value shadows the global one there anyway, and writing
+  both would change what the other iterations see.
+- **What travels is the sync model of story 28** (`@SyncWithBPMS`), the same values a
+  task completion pushes. The method names no variables.
+- **New adapter SPI methods** `MigratableProcessService#aggregateChangedPhaseOne` /
+  `#aggregateChangedPhaseTwo`, both `default` and both throwing a guiding
+  `UnsupportedOperationException`.
+- **New core operation `AGGREGATE_CHANGED`** in the operation registry (story 45),
+  WITHOUT an idempotency key: the values are read from the aggregate when the entry is
+  dispatched, so a redelivered entry writes the then-current state. Deduplicating
+  could only drop a push, never save one. The adapter is elected at dispatch time by
+  probing, like message correlation.
+- **Camunda 7** writes inside the caller's transaction: `setVariables` at the process
+  instance, `setVariablesLocal` at the execution of the scope a task runs in (found by
+  walking the execution tree, skipping an activity's own scope and the multi-instance
+  body). This is what makes **conditional events** usable at all there - the engine
+  looks at their conditions when a variable of their scope or of a parent scope
+  changes, so an event subprocess with a conditional start event reacts. Where an application shares nothing (this
+  adapter's opt-in default), a technical variable `vanillabpAggregateChanged` is
+  written so the change happens.
+- **Camunda 8** sends `SetVariables` after the commit, for the process instance
+  respectively the element instance of the scope the task runs in (the API reports
+  children of a scope but no parents, so the adapter walks down from the process
+  instance to find it). It **needs secondary storage**: the
+  cluster has no business key, so only the query API translates an aggregate ID into
+  the keys the command takes. Without it the adapter fails with a guiding message.
+  Conditional events do not exist in Camunda 8 - that stays true.
+- **Process-Engine-API:** not supported (gap 18). The API modifies the payload of a
+  TASK, never that of a running instance, so both phases throw with a guiding message.
+- **Also fixed:** the Camunda 7 EL resolver returned the task's activity behavior for
+  ANY name evaluated while an execution sat at a wired task - including the condition of
+  a conditional event reading the workflow aggregate, which failed with "condition
+  expression returns non-Boolean". A name which IS a task definition still means the
+  task; otherwise an attribute of the workflow aggregate wins. The new adapter-SPI
+  method `WorkflowTaskInvoker#workflowAggregateHasProperty` answers that from the
+  aggregate CLASS, without loading an aggregate. Adapters implementing the SPI have to
+  implement it.
+- **Fixed on the way:** the Camunda 8 adapter searched process instances by the
+  aggregate-ID variable WITHOUT quoting the value. Variable values are stored as JSON,
+  so a String value never matched and every probe of a cluster WITH secondary storage
+  answered "unknown workflow". Affects `awarenessOfWorkflow`,
+  `awarenessOfWorkflowForRedispatch` and the new push.
+
+## Telling the application that a workflow ended (2026-08-13)
+
+Story 43 - `@WorkflowEnded` exists now. Additive; nothing existing changes behavior,
+and a model without such a method is deployed exactly as before.
+
+- **New in `spi-for-java` 1.2.0:** the annotation `@WorkflowEnded` and the value
+  record `WorkflowEnd` (kind, time, end event id). The method takes the workflow
+  aggregate and optionally a `WorkflowEnd`, returns void, and VanillaBP saves the
+  aggregate afterwards.
+- **New adapter SPI** `io.vanillabp.integration.adapter.spi.workflowend`:
+  `WorkflowEndedInvoker` (implemented by the same core bean as the other two
+  invokers) with `workflowEndedHandlerExists` - adapters ask it while wiring, so a
+  listener is attached ONLY where a method exists - and `workflowEnded`.
+- **Camunda 7:** an END execution listener at the process scope, inside the engine's
+  transaction. It distinguishes `COMPLETED` from `TERMINATED` by the execution's
+  delete reason and reports the end event reached.
+- **Camunda 8:** an `end` execution listener on the process element plus a worker for
+  its job. The cluster runs end listeners of completed instances only, so this
+  adapter reports `COMPLETED` and never `TERMINATED`, and it does not report which
+  end event was reached. A model of a process with such a method is redeployed with
+  the listener and therefore produces a new process version.
+- **Process-Engine-API:** not supported (gap 17). A method for a process running
+  there yields a WARN naming it - deliberately not a boot failure, since the workflow
+  itself runs normally and only the notification is missing.
+- The notification is at-least-once, and an aggregate deleted meanwhile is logged and
+  skipped instead of failing the BPMS' transaction.
+
+## Broadcasting BPMN signals (2026-08-12)
+
+Story 42 - `ProcessService.sendSignal(String)` exists now. Additive; nothing existing
+changes behavior.
+
+- **New in `spi-for-java` 1.2.0:** `sendSignal(String signalName)` as a default method
+  throwing until an adapter implements it. Broadcast only - there is deliberately no
+  overload limiting a signal to one workflow, because Camunda 8 cannot do that and an
+  API which quietly means something else per BPMS is worse than none.
+- **New adapter SPI methods** `MigratableProcessService#sendSignalPhaseOne` /
+  `#sendSignalPhaseTwo`, both `default` and both throwing a guiding
+  `UnsupportedOperationException` - an adapter whose BPMS has no signals says so
+  instead of swallowing a broadcast.
+- **New core operation `SEND_SIGNAL`** in the operation registry (story 45), WITHOUT
+  an idempotency key: a signal has nothing to deduplicate by, so a redelivered outbox
+  entry broadcasts again. The broadcasting adapter IS persisted with the entry,
+  because a broadcast goes to every BPMS the workflow module was deployed to and each
+  of them gets its own entry.
+- **`PhaseTwoCall.workflowAggregateId()` may be `null`** from now on: an operation
+  which is not about one workflow carries no aggregate ID. Custom outbox stores have
+  to tolerate that (the shipped ones do - the JDBC store's `AGGREGATE_ID` column was
+  nullable already).
+- **Camunda 7** broadcasts inside the caller's transaction, **Camunda 8** after the
+  commit, and the **Process-Engine-API** uses its `SignalApi` after the commit (that
+  API exists, so this needed no gap entry).
+- A broadcast reaches the DEPLOYMENT UNION of the workflow module, not only the
+  first-priority adapter of the calling process service. Its SCOPE is that workflow
+  module: every adapter broadcasts through its own client with its own tenant, and
+  the signal name carries the module's prefix where the module prefixes identifiers.
+  A signal meant for several workflow modules is sent through the `ProcessService` of
+  each of them - with the mode `none` nothing separates the modules in the BPMS
+  anyway, which is the price of that mode.
+
+## Workflows the BPMS starts itself (2026-08-12)
+
+Story 41 - a timer, signal or conditional start event produces a workflow without a
+workflow aggregate, which VanillaBP now builds. Additive: nothing existing changes
+behavior.
+
+- **New in `spi-for-java` 1.2.0:** the annotation `@WorkflowStartedByBpms` and the
+  value record `BpmsStartTrigger`. Both are OPTIONAL - without them VanillaBP builds
+  the aggregate on its own (see the wiki page "Starting workflows").
+- **New adapter SPI** `io.vanillabp.integration.adapter.spi.workflowstart`:
+  `BpmsInitiatedStartInvoker` (implemented by the core, offered to adapters like
+  `WorkflowTaskInvoker` - the same bean implements both), plus
+  `BpmsInitiatedStartSpec`, `BpmsInitiatedStartContext` and
+  `BpmsInitiatedStartResult`. An adapter which does not implement it keeps working;
+  processes with such start events simply cannot run on it.
+- **Camunda 7:** an execution listener on the start event builds the aggregate inside
+  the engine's transaction and sets the instance's business key from it.
+- **Camunda 8:** an execution listener is added to the start event while deploying
+  (event type `end` - the cluster rejects `start` listeners there), and its job
+  completion writes the aggregate-ID variable plus the shared aggregate values. A
+  model deployed by an earlier VanillaBP 2 build is redeployed with that listener, so
+  it produces a new process version.
+- **Process-Engine-API:** deploying a process with such a start event now fails with a
+  guiding message (gap 16) - the API never reports a start the application did not
+  ask for.
+- The workflow-aggregate class needs a constructor without arguments to be built by
+  VanillaBP. Where it has none, a `@WorkflowStartedByBpms` method returning the
+  aggregate does the job; the failure message says both.
+
+## Phase-two operations become a registry (2026-08-12)
+
+Story 45 - the closed enum `PhaseTwoOperation` becomes an open registry, so
+extensions can use the outbox for crash-safe after-commit work of their own and new
+core operations no longer edit a shared enum plus a `switch`.
+
+- **`PhaseTwoOperation` is no longer an enum** but a record of a persisted NAME and
+  its idempotency-key derivation. The seven core operations stay constants of that
+  class under UNCHANGED names and UNCHANGED key rules (`START_WORKFLOW`,
+  `COMPLETE_TASK`, `CANCEL_TASK`, `COMPLETE_USER_TASK`, `CANCEL_USER_TASK`,
+  `CORRELATE_MESSAGE`, `START_WORKFLOW_BY_MESSAGE`), pinned by a test now that the
+  compiler no longer guarantees them. Entries written by an earlier build keep
+  dispatching and deduplicating.
+- **`PhaseTwoCall` carries the operation by name** (`String operation()`) and the
+  derived idempotency key as a component. Build calls with
+  `PhaseTwoCall.of(operation, ...)` when scheduling and with
+  `PhaseTwoCall.forDispatch(name, ...)` when a store rebuilds one from a persisted
+  entry - the canonical constructor changed, so custom stores or extensions
+  constructing calls directly have to switch to the factories.
+- **Breaking for custom `PhaseTwoOutbox` stores** in exactly two places: persist
+  `call.operation()` instead of `call.operation().name()`, and stop resolving the
+  persisted name (no more `PhaseTwoOperation.valueOf`) - hand it to the router as a
+  String. Nothing else about the store contract changed; stores still never
+  interpret operations.
+- **Unknown operations are the router's business now.** An entry whose operation is
+  not registered fails with a guiding message naming the operation and listing the
+  registered ones; the entry stays in the store and its retry/blocking behavior is
+  unchanged. This covers the new case of an extension having been removed from the
+  application.
+- **New: extensions register their own operations.** `PhaseTwoOperation`
+  `.extensionOperation(name, key)` enforces a namespace (`my-extension:NOTIFY`), and
+  `PhaseTwoOperationRegistry.register(operation, dispatch)` adds it. The registry is
+  a bean on both platforms (Spring Boot `vanillaBpPhaseTwoOperationRegistry`,
+  Quarkus a `@Singleton` producer). An extension operation is dispatched to its own
+  handler, without the aggregate-to-adapter election of the core operations.
+- **No schema change.** The persisted encoding is still the operation's name; the
+  namespaced names of extensions are longer, but the column widths of the shipped
+  stores already accommodate them (the Quarkus JDBC store's `OPERATION` column is
+  `VARCHAR(255)`, MongoDB is schemaless, gruelbox serializes the name into its
+  invocation). Applications running a SNAPSHOT need no migration.
+
 ## Name-clash avoidance: tenants, prefixes - and a Camunda 8 fix (2026-08-07)
 
 Story 35 - how a workflow module's identifiers are kept apart from those of other

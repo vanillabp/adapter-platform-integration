@@ -405,23 +405,20 @@ public class JdbcPhaseTwoOutboxDispatcher {
       final Entry entry) throws SQLException {
 
     try {
-      final PhaseTwoOperation operation;
-      try {
-        operation = PhaseTwoOperation.valueOf(entry.operation());
-      } catch (IllegalArgumentException e) {
-        throw new IllegalStateException(
-            "Unknown operation '%s' of outbox entry '%s'! Maybe it was written by a newer version of your software?"
-                .formatted(entry.operation(), entry.id()));
-      }
       // entry.attempts() holds the count BEFORE this claim - a value > 0 means the
       // entry was dispatched before (recovered/retried): the router then runs the
-      // START re-dispatch mitigation
+      // START re-dispatch mitigation. The operation travels as its persisted name -
+      // the router resolves it in the operation registry (an unknown name yields a
+      // guiding error and leaves the entry for operations)
       phaseTwoRouter
           .get()
           .dispatch(
-              new PhaseTwoCall(
-                  operation, entry.workflowModuleId(), entry.bpmnProcessId(), entry.aggregateId(), entry
-                      .adapterId(), PhaseTwoCall.deserializeArgs(entry.serializedArgs())),
+              PhaseTwoCall
+                  .forDispatch(
+                      entry.operation(), entry.workflowModuleId(), entry.bpmnProcessId(), entry
+                          .aggregateId(),
+                      entry.adapterId(), PhaseTwoCall
+                          .deserializeArgs(entry.serializedArgs())),
               entry.attempts() > 0);
     } catch (Exception e) {
       if (entry.attempts() + 1 >= properties.getBlockAfterAttempts()) {

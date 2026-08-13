@@ -218,6 +218,27 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   }
 
   /**
+   * The router's registry of phase-two operations - injectable so an extension can
+   * register operations of its own (VanillaBP's core operations are registered by
+   * the router itself).
+   * <p>
+   * Deliberately NOT conditional on a missing bean: the registry an extension
+   * registers in has to be the one the router dispatches from. An application
+   * wanting its own registry gives it to its own {@link PhaseTwoRouter} bean, and
+   * this bean follows.
+   *
+   * @param phaseTwoRouter The router owning the registry
+   * @return The operation registry
+   */
+  @Bean
+  public io.vanillabp.integration.spi.PhaseTwoOperationRegistry vanillaBpPhaseTwoOperationRegistry(
+      final PhaseTwoRouter phaseTwoRouter) {
+
+    return phaseTwoRouter.getOperations();
+
+  }
+
+  /**
    * The cache of workflow&rarr;adapter associations consulted by the BPMS election
    * for operations on existing workflows (complete/cancel task, user task, message
    * correlation): a bounded, expiring in-memory default. Cluster setups wanting

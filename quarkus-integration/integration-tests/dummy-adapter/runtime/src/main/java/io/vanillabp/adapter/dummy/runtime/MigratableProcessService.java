@@ -230,6 +230,69 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
   }
 
   @Override
+  public void sendSignalPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String signalName) {
+
+    // like an embedded BPMS: without a two-phase commit the broadcast happens here
+    if (!needsTwoPhaseCommitForStartingWorkflows && (phaseTwoListeners != null)) {
+      phaseTwoListeners
+          .stream()
+          .forEach(listener -> listener.broadcastSignal(signalName, false));
+    }
+
+  }
+
+  @Override
+  public void sendSignalPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String signalName) {
+
+    if (phaseTwoListeners != null) {
+      phaseTwoListeners
+          .stream()
+          .forEach(listener -> listener.broadcastSignal(signalName, true));
+    }
+
+  }
+
+  @Override
+  public void aggregateChangedPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate,
+      final String taskId) {
+
+    // like an embedded BPMS: without a two-phase commit the push happens here
+    if (!needsTwoPhaseCommitForStartingWorkflows && (phaseTwoListeners != null)) {
+      final var aggregateId = aggregatePersistence.getAggregateId(workflowAggregate);
+      phaseTwoListeners
+          .stream()
+          .forEach(listener -> listener.aggregateChanged(aggregateId, taskId, false));
+    }
+
+  }
+
+  @Override
+  public void aggregateChangedPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String taskId) {
+
+    if (phaseTwoListeners != null) {
+      phaseTwoListeners
+          .stream()
+          .forEach(listener -> listener.aggregateChanged(workflowAggregateId, taskId, true));
+    }
+
+  }
+
+  @Override
   public void correlateMessagePhaseOne(
       final String workflowModuleId,
       final String bpmnProcessId,

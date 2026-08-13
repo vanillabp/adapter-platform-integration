@@ -13,6 +13,12 @@ package io.vanillabp.integration.spi;
  * happens through the core's <code>PhaseTwoRouter</code> which routes the call to the
  * <code>MigrationProcessService</code> of the workflow module/BPMN process.
  * <p>
+ * An EXTENSION uses the same outbox for after-commit work of its own: it registers
+ * an operation in the {@link PhaseTwoOperationRegistry}, builds its calls with
+ * {@link PhaseTwoCall#of(PhaseTwoOperation, String, String, String, String, java.util.Map)}
+ * and schedules them here - the store treats them like any other entry, and the
+ * router dispatches them to the extension's own handler.
+ * <p>
  * Implementations are provided by the platform integrations (e.g. based on JDBC, JPA
  * or MongoDB) or by the business application itself, since the platform-neutral core
  * must not depend on any particular persistence technology.
@@ -102,9 +108,11 @@ public interface PhaseTwoOutbox {
       final String adapterId) {
 
     return schedule(
-        new PhaseTwoCall(
-            PhaseTwoOperation.START_WORKFLOW, workflowModuleId, bpmnProcessId, workflowAggregateId
-                .toString(), adapterId, null));
+        PhaseTwoCall
+            .of(
+                PhaseTwoOperation.START_WORKFLOW, workflowModuleId, bpmnProcessId, workflowAggregateId
+                    .toString(),
+                adapterId, null));
 
   }
 
@@ -129,9 +137,11 @@ public interface PhaseTwoOutbox {
       final String taskId) {
 
     return schedule(
-        new PhaseTwoCall(
-            PhaseTwoOperation.COMPLETE_TASK, workflowModuleId, bpmnProcessId, workflowAggregateId
-                .toString(), null, java.util.Map.of(PhaseTwoCall.ARG_TASK_ID, taskId)));
+        PhaseTwoCall
+            .of(
+                PhaseTwoOperation.COMPLETE_TASK, workflowModuleId, bpmnProcessId, workflowAggregateId
+                    .toString(),
+                null, java.util.Map.of(PhaseTwoCall.ARG_TASK_ID, taskId)));
 
   }
 
@@ -155,9 +165,11 @@ public interface PhaseTwoOutbox {
       final String bpmnErrorCode) {
 
     return schedule(
-        new PhaseTwoCall(
-            PhaseTwoOperation.CANCEL_TASK, workflowModuleId, bpmnProcessId, workflowAggregateId
-                .toString(), null, java.util.Map
+        PhaseTwoCall
+            .of(
+                PhaseTwoOperation.CANCEL_TASK, workflowModuleId, bpmnProcessId, workflowAggregateId
+                    .toString(),
+                null, java.util.Map
                     .of(
                         PhaseTwoCall.ARG_TASK_ID, taskId, PhaseTwoCall.ARG_BPMN_ERROR_CODE,
                         bpmnErrorCode)));
@@ -182,9 +194,11 @@ public interface PhaseTwoOutbox {
       final String taskId) {
 
     return schedule(
-        new PhaseTwoCall(
-            PhaseTwoOperation.COMPLETE_USER_TASK, workflowModuleId, bpmnProcessId, workflowAggregateId
-                .toString(), null, java.util.Map.of(PhaseTwoCall.ARG_TASK_ID, taskId)));
+        PhaseTwoCall
+            .of(
+                PhaseTwoOperation.COMPLETE_USER_TASK, workflowModuleId, bpmnProcessId, workflowAggregateId
+                    .toString(),
+                null, java.util.Map.of(PhaseTwoCall.ARG_TASK_ID, taskId)));
 
   }
 
@@ -208,9 +222,11 @@ public interface PhaseTwoOutbox {
       final String bpmnErrorCode) {
 
     return schedule(
-        new PhaseTwoCall(
-            PhaseTwoOperation.CANCEL_USER_TASK, workflowModuleId, bpmnProcessId, workflowAggregateId
-                .toString(), null, java.util.Map
+        PhaseTwoCall
+            .of(
+                PhaseTwoOperation.CANCEL_USER_TASK, workflowModuleId, bpmnProcessId, workflowAggregateId
+                    .toString(),
+                null, java.util.Map
                     .of(
                         PhaseTwoCall.ARG_TASK_ID, taskId, PhaseTwoCall.ARG_BPMN_ERROR_CODE,
                         bpmnErrorCode)));
@@ -246,9 +262,70 @@ public interface PhaseTwoOutbox {
       args.put(PhaseTwoCall.ARG_CORRELATION_ID, correlationId);
     }
     return schedule(
-        new PhaseTwoCall(
-            PhaseTwoOperation.CORRELATE_MESSAGE, workflowModuleId, bpmnProcessId, workflowAggregateId
-                .toString(), null, args));
+        PhaseTwoCall
+            .of(
+                PhaseTwoOperation.CORRELATE_MESSAGE, workflowModuleId, bpmnProcessId, workflowAggregateId
+                    .toString(),
+                null, args));
+
+  }
+
+  /**
+   * Schedule phase two of pushing a changed workflow-aggregate to the BPMS. NO
+   * adapter ID is persisted - the adapter is elected at dispatch time by probing.
+   * There is NO idempotency key either: the values are read from the aggregate when
+   * the entry is dispatched, so a repeated dispatch writes the then-current state.
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param taskId The ID of the task whose scope receives the values, or
+   *        <code>null</code> for the workflow's global scope
+   * @return <code>true</code> if scheduled
+   */
+  default boolean scheduleAggregateChanged(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Object workflowAggregateId,
+      final String taskId) {
+
+    final var args = new java.util.LinkedHashMap<String, String>();
+    if (taskId != null) {
+      args.put(PhaseTwoCall.ARG_TASK_ID, taskId);
+    }
+    return schedule(
+        PhaseTwoCall
+            .of(
+                PhaseTwoOperation.AGGREGATE_CHANGED, workflowModuleId, bpmnProcessId, workflowAggregateId
+                    .toString(),
+                null, args));
+
+  }
+
+  /**
+   * Schedule phase two of broadcasting a BPMN signal. The broadcasting adapter IS
+   * persisted with the entry: a broadcast reaches every BPMS the workflow module
+   * was deployed to, so one entry per BPMS is scheduled and each is dispatched to
+   * the BPMS it was written for. There is NO idempotency key - a signal has nothing
+   * to deduplicate by, so a redelivered entry broadcasts again.
+   *
+   * @param workflowModuleId The ID of the workflow module the signal belongs to
+   * @param bpmnProcessId The BPMN process ID whose process service was called
+   * @param signalName The PLAIN BPMN signal name
+   * @param adapterId The ID of the BPMS adapter to broadcast to
+   * @return <code>true</code> - a signal is never deduplicated
+   */
+  default boolean scheduleSendSignal(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String signalName,
+      final String adapterId) {
+
+    return schedule(
+        PhaseTwoCall
+            .of(
+                PhaseTwoOperation.SEND_SIGNAL, workflowModuleId, bpmnProcessId, null, adapterId, java.util.Map
+                    .of(PhaseTwoCall.ARG_SIGNAL_NAME, signalName)));
 
   }
 
@@ -273,9 +350,12 @@ public interface PhaseTwoOutbox {
       final String adapterId) {
 
     return schedule(
-        new PhaseTwoCall(
-            PhaseTwoOperation.START_WORKFLOW_BY_MESSAGE, workflowModuleId, bpmnProcessId, workflowAggregateId
-                .toString(), adapterId, java.util.Map.of(PhaseTwoCall.ARG_MESSAGE_NAME, messageName)));
+        PhaseTwoCall
+            .of(
+                PhaseTwoOperation.START_WORKFLOW_BY_MESSAGE, workflowModuleId, bpmnProcessId, workflowAggregateId
+                    .toString(),
+                adapterId, java.util.Map
+                    .of(PhaseTwoCall.ARG_MESSAGE_NAME, messageName)));
 
   }
 

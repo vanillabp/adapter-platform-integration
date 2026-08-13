@@ -14,21 +14,37 @@ import org.slf4j.LoggerFactory;
 
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.transaction.TransactionRunner;
+import io.vanillabp.integration.adapter.migration.workflowend.WorkflowEndedHandlers;
+import io.vanillabp.integration.adapter.migration.workflowstart.BpmsInitiatedStarts;
+import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedContext;
+import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker;
+import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartContext;
+import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker;
+import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartResult;
+import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartSpec;
 import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 
 /**
- * The core-owned registry of <code>&#64;WorkflowTask</code> handlers per (workflow
- * module, BPMN process ID) and the implementation of the adapter-facing
- * {@link WorkflowTaskInvoker}. The platform integration registers every workflow
- * service class under all BPMN process IDs it declares
- * ({@code @WorkflowService.bpmnProcess} and {@code secondaryBpmnProcesses});
+ * The core-owned registry of the annotated handler methods of the application per
+ * (workflow module, BPMN process ID), and the implementation of the adapter-facing
+ * {@link WorkflowTaskInvoker} and {@link BpmsInitiatedStartInvoker}. The platform
+ * integration registers every workflow service class under all BPMN process IDs it
+ * declares ({@code @WorkflowService.bpmnProcess} and {@code secondaryBpmnProcesses});
  * adapters validate the wiring during <code>wireBpmn</code> and dispatch task
  * invocations at runtime.
+ * <p>
+ * <code>&#64;WorkflowTask</code> methods are held here; the
+ * <code>&#64;WorkflowStartedByBpms</code> methods of the same classes are held by
+ * {@link BpmsInitiatedStarts} and the <code>&#64;WorkflowEnded</code> methods by
+ * {@link WorkflowEndedHandlers}, to which the other two interfaces delegate. Both
+ * mechanisms scan the same classes and share the value conversion - generalizing
+ * them into ONE pluggable handler contract is the subject of the extension-enablement
+ * story.
  */
-public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
+public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedStartInvoker, WorkflowEndedInvoker {
 
   private static final Logger log = LoggerFactory.getLogger(WorkflowTaskRegistry.class);
 
@@ -65,6 +81,26 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
   private final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync;
 
   private final Map<RegistryKey, RegistryEntry> entries = new ConcurrentHashMap<>();
+
+  /**
+   * What the BPMS know about the deployed versions of the BPMN processes - needed to
+   * place a version TAG named by a <code>version</code> attribute in the deployment
+   * order (story 48). Shared by all three handler kinds, since all three annotations
+   * carry that attribute.
+   */
+  private final ProcessVersions processVersions = new ProcessVersions();
+
+  /**
+   * The <code>&#64;WorkflowStartedByBpms</code> methods of the same workflow service
+   * classes - what a workflow started by the BPMS itself needs (story 41).
+   */
+  private final BpmsInitiatedStarts bpmsInitiatedStarts = new BpmsInitiatedStarts(processVersions);
+
+  /**
+   * The <code>&#64;WorkflowEnded</code> methods of the same workflow service classes
+   * (story 43).
+   */
+  private final WorkflowEndedHandlers workflowEndedHandlers = new WorkflowEndedHandlers(processVersions);
 
   /**
    * The transaction annotations of the running platform (story 40b), supplied by the
@@ -176,11 +212,37 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
           workflowServiceBean,
           beanResolver,
           transactionAnnotations);
-      handlers.forEach(handler -> failOnDuplicateWiring(workflowModuleId, bpmnProcessId, entry, handler));
-      entry.handlers.addAll(handlers);
+      // one by one, so two methods of the SAME class wired to one task definition are
+      // compared against each other as well (story 48)
+      handlers
+          .forEach(handler -> {
+            failOnDuplicateWiring(
+                workflowModuleId,
+                bpmnProcessId,
+                entry,
+                handler,
+                VersionRange.NO_RESOLVER);
+            entry.handlers.add(handler);
+          });
       entry.workflowServiceClasses.add(workflowServiceClass);
       entry.processService = processService;
     }
+
+    bpmsInitiatedStarts
+        .registerWorkflowService(
+            workflowModuleId,
+            bpmnProcessId,
+            workflowServiceClass,
+            processService.getWorkflowAggregateClass(),
+            workflowServiceBean);
+
+    workflowEndedHandlers
+        .registerWorkflowService(
+            workflowModuleId,
+            bpmnProcessId,
+            workflowServiceClass,
+            processService.getWorkflowAggregateClass(),
+            workflowServiceBean);
 
   }
 
@@ -188,15 +250,18 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
       final String workflowModuleId,
       final String bpmnProcessId,
       final RegistryEntry entry,
-      final WorkflowTaskHandler handler) {
+      final WorkflowTaskHandler handler,
+      final VersionRange.ProcessVersionResolver resolver) {
 
     final var duplicate = entry.handlers
         .stream()
+        .filter(existing -> existing != handler)
         .filter(existing -> sameWiring(existing.getTaskDefinition(),
             handler.getTaskDefinition()) || sameWiring(existing.getActivityId(), handler.getActivityId()))
-        // both matching every version = genuinely ambiguous; disjoint version
-        // ranges are a legitimate way to serve several process versions
-        .filter(existing -> existing.matchesVersion(null) && handler.matchesVersion(null))
+        // overlapping version ranges are ambiguous; disjoint ones are a legitimate
+        // way to serve several process versions ('1-2' next to '>2' is fine, '1-3'
+        // next to '2' is not)
+        .filter(existing -> existing.overlapsVersions(handler, resolver))
         .findFirst();
     if (duplicate.isPresent()) {
       throw new IllegalStateException(
@@ -386,7 +451,9 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
         .stream()
         .filter(candidate -> sameWiring(candidate.getTaskDefinition(),
             context.getTaskDefinition()) || sameWiring(candidate.getActivityId(), context.getTaskDefinition()))
-        .filter(candidate -> candidate.matchesVersion(context.getProcessVersion()))
+        .filter(candidate -> candidate.matchesVersion(
+            context.getProcessVersion(),
+            processVersions.resolverFor(workflowModuleId, bpmnProcessId)))
         .findFirst()
         .orElseThrow(() -> new IllegalStateException(
             """
@@ -406,6 +473,157 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
         context,
         transactionRunner,
         rollbackRuleRemedies);
+
+  }
+
+  @Override
+  public void registerProcessVersions(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog catalog) {
+
+    processVersions.register(adapterId, workflowModuleId, bpmnProcessId, catalog);
+
+  }
+
+  @Override
+  public void resolveProcessVersions(
+      final String workflowModuleId) {
+
+    entries
+        .entrySet()
+        .stream()
+        .filter(entry -> entry.getKey().workflowModuleId().equals(workflowModuleId))
+        .forEach(entry -> {
+          final var bpmnProcessId = entry.getKey().bpmnProcessId();
+          final var registryEntry = entry.getValue();
+          final var tagsUsed = registryEntry.handlers
+              .stream()
+              .anyMatch(handler -> !handler.versionTags().isEmpty());
+          if (!tagsUsed) {
+            return;
+          }
+          // the BPMS is asked ONCE per process, right after the deployment: the
+          // version deployed by this boot is part of the answer, and a tag the
+          // application names is either known now or reported as unknown
+          processVersions.warmUp(workflowModuleId, bpmnProcessId);
+          final var resolver = processVersions.resolverFor(workflowModuleId, bpmnProcessId);
+          synchronized (registryEntry) {
+            registryEntry.handlers
+                .forEach(handler -> handler
+                    .versionTags()
+                    .forEach(tag -> processVersions.reportUnknownVersionTag(
+                        workflowModuleId,
+                        bpmnProcessId,
+                        tag,
+                        handler.describe())));
+            // ranges naming a tag could not be placed while registering - now they can
+            registryEntry.handlers
+                .forEach(handler -> failOnDuplicateWiring(
+                    workflowModuleId,
+                    bpmnProcessId,
+                    registryEntry,
+                    handler,
+                    resolver));
+          }
+        });
+
+    bpmsInitiatedStarts.resolveProcessVersions(workflowModuleId);
+    workflowEndedHandlers.resolveProcessVersions(workflowModuleId);
+
+  }
+
+  @Override
+  public void validateBpmsInitiatedStarts(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Collection<BpmsInitiatedStartSpec> startEvents) {
+
+    bpmsInitiatedStarts.validate(workflowModuleId, bpmnProcessId, startEvents);
+
+  }
+
+  @Override
+  public BpmsInitiatedStartResult startWorkflowByBpms(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final BpmsInitiatedStartContext context) {
+
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    if ((entry == null) || (entry.processService == null)) {
+      throw new IllegalStateException(
+          """
+              No @WorkflowService class is registered for BPMN process '%s' of workflow module \
+              '%s' - the BPMS started a workflow of it (start event '%s') but there is nothing to \
+              build its workflow aggregate! Known processes: %s."""
+              .formatted(
+                  bpmnProcessId,
+                  workflowModuleId,
+                  context.getStartEventId(),
+                  entries
+                      .keySet()
+                      .stream()
+                      .map(key -> "'%s' (module '%s')".formatted(key.bpmnProcessId(), key.workflowModuleId()))
+                      .collect(Collectors.joining(", "))));
+    }
+
+    final var result = bpmsInitiatedStarts.start(entry.processService, context, transactionRunner);
+    if ((aggregateSync == null) || (context
+        .getAggregateSyncMode() == io.vanillabp.integration.adapter.spi.AggregateSyncMode.NONE)) {
+      return result;
+    }
+
+    // the aggregate values shared with a remote BPMS (story 28) - read AFTER the
+    // start's transaction committed, which is why an embedded BPMS (joining the
+    // caller's transaction, sync mode NONE) never gets here
+    final var variables = new java.util.LinkedHashMap<>(result.variables());
+    variables
+        .putAll(
+            syncedWorkflowAggregateValues(
+                workflowModuleId,
+                bpmnProcessId,
+                result.workflowAggregateId(),
+                context.getAggregateSyncMode()));
+    variables.put(result.workflowAggregateIdName(), result.workflowAggregateId());
+    return new BpmsInitiatedStartResult(
+        result.workflowAggregateId(), result.workflowAggregateIdName(), variables, result.created());
+
+  }
+
+  @Override
+  public boolean workflowEndedHandlerExists(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return workflowEndedHandlers.handlerExists(workflowModuleId, bpmnProcessId);
+
+  }
+
+  @Override
+  public void workflowEnded(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final WorkflowEndedContext context) {
+
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    if ((entry == null) || (entry.processService == null)) {
+      throw new IllegalStateException(
+          """
+              No @WorkflowService class is registered for BPMN process '%s' of workflow module \
+              '%s' - the end of workflow '%s' cannot be reported! Known processes: %s."""
+              .formatted(
+                  bpmnProcessId,
+                  workflowModuleId,
+                  context.getWorkflowAggregateId(),
+                  entries
+                      .keySet()
+                      .stream()
+                      .map(key -> "'%s' (module '%s')".formatted(key.bpmnProcessId(), key.workflowModuleId()))
+                      .collect(Collectors.joining(", "))));
+    }
+
+    workflowEndedHandlers.workflowEnded(entry.processService, context, transactionRunner);
 
   }
 
@@ -499,6 +717,20 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker {
           e);
       return Map.of();
     }
+
+  }
+
+  @Override
+  public boolean workflowAggregateHasProperty(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String propertyName) {
+
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    if ((entry == null) || (entry.processService == null)) {
+      return false;
+    }
+    return AggregatePropertyReader.has(entry.processService.getWorkflowAggregateClass(), propertyName);
 
   }
 

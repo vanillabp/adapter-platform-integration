@@ -47,6 +47,29 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
 
   }
 
+  /**
+   * The signals broadcast so far, as "signalName/phase" - a broadcast of a remote
+   * BPMS may only happen in phase two, after the commit.
+   */
+  private final List<String> broadcastSignals = new CopyOnWriteArrayList<>();
+
+  @Override
+  public void broadcastSignal(
+      final String signalName,
+      final boolean phaseTwo) {
+
+    broadcastSignals.add("%s/%s".formatted(signalName, phaseTwo
+        ? "phase-two"
+        : "phase-one"));
+
+  }
+
+  public List<String> getBroadcastSignals() {
+
+    return List.copyOf(broadcastSignals);
+
+  }
+
   public List<String> getStartedByAdapter() {
 
     return List.copyOf(startedByAdapter);
@@ -211,6 +234,30 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
 
   }
 
+  /**
+   * Recorded pushes of a changed aggregate as "aggregateId:taskId:phase" (the task
+   * id may be the literal "null" - that is the workflow's global scope).
+   */
+  private final List<String> aggregateChanges = new CopyOnWriteArrayList<>();
+
+  @Override
+  public void aggregateChanged(
+      final Object workflowAggregateId,
+      final String taskId,
+      final boolean phaseTwo) {
+
+    aggregateChanges.add("%s:%s:%s".formatted(workflowAggregateId, taskId, phaseTwo
+        ? "phase-two"
+        : "phase-one"));
+
+  }
+
+  public List<String> getAggregateChanges() {
+
+    return List.copyOf(aggregateChanges);
+
+  }
+
   public void failNextDispatches(
       final int numberOfFailures) {
 
@@ -235,6 +282,7 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
     canceledUserTasks.clear();
     correlatedMessages.clear();
     startedByMessage.clear();
+    aggregateChanges.clear();
     failuresRemaining.set(0);
 
   }

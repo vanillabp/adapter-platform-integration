@@ -98,6 +98,25 @@ public interface WorkflowTaskInvoker {
    * @return The attribute's value or <code>null</code> if the BPMN process is
    *         unknown, the aggregate does not exist or it has no such attribute
    */
+  /**
+   * Whether the workflow aggregate of the given BPMN process HAS such an attribute
+   * - answered from the aggregate's class, so no aggregate is loaded. Embedded BPMS
+   * use it while resolving a BPMN expression: a name may mean an attribute of the
+   * workflow aggregate or something of the adapter's own (Camunda 7 resolves the
+   * delegate expression of a task through the same resolver), and only the aggregate
+   * class can tell which name is whose.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param propertyName The attribute's name
+   * @return Whether the aggregate class declares that attribute (getter, boolean
+   *         getter or field); <code>false</code> if the BPMN process is unknown
+   */
+  boolean workflowAggregateHasProperty(
+      String workflowModuleId,
+      String bpmnProcessId,
+      String propertyName);
+
   Object resolveWorkflowAggregateProperty(
       String workflowModuleId,
       String bpmnProcessId,
@@ -168,5 +187,43 @@ public interface WorkflowTaskInvoker {
   String resolveWorkflowAggregateIdName(
       String workflowModuleId,
       String bpmnProcessId);
+
+  /**
+   * Hands over what the BPMS knows about the deployed versions of a BPMN process,
+   * called during <code>wireBpmn</code> by an adapter whose BPMS can tell. It serves
+   * the <code>version</code> attribute of ALL annotations carrying one
+   * (<code>&#64;WorkflowTask</code>, <code>&#64;WorkflowStartedByBpms</code>,
+   * <code>&#64;WorkflowEnded</code>) and is needed only for specifications naming a
+   * version TAG - specifications made of numbers are compared to the version the
+   * adapter reports in its invocation contexts, without asking anybody.
+   *
+   * @param adapterId The adapter ID (the catalog answers for THIS BPMS)
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The PLAIN BPMN process ID
+   * @param catalog The versions of that process
+   */
+  default void registerProcessVersions(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog catalog) {
+
+  }
+
+  /**
+   * Resolves the version tags the annotations of the given workflow module name, using
+   * the catalogs registered by {@link #registerProcessVersions}. Called by an adapter
+   * at the END of <code>deployResources</code>, so the version deployed by this very
+   * boot is part of the answer, and version specifications naming a tag are ambiguous
+   * or unknown at STARTUP instead of at the first task delivery.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @throws IllegalStateException If two methods turn out to serve the same BPMN
+   *           element in overlapping version ranges (guiding message)
+   */
+  default void resolveProcessVersions(
+      final String workflowModuleId) {
+
+  }
 
 }

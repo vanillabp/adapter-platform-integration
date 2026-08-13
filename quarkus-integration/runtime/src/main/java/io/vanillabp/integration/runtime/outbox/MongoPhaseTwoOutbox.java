@@ -99,7 +99,7 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
         .append("_id", entryId)
         .append("workflowModuleId", call.workflowModuleId())
         .append("bpmnProcessId", call.bpmnProcessId())
-        .append("operation", call.operation().name())
+        .append("operation", call.operation())
         .append("aggregateId", call.workflowAggregateId())
         .append("adapterId", call.adapterId())
         .append("args", new Document(new java.util.LinkedHashMap<String, Object>(call.args())))

@@ -336,6 +336,50 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
   }
 
   @Override
+  public void sendSignal(
+      final String signalName) {
+
+    if (noTransactionIsActive()) {
+      throw newMissingTransactionExceptionForSignal();
+    }
+
+    migrationProcessService.sendSignal(signalName);
+
+  }
+
+  @Override
+  public A aggregateChanged(
+      final A workflowAggregate) {
+
+    if (noTransactionIsActive()) {
+      throw newMissingTransactionException();
+    }
+
+    return migrationProcessService.aggregateChanged(workflowAggregate, null);
+
+  }
+
+  @Override
+  public A aggregateChanged(
+      final A workflowAggregate,
+      final String taskId) {
+
+    if (noTransactionIsActive()) {
+      throw newMissingTransactionException();
+    }
+    if ((taskId == null) || taskId.isBlank()) {
+      throw new IllegalArgumentException(
+          """
+              No task-id given! Use aggregateChanged(aggregate) to push the aggregate at the \
+              workflow's global scope, or pass the task-id reported to the @TaskId parameter of the \
+              task whose scope should receive the values.""");
+    }
+
+    return migrationProcessService.aggregateChanged(workflowAggregate, taskId);
+
+  }
+
+  @Override
   public A correlateMessage(
       final A workflowAggregate,
       final String messageName) {

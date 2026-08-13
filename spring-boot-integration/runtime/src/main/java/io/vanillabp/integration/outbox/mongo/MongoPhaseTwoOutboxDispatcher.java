@@ -17,7 +17,6 @@ import org.springframework.data.mongodb.core.query.Update;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.spi.PhaseTwoCall;
-import io.vanillabp.integration.spi.PhaseTwoOperation;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -158,23 +157,18 @@ public class MongoPhaseTwoOutboxDispatcher {
       final PhaseTwoOutboxEntry entry) {
 
     try {
-      final PhaseTwoOperation operation;
-      try {
-        operation = PhaseTwoOperation.valueOf(entry.getOperation());
-      } catch (IllegalArgumentException e) {
-        throw new IllegalStateException(
-            "Unknown operation '%s' of outbox entry '%s'! Maybe it was written by a newer version of your software?"
-                .formatted(entry.getOperation(), entry.getId()));
-      }
       // the entry holds the attempts count BEFORE this claim - a value > 0 means
       // the entry was dispatched before (recovered/retried): the router then runs
-      // the START re-dispatch mitigation
+      // the START re-dispatch mitigation. The operation travels as its persisted
+      // name and is resolved by the router's operation registry
       phaseTwoRouter
           .getObject()
           .dispatch(
-              new PhaseTwoCall(
-                  operation, entry.getWorkflowModuleId(), entry.getBpmnProcessId(), entry.getAggregateId(), entry
-                      .getAdapterId(), entry.getArgs()),
+              PhaseTwoCall
+                  .forDispatch(
+                      entry.getOperation(), entry.getWorkflowModuleId(), entry.getBpmnProcessId(), entry
+                          .getAggregateId(),
+                      entry.getAdapterId(), entry.getArgs()),
               entry.getAttempts() > 0);
       mongoTemplate.updateFirst(
           Query.query(Criteria.where("_id").is(entry.getId())),

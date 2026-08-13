@@ -2,8 +2,6 @@ package io.vanillabp.integration.adapter.migration.workflowtask;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
-import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
@@ -13,6 +11,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import io.vanillabp.integration.adapter.migration.values.ValueConversion;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskHandler.ParameterBinder;
 import io.vanillabp.integration.adapter.spi.workflowtask.MultiInstanceValue;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
@@ -241,7 +240,7 @@ class WorkflowTaskScanner {
       final var targetType = parameter.getType();
       return (
           aggregate,
-          context) -> convertValue(
+          context) -> ValueConversion.convert(
               context.getTaskParameter(taskParam.value()),
               targetType,
               "@TaskParam(\"%s\") %s".formatted(taskParam.value(), location));
@@ -392,130 +391,6 @@ class WorkflowTaskScanner {
               type."""
               .formatted(location, annotationName));
     }
-
-  }
-
-  /**
-   * Converts a task-parameter value supplied by the adapter to the handler
-   * parameter's type: assignable values pass through, Strings are converted to the
-   * common primitive/wrapper types and BigDecimal/BigInteger, numbers are narrowed/
-   * widened between number types.
-   */
-  private static Object convertValue(
-      final Object value,
-      final Class<?> targetType,
-      final String location) {
-
-    if (value == null) {
-      if (targetType.isPrimitive()) {
-        throw new IllegalStateException(
-            """
-                The value bound to %s is null but the parameter's type is primitive! Use the \
-                wrapper type or ensure the BPMN input mapping provides a value."""
-                .formatted(location));
-      }
-      return null;
-    }
-    if (wrapperOf(targetType).isInstance(value)) {
-      return value;
-    }
-    final var target = wrapperOf(targetType);
-    if (value instanceof String string) {
-      if (target.equals(Integer.class)) {
-        return Integer.valueOf(string);
-      }
-      if (target.equals(Long.class)) {
-        return Long.valueOf(string);
-      }
-      if (target.equals(Double.class)) {
-        return Double.valueOf(string);
-      }
-      if (target.equals(Float.class)) {
-        return Float.valueOf(string);
-      }
-      if (target.equals(Short.class)) {
-        return Short.valueOf(string);
-      }
-      if (target.equals(Byte.class)) {
-        return Byte.valueOf(string);
-      }
-      if (target.equals(Boolean.class)) {
-        return Boolean.valueOf(string);
-      }
-      if (target.equals(BigDecimal.class)) {
-        return new BigDecimal(string);
-      }
-      if (target.equals(BigInteger.class)) {
-        return new BigInteger(string);
-      }
-    }
-    if (value instanceof Number number) {
-      if (target.equals(Integer.class)) {
-        return number.intValue();
-      }
-      if (target.equals(Long.class)) {
-        return number.longValue();
-      }
-      if (target.equals(Double.class)) {
-        return number.doubleValue();
-      }
-      if (target.equals(Float.class)) {
-        return number.floatValue();
-      }
-      if (target.equals(Short.class)) {
-        return number.shortValue();
-      }
-      if (target.equals(Byte.class)) {
-        return number.byteValue();
-      }
-      if (target.equals(BigDecimal.class)) {
-        return new BigDecimal(number.toString());
-      }
-      if (target.equals(BigInteger.class)) {
-        return new BigInteger(number.toString());
-      }
-      if (target.equals(String.class)) {
-        return number.toString();
-      }
-    }
-    throw new IllegalStateException(
-        """
-            The value of type '%s' bound to %s cannot be converted to the parameter's type '%s'!"""
-            .formatted(value.getClass().getName(), location, targetType.getName()));
-
-  }
-
-  private static Class<?> wrapperOf(
-      final Class<?> type) {
-
-    if (!type.isPrimitive()) {
-      return type;
-    }
-    if (type.equals(int.class)) {
-      return Integer.class;
-    }
-    if (type.equals(long.class)) {
-      return Long.class;
-    }
-    if (type.equals(double.class)) {
-      return Double.class;
-    }
-    if (type.equals(float.class)) {
-      return Float.class;
-    }
-    if (type.equals(short.class)) {
-      return Short.class;
-    }
-    if (type.equals(byte.class)) {
-      return Byte.class;
-    }
-    if (type.equals(boolean.class)) {
-      return Boolean.class;
-    }
-    if (type.equals(char.class)) {
-      return Character.class;
-    }
-    return type;
 
   }
 

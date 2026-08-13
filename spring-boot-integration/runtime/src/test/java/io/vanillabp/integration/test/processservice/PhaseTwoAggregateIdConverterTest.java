@@ -73,9 +73,10 @@ public class PhaseTwoAggregateIdConverterTest {
   private PhaseTwoCall startWorkflowCall(
       final String serializedAggregateId) {
 
-    return new PhaseTwoCall(
-        PhaseTwoOperation.START_WORKFLOW, "test-module", "TestProcess", serializedAggregateId, "test-adapter", Map
-            .of());
+    return PhaseTwoCall
+        .of(
+            PhaseTwoOperation.START_WORKFLOW, "test-module", "TestProcess", serializedAggregateId, "test-adapter", Map
+                .of());
 
   }
 

@@ -40,7 +40,7 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
               .orElse(null))
           .schedule(GruelboxPhaseTwoDispatch.class)
           .dispatch(
-              call.operation().name(),
+              call.operation(),
               call.workflowModuleId(),
               call.bpmnProcessId(),
               call.workflowAggregateId(),

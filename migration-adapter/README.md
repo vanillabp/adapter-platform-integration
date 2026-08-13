@@ -250,6 +250,34 @@ and that adapter does not process workflows). A failure of the first-priority ad
 always fails the boot, regardless of the policy, because new workflows could not be
 started otherwise.
 
+#### Process versions (`version` attribute)
+
+The `version` attribute of `@WorkflowTask`, `@WorkflowStartedByBpms` and
+`@WorkflowEnded` is evaluated by `VersionRange` (parsed once at registration) and
+`ProcessVersions` (package `workflowtask`), shared by all three handler kinds:
+
+- a boundary is a version identifier as the BPMS counts it, or a version TAG of the
+  model. A specification consisting of numbers is compared to the version the adapter
+  reports in its invocation context, so it costs nothing;
+- as soon as a TAG is involved, both sides are placed in the deployment order through
+  the adapter SPI `ProcessVersionCatalog` (package `spi.version`), which an adapter
+  hands over per process during `wireBpmn`
+  (`WorkflowTaskInvoker.registerProcessVersions`). `CachingProcessVersionCatalog`
+  implements the bookkeeping every adapter would write otherwise: the versions its
+  deploy command reported, the BPMS query for a version it has never seen (a rolling
+  deployment where another node is ahead) and a floor between two such queries;
+- `WorkflowTaskInvoker.resolveProcessVersions(module)`, called by adapters at the end
+  of `deployResources`, resolves the tags the application names while the application
+  STARTS - the deployment has happened, so a tag deployed by this very start is
+  included. A tag no BPMS knows is a WARN, never a boot failure: the tagged version may
+  arrive later, and the other methods have to keep serving.
+
+Two methods wired to the same BPMN element are ambiguous exactly when their ranges
+OVERLAP (`VersionRange.overlaps`, interval math). A range naming a tag cannot be placed
+before a BPMS was asked, so the check runs twice: at registration for everything
+decidable without a BPMS, and again during `resolveProcessVersions`. Both times it fails
+the boot naming both methods.
+
 ### Two-phase workflow start (`PhaseTwoOutbox` SPI)
 
 Starting a workflow must be atomic with the local database transaction that persists
@@ -297,6 +325,56 @@ message naming that case. Future `ProcessService` operations (message correlatio
 completing tasks, ...) will instead probe the prioritized adapters at dispatch time
 (their calls carry no adapter ID); each such operation gets its own typed
 `schedule*` default method in `PhaseTwoOutbox` building the `PhaseTwoCall`.
+
+#### Which operations exist: the operation registry
+
+An operation is not a hardcoded case in the router but an entry of the
+`PhaseTwoOperationRegistry` (business SPI), consisting of three things:
+
+- its **name**, which the store persists and which is therefore a contract: never
+  rename an operation, never change what an existing name means,
+- its **idempotency-key derivation** (`PhaseTwoOperation.IdempotencyKey`, a function
+  of the `PhaseTwoCall`), which is just as persisted as the name, and
+- its **dispatch** (`PhaseTwoOperationDispatch`), which is not persisted at all: it
+  is registered at startup by whoever owns the operation.
+
+VanillaBP's own operations (`START_WORKFLOW`, `COMPLETE_TASK`, `CANCEL_TASK`,
+`COMPLETE_USER_TASK`, `CANCEL_USER_TASK`, `CORRELATE_MESSAGE`,
+`START_WORKFLOW_BY_MESSAGE`, `SEND_SIGNAL`, `AGGREGATE_CHANGED`) are constants of `PhaseTwoOperation`, registered by the
+`PhaseTwoRouter` while it is built. Their dispatch is the process-service routing
+described above. Their names and key rules are pinned by a test, because since they
+stopped being enum constants nothing else guarantees them.
+
+An **extension** contributes operations of its own, which is why the registry exists.
+It builds them with `PhaseTwoOperation.extensionOperation(name, key)`, which enforces
+a namespace (`my-extension:MY_OPERATION`), and registers them together with its own
+dispatch:
+
+```java
+registry.register(
+    PhaseTwoOperation.extensionOperation(
+        "my-extension:NOTIFY",
+        call -> Optional.of(call.workflowAggregateId() + "|" + call.args().get("event"))),
+    (call, previouslyAttempted) -> notify(call));
+```
+
+The registry is offered as a bean by both platform integrations (Spring Boot:
+`vanillaBpPhaseTwoOperationRegistry`; Quarkus: a `@Singleton` producer). Scheduling
+works as for core operations: build the call with
+`PhaseTwoCall.of(operation, ...)` and hand it to the `PhaseTwoOutbox`, inside the
+business transaction. Dispatch then goes straight to the extension's handler: the
+aggregate-ID-to-adapter election of the core operations does not apply, and no
+process service has to be registered for the call's BPMN process.
+
+Rules the registry enforces at registration time, each with a guiding message: an
+operation is registered exactly once, an extension name is namespaced, and the core's
+names are reserved. At dispatch time an unregistered name is an error naming the
+operation and listing the registered ones. The entry stays in the store (like a
+stale adapter ID of a START entry), so an extension temporarily missing from the
+application does not silently lose its scheduled work.
+
+Stores never look into the registry: they persist name, args and key and stay
+operation-agnostic.
 
 The core does not implement (or depend on) any outbox itself — it only defines the
 `PhaseTwoOutbox` contract (stores implement exactly one method,
@@ -351,6 +429,118 @@ applications may define their own `PhaseTwoOutbox` bean instead):
 | Spring Boot | JPA                      | based on `com.gruelbox:transactionoutbox` (`spring-boot-integration`)                    |
 | Spring Boot | MongoDB                  | own implementation using `MongoTemplate` (`spring-boot-integration`)                     |
 | Quarkus     | JDBC datasource (Agroal) | own JDBC/JTA-based implementation (`quarkus-integration`; gruelbox does not support JTA) |
+
+### Telling the application that a workflow ended (`WorkflowEndedInvoker`)
+
+The counterpart of the BPMS-initiated start, and the one handler kind whose whole
+point is that nothing depends on it:
+
+- Adapters ask `workflowEndedHandlerExists(module, process)` while wiring and attach
+  their listener only where the answer is yes. A model must not pay for a
+  notification the application did not ask for, which is why the question exists at
+  all instead of a plain "always attach".
+- `workflowEnded(module, process, context)` loads the aggregate, calls the method and
+  saves it, in the caller's transaction (embedded BPMS) or a new one (remote BPMS).
+- A missing aggregate is NOT an error: an application may delete the aggregate of a
+  workflow which ended, and a redelivered notification would find nothing either.
+  Both cases are logged and skipped.
+- What the context reports about the KIND of end is the adapter's honest answer, not
+  a normalized fiction: Camunda 7 tells a cancellation from a regular end by the
+  execution's delete reason, Camunda 8 never sees a cancelled instance's end.
+
+### Broadcasting signals
+
+A signal is the one BPMS operation which is not about a workflow, so it is the one
+place where neither election nor aggregate applies:
+
+- The scope is the WORKFLOW MODULE of the calling process service: each adapter
+  broadcasts through ITS own client with ITS tenant, and the signal name is scoped
+  like every other identifier of the module (prefixed in `use-prefix`). Crossing
+  module boundaries is deliberately left to the application - a module is a scope,
+  and which modules a signal is meant for is a business question.
+- `MigrationProcessService.sendSignal(name)` fans out over the DEPLOYMENT UNION of the
+  workflow module (`getDeploymentAdaptersFor`, story 27), not over the prioritized
+  adapters of the calling process service. During a migration the subscriptions are
+  spread across the BPMS, and a partial broadcast is worse than none.
+- Every adapter is asked before the first failure is reported: a broadcast which
+  stopped at the first unreachable BPMS would leave the others waiting.
+- Embedded adapters broadcast in `sendSignalPhaseOne` (inside the caller's
+  transaction), remote ones get one `SEND_SIGNAL` outbox entry EACH, carrying their
+  adapter id - dispatch goes to exactly that adapter, without probing. There is no
+  idempotency key: nothing about a signal can be deduplicated.
+- The call carries no aggregate ID, which is why `PhaseTwoCall` allows it to be
+  absent. The router's `SEND_SIGNAL` dispatch therefore does not convert one.
+
+### Pushing a changed aggregate (`aggregateChanged`)
+
+`MigrationProcessService.aggregateChanged(aggregate, taskId)` is `correlateMessage` with
+another verb: save the aggregate, locate the BPMS by probing `awarenessOfWorkflow`, write
+in phase one for an embedded BPMS and schedule an `AGGREGATE_CHANGED` outbox entry for a
+remote one. A completed workflow is a warned no-op, an unknown one a
+`WorkflowNotFoundException` naming that the aggregate WAS saved.
+
+Two decisions are worth knowing:
+
+- **No idempotency key.** The values are read from the aggregate when the entry is
+  DISPATCHED, so a redelivered entry writes the then-current state. A key could only ever
+  drop a push, never save one.
+- **The task id decides the scope and nothing else.** Without one the values belong to the
+  workflow's global scope, with one to the scope that task RUNS in (process, embedded
+  subprocess, or one iteration of a multi-instance embedded subprocess) - never the task's
+  own scope, and never additionally the global one, or the other iterations would see what
+  one of them pushed. Which execution or element instance that is, is the adapter's
+  business; the core only transports the id (in `ARG_TASK_ID`).
+
+There is no ordering guarantee between outbox entries: the dispatchers select by due time
+(`NEXT_ATTEMPT_AT <= now`) without an `ORDER BY`, so a push and a task completion scheduled
+in the same transaction may reach a remote BPMS in the other order. That is documented
+rather than fixed - inventing an order here would promise something the stores do not
+implement, and an application which needs one can keep the calls in separate transactions.
+
+WHAT is pushed stays the sync model's business (story 28). This operation adds no second
+way of choosing values, which is what keeps the aggregate the single source of truth.
+
+### Workflows the BPMS starts itself (`BpmsInitiatedStartInvoker`)
+
+A timer, signal or conditional start event produces a workflow nobody asked for - and
+therefore a workflow without a workflow aggregate, which is the one thing every other
+mechanism needs: tasks are routed by the aggregate's ID, expressions read its
+attributes. The core builds it, adapters only report and write back.
+
+Adapters use the SPI (`io.vanillabp.integration.adapter.spi.workflowstart`) twice:
+
+- `validateBpmsInitiatedStarts(module, process, specs)` during `wireBpmn`, with the
+  start events of the deployed process the BPMS fires on its own. The core registers
+  them and reports an application method serving a process (or a start event) which
+  has none. Signal names are reported PLAIN - scoping stays invisible above the BPMS
+  boundary (story 35). Throwing honors the `deployment-failure` policy.
+- `startWorkflowByBpms(module, process, context)` when the BPMS reports such a start.
+  The context carries values only: start event id, kind, trigger time, the BPMS' own
+  identity of the start, the variables the model set, and whether the aggregate has to
+  be built in the CALLER's transaction (embedded BPMS) or in a new one (remote BPMS).
+
+What the core does, in one transaction: derive the ID, reuse an aggregate already
+carrying it (a repeated notification builds nothing twice), otherwise instantiate the
+class, write the ID and the variables into it, run the optional
+`@WorkflowStartedByBpms` method and save. The result carries the aggregate's ID, the
+name of its ID attribute and the variables the adapter writes back - the ID variable
+plus the values shared per `@SyncWithBPMS` where the adapter asks for them
+(`AggregateSyncMode`).
+
+The ID rules live in `BpmsInitiatedStartId`: what the BPMS identifies the start by
+wins (a remote BPMS' instance key, stable across redeliveries), then a timer's trigger
+time, then a generated ID - and where none of them fits the ID attribute's type,
+nothing is assigned and the persistence layer generates one while saving.
+
+The `@WorkflowStartedByBpms` methods are scanned by `BpmsInitiatedStartScanner` and
+held by `BpmsInitiatedStarts`, to which `WorkflowTaskRegistry` delegates the second
+adapter-facing interface. Both scanners walk the same classes and share the value
+conversion; folding them into ONE pluggable handler contract is the subject of the
+extension-enablement story.
+
+An adapter whose BPMS cannot report such a start implements none of this and fails the
+deployment of such a process with a guiding message instead - a workflow which could
+never obtain an aggregate is better refused than deployed.
 
 ### Viewer/history API (read path)
 

@@ -26,7 +26,6 @@ import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterPropertiesMapper;
 import io.vanillabp.integration.runtime.deployment.VanillaBpDeploymentRunner;
 import io.vanillabp.integration.spi.PhaseTwoCall;
-import io.vanillabp.integration.spi.PhaseTwoOperation;
 import jakarta.annotation.PreDestroy;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -241,14 +240,6 @@ public class MongoPhaseTwoOutboxDispatcher {
 
     final var entryId = entry.getString("_id");
     try {
-      final PhaseTwoOperation operation;
-      try {
-        operation = PhaseTwoOperation.valueOf(entry.getString("operation"));
-      } catch (final IllegalArgumentException e) {
-        throw new IllegalStateException(
-            "Unknown operation '%s' of outbox entry '%s'! Maybe it was written by a newer version of your software?"
-                .formatted(entry.getString("operation"), entryId));
-      }
       final var argsDocument = entry.get("args", Document.class);
       final Map<String, String> args = new LinkedHashMap<>();
       if (argsDocument != null) {
@@ -258,13 +249,18 @@ public class MongoPhaseTwoOutboxDispatcher {
       }
       // the document holds the attempts count BEFORE this claim - a value > 0
       // means the entry was dispatched before (recovered/retried): the router
-      // then runs the START re-dispatch mitigation
+      // then runs the START re-dispatch mitigation. The operation travels as its
+      // persisted name and is resolved by the router's operation registry
       phaseTwoRouter
           .get()
           .dispatch(
-              new PhaseTwoCall(
-                  operation, entry.getString("workflowModuleId"), entry.getString("bpmnProcessId"), entry
-                      .getString("aggregateId"), entry.getString("adapterId"), args),
+              PhaseTwoCall
+                  .forDispatch(
+                      entry.getString("operation"), entry.getString("workflowModuleId"), entry
+                          .getString("bpmnProcessId"),
+                      entry.getString("aggregateId"), entry
+                          .getString("adapterId"),
+                      args),
               entry.getInteger("attempts") > 0);
       collection.updateOne(
           Filters.eq("_id", entryId),

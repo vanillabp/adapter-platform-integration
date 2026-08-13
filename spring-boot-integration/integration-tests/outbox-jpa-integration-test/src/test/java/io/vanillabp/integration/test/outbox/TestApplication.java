@@ -26,4 +26,18 @@ public class TestApplication {
 
   }
 
+  /**
+   * Stands in for an extension contributing an operation of its own to the outbox.
+   *
+   * @param registry The core's operation registry
+   * @return The sample extension
+   */
+  @Bean
+  public SampleExtension sampleExtension(
+      final io.vanillabp.integration.spi.PhaseTwoOperationRegistry registry) {
+
+    return new SampleExtension(registry);
+
+  }
+
 }

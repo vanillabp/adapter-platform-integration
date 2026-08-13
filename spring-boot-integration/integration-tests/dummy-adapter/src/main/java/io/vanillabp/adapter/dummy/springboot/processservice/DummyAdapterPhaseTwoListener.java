@@ -31,6 +31,18 @@ public interface DummyAdapterPhaseTwoListener {
   }
 
   /**
+   * Called whenever a signal is broadcast - in phase one for an adapter without a
+   * two-phase commit, in phase two for one with it.
+   *
+   * @param signalName The PLAIN BPMN signal name
+   * @param phaseTwo Whether this was phase two (after the commit)
+   */
+  default void broadcastSignal(
+      final String signalName,
+      final boolean phaseTwo) {
+  }
+
+  /**
    * Called whenever phase two of canceling an asynchronous task is executed.
    *
    * @param workflowAggregateId The ID of the workflow aggregate
@@ -89,6 +101,21 @@ public interface DummyAdapterPhaseTwoListener {
   default void startedWorkflowByMessagePhaseTwo(
       final Object workflowAggregateId,
       final String messageName) {
+  }
+
+  /**
+   * Called whenever a changed workflow-aggregate is pushed to the BPMS - in phase
+   * one for an adapter without a two-phase commit, in phase two for one with it.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param taskId The task whose scope received the values, or <code>null</code>
+   *        for the workflow's global scope
+   * @param phaseTwo Whether this was phase two (after the commit)
+   */
+  default void aggregateChanged(
+      final Object workflowAggregateId,
+      final String taskId,
+      final boolean phaseTwo) {
   }
 
 }

@@ -9,6 +9,11 @@ import org.slf4j.LoggerFactory;
 
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.adapter.spi.BpmnParseException;
+import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedContext;
+import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker;
+import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartContext;
+import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker;
+import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartResult;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
@@ -41,16 +46,135 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
    */
   private final Instance<DummyTaskWiringSource> taskWiringSource;
 
+  /**
+   * The core's entry point for workflows the BPMS starts on its own, provided by the
+   * platform integration.
+   */
+  private final BpmsInitiatedStartInvoker bpmsInitiatedStartInvoker;
+
+  /**
+   * Test hook standing in for the start events of the BPMN model (see
+   * {@link DummyBpmsInitiatedStartSource}).
+   */
+  private final Instance<DummyBpmsInitiatedStartSource> bpmsInitiatedStartSource;
+
+  /**
+   * The core's entry point for workflows which ended, provided by the platform
+   * integration.
+   */
+  private final WorkflowEndedInvoker workflowEndedInvoker;
+
+  /**
+   * Test hook standing in for the versions the BPMS deployed (see
+   * {@link DummyProcessVersionSource}).
+   */
+  private final Instance<DummyProcessVersionSource> processVersionSource;
+
+  /**
+   * The versions of the deployed BPMN processes, cached like a real adapter caches
+   * them - the test's {@link DummyProcessVersionSource} plays the BPMS query.
+   */
+  private final io.vanillabp.integration.adapter.spi.version.CachingProcessVersionCatalog processVersions = new io.vanillabp.integration.adapter.spi.version.CachingProcessVersionCatalog(
+      java.time.Duration.ZERO) {
+
+    @Override
+    protected java.util.List<io.vanillabp.integration.adapter.spi.version.DeployedProcessVersion> fetchDeployedVersions(
+        final String workflowModuleId,
+        final String bpmnProcessId) {
+
+      return (processVersionSource == null) || !processVersionSource.isResolvable()
+          ? java.util.List.of()
+          : processVersionSource
+              .get()
+              .versionsOf(adapterId, workflowModuleId, bpmnProcessId);
+
+    }
+
+  };
+
+  /**
+   * Which BPMN processes got an end listener attached - a real adapter modifies its
+   * model here, the dummy records the decision so a test can assert that a process
+   * without a handler pays nothing.
+   */
+  private final java.util.List<String> processesWithEndListener = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+  /**
+   * @return The BPMN processes an end listener was attached to
+   */
+  public java.util.List<String> getProcessesWithEndListener() {
+
+    return java.util.List.copyOf(processesWithEndListener);
+
+  }
+
+  /**
+   * Reports that a workflow ended, like a real adapter does from its process-end
+   * listener. Triggered by integration tests.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param context The notification (as a real adapter would build it)
+   */
+  public void notifyWorkflowEnded(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final WorkflowEndedContext context) {
+
+    log.info(
+        "Dummy-Adapter[{}]: Workflow '{}' of {} ended ({})",
+        adapterId,
+        context.getWorkflowAggregateId(),
+        workflowModuleId,
+        context.getKind());
+
+    workflowEndedInvoker.workflowEnded(workflowModuleId, bpmnProcessId, context);
+
+  }
+
   public DummyDeploymentService(
       final String adapterId,
       final Instance<DummyDeploymentListener> listeners,
       final WorkflowTaskInvoker workflowTaskInvoker,
-      final Instance<DummyTaskWiringSource> taskWiringSource) {
+      final Instance<DummyTaskWiringSource> taskWiringSource,
+      final BpmsInitiatedStartInvoker bpmsInitiatedStartInvoker,
+      final Instance<DummyBpmsInitiatedStartSource> bpmsInitiatedStartSource,
+      final WorkflowEndedInvoker workflowEndedInvoker,
+      final Instance<DummyProcessVersionSource> processVersionSource) {
 
     this.adapterId = adapterId;
     this.listeners = listeners;
     this.workflowTaskInvoker = workflowTaskInvoker;
     this.taskWiringSource = taskWiringSource;
+    this.bpmsInitiatedStartInvoker = bpmsInitiatedStartInvoker;
+    this.bpmsInitiatedStartSource = bpmsInitiatedStartSource;
+    this.workflowEndedInvoker = workflowEndedInvoker;
+    this.processVersionSource = processVersionSource;
+
+  }
+
+  /**
+   * Reports a workflow the BPMS started on its own, like a real adapter does from a
+   * process-start listener. Triggered by integration tests.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param context The notification (as a real adapter would build it)
+   * @return The aggregate's ID and the variables to write back into the BPMS
+   */
+  public BpmsInitiatedStartResult startWorkflowByBpms(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final BpmsInitiatedStartContext context) {
+
+    log.info(
+        "Dummy-Adapter[{}]: The BPMS started '{}' of {} by start event '{}'",
+        adapterId,
+        bpmnProcessId,
+        workflowModuleId,
+        context.getStartEventId());
+
+    return bpmsInitiatedStartInvoker.startWorkflowByBpms(workflowModuleId, bpmnProcessId, context);
 
   }
 
@@ -174,6 +298,35 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
               .tasksOf(adapterId, workflowModuleId, bpmnProcessId));
     }
 
+    // like a real adapter: report the start events the BPMS fires on its own, so the
+    // core can check the application's @WorkflowStartedByBpms methods against them
+    if ((bpmsInitiatedStartSource != null) && bpmsInitiatedStartSource.isResolvable()) {
+      bpmsInitiatedStartInvoker.validateBpmsInitiatedStarts(
+          workflowModuleId,
+          bpmnProcessId,
+          bpmsInitiatedStartSource
+              .get()
+              .startEventsOf(adapterId, workflowModuleId, bpmnProcessId));
+    }
+
+    // like a real adapter which can be asked about its deployed versions: hand the
+    // catalog over, so version specifications naming a version tag can be resolved
+    if ((processVersionSource != null) && processVersionSource.isResolvable()) {
+      workflowTaskInvoker
+          .registerProcessVersions(adapterId, workflowModuleId, bpmnProcessId, processVersions);
+    }
+
+    // like a real adapter: a model pays for the end notification only where the
+    // application asked for one
+    if (workflowEndedInvoker.workflowEndedHandlerExists(workflowModuleId, bpmnProcessId)) {
+      processesWithEndListener.add(bpmnProcessId);
+      log.info(
+          "Dummy-Adapter[{}]: attaching an end listener to BPMN process '{}' of {}",
+          adapterId,
+          bpmnProcessId,
+          workflowModuleId);
+    }
+
   }
 
   @Override
@@ -189,6 +342,10 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
     if ((taskWiringSource != null) && taskWiringSource.isResolvable()) {
       workflowTaskInvoker.validateNoUnwiredWorkflowTaskMethods(workflowModuleId);
     }
+
+    // like a real adapter: the deployment is done, so the version tags named by the
+    // application's annotations can be resolved against what the BPMS has now
+    workflowTaskInvoker.resolveProcessVersions(workflowModuleId);
 
   }
 

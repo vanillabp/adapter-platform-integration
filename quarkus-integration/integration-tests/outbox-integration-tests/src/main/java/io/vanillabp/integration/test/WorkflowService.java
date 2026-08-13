@@ -68,6 +68,21 @@ public class WorkflowService {
 
   }
 
+  public Aggregate aggregateChanged(
+      final Aggregate aggregate) {
+
+    return processService.aggregateChanged(aggregate);
+
+  }
+
+  public Aggregate aggregateChanged(
+      final Aggregate aggregate,
+      final String taskId) {
+
+    return processService.aggregateChanged(aggregate, taskId);
+
+  }
+
   public Aggregate startWorkflowByMessage(
       final String content,
       final String messageName) {
@@ -116,6 +131,20 @@ public class WorkflowService {
       final String historyContext) {
 
     return processService.getWorkflowHistory(aggregate, historyContext);
+
+  }
+
+
+  /**
+   * Broadcasts a signal - a broadcast is not addressed to a workflow, so no
+   * aggregate is involved.
+   *
+   * @param signalName The BPMN signal name
+   */
+  public void sendSignal(
+      final String signalName) {
+
+    processService.sendSignal(signalName);
 
   }
 

@@ -321,6 +321,90 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
   }
 
   @Override
+  public void sendSignalPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String signalName) {
+
+    log.info(
+        "Dummy-Adapter[{}]: Broadcasting signal '{}' (phase one) of workflow module '{}'",
+        adapterId,
+        signalName,
+        workflowModuleId);
+
+    // like an embedded BPMS: without a two-phase commit the broadcast happens here
+    if (!needsTwoPhaseCommitForStartingWorkflows && (phaseTwoListeners != null)) {
+      phaseTwoListeners.forEach(listener -> listener.broadcastSignal(signalName, false));
+    }
+
+  }
+
+  @Override
+  public void sendSignalPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String signalName) {
+
+    log.info(
+        "Dummy-Adapter[{}]: Broadcasting signal '{}' (phase two) of workflow module '{}'",
+        adapterId,
+        signalName,
+        workflowModuleId);
+
+    if (phaseTwoListeners != null) {
+      phaseTwoListeners.forEach(listener -> listener.broadcastSignal(signalName, true));
+    }
+
+  }
+
+  @Override
+  public void aggregateChangedPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate,
+      final String taskId) {
+
+    log.info(
+        "Dummy-Adapter[{}]: Pushing the changed aggregate (phase one, task '{}') of BPMN process '{}' of "
+            + "workflow module '{}'",
+        adapterId,
+        taskId,
+        bpmnProcessId,
+        workflowModuleId);
+
+    // like an embedded BPMS: without a two-phase commit the push happens here
+    if (!needsTwoPhaseCommitForStartingWorkflows && (phaseTwoListeners != null)) {
+      final var aggregateId = aggregatePersistence.getAggregateId(workflowAggregate);
+      phaseTwoListeners.forEach(listener -> listener.aggregateChanged(aggregateId, taskId, false));
+    }
+
+  }
+
+  @Override
+  public void aggregateChangedPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String taskId) {
+
+    log.info(
+        "Dummy-Adapter[{}]: Pushing the changed aggregate (phase two, task '{}') of BPMN process '{}' of "
+            + "workflow module '{}' for aggregate '{}'",
+        adapterId,
+        taskId,
+        bpmnProcessId,
+        workflowModuleId,
+        workflowAggregateId);
+
+    if (phaseTwoListeners != null) {
+      phaseTwoListeners.forEach(listener -> listener.aggregateChanged(workflowAggregateId, taskId, true));
+    }
+
+  }
+
+  @Override
   public void correlateMessagePhaseOne(
       final String workflowModuleId,
       final String bpmnProcessId,

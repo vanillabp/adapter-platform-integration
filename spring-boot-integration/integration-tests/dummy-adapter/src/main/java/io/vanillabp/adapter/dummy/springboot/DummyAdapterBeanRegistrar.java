@@ -5,6 +5,7 @@ import org.springframework.beans.factory.BeanRegistry;
 import org.springframework.core.env.Environment;
 
 import io.vanillabp.adapter.dummy.springboot.deployment.DeploymentService;
+import io.vanillabp.adapter.dummy.springboot.deployment.DummyBpmsInitiatedStartSource;
 import io.vanillabp.adapter.dummy.springboot.deployment.DummyTaskWiringSource;
 import io.vanillabp.adapter.dummy.springboot.processservice.DummyAdapterPhaseTwoListener;
 import io.vanillabp.adapter.dummy.springboot.processservice.DummyAdapterProcessServiceConfiguration;
@@ -59,7 +60,12 @@ public class DummyAdapterBeanRegistrar implements BeanRegistrar {
               DeploymentService.class,
               spec -> spec.supplier(supplierContext -> new DeploymentService(
                   adapterId, supplierContext.bean(WorkflowTaskRegistry.class), supplierContext
-                      .beanProvider(DummyTaskWiringSource.class))));
+                      .beanProvider(DummyTaskWiringSource.class), supplierContext
+                          .bean(WorkflowTaskRegistry.class), supplierContext
+                              .beanProvider(DummyBpmsInitiatedStartSource.class), supplierContext
+                                  .bean(WorkflowTaskRegistry.class), supplierContext
+                                      .beanProvider(
+                                          io.vanillabp.adapter.dummy.springboot.deployment.DummyProcessVersionSource.class))));
 
         });
 
