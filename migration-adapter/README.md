@@ -250,6 +250,34 @@ and that adapter does not process workflows). A failure of the first-priority ad
 always fails the boot, regardless of the policy, because new workflows could not be
 started otherwise.
 
+#### Process versions (`version` attribute)
+
+The `version` attribute of `@WorkflowTask`, `@WorkflowStartedByBpms` and
+`@WorkflowEnded` is evaluated by `VersionRange` (parsed once at registration) and
+`ProcessVersions` (package `workflowtask`), shared by all three handler kinds:
+
+- a boundary is a version identifier as the BPMS counts it, or a version TAG of the
+  model. A specification consisting of numbers is compared to the version the adapter
+  reports in its invocation context, so it costs nothing;
+- as soon as a TAG is involved, both sides are placed in the deployment order through
+  the adapter SPI `ProcessVersionCatalog` (package `spi.version`), which an adapter
+  hands over per process during `wireBpmn`
+  (`WorkflowTaskInvoker.registerProcessVersions`). `CachingProcessVersionCatalog`
+  implements the bookkeeping every adapter would write otherwise: the versions its
+  deploy command reported, the BPMS query for a version it has never seen (a rolling
+  deployment where another node is ahead) and a floor between two such queries;
+- `WorkflowTaskInvoker.resolveProcessVersions(module)`, called by adapters at the end
+  of `deployResources`, resolves the tags the application names while the application
+  STARTS - the deployment has happened, so a tag deployed by this very start is
+  included. A tag no BPMS knows is a WARN, never a boot failure: the tagged version may
+  arrive later, and the other methods have to keep serving.
+
+Two methods wired to the same BPMN element are ambiguous exactly when their ranges
+OVERLAP (`VersionRange.overlaps`, interval math). A range naming a tag cannot be placed
+before a BPMS was asked, so the check runs twice: at registration for everything
+decidable without a BPMS, and again during `resolveProcessVersions`. Both times it fails
+the boot naming both methods.
+
 ### Two-phase workflow start (`PhaseTwoOutbox` SPI)
 
 Starting a workflow must be atomic with the local database transaction that persists

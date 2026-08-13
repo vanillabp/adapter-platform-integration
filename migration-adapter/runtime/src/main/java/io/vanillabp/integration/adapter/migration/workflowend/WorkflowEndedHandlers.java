@@ -31,6 +31,20 @@ public class WorkflowEndedHandlers {
   private final Map<RegistryKey, List<WorkflowEndedHandler>> handlers = new ConcurrentHashMap<>();
 
   /**
+   * What the BPMS know about the deployed versions of the BPMN processes - owned by the
+   * {@link io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry}
+   * and shared, since all three annotations carry a <code>version</code> attribute.
+   */
+  private final io.vanillabp.integration.adapter.migration.workflowtask.ProcessVersions processVersions;
+
+  public WorkflowEndedHandlers(
+      final io.vanillabp.integration.adapter.migration.workflowtask.ProcessVersions processVersions) {
+
+    this.processVersions = processVersions;
+
+  }
+
+  /**
    * Scans a workflow service class and registers what it found. Called by the
    * platform integration at startup, once per (workflow service class, declared
    * BPMN process ID).
@@ -58,10 +72,58 @@ public class WorkflowEndedHandlers {
     synchronized (registered) {
       scanned
           .forEach(handler -> {
-            failOnDuplicateWiring(workflowModuleId, bpmnProcessId, registered, handler);
+            failOnDuplicateWiring(
+                workflowModuleId,
+                bpmnProcessId,
+                registered,
+                handler,
+                io.vanillabp.integration.adapter.migration.workflowtask.VersionRange.NO_RESOLVER);
             registered.add(handler);
           });
     }
+
+  }
+
+  /**
+   * Resolves the version tags the methods of the given workflow module name and checks
+   * the version ranges naming a tag for overlaps - those could not be placed while
+   * registering, since no BPMS had been asked about its versions at that point.
+   *
+   * @param workflowModuleId The workflow module ID
+   */
+  public void resolveProcessVersions(
+      final String workflowModuleId) {
+
+    handlers
+        .entrySet()
+        .stream()
+        .filter(entry -> entry.getKey().workflowModuleId().equals(workflowModuleId))
+        .forEach(entry -> {
+          final var bpmnProcessId = entry.getKey().bpmnProcessId();
+          final var registered = entry.getValue();
+          if (registered.stream().allMatch(handler -> handler.versionTags().isEmpty())) {
+            return;
+          }
+          processVersions.warmUp(workflowModuleId, bpmnProcessId);
+          final var resolver = processVersions.resolverFor(workflowModuleId, bpmnProcessId);
+          synchronized (registered) {
+            registered
+                .forEach(handler -> handler
+                    .versionTags()
+                    .forEach(tag -> processVersions.reportUnknownVersionTag(
+                        workflowModuleId,
+                        bpmnProcessId,
+                        tag,
+                        handler.describe())));
+            registered
+                .forEach(handler -> failOnDuplicateWiring(
+                    workflowModuleId,
+                    bpmnProcessId,
+                    registered,
+                    handler,
+                    resolver));
+          }
+        });
 
   }
 
@@ -69,12 +131,16 @@ public class WorkflowEndedHandlers {
       final String workflowModuleId,
       final String bpmnProcessId,
       final List<WorkflowEndedHandler> registered,
-      final WorkflowEndedHandler handler) {
+      final WorkflowEndedHandler handler,
+      final io.vanillabp.integration.adapter.migration.workflowtask.VersionRange.ProcessVersionResolver resolver) {
 
     final var duplicate = registered
         .stream()
+        .filter(existing -> existing != handler)
         .filter(existing -> java.util.Objects.equals(existing.getEndEventId(), handler.getEndEventId()))
-        .filter(existing -> existing.matchesVersion(null) && handler.matchesVersion(null))
+        // overlapping version ranges are ambiguous; disjoint ones are a legitimate
+        // way to serve several process versions
+        .filter(existing -> existing.overlapsVersions(handler, resolver))
         .findFirst();
     if (duplicate.isPresent()) {
       throw new IllegalStateException(
@@ -139,7 +205,11 @@ public class WorkflowEndedHandlers {
     final var handler = registered
         .stream()
         .filter(candidate -> candidate.matchesEndEvent(context.getEndEventId()))
-        .filter(candidate -> candidate.matchesVersion(context.getProcessVersion()))
+        .filter(candidate -> candidate.matchesVersion(
+            context.getProcessVersion(),
+            processVersions.resolverFor(
+                processService.getWorkflowModuleId(),
+                processService.getBpmnProcessId())))
         .findFirst()
         .orElse(null);
     if (handler == null) {

@@ -63,7 +63,9 @@ public class DummyAdapterBeanRegistrar implements BeanRegistrar {
                       .beanProvider(DummyTaskWiringSource.class), supplierContext
                           .bean(WorkflowTaskRegistry.class), supplierContext
                               .beanProvider(DummyBpmsInitiatedStartSource.class), supplierContext
-                                  .bean(WorkflowTaskRegistry.class))));
+                                  .bean(WorkflowTaskRegistry.class), supplierContext
+                                      .beanProvider(
+                                          io.vanillabp.adapter.dummy.springboot.deployment.DummyProcessVersionSource.class))));
 
         });
 

@@ -83,16 +83,24 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
   private final Map<RegistryKey, RegistryEntry> entries = new ConcurrentHashMap<>();
 
   /**
+   * What the BPMS know about the deployed versions of the BPMN processes - needed to
+   * place a version TAG named by a <code>version</code> attribute in the deployment
+   * order (story 48). Shared by all three handler kinds, since all three annotations
+   * carry that attribute.
+   */
+  private final ProcessVersions processVersions = new ProcessVersions();
+
+  /**
    * The <code>&#64;WorkflowStartedByBpms</code> methods of the same workflow service
    * classes - what a workflow started by the BPMS itself needs (story 41).
    */
-  private final BpmsInitiatedStarts bpmsInitiatedStarts = new BpmsInitiatedStarts();
+  private final BpmsInitiatedStarts bpmsInitiatedStarts = new BpmsInitiatedStarts(processVersions);
 
   /**
    * The <code>&#64;WorkflowEnded</code> methods of the same workflow service classes
    * (story 43).
    */
-  private final WorkflowEndedHandlers workflowEndedHandlers = new WorkflowEndedHandlers();
+  private final WorkflowEndedHandlers workflowEndedHandlers = new WorkflowEndedHandlers(processVersions);
 
   /**
    * The transaction annotations of the running platform (story 40b), supplied by the
@@ -204,8 +212,18 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
           workflowServiceBean,
           beanResolver,
           transactionAnnotations);
-      handlers.forEach(handler -> failOnDuplicateWiring(workflowModuleId, bpmnProcessId, entry, handler));
-      entry.handlers.addAll(handlers);
+      // one by one, so two methods of the SAME class wired to one task definition are
+      // compared against each other as well (story 48)
+      handlers
+          .forEach(handler -> {
+            failOnDuplicateWiring(
+                workflowModuleId,
+                bpmnProcessId,
+                entry,
+                handler,
+                VersionRange.NO_RESOLVER);
+            entry.handlers.add(handler);
+          });
       entry.workflowServiceClasses.add(workflowServiceClass);
       entry.processService = processService;
     }
@@ -232,15 +250,18 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
       final String workflowModuleId,
       final String bpmnProcessId,
       final RegistryEntry entry,
-      final WorkflowTaskHandler handler) {
+      final WorkflowTaskHandler handler,
+      final VersionRange.ProcessVersionResolver resolver) {
 
     final var duplicate = entry.handlers
         .stream()
+        .filter(existing -> existing != handler)
         .filter(existing -> sameWiring(existing.getTaskDefinition(),
             handler.getTaskDefinition()) || sameWiring(existing.getActivityId(), handler.getActivityId()))
-        // both matching every version = genuinely ambiguous; disjoint version
-        // ranges are a legitimate way to serve several process versions
-        .filter(existing -> existing.matchesVersion(null) && handler.matchesVersion(null))
+        // overlapping version ranges are ambiguous; disjoint ones are a legitimate
+        // way to serve several process versions ('1-2' next to '>2' is fine, '1-3'
+        // next to '2' is not)
+        .filter(existing -> existing.overlapsVersions(handler, resolver))
         .findFirst();
     if (duplicate.isPresent()) {
       throw new IllegalStateException(
@@ -430,7 +451,9 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
         .stream()
         .filter(candidate -> sameWiring(candidate.getTaskDefinition(),
             context.getTaskDefinition()) || sameWiring(candidate.getActivityId(), context.getTaskDefinition()))
-        .filter(candidate -> candidate.matchesVersion(context.getProcessVersion()))
+        .filter(candidate -> candidate.matchesVersion(
+            context.getProcessVersion(),
+            processVersions.resolverFor(workflowModuleId, bpmnProcessId)))
         .findFirst()
         .orElseThrow(() -> new IllegalStateException(
             """
@@ -450,6 +473,64 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
         context,
         transactionRunner,
         rollbackRuleRemedies);
+
+  }
+
+  @Override
+  public void registerProcessVersions(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog catalog) {
+
+    processVersions.register(adapterId, workflowModuleId, bpmnProcessId, catalog);
+
+  }
+
+  @Override
+  public void resolveProcessVersions(
+      final String workflowModuleId) {
+
+    entries
+        .entrySet()
+        .stream()
+        .filter(entry -> entry.getKey().workflowModuleId().equals(workflowModuleId))
+        .forEach(entry -> {
+          final var bpmnProcessId = entry.getKey().bpmnProcessId();
+          final var registryEntry = entry.getValue();
+          final var tagsUsed = registryEntry.handlers
+              .stream()
+              .anyMatch(handler -> !handler.versionTags().isEmpty());
+          if (!tagsUsed) {
+            return;
+          }
+          // the BPMS is asked ONCE per process, right after the deployment: the
+          // version deployed by this boot is part of the answer, and a tag the
+          // application names is either known now or reported as unknown
+          processVersions.warmUp(workflowModuleId, bpmnProcessId);
+          final var resolver = processVersions.resolverFor(workflowModuleId, bpmnProcessId);
+          synchronized (registryEntry) {
+            registryEntry.handlers
+                .forEach(handler -> handler
+                    .versionTags()
+                    .forEach(tag -> processVersions.reportUnknownVersionTag(
+                        workflowModuleId,
+                        bpmnProcessId,
+                        tag,
+                        handler.describe())));
+            // ranges naming a tag could not be placed while registering - now they can
+            registryEntry.handlers
+                .forEach(handler -> failOnDuplicateWiring(
+                    workflowModuleId,
+                    bpmnProcessId,
+                    registryEntry,
+                    handler,
+                    resolver));
+          }
+        });
+
+    bpmsInitiatedStarts.resolveProcessVersions(workflowModuleId);
+    workflowEndedHandlers.resolveProcessVersions(workflowModuleId);
 
   }
 

@@ -4,6 +4,49 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## `version` decides which method serves a task (2026-08-13)
+
+Story 48 - the `version` attribute of `@WorkflowTask`, `@WorkflowStartedByBpms` and
+`@WorkflowEnded` is evaluated now. It exists since VanillaBP 1 and was never implemented
+there, so every method served every version; VanillaBP 2 parsed the ranges but no adapter
+reported a version, which came to the same. Applications not using the attribute are
+unaffected.
+
+The version meant is the version of the deployed process DEFINITION as the BPMS counts it
+(Camunda 7 and Camunda 8 count integers upwards per BPMN process id), not a version an
+application invents. A boundary may also name a version TAG of the model
+(`camunda:versionTag`, `zeebe:versionTag`).
+
+Three things flip for an application which already carries the attribute:
+
+- Disjoint ranges really are disjoint now. A version served by NO method fails the
+  delivery with a message naming that version, where before the first method ran.
+- Two methods wired to one BPMN element with OVERLAPPING ranges fail the boot, naming both
+  methods. The duplicate check compared `matchesVersion(null)`, which is `true` for every
+  specification, so it never fired; and the workflow-task registry compared newly scanned
+  handlers only against the already registered ones, so two methods of the SAME class were
+  never compared at all.
+- A non-numeric specification is a version TAG now instead of a boot failure. `version =
+  "latest"` used to fail with "unsupported version specification" and is a tag named
+  `latest` today. `>=3` and `<=3` are supported as documented in version 1's README (they
+  were never implemented either).
+
+New in the adapter SPI (`io.vanillabp.integration.adapter.spi.version`):
+`ProcessVersionCatalog` with `DeployedProcessVersion` and the ready-made
+`CachingProcessVersionCatalog`, plus two default methods on `WorkflowTaskInvoker`:
+`registerProcessVersions(...)` during `wireBpmn` and `resolveProcessVersions(module)` at
+the end of `deployResources`. Both are optional: an adapter which registers nothing keeps
+working, and only specifications naming a version tag need a catalog at all. Adapters
+outside this repository do not have to change.
+
+What it costs: nothing for specifications made of numbers - they are compared to the
+version the adapter reports with the task. A specification naming a tag makes VanillaBP ask
+the BPMS once per process while the application starts (after the deployment, so a tag
+deployed by this very start is included) and again only for a version it has never seen,
+which is what a rolling deployment produces while another node is ahead. Camunda 7 answers
+from its definition query, Camunda 8 needs its query API (secondary storage) for tags, and
+the Process-Engine-API can only report the tag of the current task (GAPS 19).
+
 ## Camunda 8: workflows were never found on clusters with secondary storage (2026-08-13)
 
 Story 52 - a defect fix. Nothing to change in your code or configuration.

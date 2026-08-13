@@ -55,6 +55,33 @@ public class DeploymentService implements AdapterDeploymentService<Object, Objec
   private final WorkflowEndedInvoker workflowEndedInvoker;
 
   /**
+   * Test hook standing in for the versions the BPMS deployed (see
+   * {@link DummyProcessVersionSource}).
+   */
+  private final ObjectProvider<DummyProcessVersionSource> processVersionSource;
+
+  /**
+   * The versions of the deployed BPMN processes, cached like a real adapter caches
+   * them - the test's {@link DummyProcessVersionSource} plays the BPMS query.
+   */
+  private final io.vanillabp.integration.adapter.spi.version.CachingProcessVersionCatalog processVersions = new io.vanillabp.integration.adapter.spi.version.CachingProcessVersionCatalog(
+      java.time.Duration.ZERO) {
+
+    @Override
+    protected List<io.vanillabp.integration.adapter.spi.version.DeployedProcessVersion> fetchDeployedVersions(
+        final String workflowModuleId,
+        final String bpmnProcessId) {
+
+      final var source = processVersionSource.getIfAvailable();
+      return source == null
+          ? List.of()
+          : source.versionsOf(adapterId, workflowModuleId, bpmnProcessId);
+
+    }
+
+  };
+
+  /**
    * Which BPMN processes got an end listener attached - a real adapter modifies its
    * model here, the dummy records the decision so a test can assert that a process
    * without a handler pays nothing.
@@ -184,6 +211,12 @@ public class DeploymentService implements AdapterDeploymentService<Object, Objec
             bpmnProcessId,
             source.startEventsOf(adapterId, workflowModuleId, bpmnProcessId)));
 
+    // like a real adapter which can be asked about its deployed versions: hand the
+    // catalog over, so version specifications naming a version tag can be resolved
+    processVersionSource.ifAvailable(
+        source -> workflowTaskInvoker
+            .registerProcessVersions(adapterId, workflowModuleId, bpmnProcessId, processVersions));
+
     // like a real adapter: a model pays for the end notification only where the
     // application asked for one
     if (workflowEndedInvoker.workflowEndedHandlerExists(workflowModuleId, bpmnProcessId)) {
@@ -253,6 +286,10 @@ public class DeploymentService implements AdapterDeploymentService<Object, Objec
     // matching no task of any process are a defect (per-module check)
     taskWiringSource.ifAvailable(
         source -> workflowTaskInvoker.validateNoUnwiredWorkflowTaskMethods(workflowModuleId));
+
+    // like a real adapter: the deployment is done, so the version tags named by the
+    // application's annotations can be resolved against what the BPMS has now
+    workflowTaskInvoker.resolveProcessVersions(workflowModuleId);
 
   }
 

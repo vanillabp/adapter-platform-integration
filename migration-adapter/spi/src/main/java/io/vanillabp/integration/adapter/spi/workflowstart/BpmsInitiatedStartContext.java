@@ -97,9 +97,12 @@ public interface BpmsInitiatedStartContext {
   }
 
   /**
-   * The version of the deployed BPMN process, matched against
-   * <code>&#64;WorkflowStartedByBpms(version = ...)</code>. <code>null</code>
-   * matches every method regardless of its version ranges.
+   * The version of the deployed BPMN process definition the BPMS started this workflow
+   * from, as the BPMS counts it. It is matched against
+   * <code>&#64;WorkflowStartedByBpms(version = ...)</code> like a task's version is
+   * matched against <code>&#64;WorkflowTask(version = ...)</code> - see
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext#getProcessVersion()}.
+   * <code>null</code> matches every method regardless of its version ranges.
    *
    * @return The process version or <code>null</code>
    */

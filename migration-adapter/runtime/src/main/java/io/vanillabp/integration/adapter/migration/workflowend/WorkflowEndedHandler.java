@@ -97,9 +97,50 @@ public class WorkflowEndedHandler {
   boolean matchesVersion(
       final String processVersion) {
 
+    return matchesVersion(processVersion, VersionRange.NO_RESOLVER);
+
+  }
+
+  boolean matchesVersion(
+      final String processVersion,
+      final VersionRange.ProcessVersionResolver resolver) {
+
     return versions
         .stream()
-        .anyMatch(version -> version.matches(processVersion));
+        .anyMatch(version -> version.matches(processVersion, resolver));
+
+  }
+
+  /**
+   * Whether this handler and the given one serve at least one common process version -
+   * two handlers serving the same end event are ambiguous exactly then.
+   *
+   * @param other The other handler
+   * @param resolver Resolves version tags of the BPMN process both belong to
+   * @return Whether both serve a common version
+   */
+  boolean overlapsVersions(
+      final WorkflowEndedHandler other,
+      final VersionRange.ProcessVersionResolver resolver) {
+
+    return versions
+        .stream()
+        .anyMatch(version -> other.versions
+            .stream()
+            .anyMatch(otherVersion -> version.overlaps(otherVersion, resolver)));
+
+  }
+
+  /**
+   * @return The version tags this handler's version specifications name
+   */
+  List<String> versionTags() {
+
+    return versions
+        .stream()
+        .flatMap(version -> version.versionTags().stream())
+        .distinct()
+        .toList();
 
   }
 

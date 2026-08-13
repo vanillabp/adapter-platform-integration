@@ -1341,7 +1341,7 @@ public class WorkflowTaskRegistryTest {
 
     class BadVersionService {
 
-      @WorkflowTask(version = "latest")
+      @WorkflowTask(version = ">")
       public void badVersion(
           final Aggregate aggregate) {
       }
@@ -1358,8 +1358,53 @@ public class WorkflowTaskRegistryTest {
             beans::get,
             createProcessService()));
 
-    assertTrue(exception.getMessage().contains("latest"));
     assertTrue(exception.getMessage().contains("Supported formats"));
+
+    class BlankVersionService {
+
+      @WorkflowTask(version = "1 - 3")
+      public void blankVersion(
+          final Aggregate aggregate) {
+      }
+
+    }
+
+    final var blank = assertThrows(
+        IllegalStateException.class,
+        () -> registry.registerWorkflowService(
+            MODULE,
+            "BlankVersionProcess",
+            BlankVersionService.class,
+            BlankVersionService::new,
+            beans::get,
+            createProcessService()));
+
+    assertTrue(blank.getMessage().contains("blank"));
+
+  }
+
+  @Test
+  @DisplayName("A non-numeric version specification is a version tag, not a defect")
+  public void versionTagSpecIsAccepted() {
+
+    class TaggedService {
+
+      @WorkflowTask(taskDefinition = "tagged", version = "release-2024")
+      public void tagged(
+          final Aggregate aggregate) {
+      }
+
+    }
+
+    // a version tag cannot be validated at registration time: no BPMS was asked yet,
+    // and the tagged version may even be deployed by this very boot
+    registry.registerWorkflowService(
+        MODULE,
+        "TaggedProcess",
+        TaggedService.class,
+        TaggedService::new,
+        beans::get,
+        createProcessService());
 
   }
 

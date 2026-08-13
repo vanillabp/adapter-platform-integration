@@ -92,9 +92,14 @@ public interface TaskInvocationContext {
   }
 
   /**
-   * The version of the deployed BPMN process this task belongs to, matched against
-   * <code>&#64;WorkflowTask(version = ...)</code>. <code>null</code> matches every
-   * handler regardless of its version ranges.
+   * The version of the deployed BPMN process definition this task belongs to, as the
+   * BPMS counts it (Camunda 7 and Camunda 8 count integers upwards per BPMN process
+   * id) - NOT a version the application invented. It is matched against
+   * <code>&#64;WorkflowTask(version = ...)</code>, and a specification naming a
+   * version TAG is resolved using the
+   * {@link io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog} the
+   * adapter registered. <code>null</code> matches every handler regardless of its
+   * version ranges - the compatible answer of an adapter whose BPMS cannot tell.
    *
    * @return The process version or <code>null</code>
    */

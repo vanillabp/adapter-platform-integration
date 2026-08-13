@@ -46,7 +46,8 @@ public class DummyDeploymentServiceProducer {
       @Any final Instance<DummyDeploymentListener> deploymentListeners,
       final io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry workflowTaskRegistry,
       @Any final Instance<DummyTaskWiringSource> taskWiringSource,
-      @Any final Instance<DummyBpmsInitiatedStartSource> bpmsInitiatedStartSource) {
+      @Any final Instance<DummyBpmsInitiatedStartSource> bpmsInitiatedStartSource,
+      @Any final Instance<DummyProcessVersionSource> processVersionSource) {
 
     return properties
         .adapterTypes()
@@ -57,7 +58,7 @@ public class DummyDeploymentServiceProducer {
         .sorted()
         .<AdapterDeploymentService<Object, Object>>map(
             adapterId -> new DummyDeploymentService(
-                adapterId, deploymentListeners, workflowTaskRegistry, taskWiringSource, workflowTaskRegistry, bpmsInitiatedStartSource, workflowTaskRegistry))
+                adapterId, deploymentListeners, workflowTaskRegistry, taskWiringSource, workflowTaskRegistry, bpmsInitiatedStartSource, workflowTaskRegistry, processVersionSource))
         .toList();
 
   }
