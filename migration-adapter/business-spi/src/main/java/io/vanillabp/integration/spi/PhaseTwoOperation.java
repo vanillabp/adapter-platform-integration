@@ -180,6 +180,20 @@ public record PhaseTwoOperation(
       "SEND_SIGNAL", call -> Optional.empty());
 
   /**
+   * Phase two of pushing a changed workflow-aggregate to the BPMS - see
+   * {@code MigratableProcessService#aggregateChangedPhaseTwo}. An optional task ID
+   * travels in {@link PhaseTwoCall#args()} under {@link PhaseTwoCall#ARG_TASK_ID};
+   * without it the values are written at the workflow's global scope. No adapter ID
+   * is persisted - the executing adapter is elected at dispatch time by probing.
+   * <p>
+   * NO idempotency key, and that is not a shortcut: the values are read from the
+   * aggregate when the entry is DISPATCHED, so a redelivered entry writes the
+   * then-current state. Deduplicating could only drop a push, never save one.
+   */
+  public static final PhaseTwoOperation AGGREGATE_CHANGED = new PhaseTwoOperation(
+      "AGGREGATE_CHANGED", call -> Optional.empty());
+
+  /**
    * All operations owned by the VanillaBP core. Their names are reserved: an
    * extension registering one of them is rejected by
    * {@link PhaseTwoOperationRegistry#register(PhaseTwoOperation, PhaseTwoOperationDispatch)}.
@@ -193,7 +207,8 @@ public record PhaseTwoOperation(
           CANCEL_USER_TASK,
           CORRELATE_MESSAGE,
           START_WORKFLOW_BY_MESSAGE,
-          SEND_SIGNAL);
+          SEND_SIGNAL,
+          AGGREGATE_CHANGED);
 
   public PhaseTwoOperation {
     Objects.requireNonNull(name, "name must not be null");

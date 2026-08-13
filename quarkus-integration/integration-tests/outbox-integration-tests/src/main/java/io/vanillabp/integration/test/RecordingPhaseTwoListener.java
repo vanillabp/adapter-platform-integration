@@ -234,6 +234,30 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
 
   }
 
+  /**
+   * Recorded pushes of a changed aggregate as "aggregateId:taskId:phase" (the task
+   * id may be the literal "null" - that is the workflow's global scope).
+   */
+  private final List<String> aggregateChanges = new CopyOnWriteArrayList<>();
+
+  @Override
+  public void aggregateChanged(
+      final Object workflowAggregateId,
+      final String taskId,
+      final boolean phaseTwo) {
+
+    aggregateChanges.add("%s:%s:%s".formatted(workflowAggregateId, taskId, phaseTwo
+        ? "phase-two"
+        : "phase-one"));
+
+  }
+
+  public List<String> getAggregateChanges() {
+
+    return List.copyOf(aggregateChanges);
+
+  }
+
   public void failNextDispatches(
       final int numberOfFailures) {
 
@@ -258,6 +282,7 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
     canceledUserTasks.clear();
     correlatedMessages.clear();
     startedByMessage.clear();
+    aggregateChanges.clear();
     failuresRemaining.set(0);
 
   }

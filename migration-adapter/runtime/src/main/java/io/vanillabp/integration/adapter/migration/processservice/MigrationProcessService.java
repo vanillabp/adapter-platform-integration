@@ -910,6 +910,114 @@ public class MigrationProcessService<A> {
   }
 
   /**
+   * Pushes a changed workflow-aggregate to the BPMS holding its workflow: the
+   * aggregate is saved, the BPMS is located by probing {@code awarenessOfWorkflow},
+   * and the push runs in phase one (embedded) or is scheduled through the outbox
+   * (remote).
+   * <p>
+   * WHICH values travel is the sync model's business ({@code @SyncWithBPMS}), not
+   * this method's. WHERE they land depends on the task ID: <code>null</code> means
+   * the workflow's global scope, a task ID means the scope of that task instance
+   * only - a task-scoped push deliberately leaves the global values as they were.
+   *
+   * @param workflowAggregate The workflow aggregate
+   * @param taskId The ID of the task whose scope receives the values, or
+   *        <code>null</code> for the workflow's global scope
+   * @return The attached workflow aggregate
+   */
+  public A aggregateChanged(
+      final A workflowAggregate,
+      final String taskId) {
+
+    final var attachedAggregate = aggregatePersistenceSupport
+        .save(workflowAggregate);
+    final var aggregateId = aggregatePersistenceSupport
+        .getAggregateId(attachedAggregate);
+
+    final var subject = "workflow of aggregate '%s' (BPMN process '%s' of workflow module '%s')"
+        .formatted(aggregateId, bpmnProcessId, workflowModuleId);
+
+    final var location = workflowLocator.locate(
+        adapterProcessServices,
+        adapter -> adapter.awarenessOfWorkflow(aggregateId),
+        aggregateId,
+        subject);
+
+    switch (location.awareness()) {
+      case COMPLETED -> {
+        // a workflow which ended has no variables worth updating - the aggregate is
+        // saved either way, which is what the caller mainly wanted
+        log.warn(
+            "Ignored pushing the changed aggregate of {} to the BPMS: adapter '{}' reports the "
+                + "workflow as already completed",
+            subject,
+            location.adapter().getAdapterId());
+        return attachedAggregate;
+      }
+      case UNKNOWN_TO_BPMS -> throw new io.vanillabp.spi.process.WorkflowNotFoundException(
+          ("No configured BPMS knows the %s - the changed aggregate cannot be pushed (probed "
+              + "adapters, in prioritized order: %s)! The aggregate itself was saved. Likely "
+              + "causes: the workflow was never started, was started through another system, or "
+              + "already ended long ago.")
+              .formatted(subject, prioritizedAdapters));
+      default -> {
+        // ACTIVE - fall through
+      }
+    }
+
+    final var adapter = location.adapter();
+    adapter.aggregateChangedPhaseOne(
+        workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, attachedAggregate, taskId);
+
+    if (adapter.needsTwoPhaseCommitForStartingWorkflows()) {
+      final var outbox = resolvePhaseTwoOutbox();
+      if (outbox == null) {
+        throw new IllegalStateException(
+            buildNoOutboxMessage(adapter.getAdapterId()));
+      }
+      outbox.scheduleAggregateChanged(workflowModuleId, bpmnProcessId, aggregateId, taskId);
+    }
+
+    return attachedAggregate;
+
+  }
+
+  /**
+   * Executes phase two of pushing a changed workflow-aggregate - dispatch-time
+   * election via probing; a workflow gone by now is a stale entry (logged,
+   * consumed). The values are read from the aggregate as it is now.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate (original type)
+   * @param taskId The ID of the task whose scope receives the values, or
+   *        <code>null</code> for the workflow's global scope
+   */
+  public void aggregateChangedPhaseTwo(
+      final Object workflowAggregateId,
+      final String taskId) {
+
+    final var subject = "workflow of aggregate '%s' (BPMN process '%s' of workflow module '%s')"
+        .formatted(workflowAggregateId, bpmnProcessId, workflowModuleId);
+
+    final var location = workflowLocator.locate(
+        adapterProcessServices,
+        adapter -> adapter.awarenessOfWorkflow(workflowAggregateId),
+        workflowAggregateId,
+        subject);
+
+    switch (location.awareness()) {
+      case UNKNOWN_TO_BPMS, COMPLETED -> log.warn(
+          "Skipped phase two of pushing the changed aggregate of {}: the workflow is gone (stale "
+              + "outbox entry); the entry is consumed",
+          subject);
+      default -> location
+          .adapter()
+          .aggregateChangedPhaseTwo(
+              workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, taskId);
+    }
+
+  }
+
+  /**
    * Broadcasts a BPMN signal to every BPMS the workflow module is deployed to.
    * <p>
    * A signal is not addressed to a workflow, so nothing is probed and no aggregate

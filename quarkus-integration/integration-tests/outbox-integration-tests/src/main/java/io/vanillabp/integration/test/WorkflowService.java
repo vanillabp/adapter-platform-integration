@@ -68,6 +68,21 @@ public class WorkflowService {
 
   }
 
+  public Aggregate aggregateChanged(
+      final Aggregate aggregate) {
+
+    return processService.aggregateChanged(aggregate);
+
+  }
+
+  public Aggregate aggregateChanged(
+      final Aggregate aggregate,
+      final String taskId) {
+
+    return processService.aggregateChanged(aggregate, taskId);
+
+  }
+
   public Aggregate startWorkflowByMessage(
       final String content,
       final String messageName) {

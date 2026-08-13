@@ -4,6 +4,46 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Telling the BPMS that the aggregate changed (2026-08-13)
+
+Story 44 - `ProcessService.aggregateChanged` exists now, in two overloads. Additive;
+nothing existing changes behavior.
+
+- **New in `spi-for-java` 1.2.0:** `aggregateChanged(aggregate)` writes the values
+  shared with the BPMS at the workflow's global scope, `aggregateChanged(aggregate,
+  taskId)` writes them in the scope of that task instance - which is what
+  multi-instance needs. The task-scoped overload does NOT additionally write the
+  global scope: a local value shadows the global one there anyway, and writing both
+  would change what the sibling instances see.
+- **What travels is the sync model of story 28** (`@SyncWithBPMS`), the same values a
+  task completion pushes. The method names no variables.
+- **New adapter SPI methods** `MigratableProcessService#aggregateChangedPhaseOne` /
+  `#aggregateChangedPhaseTwo`, both `default` and both throwing a guiding
+  `UnsupportedOperationException`.
+- **New core operation `AGGREGATE_CHANGED`** in the operation registry (story 45),
+  WITHOUT an idempotency key: the values are read from the aggregate when the entry is
+  dispatched, so a redelivered entry writes the then-current state. Deduplicating
+  could only drop a push, never save one. The adapter is elected at dispatch time by
+  probing, like message correlation.
+- **Camunda 7** writes inside the caller's transaction: `setVariables` at the process
+  instance, `setVariablesLocal` at the parked execution of a task. This is what makes
+  **conditional events** usable at all there - the engine looks at their conditions
+  when a variable of their scope changes. Where an application shares nothing (this
+  adapter's opt-in default), a technical variable `vanillabpAggregateChanged` is
+  written so the change happens.
+- **Camunda 8** sends `SetVariables` after the commit, for the process instance
+  respectively the element instance of the task. It **needs secondary storage**: the
+  cluster has no business key, so only the query API translates an aggregate ID into
+  the keys the command takes. Without it the adapter fails with a guiding message.
+  Conditional events do not exist in Camunda 8 - that stays true.
+- **Process-Engine-API:** not supported (gap 18). The API modifies the payload of a
+  TASK, never that of a running instance, so both phases throw with a guiding message.
+- **Fixed on the way:** the Camunda 8 adapter searched process instances by the
+  aggregate-ID variable WITHOUT quoting the value. Variable values are stored as JSON,
+  so a String value never matched and every probe of a cluster WITH secondary storage
+  answered "unknown workflow". Affects `awarenessOfWorkflow`,
+  `awarenessOfWorkflowForRedispatch` and the new push.
+
 ## Telling the application that a workflow ended (2026-08-13)
 
 Story 43 - `@WorkflowEnded` exists now. Additive; nothing existing changes behavior,

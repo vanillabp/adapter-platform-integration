@@ -243,6 +243,20 @@ public final class PhaseTwoRouter {
 
     operations
         .registerCoreOperation(
+            PhaseTwoOperation.AGGREGATE_CHANGED,
+            (
+                call,
+                previouslyAttempted) -> withProcessService(
+                    call,
+                    (
+                        processService,
+                        workflowAggregateId) -> processService
+                            .aggregateChangedPhaseTwo(
+                                workflowAggregateId,
+                                call.args().get(PhaseTwoCall.ARG_TASK_ID))));
+
+    operations
+        .registerCoreOperation(
             PhaseTwoOperation.SEND_SIGNAL,
             (
                 call,

@@ -137,4 +137,19 @@ public interface DummyPhaseTwoListener {
       final boolean phaseTwo) {
   }
 
+  /**
+   * Called whenever a changed workflow-aggregate is pushed to the BPMS - in phase
+   * one for an adapter without a two-phase commit, in phase two for one with it.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param taskId The task whose scope received the values, or <code>null</code>
+   *        for the workflow's global scope
+   * @param phaseTwo Whether this was phase two (after the commit)
+   */
+  default void aggregateChanged(
+      final Object workflowAggregateId,
+      final String taskId,
+      final boolean phaseTwo) {
+  }
+
 }

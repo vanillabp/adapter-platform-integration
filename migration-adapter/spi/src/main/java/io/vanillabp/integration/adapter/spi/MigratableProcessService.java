@@ -510,6 +510,83 @@ public interface MigratableProcessService<A> {
 
   }
 
+  /**
+   * Push the values shared with the BPMS ({@code @SyncWithBPMS}) of a changed
+   * workflow-aggregate - phase one, executed inside the caller's transaction AFTER
+   * the adapter answered {@link WorkflowAwareness#ACTIVE} for the workflow. An
+   * EMBEDDED BPMS writes here (a rollback takes the write with it), a remote BPMS
+   * does nothing and writes in {@link #aggregateChangedPhaseTwo} after the commit.
+   * <p>
+   * WHICH values are pushed is not decided here: it is the sync model of the
+   * aggregate, the same one a task completion uses. WHERE they land is: without a
+   * task ID they belong to the workflow's global scope, with one to the scope of
+   * that task instance - which is what multi-instance needs, where a global write
+   * would be a lost update between sibling instances. A task-scoped write must NOT
+   * additionally touch the global scope.
+   * <p>
+   * The default throws: an adapter whose BPMS cannot update a running instance says
+   * so instead of pretending the push happened.
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param aggregatePersistence The persistence of the workflow-aggregate
+   * @param workflowAggregate The workflow-aggregate
+   * @param taskId The ID of the task whose scope receives the values, or
+   *        <code>null</code> for the workflow's global scope
+   */
+  default void aggregateChangedPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate,
+      final String taskId) {
+
+    throw aggregateChangedNotSupported(workflowModuleId, bpmnProcessId);
+
+  }
+
+  /**
+   * Push the values of a changed workflow-aggregate - phase two, dispatched through
+   * the outbox after the local transaction was committed. Only called for adapters
+   * requiring a two-phase commit.
+   * <p>
+   * <strong>Idempotency contract:</strong> none is needed. The adapter reads the
+   * values from the aggregate as it is NOW, so a redelivered entry writes the
+   * then-current state - which is what the application asked for either way. A
+   * workflow gone by dispatch time is tolerated (logged) like everywhere else.
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param aggregatePersistence The persistence of the workflow-aggregate
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param taskId The ID of the task whose scope receives the values, or
+   *        <code>null</code> for the workflow's global scope
+   */
+  default void aggregateChangedPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String taskId) {
+
+    throw aggregateChangedNotSupported(workflowModuleId, bpmnProcessId);
+
+  }
+
+  private UnsupportedOperationException aggregateChangedNotSupported(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return new UnsupportedOperationException(
+        ("The VanillaBP adapter '%s' cannot push a changed workflow-aggregate of BPMN process '%s' "
+            + "(workflow module '%s') to its BPMS: the BPMS cannot update a running instance, or "
+            + "the adapter predates aggregateChanged. Remove the adapter from the prioritized "
+            + "adapters of this workflow module, or model a task the workflow waits at - completing "
+            + "it pushes the aggregate as well.")
+            .formatted(getAdapterId(), bpmnProcessId, workflowModuleId));
+
+  }
+
   private UnsupportedOperationException signalsNotSupported(
       final String signalName,
       final String workflowModuleId) {

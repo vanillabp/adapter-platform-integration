@@ -50,7 +50,8 @@ public class PhaseTwoOperationContractTest {
                 "CANCEL_USER_TASK",
                 "CORRELATE_MESSAGE",
                 "START_WORKFLOW_BY_MESSAGE",
-                "SEND_SIGNAL"),
+                "SEND_SIGNAL",
+                "AGGREGATE_CHANGED"),
         PhaseTwoOperation.coreOperationNames());
 
   }
@@ -143,6 +144,19 @@ public class PhaseTwoOperationContractTest {
             .of(
                 PhaseTwoOperation.SEND_SIGNAL, "test-module", "TestProcess", null, "test-adapter", Map
                     .of(PhaseTwoCall.ARG_SIGNAL_NAME, "OrderReceived"))
+            .idempotencyKey()
+            .isEmpty());
+
+  }
+
+  @Test
+  @DisplayName("Pushing a changed aggregate has no key - the values are read at dispatch time")
+  public void aggregateChangedHasNoKey() {
+
+    assertTrue(
+        call(PhaseTwoOperation.AGGREGATE_CHANGED, Map.of()).idempotencyKey().isEmpty());
+    assertTrue(
+        call(PhaseTwoOperation.AGGREGATE_CHANGED, Map.of(PhaseTwoCall.ARG_TASK_ID, "task-1"))
             .idempotencyKey()
             .isEmpty());
 

@@ -312,7 +312,7 @@ An operation is not a hardcoded case in the router but an entry of the
 
 VanillaBP's own operations (`START_WORKFLOW`, `COMPLETE_TASK`, `CANCEL_TASK`,
 `COMPLETE_USER_TASK`, `CANCEL_USER_TASK`, `CORRELATE_MESSAGE`,
-`START_WORKFLOW_BY_MESSAGE`) are constants of `PhaseTwoOperation`, registered by the
+`START_WORKFLOW_BY_MESSAGE`, `SEND_SIGNAL`, `AGGREGATE_CHANGED`) are constants of `PhaseTwoOperation`, registered by the
 `PhaseTwoRouter` while it is built. Their dispatch is the process-service routing
 described above. Their names and key rules are pinned by a test, because since they
 stopped being enum constants nothing else guarantees them.
@@ -442,6 +442,34 @@ place where neither election nor aggregate applies:
   idempotency key: nothing about a signal can be deduplicated.
 - The call carries no aggregate ID, which is why `PhaseTwoCall` allows it to be
   absent. The router's `SEND_SIGNAL` dispatch therefore does not convert one.
+
+### Pushing a changed aggregate (`aggregateChanged`)
+
+`MigrationProcessService.aggregateChanged(aggregate, taskId)` is `correlateMessage` with
+another verb: save the aggregate, locate the BPMS by probing `awarenessOfWorkflow`, write
+in phase one for an embedded BPMS and schedule an `AGGREGATE_CHANGED` outbox entry for a
+remote one. A completed workflow is a warned no-op, an unknown one a
+`WorkflowNotFoundException` naming that the aggregate WAS saved.
+
+Two decisions are worth knowing:
+
+- **No idempotency key.** The values are read from the aggregate when the entry is
+  DISPATCHED, so a redelivered entry writes the then-current state. A key could only ever
+  drop a push, never save one.
+- **The task id decides the scope and nothing else.** Without one the values belong to the
+  workflow's global scope, with one to that task instance - and a task-scoped push must NOT
+  additionally write the global scope, or the sibling instances of a multi-instance
+  activity would see what another instance pushed. The adapters enforce that, the core only
+  transports the id (in `ARG_TASK_ID`).
+
+There is no ordering guarantee between outbox entries: the dispatchers select by due time
+(`NEXT_ATTEMPT_AT <= now`) without an `ORDER BY`, so a push and a task completion scheduled
+in the same transaction may reach a remote BPMS in the other order. That is documented
+rather than fixed - inventing an order here would promise something the stores do not
+implement, and an application which needs one can keep the calls in separate transactions.
+
+WHAT is pushed stays the sync model's business (story 28). This operation adds no second
+way of choosing values, which is what keeps the aggregate the single source of truth.
 
 ### Workflows the BPMS starts itself (`BpmsInitiatedStartInvoker`)
 

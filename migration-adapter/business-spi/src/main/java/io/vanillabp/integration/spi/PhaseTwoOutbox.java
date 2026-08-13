@@ -271,6 +271,38 @@ public interface PhaseTwoOutbox {
   }
 
   /**
+   * Schedule phase two of pushing a changed workflow-aggregate to the BPMS. NO
+   * adapter ID is persisted - the adapter is elected at dispatch time by probing.
+   * There is NO idempotency key either: the values are read from the aggregate when
+   * the entry is dispatched, so a repeated dispatch writes the then-current state.
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param taskId The ID of the task whose scope receives the values, or
+   *        <code>null</code> for the workflow's global scope
+   * @return <code>true</code> if scheduled
+   */
+  default boolean scheduleAggregateChanged(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Object workflowAggregateId,
+      final String taskId) {
+
+    final var args = new java.util.LinkedHashMap<String, String>();
+    if (taskId != null) {
+      args.put(PhaseTwoCall.ARG_TASK_ID, taskId);
+    }
+    return schedule(
+        PhaseTwoCall
+            .of(
+                PhaseTwoOperation.AGGREGATE_CHANGED, workflowModuleId, bpmnProcessId, workflowAggregateId
+                    .toString(),
+                null, args));
+
+  }
+
+  /**
    * Schedule phase two of broadcasting a BPMN signal. The broadcasting adapter IS
    * persisted with the entry: a broadcast reaches every BPMS the workflow module
    * was deployed to, so one entry per BPMS is scheduled and each is dispatched to
