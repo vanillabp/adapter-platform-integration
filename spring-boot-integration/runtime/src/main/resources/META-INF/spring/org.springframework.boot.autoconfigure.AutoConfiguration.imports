@@ -3,5 +3,7 @@ io.vanillabp.integration.utils.config.JpaSpringDataUtilConfiguration
 io.vanillabp.integration.utils.config.MongoDbSpringDataUtilAutoConfiguration
 io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfiguration
 io.vanillabp.integration.outbox.mongo.MongoPhaseTwoOutboxAutoConfiguration
+io.vanillabp.integration.delivery.JdbcTaskDeliveryLogAutoConfiguration
+io.vanillabp.integration.delivery.MongoTaskDeliveryLogAutoConfiguration
 io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration
 io.vanillabp.integration.deployment.DeploymentAutoConfiguration

@@ -142,4 +142,35 @@ public interface TaskInvocationContext {
 
   }
 
+  /**
+   * What identifies THIS delivery across redeliveries of the same task: the Camunda 8
+   * job key, the ID of the task instance a remote engine reports, whatever the BPMS
+   * uses to talk about this piece of work. A BPMS repeating a delivery has to yield
+   * the SAME value, a genuinely new task instance (the next loop iteration, the next
+   * multi-instance element, a retry AFTER the task was completed) a different one.
+   * <p>
+   * The core uses it to remember which deliveries it processed
+   * ({@link io.vanillabp.integration.spi.TaskDeliveryLog}): a repeated delivery is
+   * answered with the recorded outcome instead of running the
+   * <code>&#64;WorkflowTask</code> method again.
+   * <p>
+   * The default is <code>null</code>, which means "this adapter cannot tell": the
+   * handler is invoked for every delivery, as it always was. An EMBEDDED BPMS
+   * delivering within the application's transaction ({@link #runInCurrentTransaction()})
+   * has no reason to report one - a redelivery there proves that nothing was
+   * committed, so there is nothing to remember (see
+   * {@link io.vanillabp.integration.adapter.spi.MigratableProcessService#deliversTasksAtLeastOnce()}).
+   * <p>
+   * A value does NOT have to be unique beyond this BPMS: the core prefixes it with
+   * the adapter ID, the workflow module, the BPMN process and the event, so the ID
+   * only has to be unique within the delivering BPMS.
+   *
+   * @return The delivery's identity or <code>null</code>
+   */
+  default String getDeliveryId() {
+
+    return null;
+
+  }
+
 }

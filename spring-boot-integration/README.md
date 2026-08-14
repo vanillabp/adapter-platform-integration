@@ -48,6 +48,32 @@ coexist, and keys unknown to the core view are ignored by the JavaBean binding.
 The adapter-id set is always derived from the core properties
 (`adapterTypes()`), never from an overlay map.
 
+## The store of processed task deliveries
+
+`io.vanillabp.integration.delivery` implements the core's `TaskDeliveryLog` (story 51,
+the inbound counterpart of the outbox) twice, and `SpringTaskDeliveryLogResolver` picks
+one per workflow aggregate - the same resolution the phase-two outbox uses, since a
+record has to ride the aggregate's own transaction. The persistence technology behind an
+aggregate is detected once in `SpringPersistenceTechnology`, shared by both resolvers.
+
+- `JdbcTaskDeliveryLog` writes through `DataSourceUtils.getConnection(dataSource)`, so
+  the connection belongs to the Spring-managed transaction. The SQL and the portable DDL
+  of table `VANILLABP_TASK_DELIVERY` live in the core (`JdbcTaskDeliveryStore`), shared
+  with Quarkus. Deliberately NOT gruelbox: gruelbox stores calls to be dispatched, a
+  delivery record is a fact to be read back.
+- `MongoTaskDeliveryLog` writes `TaskDeliveryDocument`s into `vanillabp-task-deliveries`
+  through the `MongoTemplate`, keyed by the delivery key (the document ID gives
+  uniqueness). A duplicate is detected by a pre-check read: inside a MongoDB transaction
+  a duplicate-key error would abort the whole transaction, the aggregate changes
+  included.
+- Both come with an auto-configuration of their own
+  (`vanillabp.outbox.jdbc.enabled` / `.mongo.enabled`), create their schema unless
+  `vanillabp.outbox.create-schema` is disabled and delete expired records per
+  `vanillabp.outbox.retention` (`cleanUpExpiredRecords`, scheduled by the core's
+  `TaskDeliveryRetentionCleanup`). Table and index are created from a
+  `SmartInitializingSingleton`, not while the bean is built - the DDL must not
+  materialize the data source before the application's configuration is complete.
+
 ## Noteworthy & Contributors
 
 [VanillaBP](https://www.github.com/vanillabp/spi-for-java) was developed by [Phactum](https://www.phactum.at) with the

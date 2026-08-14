@@ -37,13 +37,15 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                       Optional<DeploymentFailurePolicy> deploymentFailure,
                                       Optional<String> resourcesLocation,
                                       Optional<io.vanillabp.integration.adapter.spi.NameClashAvoidance> nameClashAvoidance,
-                                      Optional<Boolean> prefixTaskDefinitionsPerProcess) implements QuarkusMigrationAdapterProperties.AdapterConfiguration {
+                                      Optional<Boolean> prefixTaskDefinitionsPerProcess,
+                                      Optional<Boolean> deduplicateDeliveries) implements QuarkusMigrationAdapterProperties.AdapterConfiguration {
   }
 
   private record AdapterProperties(
                                    Optional<String> resourcesLocation,
                                    Optional<io.vanillabp.integration.adapter.spi.NameClashAvoidance> nameClashAvoidance,
-                                   Optional<Boolean> prefixTaskDefinitionsPerProcess) implements QuarkusMigrationAdapterProperties.AdapterProperties {
+                                   Optional<Boolean> prefixTaskDefinitionsPerProcess,
+                                   Optional<Boolean> deduplicateDeliveries) implements QuarkusMigrationAdapterProperties.AdapterProperties {
   }
 
   private record TaskProperties(
@@ -105,33 +107,39 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
             "c8-cloud", new AdapterConfiguration(
                 Optional.of("camunda8"), Optional.of(DeploymentFailurePolicy.WARN), Optional
                     .of("adapter-level"), Optional
-                        .of(io.vanillabp.integration.adapter.spi.NameClashAvoidance.USE_PREFIX), Optional.of(false)),
+                        .of(io.vanillabp.integration.adapter.spi.NameClashAvoidance.USE_PREFIX), Optional
+                            .of(false), Optional.of(false)),
             "c7", new AdapterConfiguration(
-                Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty())), Map.of(
-                    "loan-approval", new WorkflowModuleProperties(
-                        Optional.of(List.of("c7")), Map.of("c7",
-                            new AdapterProperties(Optional.of("classpath:c7-bpmn"), Optional
-                                .of(io.vanillabp.integration.adapter.spi.NameClashAvoidance.NONE), Optional
-                                    .empty())), Map
-                                        .of("LoanApproval",
-                                            new WorkflowProperties(
-                                                Optional.of(List.of("c8-cloud")), Map
-                                                    .of("c8-cloud", new AdapterProperties(Optional
-                                                        .of("workflow-level"), Optional
-                                                            .empty(), Optional.of(true))), Map
-                                                                .of("assessRisk", new TaskProperties(Map
-                                                                    .of("c8-cloud", new AdapterProperties(Optional
-                                                                        .of("task-level"), Optional.empty(), Optional
-                                                                            .empty())))))))), new OutboxProperties(
-                                                                                Duration.ofSeconds(1), Duration
-                                                                                    .ofSeconds(2), 3, false, Duration
-                                                                                        .ofDays(
-                                                                                            1), new JdbcOutboxProperties(false, Optional
-                                                                                                .of("HOT_OUTBOX")), new MongoOutboxProperties(
-                                                                                                    false, "hot-outbox")), new WorkflowAdapterCacheProperties(
-                                                                                                        50_000, Duration
-                                                                                                            .ofMinutes(
-                                                                                                                30)));
+                Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional
+                    .empty())), Map.of(
+                        "loan-approval", new WorkflowModuleProperties(
+                            Optional.of(List.of("c7")), Map.of("c7",
+                                new AdapterProperties(Optional.of("classpath:c7-bpmn"), Optional
+                                    .of(io.vanillabp.integration.adapter.spi.NameClashAvoidance.NONE), Optional
+                                        .empty(), Optional.empty())), Map
+                                            .of("LoanApproval",
+                                                new WorkflowProperties(
+                                                    Optional.of(List.of("c8-cloud")), Map
+                                                        .of("c8-cloud", new AdapterProperties(Optional
+                                                            .of("workflow-level"), Optional
+                                                                .empty(), Optional.of(true), Optional.of(true))), Map
+                                                                    .of("assessRisk", new TaskProperties(Map
+                                                                        .of("c8-cloud", new AdapterProperties(Optional
+                                                                            .of("task-level"), Optional
+                                                                                .empty(), Optional
+                                                                                    .empty(), Optional
+                                                                                        .of(false))))))))), new OutboxProperties(
+                                                                                            Duration
+                                                                                                .ofSeconds(1), Duration
+                                                                                                    .ofSeconds(
+                                                                                                        2), 3, false, Duration
+                                                                                                            .ofDays(
+                                                                                                                1), new JdbcOutboxProperties(false, Optional
+                                                                                                                    .of("HOT_OUTBOX")), new MongoOutboxProperties(
+                                                                                                                        false, "hot-outbox")), new WorkflowAdapterCacheProperties(
+                                                                                                                            50_000, Duration
+                                                                                                                                .ofMinutes(
+                                                                                                                                    30)));
 
     final var core = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(properties);
 
@@ -155,6 +163,16 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
         "task-level",
         workflow.getTasks().get("assessRisk").getAdapters().get("c8-cloud").getResourcesLocation());
     assertEquals("adapter-level", core.getAdapters().get("c8-cloud").getResourcesLocation());
+    // the switch of story 51 travels the same four levels as every adapter-scoped key
+    assertEquals(
+        Boolean.FALSE,
+        core.getAdapters().get("c8-cloud").getDeduplicateDeliveries());
+    assertEquals(
+        Boolean.TRUE,
+        workflow.getAdapters().get("c8-cloud").getDeduplicateDeliveries());
+    assertEquals(
+        Boolean.FALSE,
+        workflow.getTasks().get("assessRisk").getAdapters().get("c8-cloud").getDeduplicateDeliveries());
 
     assertEquals(Duration.ofSeconds(1), core.getOutbox().getPollInterval());
     assertEquals(Duration.ofSeconds(2), core.getOutbox().getAttemptFrequency());

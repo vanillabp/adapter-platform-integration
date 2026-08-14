@@ -388,12 +388,30 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   }
 
   /**
+   * Resolves the log of processed task deliveries per workflow aggregate (mixed
+   * persistence, own stores) - injected into the process-service beans and invoked at
+   * startup by {@link #vanillaBpProcessServiceStartupValidation}.
+   *
+   * @param applicationContext Used to look up log/aware beans and repositories
+   * @return The resolver
+   */
+  @Bean
+  public SpringTaskDeliveryLogResolver vanillaBpTaskDeliveryLogResolver(
+      final org.springframework.context.ApplicationContext applicationContext) {
+
+    return new SpringTaskDeliveryLogResolver(applicationContext);
+
+  }
+
+  /**
    * Startup validation of the process services, run once all singletons exist (so
    * no persistence infrastructure is materialized mid-bean-construction): for every
    * process service whose first-priority adapter requires a two-phase commit the
    * phase-two outbox is resolved (per aggregate - mixed persistence, dedicated
    * outboxes) - a missing outbox fails the startup with a guiding message instead
-   * of surfacing at the first workflow start.
+   * of surfacing at the first workflow start. The log of processed task deliveries is
+   * resolved in the same pass: a BPMS repeating deliveries without a log to remember
+   * them is reported at startup, not at the first redelivery.
    *
    * @param beanFactory Used to iterate all process-service beans
    * @return The startup validation hook
@@ -407,9 +425,14 @@ public class SpringBootMigrationAdapterAutoConfiguration {
         .stream()
         .filter(ProcessServiceSpringBean.class::isInstance)
         .map(ProcessServiceSpringBean.class::cast)
-        .forEach(processService -> processService
-            .getMigrationProcessService()
-            .validatePhaseTwoOutboxAtStartup());
+        .forEach(processService -> {
+          processService
+              .getMigrationProcessService()
+              .validatePhaseTwoOutboxAtStartup();
+          processService
+              .getMigrationProcessService()
+              .validateTaskDeliveryLogAtStartup();
+        });
 
   }
 

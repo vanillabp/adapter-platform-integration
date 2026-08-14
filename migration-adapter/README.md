@@ -363,6 +363,45 @@ and that adapter does not process workflows). A failure of the first-priority ad
 always fails the boot, regardless of the policy, because new workflows could not be
 started otherwise.
 
+#### Deliveries VanillaBP already processed (`TaskDeliveryLog` SPI, story 51)
+
+The inbound counterpart of the outbox. A remote BPMS reports the outcome AFTER the
+local transaction was committed, so a crash in between makes it deliver the same task
+again - which used to run the `@WorkflowTask` method a second time. The core now
+remembers a processed delivery and answers a repeated one from the record:
+
+- The identity of a delivery comes from the adapter:
+  `TaskInvocationContext.getDeliveryId()` (Camunda 8: the job key; Process-Engine-API:
+  the task ID; Camunda 7: none, see below). `TaskDeliveryKey` (package `workflowtask`)
+  qualifies it with adapter ID, workflow module, BPMN process and event, so an ID only
+  has to be unique within its own BPMS, and hashes the result where it would outgrow
+  what a store can index (512 characters, MySQL's unique-key limit with utf8mb4).
+- The record is written in the handler's own transaction
+  (`MigrationProcessService.executeWorkflowTask`): read before the aggregate is loaded,
+  written after it was saved, and it carries the OUTCOME (`WorkflowTaskOutcome.Kind`
+  plus BPMN error code and name). A repeated delivery therefore reports the recorded
+  outcome again - skipping both handler and answer would leave the task open forever.
+  A handler which threw leaves no record: the rollback took it, and the BPMS' retry
+  runs the handler again.
+- `TaskDeliveryLog` and `TaskDeliveryLogAware` live in the business SPI next to
+  `PhaseTwoOutbox`, with the same per-aggregate resolution
+  (`TaskDeliveryLogResolver`, implemented per platform): a record has to ride the
+  aggregate's own transaction. `JdbcTaskDeliveryStore` and
+  `TaskDeliveryRetentionCleanup` (package `delivery`) hold the SQL respectively the
+  cleanup schedule both platforms share; the connection comes from
+  `JdbcConnectionAccess`, the one piece which cannot be platform-neutral.
+- The switch is the adapter-scoped `deduplicate-deliveries` (default `true`),
+  resolvable per workflow module, workflow and task like every adapter-scoped key.
+- An adapter says whether it needs this at all:
+  `MigratableProcessService.deliversTasksAtLeastOnce()` (default `false`). It decides
+  the startup report only - at runtime nothing is remembered where no delivery ID
+  arrives. Camunda 7 answers `false` on purpose: it delivers tasks inside its own
+  transaction, so a redelivery proves that nothing was committed.
+- Without a store there is a guiding WARN at startup
+  (`validateTaskDeliveryLogAtStartup`, once per process service) instead of a failed
+  boot. Unlike the outbox, nothing is broken without a log - the behaviour is the one
+  every VanillaBP had before, and the wiki's rule about idempotent handlers covers it.
+
 #### Process versions (`version` attribute)
 
 The `version` attribute of `@WorkflowTask`, `@WorkflowStartedByBpms` and

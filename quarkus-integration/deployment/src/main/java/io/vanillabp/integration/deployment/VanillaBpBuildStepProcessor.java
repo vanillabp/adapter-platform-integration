@@ -248,6 +248,62 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
+   * Registers the default implementations of the log of processed task deliveries (see
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLog}): the JDBC/Agroal-based one if a
+   * JDBC datasource applies AND the MongoDB-based one if the
+   * <code>quarkus-mongodb-client</code> extension is present - both may coexist, each
+   * workflow aggregate is served by the log matching its persistence (attribution via
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLogAware} beans, see
+   * {@link io.vanillabp.integration.runtime.processservice.QuarkusTaskDeliveryLogResolver}).
+   * Unwanted defaults can be deactivated via
+   * <code>vanillabp.outbox.jdbc.enabled</code> /
+   * <code>vanillabp.outbox.mongo.enabled</code> - the log shares the outbox' store
+   * settings.
+   *
+   * @param capabilities Capabilities of the project's extensions
+   * @param additionalBeans Producer used to register the delivery-log beans
+   */
+  @BuildStep
+  void buildTaskDeliveryLog(
+      final Capabilities capabilities,
+      final BuildProducer<AdditionalBeanBuildItem> additionalBeans) {
+
+    if (capabilities.isPresent(Capability.AGROAL)) {
+      additionalBeans.produce(AdditionalBeanBuildItem
+          .builder()
+          .addBeanClasses(io.vanillabp.integration.runtime.delivery.JdbcTaskDeliveryLog.class)
+          .setUnremovable() // don't remove, since it is used under the hoods
+          .build());
+    }
+
+    if (capabilities.isPresent(Capability.MONGODB_CLIENT)) {
+      additionalBeans.produce(AdditionalBeanBuildItem
+          .builder()
+          .addBeanClasses(io.vanillabp.integration.runtime.delivery.MongoTaskDeliveryLog.class)
+          .setUnremovable() // don't remove, since it is used under the hoods
+          .build());
+    }
+
+  }
+
+  /**
+   * Beans implementing {@link io.vanillabp.integration.spi.TaskDeliveryLog} or
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLogAware} are looked up dynamically
+   * at runtime (per-aggregate log resolution), not injected by application code - ArC
+   * must not remove them as unused.
+   *
+   * @return The unremovable-bean build item covering delivery logs and their attributions
+   */
+  @BuildStep
+  io.quarkus.arc.deployment.UnremovableBeanBuildItem preserveTaskDeliveryLogBeans() {
+
+    return io.quarkus.arc.deployment.UnremovableBeanBuildItem.beanTypes(
+        io.vanillabp.integration.spi.TaskDeliveryLog.class,
+        io.vanillabp.integration.spi.TaskDeliveryLogAware.class);
+
+  }
+
+  /**
    * Beans implementing {@link io.vanillabp.integration.spi.PhaseTwoOutbox}
    * or {@link io.vanillabp.integration.spi.PhaseTwoOutboxAware} are not
    * necessarily injected by application code but looked up dynamically at runtime
