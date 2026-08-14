@@ -241,19 +241,78 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   /**
    * The cache of workflow&rarr;adapter associations consulted by the BPMS election
    * for operations on existing workflows (complete/cancel task, user task, message
-   * correlation): a bounded, expiring in-memory default. Cluster setups wanting
+   * correlation): a bounded, expiring in-memory default, sized by
+   * <code>vanillabp.workflow-adapter-cache.*</code>. Cluster setups wanting
    * instances to share elections define their own bean implementing
    * {@link io.vanillabp.integration.spi.WorkflowAdapterCache} backed by their own
    * cache infrastructure - it replaces this default (entries are hints: a stale
    * entry costs an extra probe, never correctness).
    *
+   * @param properties The VanillaBP configuration (the cache's bounds)
+   * @param statistics The application's cache statistics (evictions and size are
+   *          reported by the cache itself)
    * @return The default in-memory cache
    */
   @Bean
   @ConditionalOnMissingBean(io.vanillabp.integration.spi.WorkflowAdapterCache.class)
-  public io.vanillabp.integration.spi.WorkflowAdapterCache vanillaBpWorkflowAdapterCache() {
+  public io.vanillabp.integration.spi.WorkflowAdapterCache vanillaBpWorkflowAdapterCache(
+      final MigrationAdapterProperties properties,
+      final io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics statistics) {
 
-    return new io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCache();
+    return new io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCache(
+        properties.getWorkflowAdapterCache(), statistics);
+
+  }
+
+  /**
+   * The numbers of the election cache - hits and misses of every implementation,
+   * plus size and evictions of the in-memory default. One instance per application:
+   * the process services wrap whatever cache is in use into an
+   * {@code InstrumentedWorkflowAdapterCache} reporting here, so the numbers stay
+   * comparable when an application plugs in its own cache.
+   *
+   * @param properties The VanillaBP configuration (the bound named by the
+   *          eviction-pressure warning)
+   * @return The statistics
+   */
+  @Bean
+  @ConditionalOnMissingBean
+  public io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics vanillaBpWorkflowAdapterCacheStatistics(
+      final MigrationAdapterProperties properties) {
+
+    return new io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics(
+        properties.getWorkflowAdapterCache());
+
+  }
+
+  /**
+   * Publishes the election cache's statistics as Micrometer meters, if the
+   * application brings Micrometer. The Actuator's metrics auto-configuration
+   * applies {@link io.micrometer.core.instrument.binder.MeterBinder} beans to every
+   * registry, so no endpoint of our own is needed; an application without
+   * Micrometer boots unchanged and reports no metrics.
+   */
+  @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
+  // by NAME, not by class literal: the annotation of a nested configuration class is
+  // read reflectively, so a class literal of an absent optional dependency would
+  // fail before the condition is ever evaluated
+  @org.springframework.boot.autoconfigure.condition.ConditionalOnClass(
+      name = "io.micrometer.core.instrument.MeterRegistry")
+  public static class WorkflowAdapterCacheMetricsConfiguration {
+
+    /**
+     * @param statistics The application's cache statistics
+     * @return The meter binder of the election cache
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheMeters vanillaBpWorkflowAdapterCacheMeters(
+        final io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics statistics) {
+
+      return new io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheMeters(
+          statistics);
+
+    }
 
   }
 

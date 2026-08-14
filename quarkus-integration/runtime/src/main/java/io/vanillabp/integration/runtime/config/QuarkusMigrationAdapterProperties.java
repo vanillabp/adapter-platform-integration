@@ -68,6 +68,14 @@ public interface QuarkusMigrationAdapterProperties {
   PhaseTwoOutboxProperties outbox();
 
   /**
+   * The configuration of the election cache consulted for operations on existing
+   * workflows (see {@link io.vanillabp.integration.spi.WorkflowAdapterCache}).
+   *
+   * @return The election cache's configuration
+   */
+  WorkflowAdapterCacheProperties workflowAdapterCache();
+
+  /**
    * The adapter configuration. The properties in detail are defined by the
    * respective VanillaBP adapter Quarkus extension.
    */
@@ -286,6 +294,33 @@ public interface QuarkusMigrationAdapterProperties {
      */
     @WithDefault("vanillabp-phase-two-outbox")
     String collection();
+
+  }
+
+  /**
+   * The configuration of the election cache's in-memory default implementation.
+   * Both bounds are hard on purpose - entries are hints, so losing one costs an
+   * extra probing walk but never correctness.
+   */
+  interface WorkflowAdapterCacheProperties {
+
+    /**
+     * The maximum number of entries held - the least recently used entry is dropped
+     * beyond that. Raise it if the application keeps more workflows hot than the
+     * cache holds (VanillaBP warns about it).
+     *
+     * @return The maximum number of entries
+     */
+    @WithDefault("10000")
+    int maxEntries();
+
+    /**
+     * How long an entry is kept, counted from the moment it was stored.
+     *
+     * @return The time-to-live of an entry
+     */
+    @WithDefault("PT1H")
+    Duration timeToLive();
 
   }
 

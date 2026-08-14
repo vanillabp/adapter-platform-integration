@@ -244,13 +244,17 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                   .bean(PhaseTwoRouter.class);
 
               // the election cache (in-memory default or the application's own
-              // bean, e.g. cluster-shared)
-              final var workflowAdapterCache = selectWorkflowAdapterCache(
-                  supplierContext
-                      .beanProvider(io.vanillabp.integration.spi.WorkflowAdapterCache.class)
-                      .stream()
-                      .map(io.vanillabp.integration.spi.WorkflowAdapterCache.class::cast)
-                      .toList());
+              // bean, e.g. cluster-shared), counted by the application's statistics
+              final var workflowAdapterCache = io.vanillabp.integration.adapter.migration.processservice.InstrumentedWorkflowAdapterCache
+                  .instrument(
+                      selectWorkflowAdapterCache(
+                          supplierContext
+                              .beanProvider(io.vanillabp.integration.spi.WorkflowAdapterCache.class)
+                              .stream()
+                              .map(io.vanillabp.integration.spi.WorkflowAdapterCache.class::cast)
+                              .toList()),
+                      supplierContext.bean(
+                          io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics.class));
 
               final var processServiceBean = new ProcessServiceSpringBean<A>(
                   workflowModuleId, bpmnProcessId, workflowAggregateType, properties, aggregatePersistenceAware, migratableProcessServices, phaseTwoOutboxResolver, phaseTwoRouter, workflowAdapterCache);

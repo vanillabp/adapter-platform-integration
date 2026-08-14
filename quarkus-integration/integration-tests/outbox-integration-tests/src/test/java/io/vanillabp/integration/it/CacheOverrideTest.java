@@ -12,6 +12,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusExtensionTest;
+import io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import io.vanillabp.integration.test.Aggregate;
 import io.vanillabp.integration.test.AggregatePersistence;
@@ -28,7 +29,7 @@ import jakarta.transaction.UserTransaction;
  * {@code WorkflowAdapterCache} bean replaces VanillaBP's in-memory
  * {@code @DefaultBean} - the election consults AND populates the application's
  * bean (this is how cluster setups share elections via their own cache
- * infrastructure).
+ * infrastructure) - and its lookups are counted like every other cache's.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class CacheOverrideTest {
@@ -54,6 +55,9 @@ public class CacheOverrideTest {
 
   @Inject
   PerAdapterAwarenessSource awareness;
+
+  @Inject
+  WorkflowAdapterCacheStatistics statistics;
 
   @Inject
   UserTransaction userTransaction;
@@ -87,6 +91,20 @@ public class CacheOverrideTest {
                 + "->test"),
         "the successful election must be stored in the application's cache but got: "
             + cache.getPuts());
+
+    // its lookups are counted like every other cache's (story 58) - a metric which
+    // disappeared once an application plugs in its own cache would surprise exactly
+    // the operator who needs it
+    assertTrue(
+        (statistics.getHits() + statistics.getMisses()) > 0,
+        "the lookups of an application-provided cache are counted, too");
+    assertTrue(
+        statistics.getSize().isEmpty(),
+        "but only VanillaBP's in-memory default knows its size");
+    assertEquals(
+        0,
+        statistics.getEvictions(),
+        "and an application's cache manages its own bounds");
 
   }
 

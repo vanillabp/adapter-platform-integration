@@ -62,6 +62,13 @@
       <artifactId>dummy-extension</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <!-- the election cache's meters are published only if the application brings
+         Micrometer - the test proves both halves (present and filtered out) -->
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-core</artifactId>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>io.vanillabp</groupId>
       <artifactId>test-utils</artifactId>
