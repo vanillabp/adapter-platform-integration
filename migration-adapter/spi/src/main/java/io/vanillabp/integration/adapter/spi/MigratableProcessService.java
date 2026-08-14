@@ -147,6 +147,34 @@ public interface MigratableProcessService<A> {
   boolean needsTwoPhaseCommitForStartingWorkflows();
 
   /**
+   * Whether this BPMS may deliver the same task more than once, so the core has to
+   * remember what it processed (see
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). True for every REMOTE
+   * BPMS: the task is reported as done after the local transaction was committed, so
+   * a crash in between makes the BPMS repeat the delivery.
+   * <p>
+   * The default is <code>false</code> - the answer of an EMBEDDED BPMS delivering
+   * tasks inside the application's transaction
+   * ({@link io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext#runInCurrentTransaction()}):
+   * a repeated delivery there means that nothing was committed, so there is nothing
+   * to remember and deduplication would have no effect.
+   * <p>
+   * An adapter answering <code>true</code> should report a delivery identity with
+   * every invocation context
+   * ({@link io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext#getDeliveryId()}) -
+   * without one the core cannot tell a redelivery from a new task and keeps invoking
+   * the handler for every delivery. The answer is used at STARTUP, too: it decides
+   * whether a missing delivery log is worth a guiding message.
+   *
+   * @return Whether tasks may be delivered more than once
+   */
+  default boolean deliversTasksAtLeastOnce() {
+
+    return false;
+
+  }
+
+  /**
    * Start a new workflow. Phase one of the two-phase commit. This phase is executed immediately before the
    * local transaction is committed.
    * <p>

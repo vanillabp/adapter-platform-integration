@@ -4,8 +4,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
+import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.transaction.TransactionRunner;
+import io.vanillabp.integration.adapter.migration.workflowtask.TaskDeliveryKey;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskHandler;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
@@ -13,6 +15,8 @@ import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.TaskDelivery;
+import io.vanillabp.integration.spi.TaskDeliveryLog;
 import io.vanillabp.integration.spi.WorkflowAdapterCache;
 import io.vanillabp.spi.service.TaskException;
 import lombok.Getter;
@@ -87,6 +91,33 @@ public class MigrationProcessService<A> {
   private final WorkflowLocator workflowLocator;
 
   /**
+   * The bound <code>vanillabp.*</code> tree - kept because adapter-scoped properties
+   * are resolved per DELIVERY (workflow module &gt; workflow &gt; task, see
+   * {@link MigrationAdapterProperties#resolveForAdapter}).
+   */
+  private final MigrationAdapterProperties properties;
+
+  /**
+   * Resolves the log of processed task deliveries used for this aggregate. Provided by
+   * the platform integration; may be <code>null</code> (tests) - deliveries are then
+   * not deduplicated, which is the behaviour of every VanillaBP before this existed.
+   */
+  private final TaskDeliveryLogResolver taskDeliveryLogResolver;
+
+  /**
+   * The delivery log resolved for this process service's aggregate,
+   * <code>null</code> until resolved (at startup via
+   * {@link #validateTaskDeliveryLogAtStartup()} or lazily as backstop).
+   */
+  private volatile TaskDeliveryLog taskDeliveryLog;
+
+  /**
+   * Whether the "deliveries are not deduplicated" message was logged already - it
+   * names a configuration gap, and one line per delivery would bury it.
+   */
+  private final java.util.concurrent.atomic.AtomicBoolean missingDeliveryLogReported = new java.util.concurrent.atomic.AtomicBoolean();
+
+  /**
    * Creates a process service without an adapter cache (elections probe every
    * time) - kept for tests; the platform integrations always pass the cache.
    */
@@ -104,6 +135,10 @@ public class MigrationProcessService<A> {
 
   }
 
+  /**
+   * Creates a process service without a delivery-log resolver (deliveries are not
+   * deduplicated) - kept for tests; the platform integrations always pass one.
+   */
   public MigrationProcessService(
       final String workflowModuleId,
       final String bpmnProcessId,
@@ -114,6 +149,24 @@ public class MigrationProcessService<A> {
       final PhaseTwoOutboxResolver phaseTwoOutboxResolver,
       final WorkflowAdapterCache workflowAdapterCache) {
 
+    this(
+        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, aggregatePersistenceSupport, processServices, phaseTwoOutboxResolver, workflowAdapterCache, null);
+
+  }
+
+  public MigrationProcessService(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Class<A> workflowAggregateClass,
+      final MigrationAdapterProperties properties,
+      final AggregatePersistenceAware<A> aggregatePersistenceSupport,
+      final List<MigratableProcessService<A>> processServices,
+      final PhaseTwoOutboxResolver phaseTwoOutboxResolver,
+      final WorkflowAdapterCache workflowAdapterCache,
+      final TaskDeliveryLogResolver taskDeliveryLogResolver) {
+
+    this.properties = properties;
+    this.taskDeliveryLogResolver = taskDeliveryLogResolver;
     this.workflowModuleId = workflowModuleId;
     this.bpmnProcessId = bpmnProcessId;
     this.workflowAggregateClass = workflowAggregateClass;
@@ -349,7 +402,38 @@ public class MigrationProcessService<A> {
           : WorkflowTaskOutcome.completed();
     }
 
+    // a BPMS repeating a delivery it never learned the result of must not run the
+    // business code twice - what was processed is remembered, and a redelivery is
+    // answered with the recorded outcome (leaving the task open instead would keep it
+    // open forever)
+    final var deliveryKey = deduplicateDeliveries(context.getAdapterId(), context.getTaskDefinition())
+        ? TaskDeliveryKey.of(workflowModuleId, bpmnProcessId, context)
+        : null;
+    final var deliveryLog = deliveryKey == null
+        ? null
+        : resolveTaskDeliveryLog();
+    if ((deliveryKey != null) && (deliveryLog == null)) {
+      reportMissingDeliveryLog(context.getAdapterId());
+    }
+
     final Supplier<WorkflowTaskOutcome> transactionalWork = () -> {
+      if (deliveryLog != null) {
+        final var recorded = deliveryLog
+            .recordedDelivery(deliveryKey)
+            .flatMap(delivery -> recordedOutcomeOf(delivery, context));
+        if (recorded.isPresent()) {
+          log.info(
+              "Skipping the repeated delivery of task '{}' (BPMN process '{}' of workflow module "
+                  + "'{}', aggregate '{}'): it was processed before, reporting the recorded outcome "
+                  + "{} again",
+              context.getTaskDefinition(),
+              bpmnProcessId,
+              workflowModuleId,
+              context.getWorkflowAggregateId(),
+              recorded.get().kind());
+          return recorded.get();
+        }
+      }
       final var aggregateId = convertAggregateId(context.getWorkflowAggregateId());
       final var workflowAggregate = aggregatePersistenceSupport.loadById(aggregateId);
       if (workflowAggregate == null) {
@@ -367,24 +451,185 @@ public class MigrationProcessService<A> {
       try {
         handler.invoke(workflowAggregate, context);
         aggregatePersistenceSupport.save(workflowAggregate);
-        failIfRollbackOnly(handler, context, transactionRunner, rollbackRuleRemedies);
-        return handler.isAsynchronousTask()
+        final var outcome = handler.isAsynchronousTask()
             ? WorkflowTaskOutcome.completionPending()
             : WorkflowTaskOutcome.completed();
+        recordDelivery(deliveryLog, deliveryKey, context, outcome);
+        failIfRollbackOnly(handler, context, transactionRunner, rollbackRuleRemedies);
+        return outcome;
       } catch (final TaskException taskException) {
         // the restored V1 contract: a TaskException is a BPMN error, not a
         // failure - the aggregate changes are persisted and the transaction
         // commits (V1 applications used @Transactional(noRollbackFor =
         // TaskException.class) for exactly this)
         aggregatePersistenceSupport.save(workflowAggregate);
+        final var outcome = WorkflowTaskOutcome
+            .bpmnError(taskException.getErrorCode(), taskException.getErrorName());
+        recordDelivery(deliveryLog, deliveryKey, context, outcome);
         failIfRollbackOnly(handler, context, transactionRunner, rollbackRuleRemedies);
-        return WorkflowTaskOutcome.bpmnError(taskException.getErrorCode(), taskException.getErrorName());
+        return outcome;
       }
     };
 
     return context.runInCurrentTransaction()
         ? transactionRunner.inCurrent(transactionalWork)
         : transactionRunner.requireNew(transactionalWork);
+
+  }
+
+  /**
+   * Whether deliveries of the given adapter are deduplicated for the given task
+   * (<code>vanillabp.adapters.&lt;id&gt;.deduplicate-deliveries</code>, resolvable per
+   * workflow module, workflow and task). The default is <code>true</code>; an adapter
+   * reporting no ID at all is not deduplicated, since neither the configuration nor
+   * the delivery key could be attributed to a BPMS then.
+   *
+   * @param adapterId The ID of the adapter delivering the task or <code>null</code>
+   * @param taskDefinition The task definition delivered
+   * @return Whether to remember this delivery
+   */
+  private boolean deduplicateDeliveries(
+      final String adapterId,
+      final String taskDefinition) {
+
+    if ((adapterId == null) || (properties == null)) {
+      return false;
+    }
+    final var configured = properties
+        .resolveForAdapter(
+            workflowModuleId,
+            bpmnProcessId,
+            taskDefinition,
+            adapterId,
+            AdapterProperties::getDeduplicateDeliveries);
+    return (configured == null) || configured;
+
+  }
+
+  /**
+   * Validates AT STARTUP that a delivery log is available if any prioritized adapter
+   * may repeat a delivery
+   * ({@link MigratableProcessService#deliversTasksAtLeastOnce()}) and deduplication is
+   * switched on. Unlike the outbox this does NOT fail the boot: without a log
+   * VanillaBP behaves exactly as it did before the feature existed (at-least-once, the
+   * rule to key business decisions on the aggregate's state carries the case), so a
+   * guiding WARN naming both remedies is the honest answer - and it is logged at
+   * startup instead of surfacing per delivery.
+   * <p>
+   * Nothing is resolved where no adapter can repeat a delivery: an application using
+   * an embedded BPMS only must not be pushed towards a store it does not need.
+   */
+  public void validateTaskDeliveryLogAtStartup() {
+
+    final var atLeastOnceAdapters = adapterProcessServices
+        .stream()
+        .filter(MigratableProcessService::deliversTasksAtLeastOnce)
+        .map(MigratableProcessService::getAdapterId)
+        .filter(adapterId -> deduplicateDeliveries(adapterId, null))
+        .toList();
+    if (atLeastOnceAdapters.isEmpty()) {
+      return;
+    }
+    if (resolveTaskDeliveryLog() == null) {
+      reportMissingDeliveryLog(atLeastOnceAdapters.getFirst());
+    }
+
+  }
+
+  private TaskDeliveryLog resolveTaskDeliveryLog() {
+
+    if ((taskDeliveryLog == null) && (taskDeliveryLogResolver != null)) {
+      taskDeliveryLog = taskDeliveryLogResolver.resolveFor(workflowAggregateClass);
+    }
+    return taskDeliveryLog;
+
+  }
+
+  /**
+   * States once that deliveries of this BPMN process are not deduplicated, and how to
+   * change that. Also the answer to "why did my handler run twice" - the message is
+   * the first thing to look for then.
+   *
+   * @param adapterId The ID of an adapter which may repeat a delivery
+   */
+  private void reportMissingDeliveryLog(
+      final String adapterId) {
+
+    if (!missingDeliveryLogReported.compareAndSet(false, true)) {
+      return;
+    }
+    log.warn(
+        """
+            Adapter '{}' may deliver a task of BPMN process '{}' of workflow module '{}' more than \
+            once, but no TaskDeliveryLog is available for aggregate '{}' - a repeated delivery will \
+            run the @WorkflowTask method again. To solve this either
+            {}
+            - define your own bean implementing io.vanillabp.integration.spi.TaskDeliveryLog \
+            (assign it to specific aggregates via a io.vanillabp.integration.spi.TaskDeliveryLogAware \
+            bean), or
+            - set 'vanillabp.adapters.{}.deduplicate-deliveries' to 'false' to state that the \
+            handlers of this application are idempotent themselves.""",
+        adapterId,
+        bpmnProcessId,
+        workflowModuleId,
+        workflowAggregateClass.getName(),
+        taskDeliveryLogResolver == null
+            ? "- provide a TaskDeliveryLogResolver (platform integration), or"
+            : taskDeliveryLogResolver.remediesDescription(),
+        adapterId);
+
+  }
+
+  /**
+   * Remembers a processed delivery within the transaction which also persists the
+   * aggregate - the two commit together or not at all.
+   */
+  private void recordDelivery(
+      final TaskDeliveryLog deliveryLog,
+      final String deliveryKey,
+      final TaskInvocationContext context,
+      final WorkflowTaskOutcome outcome) {
+
+    if (deliveryLog == null) {
+      return;
+    }
+    deliveryLog.record(
+        new TaskDelivery(
+            deliveryKey, workflowModuleId, bpmnProcessId, context.getWorkflowAggregateId(), context
+                .getTaskDefinition(), outcome.kind().name(), outcome.errorCode(), outcome.errorName()));
+
+  }
+
+  /**
+   * The outcome a recorded delivery is answered with. An outcome the core does not
+   * know (a record written by a newer version, or a store returning something of its
+   * own) yields an empty result: the handler runs again, which is the behaviour without
+   * any log at all, and the WARN says why.
+   */
+  private java.util.Optional<WorkflowTaskOutcome> recordedOutcomeOf(
+      final TaskDelivery delivery,
+      final TaskInvocationContext context) {
+
+    try {
+      return java.util.Optional
+          .of(
+              switch (WorkflowTaskOutcome.Kind.valueOf(delivery.outcome())) {
+                case COMPLETED -> WorkflowTaskOutcome.completed();
+                case COMPLETION_PENDING -> WorkflowTaskOutcome.completionPending();
+                case BPMN_ERROR -> WorkflowTaskOutcome
+                    .bpmnError(delivery.bpmnErrorCode(), delivery.bpmnErrorName());
+              });
+    } catch (final IllegalArgumentException e) {
+      log.warn(
+          "The recorded delivery '{}' of task '{}' (BPMN process '{}' of workflow module '{}') "
+              + "reports the unknown outcome '{}' - processing the delivery again",
+          delivery.deliveryKey(),
+          context.getTaskDefinition(),
+          bpmnProcessId,
+          workflowModuleId,
+          delivery.outcome());
+      return java.util.Optional.empty();
+    }
 
   }
 

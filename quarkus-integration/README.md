@@ -154,6 +154,32 @@ To minimize build output three actions were taken:
 In case of errors one might disable one or all of them for finding
 the root cause of the problem.
 
+## The store of processed task deliveries
+
+`io.vanillabp.integration.runtime.delivery` implements the core's `TaskDeliveryLog`
+(story 51, the inbound counterpart of the outbox) twice, registered by the build step
+`buildTaskDeliveryLog` along the capabilities present (`quarkus-agroal`,
+`quarkus-mongodb-client`) and kept by `preserveTaskDeliveryLogBeans` - the beans are
+looked up per aggregate at runtime, never injected by application code.
+`QuarkusTaskDeliveryLogResolver` picks one per workflow aggregate, and as with the
+outbox a mixed-persistence application has to attribute aggregates itself
+(`TaskDeliveryLogAware`): Quarkus has no platform-side knowledge of which persistence
+manages an aggregate.
+
+- `JdbcTaskDeliveryLog` acquires its Agroal connection within the running JTA
+  transaction, so it is enlisted there. The SQL and the portable DDL of table
+  `VANILLABP_TASK_DELIVERY` live in the core (`JdbcTaskDeliveryStore`), shared with
+  Spring Boot.
+- `MongoTaskDeliveryLog` writes into `vanillabp-task-deliveries` of
+  `quarkus.mongodb.database`. MongoDB is no JTA resource, so the record is written
+  immediately and deleted again from an interposed synchronization when the transaction
+  ends in anything but a commit - the same best-effort compensation `MongoPhaseTwoOutbox`
+  does for its entries.
+- Both observe the `StartupEvent` to create their schema (unless
+  `vanillabp.outbox.create-schema` is disabled) and to start the core's
+  `TaskDeliveryRetentionCleanup`, which calls `cleanUpExpiredRecords` per
+  `vanillabp.outbox.retention`.
+
 ## Noteworthy & Contributors
 
 [VanillaBP](https://www.github.com/vanillabp/spi-for-java) was developed by [Phactum](https://www.phactum.at) with the

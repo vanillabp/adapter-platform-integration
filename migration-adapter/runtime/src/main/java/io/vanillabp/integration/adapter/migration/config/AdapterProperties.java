@@ -37,4 +37,20 @@ public class AdapterProperties {
    */
   private Boolean prefixTaskDefinitionsPerProcess;
 
+  /**
+   * Whether VanillaBP remembers the task deliveries of this BPMS, so a repeated
+   * delivery does not run the <code>&#64;WorkflowTask</code> method again but reports
+   * the recorded outcome once more (see
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). Adapter-scoped and
+   * therefore resolvable per workflow module, workflow and task - a single task doing
+   * something expensive twice may be treated differently from the rest.
+   * <p>
+   * Defaults to <code>true</code>: not running business code twice is the safer
+   * behaviour. It has an effect only where the BPMS may repeat a delivery at all
+   * ({@link io.vanillabp.integration.adapter.spi.MigratableProcessService#deliversTasksAtLeastOnce()})
+   * and the adapter reports a delivery identity. <code>null</code> means "not
+   * configured at this level".
+   */
+  private Boolean deduplicateDeliveries;
+
 }

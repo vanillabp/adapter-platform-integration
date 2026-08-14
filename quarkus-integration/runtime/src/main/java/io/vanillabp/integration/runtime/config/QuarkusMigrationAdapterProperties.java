@@ -130,6 +130,18 @@ public interface QuarkusMigrationAdapterProperties {
      */
     Optional<Boolean> prefixTaskDefinitionsPerProcess();
 
+    /**
+     * Whether VanillaBP remembers the task deliveries of this BPMS, so a repeated
+     * delivery reports the recorded outcome again instead of running the
+     * <code>&#64;WorkflowTask</code> method a second time (see
+     * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). Defaults to
+     * <code>true</code> and takes effect only for a BPMS which may repeat a delivery
+     * at all.
+     *
+     * @return Whether deliveries are deduplicated
+     */
+    Optional<Boolean> deduplicateDeliveries();
+
   }
 
   /**
@@ -166,6 +178,18 @@ public interface QuarkusMigrationAdapterProperties {
      * @return Whether task definitions are scoped per BPMN process
      */
     Optional<Boolean> prefixTaskDefinitionsPerProcess();
+
+    /**
+     * Whether VanillaBP remembers the task deliveries of this BPMS, so a repeated
+     * delivery reports the recorded outcome again instead of running the
+     * <code>&#64;WorkflowTask</code> method a second time (see
+     * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). Defaults to
+     * <code>true</code> and takes effect only for a BPMS which may repeat a delivery
+     * at all.
+     *
+     * @return Whether deliveries are deduplicated
+     */
+    Optional<Boolean> deduplicateDeliveries();
 
   }
 

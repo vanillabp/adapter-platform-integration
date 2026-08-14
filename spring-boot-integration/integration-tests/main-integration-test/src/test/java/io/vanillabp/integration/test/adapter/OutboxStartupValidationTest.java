@@ -13,7 +13,6 @@ import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoCon
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.test.TestPersistenceConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
-import io.vanillabp.integration.test.sample.Aggregate;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 
@@ -58,8 +57,14 @@ public class OutboxStartupValidationTest {
               message.contains("requires a two-phase commit"),
               "expected the guiding message but got: "
                   + message);
-          // the message names the aggregate and ALL remedies
-          Assertions.assertTrue(message.contains(Aggregate.class.getName()));
+          // the message names an aggregate of this test application and ALL remedies.
+          // WHICH aggregate it is depends on the order the classpath scan finds the
+          // workflow services in: the application has several, and the first process
+          // service failing the validation throws
+          Assertions.assertTrue(
+              message.contains("is available for aggregate 'io.vanillabp.integration.test."),
+              "the message has to name an aggregate of the test application: "
+                  + message);
           Assertions.assertTrue(message.contains("spring-boot-starter-data-jpa"));
           Assertions.assertTrue(message.contains("spring-boot-starter-data-mongodb"));
           Assertions.assertTrue(message.contains("PhaseTwoOutbox"));

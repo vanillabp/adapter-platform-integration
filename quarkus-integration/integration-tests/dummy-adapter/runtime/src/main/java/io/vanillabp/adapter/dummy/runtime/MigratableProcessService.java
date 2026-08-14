@@ -114,6 +114,18 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
 
   }
 
+  /**
+   * A dummy configured as a remote BPMS (two-phase commit) also stands in for its
+   * at-least-once task delivery: the outcome is reported after the local commit, so the
+   * same task may arrive again (story 51).
+   */
+  @Override
+  public boolean deliversTasksAtLeastOnce() {
+
+    return needsTwoPhaseCommitForStartingWorkflows;
+
+  }
+
   @Override
   public void startWorkflowPhaseOne(
       final String workflowModuleId,

@@ -81,6 +81,24 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
   @Any
   Instance<PhaseTwoOutboxAware<?>> phaseTwoOutboxAwares;
 
+  /**
+   * The logs of processed task deliveries available at runtime, resolved per aggregate
+   * (mixed persistence) via {@link QuarkusTaskDeliveryLogResolver}. Unsatisfied if no
+   * implementation is available (e.g. no datasource configured) - a BPMS repeating a
+   * delivery then runs the handler again, which the startup validation reports.
+   */
+  @Inject
+  @Any
+  Instance<io.vanillabp.integration.spi.TaskDeliveryLog> taskDeliveryLogs;
+
+  /**
+   * Application-provided attributions of aggregates to delivery logs (required in
+   * mixed-persistence setups, optional otherwise).
+   */
+  @Inject
+  @Any
+  Instance<io.vanillabp.integration.spi.TaskDeliveryLogAware<?>> taskDeliveryLogAwares;
+
   @Inject
   TransactionSynchronizationRegistry txRegistry;
 
@@ -159,6 +177,12 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
             .enabled(), outboxProperties
                 .mongo()
                 .enabled());
+    final var taskDeliveryLogResolver = new QuarkusTaskDeliveryLogResolver(
+        taskDeliveryLogAwares, taskDeliveryLogs, outboxProperties
+            .jdbc()
+            .enabled(), outboxProperties
+                .mongo()
+                .enabled());
     final var electionCache = io.vanillabp.integration.adapter.migration.processservice.InstrumentedWorkflowAdapterCache
         .instrument(
             workflowAdapterCache.isResolvable()
@@ -168,7 +192,7 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
                 ? workflowAdapterCacheStatistics.get()
                 : null);
     this.migrationProcessService = new MigrationProcessService<>(
-        getWorkflowModuleId(), getBpmnProcessId(), getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, phaseTwoOutboxResolver, electionCache);
+        getWorkflowModuleId(), getBpmnProcessId(), getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, phaseTwoOutboxResolver, electionCache, taskDeliveryLogResolver);
 
     // register as phase-two dispatch target: outbox entries for this workflow
     // module/BPMN process are routed here after the local transaction was committed
@@ -178,7 +202,7 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
           .register(migrationProcessService);
     }
 
-    registerWorkflowTaskHandlers(processServices, phaseTwoOutboxResolver, electionCache);
+    registerWorkflowTaskHandlers(processServices, phaseTwoOutboxResolver, electionCache, taskDeliveryLogResolver);
 
   }
 
@@ -192,7 +216,8 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
   private void registerWorkflowTaskHandlers(
       final List<io.vanillabp.integration.adapter.spi.MigratableProcessService<A>> processServices,
       final QuarkusPhaseTwoOutboxResolver phaseTwoOutboxResolver,
-      final io.vanillabp.integration.spi.WorkflowAdapterCache electionCache) {
+      final io.vanillabp.integration.spi.WorkflowAdapterCache electionCache,
+      final QuarkusTaskDeliveryLogResolver taskDeliveryLogResolver) {
 
     if (!workflowTaskRegistry.isResolvable()) {
       return;
@@ -222,7 +247,7 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
           "%s|%s".formatted(moduleId, bpmnProcessId),
           key -> {
             final var secondaryProcessService = new MigrationProcessService<>(
-                moduleId, bpmnProcessId, getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, phaseTwoOutboxResolver, electionCache);
+                moduleId, bpmnProcessId, getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, phaseTwoOutboxResolver, electionCache, taskDeliveryLogResolver);
             if (phaseTwoRouter.isResolvable()) {
               phaseTwoRouter
                   .get()
@@ -256,7 +281,9 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
    * process-service beans): if the first-priority adapter of this process requires
    * a two-phase commit, the phase-two outbox is resolved AT STARTUP - a missing
    * outbox fails the boot with a guiding message instead of surfacing at the first
-   * workflow start.
+   * workflow start. The log of processed task deliveries is resolved in the same pass: a
+   * BPMS repeating deliveries without a log to remember them is reported at startup, not
+   * at the first redelivery.
    *
    * @param event The startup event observed
    */
@@ -264,6 +291,7 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
       @Observes final StartupEvent event) {
 
     migrationProcessService.validatePhaseTwoOutboxAtStartup();
+    migrationProcessService.validateTaskDeliveryLogAtStartup();
 
   }
 

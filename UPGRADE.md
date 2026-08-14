@@ -4,6 +4,42 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## A redelivered task no longer runs the handler twice (2026-08-14)
+
+Story 51. This is a behaviour change of the inbound direction, and it is on by default.
+
+A remote BPMS delivers a task at least once: it hands the task out again whenever it did
+not learn the result, for instance after a crash between the commit of the local
+transaction and the report to the BPMS. Until now that ran the `@WorkflowTask` method a
+second time, and the wiki's rule "write handlers idempotently, keyed on aggregate state"
+was all there was to it. VanillaBP now records every processed delivery in the
+transaction of the handler and answers a repeated delivery with the recorded outcome
+instead of invoking the method again.
+
+**A new store, without new configuration.** The records live in the database the workflow
+aggregates live in: a table `VANILLABP_TASK_DELIVERY` respectively a collection
+`vanillabp-task-deliveries`, created at startup unless
+`vanillabp.outbox.create-schema` is disabled, cleaned up per `vanillabp.outbox.retention`.
+An application managing its schema manually creates the table itself; the DDL is in
+`JdbcTaskDeliveryStore` of the migration adapter, and the only structural requirement is
+a unique `DELIVERY_KEY`.
+
+**A new property.** `vanillabp.adapters.<id>.deduplicate-deliveries` (default `true`)
+switches it off, per workflow module, workflow and task as well. Turning it off restores
+the previous behaviour exactly.
+
+**A new warning.** An application whose aggregates live in a persistence VanillaBP brings
+no store for logs one WARN per BPMN process naming the `TaskDeliveryLog` bean to provide
+and the property to set. It boots and behaves as before.
+
+**Only relevant for adapters:** `TaskInvocationContext.getDeliveryId()` and
+`MigratableProcessService.deliversTasksAtLeastOnce()` are new `default` methods, so an
+adapter compiled against the previous version keeps working - and keeps invoking handlers
+per delivery, since VanillaBP cannot tell two deliveries apart without an identity.
+Camunda 8 reports the job key, the Process-Engine-API adapter the task id, Camunda 7
+nothing at all: it delivers inside the engine's transaction, where a redelivery proves
+that nothing was committed.
+
 ## The election cache can be sized and watched (2026-08-14)
 
 Story 58. Everything here is additive - an application configuring nothing behaves

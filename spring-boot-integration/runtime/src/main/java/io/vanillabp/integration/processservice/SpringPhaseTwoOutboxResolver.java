@@ -1,12 +1,10 @@
 package io.vanillabp.integration.processservice;
 
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
 import org.springframework.context.ApplicationContext;
-import org.springframework.data.repository.support.Repositories;
 
 import io.vanillabp.integration.adapter.migration.processservice.AwareSelection;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxResolver;
@@ -37,24 +35,15 @@ import io.vanillabp.integration.spi.PhaseTwoOutboxAware;
  */
 public class SpringPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
 
-  private enum PersistenceTechnology {
-    JPA,
-    MONGO,
-    UNKNOWN
-  }
-
-  private static final String JPA_REPOSITORY = "org.springframework.data.jpa.repository.JpaRepository";
-
-  private static final String MONGO_REPOSITORY = "org.springframework.data.mongodb.repository.MongoRepository";
-
   private final ApplicationContext applicationContext;
 
-  private volatile Repositories repositories;
+  private final SpringPersistenceTechnology persistenceTechnology;
 
   public SpringPhaseTwoOutboxResolver(
       final ApplicationContext applicationContext) {
 
     this.applicationContext = applicationContext;
+    this.persistenceTechnology = new SpringPersistenceTechnology(applicationContext);
 
   }
 
@@ -84,7 +73,7 @@ public class SpringPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
       return null;
     }
 
-    final var technology = detectPersistenceTechnology(workflowAggregateClass);
+    final var technology = persistenceTechnology.of(workflowAggregateClass);
 
     // 2. exactly one outbox bean: use it - unless it is a platform default clearly
     // not matching the aggregate's persistence (broken atomicity, fail guiding)
@@ -93,10 +82,10 @@ public class SpringPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
           .entrySet()
           .iterator()
           .next();
-      final var mismatch = ((technology == PersistenceTechnology.MONGO) && entry
+      final var mismatch = ((technology == SpringPersistenceTechnology.Technology.MONGO) && entry
           .getKey()
           .equals(
-              GruelboxPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME)) || ((technology == PersistenceTechnology.JPA) && entry
+              GruelboxPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME)) || ((technology == SpringPersistenceTechnology.Technology.JPA) && entry
                   .getKey()
                   .equals(MongoPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME));
       if (mismatch) {
@@ -132,7 +121,7 @@ public class SpringPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
 
   private String buildAttributionErrorMessage(
       final Class<?> workflowAggregateClass,
-      final PersistenceTechnology technology,
+      final SpringPersistenceTechnology.Technology technology,
       final Set<String> outboxBeanNames) {
 
     return """
@@ -147,70 +136,6 @@ public class SpringPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
             outboxBeanNames,
             workflowAggregateClass.getName(),
             technology);
-
-  }
-
-  /**
-   * Detects the persistence technology managing the aggregate from its Spring Data
-   * repository's type. The repository interfaces are matched BY NAME so this check
-   * works in applications having only one of the Spring Data modules on the
-   * classpath.
-   *
-   * @param workflowAggregateClass The workflow aggregate's class
-   * @return The technology, {@link PersistenceTechnology#UNKNOWN} if the aggregate
-   *         has no Spring Data repository (custom persistence)
-   */
-  private PersistenceTechnology detectPersistenceTechnology(
-      final Class<?> workflowAggregateClass) {
-
-    if (repositories == null) {
-      repositories = new Repositories(applicationContext);
-    }
-    Class<?> current = workflowAggregateClass;
-    Optional<Object> repository = Optional.empty();
-    while (repository.isEmpty() && (current != null) && (current != Object.class)) {
-      repository = repositories.getRepositoryFor(current);
-      current = current.getSuperclass();
-    }
-    return repository
-        .map(repo -> {
-          if (implementsInterfaceNamed(repo.getClass(), JPA_REPOSITORY)) {
-            return PersistenceTechnology.JPA;
-          }
-          if (implementsInterfaceNamed(repo.getClass(), MONGO_REPOSITORY)) {
-            return PersistenceTechnology.MONGO;
-          }
-          return PersistenceTechnology.UNKNOWN;
-        })
-        .orElse(PersistenceTechnology.UNKNOWN);
-
-  }
-
-  private static boolean implementsInterfaceNamed(
-      final Class<?> type,
-      final String interfaceName) {
-
-    return implementsInterfaceNamed(type, interfaceName, new HashSet<>());
-
-  }
-
-  private static boolean implementsInterfaceNamed(
-      final Class<?> type,
-      final String interfaceName,
-      final Set<Class<?>> visited) {
-
-    if ((type == null) || !visited.add(type)) {
-      return false;
-    }
-    if (type.getName().equals(interfaceName)) {
-      return true;
-    }
-    for (final var iface : type.getInterfaces()) {
-      if (implementsInterfaceNamed(iface, interfaceName, visited)) {
-        return true;
-      }
-    }
-    return implementsInterfaceNamed(type.getSuperclass(), interfaceName, visited);
 
   }
 
