@@ -1,0 +1,12 @@
+vanillabp:
+  adapters:
+    test:
+      type: dummy
+  workflow-modules:
+    test-module:
+      adapters:
+        test:
+          resources-location: classpath:test-module/processes/dummy
+  workflow-adapter-cache:
+    max-entries: 2
+    time-to-live: 30m

@@ -88,9 +88,54 @@ not truth: a stale hit (the adapter answers `UNKNOWN_TO_BPMS`) falls through to 
 full walk and repairs the entry; `BPMS_UNAVAILABLE` on a cached adapter follows the
 retry-never-fallback contract. The platform integrations provide a bounded,
 expiring in-memory default (`InMemoryWorkflowAdapterCache`, 10&nbsp;000 entries /
-1&nbsp;h TTL, fixed); an application bean implementing `WorkflowAdapterCache`
-replaces it — cluster setups plug their own shared cache infrastructure this way
-(VanillaBP deliberately ships no distributed implementation).
+1&nbsp;h TTL by default, both configurable — see below); an application bean
+implementing `WorkflowAdapterCache` replaces it — cluster setups plug their own
+shared cache infrastructure this way (VanillaBP deliberately ships no distributed
+implementation).
+
+### Sizing the election cache, and knowing when to (story 58)
+
+Both bounds are properties of the platform, not of an adapter:
+`vanillabp.workflow-adapter-cache.max-entries` and `.time-to-live`
+(`WorkflowAdapterCacheProperties`, validated at startup like everything else, today's
+values as defaults). An application running several thousand workflows of one process
+at the same time does not run out of memory — the map is bounded, a full cache costs
+about 3&nbsp;MB. It runs into EVICTION PRESSURE instead: more hot workflows than
+places, so entries are dropped before they are read.
+
+**Why the bound is a number and not a soft reference.** Soft references were
+considered and rejected: the JVM clears them only when it is nearly out of heap, so
+the cache would grow into the old generation and be reclaimed exactly when the
+application is under pressure anyway; every soft reference is visited by full GCs,
+which lengthens the pauses this kind of application cares about most; it would trade a
+deterministic bound for one depending on GC tuning
+(`-XX:SoftRefLRUPolicyMSPerMB`), for a cache whose loss is cheap by design; and the
+numbers do not call for it, since 100.000 entries are roughly 30&nbsp;MB and raising
+the bound is the cheaper answer. An application which really wants soft or off-heap
+semantics has the SPI bean for it.
+
+**What is measured.** `WorkflowAdapterCacheStatistics` (one per application) counts
+hits, misses, evictions, evictions before an entry was ever read, and LOST HINTS. The
+process services wrap WHATEVER cache is in use into an
+`InstrumentedWorkflowAdapterCache` reporting there, so hits and misses exist for an
+application-provided cache as well. A number which disappears once somebody plugs in
+their own cache would surprise exactly the operator who needs it. Size and evictions
+are different: only the implementation knows them, so the in-memory default reports
+them itself and an application's cache reports none (the size gauge is NaN, not a
+wrong zero). `WorkflowAdapterCacheMeters` publishes all of it as Micrometer meters
+under `vanillabp.workflow.adapter.cache.*`; Micrometer is OPTIONAL and both platforms
+apply `MeterBinder` beans to their registries by themselves, so an application without
+it boots unchanged and reports nothing.
+
+**The warning is about lost hints, not about a full cache.** A cache which is merely
+full is healthy, and an entry evicted unread is not by itself a defect (a workflow
+which is started and never operated on afterwards leaves exactly such an entry
+behind). It becomes one when that workflow IS looked up later: then the bound, not the
+workflow, decided the outcome. The keys of unused evictions are therefore remembered
+(hash codes, bounded like the cache), and a later miss on such a key is a lost hint.
+Ten of them within an hour produce ONE guiding WARN naming the observed number, the
+observation period and the property to raise. Heap pressure is deliberately not the
+trigger, because the cache cannot see the old generation and the JVM does not tell it.
 
 The workflow probe takes the aggregate's persistence because a BPMS without a business
 key finds the workflow by the process variable carrying the aggregate's ID, and that

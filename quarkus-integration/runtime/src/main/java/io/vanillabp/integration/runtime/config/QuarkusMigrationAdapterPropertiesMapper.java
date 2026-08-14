@@ -14,6 +14,7 @@ import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.config.TaskAdapterProperties;
+import io.vanillabp.integration.adapter.migration.config.WorkflowAdapterCacheProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
 
@@ -61,6 +62,9 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
 
   PhaseTwoOutboxProperties.MongoOutboxProperties toCore(
       QuarkusMigrationAdapterProperties.MongoOutboxProperties mongoOutboxProperties);
+
+  WorkflowAdapterCacheProperties toCore(
+      QuarkusMigrationAdapterProperties.WorkflowAdapterCacheProperties workflowAdapterCacheProperties);
 
   AdapterConfigProperties toCore(
       QuarkusMigrationAdapterProperties.AdapterConfiguration adapterConfiguration);

@@ -4,6 +4,43 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## The election cache can be sized and watched (2026-08-14)
+
+Story 58. Everything here is additive - an application configuring nothing behaves
+exactly as before.
+
+**New properties.** The bounds of the default election cache were fixed constants and
+became properties of the platform:
+
+|                    Property                     | Default |
+|-------------------------------------------------|---------|
+| `vanillabp.workflow-adapter-cache.max-entries`  | `10000` |
+| `vanillabp.workflow-adapter-cache.time-to-live` | `PT1H`  |
+
+Both are validated at startup: a cache holding no entry, or an entry expiring
+immediately, fails the boot with a message naming the property. Raise `max-entries` if
+the application keeps more workflows in flight than the cache holds - a record costs
+roughly 300 bytes, so 100.000 of them are about 30 MB. The bound stays hard; why it is
+not a soft reference is written down in `migration-adapter/README.md`.
+
+**New metrics, only with Micrometer.** If the application brings Micrometer (Spring
+Boot: the Actuator's metrics; Quarkus: the `quarkus-micrometer` extension), VanillaBP
+publishes `vanillabp.workflow.adapter.cache.size`, `.hits`, `.misses`, `.evictions`,
+`.evictions.unused` and `.lost.hints`. Micrometer is an optional dependency: without
+it the application boots unchanged and publishes nothing. Hits and misses are counted
+for an application-provided `WorkflowAdapterCache` bean as well, size and evictions
+are not - only the implementation itself knows them.
+
+**A new warning.** Once ten cached elections were dropped for lack of space AND looked
+up again within an hour, one WARN per hour names the number, the observation period
+and the property to raise. A cache which is merely full is not warned about.
+
+**Only relevant for code compiling against the platform:** the constants
+`InMemoryWorkflowAdapterCache.MAX_ENTRIES` and `.TIME_TO_LIVE` are gone (the defaults
+live in `WorkflowAdapterCacheProperties` now), and the cache's preferred constructor
+takes the properties plus the application's `WorkflowAdapterCacheStatistics`. The
+no-arg constructor still exists and still means "the defaults, uncounted".
+
 ## An operation right after a start waits for the BPMS to catch up (2026-08-13)
 
 Story 54. Two changes, one of them a defect that made Camunda 8 unusable on any cluster

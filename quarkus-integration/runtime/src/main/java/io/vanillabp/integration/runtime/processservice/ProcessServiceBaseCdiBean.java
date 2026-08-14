@@ -106,6 +106,13 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
   @Inject
   Instance<io.vanillabp.integration.spi.WorkflowAdapterCache> workflowAdapterCache;
 
+  /**
+   * The application-wide numbers of the election cache - every lookup of whatever
+   * cache is in use is counted into this one instance.
+   */
+  @Inject
+  Instance<io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics> workflowAdapterCacheStatistics;
+
   @Getter
   MigrationProcessService<A> migrationProcessService;
 
@@ -152,9 +159,14 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
             .enabled(), outboxProperties
                 .mongo()
                 .enabled());
-    final var electionCache = workflowAdapterCache.isResolvable()
-        ? workflowAdapterCache.get()
-        : null;
+    final var electionCache = io.vanillabp.integration.adapter.migration.processservice.InstrumentedWorkflowAdapterCache
+        .instrument(
+            workflowAdapterCache.isResolvable()
+                ? workflowAdapterCache.get()
+                : null,
+            workflowAdapterCacheStatistics.isResolvable()
+                ? workflowAdapterCacheStatistics.get()
+                : null);
     this.migrationProcessService = new MigrationProcessService<>(
         getWorkflowModuleId(), getBpmnProcessId(), getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, phaseTwoOutboxResolver, electionCache);
 
@@ -166,7 +178,7 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
           .register(migrationProcessService);
     }
 
-    registerWorkflowTaskHandlers(processServices, phaseTwoOutboxResolver);
+    registerWorkflowTaskHandlers(processServices, phaseTwoOutboxResolver, electionCache);
 
   }
 
@@ -179,7 +191,8 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
    */
   private void registerWorkflowTaskHandlers(
       final List<io.vanillabp.integration.adapter.spi.MigratableProcessService<A>> processServices,
-      final QuarkusPhaseTwoOutboxResolver phaseTwoOutboxResolver) {
+      final QuarkusPhaseTwoOutboxResolver phaseTwoOutboxResolver,
+      final io.vanillabp.integration.spi.WorkflowAdapterCache electionCache) {
 
     if (!workflowTaskRegistry.isResolvable()) {
       return;
@@ -209,10 +222,7 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
           "%s|%s".formatted(moduleId, bpmnProcessId),
           key -> {
             final var secondaryProcessService = new MigrationProcessService<>(
-                moduleId, bpmnProcessId, getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, phaseTwoOutboxResolver, workflowAdapterCache
-                    .isResolvable()
-                        ? workflowAdapterCache.get()
-                        : null);
+                moduleId, bpmnProcessId, getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, phaseTwoOutboxResolver, electionCache);
             if (phaseTwoRouter.isResolvable()) {
               phaseTwoRouter
                   .get()

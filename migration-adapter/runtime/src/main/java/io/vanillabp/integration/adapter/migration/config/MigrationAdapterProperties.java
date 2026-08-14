@@ -71,6 +71,14 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   private PhaseTwoOutboxProperties outbox = new PhaseTwoOutboxProperties();
 
   /**
+   * Configuration of the default election cache
+   * {@link io.vanillabp.integration.spi.WorkflowAdapterCache} (properties section
+   * <code>vanillabp.workflow-adapter-cache</code>).
+   */
+  @Builder.Default
+  private WorkflowAdapterCacheProperties workflowAdapterCache = new WorkflowAdapterCacheProperties();
+
+  /**
    * Derived view of {@link #getAdapters()}: adapter ID mapped to the adapter's type.
    * An adapter entry without an explicit {@link AdapterConfigProperties#getType()
    * type} defaults to its ID being the type.
@@ -748,6 +756,11 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     normalize(facts);
     validateAndLink();
     validateWorkflowModuleIdsAgainstPrefixing();
+    if (workflowAdapterCache == null) {
+      // a binder mapping an absent section onto null must not cost the defaults
+      workflowAdapterCache = new WorkflowAdapterCacheProperties();
+    }
+    workflowAdapterCache.validate();
 
     if (knownWorkflowModuleIds.isEmpty()) {
       throw new IllegalStateException("No workflow-modules where given!");

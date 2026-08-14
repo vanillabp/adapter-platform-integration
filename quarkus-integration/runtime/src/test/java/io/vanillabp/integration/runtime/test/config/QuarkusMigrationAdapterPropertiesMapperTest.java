@@ -82,12 +82,18 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                   QuarkusMigrationAdapterProperties.MongoOutboxProperties mongo) implements QuarkusMigrationAdapterProperties.PhaseTwoOutboxProperties {
   }
 
+  private record WorkflowAdapterCacheProperties(
+                                                int maxEntries,
+                                                Duration timeToLive) implements QuarkusMigrationAdapterProperties.WorkflowAdapterCacheProperties {
+  }
+
   private record Properties(
                             Optional<List<String>> prioritizedAdapters,
                             Optional<String> resourcesLocation,
                             Map<String, QuarkusMigrationAdapterProperties.AdapterConfiguration> adapters,
                             Map<String, QuarkusMigrationAdapterProperties.WorkflowModuleProperties> workflowModules,
-                            QuarkusMigrationAdapterProperties.PhaseTwoOutboxProperties outbox) implements QuarkusMigrationAdapterProperties {
+                            QuarkusMigrationAdapterProperties.PhaseTwoOutboxProperties outbox,
+                            QuarkusMigrationAdapterProperties.WorkflowAdapterCacheProperties workflowAdapterCache) implements QuarkusMigrationAdapterProperties {
   }
 
   @Test
@@ -122,7 +128,10 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                                                                         .ofDays(
                                                                                             1), new JdbcOutboxProperties(false, Optional
                                                                                                 .of("HOT_OUTBOX")), new MongoOutboxProperties(
-                                                                                                    false, "hot-outbox")));
+                                                                                                    false, "hot-outbox")), new WorkflowAdapterCacheProperties(
+                                                                                                        50_000, Duration
+                                                                                                            .ofMinutes(
+                                                                                                                30)));
 
     final var core = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(properties);
 
@@ -156,6 +165,27 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     assertEquals("HOT_OUTBOX", core.getOutbox().getJdbc().getTable());
     assertFalse(core.getOutbox().getMongo().isEnabled());
     assertEquals("hot-outbox", core.getOutbox().getMongo().getCollection());
+
+    assertEquals(50_000, core.getWorkflowAdapterCache().getMaxEntries());
+    assertEquals(Duration.ofMinutes(30), core.getWorkflowAdapterCache().getTimeToLive());
+
+  }
+
+  @Test
+  @DisplayName("The interface's @WithDefault election-cache values equal the core defaults")
+  public void workflowAdapterCacheDefaultsMatchCoreDefaults() {
+
+    final var config = new SmallRyeConfigBuilder()
+        .withMapping(QuarkusMigrationAdapterProperties.class)
+        .build();
+    final var mappedDefaults = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(
+        config
+            .getConfigMapping(QuarkusMigrationAdapterProperties.class)
+            .workflowAdapterCache());
+
+    final var coreDefaults = new io.vanillabp.integration.adapter.migration.config.WorkflowAdapterCacheProperties();
+    assertEquals(coreDefaults.getMaxEntries(), mappedDefaults.getMaxEntries());
+    assertEquals(coreDefaults.getTimeToLive(), mappedDefaults.getTimeToLive());
 
   }
 
@@ -192,7 +222,7 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
   public void emptyOptionalsMapToDefaults() {
 
     final var properties = new Properties(
-        Optional.empty(), Optional.empty(), Map.of(), Map.of(), null);
+        Optional.empty(), Optional.empty(), Map.of(), Map.of(), null, null);
 
     final var core = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(properties);
 

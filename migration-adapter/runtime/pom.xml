@@ -38,6 +38,14 @@
       <artifactId>migration-adapter-spi</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <!-- optional: the election cache publishes its statistics as Micrometer meters
+         if the application brings Micrometer (both platforms apply MeterBinder
+         beans by themselves); without it nothing of this is loaded -->
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-core</artifactId>
+      <optional>true</optional>
+    </dependency>
     <dependency>
       <groupId>io.vanillabp</groupId>
       <artifactId>test-utils</artifactId>
