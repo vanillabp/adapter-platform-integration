@@ -194,9 +194,9 @@ public class VersionRange {
 
   /**
    * @param processVersion The version the BPMS reported
-   * @return Whether this specification covers that version - always
-   *         <code>true</code> for <code>null</code> (a BPMS which cannot report a
-   *         version matches every method)
+   * @return Whether this specification covers that version - only <code>*</code>
+   *         covers <code>null</code> (see
+   *         {@link #matches(String, ProcessVersionResolver)})
    */
   public boolean matches(
       final String processVersion) {
@@ -206,6 +206,12 @@ public class VersionRange {
   }
 
   /**
+   * A BPMS which reports NO version (<code>null</code>) is served by <code>*</code>
+   * only: whether a version lies within <code>1-3</code> cannot be answered without
+   * knowing the version, and answering it with "yes" would run a method for a version
+   * its author excluded. Which is why the choice is not left to the order the methods
+   * happen to be reflected in either.
+   *
    * @param processVersion The version the BPMS reported
    * @param resolver Resolves version tags of the BPMN process the version belongs to
    * @return Whether this specification covers that version
@@ -214,8 +220,11 @@ public class VersionRange {
       final String processVersion,
       final ProcessVersionResolver resolver) {
 
-    if ((kind == Kind.ALL) || (processVersion == null)) {
+    if (kind == Kind.ALL) {
       return true;
+    }
+    if (processVersion == null) {
+      return false;
     }
     if (kind == Kind.EXACT) {
       if (lower.equals(processVersion)) {
@@ -242,6 +251,25 @@ public class VersionRange {
     // the boundaries are closed - '>' and '<' moved theirs by one when they were built
     return ((boundaries[0] == null) || (version.value() >= boundaries[0]
         .value())) && ((boundaries[1] == null) || (version.value() <= boundaries[1].value()));
+
+  }
+
+  /**
+   * The reason a delivery of a BPMS which reports no version found no method, ready to
+   * be appended to a message - empty for a reported version, where the version itself
+   * is the reason.
+   *
+   * @param processVersion The version the BPMS reported
+   * @return The sentence to append, or an empty string
+   */
+  public static String noVersionReportedHint(
+      final String processVersion) {
+
+    return processVersion == null
+        ? " This BPMS reports no process version, so only a method whose version is '*' (the "
+            + "default) can serve the delivery - whether a version lies within a range nobody "
+            + "reported is not something VanillaBP guesses."
+        : "";
 
   }
 

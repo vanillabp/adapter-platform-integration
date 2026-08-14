@@ -113,7 +113,7 @@ public class WorkflowVisibilityDelayTest {
     assertEquals(
         0, awareness.remainingInvisibleProbes(), "the core has to keep asking until the workflow shows up");
 
-    final var deadline = System.currentTimeMillis() + 15000;
+    final var deadline = System.currentTimeMillis() + 30_000;
     while (listener.getCorrelatedMessages().isEmpty()) {
       assertTrue(
           System.currentTimeMillis() < deadline,

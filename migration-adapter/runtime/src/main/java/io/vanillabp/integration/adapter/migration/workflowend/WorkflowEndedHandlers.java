@@ -205,9 +205,12 @@ public class WorkflowEndedHandlers {
       return;
     }
 
-    final var handler = registered
+    final var wired = registered
         .stream()
         .filter(candidate -> candidate.matchesEndEvent(context.getEndEventId()))
+        .toList();
+    final var handler = wired
+        .stream()
         .filter(candidate -> candidate.matchesVersion(
             context.getProcessVersion(),
             processVersions.resolverFor(
@@ -216,15 +219,34 @@ public class WorkflowEndedHandlers {
         .findFirst()
         .orElse(null);
     if (handler == null) {
-      log
-          .debug(
-              "No @WorkflowEnded method of BPMN process '{}' (workflow module '{}') serves end event "
-                  + "'{}' of process version '{}' - the end of workflow '{}' is not reported",
-              processService.getBpmnProcessId(),
-              processService.getWorkflowModuleId(),
-              context.getEndEventId(),
-              context.getProcessVersion(),
-              context.getWorkflowAggregateId());
+      // a method wired to the event but excluded by its version is worth a warning: the
+      // application asked to be notified and is not, which no log level should hide
+      final var message = "No @WorkflowEnded method of BPMN process '{}' (workflow module '{}') "
+          + "serves end event '{}' of process version '{}' - the end of workflow '{}' is not "
+          + "reported.{}";
+      final var hint = io.vanillabp.integration.adapter.migration.workflowtask.VersionRange
+          .noVersionReportedHint(context.getProcessVersion());
+      if (wired.isEmpty()) {
+        log
+            .debug(
+                message,
+                processService.getBpmnProcessId(),
+                processService.getWorkflowModuleId(),
+                context.getEndEventId(),
+                context.getProcessVersion(),
+                context.getWorkflowAggregateId(),
+                hint);
+      } else {
+        log
+            .warn(
+                message,
+                processService.getBpmnProcessId(),
+                processService.getWorkflowModuleId(),
+                context.getEndEventId(),
+                context.getProcessVersion(),
+                context.getWorkflowAggregateId(),
+                hint);
+      }
       return;
     }
 

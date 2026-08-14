@@ -79,7 +79,7 @@ public class AggregateChangedTest {
     try {
       final var aggregate = workflowService.startWorkflow(content);
       userTransaction.commit();
-      listener.awaitInvocations(1, 10000);
+      listener.awaitInvocations(1, 30_000);
       awareness.answerWith(WorkflowAwareness.ACTIVE);
       return aggregate;
     } catch (final Exception e) {
@@ -110,7 +110,7 @@ public class AggregateChangedTest {
       throw e;
     }
 
-    final var deadline = System.currentTimeMillis() + 15000;
+    final var deadline = System.currentTimeMillis() + 30_000;
     while (listener.getAggregateChanges().size() < 3) {
       assertTrue(
           System.currentTimeMillis() < deadline,

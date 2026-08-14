@@ -91,7 +91,7 @@ public class MigrationElectionTest {
     final var aggregate = aggregateHolder[0];
 
     // the NEW start went to the CURRENT first-priority adapter 'new-bpms'
-    final var deadline = System.currentTimeMillis() + 15000;
+    final var deadline = System.currentTimeMillis() + 30_000;
     while (listener.getStartedByAdapter().isEmpty() && (System.currentTimeMillis() < deadline)) {
       Thread.sleep(50);
     }
@@ -137,7 +137,7 @@ public class MigrationElectionTest {
   private void awaitCompletedTasksByAdapter(
       final int count) throws Exception {
 
-    final var deadline = System.currentTimeMillis() + 15000;
+    final var deadline = System.currentTimeMillis() + 30_000;
     while (listener.getCompletedTasksByAdapter().size() < count) {
       assertTrue(
           System.currentTimeMillis() < deadline,

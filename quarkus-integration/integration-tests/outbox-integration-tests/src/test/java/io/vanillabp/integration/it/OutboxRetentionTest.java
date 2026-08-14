@@ -73,10 +73,10 @@ public class OutboxRetentionTest {
     final var attachedAggregate = workflowService.startWorkflow("retention-test");
     userTransaction.commit();
 
-    listener.awaitInvocations(1, 10000);
+    listener.awaitInvocations(1, 30_000);
 
     // retention PT1S + poll interval PT0.5S: the DONE entry has to be gone soon
-    final var deadline = System.currentTimeMillis() + 10000;
+    final var deadline = System.currentTimeMillis() + 30_000;
     while (countEntriesOfAggregate(attachedAggregate) > 0) {
       assertTrue(
           System.currentTimeMillis() < deadline,

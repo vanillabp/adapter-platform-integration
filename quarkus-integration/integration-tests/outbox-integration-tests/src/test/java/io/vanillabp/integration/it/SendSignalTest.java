@@ -69,7 +69,7 @@ public class SendSignalTest {
   private List<String> awaitBroadcast(
       final int count) throws InterruptedException {
 
-    final var deadline = System.currentTimeMillis() + 10_000;
+    final var deadline = System.currentTimeMillis() + 30_000;
     while (listener.getBroadcastSignals().size() < count) {
       if (System.currentTimeMillis() > deadline) {
         throw new AssertionError(

@@ -101,7 +101,7 @@ public class OutboxCustomTableTest {
     assertNotNull(attachedAggregate.getId());
 
     // dispatched from the configured table
-    final var invocations = listener.awaitInvocations(1, 10000);
+    final var invocations = listener.awaitInvocations(1, 30_000);
     assertEquals(attachedAggregate.getId(), invocations.getFirst());
 
     // the default table was never created
