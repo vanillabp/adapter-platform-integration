@@ -286,6 +286,32 @@ public class WorkflowTaskRegistryTest {
 
   }
 
+  /**
+   * Two methods serving ONE BPMN element, one of them keeping the task open (story
+   * 50): what an adapter has to treat as "this element cannot complete on return".
+   */
+  static class MixedAsyncService {
+
+    @WorkflowTask(taskDefinition = "mixedVersioned", version = "1")
+    public void firstVersion(
+        final Aggregate aggregate) {
+
+      aggregate.processedBy = "firstVersion";
+
+    }
+
+    @WorkflowTask(taskDefinition = "mixedVersioned", version = ">1")
+    public void laterVersions(
+        final Aggregate aggregate,
+        @TaskId final String taskId) {
+
+      aggregate.processedBy = "laterVersions";
+      aggregate.taskId = taskId;
+
+    }
+
+  }
+
   private static final String MODULE = "test-module";
 
   private static final String PROCESS = "TestProcess";
@@ -914,6 +940,55 @@ public class WorkflowTaskRegistryTest {
           () -> registry.invokeWorkflowTask(MODULE, "VersionedProcess", versionedContext(null)));
       assertTrue(exception.getMessage().contains("reports no process version"), exception.getMessage());
       assertNull(persistence.aggregates.get("4711").processedBy, "no handler ran");
+
+    }
+
+  }
+
+  @Nested
+  @DisplayName("Asynchronous completion (story 50)")
+  class AsynchronousCompletion {
+
+    @Test
+    @DisplayName("A method declaring @TaskId says its task stays open")
+    public void aTaskIdMethodCompletesAsynchronously() {
+
+      assertTrue(registry.workflowTaskCompletesAsynchronously(MODULE, PROCESS, "asyncTask"));
+
+    }
+
+    @Test
+    @DisplayName("A method without @TaskId completes its task on return")
+    public void aMethodWithoutTaskIdCompletesOnReturn() {
+
+      assertFalse(registry.workflowTaskCompletesAsynchronously(MODULE, PROCESS, "doSomething"));
+      assertFalse(registry.workflowTaskCompletesAsynchronously(MODULE, PROCESS, "explicitDefinition"));
+      assertFalse(registry.workflowTaskCompletesAsynchronously(MODULE, PROCESS, "Activity_4711"));
+
+    }
+
+    @Test
+    @DisplayName("An element no method serves is not asynchronous either")
+    public void anUnknownElementIsNotAsynchronous() {
+
+      assertFalse(registry.workflowTaskCompletesAsynchronously(MODULE, PROCESS, "unknownTask"));
+      assertFalse(registry.workflowTaskCompletesAsynchronously(MODULE, "UnknownProcess", "asyncTask"));
+
+    }
+
+    @Test
+    @DisplayName("One of several methods keeping the task open is enough")
+    public void oneAsynchronousMethodDecidesForTheElement() {
+
+      registry.registerWorkflowService(
+          MODULE,
+          "MixedAsyncProcess",
+          MixedAsyncService.class,
+          MixedAsyncService::new,
+          beans::get,
+          createProcessService());
+
+      assertTrue(registry.workflowTaskCompletesAsynchronously(MODULE, "MixedAsyncProcess", "mixedVersioned"));
 
     }
 

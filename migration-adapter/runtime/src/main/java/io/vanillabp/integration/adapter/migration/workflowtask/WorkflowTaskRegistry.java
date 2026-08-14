@@ -646,6 +646,27 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
   }
 
   @Override
+  public boolean workflowTaskCompletesAsynchronously(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String taskDefinitionOrActivityId) {
+
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    if (entry == null) {
+      return false;
+    }
+    // ONE method wanting to keep the task open is enough - see the SPI: methods
+    // serving different process versions share the BPMN element, and the element
+    // either can stay open or it cannot
+    return entry.handlers
+        .stream()
+        .filter(candidate -> sameWiring(candidate.getTaskDefinition(),
+            taskDefinitionOrActivityId) || sameWiring(candidate.getActivityId(), taskDefinitionOrActivityId))
+        .anyMatch(WorkflowTaskHandler::isAsynchronousTask);
+
+  }
+
+  @Override
   public String resolveWorkflowAggregateIdName(
       final String workflowModuleId,
       final String bpmnProcessId) {
