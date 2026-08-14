@@ -141,6 +141,40 @@ public interface WorkflowTaskInvoker {
       String taskDefinitionOrActivityId);
 
   /**
+   * Whether the <code>&#64;WorkflowTask</code> method serving the given task
+   * definition (or BPMN activity ID) completes its task ASYNCHRONOUSLY, which a
+   * method says by declaring a <code>&#64;TaskId</code> parameter: the task stays
+   * open until the application completes it.
+   * <p>
+   * Adapters ask this while wiring, because a BPMN element which cannot stay open
+   * is a modelling defect the developer should learn about while the application
+   * starts rather than as an incident on a live workflow. Camunda 7's
+   * <code>camunda:expression</code> is such an element - it completes the task as
+   * soon as the expression returns.
+   * <p>
+   * ONE such method is enough for the answer to be <code>true</code>: several
+   * methods may serve one element (different process versions, story 48), and an
+   * element which cannot stay open is wired wrongly as soon as any of them wants to
+   * keep it open.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param taskDefinitionOrActivityId The task definition or BPMN activity ID
+   * @return Whether a matching method completes its task asynchronously;
+   *         <code>false</code> if no method is registered at all
+   */
+  default boolean workflowTaskCompletesAsynchronously(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String taskDefinitionOrActivityId) {
+
+    // the core answers this; the default keeps test doubles of this SPI compiling
+    // and switches such a check off rather than inventing an answer
+    return false;
+
+  }
+
+  /**
    * The values of a workflow aggregate SHARED WITH THE BPMS
    * ({@code @SyncWithBPMS}/{@code @NoSyncWithBPMS}, see
    * {@link io.vanillabp.integration.adapter.spi.WorkflowAggregateSync}) - for
