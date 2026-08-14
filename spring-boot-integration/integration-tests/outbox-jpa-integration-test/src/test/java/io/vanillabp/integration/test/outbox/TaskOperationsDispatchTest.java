@@ -53,6 +53,10 @@ public class TaskOperationsDispatchTest {
 
     listener.reset();
     awareness.answerWith(WorkflowAwareness.UNKNOWN_TO_BPMS);
+    // the awareness source is a bean of the cached context this module's test classes
+    // share, so start from "the workflow is visible" instead of whatever the class
+    // running before left behind
+    awareness.alwaysVisible();
 
   }
 

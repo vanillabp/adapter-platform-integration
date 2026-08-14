@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -56,6 +57,20 @@ public class WorkflowVisibilityDelayTest {
     listener.reset();
     awareness.alwaysVisible();
     awareness.answerWith(WorkflowAwareness.ACTIVE);
+
+  }
+
+  /**
+   * The window and the "invisible for the next N probes" counter are state of a bean in
+   * the CACHED Spring context, which every test class of this module shares. Leaving them
+   * behind made every workflow probe of the class running next answer "unknown" and wait
+   * five minutes for nothing - three tests of {@code TaskOperationsDispatchTest} timed out
+   * that way in the GitHub build, where the classes run in a different order than locally.
+   */
+  @AfterEach
+  public void leaveNoWindowBehind() {
+
+    awareness.alwaysVisible();
 
   }
 

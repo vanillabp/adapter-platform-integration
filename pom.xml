@@ -135,6 +135,12 @@
         <plugin>
           <artifactId>maven-failsafe-plugin</artifactId>
           <version>3.5.2</version>
+          <configuration>
+            <!-- deterministic order: the default 'filesystem' differs between a
+                 developer machine and the GitHub runner, which hid an order-dependent
+                 test for a day (see prompts/bugfix-flaky-test.md) -->
+            <runOrder>alphabetical</runOrder>
+          </configuration>
         </plugin>
         <plugin>
           <artifactId>maven-surefire-plugin</artifactId>
@@ -143,6 +149,8 @@
             <!-- see https://javadoc.io/doc/org.mockito/mockito-core/latest/org.mockito/org/mockito/Mockito.html#mockito-instrumentation -->
             <!-- property 'jacoco.agent' is filled by jacoco-maven-plugin blow in this file -->
             <argLine>@{jacoco.agent} -Xshare:off -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
+            <!-- deterministic order, see the failsafe configuration above -->
+            <runOrder>alphabetical</runOrder>
           </configuration>
           <dependencies>
             <dependency>
