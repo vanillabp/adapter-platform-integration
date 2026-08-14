@@ -118,10 +118,13 @@ public class ProcessVersionsTest {
     assertEquals("tagged", persistence.stored("4711").getServedBy());
     assertEquals(1, versionSource.getQueries());
 
-    // a BPMS which cannot report a version is served by the first method - what
-    // every application not using the attribute relies on
-    dummyAdapter.invokeTask("test-module", "VersionedProcess", context("4711", null));
-    assertEquals("upToTwo", persistence.stored("4711").getServedBy());
+    // a BPMS reporting NO version reaches none of these methods: every one of them
+    // names versions, and which of them applies is not something to guess
+    final var unreported = assertThrows(
+        IllegalStateException.class,
+        () -> dummyAdapter.invokeTask("test-module", "VersionedProcess", context("4711", null)));
+    assertTrue(unreported.getMessage().contains("reports no process version"), unreported.getMessage());
+    assertEquals("tagged", persistence.stored("4711").getServedBy(), "no method ran");
 
     // ANOTHER cluster node deploys version 5 and moves the tag to it: this node has
     // never seen that version, so it asks the BPMS while the task is dispatched

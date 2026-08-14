@@ -458,12 +458,13 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
         .orElseThrow(() -> new IllegalStateException(
             """
                 No @WorkflowTask method of BPMN process '%s' of workflow module '%s' matches task \
-                definition '%s' (process version '%s')! Registered methods: %s."""
+                definition '%s' (process version '%s')!%s Registered methods: %s."""
                 .formatted(
                     bpmnProcessId,
                     workflowModuleId,
                     context.getTaskDefinition(),
                     context.getProcessVersion(),
+                    VersionRange.noVersionReportedHint(context.getProcessVersion()),
                     entry.handlers
                         .stream()
                         .map(candidate -> "'%s' (%s)".formatted(candidate.describe(), candidate.describeWiring()))

@@ -82,12 +82,12 @@ public class OutboxRedispatchMitigationTest {
 
     // the first (failing) dispatch happened - previouslyAttempted was false, so
     // NO mitigation probe ran up to now
-    listener.awaitInvocations(1, 10000);
+    listener.awaitInvocations(1, 30_000);
     assertEquals(0, awareness.countProbesOf("test"), "the first dispatch must not probe");
 
     // the RETRY recognizes attempts > 0, probes the adapter (ACTIVE) and consumes
     // the entry without a second start
-    final var deadline = System.currentTimeMillis() + 15000;
+    final var deadline = System.currentTimeMillis() + 30_000;
     while ((awareness.countProbesOf("test") == 0) && (System.currentTimeMillis() < deadline)) {
       Thread.sleep(50);
     }

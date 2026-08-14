@@ -98,8 +98,14 @@ public interface TaskInvocationContext {
    * <code>&#64;WorkflowTask(version = ...)</code>, and a specification naming a
    * version TAG is resolved using the
    * {@link io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog} the
-   * adapter registered. <code>null</code> matches every handler regardless of its
-   * version ranges - the compatible answer of an adapter whose BPMS cannot tell.
+   * adapter registered.
+   * <p>
+   * <code>null</code> is the answer of an adapter whose BPMS cannot tell. Such a
+   * delivery is served by a method whose version is <code>*</code> (the default), and
+   * an application not using the attribute is therefore unaffected. A method naming
+   * versions is NOT called: whether the version lies within its range cannot be
+   * answered, and VanillaBP does not decide it by the order the methods happen to be
+   * reflected in.
    *
    * @return The process version or <code>null</code>
    */

@@ -364,6 +364,18 @@ public class ProcessVersionMatchingTest {
 
   }
 
+  static class UnversionedService {
+
+    @WorkflowTask(taskDefinition = "task")
+    public void everyVersion(
+        final Aggregate aggregate) {
+
+      aggregate.servedBy = "everyVersion";
+
+    }
+
+  }
+
   static class TaggedVersionsService {
 
     @WorkflowTask(taskDefinition = "task", version = "release-2024")
@@ -446,10 +458,31 @@ public class ProcessVersionMatchingTest {
     testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", "3"));
     assertEquals("afterTwo", persistence.aggregates.get("4711").servedBy);
 
-    // a BPMS which cannot report a version is served by the first method - the
-    // compatible behavior every application not using the attribute relies on
+    // a BPMS reporting NO version is served by '*' only: whether a version nobody
+    // reported lies within '1-2' cannot be answered, and the answer must not depend on
+    // the order the methods happen to be reflected in
+    final var unreported = assertThrows(
+        IllegalStateException.class,
+        () -> testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", null)));
+    assertTrue(unreported.getMessage().contains("reports no process version"), unreported.getMessage());
+    assertEquals("afterTwo", persistence.aggregates.get("4711").servedBy, "no method ran");
+
+  }
+
+  @Test
+  @DisplayName("A BPMS reporting no version is served by the method without a version")
+  public void withoutAReportedVersionTheUnrestrictedMethodServes() {
+
+    final var testee = registry(UnversionedService.class, UnversionedService::new);
+    storeAggregate("4711");
+
     testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", null));
-    assertEquals("upToTwo", persistence.aggregates.get("4711").servedBy);
+    assertEquals("everyVersion", persistence.aggregates.get("4711").servedBy);
+
+    // the same method serves a reported version, which is what makes the attribute
+    // free of cost for an application not using it
+    testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", "7"));
+    assertEquals("everyVersion", persistence.aggregates.get("4711").servedBy);
 
   }
 
@@ -678,6 +711,16 @@ public class ProcessVersionMatchingTest {
     testee.startWorkflowByBpms(MODULE, PROCESS, startContext("4712", "3"));
     assertEquals("afterTwo", persistence.aggregates.get("4712").servedBy);
 
+    // without a reported version no ranged method runs: the aggregate is built anyway,
+    // since the BPMS created that workflow either way - and it is said out loud
+    final var messages = loggedBy(
+        io.vanillabp.integration.adapter.migration.workflowstart.BpmsInitiatedStarts.class,
+        () -> testee.startWorkflowByBpms(MODULE, PROCESS, startContext("4713", null)));
+    assertNull(persistence.aggregates.get("4713").servedBy, "no method initialized the aggregate");
+    assertTrue(
+        messages.stream().anyMatch(message -> message.contains("reports no process version")),
+        messages.toString());
+
   }
 
   @Test
@@ -697,6 +740,16 @@ public class ProcessVersionMatchingTest {
 
     testee.workflowEnded(MODULE, PROCESS, endedContext("3"));
     assertEquals("afterTwo", persistence.aggregates.get("4711").servedBy);
+
+    // a notification without a version reaches no ranged method - a warning, because
+    // the application asked to hear about the end and does not
+    final var messages = loggedBy(
+        io.vanillabp.integration.adapter.migration.workflowend.WorkflowEndedHandlers.class,
+        () -> testee.workflowEnded(MODULE, PROCESS, endedContext(null)));
+    assertEquals("afterTwo", persistence.aggregates.get("4711").servedBy, "no method ran");
+    assertTrue(
+        messages.stream().anyMatch(message -> message.contains("reports no process version")),
+        messages.toString());
 
   }
 

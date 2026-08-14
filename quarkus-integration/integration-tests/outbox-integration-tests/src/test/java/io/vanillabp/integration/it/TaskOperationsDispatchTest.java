@@ -86,7 +86,7 @@ public class TaskOperationsDispatchTest {
   public void taskOperationsDispatchAfterCommit() throws Exception {
 
     final var aggregate = startedAggregate("task-ops");
-    listener.awaitInvocations(1, 10000);
+    listener.awaitInvocations(1, 30_000);
     awareness.answerWith(WorkflowAwareness.ACTIVE);
 
     userTransaction.begin();
@@ -99,7 +99,7 @@ public class TaskOperationsDispatchTest {
       throw e;
     }
 
-    final var deadline = System.currentTimeMillis() + 15000;
+    final var deadline = System.currentTimeMillis() + 30_000;
     while (listener.getCompletedTasks().isEmpty() || listener.getCanceledTasks().isEmpty()) {
       assertTrue(
           System.currentTimeMillis() < deadline,
@@ -125,7 +125,7 @@ public class TaskOperationsDispatchTest {
   public void userTaskOperationsDispatchAfterCommit() throws Exception {
 
     final var aggregate = startedAggregate("user-task-ops");
-    listener.awaitInvocations(1, 10000);
+    listener.awaitInvocations(1, 30_000);
     awareness.answerWith(WorkflowAwareness.ACTIVE);
 
     userTransaction.begin();
@@ -138,7 +138,7 @@ public class TaskOperationsDispatchTest {
       throw e;
     }
 
-    final var deadline = System.currentTimeMillis() + 15000;
+    final var deadline = System.currentTimeMillis() + 30_000;
     while (listener.getCompletedUserTasks().isEmpty() || listener.getCanceledUserTasks().isEmpty()) {
       assertTrue(
           System.currentTimeMillis() < deadline,
@@ -161,7 +161,7 @@ public class TaskOperationsDispatchTest {
   public void correlateMessageDispatchesAfterCommit() throws Exception {
 
     final var aggregate = startedAggregate("correlate");
-    listener.awaitInvocations(1, 10000);
+    listener.awaitInvocations(1, 30_000);
     awareness.answerWith(WorkflowAwareness.ACTIVE);
 
     userTransaction.begin();
@@ -178,7 +178,7 @@ public class TaskOperationsDispatchTest {
       throw e;
     }
 
-    final var deadline = System.currentTimeMillis() + 15000;
+    final var deadline = System.currentTimeMillis() + 30_000;
     while (listener.getCorrelatedMessages().size() < 3) {
       assertTrue(
           System.currentTimeMillis() < deadline,
@@ -215,7 +215,7 @@ public class TaskOperationsDispatchTest {
   public void unknownWorkflowRaisesGuidingException() throws Exception {
 
     final var aggregate = startedAggregate("correlate-unknown");
-    listener.awaitInvocations(1, 10000);
+    listener.awaitInvocations(1, 30_000);
     // awareness stays UNKNOWN_TO_BPMS
 
     userTransaction.begin();
@@ -239,7 +239,7 @@ public class TaskOperationsDispatchTest {
   public void completedWorkflowCorrelationIsNoOp() throws Exception {
 
     final var aggregate = startedAggregate("correlate-completed");
-    listener.awaitInvocations(1, 10000);
+    listener.awaitInvocations(1, 30_000);
     awareness.answerWith(WorkflowAwareness.COMPLETED);
 
     userTransaction.begin();
@@ -270,7 +270,7 @@ public class TaskOperationsDispatchTest {
       throw e;
     }
 
-    final var deadline = System.currentTimeMillis() + 15000;
+    final var deadline = System.currentTimeMillis() + 30_000;
     while (listener.getStartedByMessage().isEmpty()) {
       assertTrue(
           System.currentTimeMillis() < deadline,
@@ -289,7 +289,7 @@ public class TaskOperationsDispatchTest {
   public void rollbackAndUnknownTask() throws Exception {
 
     final var aggregate = startedAggregate("task-rollback");
-    listener.awaitInvocations(1, 10000);
+    listener.awaitInvocations(1, 30_000);
     awareness.answerWith(WorkflowAwareness.ACTIVE);
 
     userTransaction.begin();

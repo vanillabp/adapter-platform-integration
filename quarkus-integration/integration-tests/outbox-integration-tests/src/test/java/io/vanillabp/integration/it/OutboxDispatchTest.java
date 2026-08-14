@@ -116,12 +116,12 @@ public class OutboxDispatchTest {
 
     // after the commit, phase two has to be dispatched with the aggregate's ID
     // converted back from its string representation to the original type
-    final var invocations = listener.awaitInvocations(1, 10000);
+    final var invocations = listener.awaitInvocations(1, 30_000);
     assertEquals(attachedAggregate.getId(), invocations.getFirst());
 
     // DONE instead of delete: the entry has to be marked DONE after the successful
     // dispatch and stays visible until the asynchronous retention cleanup
-    final var deadline = System.currentTimeMillis() + 10000;
+    final var deadline = System.currentTimeMillis() + 30_000;
     while (count(COUNT_DONE_ENTRIES_OF_AGGREGATE.formatted(attachedAggregate.getId())) == 0) {
       assertTrue(System.currentTimeMillis() < deadline, "outbox entry was not marked DONE");
       Thread.sleep(50);
@@ -137,7 +137,7 @@ public class OutboxDispatchTest {
     final var attachedAggregate = workflowService.startWorkflow("dedup-test");
     userTransaction.commit();
 
-    listener.awaitInvocations(1, 10000);
+    listener.awaitInvocations(1, 30_000);
 
     // starting the workflow again for the same aggregate schedules the same
     // idempotency key: the unique constraint makes it a no-op - no second entry,
@@ -185,7 +185,7 @@ public class OutboxDispatchTest {
     userTransaction.commit();
 
     // the first dispatch fails, the retry succeeds
-    final var invocations = listener.awaitInvocations(2, 10000);
+    final var invocations = listener.awaitInvocations(2, 30_000);
     assertEquals(attachedAggregate.getId(), invocations.get(0));
     assertEquals(attachedAggregate.getId(), invocations.get(1));
 

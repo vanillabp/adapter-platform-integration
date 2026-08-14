@@ -906,11 +906,14 @@ public class WorkflowTaskRegistryTest {
     }
 
     @Test
-    @DisplayName("A null process version matches any handler")
-    public void nullVersionMatchesAll() {
+    @DisplayName("A BPMS reporting no version reaches no handler naming versions")
+    public void withoutAReportedVersionRangedHandlersAreNotCalled() {
 
-      registry.invokeWorkflowTask(MODULE, "VersionedProcess", versionedContext(null));
-      assertEquals("oldVersions", persistence.aggregates.get("4711").processedBy);
+      final var exception = assertThrows(
+          IllegalStateException.class,
+          () -> registry.invokeWorkflowTask(MODULE, "VersionedProcess", versionedContext(null)));
+      assertTrue(exception.getMessage().contains("reports no process version"), exception.getMessage());
+      assertNull(persistence.aggregates.get("4711").processedBy, "no handler ran");
 
     }
 

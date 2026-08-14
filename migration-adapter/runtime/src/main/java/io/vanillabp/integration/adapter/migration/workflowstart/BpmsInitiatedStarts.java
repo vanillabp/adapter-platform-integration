@@ -8,6 +8,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.transaction.TransactionRunner;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartContext;
@@ -22,6 +25,8 @@ import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartSpec
  * which the workflow-task registry implements by delegating here.
  */
 public class BpmsInitiatedStarts {
+
+  private static final Logger log = LoggerFactory.getLogger(BpmsInitiatedStarts.class);
 
   private record RegistryKey(
                              String workflowModuleId,
@@ -257,18 +262,37 @@ public class BpmsInitiatedStarts {
     final var entry = entries
         .get(
             new RegistryKey(processService.getWorkflowModuleId(), processService.getBpmnProcessId()));
-    final var handler = entry == null
-        ? null
+    final var wired = entry == null
+        ? List.<BpmsInitiatedStartHandler>of()
         : entry.handlers
             .stream()
             .filter(candidate -> candidate.matchesStartEvent(context.getStartEventId()))
-            .filter(candidate -> candidate.matchesVersion(
-                context.getProcessVersion(),
-                processVersions.resolverFor(
-                    processService.getWorkflowModuleId(),
-                    processService.getBpmnProcessId())))
-            .findFirst()
-            .orElse(null);
+            .toList();
+    final var handler = wired
+        .stream()
+        .filter(candidate -> candidate.matchesVersion(
+            context.getProcessVersion(),
+            processVersions.resolverFor(
+                processService.getWorkflowModuleId(),
+                processService.getBpmnProcessId())))
+        .findFirst()
+        .orElse(null);
+    if ((handler == null) && !wired.isEmpty()) {
+      // the aggregate is built either way, but the method meant to initialize it does
+      // not run - said out loud, because an empty aggregate looks like a defect later
+      log
+          .warn(
+              "No @WorkflowStartedByBpms method of BPMN process '{}' (workflow module '{}') serves "
+                  + "start event '{}' of process version '{}' - the aggregate is built without "
+                  + "initialization. Methods wired to that start event: {}.{}",
+              processService.getBpmnProcessId(),
+              processService.getWorkflowModuleId(),
+              context.getStartEventId(),
+              context.getProcessVersion(),
+              describeHandlers(wired),
+              io.vanillabp.integration.adapter.migration.workflowtask.VersionRange
+                  .noVersionReportedHint(context.getProcessVersion()));
+    }
 
     final var result = BpmsInitiatedStartExecution.run(processService, handler, context, transactionRunner);
     // the BPMS just built this workflow through us - it holds it

@@ -135,10 +135,16 @@ The version meant is the version of the deployed process DEFINITION as the BPMS 
 application invents. A boundary may also name a version TAG of the model
 (`camunda:versionTag`, `zeebe:versionTag`).
 
-Three things flip for an application which already carries the attribute:
+Four things flip for an application which already carries the attribute:
 
 - Disjoint ranges really are disjoint now. A version served by NO method fails the
   delivery with a message naming that version, where before the first method ran.
+- A BPMS which reports no version at all (the Process-Engine-API, and any adapter whose
+  BPMS cannot tell) reaches methods without the attribute only. A method naming versions
+  is not called there, and a task whose every method names versions fails the delivery
+  saying so, where before the first method ran. Whether a version nobody reported lies
+  within `1-3` cannot be answered, and answering it by the order the methods happen to be
+  reflected in was not stable between two starts of the same application.
 - Two methods wired to one BPMN element with OVERLAPPING ranges fail the boot, naming both
   methods. The duplicate check compared `matchesVersion(null)`, which is `true` for every
   specification, so it never fired; and the workflow-task registry compared newly scanned
