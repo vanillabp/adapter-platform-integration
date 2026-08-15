@@ -65,11 +65,20 @@ as possible at **build time**, following Quarkus' extension philosophy:
    classes with config ordinals slightly above `application.*` (properties: 251,
    YAML: 256), so module properties take precedence. The files are also registered for
    dev-mode hot reload.
-5. **Aggregate persistence:** Unlike Spring Boot there is *no* generic fallback —
-   Quarkus has no single persistence idiom. A CDI bean implementing
-   `AggregatePersistenceAware` (from [quarkus-support](./quarkus-support)) is required
-   per aggregate; the most specific generic type wins (`AggregatePersistenceResolver`,
-   Jandex-based).
+5. **Aggregate persistence:** a CDI bean implementing `AggregatePersistenceAware`
+   always wins, the most specific generic type first (`AggregatePersistenceResolver`,
+   Jandex-based). For an aggregate having none, VanillaBP asks the aggregate what it
+   is (`DefaultAggregatePersistenceResolver`, also at build time): a Panache
+   repository for it wins (Hibernate ORM or MongoDB), then the aggregate being a
+   Panache active record, then a Spring Data repository for it
+   (`quarkus-spring-data-jpa`). The chosen implementation lives in the runtime module
+   (package `runtime/persistence`), and one `@Singleton` subclass per aggregate is
+   generated with Gizmo, so the runtime lookup finds a normal CDI bean. Two
+   repositories for one aggregate fail the build; an aggregate using none of the
+   idioms fails it, too, with a message naming what was looked for. Everything about
+   the aggregate's ID (name, type, value) comes from reflection (`AggregateIdTypes`),
+   not from the persistence framework: it is needed at build and startup time, where
+   no session is guaranteed to be around.
 6. **Validation at build time:** `EnsureCollectedClassesAreBeansBuildStepProcessor`
    fails the build if collected classes (workflow services, persistence
    implementations) are not actual CDI beans.

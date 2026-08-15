@@ -56,15 +56,37 @@
       <optional>true</optional>
     </dependency>
     <dependency>
+      <!-- optional: aggregate persistence defaults for Hibernate ORM Panache
+           (repository and active record) -->
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-hibernate-orm-panache</artifactId>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <!-- optional: aggregate persistence defaults for MongoDB Panache -->
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-mongodb-panache</artifactId>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <!-- optional: aggregate persistence default for Spring Data repositories
+           (the API artifact only, the extension itself is the application's choice) -->
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-spring-data-commons-api</artifactId>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
       <groupId>io.vanillabp</groupId>
       <artifactId>test-utils</artifactId>
       <version>${project.version}</version>
       <scope>test</scope>
     </dependency>
     <dependency>
+      <!-- optional: the JPA-backed aggregate persistence defaults and the tests
+           of the JDBC outbox (an application gets it from its Hibernate extension) -->
       <groupId>jakarta.persistence</groupId>
       <artifactId>jakarta.persistence-api</artifactId>
-      <scope>test</scope>
+      <optional>true</optional>
     </dependency>
   </dependencies>
 

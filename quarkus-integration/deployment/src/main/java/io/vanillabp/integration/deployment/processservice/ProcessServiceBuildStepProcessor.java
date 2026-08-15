@@ -14,6 +14,7 @@ import java.util.function.Predicate;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.ClassInfo;
+import org.jboss.jandex.DotName;
 import org.jboss.jandex.Type;
 
 import io.quarkus.arc.Unremovable;
@@ -24,7 +25,10 @@ import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
+import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.gizmo.ClassCreator;
+import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.SignatureBuilder;
 import io.vanillabp.integration.deployment.config.MigrationAdapterPropertiesBuildItem;
 import io.vanillabp.integration.deployment.validation.EnsureClassIsBeanValidationBuildItem;
@@ -34,6 +38,7 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.spi.process.ProcessService;
 import io.vanillabp.spi.service.WorkflowService;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -68,18 +73,24 @@ public class ProcessServiceBuildStepProcessor {
    * annotated by {@link WorkflowService} at class level.
    *
    * @param applicationArchivesBuildItem Information about All archives (JARs and directories) of the project
+   * @param combinedIndex The index of the application and of all indexed dependencies, used to
+   *        determine the persistence idiom of an aggregate the application provides no
+   *        {@link AggregatePersistenceAware} for
    * @param migrationAdapterProperties Properties of the migration adapter previously built and validated as a dependency
    * @param workflowModulesFound Information about all workflow modules found in the project
    * @param generatedBeanBuildItemBuildProducer {@link BuildProducer} used to collect generated {@link ProcessService} beans
+   * @param reflectiveClassBuildItemProducer {@link BuildProducer} used to register aggregates whose ID VanillaBP reads by reflection
    * @param additionalBeanBuildItemBuildProducer {@link BuildProducer} used to collect beans provided in module "runtime"
    */
   @BuildStep
   void buildProcessServices(
       final ApplicationArchivesBuildItem applicationArchivesBuildItem,
+      final CombinedIndexBuildItem combinedIndex,
       final MigrationAdapterPropertiesBuildItem migrationAdapterProperties,
       final VanillaBpWorkflowModulesBuildItem workflowModulesFound,
       final BuildProducer<EnsureClassIsBeanValidationBuildItem> ensureClassIsBeanBuildItemProducer,
       final BuildProducer<GeneratedBeanBuildItem> generatedBeanBuildItemBuildProducer,
+      final BuildProducer<ReflectiveClassBuildItem> reflectiveClassBuildItemProducer,
       final BuildProducer<AdditionalBeanBuildItem> additionalBeanBuildItemBuildProducer) {
 
     final var aggregatePersistenceAwares = applicationArchivesBuildItem
@@ -159,8 +170,9 @@ public class ProcessServiceBuildStepProcessor {
                   serviceClass);
           final var bpmnProcessId = primaryBpmnProcessId(annotation, serviceClass);
 
-          // find persistence support class for the aggregate class
-          final var aggregatePersistenceType = aggregatePersistenceAwares
+          // find persistence support class for the aggregate class: an implementation
+          // provided by the application always wins, the most specific one of them
+          final var applicationPersistenceType = aggregatePersistenceAwares
               .stream()
               // calculate distance of classes
               .map(awareEntry -> Map.entry(
@@ -174,25 +186,63 @@ public class ProcessServiceBuildStepProcessor {
               .filter(awareEntry -> awareEntry.getValue() != Integer.MAX_VALUE)
               // choose the most specific persistence support in terms of inheritance class distance
               .min(Comparator.comparingInt(Map.Entry::getValue))
-              // if none found, fall back to persistence support based on Spring Data Util bean
-              .map(Map.Entry::getKey)
-              .orElseThrow(() -> new IllegalStateException(
-                  "You have to provide a CDI bean implementing\n  "
-                      + AggregatePersistenceAware.class.getName()
-                      + "\nwhich is responsible to persist aggregates.\n"
-                      + "This is necessary because in Quarkus there is no unique way to do persistence of entities:\n"
-                      + "- Active record pattern: https://quarkus.io/guides/hibernate-orm-panache#solution-1-using-the-active-record-pattern\n"
-                      + "- Repository record pattern: https://quarkus.io/guides/hibernate-orm-panache#solution-2-using-the-repository-pattern\n"
-                      + "- Spring Data pattern: https://quarkus.io/guides/spring-data-jpa"
-              ));
-          // ensure service class will be a CDI bean at runtime
-          ensureClassIsBeanBuildItemProducer
-              .produce(EnsureClassIsBeanValidationBuildItem
-                  .builder()
-                  .className(aggregatePersistenceType.name())
-                  .usageDescription("Service implementing the interface "
-                      + AggregatePersistenceAware.class.getName())
-                  .build());
+              .map(Map.Entry::getKey);
+
+          final String aggregatePersistenceClassName;
+          if (applicationPersistenceType.isPresent()) {
+            // ensure service class will be a CDI bean at runtime
+            ensureClassIsBeanBuildItemProducer
+                .produce(EnsureClassIsBeanValidationBuildItem
+                    .builder()
+                    .className(applicationPersistenceType
+                        .get()
+                        .name())
+                    .usageDescription("Service implementing the interface "
+                        + AggregatePersistenceAware.class.getName())
+                    .build());
+            aggregatePersistenceClassName = applicationPersistenceType
+                .get()
+                .name()
+                .toString();
+          } else {
+            // no implementation of the application: use the one matching the
+            // persistence idiom the aggregate is written in
+            final var defaultPersistence = DefaultAggregatePersistenceResolver
+                .resolve(combinedIndex.getIndex(), workflowAggregateType.name())
+                .orElseThrow(() -> new IllegalStateException(
+                    missingAggregatePersistenceMessage(workflowAggregateType)));
+            log.info(
+                "Using VanillaBP's {} persistence for workflow aggregate '{}'{}",
+                defaultPersistence.idiom(),
+                workflowAggregateType.name(),
+                defaultPersistence.repositoryClass() == null
+                    ? ""
+                    : " (repository '%s')".formatted(defaultPersistence.repositoryClass()));
+            aggregatePersistenceClassName = "%s.AggregatePersistence_%s".formatted(
+                workflowAggregateType
+                    .name()
+                    .packagePrefix(),
+                workflowAggregateType
+                    .name()
+                    .withoutPackagePrefix());
+            generateDefaultAggregatePersistence(
+                generatedBeanBuildItemBuildProducer,
+                aggregatePersistenceClassName,
+                defaultPersistence,
+                workflowAggregateType);
+            // the ID is read by reflection (AggregateIdTypes), which a native image
+            // has to be told about - the persistence frameworks register their
+            // entities themselves, but an aggregate may be neither
+            reflectiveClassBuildItemProducer
+                .produce(ReflectiveClassBuildItem
+                    .builder(workflowAggregateType
+                        .name()
+                        .toString())
+                    .fields()
+                    .methods()
+                    .reason("VanillaBP reads the workflow aggregate's ID by reflection")
+                    .build());
+          }
 
           // generate process service CDI bean specific to the workflow aggregate
           generateProcessService(
@@ -202,11 +252,110 @@ public class ProcessServiceBuildStepProcessor {
               "%s.ProcessService_%s".formatted(
                   workflowAggregateType.name().packagePrefix(),
                   workflowAggregateType.name().withoutPackagePrefix()),
-              aggregatePersistenceType,
+              aggregatePersistenceClassName,
               workflowAggregateType,
               String.join(";", workflowTaskRegistrations));
 
         });
+
+  }
+
+  /**
+   * The message shown when neither the application nor one of the persistence idioms
+   * VanillaBP knows answers for an aggregate. It names what was looked for, because
+   * "provide a bean" alone leaves the reader guessing which of the Quarkus ways they
+   * were expected to use.
+   */
+  private static String missingAggregatePersistenceMessage(
+      final Type workflowAggregateType) {
+
+    return """
+        VanillaBP does not know how to persist the workflow aggregate '%s'!
+        Either the aggregate uses one of the persistence idioms VanillaBP serves out of the box:
+        - a Panache repository for the aggregate (PanacheRepository/PanacheRepositoryBase, or \
+        PanacheMongoRepository/PanacheMongoRepositoryBase): https://quarkus.io/guides/hibernate-orm-panache#solution-2-using-the-repository-pattern
+        - the aggregate itself being a Panache active record (extending PanacheEntity/PanacheEntityBase, or \
+        PanacheMongoEntity/PanacheMongoEntityBase): https://quarkus.io/guides/hibernate-orm-panache#solution-1-using-the-active-record-pattern
+        - a Spring Data repository for the aggregate (extension quarkus-spring-data-jpa): https://quarkus.io/guides/spring-data-jpa
+        None of them was found for this aggregate (mind that classes of workflow modules have to be \
+        indexed using the jandex-maven-plugin to be seen).
+        Or, for any other kind of persistence, provide a CDI bean implementing
+          %s<%s>
+        which is responsible to persist this aggregate."""
+        .formatted(
+            workflowAggregateType.name(),
+            AggregatePersistenceAware.class.getName(),
+            workflowAggregateType
+                .name()
+                .withoutPackagePrefix());
+
+  }
+
+  /**
+   * Generates the CDI bean providing one of VanillaBP's persistence implementations
+   * for a specific aggregate:
+   *
+   * <pre>
+   * &#64;Singleton
+   * public class AggregatePersistence_Aggregate extends PanacheRepositoryAggregatePersistence&lt;Aggregate&gt; {
+   *   public AggregatePersistence_Aggregate() {
+   *     super(Aggregate.class, AggregateRepository.class);
+   *   }
+   * }
+   * </pre>
+   *
+   * The generic superclass is spelled out (not raw) on purpose: the bean type has to
+   * be {@code AggregatePersistenceAware<Aggregate>} for the runtime lookup of
+   * {@link ProcessServiceBaseCdiBean} to find it.
+   *
+   * @param className The class name of the bean to build
+   * @param defaultPersistence The implementation chosen for the aggregate
+   * @param workflowAggregateType The workflow aggregate type the persistence is for
+   */
+  private void generateDefaultAggregatePersistence(
+      final BuildProducer<GeneratedBeanBuildItem> generatedBeanBuildItemBuildProducer,
+      final String className,
+      final DefaultAggregatePersistenceResolver.DefaultPersistence defaultPersistence,
+      final Type workflowAggregateType) {
+
+    final var beanClassOutput = new GeneratedBeanGizmoAdaptor(generatedBeanBuildItemBuildProducer);
+    final var implementationClass = DotName.createSimple(defaultPersistence.implementationClass());
+    final var cc = ClassCreator
+        .builder()
+        .classOutput(beanClassOutput)
+        .className(className)
+        .signature(SignatureBuilder
+            .forClass()
+            .setSuperClass(
+                parameterizedType(classType(implementationClass), classType(workflowAggregateType.name()))))
+        .build();
+
+    cc.addAnnotation(Singleton.class);
+    // the bean is never injected but looked up by its class at runtime
+    cc.addAnnotation(Unremovable.class);
+
+    final var constructor = cc.getConstructorCreator(new String[0]);
+    final var aggregateClass = constructor.loadClass(workflowAggregateType
+        .name()
+        .toString());
+    if (defaultPersistence.repositoryClass() == null) {
+      constructor.invokeSpecialMethod(
+          MethodDescriptor.ofConstructor(defaultPersistence.implementationClass(), Class.class.getName()),
+          constructor.getThis(),
+          aggregateClass);
+    } else {
+      constructor.invokeSpecialMethod(
+          MethodDescriptor.ofConstructor(
+              defaultPersistence.implementationClass(), Class.class.getName(), Class.class.getName()),
+          constructor.getThis(),
+          aggregateClass,
+          constructor.loadClass(defaultPersistence
+              .repositoryClass()
+              .toString()));
+    }
+    constructor.returnVoid();
+
+    cc.close();
 
   }
 
@@ -267,7 +416,7 @@ public class ProcessServiceBuildStepProcessor {
    * @param workflowModuleId The ID of the workflow module the service belongs to
    * @param bpmnProcessId The BPMN process ID the service is for
    * @param className The class name of the service to build
-   * @param aggregatePersistenceType The aggregate persistence type to be used by the service
+   * @param aggregatePersistenceClassName The aggregate persistence class to be used by the service
    * @param workflowAggregateType The workflow aggregate type the service is for
    */
   private void generateProcessService(
@@ -275,11 +424,10 @@ public class ProcessServiceBuildStepProcessor {
       final String workflowModuleId,
       final String bpmnProcessId,
       final String className,
-      final ClassInfo aggregatePersistenceType,
+      final String aggregatePersistenceClassName,
       final Type workflowAggregateType,
       final String workflowTaskRegistrations) {
 
-    final var aggregatePersistenceClassName = aggregatePersistenceType.name().toString();
     final var aggregateClassName = workflowAggregateType.name().toString();
 
     /*
