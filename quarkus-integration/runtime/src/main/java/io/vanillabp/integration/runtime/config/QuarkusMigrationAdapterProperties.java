@@ -11,6 +11,7 @@ import io.quarkus.runtime.annotations.StaticInitSafe;
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
+import io.vanillabp.integration.adapter.migration.config.OutfadedVersionsInUsePolicy;
 
 /**
  * Properties common to all adapters.
@@ -142,6 +143,25 @@ public interface QuarkusMigrationAdapterProperties {
      */
     Optional<Boolean> deduplicateDeliveries();
 
+    /**
+     * The versions of a BPMN process this application does not serve any more (story
+     * 57), each written in the grammar of the <code>version</code> attribute of
+     * <code>&#64;WorkflowTask</code> and its siblings (<code>&lt;4</code>,
+     * <code>1-3</code>, <code>v1.0..v2.0</code>, a version tag). Adapter-scoped: the
+     * most specific configured level wins (workflow &gt; workflow module &gt; adapter).
+     *
+     * @return The outfaded versions
+     */
+    Optional<List<String>> outfadedVersions();
+
+    /**
+     * What happens when workflows still run on an outfaded version: <code>log</code>
+     * (the default, a FATAL message) or <code>fail</code> (the boot aborts).
+     *
+     * @return The policy
+     */
+    Optional<OutfadedVersionsInUsePolicy> outfadedVersionsInUse();
+
   }
 
   /**
@@ -190,6 +210,25 @@ public interface QuarkusMigrationAdapterProperties {
      * @return Whether deliveries are deduplicated
      */
     Optional<Boolean> deduplicateDeliveries();
+
+    /**
+     * The versions of a BPMN process this application does not serve any more (story
+     * 57), each written in the grammar of the <code>version</code> attribute of
+     * <code>&#64;WorkflowTask</code> and its siblings (<code>&lt;4</code>,
+     * <code>1-3</code>, <code>v1.0..v2.0</code>, a version tag). Adapter-scoped: the
+     * most specific configured level wins (workflow &gt; workflow module &gt; adapter).
+     *
+     * @return The outfaded versions
+     */
+    Optional<List<String>> outfadedVersions();
+
+    /**
+     * What happens when workflows still run on an outfaded version: <code>log</code>
+     * (the default, a FATAL message) or <code>fail</code> (the boot aborts).
+     *
+     * @return The policy
+     */
+    Optional<OutfadedVersionsInUsePolicy> outfadedVersionsInUse();
 
   }
 

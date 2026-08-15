@@ -108,6 +108,22 @@ public class BpmsInitiatedStartHandler {
 
   }
 
+  /**
+   * The version specification(s) this method names, for messages about a method
+   * serving no version the BPMS holds (story 57).
+   *
+   * @return The specifications, comma separated
+   */
+  String describeVersions() {
+
+    return versions
+        .stream()
+        .map(VersionRange::toString)
+        .map("'%s'"::formatted)
+        .collect(java.util.stream.Collectors.joining(", "));
+
+  }
+
   boolean matchesVersion(
       final String processVersion) {
 

@@ -66,9 +66,11 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
   WorkflowAdapterCacheProperties toCore(
       QuarkusMigrationAdapterProperties.WorkflowAdapterCacheProperties workflowAdapterCacheProperties);
 
+  @Mapping(target = "outfadedVersions", qualifiedByName = "unwrapOutfadedVersions")
   AdapterConfigProperties toCore(
       QuarkusMigrationAdapterProperties.AdapterConfiguration adapterConfiguration);
 
+  @Mapping(target = "outfadedVersions", qualifiedByName = "unwrapOutfadedVersions")
   AdapterProperties toCore(
       QuarkusMigrationAdapterProperties.AdapterProperties adapterProperties);
 
@@ -120,6 +122,25 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
       final Optional<String> value) {
 
     return value.orElse(null);
+
+  }
+
+  /**
+   * Unwraps the outfaded versions ({@code Optional.empty()} becomes {@code null}, not
+   * an empty list): the core walks the levels of an adapter-scoped property and takes
+   * the first one which configured something, so "nothing here" has to stay null.
+   *
+   * @param value The optional list
+   * @return The unwrapped list or {@code null}
+   */
+  @Named("unwrapOutfadedVersions")
+  default List<String> unwrapOutfadedVersions(
+      final Optional<List<String>> value) {
+
+    return value
+        .filter(versions -> !versions.isEmpty())
+        .map(List::copyOf)
+        .orElse(null);
 
   }
 

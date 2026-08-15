@@ -35,12 +35,30 @@ public class ProcessVersions {
                              String bpmnProcessId) {
   }
 
-  private record RegisteredCatalog(
-                                   String adapterId,
-                                   ProcessVersionCatalog catalog) {
+  /**
+   * One BPMS answering for one BPMN process.
+   *
+   * @param adapterId The adapter ID
+   * @param catalog What that BPMS knows about the process' versions
+   */
+  public record RegisteredCatalog(
+                                  String adapterId,
+                                  ProcessVersionCatalog catalog) {
+  }
+
+  private record DeploymentKey(
+                               String adapterId,
+                               String workflowModuleId,
+                               String bpmnProcessId) {
   }
 
   private final Map<RegistryKey, List<RegisteredCatalog>> catalogs = new ConcurrentHashMap<>();
+
+  /**
+   * The version each adapter deployed during THIS boot (story 57) - the border between
+   * "the model this application brings" and the older versions the BPMS still holds.
+   */
+  private final Map<DeploymentKey, String> deployedVersions = new ConcurrentHashMap<>();
 
   /**
    * The version identifiers and tags already reported as unknown - a task delivery
@@ -76,6 +94,59 @@ public class ProcessVersions {
         .noneMatch(existing -> existing.adapterId().equals(adapterId) && (existing.catalog() == catalog))) {
       registered.add(new RegisteredCatalog(adapterId, catalog));
     }
+
+  }
+
+  /**
+   * Remembers the version an adapter deployed during this boot - see
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker#registerDeployedVersion}.
+   *
+   * @param adapterId The adapter ID
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @param version The version identifier the BPMS assigned, or <code>null</code>
+   */
+  public void recordDeployedVersion(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String version) {
+
+    if (version == null) {
+      return;
+    }
+    deployedVersions.put(new DeploymentKey(adapterId, workflowModuleId, bpmnProcessId), version);
+
+  }
+
+  /**
+   * @param adapterId The adapter ID
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @return The version that adapter deployed during this boot, or <code>null</code>
+   */
+  public String deployedVersion(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return deployedVersions.get(new DeploymentKey(adapterId, workflowModuleId, bpmnProcessId));
+
+  }
+
+  /**
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @return The BPMS answering for that process, in registration order
+   */
+  public List<RegisteredCatalog> registeredCatalogs(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    final var registered = catalogs.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    return registered == null
+        ? List.of()
+        : List.copyOf(registered);
 
   }
 

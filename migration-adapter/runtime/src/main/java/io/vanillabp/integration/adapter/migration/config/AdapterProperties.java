@@ -53,4 +53,28 @@ public class AdapterProperties {
    */
   private Boolean deduplicateDeliveries;
 
+  /**
+   * The versions of a BPMN process this application does not serve any more (story
+   * 57), each written in the grammar of the <code>version</code> attribute of
+   * <code>&#64;WorkflowTask</code> and its siblings (<code>&lt;4</code>,
+   * <code>1-3</code>, <code>v1.0..v2.0</code>, a version tag). A version covered by
+   * ANY of them is ignored by the startup check, so its task definitions need no
+   * methods.
+   * <p>
+   * Adapter-scoped and therefore resolvable per workflow module and workflow - every
+   * BPMS counts its own versions, which is why a specification without an adapter
+   * would be meaningless and why the two adapters of a BPMS migration fade out their
+   * own versions independently. <code>null</code> or empty means "not configured at
+   * this level".
+   */
+  private java.util.List<String> outfadedVersions;
+
+  /**
+   * What happens when workflows still run on an outfaded version - see
+   * {@link OutfadedVersionsInUsePolicy}. Defaults to
+   * {@link OutfadedVersionsInUsePolicy#LOG}; <code>null</code> means "not configured
+   * at this level".
+   */
+  private OutfadedVersionsInUsePolicy outfadedVersionsInUse;
+
 }
