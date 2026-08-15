@@ -54,6 +54,13 @@
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-jdbc-h2</artifactId>
     </dependency>
+    <!-- the version-conflict acceptance test (story 59) needs a real ORM: what is
+         proven there is what Hibernate raises when the version of a row moved on,
+         and how JTA wraps it on the way out -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-hibernate-orm</artifactId>
+    </dependency>
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-jacoco</artifactId>

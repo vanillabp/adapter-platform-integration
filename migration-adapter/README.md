@@ -865,6 +865,42 @@ new model dropped. What used to be caught by those checks is caught by the dead-
 warning instead, which reports rather than fails: a version which does not exist YET is
 normal during a rolling deployment.
 
+## Two writers on one workflow aggregate (story 59)
+
+A workflow aggregate has one workflow, which reads like one writer - until the process holds
+a second token. Then one branch writes in the transaction VanillaBP owns for its task and the
+other in the transaction the application opens around its API call, and since a persistence
+layer writes the whole record, the branch committing second puts back what it read at its
+start. `blueprints/GAPS.md` G3 is where that was found.
+
+The core answers the part it owns, and only that part:
+
+- Recognizing the conflict belongs to the platform. The core is plain Java and must not know
+  `OptimisticLockingFailureException` or `jakarta.persistence.OptimisticLockException`, so
+  `TransactionRunner#isConcurrentModification(Throwable)` asks the platform, through the same
+  seam the transaction itself goes through. What is not platform-specific sits in
+  `AggregateWrite#causedByOptimisticLocking`: matching the exceptions of a persistence layer
+  along the chain of causes, by NAME.
+- One helper around the transaction, not one per call site.
+  `AggregateWrite#inTransaction` runs the work (`requireNew` or `inCurrent`), logs ONE guiding
+  ERROR if the failure is a conflict and rethrows it unchanged. It sits at every place the
+  core commits a transaction of its own: `MigrationProcessService#executeWorkflowTask`,
+  `BpmsInitiatedStartExecution` and `WorkflowEndedHandlers`. The operations an application
+  calls itself (`startWorkflow`, `correlateMessage`, `aggregateChanged`, the task operations)
+  save inside the CALLER's transaction, so their conflict surfaces in the application's own
+  commit. That one is the application's to catch, which is why the wiki says so instead of the
+  core pretending to handle it.
+- Nothing is retried. A handler may have called a remote API before the commit failed, so a
+  quiet retry would repeat that call and hide the failure at the same time. The adapter gets
+  the original exception and maps it to its BPMS' retry semantics.
+- The startup hint is split the way story 57 is split. The adapter reads its model and reports
+  the elements which can produce a second token
+  (`WorkflowTaskInvoker#reportConcurrentTokenElements`), the core decides what it means:
+  `ConcurrentTokenCheck` asks the aggregate class for a version attribute, by the SIMPLE name
+  of the annotation so JPA and Spring Data are covered without a dependency on either, and
+  warns once per BPMN process where there is none. An aggregate with a version attribute stays
+  quiet, because then the collision is the exception above instead of a lost write.
+
 ## Modules
 
 1. **business-spi:** (artifact `io.vanillabp:vanillabp-integration-spi`)<br>

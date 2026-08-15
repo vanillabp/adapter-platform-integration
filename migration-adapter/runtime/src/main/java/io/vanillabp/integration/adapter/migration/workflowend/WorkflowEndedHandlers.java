@@ -304,11 +304,15 @@ public class WorkflowEndedHandlers {
       return null;
     };
 
-    if (context.runInCurrentTransaction()) {
-      transactionRunner.inCurrent(transactionalWork);
-    } else {
-      transactionRunner.requireNew(transactionalWork);
-    }
+    io.vanillabp.integration.adapter.migration.transaction.AggregateWrite
+        .inTransaction(
+            transactionRunner,
+            context.runInCurrentTransaction(),
+            processService.getWorkflowModuleId(),
+            processService.getBpmnProcessId(),
+            context.getWorkflowAggregateId(),
+            "reporting the end of the workflow",
+            transactionalWork);
 
   }
 

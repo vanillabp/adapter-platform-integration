@@ -120,6 +120,12 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
   private final List<String> rollbackRuleRemedies;
 
   /**
+   * The hint about BPMN processes producing concurrent tokens while their workflow
+   * aggregate has no version attribute (story 59).
+   */
+  private final io.vanillabp.integration.adapter.migration.transaction.ConcurrentTokenCheck concurrentTokenCheck = new io.vanillabp.integration.adapter.migration.transaction.ConcurrentTokenCheck();
+
+  /**
    * The process versions this application declares obsolete (story 57).
    */
   private final OutfadedProcessVersions outfadedVersions;
@@ -307,6 +313,27 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
       final String second) {
 
     return (first != null) && first.equals(second);
+
+  }
+
+  @Override
+  public void reportConcurrentTokenElements(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Collection<String> elementIds) {
+
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    if ((entry == null) || (entry.processService == null)) {
+      // a process no @WorkflowService class serves is reported by the wiring
+      // validation already - there is no aggregate class to ask here
+      return;
+    }
+    concurrentTokenCheck
+        .reportConcurrentTokenElements(
+            workflowModuleId,
+            bpmnProcessId,
+            entry.processService.getWorkflowAggregateClass(),
+            elementIds);
 
   }
 

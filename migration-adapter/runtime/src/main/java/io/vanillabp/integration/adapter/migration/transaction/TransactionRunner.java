@@ -53,4 +53,30 @@ public interface TransactionRunner {
    */
   boolean isRollbackOnly();
 
+  /**
+   * Whether the given failure says that the workflow aggregate was changed by
+   * another writer in between (an optimistic locking conflict on an aggregate
+   * carrying a version attribute). Only the platform can tell: Spring reports it as
+   * <code>OptimisticLockingFailureException</code> (JPA as well as MongoDB), JTA on
+   * Quarkus wraps <code>jakarta.persistence.OptimisticLockException</code> in a
+   * <code>RollbackException</code>. Implementations unwrap the causes, because both
+   * platforms wrap.
+   * <p>
+   * The answer decides whether the guiding message of
+   * {@link AggregateWrite} is logged - nothing else: the exception is propagated
+   * unchanged either way, VanillaBP never retries a conflict itself.
+   *
+   * @param failure The exception the transactional work or its commit produced
+   * @return Whether it is a version conflict; <code>false</code> if the platform
+   *         cannot tell
+   */
+  default boolean isConcurrentModification(
+      final Throwable failure) {
+
+    // a platform which does not classify silences the message rather than inventing
+    // an answer - test doubles of this interface are the typical case
+    return false;
+
+  }
+
 }

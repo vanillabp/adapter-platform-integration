@@ -65,6 +65,19 @@ public class QuarkusTransactionRunner implements TransactionRunner {
 
   }
 
+  @Override
+  public boolean isConcurrentModification(
+      final Throwable failure) {
+
+    // under JTA the conflict never arrives as itself: Hibernate raises it while
+    // flushing at commit, the transaction manager reports a RollbackException and
+    // QuarkusTransaction wraps that again - so the chain of causes is what is asked,
+    // which the core does by name (it must not depend on JPA)
+    return io.vanillabp.integration.adapter.migration.transaction.AggregateWrite
+        .causedByOptimisticLocking(failure);
+
+  }
+
   private <T> T withRequestContext(
       final Supplier<T> work) {
 
