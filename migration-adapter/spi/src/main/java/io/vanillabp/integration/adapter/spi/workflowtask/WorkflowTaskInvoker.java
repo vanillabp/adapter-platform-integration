@@ -260,4 +260,27 @@ public interface WorkflowTaskInvoker {
 
   }
 
+  /**
+   * The version the BPMS assigned to the model THIS boot deployed, reported by the
+   * adapter right after its deployment (story 57). It tells the core two things it
+   * cannot know otherwise: which versions of that process are OLDER, so the startup
+   * check knows what to look at, and which version must never be covered by
+   * <code>outfaded-versions</code> - fading out the version the application just
+   * deployed is a configuration error, and the boot says so.
+   * <p>
+   * An adapter whose BPMS counts no versions reports nothing, which switches both off.
+   *
+   * @param adapterId The adapter ID
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The PLAIN BPMN process ID
+   * @param version The version identifier the BPMS assigned, or <code>null</code>
+   */
+  default void registerDeployedVersion(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String version) {
+
+  }
+
 }

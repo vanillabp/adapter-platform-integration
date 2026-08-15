@@ -363,11 +363,13 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   @Bean
   public WorkflowTaskRegistry vanillaBpWorkflowTaskRegistry(
       final org.springframework.beans.factory.ObjectProvider<org.springframework.transaction.PlatformTransactionManager> transactionManager,
-      final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync) {
+      final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync,
+      @org.springframework.beans.factory.annotation.Qualifier(
+        BEANNAME_MIGRATIONADAPERPROPERTIES) final MigrationAdapterProperties properties) {
 
     return new WorkflowTaskRegistry(
         new SpringTransactionRunner(transactionManager), aggregateSync, io.vanillabp.integration.workflowtask.SpringTransactionAnnotations
-            .specs());
+            .specs(), properties);
 
   }
 

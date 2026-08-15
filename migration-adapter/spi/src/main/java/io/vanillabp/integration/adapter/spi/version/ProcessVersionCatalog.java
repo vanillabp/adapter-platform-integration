@@ -53,4 +53,55 @@ public interface ProcessVersionCatalog {
       String bpmnProcessId,
       String versionOrVersionTag);
 
+  /**
+   * The tasks of ONE deployed version of a BPMN process, read from the model the BPMS
+   * still holds - what the startup check of story 57 needs to tell whether the
+   * application still serves an older version. The specs are built exactly like the
+   * ones handed to
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker#validateTaskWiring},
+   * so both directions of the wiring speak about the same thing.
+   * <p>
+   * Reading a model is BPMS-specific and not every BPMS can do it: an adapter which
+   * cannot returns <code>null</code>, which switches the check off for that adapter
+   * instead of pretending the version is fine. An adapter which CAN read models but
+   * finds nothing for that version returns an empty collection.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The PLAIN BPMN process ID
+   * @param version The version identifier the BPMS reported
+   * @return The tasks of that version, or <code>null</code> if this BPMS cannot say
+   */
+  default java.util.Collection<io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec> tasksOfVersion(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String version) {
+
+    return null;
+
+  }
+
+  /**
+   * How many workflows still run on ONE deployed version - what decides whether an
+   * unserved task definition of that version is a warning or a defect, and whether
+   * outfading it (<code>outfaded-versions</code>) leaves workflows behind.
+   * <p>
+   * A BPMS which cannot be asked returns <code>null</code>, and the core says so once
+   * with a guiding message rather than turning an unanswerable question into a boot
+   * failure.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The PLAIN BPMN process ID
+   * @param version The version identifier the BPMS reported
+   * @return The number of active workflows of that version, or <code>null</code> if
+   *         this BPMS cannot say
+   */
+  default Long activeInstanceCountOf(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String version) {
+
+    return null;
+
+  }
+
 }

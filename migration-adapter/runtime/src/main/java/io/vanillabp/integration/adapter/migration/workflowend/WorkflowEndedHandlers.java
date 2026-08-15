@@ -45,6 +45,39 @@ public class WorkflowEndedHandlers {
   }
 
   /**
+   * The &#64;WorkflowEnded methods of that BPMN process whose version specification
+   * matches NONE of the given versions (story 57): the versions the BPMS holds, minus
+   * the ones the configuration faded out. Such a method never runs, and the start says
+   * so.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @param servableVersions The versions worth serving
+   * @param resolver Resolves version tags of that process
+   * @return One description per dead method
+   */
+  public List<String> handlersNotServing(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final java.util.Collection<String> servableVersions,
+      final io.vanillabp.integration.adapter.migration.workflowtask.VersionRange.ProcessVersionResolver resolver) {
+
+    final var registered = handlers.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    if (registered == null) {
+      return List.of();
+    }
+    return registered
+        .stream()
+        .filter(handler -> servableVersions
+            .stream()
+            .noneMatch(version -> handler.matchesVersion(version, resolver)))
+        .map(handler -> "@WorkflowEnded method '%s' (version %s)"
+            .formatted(handler.describe(), handler.describeVersions()))
+        .toList();
+
+  }
+
+  /**
    * Scans a workflow service class and registers what it found. Called by the
    * platform integration at startup, once per (workflow service class, declared
    * BPMN process ID).

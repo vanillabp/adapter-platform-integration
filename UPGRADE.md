@@ -1255,3 +1255,28 @@ require `spring-boot-data-mongodb-test` — not needed so far.)
 - Spring Boot 4.1.0 manages JUnit Jupiter **6.0.x** and Mockito 5.23; tests kept
   running without changes (root `mockito.version` is upgraded separately).
 
+## Story 57: the older versions a BPMS still holds (2026-08-15)
+
+**Adapters** gain two optional questions and one report, all of them additive:
+
+- `ProcessVersionCatalog#tasksOfVersion(workflowModuleId, bpmnProcessId, version)` reads the
+  model of a version the BPMS still holds and returns its tasks; `null` means "this BPMS
+  cannot say", which switches the check off for that adapter.
+- `ProcessVersionCatalog#activeInstanceCountOf(...)` counts the workflows still running on a
+  version; `null` again means "cannot say".
+- `WorkflowTaskInvoker#registerDeployedVersion(adapterId, workflowModuleId, bpmnProcessId,
+  version)` reports the version the BPMS assigned to the model deployed by this boot. Report
+  it even when the BPMS deployed nothing because the resources were unchanged, otherwise the
+  startup check runs only on boots which changed a model.
+
+An adapter implementing none of them keeps working exactly as before.
+
+**Applications** gain `vanillabp.adapters.<id>.outfaded-versions` (a list, in the grammar of
+the `version` attribute) and `vanillabp.adapters.<id>.outfaded-versions-in-use` (`LOG` by
+default, `FAIL` to make workflows on a faded-out version stop the boot). Both are
+adapter-scoped and resolvable per workflow module and workflow.
+
+**Behaviour which changed without a property:** a `@WorkflowTask` or `@WorkflowStartedByBpms`
+method whose version range excludes the version this boot deployed no longer has to match a
+task respectively a start event of the deployed model. It is reported as a warning if it
+matches no version the BPMS holds at all.

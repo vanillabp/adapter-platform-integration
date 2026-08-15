@@ -119,6 +119,16 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
    */
   private final List<String> rollbackRuleRemedies;
 
+  /**
+   * The process versions this application declares obsolete (story 57).
+   */
+  private final OutfadedProcessVersions outfadedVersions;
+
+  /**
+   * Whether the application still serves the OLDER versions the BPMS holds (story 57).
+   */
+  private final DeployedProcessVersionsCheck deployedVersionsCheck;
+
   public WorkflowTaskRegistry(
       final TransactionRunner transactionRunner) {
 
@@ -139,9 +149,22 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
       final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync,
       final List<TransactionAnnotationSpec> transactionAnnotations) {
 
+    this(transactionRunner, aggregateSync, transactionAnnotations, null);
+
+  }
+
+  public WorkflowTaskRegistry(
+      final TransactionRunner transactionRunner,
+      final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync,
+      final List<TransactionAnnotationSpec> transactionAnnotations,
+      final io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties properties) {
+
     this.transactionRunner = transactionRunner;
     this.aggregateSync = aggregateSync;
     this.transactionAnnotations = transactionAnnotations;
+    this.outfadedVersions = new OutfadedProcessVersions(properties);
+    this.deployedVersionsCheck = new DeployedProcessVersionsCheck(
+        processVersions, outfadedVersions, this::tasksNotServedInVersion, this::handlersNotServingAnyVersion);
     this.rollbackRuleRemedies = transactionAnnotations
         .stream()
         .filter(TransactionAnnotationSpec::honored)
@@ -388,7 +411,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
               if (entry.getValue().wiringValidated) {
                 validatedMethods.add(method);
               }
-              if (handler.isWired()) {
+              if (handler.isWired() || servesOnlyOlderVersions(entry.getKey(), handler)) {
                 wiredMethods.add(method);
               } else {
                 unwiredByMethod.putIfAbsent(method, handler);
@@ -414,6 +437,42 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
                 annotation or add the task to one of the class' BPMN processes."""
                 .formatted(handler.describe(), handler.describeWiring())));
     throw new IllegalStateException(message.toString());
+
+  }
+
+  /**
+   * Whether the method exists for OLDER versions of its process only (story 57) - it
+   * then matches no task of the model this boot deployed, and that is the point of it
+   * rather than a defect.
+   * <p>
+   * Without this, keeping a method for a version the BPMS still holds would be
+   * impossible: the reverse direction would demand that the deployed model still
+   * carries the task the newer model dropped, so an application could only serve an
+   * old version by keeping a dead task in its current BPMN.
+   */
+  private boolean servesOnlyOlderVersions(
+      final RegistryKey key,
+      final WorkflowTaskHandler handler) {
+
+    final var deployedVersions = processVersions
+        .registeredCatalogs(key.workflowModuleId(), key.bpmnProcessId())
+        .stream()
+        .map(registered -> processVersions
+            .deployedVersion(registered.adapterId(), key.workflowModuleId(), key.bpmnProcessId()))
+        .filter(java.util.Objects::nonNull)
+        .distinct()
+        .toList();
+    if (deployedVersions.isEmpty()) {
+      // no BPMS counting versions: nothing to exempt, and the reverse direction
+      // stays as strict as it was
+      return false;
+    }
+    final var resolver = processVersions.resolverFor(key.workflowModuleId(), key.bpmnProcessId());
+    // a method serving the version deployed by ANY of the BPMS is expected to match
+    // a task of that model - only a method excluded everywhere is an old-version one
+    return deployedVersions
+        .stream()
+        .noneMatch(version -> handler.matchesVersion(version, resolver));
 
   }
 
@@ -458,13 +517,17 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
         .orElseThrow(() -> new IllegalStateException(
             """
                 No @WorkflowTask method of BPMN process '%s' of workflow module '%s' matches task \
-                definition '%s' (process version '%s')!%s Registered methods: %s."""
+                definition '%s' (process version '%s')!%s%s Registered methods: %s."""
                 .formatted(
                     bpmnProcessId,
                     workflowModuleId,
                     context.getTaskDefinition(),
                     context.getProcessVersion(),
                     VersionRange.noVersionReportedHint(context.getProcessVersion()),
+                    // story 57: a delivery from a version the configuration faded out
+                    // looks exactly like a wiring defect otherwise
+                    outfadedVersionHint(
+                        workflowModuleId, bpmnProcessId, context.getAdapterId(), context.getProcessVersion()),
                     entry.handlers
                         .stream()
                         .map(candidate -> "'%s' (%s)".formatted(candidate.describe(), candidate.describeWiring()))
@@ -503,6 +566,9 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
               .stream()
               .anyMatch(handler -> !handler.versionTags().isEmpty());
           if (!tagsUsed) {
+            // story 57: the older versions are checked even where no annotation
+            // names a tag, so this is no longer the end of the story
+            deployedVersionsCheck.check(workflowModuleId, bpmnProcessId);
             return;
           }
           // the BPMS is asked ONCE per process, right after the deployment: the
@@ -528,6 +594,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
                     handler,
                     resolver));
           }
+          deployedVersionsCheck.check(workflowModuleId, bpmnProcessId);
         });
 
     bpmsInitiatedStarts.resolveProcessVersions(workflowModuleId);
@@ -642,6 +709,130 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
         .stream()
         .anyMatch(candidate -> sameWiring(candidate.getTaskDefinition(),
             taskDefinitionOrActivityId) || sameWiring(candidate.getActivityId(), taskDefinitionOrActivityId));
+
+  }
+
+  /**
+   * The sentence a delivery from an OUTFADED version deserves - without it the
+   * developer reads "no method matches" and looks for a wiring defect, while the
+   * configuration says on purpose that this version is not served any more.
+   */
+  private String outfadedVersionHint(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String adapterId,
+      final String processVersion) {
+
+    if ((adapterId == null) || (processVersion == null)) {
+      return "";
+    }
+    if (!outfadedVersions
+        .isOutfaded(
+            workflowModuleId,
+            bpmnProcessId,
+            adapterId,
+            processVersion,
+            processVersions.resolverFor(workflowModuleId, bpmnProcessId))) {
+      return "";
+    }
+    return " Version '%s' is faded out by '%s', so this application deliberately does not serve it - the workflow has to be completed or migrated, or the version has to be served again."
+        .formatted(processVersion, OutfadedProcessVersions.propertyName(adapterId));
+
+  }
+
+  @Override
+  public void registerDeployedVersion(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String version) {
+
+    processVersions.recordDeployedVersion(adapterId, workflowModuleId, bpmnProcessId, version);
+
+  }
+
+  /**
+   * Which of the given tasks of ONE deployed version no <code>&#64;WorkflowTask</code>
+   * method serves - the version-aware sibling of {@link #validateTaskWiring}, used by
+   * the startup check of story 57.
+   * <p>
+   * Two differences to the wiring validation, and both matter. It asks per VERSION, so
+   * a method carrying <code>version = "3"</code> counts for version 3 and for nothing
+   * else. And it marks NOTHING as wired: serving an old version says nothing about the
+   * reverse direction {@link #validateNoUnwiredWorkflowTaskMethods} decides, and a
+   * method kept only for an old version must still match a task of the deployed model.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @param version The version identifier the BPMS reported
+   * @param tasks The tasks of that version's model
+   * @return The tasks no method serves in that version
+   */
+  /**
+   * The methods of that BPMN process which serve NO version worth serving - the
+   * versions the BPMS holds, minus the ones the configuration faded out (story 57).
+   * All three annotations carry a <code>version</code> attribute, so all three are
+   * asked.
+   * <p>
+   * Such a method never runs. It is a warning rather than a boot failure, because a
+   * version which does not exist YET is a normal state: an application may be rolled
+   * out before the model that needs it, and during a rolling deployment another node
+   * may still be deploying it.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @param servableVersions The versions worth serving
+   * @param resolver Resolves version tags of that process
+   * @return One description per dead method
+   */
+  public List<String> handlersNotServingAnyVersion(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Collection<String> servableVersions,
+      final VersionRange.ProcessVersionResolver resolver) {
+
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    final var tasks = entry == null
+        ? List.<String>of()
+        : List
+            .copyOf(entry.handlers)
+            .stream()
+            .filter(handler -> servableVersions
+                .stream()
+                .noneMatch(version -> handler.matchesVersion(version, resolver)))
+            .map(handler -> "@WorkflowTask method '%s' (version %s)"
+                .formatted(handler.describe(), handler.describeVersions()))
+            .toList();
+    return java.util.stream.Stream
+        .of(
+            tasks,
+            bpmsInitiatedStarts.handlersNotServing(workflowModuleId, bpmnProcessId, servableVersions, resolver),
+            workflowEndedHandlers.handlersNotServing(workflowModuleId, bpmnProcessId, servableVersions, resolver))
+        .flatMap(List::stream)
+        .toList();
+
+  }
+
+  public Collection<BpmnTaskSpec> tasksNotServedInVersion(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String version,
+      final Collection<BpmnTaskSpec> tasks) {
+
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    final var handlers = entry == null
+        ? List.<WorkflowTaskHandler>of()
+        : List.copyOf(entry.handlers);
+    final var resolver = processVersions.resolverFor(workflowModuleId, bpmnProcessId);
+    return tasks
+        .stream()
+        // a user task without a handler is processed through forms or task lists, in
+        // an old version exactly as in the deployed one
+        .filter(task -> !task.optional())
+        .filter(task -> handlers
+            .stream()
+            .noneMatch(handler -> matches(handler, task) && handler.matchesVersion(version, resolver)))
+        .toList();
 
   }
 

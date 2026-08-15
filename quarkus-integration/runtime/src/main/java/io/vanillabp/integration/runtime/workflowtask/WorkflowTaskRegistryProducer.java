@@ -39,11 +39,12 @@ public class WorkflowTaskRegistryProducer {
   @Unremovable
   public WorkflowTaskRegistry workflowTaskRegistry(
       final jakarta.transaction.TransactionSynchronizationRegistry transactionRegistry,
-      final SpringTransactionSupport springTransactionSupport) {
+      final SpringTransactionSupport springTransactionSupport,
+      final io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties properties) {
 
     return new WorkflowTaskRegistry(
         new QuarkusTransactionRunner(transactionRegistry), aggregateSync, QuarkusTransactionAnnotations
-            .specs(springTransactionSupport.honored()));
+            .specs(springTransactionSupport.honored()), properties);
 
   }
 

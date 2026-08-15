@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.transaction.TransactionRunner;
+import io.vanillabp.integration.adapter.migration.workflowtask.VersionRange;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartContext;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartResult;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartSpec;
@@ -188,6 +189,38 @@ public class BpmsInitiatedStarts {
    * @throws IllegalStateException If a method serves a process without such a start
    *           event, or names a start event the process does not have
    */
+  /**
+   * The @WorkflowStartedByBpms methods of that BPMN process whose version specification matches
+   * NONE of the given versions (story 57): the versions the BPMS holds, minus the ones
+   * the configuration faded out. Such a method never runs, and the start says so.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @param servableVersions The versions worth serving
+   * @param resolver Resolves version tags of that process
+   * @return One description per dead method
+   */
+  public java.util.List<String> handlersNotServing(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final java.util.Collection<String> servableVersions,
+      final VersionRange.ProcessVersionResolver resolver) {
+
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    if (entry == null) {
+      return java.util.List.of();
+    }
+    return entry.handlers
+        .stream()
+        .filter(handler -> servableVersions
+            .stream()
+            .noneMatch(version -> handler.matchesVersion(version, resolver)))
+        .map(handler -> "@WorkflowStartedByBpms method '%s' (version %s)"
+            .formatted(handler.describe(), handler.describeVersions()))
+        .toList();
+
+  }
+
   public void validate(
       final String workflowModuleId,
       final String bpmnProcessId,
@@ -224,6 +257,11 @@ public class BpmsInitiatedStarts {
       entry.handlers
           .stream()
           .filter(handler -> handler.getStartEventId() != null)
+          // story 57: a method kept for an OLDER version names a start event the
+          // deployed model may not have any more - that is what it is for. Whether
+          // such a version still exists is answered by the startup check, which
+          // reports a method serving no held version as dead.
+          .filter(handler -> !servesOnlyOlderVersions(workflowModuleId, bpmnProcessId, handler))
           .filter(handler -> entry.startEvents
               .stream()
               .noneMatch(spec -> spec.elementId().equals(handler.getStartEventId())))
@@ -242,6 +280,32 @@ public class BpmsInitiatedStarts {
                         describeStartEvents(entry.startEvents)));
           });
     }
+
+  }
+
+  /**
+   * Whether the method exists for versions OLDER than the one this boot deployed
+   * (story 57) - it then names an element of a model which is not the deployed one.
+   */
+  private boolean servesOnlyOlderVersions(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final BpmsInitiatedStartHandler handler) {
+
+    final var deployedVersions = processVersions
+        .registeredCatalogs(workflowModuleId, bpmnProcessId)
+        .stream()
+        .map(registered -> processVersions.deployedVersion(registered.adapterId(), workflowModuleId, bpmnProcessId))
+        .filter(java.util.Objects::nonNull)
+        .distinct()
+        .toList();
+    if (deployedVersions.isEmpty()) {
+      return false;
+    }
+    final var resolver = processVersions.resolverFor(workflowModuleId, bpmnProcessId);
+    return deployedVersions
+        .stream()
+        .noneMatch(version -> handler.matchesVersion(version, resolver));
 
   }
 

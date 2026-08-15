@@ -827,6 +827,44 @@ the message names the required version and every artifact to raise (starting wit
 BOM), following the [configuration/error-message principle](#features) of guiding the
 developer instead of just reporting.
 
+## The older versions a BPMS still holds (story 57)
+
+A BPMS keeps every version of a process it was ever given while the application brings only
+its newest model, so "does this application still serve version 1" is a question only the
+BPMS and the registry together can answer. The check runs once per BPMN process after the
+module was deployed, next to the version-tag resolution in
+`WorkflowTaskRegistry#resolveProcessVersions`.
+
+The split follows the rule of this project: reading a model is BPMS-specific, deciding what
+it means is not.
+
+- The adapter answers two optional questions of `ProcessVersionCatalog`:
+  `tasksOfVersion` reads the model the BPMS still holds and builds the same `BpmnTaskSpec`
+  list `wireBpmn` builds (both adapters extract it once and use it for both directions, so
+  the two cannot drift), and `activeInstanceCountOf` counts the workflows of that version.
+  A BPMS which cannot answer returns `null`, which switches the respective half off instead
+  of inventing an answer.
+- The adapter also reports what it deployed, through
+  `WorkflowTaskInvoker#registerDeployedVersion`. That is the border between "the model this
+  boot brought" and the older ones, and it is what makes fading out the deployed version a
+  boot failure. Watch out for the case where the BPMS deploys NOTHING because the resources
+  did not change - the version has to be reported anyway, otherwise the check would only
+  ever run on a boot which changed a model (Camunda 7 queries the latest version for that).
+- `DeployedProcessVersionsCheck` owns the decisions and every message: which versions are
+  older, which are faded out (`OutfadedProcessVersions`, the `outfaded-versions` property in
+  the grammar of `VersionRange`), which task definitions of a version nobody serves
+  (`WorkflowTaskRegistry#tasksNotServedInVersion`, version-aware and marking nothing as
+  wired), and which methods serve no version worth serving at all
+  (`handlersNotServingAnyVersion`, for all three annotations carrying a `version`).
+
+Two rules of the reverse direction come from this story. A method whose version range
+excludes the deployed version needs no task in the deployed model - without that exemption
+an application could only serve an old version by keeping a dead task in its current BPMN -
+and the same exemption applies to a `@WorkflowStartedByBpms` method naming a start event the
+new model dropped. What used to be caught by those checks is caught by the dead-method
+warning instead, which reports rather than fails: a version which does not exist YET is
+normal during a rolling deployment.
+
 ## Modules
 
 1. **business-spi:** (artifact `io.vanillabp:vanillabp-integration-spi`)<br>
