@@ -52,6 +52,21 @@
       <artifactId>quarkus-narayana-jta</artifactId>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <!-- the persistence idioms the default aggregate persistence recognizes
+           (DefaultAggregatePersistenceResolverTest indexes the real types). NOT
+           MongoDB Panache: it activates the MongoDB client extension for every test
+           application of this module, which then wants a database configured - the
+           MongoDB idioms are covered by the integration tests instead -->
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-hibernate-orm-panache</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-spring-data-commons-api</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>

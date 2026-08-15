@@ -34,13 +34,15 @@ public class NoPersistenceAvailableTest {
         assertInstanceOf(IllegalStateException.class, rootCause);
         assertEquals(
             """
-                You have to provide a CDI bean implementing
-                  io.vanillabp.integration.spi.AggregatePersistenceAware
-                which is responsible to persist aggregates.
-                This is necessary because in Quarkus there is no unique way to do persistence of entities:
-                - Active record pattern: https://quarkus.io/guides/hibernate-orm-panache#solution-1-using-the-active-record-pattern
-                - Repository record pattern: https://quarkus.io/guides/hibernate-orm-panache#solution-2-using-the-repository-pattern
-                - Spring Data pattern: https://quarkus.io/guides/spring-data-jpa""",
+                VanillaBP does not know how to persist the workflow aggregate 'io.vanillabp.integration.test.Aggregate'!
+                Either the aggregate uses one of the persistence idioms VanillaBP serves out of the box:
+                - a Panache repository for the aggregate (PanacheRepository/PanacheRepositoryBase, or PanacheMongoRepository/PanacheMongoRepositoryBase): https://quarkus.io/guides/hibernate-orm-panache#solution-2-using-the-repository-pattern
+                - the aggregate itself being a Panache active record (extending PanacheEntity/PanacheEntityBase, or PanacheMongoEntity/PanacheMongoEntityBase): https://quarkus.io/guides/hibernate-orm-panache#solution-1-using-the-active-record-pattern
+                - a Spring Data repository for the aggregate (extension quarkus-spring-data-jpa): https://quarkus.io/guides/spring-data-jpa
+                None of them was found for this aggregate (mind that classes of workflow modules have to be indexed using the jandex-maven-plugin to be seen).
+                Or, for any other kind of persistence, provide a CDI bean implementing
+                  io.vanillabp.integration.spi.AggregatePersistenceAware<Aggregate>
+                which is responsible to persist this aggregate.""",
             rootCause.getMessage());
       });
 

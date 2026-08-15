@@ -14,6 +14,8 @@
 
   <modules>
     <module>aggregateperstistence-tests</module>
+    <module>default-persistence-tests</module>
+    <module>default-persistence-mongo-tests</module>
     <module>discovery-tests</module>
   </modules>
 </project>
