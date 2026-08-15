@@ -47,9 +47,15 @@ public final class BpmsInitiatedStartExecution {
         handler,
         context);
 
-    return context.runInCurrentTransaction()
-        ? transactionRunner.inCurrent(transactionalWork)
-        : transactionRunner.requireNew(transactionalWork);
+    return io.vanillabp.integration.adapter.migration.transaction.AggregateWrite
+        .inTransaction(
+            transactionRunner,
+            context.runInCurrentTransaction(),
+            processService.getWorkflowModuleId(),
+            processService.getBpmnProcessId(),
+            context.getNaturalIdentity(),
+            "the BPMS-initiated start at start event '%s'".formatted(context.getStartEventId()),
+            transactionalWork);
 
   }
 

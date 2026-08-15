@@ -1280,3 +1280,38 @@ adapter-scoped and resolvable per workflow module and workflow.
 method whose version range excludes the version this boot deployed no longer has to match a
 task respectively a start event of the deployed model. It is reported as a warning if it
 matches no version the BPMS holds at all.
+
+## Story 59: two writers on one workflow aggregate (2026-08-15)
+
+**Platform integrations** implement one new method of the core's `TransactionRunner`:
+`isConcurrentModification(Throwable)` answers whether a failure is an optimistic locking
+conflict. Spring checks for `OptimisticLockingFailureException` (JPA as well as MongoDB),
+Quarkus walks the chain of causes for `jakarta.persistence.OptimisticLockException`, which
+JTA delivers wrapped in a `RollbackException`. The method has a default returning `false`,
+so a platform integration or test double which does not implement it keeps compiling and
+simply stays silent.
+
+**Adapters** gain one optional report:
+`WorkflowTaskInvoker#reportConcurrentTokenElements(workflowModuleId, bpmnProcessId,
+elementIds)`, called during `wireBpmn` with the elements which can put a second token into a
+running workflow - a non-interrupting boundary event, a parallel or inclusive gateway
+forking into several flows, a parallel multi-instance activity, a non-interrupting event
+subprocess. Element IDs, not a boolean: the message names what made VanillaBP say this. An
+adapter which cannot read models reports nothing, and the check stays silent then.
+
+**Applications** see two new messages and no new property:
+
+- a WARN per BPMN process whose model can produce concurrent tokens while its workflow
+  aggregate has no version attribute, naming the elements and the four ways out;
+- an ERROR when the commit of a transaction VanillaBP owns (a `@WorkflowTask` method, a
+  workflow the BPMS started on its own, the `@WorkflowEnded` notification) fails on a version
+  conflict.
+
+**There is no retry, deliberately.** The exception is passed on unchanged, so the BPMS
+applies its retry semantics and ends in an incident. A retry inside the framework would
+repeat whatever the handler did before the commit failed - a call to a remote API, for
+instance - while hiding that anything went wrong. Adding a retry property later is easy;
+taking a silent retry away from applications which grew used to it is not. The rule, the four
+ways an application can avoid the collision and its own duty on the other side of it are
+described by the wiki page
+[Workflow aggregates](https://github.com/vanillabp/adapter-platform-integration/wiki/Workflow-aggregates#two-writers-on-one-aggregate).

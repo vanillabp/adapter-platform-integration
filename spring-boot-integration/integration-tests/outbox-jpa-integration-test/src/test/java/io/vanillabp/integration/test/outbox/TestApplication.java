@@ -19,6 +19,29 @@ public class TestApplication {
 
   }
 
+  /**
+   * The tasks of the version-conflict acceptance test (story 59) - the dummy adapter
+   * has no model to read them from.
+   *
+   * @return The wiring of the BPMN process 'ConflictProcess'
+   */
+  @Bean
+  public io.vanillabp.adapter.dummy.springboot.deployment.DummyTaskWiringSource conflictTaskWiringSource() {
+
+    return (
+        adapterId,
+        workflowModuleId,
+        bpmnProcessId) -> "ConflictProcess".equals(bpmnProcessId)
+            ? java.util.List
+                .of(
+                    new io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec(
+                        "Activity_Conflict", "conflictingTask"),
+                    new io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec(
+                        "Activity_Undisturbed", "undisturbedTask"))
+            : java.util.List.of();
+
+  }
+
   @Bean
   public SteerableTaskAwarenessSource steerableTaskAwarenessSource() {
 

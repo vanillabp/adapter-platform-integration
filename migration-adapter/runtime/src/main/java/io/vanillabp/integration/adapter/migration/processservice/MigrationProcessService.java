@@ -471,9 +471,15 @@ public class MigrationProcessService<A> {
       }
     };
 
-    return context.runInCurrentTransaction()
-        ? transactionRunner.inCurrent(transactionalWork)
-        : transactionRunner.requireNew(transactionalWork);
+    return io.vanillabp.integration.adapter.migration.transaction.AggregateWrite
+        .inTransaction(
+            transactionRunner,
+            context.runInCurrentTransaction(),
+            workflowModuleId,
+            bpmnProcessId,
+            context.getWorkflowAggregateId(),
+            "processing task '%s'".formatted(context.getTaskDefinition()),
+            transactionalWork);
 
   }
 

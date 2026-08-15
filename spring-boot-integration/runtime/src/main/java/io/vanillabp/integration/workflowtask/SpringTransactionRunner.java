@@ -58,6 +58,31 @@ public class SpringTransactionRunner implements TransactionRunner {
 
   }
 
+  @Override
+  public boolean isConcurrentModification(
+      final Throwable failure) {
+
+    // OptimisticLockingFailureException is Spring's translation for every
+    // persistence technology it integrates - JPA (ObjectOptimisticLockingFailure-
+    // Exception) as well as MongoDB. The causes are walked because the conflict
+    // arrives wrapped as often as not: the commit of the transaction template wraps
+    // what the persistence provider threw while flushing.
+    var candidate = failure;
+    while (candidate != null) {
+      if (candidate instanceof org.springframework.dao.OptimisticLockingFailureException) {
+        return true;
+      }
+      candidate = candidate.getCause() == candidate
+          ? null
+          : candidate.getCause();
+    }
+    // a provider exception which never passed Spring's translation (e.g. thrown by
+    // an application's own repository code) means the same thing
+    return io.vanillabp.integration.adapter.migration.transaction.AggregateWrite
+        .causedByOptimisticLocking(failure);
+
+  }
+
   private <T> T run(
       final Supplier<T> work,
       final int propagation) {

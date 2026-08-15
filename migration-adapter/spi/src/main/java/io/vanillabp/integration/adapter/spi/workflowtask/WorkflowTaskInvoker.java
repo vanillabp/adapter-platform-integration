@@ -42,6 +42,34 @@ public interface WorkflowTaskInvoker {
       Collection<BpmnTaskSpec> tasks);
 
   /**
+   * Reports the elements of a BPMN process which can put a SECOND token into a
+   * running workflow - a non-interrupting boundary event, a parallel or inclusive
+   * gateway forking into several flows, a parallel multi-instance activity, a
+   * non-interrupting event subprocess. Called during <code>wireBpmn</code>, since
+   * only the adapter can read its BPMN dialect.
+   * <p>
+   * What it means is the core's decision (story 59): concurrent tokens mean two
+   * branches writing the same workflow aggregate, and an aggregate without a version
+   * attribute loses the writes of whichever branch commits first, without any error.
+   * The core knows the aggregate class, so it warns once per BPMN process - naming
+   * the elements reported here, which is why this method takes IDs rather than a
+   * boolean.
+   * <p>
+   * An adapter whose BPMS cannot be asked about its models reports nothing; the check
+   * stays silent then instead of guessing.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The PLAIN BPMN process ID
+   * @param elementIds The IDs of the elements producing a second token
+   */
+  default void reportConcurrentTokenElements(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Collection<String> elementIds) {
+
+  }
+
+  /**
    * Validates - after ALL BPMN processes of a workflow module were wired - that
    * every <code>&#64;WorkflowTask</code> method matched a task of at least ONE of
    * the module's BPMN processes (a workflow service class may declare several

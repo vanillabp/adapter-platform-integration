@@ -1,0 +1,144 @@
+package io.vanillabp.integration.adapter.migration.transaction;
+
+import java.util.function.Supplier;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Runs work the core wraps in a transaction of its OWN (processing a task, building
+ * the aggregate of a workflow the BPMS started, reporting the end of a workflow) and
+ * says what a version conflict on saving the workflow aggregate means (story 59).
+ * <p>
+ * As soon as a BPMN process holds more than one token, two branches write the same
+ * workflow aggregate: one in the transaction VanillaBP owns, the other in a
+ * transaction the application opens around an API call. An aggregate carrying a
+ * version attribute turns that collision into an exception instead of a silent
+ * overwrite - and the exception surfaces at the COMMIT VanillaBP performs, where the
+ * application cannot catch it.
+ * <p>
+ * <b>VanillaBP does not retry.</b> A handler may have called a remote API before the
+ * commit failed, and a quiet retry inside the framework would repeat that call while
+ * hiding that anything went wrong. So the conflict is named by one guiding message and
+ * the exception is propagated UNCHANGED: the adapter maps it to its BPMS' retry
+ * semantics (a retry until the attempts are used up, then an incident). Where the work
+ * ran in the BPMS' own transaction ({@link TransactionRunner#inCurrent(Supplier)},
+ * Camunda 7 embedded) the engine owns the commit and VanillaBP never sees the
+ * conflict at all.
+ */
+public final class AggregateWrite {
+
+  private static final Logger log = LoggerFactory.getLogger(AggregateWrite.class);
+
+  private AggregateWrite() {
+  }
+
+  /**
+   * Runs the given work in a transaction and reports a version conflict on the way
+   * out.
+   *
+   * @param <T> The result type
+   * @param transactionRunner The platform's transaction runner, which also
+   *          classifies the failure (only the platform knows its exceptions)
+   * @param inCurrentTransaction Whether to join the caller's transaction instead of
+   *          starting a new one
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param workflowAggregateId The workflow aggregate's ID
+   * @param operation What was going on, in a form fitting "... failed": e.g.
+   *          "processing task 'approve'"
+   * @param work The work to run
+   * @return The work's result
+   */
+  public static <T> T inTransaction(
+      final TransactionRunner transactionRunner,
+      final boolean inCurrentTransaction,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Object workflowAggregateId,
+      final String operation,
+      final Supplier<T> work) {
+
+    try {
+      return inCurrentTransaction
+          ? transactionRunner.inCurrent(work)
+          : transactionRunner.requireNew(work);
+    } catch (final RuntimeException failure) {
+      if (transactionRunner.isConcurrentModification(failure)) {
+        log
+            .error(
+                """
+                    {} of workflow aggregate '{}' (BPMN process '{}' of workflow module '{}') failed \
+                    on a version conflict: another writer changed that aggregate meanwhile, so \
+                    nothing this run changed was saved. VanillaBP does not retry - the BPMS decides \
+                    what happens next (its retries, and an incident once they are used up), and a \
+                    repeated run repeats everything the method did outside the transaction as well. \
+                    Two writers appear as soon as a workflow has more than one token (e.g. a \
+                    non-interrupting boundary event) or the application changes the aggregate \
+                    through its own API while the workflow runs. The wiki page 'Workflow \
+                    aggregates' describes the four ways to avoid the collision.""",
+                capitalized(operation),
+                workflowAggregateId == null
+                    ? "not assigned yet"
+                    : workflowAggregateId,
+                bpmnProcessId,
+                workflowModuleId);
+      }
+      throw failure;
+    }
+
+  }
+
+  /**
+   * The exceptions a persistence layer raises on a version conflict, matched by NAME
+   * along the chain of causes - a service both platform implementations of
+   * {@link TransactionRunner#isConcurrentModification(Throwable)} use for the part
+   * which is not platform-specific at all: JPA reports
+   * <code>jakarta.persistence.OptimisticLockException</code> whether it runs under
+   * Spring or under JTA, and Hibernate's own
+   * <code>org.hibernate.StaleObjectStateException</code> travels as its cause.
+   * <p>
+   * Names instead of types, because the core is plain Java: it must not gain a
+   * dependency on JPA, Hibernate or MongoDB to recognize their exceptions.
+   *
+   * @param failure The exception the transactional work or its commit produced
+   * @return Whether a version conflict is somewhere in the chain of causes
+   */
+  public static boolean causedByOptimisticLocking(
+      final Throwable failure) {
+
+    var candidate = failure;
+    while (candidate != null) {
+      final var name = candidate
+          .getClass()
+          .getName();
+      if (OPTIMISTIC_LOCKING_EXCEPTIONS.contains(name)) {
+        return true;
+      }
+      candidate = candidate.getCause() == candidate
+          ? null
+          : candidate.getCause();
+    }
+    return false;
+
+  }
+
+  private static final java.util.Set<String> OPTIMISTIC_LOCKING_EXCEPTIONS = java.util.Set
+      .of(
+          "jakarta.persistence.OptimisticLockException",
+          "javax.persistence.OptimisticLockException",
+          "org.hibernate.StaleObjectStateException",
+          "org.hibernate.StaleStateException",
+          "io.quarkus.mongodb.panache.common.exception.OptimisticLockException");
+
+  private static String capitalized(
+      final String operation) {
+
+    if ((operation == null) || operation.isEmpty()) {
+      return "Saving";
+    }
+    return Character.toUpperCase(operation.charAt(0)) + operation.substring(1);
+
+  }
+
+}
