@@ -80,6 +80,7 @@ public class ProcessServiceBuildStepProcessor {
    * @param workflowModulesFound Information about all workflow modules found in the project
    * @param generatedBeanBuildItemBuildProducer {@link BuildProducer} used to collect generated {@link ProcessService} beans
    * @param reflectiveClassBuildItemProducer {@link BuildProducer} used to register aggregates whose ID VanillaBP reads by reflection
+   * @param unremovableBeanBuildItemProducer {@link BuildProducer} used to keep repositories alive which only VanillaBP uses
    * @param additionalBeanBuildItemBuildProducer {@link BuildProducer} used to collect beans provided in module "runtime"
    */
   @BuildStep
@@ -91,6 +92,7 @@ public class ProcessServiceBuildStepProcessor {
       final BuildProducer<EnsureClassIsBeanValidationBuildItem> ensureClassIsBeanBuildItemProducer,
       final BuildProducer<GeneratedBeanBuildItem> generatedBeanBuildItemBuildProducer,
       final BuildProducer<ReflectiveClassBuildItem> reflectiveClassBuildItemProducer,
+      final BuildProducer<UnremovableBeanBuildItem> unremovableBeanBuildItemProducer,
       final BuildProducer<AdditionalBeanBuildItem> additionalBeanBuildItemBuildProducer) {
 
     final var aggregatePersistenceAwares = applicationArchivesBuildItem
@@ -230,6 +232,17 @@ public class ProcessServiceBuildStepProcessor {
                 aggregatePersistenceClassName,
                 defaultPersistence,
                 workflowAggregateType);
+            if (defaultPersistence.repositoryClass() != null) {
+              // an application whose repository is used by VanillaBP alone injects it
+              // nowhere, and Quarkus removes beans nobody injects while building the
+              // application (story 71, the same shape as the multi-instance
+              // resolvers). Panache and Spring Data keep their repositories
+              // themselves today, so this is insurance rather than a fix - VanillaBP
+              // looks the bean up by class and should not depend on another
+              // extension's decision
+              unremovableBeanBuildItemProducer
+                  .produce(UnremovableBeanBuildItem.beanTypes(defaultPersistence.repositoryClass()));
+            }
             // the ID is read by reflection (AggregateIdTypes), which a native image
             // has to be told about - the persistence frameworks register their
             // entities themselves, but an aggregate may be neither
