@@ -105,7 +105,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * {@link #normalize(ClasspathFacts)} (story 34's convention). Key is the
    * workflow module ID, value the location WITHOUT the adapter ID (which is
    * appended per adapter, see
-   * {@link #getAdapterResourcesLocationFor(String, String)}).
+   * {@link #getAdapterResourcesLocationsFor(String, String)}).
    */
   @Builder.Default
   private Map<String, List<String>> conventionalResourcesLocations = Map.of();
@@ -146,7 +146,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * section gets an empty one - a module needs no configuration any more.</li>
    * <li><b>Resources locations:</b> the location BPMN is read from follows the
    * convention documented at
-   * {@link #getAdapterResourcesLocationFor(String, String)}.</li>
+   * {@link #getAdapterResourcesLocationsFor(String, String)}.</li>
    * </ol>
    *
    * @param facts What the platform knows about the application without any
@@ -220,7 +220,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   /**
    * Derives the conventional resources location of every workflow module found in
-   * the classpath (see {@link #getAdapterResourcesLocationFor(String, String)} for
+   * the classpath (see {@link #getAdapterResourcesLocationsFor(String, String)} for
    * the convention itself).
    */
   private void deriveConventionalResourcesLocations(
@@ -614,35 +614,23 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * <td><code>classpath*:&lt;workflow-module-id&gt;/processes/&lt;adapter-id&gt;</code></td></tr>
    * <tr><td>exactly one workflow module, declared by the application's MAIN
    * artifact</td>
-   * <td><code>classpath*:processes/&lt;adapter-id&gt;</code></td></tr>
+   * <td><code>classpath*:&lt;workflow-module-id&gt;/processes/&lt;adapter-id&gt;</code>,
+   * and <code>classpath*:processes/&lt;adapter-id&gt;</code> if the first holds
+   * nothing</td></tr>
    * </table>
    * A conventional location is adapter-specific like a configured one.</li>
    * </ol>
+   * The locations are returned in the order they are searched, and the first one
+   * holding BPMN files wins (see {@code DeploymentService}) - so a process is never
+   * deployed twice. A configured location is always the only one; the convention
+   * names two where the application IS the workflow module, because a module tested
+   * inside its own Maven module is the main artifact as well while its files sit
+   * below the module ID (story 68).
    *
    * @param workflowModuleId The workflow module ID
    * @param adapterId The adapter ID
-   * @return The location and whether the location contains VanillaBP BPMN (true)
-   *         or BPMN specific to the target BPMS (false).
-   */
-  public ResourcesLocation getAdapterResourcesLocationFor(
-      final String workflowModuleId,
-      final String adapterId) {
-
-    return getAdapterResourcesLocationsFor(workflowModuleId, adapterId).getFirst();
-
-  }
-
-  /**
-   * All locations to be searched for the resources of a workflow module, in the order
-   * they are searched - the first one holding BPMN files wins (see
-   * {@code DeploymentService}). A configured location is always the only one; the
-   * convention names two where the application IS the workflow module, because a
-   * module tested inside its own Maven module is the main artifact as well while its
-   * files sit below the module ID (story 68).
-   *
-   * @param workflowModuleId The workflow module ID
-   * @param adapterId The adapter ID
-   * @return The locations, never empty
+   * @return The locations to search, never empty, each carrying whether it contains
+   *         VanillaBP BPMN (true) or BPMN specific to the target BPMS (false)
    */
   public List<ResourcesLocation> getAdapterResourcesLocationsFor(
       final String workflowModuleId,
@@ -1034,7 +1022,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     knownWorkflowModuleIds.forEach(
         workflowModuleId -> {
           final var prioritizedAdaptersOfModule = getPrioritizedAdaptersFor(workflowModuleId, null);
-          prioritizedAdaptersOfModule.forEach(adapterId -> getAdapterResourcesLocationFor(workflowModuleId, adapterId));
+          prioritizedAdaptersOfModule
+              .forEach(adapterId -> getAdapterResourcesLocationsFor(workflowModuleId, adapterId));
           getBpmnProcessIdsForWorkflowModule(workflowModuleId)
               .forEach(
                   bpmnProcessId -> {
@@ -1042,7 +1031,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
                         workflowModuleId,
                         bpmnProcessId
                     );
-                    prioritizedAdapters.forEach(adapterId -> getAdapterResourcesLocationFor(
+                    prioritizedAdapters.forEach(adapterId -> getAdapterResourcesLocationsFor(
                         workflowModuleId,
                         adapterId));
                   });

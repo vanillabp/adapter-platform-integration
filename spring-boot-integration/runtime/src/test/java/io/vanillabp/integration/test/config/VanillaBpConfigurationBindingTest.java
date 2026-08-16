@@ -137,7 +137,9 @@ public class VanillaBpConfigurationBindingTest {
           assertEquals(
               List.of("test"),
               properties.getPrioritizedAdaptersFor("test-module"));
-          final var resourcesLocation = properties.getAdapterResourcesLocationFor("test-module", "test");
+          final var resourcesLocation = properties
+              .getAdapterResourcesLocationsFor("test-module", "test")
+              .getFirst();
           assertEquals("classpath:bpms-specific", resourcesLocation.location());
           assertFalse(resourcesLocation.vanillaBpBpmn());
 

@@ -163,7 +163,8 @@ public class ConfigurationConventionsTest {
       Assertions.assertEquals(
           "classpath*:test-module/processes/dummy",
           properties
-              .getAdapterResourcesLocationFor("test-module", "dummy")
+              .getAdapterResourcesLocationsFor("test-module", "dummy")
+              .getFirst()
               .location());
 
       // the BPMN of that location really was deployed by the derived adapter
@@ -222,7 +223,8 @@ public class ConfigurationConventionsTest {
       Assertions.assertEquals(
           "classpath*:test-module/processes/dummy2",
           properties
-              .getAdapterResourcesLocationFor("test-module", "dummy2")
+              .getAdapterResourcesLocationsFor("test-module", "dummy2")
+              .getFirst()
               .location());
 
     }

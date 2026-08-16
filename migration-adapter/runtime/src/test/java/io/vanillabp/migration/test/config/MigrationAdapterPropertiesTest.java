@@ -95,7 +95,9 @@ public class MigrationAdapterPropertiesTest {
 
     properties.validateProperties(adaptersLoaded, List.of("fake-module"));
 
-    final var resourcesLocation = properties.getAdapterResourcesLocationFor("fake-module", "adapter-test");
+    final var resourcesLocations = properties.getAdapterResourcesLocationsFor("fake-module", "adapter-test");
+    assertEquals(1, resourcesLocations.size(), "a module of its own artifact has ONE conventional location");
+    final var resourcesLocation = resourcesLocations.getFirst();
     assertEquals("classpath*:fake-module/processes/adapter-test", resourcesLocation.location());
     assertFalse(resourcesLocation.vanillaBpBpmn(), "a derived location is adapter-specific");
 
@@ -172,11 +174,15 @@ public class MigrationAdapterPropertiesTest {
     properties.validateProperties(adaptersLoaded, List.of("configured-module", "global-module"));
 
     // the adapter-specific location wins over everything
-    final var specific = properties.getAdapterResourcesLocationFor("configured-module", "adapter-test");
+    final var specific = properties
+        .getAdapterResourcesLocationsFor("configured-module", "adapter-test")
+        .getFirst();
     assertEquals("classpath*:specific", specific.location());
     assertFalse(specific.vanillaBpBpmn());
     // the global location wins over the convention (VanillaBP-neutral BPMN)
-    final var global = properties.getAdapterResourcesLocationFor("global-module", "adapter-test");
+    final var global = properties
+        .getAdapterResourcesLocationsFor("global-module", "adapter-test")
+        .getFirst();
     assertEquals("classpath*:global-bpmn", global.location());
     assertTrue(global.vanillaBpBpmn());
 
@@ -460,7 +466,8 @@ public class MigrationAdapterPropertiesTest {
     assertEquals(
         "classpath*:test-module/processes/only-adapter",
         properties
-            .getAdapterResourcesLocationFor("test-module", "only-adapter")
+            .getAdapterResourcesLocationsFor("test-module", "only-adapter")
+            .getFirst()
             .location());
 
   }
