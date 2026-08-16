@@ -44,6 +44,15 @@ public class DummyProcessServiceProducer {
    */
   public static final String PROPERTY_TWO_PHASE_COMMIT = "dummy-adapter.two-phase-commit";
 
+  /**
+   * The property making the dummy adapter READ the workflow aggregate in phase two,
+   * the way an adapter of a remote BPMS does (it builds the variables it sends from
+   * the aggregate). Off by default, because most test doubles of
+   * {@link io.vanillabp.integration.spi.AggregatePersistenceAware} implement nothing
+   * but save; the tests of the phase-two contract (story 67) switch it on.
+   */
+  public static final String PROPERTY_READ_AGGREGATE_IN_PHASE_TWO = "dummy-adapter.read-aggregate-in-phase-two";
+
   @Produces
   public List<io.vanillabp.integration.adapter.spi.MigratableProcessService<Object>> dummyMigratableProcessServices(
       final MigrationAdapterProperties properties,
@@ -55,6 +64,10 @@ public class DummyProcessServiceProducer {
         .getConfig()
         .getOptionalValue(PROPERTY_TWO_PHASE_COMMIT, Boolean.class)
         .orElse(Boolean.FALSE);
+    final var readsAggregateInPhaseTwo = ConfigProvider
+        .getConfig()
+        .getOptionalValue(PROPERTY_READ_AGGREGATE_IN_PHASE_TWO, Boolean.class)
+        .orElse(Boolean.FALSE);
 
     return properties
         .adapterTypes()
@@ -63,7 +76,7 @@ public class DummyProcessServiceProducer {
         .filter(adapter -> ADAPTER_TYPE.equals(adapter.getValue()))
         .map(Map.Entry::getKey)
         .sorted().<io.vanillabp.integration.adapter.spi.MigratableProcessService<Object>>map(
-            adapterId -> new MigratableProcessService<>(adapterId, needsTwoPhaseCommit, phaseTwoListeners, taskAwarenessSources, viewerSources))
+            adapterId -> new MigratableProcessService<>(adapterId, needsTwoPhaseCommit, readsAggregateInPhaseTwo, phaseTwoListeners, taskAwarenessSources, viewerSources))
         .toList();
 
   }

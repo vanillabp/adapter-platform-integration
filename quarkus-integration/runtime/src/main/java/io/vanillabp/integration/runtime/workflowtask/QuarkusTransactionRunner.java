@@ -13,7 +13,10 @@ import jakarta.transaction.TransactionSynchronizationRegistry;
  * <code>&#64;WorkflowTask</code> handlers: JTA via {@link QuarkusTransaction}.
  * Additionally the CDI request context is activated around the work - handlers are
  * invoked on adapter threads (e.g. job-executor or polling-worker threads) where no
- * request context is active, and Panache/Hibernate session access requires one.
+ * request context is active, and Panache/Hibernate session access requires one. The
+ * same runner provides both to phase-two dispatch, which calls the application's
+ * persistence from the outbox dispatcher's thread (see
+ * {@link #requireTransaction(Supplier)}).
  */
 public class QuarkusTransactionRunner implements TransactionRunner {
 
@@ -52,6 +55,18 @@ public class QuarkusTransactionRunner implements TransactionRunner {
               valid for embedded BPMS invoking handlers inside the engine's transaction.""");
     }
     return withRequestContext(work);
+
+  }
+
+  @Override
+  public <T> T requireTransaction(
+      final Supplier<T> work) {
+
+    // joining instead of suspending: an outbox of the application may well dispatch
+    // inside a transaction of its own, and phase two belongs into it then
+    return withRequestContext(() -> QuarkusTransaction
+        .joiningExisting()
+        .call(work::get));
 
   }
 
