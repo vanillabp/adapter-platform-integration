@@ -320,7 +320,10 @@ class WorkflowTaskScanner {
         throw new IllegalStateException(
             """
                 No bean of the resolver class '%s' (used by the %s) is available! Define it as a \
-                bean of your application."""
+                bean of your application. If it IS one: on Quarkus the class has to be visible to \
+                the build, which keeps resolver beans alive although nothing injects them - a \
+                workflow module in its own Maven module needs a Jandex index for that (see the \
+                jandex-maven-plugin)."""
                 .formatted(resolverClass.getName(), location));
       }
       return resolver.resolve(aggregate, adaptMultiInstances(context.getMultiInstances()));
