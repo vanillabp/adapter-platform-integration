@@ -33,7 +33,7 @@ public record ClasspathFacts(
    *          module keeps its BPMN below <code>processes/</code>, whereas a
    *          workflow module shipped as its own artifact namespaces them below
    *          its module ID (see
-   *          {@link MigrationAdapterProperties#getAdapterResourcesLocationFor(String, String)}).
+   *          {@link MigrationAdapterProperties#getAdapterResourcesLocationsFor(String, String)}).
    */
   public record WorkflowModuleInfo(
                                    String id,
