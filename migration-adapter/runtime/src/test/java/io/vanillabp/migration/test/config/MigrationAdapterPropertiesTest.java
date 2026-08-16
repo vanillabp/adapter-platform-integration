@@ -105,7 +105,10 @@ public class MigrationAdapterPropertiesTest {
   public void testResourcesLocationOfTheApplicationsOwnWorkflowModule() {
 
     // the single workflow module declared by the application's MAIN artifact: its
-    // BPMN lives below 'processes/' - no module id in the path
+    // BPMN lives below 'processes/' - no module id in the path. Story 68: the
+    // module's OWN location is searched first, because a workflow module tested
+    // inside its own Maven module is the main artifact as well while its files sit
+    // below the module id
     final var properties = new MigrationAdapterProperties();
     properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
     properties.setPrioritizedAdapters(List.of("adapter-test"));
@@ -116,10 +119,36 @@ public class MigrationAdapterPropertiesTest {
         null);
 
     assertEquals(
-        "classpath*:processes/adapter-test",
+        List.of("classpath*:the-app/processes/adapter-test", "classpath*:processes/adapter-test"),
         properties
-            .getAdapterResourcesLocationFor("the-app", "adapter-test")
-            .location());
+            .getAdapterResourcesLocationsFor("the-app", "adapter-test")
+            .stream()
+            .map(MigrationAdapterProperties.ResourcesLocation::location)
+            .toList());
+
+  }
+
+  @Test
+  public void testOneLocationOnlyForAModuleWhichIsNotTheMainArtifact() {
+
+    // a module shipped as its own artifact keeps ONE location: the root of the
+    // application is another module's business (story 68)
+    final var properties = new MigrationAdapterProperties();
+    properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
+    properties.setPrioritizedAdapters(List.of("adapter-test"));
+
+    properties.validateProperties(
+        new ClasspathFacts(
+            adaptersLoaded, List.of(new ClasspathFacts.WorkflowModuleInfo("a-module", false))),
+        null);
+
+    assertEquals(
+        List.of("classpath*:a-module/processes/adapter-test"),
+        properties
+            .getAdapterResourcesLocationsFor("a-module", "adapter-test")
+            .stream()
+            .map(MigrationAdapterProperties.ResourcesLocation::location)
+            .toList());
 
   }
 

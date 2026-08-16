@@ -55,12 +55,17 @@ public class ZeroConfigurationTest {
         () -> "the workflow module found in classpath needs no section but got: "
             + properties.getWorkflowModules().keySet());
     // the application IS the workflow module here (the test archive is the root
-    // application archive), so its BPMN lives below 'processes/<adapter id>'
+    // application archive), so its BPMN lives below 'processes/<adapter id>' - and
+    // below '<module id>/processes/<adapter id>' when the module is being tested
+    // inside its own Maven module, which is the main artifact as well (story 68)
     Assertions.assertEquals(
-        "classpath*:processes/dummy",
+        List.of("classpath*:test-module/processes/dummy", "classpath*:processes/dummy"),
         properties
-            .getAdapterResourcesLocationFor("test-module", "dummy")
-            .location());
+            .getAdapterResourcesLocationsFor("test-module", "dummy")
+            .stream()
+            .map(
+                io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties.ResourcesLocation::location)
+            .toList());
 
   }
 

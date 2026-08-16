@@ -108,7 +108,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * {@link #getAdapterResourcesLocationFor(String, String)}).
    */
   @Builder.Default
-  private Map<String, String> conventionalResourcesLocations = Map.of();
+  private Map<String, List<String>> conventionalResourcesLocations = Map.of();
 
   /**
    * Applies convention-over-configuration defaults to the bound properties:
@@ -231,13 +231,20 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
         .getFirst()
         .fromMainArtifact();
 
-    final var locations = new LinkedHashMap<String, String>();
+    final var locations = new LinkedHashMap<String, List<String>>();
     modules.forEach(
         module -> locations.put(
             module.id(),
             singleModuleOfMainArtifact
-                ? "classpath*:processes"
-                : "classpath*:%s/processes".formatted(module.id())));
+                // the application IS the workflow module - but a module tested inside
+                // its own Maven module is the main artifact as well, and its files sit
+                // where the packaged application needs them: below the module ID. Both
+                // are searched, the module's own location first (story 68; the module's
+                // configuration files are found in both places for the same reason)
+                ? List.of(
+                    "classpath*:%s/processes".formatted(module.id()),
+                    "classpath*:processes")
+                : List.of("classpath*:%s/processes".formatted(module.id()))));
     conventionalResourcesLocations = locations;
 
   }
@@ -621,23 +628,46 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       final String workflowModuleId,
       final String adapterId) {
 
+    return getAdapterResourcesLocationsFor(workflowModuleId, adapterId).getFirst();
+
+  }
+
+  /**
+   * All locations to be searched for the resources of a workflow module, in the order
+   * they are searched - the first one holding BPMN files wins (see
+   * {@code DeploymentService}). A configured location is always the only one; the
+   * convention names two where the application IS the workflow module, because a
+   * module tested inside its own Maven module is the main artifact as well while its
+   * files sit below the module ID (story 68).
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param adapterId The adapter ID
+   * @return The locations, never empty
+   */
+  public List<ResourcesLocation> getAdapterResourcesLocationsFor(
+      final String workflowModuleId,
+      final String adapterId) {
+
     final var workflowModule = getWorkflowModules().get(workflowModuleId);
     if (workflowModule != null) {
       final var adapter = workflowModule.getAdapters().get(adapterId);
       if ((adapter != null) && (adapter.getResourcesLocation() != null) && !adapter.getResourcesLocation().isBlank()) {
-        return new ResourcesLocation(adapter.getResourcesLocation(), false);
+        return List.of(new ResourcesLocation(adapter.getResourcesLocation(), false));
       }
     }
 
     final var globalResourcesLocation = getResourcesLocation();
     if ((globalResourcesLocation != null) && !globalResourcesLocation.isBlank()) {
-      return new ResourcesLocation(globalResourcesLocation, true);
+      return List.of(new ResourcesLocation(globalResourcesLocation, true));
     }
 
-    final var conventionalLocation = conventionalResourcesLocations.get(workflowModuleId);
-    if (conventionalLocation != null) {
-      return new ResourcesLocation(
-          "%s/%s".formatted(conventionalLocation, adapterId), false);
+    final var conventionalLocations = conventionalResourcesLocations.get(workflowModuleId);
+    if ((conventionalLocations != null) && !conventionalLocations.isEmpty()) {
+      return conventionalLocations
+          .stream()
+          .map(conventionalLocation -> new ResourcesLocation(
+              "%s/%s".formatted(conventionalLocation, adapterId), false))
+          .toList();
     }
 
     throw new IllegalStateException(
