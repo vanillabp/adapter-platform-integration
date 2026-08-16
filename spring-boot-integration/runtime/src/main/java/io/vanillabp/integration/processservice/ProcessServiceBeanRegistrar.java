@@ -1,5 +1,6 @@
 package io.vanillabp.integration.processservice;
 
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
@@ -7,6 +8,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.BeanRegistrar;
 import org.springframework.beans.factory.BeanRegistry;
@@ -131,6 +133,101 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
   }
 
   /**
+   * The class declaring the process of the aggregate's {@code ProcessService}.
+   *
+   * @param serviceClasses All classes declaring this aggregate
+   * @param workflowAggregateType The aggregate
+   * @return The class whose primary BPMN process the process service serves
+   * @throws IllegalStateException If the classes declare different primary processes
+   *         for one aggregate - which of them {@code startWorkflow} would start
+   *         cannot be decided here (the BPMN models are read later, by the adapter,
+   *         while deploying), so the application decides it by naming one process as
+   *         the primary one and the others as secondary
+   */
+  static Class<?> primaryWorkflowServiceClass(
+      final List<Class<?>> serviceClasses,
+      final Class<?> workflowAggregateType) {
+
+    return primaryWorkflowServiceClass(
+        serviceClasses,
+        workflowAggregateType,
+        ProcessServiceBeanRegistrar::primaryBpmnProcessId);
+
+  }
+
+  /**
+   * The rule itself, with the process of a class handed in - the tests use it that
+   * way, because a fixture carrying {@code @WorkflowService} would be found by the
+   * classpath scan of every other test in this module.
+   *
+   * @param serviceClasses All classes declaring this aggregate
+   * @param workflowAggregateType The aggregate
+   * @param primaryProcessOf The primary BPMN process of a class
+   * @return The class whose primary BPMN process the process service serves
+   */
+  static Class<?> primaryWorkflowServiceClass(
+      final List<Class<?>> serviceClasses,
+      final Class<?> workflowAggregateType,
+      final Function<Class<?>, String> primaryProcessOf) {
+
+    // reproducible: with several classes on one process the choice must not depend on
+    // the order the classpath scan happened to return
+    final var sorted = serviceClasses
+        .stream()
+        .sorted(Comparator.comparing(Class::getName))
+        .toList();
+    final var distinctProcesses = sorted
+        .stream()
+        .map(primaryProcessOf)
+        .distinct()
+        .toList();
+    if (distinctProcesses.size() > 1) {
+      throw new IllegalStateException(
+          ambiguousPrimaryProcessMessage(sorted, workflowAggregateType, primaryProcessOf));
+    }
+    return sorted.getFirst();
+
+  }
+
+  /**
+   * The message reporting several BPMN processes declared as the primary one for a
+   * single workflow aggregate.
+   *
+   * @param serviceClasses The classes declaring the aggregate, sorted
+   * @param workflowAggregateType The aggregate
+   * @param primaryProcessOf The primary BPMN process of a class
+   * @return The message
+   */
+  static String ambiguousPrimaryProcessMessage(
+      final List<Class<?>> serviceClasses,
+      final Class<?> workflowAggregateType,
+      final Function<Class<?>, String> primaryProcessOf) {
+
+    final var declarations = serviceClasses
+        .stream()
+        .map(serviceClass -> "  %s declares '%s'".formatted(
+            serviceClass.getName(),
+            primaryProcessOf.apply(serviceClass)))
+        .collect(Collectors.joining("\n"));
+    return """
+        Several classes annotated with @WorkflowService declare a DIFFERENT BPMN process for the \
+        workflow aggregate '%s':
+        %s
+        VanillaBP provides one ProcessService per workflow aggregate (that is what \
+        'ProcessService<%s>' injects), so exactly one of these processes is the one \
+        'startWorkflow' starts - and picking one of them here would be a coin flip.
+        Declare the process to be started as the 'bpmnProcess' of ONE class and move the others \
+        into that class' 'secondaryBpmnProcesses' (a process called by a call activity is the \
+        typical case). Handlers of a secondary process may stay in their own class as long as \
+        that class declares the same 'bpmnProcess'."""
+        .formatted(
+            workflowAggregateType.getName(),
+            declarations,
+            workflowAggregateType.getSimpleName());
+
+  }
+
+  /**
    * All BPMN process IDs a workflow service class declares: the primary
    * {@code bpmnProcess} plus every {@code secondaryBpmnProcesses} entry. Secondary
    * entries have to be explicit - there is no class-name convention for them.
@@ -172,7 +269,12 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
       final List<Class<?>> serviceClasses,
       final Class<A> workflowAggregateType) {
 
-    final var serviceClass = serviceClasses.getFirst();
+    // ONE ProcessService per aggregate is the SPI's injection contract, so ONE of
+    // the classes declares the process startWorkflow starts. Which one used to be
+    // the first the classpath scan returned - an order coming from the file system
+    // (story 60). Several classes declaring the SAME process are fine (handlers
+    // split across classes); different ones are ambiguous and end the boot.
+    final var serviceClass = primaryWorkflowServiceClass(serviceClasses, workflowAggregateType);
     final var bpmnProcessId = primaryBpmnProcessId(serviceClass);
 
     final var beanType = ParameterizedTypeReference

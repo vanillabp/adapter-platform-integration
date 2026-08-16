@@ -161,9 +161,12 @@ public class ProcessServiceBuildStepProcessor {
             }
           }
 
-          // collect information necessary for bean creation (first class found
-          // provides the primary BPMN process and the bean's identity)
-          final var annotation = annotations.getFirst();
+          // ONE ProcessService per aggregate is the SPI's injection contract, so ONE
+          // of the classes declares the process startWorkflow starts. Which one used
+          // to be whichever class was found first (story 60). Several classes
+          // declaring the SAME process are fine (handlers split across classes),
+          // different ones are ambiguous and end the build.
+          final var annotation = primaryWorkflowServiceAnnotation(annotations, workflowAggregateType);
           final var serviceClass = annotation.target().asClass();
 
           final var workflowModuleId = workflowModulesFound
@@ -388,6 +391,70 @@ public class ProcessServiceBuildStepProcessor {
         .map(AnnotationValue::asString)
         .filter(Predicate.not(String::isEmpty))
         .orElse(serviceClass.simpleName());
+
+  }
+
+  /**
+   * The annotation declaring the process of the aggregate's process service.
+   *
+   * @param annotations All {@code @WorkflowService} annotations of this aggregate
+   * @param workflowAggregateType The aggregate
+   * @return The annotation whose primary BPMN process the process service serves
+   * @throws IllegalStateException If the classes declare different primary processes
+   *         for one aggregate - which of them {@code startWorkflow} would start
+   *         cannot be decided here (the BPMN models are read later, by the adapter,
+   *         while deploying), so the application decides it by naming one process as
+   *         the primary one and the others as secondary
+   */
+  private static AnnotationInstance primaryWorkflowServiceAnnotation(
+      final List<AnnotationInstance> annotations,
+      final Type workflowAggregateType) {
+
+    // reproducible: with several classes on one process the choice must not depend on
+    // the order the archives happened to be scanned in
+    final var sorted = annotations
+        .stream()
+        .sorted(Comparator.comparing(candidate -> candidate
+            .target()
+            .asClass()
+            .name()
+            .toString()))
+        .toList();
+    final var distinctProcesses = sorted
+        .stream()
+        .map(candidate -> primaryBpmnProcessId(candidate, candidate.target().asClass()))
+        .distinct()
+        .toList();
+    if (distinctProcesses.size() > 1) {
+      final var declarations = sorted
+          .stream()
+          .map(candidate -> "  %s declares '%s'".formatted(
+              candidate
+                  .target()
+                  .asClass()
+                  .name(),
+              primaryBpmnProcessId(candidate, candidate.target().asClass())))
+          .collect(java.util.stream.Collectors.joining("\n"));
+      throw new IllegalStateException(
+          """
+              Several classes annotated with @WorkflowService declare a DIFFERENT BPMN process for \
+              the workflow aggregate '%s':
+              %s
+              VanillaBP provides one ProcessService per workflow aggregate (that is what \
+              'ProcessService<%s>' injects), so exactly one of these processes is the one \
+              'startWorkflow' starts - and picking one of them here would be a coin flip.
+              Declare the process to be started as the 'bpmnProcess' of ONE class and move the \
+              others into that class' 'secondaryBpmnProcesses' (a process called by a call \
+              activity is the typical case). Handlers of a secondary process may stay in their own \
+              class as long as that class declares the same 'bpmnProcess'."""
+              .formatted(
+                  workflowAggregateType.name(),
+                  declarations,
+                  workflowAggregateType
+                      .name()
+                      .withoutPackagePrefix()));
+    }
+    return sorted.getFirst();
 
   }
 
