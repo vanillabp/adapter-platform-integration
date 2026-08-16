@@ -204,7 +204,50 @@ public class DeploymentService {
           }
         });
 
+    reportWorkflowModulesWithoutResources(workflowModuleIds);
+
     warnAboutConfiguredWorkflowsUnknownToBpmnResources(workflowModuleIds, knownBpmnProcessIds);
+
+  }
+
+  /**
+   * Reports a workflow module NO adapter found resources for. Each adapter already
+   * warned about its own location, but a module none of them could serve is a
+   * different message: nothing of this module runs, and the failure a developer meets
+   * later comes from the BPMS ("no processes deployed with key ...") and names neither
+   * VanillaBP nor a location (story 68).
+   * <p>
+   * The boot continues on purpose: BPMN may arrive with an adapter deployed later
+   * (the migration case this platform exists for), and a module without resources
+   * breaks nothing by itself.
+   *
+   * @param workflowModuleIds The workflow module IDs which were deployed
+   */
+  private void reportWorkflowModulesWithoutResources(
+      final List<String> workflowModuleIds) {
+
+    workflowModuleIds
+        .stream()
+        .filter(workflowModuleId -> !bpmsProcessingContexts.containsKey(workflowModuleId))
+        .forEach(workflowModuleId -> log.error(
+            "No BPMN resources were found for workflow module '{}' - by NONE of its adapters ({}). "
+                + "No workflow of this module can be started; the BPMS would report an unknown "
+                + "process. Locations searched: {}. Check where the module's BPMN files are packaged, "
+                + "or name the location explicitly in "
+                + "'{}.workflow-modules.{}.adapters.<adapter>.resources-location'.",
+            workflowModuleId,
+            String.join(", ", properties.getDeploymentAdaptersFor(workflowModuleId)),
+            properties
+                .getDeploymentAdaptersFor(workflowModuleId)
+                .stream()
+                .flatMap(adapterId -> properties
+                    .getAdapterResourcesLocationsFor(workflowModuleId, adapterId)
+                    .stream())
+                .map(location -> "'%s'".formatted(location.location()))
+                .distinct()
+                .collect(java.util.stream.Collectors.joining(", ")),
+            MigrationAdapterProperties.PREFIX,
+            workflowModuleId));
 
   }
 
@@ -326,12 +369,27 @@ public class DeploymentService {
       final Function<String, Map<String, InputStream>> bpmnResourcesLoader,
       final Set<String> knownBpmnProcessIds) {
 
-    final var resourcesLocation = properties.getAdapterResourcesLocationFor(
+    // a configured location is the only one; the convention may name two (the
+    // application IS the workflow module, and a module tested inside its own Maven
+    // module is that as well while keeping its files below the module ID, story 68).
+    // The first location holding files wins - never both, so a process cannot be
+    // deployed twice.
+    final var candidateLocations = properties.getAdapterResourcesLocationsFor(
         workflowModuleId,
         deploymentService.getAdapterId());
-    // find all BPMN files in the resource location...
+    var searchedLocation = candidateLocations.getFirst();
+    var foundFiles = Map.<String, InputStream>of();
+    for (final var candidate : candidateLocations) {
+      final var filesOfCandidate = bpmnResourcesLoader.apply(candidate.location());
+      if (!filesOfCandidate.isEmpty()) {
+        searchedLocation = candidate;
+        foundFiles = filesOfCandidate;
+        break;
+      }
+    }
+    final var resourcesLocation = searchedLocation;
     final var bpmsProcessingContext = new BpmsProcessingContextHolder<PC>();
-    final var bpmnFiles = bpmnResourcesLoader.apply(resourcesLocation.location());
+    final var bpmnFiles = foundFiles;
     try {
       bpmnFiles
           .entrySet()
@@ -375,12 +433,18 @@ public class DeploymentService {
     // the adapter must never be called with a null processing context
     if (bpmsProcessingContext.getBpmsProcessingContext() == null) {
       log.warn(
-          "No executable BPMN processes found for workflow module '{}' at location '{}'! "
-              + "Adapter '{}' is skipped for this workflow module. If this is unintended, "
-              + "check property '{}.workflow-modules.{}.adapters.{}.resources-location' "
-              + "(or '{}.resources-location') and the BPMN files at that location.",
+          "No executable BPMN processes found for workflow module '{}' at location {}! "
+              + "Adapter '{}' is skipped for this workflow module, so none of its workflows can be "
+              + "started by that adapter. If this is unintended, check property "
+              + "'{}.workflow-modules.{}.adapters.{}.resources-location' (or '{}.resources-location') "
+              + "and the BPMN files at that location.",
           workflowModuleId,
-          resourcesLocation.location(),
+          candidateLocations.size() == 1
+              ? "'%s'".formatted(resourcesLocation.location())
+              : candidateLocations
+                  .stream()
+                  .map(candidate -> "'%s'".formatted(candidate.location()))
+                  .collect(java.util.stream.Collectors.joining(" and ")),
           deploymentService.getAdapterId(),
           MigrationAdapterProperties.PREFIX,
           workflowModuleId,

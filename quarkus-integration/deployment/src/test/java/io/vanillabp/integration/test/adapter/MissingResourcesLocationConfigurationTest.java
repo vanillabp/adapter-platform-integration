@@ -43,9 +43,19 @@ public class MissingResourcesLocationConfigurationTest {
   @Test
   public void testResourcesLocationFollowsTheConvention() {
 
-    final var resourcesLocation = properties.getAdapterResourcesLocationFor("test-module", "test");
+    final var resourcesLocations = properties.getAdapterResourcesLocationsFor("test-module", "test");
+    final var resourcesLocation = resourcesLocations.getFirst();
 
-    Assertions.assertEquals("classpath*:processes/test", resourcesLocation.location());
+    // the module is searched at its own location first and at the application's root
+    // second - a module tested inside its own Maven module is the main artifact as
+    // well while its files sit below the module id (story 68)
+    Assertions.assertEquals(
+        java.util.List.of("classpath*:test-module/processes/test", "classpath*:processes/test"),
+        resourcesLocations
+            .stream()
+            .map(
+                io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties.ResourcesLocation::location)
+            .toList());
     Assertions.assertFalse(
         resourcesLocation.vanillaBpBpmn(),
         "a derived location is adapter-specific, like a configured adapter-specific one");

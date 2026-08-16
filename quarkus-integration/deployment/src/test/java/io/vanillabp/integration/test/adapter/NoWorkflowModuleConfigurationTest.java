@@ -47,9 +47,14 @@ public class NoWorkflowModuleConfigurationTest {
         () -> "expected a derived section for the workflow module found in classpath but got: "
             + properties.getWorkflowModules().keySet());
     Assertions.assertEquals(
-        "classpath*:processes/test",
-        properties.getAdapterResourcesLocationFor("test-module", "test").location(),
-        "the BPMN location follows the convention");
+        java.util.List.of("classpath*:test-module/processes/test", "classpath*:processes/test"),
+        properties
+            .getAdapterResourcesLocationsFor("test-module", "test")
+            .stream()
+            .map(
+                io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties.ResourcesLocation::location)
+            .toList(),
+        "the BPMN location follows the convention, the module's own location first");
 
   }
 
