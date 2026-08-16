@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 
+import io.vanillabp.integration.adapter.migration.transaction.TransactionRunner;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOperation;
 import io.vanillabp.integration.spi.PhaseTwoOperationRegistry;
@@ -45,9 +46,17 @@ public final class PhaseTwoRouter {
 
   private final PhaseTwoOperationRegistry operations;
 
+  /**
+   * Provides the transaction (and whatever else the platform needs, e.g. an active
+   * CDI request context on Quarkus) the dispatch runs in, or <code>null</code> if
+   * the platform's outbox implementations bring their own (Spring Boot: gruelbox
+   * dispatches inside a transaction it manages).
+   */
+  private final TransactionRunner transactionRunner;
+
   public PhaseTwoRouter() {
 
-    this(new PhaseTwoOperationRegistry());
+    this(new PhaseTwoOperationRegistry(), null);
 
   }
 
@@ -58,7 +67,33 @@ public final class PhaseTwoRouter {
   public PhaseTwoRouter(
       final PhaseTwoOperationRegistry operations) {
 
+    this(operations, null);
+
+  }
+
+  /**
+   * @param transactionRunner Provides the transaction dispatching runs in, see
+   *        {@link #transactionRunner}
+   */
+  public PhaseTwoRouter(
+      final TransactionRunner transactionRunner) {
+
+    this(new PhaseTwoOperationRegistry(), transactionRunner);
+
+  }
+
+  /**
+   * @param operations The registry to register the core operations in and to
+   *        resolve dispatched operations from
+   * @param transactionRunner Provides the transaction dispatching runs in, see
+   *        {@link #transactionRunner}
+   */
+  public PhaseTwoRouter(
+      final PhaseTwoOperationRegistry operations,
+      final TransactionRunner transactionRunner) {
+
     this.operations = operations;
+    this.transactionRunner = transactionRunner;
     registerCoreOperations();
 
   }
@@ -143,7 +178,19 @@ public final class PhaseTwoRouter {
                     call.workflowAggregateId(),
                     String.join(", ", operations.registeredNames()))));
 
-    dispatch.dispatch(call, previouslyAttempted);
+    // phase two runs on the outbox dispatcher's own thread and calls back into the
+    // application (the aggregate has to be loaded to build what the BPMS is told).
+    // Whatever that needs - a transaction, an active CDI request context - is
+    // VanillaBP's to provide here, once for every outbox implementation, instead of
+    // in each of them.
+    if (transactionRunner == null) {
+      dispatch.dispatch(call, previouslyAttempted);
+      return;
+    }
+    transactionRunner.requireTransaction(() -> {
+      dispatch.dispatch(call, previouslyAttempted);
+      return null;
+    });
 
   }
 

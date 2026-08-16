@@ -40,13 +40,37 @@ public interface TransactionRunner {
       Supplier<T> work);
 
   /**
+   * Runs the given work in a transaction, JOINING the one active on the calling
+   * thread and starting a new one otherwise (semantics of "required").
+   * <p>
+   * This is what phase-two dispatch uses: VanillaBP calls back into the application
+   * (the workflow aggregate has to be loaded to build what the BPMS is told) from
+   * the outbox dispatcher's own thread, where the platform provides nothing on its
+   * own. An outbox implementation which dispatches inside a transaction of its own
+   * (e.g. gruelbox on Spring Boot) keeps it, everything else gets one from VanillaBP.
+   * <p>
+   * The default runs the work in a new transaction - platforms activating additional
+   * contexts (Quarkus: the CDI request context) override it.
+   *
+   * @param <T> The result type
+   * @param work The work to run
+   * @return The work's result
+   */
+  default <T> T requireTransaction(
+      final Supplier<T> work) {
+
+    return requireNew(work);
+
+  }
+
+  /**
    * Whether the transaction of the work currently running was marked rollback-only,
    * which no longer allows a commit. Only a transaction annotation of the
    * application can do that to VanillaBP's transaction, and the mark cannot be
    * cleared, in neither Spring nor JTA.
    * <p>
-   * Valid only while work handed to {@link #requireNew(Supplier)} or
-   * {@link #inCurrent(Supplier)} is running; outside of that the answer is
+   * Valid only while work handed to {@link #requireNew(Supplier)},
+   * {@link #inCurrent(Supplier)} or {@link #requireTransaction(Supplier)} is running; outside of that the answer is
    * <code>false</code>.
    *
    * @return <code>true</code> if the current transaction can no longer commit

@@ -451,6 +451,20 @@ the local transaction, starting is split into two phases
   fails with a guiding message naming the remedies (the same message remains as a
   runtime backstop).
 
+**What phase two may expect (story 67):** the dispatch calls back into the
+application - a remote BPMS adapter loads the workflow aggregate to build what it
+sends to the BPMS - and it does so on the outbox dispatcher's own thread, where
+nothing the application relies on is active by itself. VanillaBP therefore provides
+it: the `PhaseTwoRouter` runs every dispatch through the platform's
+`TransactionRunner.requireTransaction`, which joins a transaction the store already
+opened and starts one otherwise. On Quarkus that runner additionally activates the
+CDI request context, without which an entity manager cannot be touched at all. Since
+the guarantee sits in the router, an outbox contributed by an application gets it as
+well, and stores which dispatch inside their own transaction (gruelbox on Spring
+Boot) keep theirs. Spring Boot passes no runner today: gruelbox brings the
+transaction, and Spring Data opens what it needs per call - see the platform's
+wiki page for what an application may rely on.
+
 A scheduled call is described by the immutable value type `PhaseTwoCall`
 (operation, workflow module, BPMN process, workflow-aggregate ID in serialized
 String form, elected adapter ID, operation-specific args). The dispatch chain is as

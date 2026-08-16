@@ -11,10 +11,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
+import io.vanillabp.integration.adapter.migration.transaction.TransactionRunner;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOperation;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
@@ -39,6 +41,86 @@ public class PhaseTwoRouterTest {
     when(processService.getBpmnProcessId()).thenReturn("TestProcess");
 
     testee.register(processService);
+
+  }
+
+  @Test
+  @DisplayName("Dispatch runs inside the transaction the platform provides (story 67)")
+  public void dispatchRunsInsideTheProvidedTransaction() {
+
+    when(processService.getWorkflowModuleId()).thenReturn("test-module");
+    when(processService.getBpmnProcessId()).thenReturn("TestProcess");
+    when(processService.convertAggregateId("42")).thenReturn(42L);
+
+    final var runner = new RecordingTransactionRunner();
+    final var router = new PhaseTwoRouter(runner);
+    router.register(processService);
+
+    router.dispatch(PhaseTwoCall
+        .of(
+            PhaseTwoOperation.START_WORKFLOW, "test-module", "TestProcess", "42", "test-adapter", Map.of()));
+
+    assertTrue(runner.dispatchedInsideTransaction, "phase two ran without the transaction the platform provided");
+
+  }
+
+  /**
+   * Stands in for a platform's transaction runner and remembers whether the work it
+   * received actually reached the process service.
+   */
+  private class RecordingTransactionRunner implements TransactionRunner {
+
+    private boolean insideTransaction;
+
+    private boolean dispatchedInsideTransaction;
+
+    @Override
+    public <T> T requireTransaction(
+        final java.util.function.Supplier<T> work) {
+
+      insideTransaction = true;
+      try {
+        final var result = work.get();
+        dispatchedInsideTransaction = insideTransaction && Mockito.mockingDetails(processService).getInvocations()
+            .stream().anyMatch(
+                invocation -> invocation.getMethod().getName().equals("startWorkflowPhaseTwo"));
+        return result;
+      } finally {
+        insideTransaction = false;
+      }
+
+    }
+
+    @Override
+    public <T> T requireNew(
+        final java.util.function.Supplier<T> work) {
+
+      throw new UnsupportedOperationException("phase two has to use requireTransaction");
+
+    }
+
+    @Override
+    public <T> T inCurrent(
+        final java.util.function.Supplier<T> work) {
+
+      throw new UnsupportedOperationException("phase two has to use requireTransaction");
+
+    }
+
+    @Override
+    public boolean isRollbackOnly() {
+
+      return false;
+
+    }
+
+    @Override
+    public boolean isConcurrentModification(
+        final Throwable failure) {
+
+      return false;
+
+    }
 
   }
 

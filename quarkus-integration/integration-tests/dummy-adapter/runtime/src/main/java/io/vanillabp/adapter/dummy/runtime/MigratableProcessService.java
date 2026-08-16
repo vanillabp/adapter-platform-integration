@@ -10,6 +10,8 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
 
   private final boolean needsTwoPhaseCommitForStartingWorkflows;
 
+  private final boolean readsAggregateInPhaseTwo;
+
   private final Instance<DummyPhaseTwoListener> phaseTwoListeners;
 
   private final Instance<DummyTaskAwarenessSource> taskAwarenessSources;
@@ -19,12 +21,14 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
   public MigratableProcessService(
       final String adapterId,
       final boolean needsTwoPhaseCommitForStartingWorkflows,
+      final boolean readsAggregateInPhaseTwo,
       final Instance<DummyPhaseTwoListener> phaseTwoListeners,
       final Instance<DummyTaskAwarenessSource> taskAwarenessSources,
       final Instance<DummyViewerSource> viewerSources) {
 
     this.adapterId = adapterId;
     this.needsTwoPhaseCommitForStartingWorkflows = needsTwoPhaseCommitForStartingWorkflows;
+    this.readsAggregateInPhaseTwo = readsAggregateInPhaseTwo;
     this.phaseTwoListeners = phaseTwoListeners;
     this.taskAwarenessSources = taskAwarenessSources;
     this.viewerSources = viewerSources;
@@ -126,6 +130,28 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
 
   }
 
+  /**
+   * Loads the workflow aggregate the way a remote BPMS adapter does in phase two: it
+   * builds the variables it sends to the BPMS from the aggregate, so it calls the
+   * application's persistence from the outbox dispatcher's thread. Switched on by
+   * <code>dummy-adapter.read-aggregate-in-phase-two</code> (the tests of the
+   * phase-two contract, story 67); off by default because most test doubles of
+   * {@link AggregatePersistenceAware} implement nothing but save.
+   *
+   * @param aggregatePersistence The application's persistence of this aggregate
+   * @param workflowAggregateId The aggregate's ID
+   */
+  private void readAggregateLikeARemoteBpms(
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId) {
+
+    if (!readsAggregateInPhaseTwo) {
+      return;
+    }
+    aggregatePersistence.loadById(workflowAggregateId);
+
+  }
+
   @Override
   public void startWorkflowPhaseOne(
       final String workflowModuleId,
@@ -141,6 +167,8 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
       final String bpmnProcessId,
       final AggregatePersistenceAware<A> aggregatePersistence,
       final Object workflowAggregateId) {
+
+    readAggregateLikeARemoteBpms(aggregatePersistence, workflowAggregateId);
 
     if (phaseTwoListeners != null) {
       phaseTwoListeners
@@ -167,6 +195,8 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
       final AggregatePersistenceAware<A> aggregatePersistence,
       final Object workflowAggregateId,
       final String taskId) {
+
+    readAggregateLikeARemoteBpms(aggregatePersistence, workflowAggregateId);
 
     if (phaseTwoListeners != null) {
       phaseTwoListeners
@@ -196,6 +226,8 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
       final String taskId,
       final String bpmnErrorCode) {
 
+    readAggregateLikeARemoteBpms(aggregatePersistence, workflowAggregateId);
+
     if (phaseTwoListeners != null) {
       phaseTwoListeners
           .stream()
@@ -221,6 +253,8 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
       final AggregatePersistenceAware<A> aggregatePersistence,
       final Object workflowAggregateId,
       final String taskId) {
+
+    readAggregateLikeARemoteBpms(aggregatePersistence, workflowAggregateId);
 
     if (phaseTwoListeners != null) {
       phaseTwoListeners
@@ -249,6 +283,8 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
       final Object workflowAggregateId,
       final String taskId,
       final String bpmnErrorCode) {
+
+    readAggregateLikeARemoteBpms(aggregatePersistence, workflowAggregateId);
 
     if (phaseTwoListeners != null) {
       phaseTwoListeners
@@ -313,6 +349,8 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
       final Object workflowAggregateId,
       final String taskId) {
 
+    readAggregateLikeARemoteBpms(aggregatePersistence, workflowAggregateId);
+
     if (phaseTwoListeners != null) {
       phaseTwoListeners
           .stream()
@@ -341,6 +379,8 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
       final String messageName,
       final String correlationId) {
 
+    readAggregateLikeARemoteBpms(aggregatePersistence, workflowAggregateId);
+
     if (phaseTwoListeners != null) {
       phaseTwoListeners
           .stream()
@@ -366,6 +406,8 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
       final AggregatePersistenceAware<A> aggregatePersistence,
       final Object workflowAggregateId,
       final String messageName) {
+
+    readAggregateLikeARemoteBpms(aggregatePersistence, workflowAggregateId);
 
     if (phaseTwoListeners != null) {
       phaseTwoListeners
