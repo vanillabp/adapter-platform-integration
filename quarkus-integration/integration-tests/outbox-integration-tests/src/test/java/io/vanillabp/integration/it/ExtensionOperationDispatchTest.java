@@ -45,7 +45,9 @@ public class ExtensionOperationDispatchTest {
           .addClass(WorkflowService.class)
           .addClass(RecordingPhaseTwoListener.class)
           .addClass(SampleExtension.class)
-          .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"));
+          .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
+      .overrideRuntimeConfigKey("quarkus.datasource.jdbc.url",
+          "jdbc:h2:mem:extension-operation-dispatch-it;DB_CLOSE_DELAY=-1");
 
   private static final String COUNT_ENTRIES_OF_OPERATION = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX "
       + "WHERE OPERATION = '%s'".formatted(SampleExtension.OPERATION_NAME);

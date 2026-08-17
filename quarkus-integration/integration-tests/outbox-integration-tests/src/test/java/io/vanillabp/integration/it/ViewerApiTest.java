@@ -50,7 +50,8 @@ public class ViewerApiTest {
           .addClass(RecordingPhaseTwoListener.class)
           .addClass(PerAdapterAwarenessSource.class)
           .addClass(SteerableViewerSource.class)
-          .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"));
+          .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
+      .overrideRuntimeConfigKey("quarkus.datasource.jdbc.url", "jdbc:h2:mem:viewer-api-it;DB_CLOSE_DELAY=-1");
 
   @Inject
   WorkflowService workflowService;

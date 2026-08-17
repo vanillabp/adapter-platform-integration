@@ -44,7 +44,9 @@ public class TaskOperationsDispatchTest {
           .addClass(WorkflowService.class)
           .addClass(RecordingPhaseTwoListener.class)
           .addClass(SteerableTaskAwarenessSource.class)
-          .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"));
+          .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
+      .overrideRuntimeConfigKey("quarkus.datasource.jdbc.url",
+          "jdbc:h2:mem:task-operations-dispatch-it;DB_CLOSE_DELAY=-1");
 
   @Inject
   WorkflowService workflowService;

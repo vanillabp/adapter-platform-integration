@@ -48,7 +48,9 @@ public class WorkflowAdapterCacheMetricsTest {
           .addClass(WorkflowService.class)
           .addClass(PerAdapterAwarenessSource.class)
           .addClass(TestMeterRegistryProducer.class)
-          .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"));
+          .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
+      .overrideRuntimeConfigKey("quarkus.datasource.jdbc.url",
+          "jdbc:h2:mem:workflow-adapter-cache-metrics-it;DB_CLOSE_DELAY=-1");
 
   @Inject
   MigrationAdapterProperties properties;

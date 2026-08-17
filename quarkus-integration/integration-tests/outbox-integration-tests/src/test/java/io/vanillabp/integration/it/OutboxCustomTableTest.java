@@ -43,7 +43,7 @@ public class OutboxCustomTableTest {
           .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
       .overrideConfigKey("vanillabp.outbox.jdbc.table", CUSTOM_TABLE)
       // separate database: the module's other tests share the class-level H2 URL
-      .overrideConfigKey("quarkus.datasource.jdbc.url", "jdbc:h2:mem:outbox-custom-table-it;DB_CLOSE_DELAY=-1");
+      .overrideRuntimeConfigKey("quarkus.datasource.jdbc.url", "jdbc:h2:mem:outbox-custom-table-it;DB_CLOSE_DELAY=-1");
 
   @Inject
   WorkflowService workflowService;

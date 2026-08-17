@@ -124,6 +124,26 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
    * same task may arrive again (story 51).
    */
   @Override
+  public boolean isPhaseTwoFailureRepeatable(
+      final Throwable failure) {
+
+    // story 63: an adapter tells the store which failures are worth repeating. This
+    // double reports exactly one kind as permanent, so a test can prove that such an
+    // entry is blocked immediately instead of after the configured attempts
+    var candidate = failure;
+    while (candidate != null) {
+      if (candidate instanceof DummyPermanentFailure) {
+        return false;
+      }
+      candidate = candidate.getCause() == candidate
+          ? null
+          : candidate.getCause();
+    }
+    return true;
+
+  }
+
+  @Override
   public boolean deliversTasksAtLeastOnce() {
 
     return needsTwoPhaseCommitForStartingWorkflows;

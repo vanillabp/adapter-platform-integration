@@ -873,7 +873,12 @@ public class MigrationProcessService<A> {
     if (previouslyAttempted && skipRedispatchedStart(adapter, workflowAggregateId, "starting the workflow")) {
       return;
     }
-    adapter.startWorkflowPhaseTwo(workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId);
+    runPhaseTwo(
+        adapter,
+        "starting the workflow of aggregate '%s'".formatted(workflowAggregateId),
+        () -> adapter
+            .startWorkflowPhaseTwo(
+                workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId));
     // the workflow exists now, and this adapter created it: the next operation on it
     // (the classic one is correlating the message which lets it continue) probes this
     // adapter first and waits out its BPMS' visibility delay instead of failing
@@ -1302,10 +1307,13 @@ public class MigrationProcessService<A> {
           "Skipped phase two of pushing the changed aggregate of {}: the workflow is gone (stale "
               + "outbox entry); the entry is consumed",
           subject);
-      default -> location
-          .adapter()
-          .aggregateChangedPhaseTwo(
-              workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, taskId);
+      default -> runPhaseTwo(
+          location.adapter(),
+          "pushing the changed aggregate of %s".formatted(subject),
+          () -> location
+              .adapter()
+              .aggregateChangedPhaseTwo(
+                  workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, taskId));
     }
 
   }
@@ -1396,7 +1404,10 @@ public class MigrationProcessService<A> {
                 adapter's configuration or remove the entry from the outbox store."""
                 .formatted(signalName, bpmnProcessId, workflowModuleId, adapterId)));
 
-    adapter.sendSignalPhaseTwo(workflowModuleId, bpmnProcessId, signalName);
+    runPhaseTwo(
+        adapter,
+        "sending signal '%s'".formatted(signalName),
+        () -> adapter.sendSignalPhaseTwo(workflowModuleId, bpmnProcessId, signalName));
 
   }
 
@@ -1429,11 +1440,14 @@ public class MigrationProcessService<A> {
               + "outbox entry); the entry is consumed",
           messageName,
           subject);
-      default -> location
-          .adapter()
-          .correlateMessagePhaseTwo(
-              workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, messageName,
-              correlationId);
+      default -> runPhaseTwo(
+          location.adapter(),
+          "correlating message '%s' with %s".formatted(messageName, subject),
+          () -> location
+              .adapter()
+              .correlateMessagePhaseTwo(
+                  workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, messageName,
+                  correlationId));
     }
 
   }
@@ -1534,8 +1548,12 @@ public class MigrationProcessService<A> {
         adapter, workflowAggregateId, "starting the workflow by message '%s'".formatted(messageName))) {
       return;
     }
-    adapter.startWorkflowByMessagePhaseTwo(
-        workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, messageName);
+    runPhaseTwo(
+        adapter,
+        "starting the workflow of aggregate '%s' by message '%s'".formatted(workflowAggregateId, messageName),
+        () -> adapter
+            .startWorkflowByMessagePhaseTwo(
+                workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, messageName));
     rememberWorkflowAdapter(workflowAggregateId, adapterId);
 
   }
@@ -1879,6 +1897,41 @@ public class MigrationProcessService<A> {
 
   }
 
+  /**
+   * Runs a phase-two operation and lets the adapter classify a failure (story 63):
+   * the outbox repeats what may succeed on the next attempt - a concurrency conflict
+   * is the case this exists for - while a failure repeating cannot fix blocks the
+   * entry right away.
+   *
+   * @param adapter The adapter executing the operation
+   * @param operationDescription What was attempted, for the message
+   * @param operation The phase-two call
+   */
+  private void runPhaseTwo(
+      final MigratableProcessService<A> adapter,
+      final String operationDescription,
+      final Runnable operation) {
+
+    try {
+      operation.run();
+    } catch (final RuntimeException e) {
+      if (adapter.isPhaseTwoFailureRepeatable(e)) {
+        throw e;
+      }
+      throw new io.vanillabp.integration.spi.PhaseTwoPermanentFailure(
+          """
+              Phase two of %s failed for BPMN process '%s' of workflow module '%s', and adapter '%s' \
+              says that repeating it cannot help. The outbox entry is blocked instead of being \
+              retried - look at the cause, fix what it names, and remove the entry."""
+              .formatted(
+                  operationDescription,
+                  bpmnProcessId,
+                  workflowModuleId,
+                  adapter.getAdapterId()), e);
+    }
+
+  }
+
   private void executeTaskPhaseTwo(
       final Object workflowAggregateId,
       final String taskId,
@@ -1906,7 +1959,10 @@ public class MigrationProcessService<A> {
           operationDescription,
           subject);
       // BPMS_UNAVAILABLE cannot reach here (locate throws) - the outbox retries
-      default -> phaseTwo.accept(location.adapter());
+      default -> runPhaseTwo(
+          location.adapter(),
+          "%s of %s".formatted(operationDescription, subject),
+          () -> phaseTwo.accept(location.adapter()));
     }
 
   }

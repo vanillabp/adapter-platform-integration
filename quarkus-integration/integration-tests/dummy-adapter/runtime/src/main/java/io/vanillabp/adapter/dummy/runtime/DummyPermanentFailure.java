@@ -1,0 +1,18 @@
+package io.vanillabp.adapter.dummy.runtime;
+
+/**
+ * A phase-two failure this adapter reports as permanent (story 63): the store blocks
+ * the outbox entry instead of retrying it until the configured attempts are used up.
+ */
+public class DummyPermanentFailure extends RuntimeException {
+
+  private static final long serialVersionUID = 1L;
+
+  public DummyPermanentFailure(
+      final String message) {
+
+    super(message);
+
+  }
+
+}

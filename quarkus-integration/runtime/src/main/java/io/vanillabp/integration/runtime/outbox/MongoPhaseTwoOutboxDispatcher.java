@@ -268,6 +268,24 @@ public class MongoPhaseTwoOutboxDispatcher {
               Updates.set("status", MongoPhaseTwoOutbox.STATUS_DONE),
               Updates.set("doneAt", Date.from(Instant.now()))));
     } catch (final RuntimeException e) {
+      // the adapter said that repeating cannot help (story 63) - blocked right away
+      // instead of after the configured attempts
+      if (io.vanillabp.integration.spi.PhaseTwoPermanentFailure.isPermanent(e)) {
+        collection.updateOne(
+            Filters.eq("_id", entryId),
+            Updates.set("status", MongoPhaseTwoOutbox.STATUS_BLOCKED));
+        log.error(
+            "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
+                + "failed for a reason repeating cannot fix - the outbox entry '{}' is blocked and has "
+                + "to be cleaned up manually!",
+            entry.getString("operation"),
+            entry.getString("bpmnProcessId"),
+            entry.getString("workflowModuleId"),
+            entry.getString("aggregateId"),
+            entryId,
+            e);
+        return;
+      }
       if (entry.getInteger("attempts") + 1 >= properties.getBlockAfterAttempts()) {
         collection.updateOne(
             Filters.eq("_id", entryId),
