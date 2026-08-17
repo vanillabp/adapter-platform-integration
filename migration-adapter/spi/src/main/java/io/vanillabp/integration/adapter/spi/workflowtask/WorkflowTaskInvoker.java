@@ -169,6 +169,36 @@ public interface WorkflowTaskInvoker {
       String taskDefinitionOrActivityId);
 
   /**
+   * Whether two BPMN processes of one workflow module work on the SAME workflow
+   * aggregate - which is what the declaration says: one class declares the process
+   * to be started as its {@code bpmnProcess} and the others as
+   * {@code secondaryBpmnProcesses}.
+   * <p>
+   * Adapters ask this about a call activity: a process called on the same aggregate
+   * continues the same business case and has to reach the same aggregate, whereas a
+   * process with an aggregate of its own must not be handed the caller's identity.
+   * Camunda 7 needs the answer because it does not pass its business key - which
+   * carries the aggregate's ID - to a called process on its own (story 61).
+   * <p>
+   * The default is <code>false</code>: the core answers this, and a test double of
+   * this SPI should not invent an answer which makes an adapter change a model.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param otherBpmnProcessId The BPMN process ID to compare with
+   * @return Whether both processes serve the same workflow aggregate;
+   *         <code>false</code> if either of them is unknown
+   */
+  default boolean workflowsShareTheWorkflowAggregate(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String otherBpmnProcessId) {
+
+    return false;
+
+  }
+
+  /**
    * Whether the <code>&#64;WorkflowTask</code> method serving the given task
    * definition (or BPMN activity ID) completes its task ASYNCHRONOUSLY, which a
    * method says by declaring a <code>&#64;TaskId</code> parameter: the task stays
