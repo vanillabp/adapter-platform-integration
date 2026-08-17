@@ -275,6 +275,34 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
 
   }
 
+  @Override
+  public boolean workflowsShareTheWorkflowAggregate(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String otherBpmnProcessId) {
+
+    final var aggregate = workflowAggregateClassOf(workflowModuleId, bpmnProcessId);
+    final var otherAggregate = workflowAggregateClassOf(workflowModuleId, otherBpmnProcessId);
+    return (aggregate != null) && aggregate.equals(otherAggregate);
+
+  }
+
+  /**
+   * The workflow aggregate a BPMN process of a workflow module works on, or
+   * <code>null</code> if no workflow service declared that process.
+   */
+  private Class<?> workflowAggregateClassOf(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    if ((entry == null) || (entry.processService == null)) {
+      return null;
+    }
+    return entry.processService.getWorkflowAggregateClass();
+
+  }
+
   private static void failOnDuplicateWiring(
       final String workflowModuleId,
       final String bpmnProcessId,

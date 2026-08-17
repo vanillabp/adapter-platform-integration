@@ -1495,6 +1495,83 @@ public class WorkflowTaskRegistryTest {
    * workflow-aggregate class is validated at STARTUP.
    */
   @Nested
+  @DisplayName("Processes sharing a workflow aggregate (story 61)")
+  class SharedWorkflowAggregates {
+
+    /**
+     * Registers a second BPMN process of the module on a workflow aggregate of its
+     * own - the "reuse" case, where a called process must NOT be handed the caller's
+     * identity.
+     */
+    private void registerProcessOfAnotherAggregate(
+        final String bpmnProcessId) {
+
+      final var persistenceOfOtherAggregate = new AggregatePersistenceAware<GetterAggregate>() {
+
+        @Override
+        public Class<GetterAggregate> getAggregateClass() {
+          return GetterAggregate.class;
+        }
+
+        @Override
+        public Object getAggregateId(
+            final GetterAggregate aggregate) {
+          return aggregate.id;
+        }
+
+      };
+      final var properties = MigrationAdapterProperties
+          .builder()
+          .adapters(Map.of("test-adapter", AdapterConfigProperties.ofType("dummy")))
+          .prioritizedAdapters(List.of("test-adapter"))
+          .build();
+      properties.validateAndLink();
+      registry.registerWorkflowService(
+          MODULE,
+          bpmnProcessId,
+          GetterAggregate.class, // no @WorkflowTask methods - registration is fine
+          GetterAggregate::new,
+          beans::get,
+          new MigrationProcessService<>(
+              MODULE, bpmnProcessId, GetterAggregate.class, properties, persistenceOfOtherAggregate, List.of(
+                  new NoOpProcessService<GetterAggregate>()), null));
+
+    }
+
+    @Test
+    @DisplayName("Two processes of one aggregate share it, a process with its own does not")
+    public void aggregatesAreComparedByClass() {
+
+      // a secondary process of the same aggregate: the class declaring it named the
+      // same aggregate, which is what the adapter asks about a call activity
+      registry.registerWorkflowService(
+          MODULE,
+          "SecondaryProcess",
+          SampleService.class,
+          () -> serviceBean,
+          beans::get,
+          createProcessService());
+      registerProcessOfAnotherAggregate("ProcessOfItsOwn");
+
+      assertTrue(registry.workflowsShareTheWorkflowAggregate(MODULE, PROCESS, "SecondaryProcess"));
+      assertTrue(registry.workflowsShareTheWorkflowAggregate(MODULE, "SecondaryProcess", PROCESS));
+      assertFalse(registry.workflowsShareTheWorkflowAggregate(MODULE, PROCESS, "ProcessOfItsOwn"));
+
+    }
+
+    @Test
+    @DisplayName("A process nobody declared is not known to share anything")
+    public void unknownProcessesShareNothing() {
+
+      assertFalse(registry.workflowsShareTheWorkflowAggregate(MODULE, PROCESS, "NeverDeclared"));
+      assertFalse(registry.workflowsShareTheWorkflowAggregate(MODULE, "NeverDeclared", PROCESS));
+      assertFalse(registry.workflowsShareTheWorkflowAggregate("another-module", PROCESS, PROCESS));
+
+    }
+
+  }
+
+  @Nested
   @DisplayName("Aggregate sync (story 28b)")
   class AggregateSync {
 
