@@ -346,6 +346,12 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
               final var taskDeliveryLogResolver = supplierContext
                   .bean(SpringTaskDeliveryLogResolver.class);
 
+              // and the same for the transaction the work runs in: an application
+              // storing this aggregate in a system Spring does not manage contributes
+              // its own runner (story 70)
+              final var transactionRunnerResolver = supplierContext
+                  .bean(SpringTransactionRunnerResolver.class);
+
               // the bean registers itself with the router as phase-two dispatch
               // target of this workflow module/BPMN process
               final var phaseTwoRouter = supplierContext
@@ -365,7 +371,7 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                           io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics.class));
 
               final var processServiceBean = new ProcessServiceSpringBean<A>(
-                  workflowModuleId, bpmnProcessId, workflowAggregateType, properties, aggregatePersistenceAware, migratableProcessServices, phaseTwoOutboxResolver, phaseTwoRouter, workflowAdapterCache, taskDeliveryLogResolver);
+                  workflowModuleId, bpmnProcessId, workflowAggregateType, properties, aggregatePersistenceAware, migratableProcessServices, phaseTwoOutboxResolver, phaseTwoRouter, workflowAdapterCache, taskDeliveryLogResolver, transactionRunnerResolver);
 
               // register ALL classes declaring this aggregate under ALL their
               // declared BPMN process IDs: @WorkflowTask handlers per (module,
@@ -390,7 +396,7 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                       "%s|%s".formatted(declaringModuleId, declaredProcessId),
                       key -> {
                         final var secondaryProcessService = new MigrationProcessService<A>(
-                            declaringModuleId, declaredProcessId, workflowAggregateType, properties, aggregatePersistenceAware, migratableProcessServices, phaseTwoOutboxResolver, workflowAdapterCache, taskDeliveryLogResolver);
+                            declaringModuleId, declaredProcessId, workflowAggregateType, properties, aggregatePersistenceAware, migratableProcessServices, phaseTwoOutboxResolver, workflowAdapterCache, taskDeliveryLogResolver, transactionRunnerResolver);
                         if (phaseTwoRouter != null) {
                           phaseTwoRouter.register(secondaryProcessService);
                         }

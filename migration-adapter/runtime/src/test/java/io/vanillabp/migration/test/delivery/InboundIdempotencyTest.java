@@ -25,7 +25,6 @@ import io.vanillabp.integration.adapter.migration.config.WorkflowAdapterProperti
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver;
-import io.vanillabp.integration.adapter.migration.transaction.TransactionRunner;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
@@ -33,6 +32,7 @@ import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.spi.TaskDeliveryLog;
+import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.service.TaskException;
 import io.vanillabp.spi.service.WorkflowTask;

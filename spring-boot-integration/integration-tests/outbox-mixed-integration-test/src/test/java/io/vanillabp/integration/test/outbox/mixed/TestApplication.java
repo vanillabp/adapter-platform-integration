@@ -30,8 +30,11 @@ import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxDispatcher
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.PhaseTwoOutboxAware;
+import io.vanillabp.integration.spi.TransactionRunner;
+import io.vanillabp.integration.spi.TransactionRunnerAware;
 import io.vanillabp.integration.utils.impl.MongoDbSpringDataUtil;
 import io.vanillabp.integration.utils.impl.SpringDataUtilBasedAggregatePersistenceSupport;
+import io.vanillabp.integration.workflowtask.SpringTransactionRunner;
 import jakarta.persistence.EntityManagerFactory;
 
 /**
@@ -70,6 +73,91 @@ public class TestApplication {
       final MongoDatabaseFactory databaseFactory) {
 
     return new MongoTransactionManager(databaseFactory);
+
+  }
+
+  /**
+   * Story 70: with a JPA and a MongoDB transaction manager in one application, no manager is
+   * THE one - so the application says which aggregate belongs to which. Each bean returns a
+   * runner bound to the matching manager, and VanillaBP runs everything it does with that
+   * aggregate inside it.
+   *
+   * @param transactionManager The JPA manager
+   * @return The attribution of the JPA aggregate
+   */
+  @Bean
+  public TransactionRunnerAware<JpaAggregate> jpaAggregateTransactions(
+      @Qualifier("transactionManager") final PlatformTransactionManager transactionManager) {
+
+    final var runner = new SpringTransactionRunner(transactionManager);
+    return new TransactionRunnerAware<>() {
+
+      @Override
+      public Class<JpaAggregate> getAggregateClass() {
+        return JpaAggregate.class;
+      }
+
+      @Override
+      public TransactionRunner getTransactionRunner() {
+        return runner;
+      }
+
+    };
+
+  }
+
+  /**
+   * The "hot" aggregate is JPA-persisted as well, and gets the JPA manager for the same
+   * reason.
+   *
+   * @param transactionManager The JPA manager
+   * @return The attribution of the hot aggregate
+   */
+  @Bean
+  public TransactionRunnerAware<HotAggregate> hotAggregateTransactions(
+      @Qualifier("transactionManager") final PlatformTransactionManager transactionManager) {
+
+    final var runner = new SpringTransactionRunner(transactionManager);
+    return new TransactionRunnerAware<>() {
+
+      @Override
+      public Class<HotAggregate> getAggregateClass() {
+        return HotAggregate.class;
+      }
+
+      @Override
+      public TransactionRunner getTransactionRunner() {
+        return runner;
+      }
+
+    };
+
+  }
+
+  /**
+   * The MongoDB aggregate gets the MongoDB manager - the one which really covers its store.
+   *
+   * @param transactionManager The MongoDB manager
+   * @return The attribution of the MongoDB aggregate
+   */
+  @Bean
+  public TransactionRunnerAware<MongoAggregate> mongoAggregateTransactions(
+      @Qualifier("mongoTransactionManager") final PlatformTransactionManager transactionManager) {
+
+    final var runner = new SpringTransactionRunner(transactionManager);
+    return new TransactionRunnerAware<>() {
+
+      @Override
+      public Class<MongoAggregate> getAggregateClass() {
+        return MongoAggregate.class;
+      }
+
+      @Override
+      public TransactionRunner getTransactionRunner() {
+        return runner;
+      }
+
+    };
 
   }
 

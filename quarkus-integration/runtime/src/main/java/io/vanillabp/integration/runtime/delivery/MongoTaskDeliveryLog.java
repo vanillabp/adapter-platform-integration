@@ -36,8 +36,11 @@ import lombok.extern.slf4j.Slf4j;
  * <code>quarkus.mongodb.database</code> and are keyed by the delivery key (the
  * document's <code>_id</code>), so uniqueness comes for free.
  * <p>
- * <strong>Best-effort window (no MongoDB transaction):</strong> MongoDB is no JTA
- * resource and the Quarkus client does not enlist in the Narayana transaction, so the
+ * <strong>One transaction where MongoDB Panache provides a session (story 70):</strong> the
+ * record is written through the <code>ClientSession</code> Panache bound to the running JTA
+ * transaction, so it commits with the aggregate and a rollback takes it with it.
+ * <p>
+ * <strong>Best-effort window (no MongoDB transaction):</strong> Without such a session the
  * record is written IMMEDIATELY instead of with the commit - the same window the MongoDB
  * outbox documents. A record whose transaction rolls back would skip a redelivery of
  * work which never happened, therefore the record is deleted best-effort when the
@@ -152,11 +155,20 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
   public Optional<TaskDelivery> recordedDelivery(
       final String deliveryKey) {
 
+    // read through the session of the running transaction where there is one, so the
+    // answer is consistent with what this transaction wrote (story 70)
+    final var session = io.vanillabp.integration.runtime.mongo.MongoSessions
+        .activeSession(txRegistry);
+    final var collection = deliveryCollection();
     return Optional
         .ofNullable(
-            deliveryCollection()
-                .find(new Document("_id", deliveryKey))
-                .first())
+            session != null
+                ? collection
+                    .find(session, new Document("_id", deliveryKey))
+                    .first()
+                : collection
+                    .find(new Document("_id", deliveryKey))
+                    .first())
         .map(document -> new TaskDelivery(
             deliveryKey, document.getString("workflowModuleId"), document.getString("bpmnProcessId"), document
                 .getString("aggregateId"), document.getString("taskDefinition"), document
@@ -169,18 +181,39 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
       final TaskDelivery delivery) {
 
     final var collection = deliveryCollection();
+    // the session of the running transaction where MongoDB Panache provides one: the
+    // record then commits with the aggregate instead of being written immediately
+    // (story 70)
+    final var session = io.vanillabp.integration.runtime.mongo.MongoSessions
+        .activeSession(txRegistry);
+    final var record = new Document()
+        .append("_id", delivery.deliveryKey())
+        .append("workflowModuleId", delivery.workflowModuleId())
+        .append("bpmnProcessId", delivery.bpmnProcessId())
+        .append("aggregateId", delivery.workflowAggregateId())
+        .append("taskDefinition", delivery.taskDefinition())
+        .append("outcome", delivery.outcome())
+        .append("bpmnErrorCode", delivery.bpmnErrorCode())
+        .append("bpmnErrorName", delivery.bpmnErrorName())
+        .append("recordedAt", Date.from(java.time.Instant.now()));
+    // a duplicate-key error inside a MongoDB transaction would abort it entirely, so the
+    // common duplicate is read instead - the unique document ID stays the backstop
+    if ((session != null) && (collection
+        .find(session, new Document("_id", delivery.deliveryKey()))
+        .first() != null)) {
+      log.debug(
+          "Task delivery '{}' of BPMN process '{}' of workflow module '{}' was recorded already",
+          delivery.deliveryKey(),
+          delivery.bpmnProcessId(),
+          delivery.workflowModuleId());
+      return false;
+    }
     try {
-      collection.insertOne(
-          new Document()
-              .append("_id", delivery.deliveryKey())
-              .append("workflowModuleId", delivery.workflowModuleId())
-              .append("bpmnProcessId", delivery.bpmnProcessId())
-              .append("aggregateId", delivery.workflowAggregateId())
-              .append("taskDefinition", delivery.taskDefinition())
-              .append("outcome", delivery.outcome())
-              .append("bpmnErrorCode", delivery.bpmnErrorCode())
-              .append("bpmnErrorName", delivery.bpmnErrorName())
-              .append("recordedAt", Date.from(java.time.Instant.now())));
+      if (session != null) {
+        collection.insertOne(session, record);
+      } else {
+        collection.insertOne(record);
+      }
     } catch (final MongoWriteException e) {
       // 11000 = duplicate key: another node recorded the same delivery concurrently
       if (e.getError().getCode() == 11000) {
@@ -194,10 +227,11 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
       throw e;
     }
 
-    // MongoDB does not take part in the JTA transaction, so the record is already
-    // written - remove it again if the transaction does not commit, otherwise a
-    // redelivery of the rolled-back work would be skipped
-    if (txRegistry.getTransactionKey() != null) {
+    // without a session MongoDB does not take part in the JTA transaction, so the record
+    // is already written - remove it again if the transaction does not commit, otherwise a
+    // redelivery of the rolled-back work would be skipped. With a session the abort of the
+    // MongoDB transaction takes the record with it.
+    if ((session == null) && (txRegistry.getTransactionKey() != null)) {
       txRegistry.registerInterposedSynchronization(new Synchronization() {
         @Override
         public void beforeCompletion() {

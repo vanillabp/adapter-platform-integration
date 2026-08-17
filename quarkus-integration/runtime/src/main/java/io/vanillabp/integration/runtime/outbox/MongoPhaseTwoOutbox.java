@@ -29,11 +29,18 @@ import lombok.extern.slf4j.Slf4j;
  * <code>vanillabp-phase-two-outbox</code>) so both platforms share the same store
  * layout.
  * <p>
- * <strong>Best-effort window (no MongoDB transaction):</strong> MongoDB is no JTA
- * resource and the Quarkus MongoDB client does not enlist in the Narayana
- * transaction, so - exactly like the Spring Boot MongoDB outbox without a replica
- * set - the entry is written <i>immediately</i>, before the local commit. Two
- * windows follow:
+ * <strong>One transaction where MongoDB Panache provides a session (story 70):</strong>
+ * MongoDB Panache enlists itself in the Narayana transaction - it starts a
+ * <code>ClientSession</code> with a MongoDB transaction and keeps it as a transaction
+ * resource - and this outbox writes through that very session. Aggregate and outbox entry
+ * then commit together, which is what the {@link PhaseTwoOutbox} contract demands, and the
+ * entry becomes visible to anybody else only with the commit. The session needs the
+ * deployment to be a replica set, and MongoDB Panache on the classpath.
+ * <p>
+ * <strong>Best-effort window (no MongoDB transaction):</strong> Without such a session -
+ * an application using the MongoDB client without Panache, or a write outside any
+ * transaction - MongoDB is no JTA resource, so the entry is written <i>immediately</i>,
+ * before the local commit. Two windows follow:
  * <ul>
  * <li><i>Rollback:</i> the already-written entry would become an orphan and the
  * poller would start a workflow whose aggregate does not exist. Mitigation: on
@@ -108,8 +115,26 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
         .append("createdAt", java.util.Date.from(now))
         .append("attempts", 0)
         .append("nextAttemptAt", java.util.Date.from(now));
+    // the session of the running transaction where MongoDB Panache provides one: the
+    // entry then commits with the aggregate instead of being written immediately
+    // (story 70)
+    final var session = io.vanillabp.integration.runtime.mongo.MongoSessions
+        .activeSession(txRegistry);
+    // within a MongoDB transaction a duplicate-key error would abort the whole
+    // transaction (the aggregate included), so the common duplicate is detected by a
+    // read - the unique index stays the backstop for two nodes scheduling at once
+    if ((session != null) && (idempotencyKey != null) && (collection
+        .find(session, new Document("idempotencyKey", idempotencyKey))
+        .first() != null)) {
+      logDuplicate(call);
+      return false;
+    }
     try {
-      collection.insertOne(entry);
+      if (session != null) {
+        collection.insertOne(session, entry);
+      } else {
+        collection.insertOne(entry);
+      }
     } catch (final MongoWriteException e) {
       // 11000 = duplicate key: the idempotency key is already present
       if (e.getError().getCode() == 11000) {
@@ -133,7 +158,9 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
             final int status) {
           if (status == Status.STATUS_COMMITTED) {
             dispatcher.triggerPoll();
-          } else {
+          } else if (session == null) {
+            // no MongoDB transaction covered the insert, so it has to be undone here;
+            // with a session the abort of that transaction removed it already
             try {
               collection.deleteOne(new Document("_id", entryId));
             } catch (final RuntimeException e) {

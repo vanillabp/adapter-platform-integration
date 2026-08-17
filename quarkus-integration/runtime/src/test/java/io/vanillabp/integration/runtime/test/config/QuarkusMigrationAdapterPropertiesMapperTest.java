@@ -66,7 +66,25 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
   private record WorkflowModuleProperties(
                                           Optional<List<String>> prioritizedAdapters,
                                           Map<String, QuarkusMigrationAdapterProperties.AdapterProperties> adapters,
-                                          Map<String, QuarkusMigrationAdapterProperties.WorkflowProperties> workflows) implements QuarkusMigrationAdapterProperties.WorkflowModuleProperties {
+                                          Map<String, QuarkusMigrationAdapterProperties.WorkflowProperties> workflows,
+                                          QuarkusMigrationAdapterProperties.TransactionsProperties transactions) implements QuarkusMigrationAdapterProperties.WorkflowModuleProperties {
+
+    /**
+     * Without a transaction section, which is what most of these fixtures need.
+     */
+    private WorkflowModuleProperties(
+        final Optional<List<String>> prioritizedAdapters,
+        final Map<String, QuarkusMigrationAdapterProperties.AdapterProperties> adapters,
+        final Map<String, QuarkusMigrationAdapterProperties.WorkflowProperties> workflows) {
+
+      this(prioritizedAdapters, adapters, workflows, null);
+
+    }
+
+  }
+
+  private record TransactionsProperties(
+                                        Optional<io.vanillabp.integration.adapter.migration.config.TransactionsProperties.UnguardedAggregateWrites> unguardedAggregateWrites) implements QuarkusMigrationAdapterProperties.TransactionsProperties {
   }
 
   private record JdbcOutboxProperties(
@@ -100,7 +118,24 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                             Map<String, QuarkusMigrationAdapterProperties.AdapterConfiguration> adapters,
                             Map<String, QuarkusMigrationAdapterProperties.WorkflowModuleProperties> workflowModules,
                             QuarkusMigrationAdapterProperties.PhaseTwoOutboxProperties outbox,
-                            QuarkusMigrationAdapterProperties.WorkflowAdapterCacheProperties workflowAdapterCache) implements QuarkusMigrationAdapterProperties {
+                            QuarkusMigrationAdapterProperties.WorkflowAdapterCacheProperties workflowAdapterCache,
+                            QuarkusMigrationAdapterProperties.TransactionsProperties transactions) implements QuarkusMigrationAdapterProperties {
+
+    /**
+     * Without a transaction section.
+     */
+    private Properties(
+        final Optional<List<String>> prioritizedAdapters,
+        final Optional<String> resourcesLocation,
+        final Map<String, QuarkusMigrationAdapterProperties.AdapterConfiguration> adapters,
+        final Map<String, QuarkusMigrationAdapterProperties.WorkflowModuleProperties> workflowModules,
+        final QuarkusMigrationAdapterProperties.PhaseTwoOutboxProperties outbox,
+        final QuarkusMigrationAdapterProperties.WorkflowAdapterCacheProperties workflowAdapterCache) {
+
+      this(prioritizedAdapters, resourcesLocation, adapters, workflowModules, outbox, workflowAdapterCache, null);
+
+    }
+
   }
 
   @Test
@@ -260,6 +295,35 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     assertEquals(coreDefaults.getJdbc().getTable(), mappedDefaults.getJdbc().getTable());
     assertEquals(coreDefaults.getMongo().isEnabled(), mappedDefaults.getMongo().isEnabled());
     assertEquals(coreDefaults.getMongo().getCollection(), mappedDefaults.getMongo().getCollection());
+
+  }
+
+  @Test
+  @DisplayName("Story 70: the unguarded-writes setting travels globally and per workflow module")
+  public void transactionsSettingTravelsGloballyAndPerModule() {
+
+    final var accepted = io.vanillabp.integration.adapter.migration.config.TransactionsProperties.UnguardedAggregateWrites.ACCEPTED;
+    final var rejected = io.vanillabp.integration.adapter.migration.config.TransactionsProperties.UnguardedAggregateWrites.REJECTED;
+
+    final var properties = new Properties(
+        Optional.empty(), Optional.empty(), Map.of(), Map
+            .of(
+                "loan-approval",
+                new WorkflowModuleProperties(
+                    Optional.empty(), Map.of(), Map.of(), new TransactionsProperties(Optional.of(accepted))),
+                "payments",
+                new WorkflowModuleProperties(
+                    Optional.empty(), Map.of(), Map.of(), new TransactionsProperties(Optional
+                        .empty()))), null, null, new TransactionsProperties(Optional.of(rejected)));
+
+    final var core = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(properties);
+
+    assertEquals(rejected, core.getTransactions().getUnguardedAggregateWrites());
+    // the module's own value wins; a module saying nothing, and a module without any
+    // section at all, inherit what the application configured globally
+    assertTrue(core.acceptsUnguardedAggregateWrites("loan-approval"));
+    assertFalse(core.acceptsUnguardedAggregateWrites("payments"));
+    assertFalse(core.acceptsUnguardedAggregateWrites("unconfigured-module"));
 
   }
 

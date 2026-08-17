@@ -79,6 +79,14 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   private WorkflowAdapterCacheProperties workflowAdapterCache = new WorkflowAdapterCacheProperties();
 
   /**
+   * What VanillaBP does about a workflow aggregate whose store is not covered by the
+   * transaction it opens (properties section <code>vanillabp.transactions</code>,
+   * overridable per workflow module).
+   */
+  @Builder.Default
+  private TransactionsProperties transactions = new TransactionsProperties();
+
+  /**
    * Derived view of {@link #getAdapters()}: adapter ID mapped to the adapter's type.
    * An adapter entry without an explicit {@link AdapterConfigProperties#getType()
    * type} defaults to its ID being the type.
@@ -594,6 +602,51 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     return (adapter != null) && (adapter.getDeploymentFailure() != null)
         ? adapter.getDeploymentFailure()
         : DeploymentFailurePolicy.FAIL;
+
+  }
+
+  /**
+   * Whether the given workflow module accepts writes to a workflow-aggregate store
+   * which VanillaBP's transaction demonstrably does not cover
+   * (<code>vanillabp.transactions.unguarded-aggregate-writes</code>, overridable as
+   * <code>vanillabp.workflow-modules.&lt;id&gt;.transactions.unguarded-aggregate-writes</code>).
+   * The module's setting wins where it is defined, the global one applies otherwise,
+   * and the default is to reject.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @return Whether unguarded aggregate writes are accepted for this module
+   */
+  public boolean acceptsUnguardedAggregateWrites(
+      final String workflowModuleId) {
+
+    final var module = workflowModules.get(workflowModuleId);
+    final var moduleSetting = (module != null) && (module.getTransactions() != null)
+        ? module
+            .getTransactions()
+            .getUnguardedAggregateWrites()
+        : null;
+    final var effective = moduleSetting != null
+        ? moduleSetting
+        : transactions != null
+            ? transactions.getUnguardedAggregateWrites()
+            : null;
+    return effective == TransactionsProperties.UnguardedAggregateWrites.ACCEPTED;
+
+  }
+
+  /**
+   * The property naming the decision of
+   * {@link #acceptsUnguardedAggregateWrites(String)}, for the guiding messages which
+   * have to tell how to accept what they refuse.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @return The property key of the module-scoped override
+   */
+  public static String unguardedAggregateWritesProperty(
+      final String workflowModuleId) {
+
+    return "%s.workflow-modules.%s.transactions.unguarded-aggregate-writes"
+        .formatted(PREFIX, workflowModuleId);
 
   }
 

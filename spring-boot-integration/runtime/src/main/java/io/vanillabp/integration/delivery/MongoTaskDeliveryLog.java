@@ -8,6 +8,8 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import io.vanillabp.integration.adapter.migration.delivery.TaskDeliveryRetentionCleanup;
 import io.vanillabp.integration.spi.TaskDelivery;
@@ -23,9 +25,11 @@ import lombok.extern.slf4j.Slf4j;
  * <strong>Note:</strong> MongoDB transactions require a replica set. Without one (no
  * <code>MongoTransactionManager</code> or a standalone server) the record is written
  * immediately, exactly like an outbox entry is (see
- * {@link io.vanillabp.integration.outbox.mongo.MongoPhaseTwoOutbox}): a crash between
- * writing the record and committing the aggregate would then skip a redelivery of work
- * which was rolled back.
+ * {@link io.vanillabp.integration.outbox.mongo.MongoPhaseTwoOutbox}). The record is then
+ * deleted again when its transaction does not commit (story 70, the same compensation the
+ * Quarkus MongoDB log has), so a redelivery of rolled-back work is not skipped - only a
+ * process dying between the two leaves a record behind, and its delivery is reported as
+ * done although nothing was persisted.
  */
 @Slf4j
 public class MongoTaskDeliveryLog implements TaskDeliveryLog {
@@ -113,12 +117,60 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
                   .workflowAggregateId(), delivery.taskDefinition(), delivery
                       .outcome(), delivery.bpmnErrorCode(), delivery.bpmnErrorName(), Instant.now()),
           collection);
+      compensateUnlessCommitted(delivery);
       return true;
     } catch (final DuplicateKeyException e) {
       // another node recorded the same delivery between the pre-check and the insert
       logRecordedAlready(delivery);
       return false;
     }
+
+  }
+
+  /**
+   * Removes the record again where the transaction it was written in did not commit
+   * (story 70). Without a MongoDB transaction covering it - no
+   * <code>MongoTransactionManager</code>, or a deployment which is no replica set - the
+   * document is written immediately, and a record for work which was rolled back is the
+   * worse of the two possible mistakes: the redelivery of that work would be skipped and
+   * the workflow would wait forever. Where a MongoDB transaction does cover the write,
+   * the rollback removes the document anyway and this deletion finds nothing.
+   * <p>
+   * Same behaviour as the Quarkus MongoDB delivery log, which compensates through a JTA
+   * synchronization.
+   */
+  private void compensateUnlessCommitted(
+      final TaskDelivery delivery) {
+
+    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+      return;
+    }
+    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+
+      @Override
+      public void afterCompletion(
+          final int status) {
+
+        if (status == TransactionSynchronization.STATUS_COMMITTED) {
+          return;
+        }
+        try {
+          mongoTemplate.remove(
+              Query.query(Criteria.where("_id").is(delivery.deliveryKey())),
+              TaskDeliveryDocument.class,
+              collection);
+        } catch (final RuntimeException e) {
+          log.error(
+              "The delivery record '{}' could not be removed after its transaction did not commit! "
+                  + "A repeated delivery of that task will be skipped although nothing was "
+                  + "persisted - remove the document from collection '{}' manually.",
+              delivery.deliveryKey(),
+              collection,
+              e);
+        }
+      }
+
+    });
 
   }
 

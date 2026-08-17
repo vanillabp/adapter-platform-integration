@@ -28,4 +28,11 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
   @Builder.Default
   private Map<String, WorkflowAdapterProperties> workflows = Map.of();
 
+  /**
+   * Overrides <code>vanillabp.transactions</code> for this workflow module. A setting
+   * left undefined here means the global one applies, so a single module can accept
+   * unguarded writes while every other one keeps failing the startup check.
+   */
+  private TransactionsProperties transactions;
+
 }

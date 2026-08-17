@@ -362,14 +362,52 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    */
   @Bean
   public WorkflowTaskRegistry vanillaBpWorkflowTaskRegistry(
-      final org.springframework.beans.factory.ObjectProvider<org.springframework.transaction.PlatformTransactionManager> transactionManager,
+      final SpringTransactionRunner platformTransactionRunner,
       final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync,
       @org.springframework.beans.factory.annotation.Qualifier(
         BEANNAME_MIGRATIONADAPERPROPERTIES) final MigrationAdapterProperties properties) {
 
     return new WorkflowTaskRegistry(
-        new SpringTransactionRunner(transactionManager), aggregateSync, io.vanillabp.integration.workflowtask.SpringTransactionAnnotations
+        platformTransactionRunner, aggregateSync, io.vanillabp.integration.workflowtask.SpringTransactionAnnotations
             .specs(), properties);
+
+  }
+
+  /**
+   * The platform's transaction runner, used for every workflow aggregate the application
+   * did not contribute a runner for (story 70). One instance for the whole application,
+   * because it also answers whether the transaction it is running was marked
+   * rollback-only and that answer belongs to the instance which opened it.
+   *
+   * @param transactionManager The application's transaction manager, resolved lazily - an
+   *          application without transactional persistence still boots, and the startup
+   *          check of the process services names every way to give it one
+   * @return The platform's runner
+   */
+  @Bean
+  public SpringTransactionRunner vanillaBpPlatformTransactionRunner(
+      final org.springframework.beans.factory.ObjectProvider<org.springframework.transaction.PlatformTransactionManager> transactionManager) {
+
+    return new SpringTransactionRunner(transactionManager);
+
+  }
+
+  /**
+   * Resolves the transaction runner per workflow aggregate (story 70) - injected into the
+   * process-service beans and invoked at startup by
+   * {@link #vanillaBpProcessServiceStartupValidation}.
+   *
+   * @param applicationContext Used to look up runner/aware beans and repositories
+   * @param platformTransactionRunner The platform's runner, the last of the four
+   *          resolution steps
+   * @return The resolver
+   */
+  @Bean
+  public SpringTransactionRunnerResolver vanillaBpTransactionRunnerResolver(
+      final org.springframework.context.ApplicationContext applicationContext,
+      final SpringTransactionRunner platformTransactionRunner) {
+
+    return new SpringTransactionRunnerResolver(applicationContext, platformTransactionRunner);
 
   }
 
@@ -431,6 +469,11 @@ public class SpringBootMigrationAdapterAutoConfiguration {
           processService
               .getMigrationProcessService()
               .validatePhaseTwoOutboxAtStartup();
+          // after the outbox: an application which configured a remote BPMS without a
+          // store hears about the store first, which is the more specific gap
+          processService
+              .getMigrationProcessService()
+              .validateTransactionRunnerAtStartup();
           processService
               .getMigrationProcessService()
               .validateTaskDeliveryLogAtStartup();

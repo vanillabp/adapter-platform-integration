@@ -103,6 +103,32 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
   TransactionSynchronizationRegistry txRegistry;
 
   /**
+   * Application-provided attributions of aggregates to transaction runners - the hook of
+   * story 70 for a storage the platform does not manage.
+   */
+  @Inject
+  @Any
+  Instance<io.vanillabp.integration.spi.TransactionRunnerAware<?>> transactionRunnerAwares;
+
+  /**
+   * A transaction runner of the application serving every aggregate no
+   * {@link io.vanillabp.integration.spi.TransactionRunnerAware} covers. VanillaBP's own
+   * runner is not a bean, so whatever is found here belongs to the application.
+   */
+  @Inject
+  @Any
+  Instance<io.vanillabp.integration.spi.TransactionRunner> applicationTransactionRunners;
+
+  /**
+   * The aggregate persistences of the application, used by the startup check to tell
+   * whether the transaction VanillaBP opens covers the store of an aggregate (a MongoDB
+   * Panache one takes part in it, a persistence of the application cannot be judged).
+   */
+  @Inject
+  @Any
+  Instance<AggregatePersistenceAware<?>> aggregatePersistences;
+
+  /**
    * The core-owned router dispatching committed phase-two outbox entries. This bean
    * registers itself (including the aggregate-ID converter) at bean creation.
    */
@@ -177,6 +203,9 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
             .enabled(), outboxProperties
                 .mongo()
                 .enabled());
+    final var transactionRunnerResolver = new QuarkusTransactionRunnerResolver(
+        transactionRunnerAwares, applicationTransactionRunners, aggregatePersistences, new io.vanillabp.integration.runtime.workflowtask.QuarkusTransactionRunner(
+            txRegistry));
     final var taskDeliveryLogResolver = new QuarkusTaskDeliveryLogResolver(
         taskDeliveryLogAwares, taskDeliveryLogs, outboxProperties
             .jdbc()
@@ -192,7 +221,7 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
                 ? workflowAdapterCacheStatistics.get()
                 : null);
     this.migrationProcessService = new MigrationProcessService<>(
-        getWorkflowModuleId(), getBpmnProcessId(), getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, phaseTwoOutboxResolver, electionCache, taskDeliveryLogResolver);
+        getWorkflowModuleId(), getBpmnProcessId(), getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, phaseTwoOutboxResolver, electionCache, taskDeliveryLogResolver, transactionRunnerResolver);
 
     // register as phase-two dispatch target: outbox entries for this workflow
     // module/BPMN process are routed here after the local transaction was committed
@@ -202,7 +231,8 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
           .register(migrationProcessService);
     }
 
-    registerWorkflowTaskHandlers(processServices, phaseTwoOutboxResolver, electionCache, taskDeliveryLogResolver);
+    registerWorkflowTaskHandlers(
+        processServices, phaseTwoOutboxResolver, electionCache, taskDeliveryLogResolver, transactionRunnerResolver);
 
   }
 
@@ -217,7 +247,8 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
       final List<io.vanillabp.integration.adapter.spi.MigratableProcessService<A>> processServices,
       final QuarkusPhaseTwoOutboxResolver phaseTwoOutboxResolver,
       final io.vanillabp.integration.spi.WorkflowAdapterCache electionCache,
-      final QuarkusTaskDeliveryLogResolver taskDeliveryLogResolver) {
+      final QuarkusTaskDeliveryLogResolver taskDeliveryLogResolver,
+      final QuarkusTransactionRunnerResolver transactionRunnerResolver) {
 
     if (!workflowTaskRegistry.isResolvable()) {
       return;
@@ -247,7 +278,7 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
           "%s|%s".formatted(moduleId, bpmnProcessId),
           key -> {
             final var secondaryProcessService = new MigrationProcessService<>(
-                moduleId, bpmnProcessId, getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, phaseTwoOutboxResolver, electionCache, taskDeliveryLogResolver);
+                moduleId, bpmnProcessId, getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, phaseTwoOutboxResolver, electionCache, taskDeliveryLogResolver, transactionRunnerResolver);
             if (phaseTwoRouter.isResolvable()) {
               phaseTwoRouter
                   .get()
@@ -291,6 +322,9 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
       @Observes final StartupEvent event) {
 
     migrationProcessService.validatePhaseTwoOutboxAtStartup();
+    // after the outbox: an application which configured a remote BPMS without a store
+    // hears about the store first, which is the more specific gap
+    migrationProcessService.validateTransactionRunnerAtStartup();
     migrationProcessService.validateTaskDeliveryLogAtStartup();
 
   }
@@ -510,9 +544,18 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
 
   }
 
+  /**
+   * Whether nothing is open the aggregate could be persisted in. The question goes to the
+   * runner serving this aggregate (story 70): an application storing its aggregates in a
+   * system JTA does not cover has its own unit of work, and the JTA answer would be wrong
+   * for it.
+   */
   public boolean noTransactionIsActive() {
 
-    return txRegistry.getTransactionKey() == null;
+    final var runner = migrationProcessService.getTransactionRunner(null);
+    return runner != null
+        ? !runner.isTransactionActive()
+        : txRegistry.getTransactionKey() == null;
 
   }
 

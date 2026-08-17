@@ -12,6 +12,22 @@ package io.vanillabp.integration.spi;
  * This is the single, platform-independent interface: business code implements it regardless
  * of whether the application runs on Spring Boot or Quarkus.
  * <p>
+ * <b>What VanillaBP guarantees around the calls.</b> Loading the aggregate, invoking the
+ * <code>&#64;WorkflowTask</code> method, saving the aggregate, remembering the delivery and
+ * scheduling a phase-two outbox entry happen inside ONE transaction, which VanillaBP opens
+ * on the threads it owns (an adapter thread delivering a task, the outbox dispatcher's
+ * thread) - so no implementation needs a transaction annotation for VanillaBP's sake.
+ * <p>
+ * Which transaction that is depends on the store: the platform's own where the platform
+ * manages the persistence (JPA/JDBC, and MongoDB Panache on Quarkus, which binds a MongoDB
+ * transaction to the JTA one), and the application's own where it does not. An
+ * implementation writing into a system the platform does not manage - an event store, a
+ * ledger, a message producer, a service behind an API - therefore comes with a
+ * {@link TransactionRunner}, contributed as a bean or attributed per aggregate through
+ * {@link TransactionRunnerAware}. Without one, VanillaBP cannot bracket the three calls it
+ * makes, and it says so at startup where it can tell (see the wiki page "Workflow
+ * aggregates" for what the guarantees shrink to).
+ * <p>
  * All methods are <code>default</code> methods throwing an
  * {@link UnsupportedOperationException} with a guiding message: this keeps
  * hand-written implementations source-compatible when methods are added to this

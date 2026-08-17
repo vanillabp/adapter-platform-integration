@@ -14,6 +14,7 @@ import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.config.TaskAdapterProperties;
+import io.vanillabp.integration.adapter.migration.config.TransactionsProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowAdapterCacheProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
@@ -66,6 +67,10 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
   WorkflowAdapterCacheProperties toCore(
       QuarkusMigrationAdapterProperties.WorkflowAdapterCacheProperties workflowAdapterCacheProperties);
 
+  @Mapping(target = "unguardedAggregateWrites", qualifiedByName = "unwrapUnguardedAggregateWrites")
+  TransactionsProperties toCore(
+      QuarkusMigrationAdapterProperties.TransactionsProperties transactionsProperties);
+
   @Mapping(target = "outfadedVersions", qualifiedByName = "unwrapOutfadedVersions")
   AdapterConfigProperties toCore(
       QuarkusMigrationAdapterProperties.AdapterConfiguration adapterConfiguration);
@@ -117,6 +122,22 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
    * @param value The optional string
    * @return The unwrapped string or {@code null}
    */
+  /**
+   * Unwraps the setting whether unguarded aggregate writes are accepted
+   * ({@code Optional.empty()} becomes {@code null}: a workflow module which says nothing
+   * inherits what the application configured globally).
+   *
+   * @param value The optional setting
+   * @return The setting or {@code null}
+   */
+  @Named("unwrapUnguardedAggregateWrites")
+  default TransactionsProperties.UnguardedAggregateWrites unwrapUnguardedAggregateWrites(
+      final Optional<TransactionsProperties.UnguardedAggregateWrites> value) {
+
+    return value.orElse(null);
+
+  }
+
   @Named("unwrapString")
   default String unwrapString(
       final Optional<String> value) {

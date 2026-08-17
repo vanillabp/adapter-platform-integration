@@ -26,11 +26,11 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.transaction.AggregateWrite;
 import io.vanillabp.integration.adapter.migration.transaction.ConcurrentTokenCheck;
-import io.vanillabp.integration.adapter.migration.transaction.TransactionRunner;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.service.WorkflowTask;
 
