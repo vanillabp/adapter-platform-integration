@@ -109,47 +109,114 @@ public interface WorkflowTaskInvoker {
       TaskInvocationContext context);
 
   /**
-   * Reads an attribute of the workflow aggregate identified by the given
-   * serialized ID - used by embedded BPMS evaluating BPMN expressions against the
-   * workflow aggregate (e.g. a Camunda 7 gateway condition
-   * <code>${riskAcceptable}</code>): the attribute is resolved via getter
-   * (<code>getX()</code>), boolean getter (<code>isX()</code>) or field access, in
-   * this order. The aggregate is loaded within the CALLER's transaction (embedded
-   * BPMS evaluate expressions inside an engine transaction) - callers without an
-   * active transaction get whatever the persistence layer does outside
-   * transactions.
+   * The values shared with the BPMS, read within the transaction of the CALLER
+   * instead of a new one - what an EMBEDDED engine needs (story 66).
+   * <p>
+   * An embedded engine invokes a <code>&#64;WorkflowTask</code> handler inside its own
+   * transaction and completes the task in the same one, so the values have to be read
+   * from the aggregate as it is NOW: reading in a new transaction would either see the
+   * state before the handler ran or deadlock on the row the caller holds. A remote BPMS
+   * is the opposite case and uses
+   * {@link #syncedWorkflowAggregateValues(String, String, String, io.vanillabp.integration.adapter.spi.AggregateSyncMode)},
+   * which reads after the commit.
+   * <p>
+   * Like its sibling this never throws: a failure to read yields an empty map, because
+   * a task must be completable even when the values an operator would see cannot be
+   * determined.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
    * @param workflowAggregateId The workflow aggregate's ID in serialized form
-   * @param propertyName The attribute's name
-   * @return The attribute's value or <code>null</code> if the BPMN process is
-   *         unknown, the aggregate does not exist or it has no such attribute
+   * @param adapterDefault What this adapter shares unless the application says
+   *          otherwise
+   * @return The values shared with the BPMS, empty if they cannot be determined
    */
+  default java.util.Map<String, Object> syncedWorkflowAggregateValuesInCurrentTransaction(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final io.vanillabp.integration.adapter.spi.AggregateSyncMode adapterDefault) {
+
+    // the default reads like a remote BPMS would - the core overrides it and runs the read
+    // in the caller's transaction. A test double of this SPI needs no answer of its own.
+    return syncedWorkflowAggregateValues(
+        workflowModuleId,
+        bpmnProcessId,
+        workflowAggregateId,
+        adapterDefault);
+
+  }
+
   /**
-   * Whether the workflow aggregate of the given BPMN process HAS such an attribute
-   * - answered from the aggregate's class, so no aggregate is loaded. Embedded BPMS
-   * use it while resolving a BPMN expression: a name may mean an attribute of the
-   * workflow aggregate or something of the adapter's own (Camunda 7 resolves the
-   * delegate expression of a task through the same resolver), and only the aggregate
-   * class can tell which name is whose.
+   * Whether the workflow aggregate of the given BPMN process HAS such an attribute -
+   * answered from the aggregate's class, so no aggregate is loaded.
    *
+   * @deprecated Story 66 pushes the shared values as process variables, so an embedded
+   *             engine resolves expressions against them like every other BPMS. This
+   *             method serves the MIGRATION fallback of the Camunda 7 adapter only (an
+   *             application upgrading from version 1 has no variables in its running
+   *             workflows yet, and version 1 also resolved attributes without a getter),
+   *             and it is removed in 2.1 together with that fallback.
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
    * @param propertyName The attribute's name
-   * @return Whether the aggregate class declares that attribute (getter, boolean
-   *         getter or field); <code>false</code> if the BPMN process is unknown
+   * @return Whether the aggregate class declares that attribute (getter, boolean getter
+   *         or field); <code>false</code> if the BPMN process is unknown
    */
+  @Deprecated(forRemoval = true)
   boolean workflowAggregateHasProperty(
       String workflowModuleId,
       String bpmnProcessId,
       String propertyName);
 
+  /**
+   * Reads an attribute of the workflow aggregate identified by the given serialized ID,
+   * within the CALLER's transaction - getter, boolean getter or field, in this order.
+   *
+   * @deprecated The migration fallback of story 66, removed in 2.1 - see
+   *             {@link #workflowAggregateHasProperty(String, String, String)}.
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param workflowAggregateId The workflow aggregate's ID in serialized form
+   * @param propertyName The attribute's name
+   * @return The attribute's value or <code>null</code> if the BPMN process is unknown,
+   *         the aggregate does not exist or it has no such attribute
+   */
+  @Deprecated(forRemoval = true)
   Object resolveWorkflowAggregateProperty(
       String workflowModuleId,
       String bpmnProcessId,
       String workflowAggregateId,
       String propertyName);
+
+  /**
+   * Which of the given names are attributes of the workflow aggregate that are NOT
+   * shared with the BPMS - the question behind the startup check of story 66.
+   * <p>
+   * An embedded engine can read the BPMN model, and only the core knows what an
+   * aggregate shares. So the adapter collects the identifiers its models read (a
+   * condition, a timer, a multi-instance collection) and asks here which of them would
+   * always be <code>null</code> in the engine although the application clearly meant an
+   * attribute of its aggregate. A name which is no attribute at all is none of this
+   * check's business: it may well be a variable the model itself provides.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param names The identifiers read by the model
+   * @param adapterDefault What this adapter shares unless the application says
+   *          otherwise
+   * @return The names which are attributes of the aggregate but not shared, in the
+   *         order given; empty if the BPMN process is unknown
+   */
+  default java.util.Collection<String> unsharedWorkflowAggregateProperties(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final java.util.Collection<String> names,
+      final io.vanillabp.integration.adapter.spi.AggregateSyncMode adapterDefault) {
+
+    return java.util.List.of();
+
+  }
 
   /**
    * Whether a <code>&#64;WorkflowTask</code> method is registered for the given

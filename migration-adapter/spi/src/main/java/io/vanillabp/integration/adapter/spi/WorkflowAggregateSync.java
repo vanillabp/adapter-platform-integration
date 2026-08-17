@@ -55,4 +55,42 @@ public interface WorkflowAggregateSync {
   void validateSyncModel(
       Class<?> workflowAggregateClass);
 
+  /**
+   * Whether the given name is a readable attribute of the workflow-aggregate class -
+   * asked about a name a BPMN model reads, so an adapter can tell "the application
+   * clearly meant its aggregate" from "this is a variable of the model" (story 66).
+   *
+   * @param workflowAggregateClass The workflow-aggregate class (may be
+   *          <code>null</code>)
+   * @param propertyName The name read by the model
+   * @return Whether the class has such a readable attribute
+   */
+  default boolean isAggregateProperty(
+      final Class<?> workflowAggregateClass,
+      final String propertyName) {
+
+    return false;
+
+  }
+
+  /**
+   * Whether that attribute is SHARED with the BPMS, which is what decides whether an
+   * expression reading it finds a value or always <code>null</code> (story 66).
+   *
+   * @param workflowAggregateClass The workflow-aggregate class (may be
+   *          <code>null</code>)
+   * @param propertyName The attribute's name
+   * @param adapterDefault The adapter's default for aggregates carrying no annotation
+   *          of their own
+   * @return Whether the attribute is shared
+   */
+  default boolean isSharedWithBpms(
+      final Class<?> workflowAggregateClass,
+      final String propertyName,
+      final AggregateSyncMode adapterDefault) {
+
+    return true;
+
+  }
+
 }

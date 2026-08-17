@@ -1136,80 +1136,70 @@ public class WorkflowTaskRegistryTest {
 
   }
 
-  @Test
-  @DisplayName("An attribute is reported from the CLASS, without loading an aggregate")
-  public void aggregatePropertyExistence() {
-
-    // what an embedded BPMS asks while resolving an expression: is this name an
-    // attribute of the workflow aggregate, or does it mean something else entirely?
-    assertTrue(registry.workflowAggregateHasProperty(MODULE, PROCESS, "processedBy"));
-    assertTrue(registry.workflowAggregateHasProperty(MODULE, PROCESS, "index"));
-
-    assertFalse(registry.workflowAggregateHasProperty(MODULE, PROCESS, "noSuchProperty"));
-    assertFalse(registry.workflowAggregateHasProperty(MODULE, "NoSuchProcess", "processedBy"));
-
-    // no aggregate has to exist for the answer - the ID never enters the question
-    assertTrue(persistence.aggregates.containsKey("4711"));
-
-  }
-
-  @Test
-  @DisplayName("Aggregate attributes resolve via field access - null for unknowns")
-  public void aggregatePropertyResolution() {
-
-    persistence.aggregates.get("4711").processedBy = "the-status";
-    persistence.aggregates.get("4711").index = 7;
-
-    // field access (package-private fields, no getters on the test aggregate)
-    assertEquals(
-        "the-status",
-        registry.resolveWorkflowAggregateProperty(MODULE, PROCESS, "4711", "processedBy"));
-    assertEquals(
-        7,
-        registry.resolveWorkflowAggregateProperty(MODULE, PROCESS, "4711", "index"));
-
-    // unknown attribute, unknown aggregate, unknown process: null - the engine's
-    // other EL resolvers get their chance
-    assertNull(registry.resolveWorkflowAggregateProperty(MODULE, PROCESS, "4711", "noSuchProperty"));
-    assertNull(registry.resolveWorkflowAggregateProperty(MODULE, PROCESS, "no-such-id", "processedBy"));
-    assertNull(registry.resolveWorkflowAggregateProperty(MODULE, "NoSuchProcess", "4711", "processedBy"));
-
-  }
-
+  /**
+   * A second aggregate class - used where a test needs a process working on an aggregate
+   * of its own (story 61).
+   */
   public static class GetterAggregate {
 
     private String id;
 
-    public boolean isFine() {
+  }
+
+  /**
+   * An aggregate whose getters carry the sync model of story 66's check: what a BPMN
+   * expression may read is what the aggregate shares.
+   */
+  @io.vanillabp.spi.service.SyncWithBPMS
+  public static class SharingAggregate {
+
+    private String id;
+
+    /**
+     * A field without a getter: VanillaBP 1 resolved it in expressions, the sync model
+     * does not - which the check has to say (story 66, migration).
+     */
+    private String riskClass;
+
+    public boolean isApprovable() {
       return true;
     }
 
-    public String getName() {
-      return "from-getter";
+    /**
+     * An isX() method returning something other than boolean: version 1 read it, the
+     * JavaBean rule does not (story 66, migration).
+     */
+    public String isRiskLevel() {
+      return "high";
+    }
+
+    @io.vanillabp.spi.service.NoSyncWithBPMS
+    public String getInternalNote() {
+      return "not for the engine";
     }
 
   }
 
   @Test
-  @DisplayName("Getters and boolean getters win when resolving aggregate attributes")
-  public void aggregatePropertyGetterPrecedence() {
+  @DisplayName("Story 66: an expression reading an unshared attribute is reported, an unknown name is not")
+  public void unsharedAggregateProperties() {
 
-    final var getterPersistence = new AggregatePersistenceAware<GetterAggregate>() {
+    final var sharingPersistence = new AggregatePersistenceAware<SharingAggregate>() {
 
       @Override
-      public Class<GetterAggregate> getAggregateClass() {
-        return GetterAggregate.class;
+      public Class<SharingAggregate> getAggregateClass() {
+        return SharingAggregate.class;
       }
 
       @Override
-      public GetterAggregate save(
-          final GetterAggregate aggregate) {
+      public SharingAggregate save(
+          final SharingAggregate aggregate) {
         return aggregate;
       }
 
       @Override
       public Object getAggregateId(
-          final GetterAggregate aggregate) {
+          final SharingAggregate aggregate) {
         return aggregate.id;
       }
 
@@ -1219,9 +1209,9 @@ public class WorkflowTaskRegistryTest {
       }
 
       @Override
-      public GetterAggregate loadById(
+      public SharingAggregate loadById(
           final Object aggregateId) {
-        return new GetterAggregate();
+        return new SharingAggregate();
       }
 
     };
@@ -1231,22 +1221,57 @@ public class WorkflowTaskRegistryTest {
         .prioritizedAdapters(List.of("test-adapter"))
         .build();
     properties.validateAndLink();
-    registry.registerWorkflowService(
+    final var registryWithSync = new WorkflowTaskRegistry(
+        transactionRunner, new io.vanillabp.integration.adapter.migration.sync.AggregateSyncSupport());
+    registryWithSync.registerWorkflowService(
         MODULE,
-        "GetterProcess",
-        GetterAggregate.class, // no @WorkflowTask methods - registration is fine
-        GetterAggregate::new,
+        "SharingProcess",
+        SharingAggregate.class,
+        SharingAggregate::new,
         beans::get,
         new MigrationProcessService<>(
-            MODULE, "GetterProcess", GetterAggregate.class, properties, getterPersistence, List.of(
-                new NoOpProcessService<GetterAggregate>()), null));
+            MODULE, "SharingProcess", SharingAggregate.class, properties, sharingPersistence, List.of(
+                new NoOpProcessService<SharingAggregate>()), null));
 
+    // the attribute the application excluded is reported, the shared one is not, and a
+    // name which is no attribute at all is none of this check's business (the model may
+    // well provide that variable itself)
     assertEquals(
-        "from-getter",
-        registry.resolveWorkflowAggregateProperty(MODULE, "GetterProcess", "x", "name"));
+        List.of("internalNote"),
+        registryWithSync.unsharedWorkflowAggregateProperties(
+            MODULE,
+            "SharingProcess",
+            List.of("approvable", "internalNote", "somethingTheModelProvides"),
+            io.vanillabp.integration.adapter.spi.AggregateSyncMode.FULL));
+
+    // migration (story 66): what VanillaBP 1 resolved and the sync model cannot share is
+    // reported as well - a field without a getter, and an isX() returning non-boolean
     assertEquals(
-        true,
-        registry.resolveWorkflowAggregateProperty(MODULE, "GetterProcess", "x", "fine"));
+        List.of("riskClass", "riskLevel"),
+        registryWithSync.unsharedWorkflowAggregateProperties(
+            MODULE,
+            "SharingProcess",
+            List.of("riskClass", "riskLevel", "approvable"),
+            io.vanillabp.integration.adapter.spi.AggregateSyncMode.FULL));
+
+    // the class states its own mode, so the adapter's default changes nothing here -
+    // what the application said wins either way
+    assertEquals(
+        List.of("internalNote"),
+        registryWithSync.unsharedWorkflowAggregateProperties(
+            MODULE,
+            "SharingProcess",
+            List.of("approvable", "internalNote"),
+            io.vanillabp.integration.adapter.spi.AggregateSyncMode.NONE));
+
+    // an unknown process yields nothing rather than a guess
+    assertEquals(
+        List.of(),
+        registryWithSync.unsharedWorkflowAggregateProperties(
+            MODULE,
+            "NoSuchProcess",
+            List.of("internalNote"),
+            io.vanillabp.integration.adapter.spi.AggregateSyncMode.FULL));
 
   }
 
@@ -1587,6 +1612,27 @@ public class WorkflowTaskRegistryTest {
           beans::get,
           createProcessService());
       return withSync;
+
+    }
+
+    @Test
+    @DisplayName("Story 66: an embedded engine reads the shared values in the CALLER's transaction")
+    public void sharedValuesForAnEmbeddedEngineAreReadInTheCurrentTransaction() {
+
+      transactionRunner.requireNewUsed = false;
+      transactionRunner.inCurrentUsed = false;
+
+      final var values = registryWithSync().syncedWorkflowAggregateValuesInCurrentTransaction(
+          MODULE,
+          PROCESS,
+          "4711",
+          io.vanillabp.integration.adapter.spi.AggregateSyncMode.FULL);
+
+      // the engine completes the task in the transaction the handler ran in, so a new
+      // one would read the state before the handler - or wait for its row
+      assertTrue(transactionRunner.inCurrentUsed, "the values were not read in the caller's transaction");
+      assertFalse(transactionRunner.requireNewUsed, "a new transaction was opened although one is running");
+      assertEquals("4711", values.get("id"));
 
     }
 
