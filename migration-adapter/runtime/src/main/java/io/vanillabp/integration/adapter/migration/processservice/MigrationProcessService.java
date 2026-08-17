@@ -6,7 +6,6 @@ import java.util.function.Supplier;
 
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
-import io.vanillabp.integration.adapter.migration.transaction.TransactionRunner;
 import io.vanillabp.integration.adapter.migration.workflowtask.TaskDeliveryKey;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskHandler;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
@@ -17,6 +16,7 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.spi.TaskDeliveryLog;
+import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.spi.WorkflowAdapterCache;
 import io.vanillabp.spi.service.TaskException;
 import lombok.Getter;
@@ -118,6 +118,21 @@ public class MigrationProcessService<A> {
   private final java.util.concurrent.atomic.AtomicBoolean missingDeliveryLogReported = new java.util.concurrent.atomic.AtomicBoolean();
 
   /**
+   * Resolves the transaction VanillaBP runs the work on this aggregate in (story 70).
+   * Provided by the platform integration; may be <code>null</code> in tests and for
+   * adapters handing their runner in directly - the runner passed by the caller is
+   * used then.
+   */
+  private final TransactionRunnerResolver transactionRunnerResolver;
+
+  /**
+   * The runner resolved for this process service's aggregate, <code>null</code> until
+   * resolved (at startup via {@link #validateTransactionRunnerAtStartup()} or lazily
+   * as backstop).
+   */
+  private volatile TransactionRunner transactionRunner;
+
+  /**
    * Creates a process service without an adapter cache (elections probe every
    * time) - kept for tests; the platform integrations always pass the cache.
    */
@@ -154,6 +169,11 @@ public class MigrationProcessService<A> {
 
   }
 
+  /**
+   * Creates a process service without a transaction-runner resolver - kept for tests
+   * and for callers handing the runner in directly; the platform integrations always
+   * pass one (story 70).
+   */
   public MigrationProcessService(
       final String workflowModuleId,
       final String bpmnProcessId,
@@ -165,6 +185,24 @@ public class MigrationProcessService<A> {
       final WorkflowAdapterCache workflowAdapterCache,
       final TaskDeliveryLogResolver taskDeliveryLogResolver) {
 
+    this(
+        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, aggregatePersistenceSupport, processServices, phaseTwoOutboxResolver, workflowAdapterCache, taskDeliveryLogResolver, null);
+
+  }
+
+  public MigrationProcessService(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Class<A> workflowAggregateClass,
+      final MigrationAdapterProperties properties,
+      final AggregatePersistenceAware<A> aggregatePersistenceSupport,
+      final List<MigratableProcessService<A>> processServices,
+      final PhaseTwoOutboxResolver phaseTwoOutboxResolver,
+      final WorkflowAdapterCache workflowAdapterCache,
+      final TaskDeliveryLogResolver taskDeliveryLogResolver,
+      final TransactionRunnerResolver transactionRunnerResolver) {
+
+    this.transactionRunnerResolver = transactionRunnerResolver;
     this.properties = properties;
     this.taskDeliveryLogResolver = taskDeliveryLogResolver;
     this.workflowModuleId = workflowModuleId;
@@ -253,6 +291,132 @@ public class MigrationProcessService<A> {
                   .getFirst()
                   .getAdapterId()));
     }
+
+  }
+
+  /**
+   * The transaction runner serving this process service's aggregate: the most specific
+   * {@link io.vanillabp.integration.spi.TransactionRunnerAware} bean, a
+   * {@link TransactionRunner} bean of the application, or the platform's own runner
+   * (story 70). Resolved once and cached - a resolution per delivery would ask the
+   * bean container on every task.
+   *
+   * @param fallback The runner the caller would use, taken where no resolver was
+   *          provided or the resolver knows nothing better (adapters and tests handing
+   *          their runner in directly)
+   * @return The runner to run work on this aggregate in
+   */
+  public TransactionRunner getTransactionRunner(
+      final TransactionRunner fallback) {
+
+    if (transactionRunnerResolver == null) {
+      return fallback;
+    }
+    if (transactionRunner == null) {
+      transactionRunner = transactionRunnerResolver.resolveFor(workflowAggregateClass);
+    }
+    return transactionRunner != null
+        ? transactionRunner
+        : fallback;
+
+  }
+
+  /**
+   * Validates AT STARTUP that the work VanillaBP does on this aggregate has a
+   * transaction to run in, and reports what that transaction covers (story 70).
+   * <p>
+   * Three outcomes. No runner at all ends the boot where the first-priority adapter needs
+   * a two-phase commit: such an application cannot start a single workflow (the aggregate
+   * and the outbox entry have to be written in one transaction), so booting green would
+   * only move the failure to the first workflow. Where every prioritized adapter is
+   * embedded, the engine owns the transaction and VanillaBP joins it, so nothing is
+   * demanded here - the same line the outbox validation draws. A store the platform can
+   * tell is not covered gets a WARN naming what is given up. A combination the platform
+   * can name a fix for ends the boot as well, unless the application accepts unguarded
+   * writes (<code>vanillabp.transactions.unguarded-aggregate-writes</code>) - the message
+   * is then logged as a WARN, because a decision like this has to stay visible.
+   *
+   * @throws IllegalStateException If no runner is available for an aggregate whose adapter
+   *           needs a two-phase commit, or the coverage cannot work and unguarded writes
+   *           are not accepted
+   */
+  public void validateTransactionRunnerAtStartup() {
+
+    if (transactionRunnerResolver == null) {
+      return;
+    }
+    final var runner = getTransactionRunner(null);
+    if (runner == null) {
+      if (needsTwoPhaseCommitForStartingWorkflows()) {
+        throw new IllegalStateException(buildNoTransactionRunnerMessage());
+      }
+      log.debug(
+          "No transaction runner is available for workflow aggregate '{}' - the prioritized adapter "
+              + "of BPMN process '{}' of workflow module '{}' is embedded, so the engine's "
+              + "transaction is the one used",
+          workflowAggregateClass.getName(),
+          bpmnProcessId,
+          workflowModuleId);
+      return;
+    }
+    log.info(
+        "Workflow aggregate '{}' (BPMN process '{}' of workflow module '{}') is processed in the "
+            + "transaction of: {}",
+        workflowAggregateClass.getName(),
+        bpmnProcessId,
+        workflowModuleId,
+        transactionRunnerResolver.describeResolutionFor(workflowAggregateClass));
+
+    final var coverage = transactionRunnerResolver.coverageOf(workflowAggregateClass);
+    switch (coverage.verdict()) {
+      case COVERED, UNKNOWN -> {
+      }
+      case UNGUARDED -> log.warn("{}", coverage.message());
+      case UNCOVERABLE -> {
+        if (properties.acceptsUnguardedAggregateWrites(workflowModuleId)) {
+          log.warn(
+              "{} This was accepted by setting '{}' - VanillaBP does not stop the application, and "
+                  + "the guarantees named above are the ones you have.",
+              coverage.message(),
+              MigrationAdapterProperties.unguardedAggregateWritesProperty(workflowModuleId));
+        } else {
+          throw new IllegalStateException(
+              """
+                  %s
+                  If this is what you want, state it by setting '%s' to 'accepted' (or \
+                  '%s.transactions.unguarded-aggregate-writes' for the whole application) - the \
+                  message stays as a warning then."""
+                  .formatted(
+                      coverage.message(),
+                      MigrationAdapterProperties.unguardedAggregateWritesProperty(workflowModuleId),
+                      MigrationAdapterProperties.PREFIX));
+        }
+      }
+    }
+
+  }
+
+  /**
+   * The guiding message of a workflow aggregate nothing can open a transaction for.
+   */
+  private String buildNoTransactionRunnerMessage() {
+
+    return """
+        No transaction is available to process workflows of BPMN process '%s' (workflow module \
+        '%s', workflow aggregate '%s')! VanillaBP loads the workflow aggregate, invokes the \
+        @WorkflowTask method and saves the aggregate within ONE transaction, and nothing provides \
+        one. To solve this either
+        %s
+        - define a bean implementing io.vanillabp.integration.spi.TransactionRunner, which serves \
+        every workflow aggregate of this application, or
+        - define a bean implementing io.vanillabp.integration.spi.TransactionRunnerAware to \
+        provide a runner for this aggregate (or for an interface all your aggregates \
+        implement)."""
+        .formatted(
+            bpmnProcessId,
+            workflowModuleId,
+            workflowAggregateClass.getName(),
+            transactionRunnerResolver.remediesDescription());
 
   }
 
@@ -374,7 +538,8 @@ public class MigrationProcessService<A> {
    * @param handler The handler resolved by the
    *          {@link io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry}
    * @param context The invocation context supplied by the adapter
-   * @param transactionRunner The platform's transaction runner
+   * @param platformTransactionRunner The platform's transaction runner, used unless the
+   *          application contributed one for this aggregate (story 70)
    * @param rollbackRuleRemedies How a rollback rule excluding a {@link TaskException} is
    *          written on this platform, named by the failure of the rollback-only check
    * @return The outcome the adapter maps to the BPMS
@@ -382,8 +547,12 @@ public class MigrationProcessService<A> {
   public WorkflowTaskOutcome executeWorkflowTask(
       final WorkflowTaskHandler handler,
       final TaskInvocationContext context,
-      final TransactionRunner transactionRunner,
+      final TransactionRunner platformTransactionRunner,
       final List<String> rollbackRuleRemedies) {
+
+    // the runner of the application where it contributed one for this aggregate, the
+    // platform's otherwise (story 70) - resolved once and cached by the process service
+    final var runner = getTransactionRunner(platformTransactionRunner);
 
     // a delivery proves which BPMS holds this workflow - recorded before anything
     // else, so it also holds for a delivery the handler does not subscribe to
@@ -455,7 +624,7 @@ public class MigrationProcessService<A> {
             ? WorkflowTaskOutcome.completionPending()
             : WorkflowTaskOutcome.completed();
         recordDelivery(deliveryLog, deliveryKey, context, outcome);
-        failIfRollbackOnly(handler, context, transactionRunner, rollbackRuleRemedies);
+        failIfRollbackOnly(handler, context, runner, rollbackRuleRemedies);
         return outcome;
       } catch (final TaskException taskException) {
         // the restored V1 contract: a TaskException is a BPMN error, not a
@@ -466,14 +635,14 @@ public class MigrationProcessService<A> {
         final var outcome = WorkflowTaskOutcome
             .bpmnError(taskException.getErrorCode(), taskException.getErrorName());
         recordDelivery(deliveryLog, deliveryKey, context, outcome);
-        failIfRollbackOnly(handler, context, transactionRunner, rollbackRuleRemedies);
+        failIfRollbackOnly(handler, context, runner, rollbackRuleRemedies);
         return outcome;
       }
     };
 
     return io.vanillabp.integration.adapter.migration.transaction.AggregateWrite
         .inTransaction(
-            transactionRunner,
+            runner,
             context.runInCurrentTransaction(),
             workflowModuleId,
             bpmnProcessId,

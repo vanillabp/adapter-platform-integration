@@ -8,9 +8,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
-import io.vanillabp.integration.adapter.migration.transaction.TransactionRunner;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartContext;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartResult;
+import io.vanillabp.integration.spi.TransactionRunner;
 
 /**
  * Builds the workflow aggregate of a workflow the BPMS started on its own, in one

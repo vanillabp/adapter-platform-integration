@@ -13,7 +13,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
-import io.vanillabp.integration.adapter.migration.transaction.TransactionRunner;
 import io.vanillabp.integration.adapter.migration.workflowend.WorkflowEndedHandlers;
 import io.vanillabp.integration.adapter.migration.workflowstart.BpmsInitiatedStarts;
 import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedContext;
@@ -26,6 +25,7 @@ import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
+import io.vanillabp.integration.spi.TransactionRunner;
 
 /**
  * The core-owned registry of the annotated handler methods of the application per
@@ -691,7 +691,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
                       .collect(Collectors.joining(", "))));
     }
 
-    final var result = bpmsInitiatedStarts.start(entry.processService, context, transactionRunner);
+    final var result = bpmsInitiatedStarts
+        .start(entry.processService, context, entry.processService.getTransactionRunner(transactionRunner));
     if ((aggregateSync == null) || (context
         .getAggregateSyncMode() == io.vanillabp.integration.adapter.spi.AggregateSyncMode.NONE)) {
       return result;
@@ -746,7 +747,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
                       .collect(Collectors.joining(", "))));
     }
 
-    workflowEndedHandlers.workflowEnded(entry.processService, context, transactionRunner);
+    workflowEndedHandlers
+        .workflowEnded(entry.processService, context, entry.processService.getTransactionRunner(transactionRunner));
 
   }
 
@@ -961,7 +963,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
     // this point - the aggregate is loaded in a new one. A failure must never
     // prevent the task from being completed: the BPMS would redeliver it forever.
     try {
-      return transactionRunner.requireNew(() -> {
+      return entry.processService.getTransactionRunner(transactionRunner).requireNew(() -> {
         final var workflowAggregate = entry.processService.loadWorkflowAggregate(workflowAggregateId);
         if (workflowAggregate == null) {
           log.warn(

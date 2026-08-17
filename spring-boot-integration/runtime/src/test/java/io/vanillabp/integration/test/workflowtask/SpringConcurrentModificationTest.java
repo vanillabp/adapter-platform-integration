@@ -20,7 +20,8 @@ import io.vanillabp.integration.workflowtask.SpringTransactionRunner;
 @ExtendWith(SuppressOutputExtension.class)
 public class SpringConcurrentModificationTest {
 
-  private final SpringTransactionRunner runner = new SpringTransactionRunner(null);
+  private final SpringTransactionRunner runner = new SpringTransactionRunner(
+      (org.springframework.beans.factory.ObjectProvider<org.springframework.transaction.PlatformTransactionManager>) null);
 
   @Test
   @DisplayName("Spring's own translation is recognized, wrapped as well as bare")

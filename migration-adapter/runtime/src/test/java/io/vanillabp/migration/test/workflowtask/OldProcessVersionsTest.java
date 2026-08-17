@@ -18,7 +18,6 @@ import ch.qos.logback.classic.Level;
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.OutfadedVersionsInUsePolicy;
-import io.vanillabp.integration.adapter.migration.transaction.TransactionRunner;
 import io.vanillabp.integration.adapter.migration.workflowtask.DeployedProcessVersionsCheck;
 import io.vanillabp.integration.adapter.migration.workflowtask.OutfadedProcessVersions;
 import io.vanillabp.integration.adapter.migration.workflowtask.ProcessVersions;
@@ -26,6 +25,7 @@ import io.vanillabp.integration.adapter.migration.workflowtask.VersionRange;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
 import io.vanillabp.integration.adapter.spi.version.DeployedProcessVersion;
 import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
+import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.service.WorkflowTask;
 

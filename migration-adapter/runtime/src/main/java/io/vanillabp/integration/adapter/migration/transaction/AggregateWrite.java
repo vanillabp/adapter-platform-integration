@@ -5,6 +5,8 @@ import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.vanillabp.integration.spi.TransactionRunner;
+
 /**
  * Runs work the core wraps in a transaction of its OWN (processing a task, building
  * the aggregate of a workflow the BPMS started, reporting the end of a workflow) and

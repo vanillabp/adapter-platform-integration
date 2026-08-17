@@ -4,11 +4,11 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 
-import io.vanillabp.integration.adapter.migration.transaction.TransactionRunner;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOperation;
 import io.vanillabp.integration.spi.PhaseTwoOperationRegistry;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.TransactionRunner;
 
 /**
  * Core-owned router dispatching {@link PhaseTwoCall}s scheduled via
@@ -182,15 +182,42 @@ public final class PhaseTwoRouter {
     // application (the aggregate has to be loaded to build what the BPMS is told).
     // Whatever that needs - a transaction, an active CDI request context - is
     // VanillaBP's to provide here, once for every outbox implementation, instead of
-    // in each of them.
-    if (transactionRunner == null) {
+    // in each of them. Which transaction it is, belongs to the aggregate of the entry
+    // (story 70): an application storing this aggregate in a system of its own gets
+    // its own runner here as well, and an entry of an extension - which routes to no
+    // process service - gets the platform's.
+    final var runner = runnerFor(call);
+    if (runner == null) {
       dispatch.dispatch(call, previouslyAttempted);
       return;
     }
-    transactionRunner.requireTransaction(() -> {
+    runner.requireTransaction(() -> {
       dispatch.dispatch(call, previouslyAttempted);
       return null;
     });
+
+  }
+
+  /**
+   * The runner providing the transaction of a dispatch: the one serving the aggregate
+   * of the call where a process service is registered for it, the platform's otherwise.
+   *
+   * @param call The call about to be dispatched
+   * @return The runner or <code>null</code> if none is available at all (an outbox
+   *         dispatching inside a transaction of its own, e.g. gruelbox on Spring Boot)
+   */
+  private TransactionRunner runnerFor(
+      final PhaseTwoCall call) {
+
+    final var processService = registrations
+        .get(new RegistrationKey(call.workflowModuleId(), call.bpmnProcessId()));
+    if (processService == null) {
+      return transactionRunner;
+    }
+    final var resolved = processService.getTransactionRunner(transactionRunner);
+    return resolved != null
+        ? resolved
+        : transactionRunner;
 
   }
 

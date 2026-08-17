@@ -4,7 +4,7 @@ import java.util.function.Supplier;
 
 import io.quarkus.arc.Arc;
 import io.quarkus.narayana.jta.QuarkusTransaction;
-import io.vanillabp.integration.adapter.migration.transaction.TransactionRunner;
+import io.vanillabp.integration.spi.TransactionRunner;
 import jakarta.transaction.Status;
 import jakarta.transaction.TransactionSynchronizationRegistry;
 
@@ -67,6 +67,13 @@ public class QuarkusTransactionRunner implements TransactionRunner {
     return withRequestContext(() -> QuarkusTransaction
         .joiningExisting()
         .call(work::get));
+
+  }
+
+  @Override
+  public boolean isTransactionActive() {
+
+    return transactionRegistry.getTransactionStatus() != Status.STATUS_NO_TRANSACTION;
 
   }
 

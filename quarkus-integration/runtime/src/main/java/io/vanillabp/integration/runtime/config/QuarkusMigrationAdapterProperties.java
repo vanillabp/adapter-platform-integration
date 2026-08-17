@@ -77,6 +77,14 @@ public interface QuarkusMigrationAdapterProperties {
   WorkflowAdapterCacheProperties workflowAdapterCache();
 
   /**
+   * What VanillaBP does about a workflow aggregate whose store is not covered by the
+   * transaction it opens (story 70).
+   *
+   * @return The transaction configuration
+   */
+  TransactionsProperties transactions();
+
+  /**
    * The adapter configuration. The properties in detail are defined by the
    * respective VanillaBP adapter Quarkus extension.
    */
@@ -409,6 +417,30 @@ public interface QuarkusMigrationAdapterProperties {
      * BPMN process ID.
      */
     Map<String, WorkflowProperties> workflows();
+
+    /**
+     * Overrides <code>vanillabp.transactions</code> for this workflow module.
+     *
+     * @return The transaction configuration of this workflow module
+     */
+    TransactionsProperties transactions();
+
+  }
+
+  /**
+   * What VanillaBP does about a workflow aggregate whose store is demonstrably not covered
+   * by the transaction it opens: refuse to start, or accept it and keep the warning
+   * (story 70).
+   */
+  interface TransactionsProperties {
+
+    /**
+     * Whether writes to a store outside VanillaBP's transaction are accepted. The default
+     * is to reject them, which ends the startup with a message naming the fix.
+     *
+     * @return The setting, an empty Optional meaning "whatever applies globally"
+     */
+    Optional<io.vanillabp.integration.adapter.migration.config.TransactionsProperties.UnguardedAggregateWrites> unguardedAggregateWrites();
 
   }
 

@@ -115,7 +115,8 @@ public class SpringPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
 
     return """
         - add spring-boot-starter-data-jpa and configure a data source (enables the gruelbox-based default),
-        - add spring-boot-starter-data-mongodb and configure the MongoDB connection (enables the MongoDB default), or""";
+        - add spring-boot-starter-data-mongodb and configure the MongoDB connection (enables the MongoDB default),
+        - define a bean implementing io.vanillabp.integration.spi.PhaseTwoOutbox storing entries wherever your workflow aggregates live, or""";
 
   }
 

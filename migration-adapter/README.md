@@ -749,6 +749,38 @@ itself; the implementation with the most specific generic type for the aggregate
 It is the single canonical interface used on all platforms — business code implements
 it regardless of running on Spring Boot or Quarkus.
 
+### The transaction the work runs in
+
+VanillaBP wraps everything it does around one workflow aggregate in ONE transaction: the
+lookup of a processed delivery, loading the aggregate, invoking the `@WorkflowTask` method,
+saving the aggregate, writing the delivery record and scheduling a phase-two outbox entry
+either all commit or none of them do. The core's abstraction for it is
+`io.vanillabp.integration.spi.TransactionRunner` (module `business-spi`, with `requireNew`,
+`inCurrent` and `requireTransaction`), and every platform provides an implementation of it.
+
+An application whose aggregates live in a system the platform does not manage implements the
+runner itself, and `TransactionRunnerResolver` (implemented per platform) picks it in four
+steps:
+
+1. the most specific `io.vanillabp.integration.spi.TransactionRunnerAware` bean covering the
+   aggregate class (`AwareSelection`, so interfaces count and a bean naming the aggregate
+   beats one naming an interface it implements; a tie ends the boot naming both beans),
+2. a plain `TransactionRunner` bean of the application, serving every aggregate no aware bean
+   covers,
+3. the platform's own runner, if it can work at all - on Spring Boot that means a unique
+   `PlatformTransactionManager` exists,
+4. nothing, which ends the boot with a guiding message where the first-priority adapter needs
+   a two-phase commit (such an application cannot start a single workflow). Where every
+   prioritized adapter is embedded, the engine owns the transaction and nothing is demanded.
+
+The resolver also reports what the transaction COVERS (`TransactionCoverage`): a store the
+platform can tell is not covered gets a WARN, a combination it can name a fix for ends the
+boot unless the application accepts it with
+`vanillabp.transactions.unguarded-aggregate-writes`, and a store the platform cannot judge -
+an `AggregatePersistenceAware` implementation writing wherever it wants - is not commented
+on. `MigrationProcessService.validateTransactionRunnerAtStartup()` turns those verdicts into
+messages and logs one line per aggregate naming the runner serving it.
+
 ### Extensions
 
 An extension participates in two steps of the [deployment pipeline](#deployment-pipeline)
@@ -921,11 +953,13 @@ The core answers the part it owns, and only that part:
    Interfaces business code may implement, kept strictly separate from the adapter
    SPI so business code never sees adapter-implementation interfaces:
    `io.vanillabp.integration.spi.AggregatePersistenceAware` — the single canonical
-   persistence abstraction used on all platforms — and the outbox contract
+   persistence abstraction used on all platforms — the outbox contract
    (`PhaseTwoOutbox` incl. `PhaseTwoCall`/`PhaseTwoOperation`, plus the
-   per-aggregate attribution `PhaseTwoOutboxAware`): custom outboxes are
-   contributed by APPLICATIONS, not by adapters, so these types live here (moved
-   from the adapter SPI in story 26i). It is provided to applications
+   per-aggregate attribution `PhaseTwoOutboxAware`), and the transaction the work runs in
+   (`TransactionRunner` plus the per-aggregate attribution `TransactionRunnerAware`, story
+   70): custom outboxes and custom transactions are
+   contributed by APPLICATIONS, not by adapters, so these types live here (the outbox types
+   moved from the adapter SPI in story 26i). It is provided to applications
    transitively through the platform support modules (`vanillabp-spring-boot-support`
    / `vanillabp-quarkus-support`).
 2. **spi:** (artifact `io.vanillabp.adapter:migration-adapter-spi`)<br>

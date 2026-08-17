@@ -30,9 +30,11 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 public class TaskDeliveryLogStartupValidationTest {
 
   /**
-   * An outbox of the application's own, so the boot gets past the outbox validation: the
-   * dummy adapter needs a two-phase commit here, and this context has no data source a
-   * platform default could use. Nothing is dispatched in these tests.
+   * The stores and the transaction of the application's own, so the boot gets past the
+   * outbox and transaction validations: the dummy adapter needs a two-phase commit here,
+   * and this context has no data source a platform default could use. Nothing is
+   * dispatched in these tests, and the runner is a pass-through - what is pinned here is a
+   * log message, not a transaction.
    */
   @org.springframework.context.annotation.Configuration
   static class OwnOutboxConfiguration {
@@ -41,6 +43,32 @@ public class TaskDeliveryLogStartupValidationTest {
     io.vanillabp.integration.spi.PhaseTwoOutbox ownOutbox() {
 
       return call -> true;
+
+    }
+
+    @org.springframework.context.annotation.Bean
+    io.vanillabp.integration.spi.TransactionRunner ownTransactionRunner() {
+
+      return new io.vanillabp.integration.spi.TransactionRunner() {
+
+        @Override
+        public <T> T requireNew(
+            final java.util.function.Supplier<T> work) {
+          return work.get();
+        }
+
+        @Override
+        public <T> T inCurrent(
+            final java.util.function.Supplier<T> work) {
+          return work.get();
+        }
+
+        @Override
+        public boolean isRollbackOnly() {
+          return false;
+        }
+
+      };
 
     }
 

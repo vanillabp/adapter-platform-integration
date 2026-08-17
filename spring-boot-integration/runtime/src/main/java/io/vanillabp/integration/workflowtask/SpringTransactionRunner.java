@@ -8,7 +8,7 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import io.vanillabp.integration.adapter.migration.transaction.TransactionRunner;
+import io.vanillabp.integration.spi.TransactionRunner;
 
 /**
  * The Spring implementation of the core's {@link TransactionRunner} used to run
@@ -31,6 +31,73 @@ public class SpringTransactionRunner implements TransactionRunner {
 
   }
 
+  /**
+   * A runner bound to ONE transaction manager - the shape a mixed-persistence application
+   * needs (story 70): with a JPA and a MongoDB manager in the same application no manager
+   * is unique, so the application attributes its aggregates to runners built from the
+   * matching manager through
+   * {@link io.vanillabp.integration.spi.TransactionRunnerAware} beans.
+   *
+   * @param transactionManager The manager covering the aggregates this runner serves
+   */
+  public SpringTransactionRunner(
+      final PlatformTransactionManager transactionManager) {
+
+    this.transactionManager = new ObjectProvider<>() {
+
+      @Override
+      public PlatformTransactionManager getObject() {
+        return transactionManager;
+      }
+
+      @Override
+      public PlatformTransactionManager getObject(
+          final Object... args) {
+        return transactionManager;
+      }
+
+      @Override
+      public PlatformTransactionManager getIfAvailable() {
+        return transactionManager;
+      }
+
+      @Override
+      public PlatformTransactionManager getIfUnique() {
+        return transactionManager;
+      }
+
+    };
+
+  }
+
+  /**
+   * Whether this runner can work at all, which on Spring Boot means a unique
+   * {@link PlatformTransactionManager} exists. Asked by
+   * {@link io.vanillabp.integration.processservice.SpringTransactionRunnerResolver}: a
+   * runner which cannot open a transaction must not be handed out as the platform's
+   * default, the startup check reports the situation with every remedy instead (story
+   * 70).
+   *
+   * @return Whether a unique transaction manager is available
+   */
+  public boolean isUsable() {
+
+    return transactionManager.getIfUnique() != null;
+
+  }
+
+  /**
+   * The transaction manager this runner uses, for the startup check naming what it
+   * covers.
+   *
+   * @return The manager or <code>null</code> if there is none (or several)
+   */
+  public PlatformTransactionManager getTransactionManager() {
+
+    return transactionManager.getIfUnique();
+
+  }
+
   @Override
   public <T> T requireNew(
       final Supplier<T> work) {
@@ -44,6 +111,14 @@ public class SpringTransactionRunner implements TransactionRunner {
       final Supplier<T> work) {
 
     return run(work, TransactionDefinition.PROPAGATION_MANDATORY);
+
+  }
+
+  @Override
+  public boolean isTransactionActive() {
+
+    return org.springframework.transaction.support.TransactionSynchronizationManager
+        .isActualTransactionActive();
 
   }
 
@@ -92,9 +167,19 @@ public class SpringTransactionRunner implements TransactionRunner {
       throw new IllegalStateException(
           """
               No (unique) PlatformTransactionManager is available to process a BPMN task! \
-              @WorkflowTask methods load and save the workflow aggregate within a transaction. \
-              Add a transactional persistence (e.g. spring-boot-starter-data-jpa with a data \
-              source) or define a PlatformTransactionManager bean.""");
+              @WorkflowTask methods load and save the workflow aggregate within one transaction, \
+              and a relational database is only one way to get one. To solve this either
+              - define a transaction manager covering the persistence of your workflow \
+              aggregates: a JPA or JDBC one (e.g. spring-boot-starter-data-jpa with a data \
+              source), or a MongoTransactionManager if they live in MongoDB (which needs the \
+              deployment to be a replica set),
+              - define a bean implementing io.vanillabp.integration.spi.TransactionRunner, which \
+              serves every workflow aggregate of this application, or
+              - define a bean implementing io.vanillabp.integration.spi.TransactionRunnerAware to \
+              provide a runner for a single aggregate (or for an interface all your aggregates \
+              implement).
+              If several transaction managers exist, none of them is unique - name the one \
+              VanillaBP has to use by contributing a TransactionRunner bean built from it.""");
     }
     final var transactionTemplate = new TransactionTemplate(manager);
     transactionTemplate.setPropagationBehavior(propagation);

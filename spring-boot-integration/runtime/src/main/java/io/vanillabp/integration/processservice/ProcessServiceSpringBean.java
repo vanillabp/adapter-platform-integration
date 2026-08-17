@@ -21,6 +21,10 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
   @Getter
   private final MigrationProcessService<A> migrationProcessService;
 
+  /**
+   * Creates the bean without a transaction-runner resolver - kept for tests; the bean
+   * registrar always passes one (story 70).
+   */
   public ProcessServiceSpringBean(
       final String workflowModuleId,
       final String bpmnProcessId,
@@ -33,8 +37,26 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
       final WorkflowAdapterCache workflowAdapterCache,
       final io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver taskDeliveryLogResolver) {
 
+    this(
+        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, aggregatePersistenceAware, migratableProcessServices, phaseTwoOutboxResolver, phaseTwoRouter, workflowAdapterCache, taskDeliveryLogResolver, null);
+
+  }
+
+  public ProcessServiceSpringBean(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Class<A> workflowAggregateClass,
+      final MigrationAdapterProperties properties,
+      final AggregatePersistenceAware<A> aggregatePersistenceAware,
+      final List<MigratableProcessService<A>> migratableProcessServices,
+      final PhaseTwoOutboxResolver phaseTwoOutboxResolver,
+      final PhaseTwoRouter phaseTwoRouter,
+      final WorkflowAdapterCache workflowAdapterCache,
+      final io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver taskDeliveryLogResolver,
+      final io.vanillabp.integration.adapter.migration.processservice.TransactionRunnerResolver transactionRunnerResolver) {
+
     migrationProcessService = new MigrationProcessService<A>(
-        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, aggregatePersistenceAware, migratableProcessServices, phaseTwoOutboxResolver, workflowAdapterCache, taskDeliveryLogResolver);
+        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, aggregatePersistenceAware, migratableProcessServices, phaseTwoOutboxResolver, workflowAdapterCache, taskDeliveryLogResolver, transactionRunnerResolver);
 
     // register as phase-two dispatch target: outbox entries for this workflow
     // module/BPMN process are routed here after the local transaction was committed
@@ -261,9 +283,18 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
 
   }
 
+  /**
+   * Whether nothing is open the aggregate could be persisted in. The question goes to the
+   * runner serving this aggregate (story 70): an application storing its aggregates in a
+   * system Spring does not manage has its own unit of work, and Spring's answer would be
+   * wrong for it. Without a resolver (tests) Spring answers.
+   */
   private boolean noTransactionIsActive() {
 
-    return !TransactionSynchronizationManager.isActualTransactionActive();
+    final var runner = migrationProcessService.getTransactionRunner(null);
+    return runner != null
+        ? !runner.isTransactionActive()
+        : !TransactionSynchronizationManager.isActualTransactionActive();
 
   }
 
