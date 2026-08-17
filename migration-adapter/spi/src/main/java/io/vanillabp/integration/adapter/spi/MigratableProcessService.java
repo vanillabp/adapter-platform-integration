@@ -175,6 +175,31 @@ public interface MigratableProcessService<A> {
   }
 
   /**
+   * Whether a phase-two operation which failed with the given exception is worth
+   * repeating (story 63).
+   * <p>
+   * The outbox repeats a failed dispatch until the entry is blocked. That is what
+   * makes a progressing operation survivable which lost a concurrency conflict - an
+   * embedded engine reports those as its own exception type, and the next attempt
+   * simply wins. A failure the BPMS will answer the same way every time (a malformed
+   * request, an identifier which does not exist) gains nothing from being repeated:
+   * saying so here blocks the entry immediately, so operations see it while the log
+   * still says why.
+   * <p>
+   * The default is <code>true</code>: repeating is the safe answer, and it is what
+   * every store did before adapters could classify at all.
+   *
+   * @param failure What the phase-two operation threw
+   * @return Whether repeating the operation may succeed
+   */
+  default boolean isPhaseTwoFailureRepeatable(
+      final Throwable failure) {
+
+    return true;
+
+  }
+
+  /**
    * Start a new workflow. Phase one of the two-phase commit. This phase is executed immediately before the
    * local transaction is committed.
    * <p>

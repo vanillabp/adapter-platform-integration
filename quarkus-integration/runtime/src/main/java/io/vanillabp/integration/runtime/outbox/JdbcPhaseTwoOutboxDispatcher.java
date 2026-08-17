@@ -421,6 +421,25 @@ public class JdbcPhaseTwoOutboxDispatcher {
                           .deserializeArgs(entry.serializedArgs())),
               entry.attempts() > 0);
     } catch (Exception e) {
+      // the adapter said that repeating cannot help (story 63) - blocked right away
+      // instead of after the configured attempts
+      if (io.vanillabp.integration.spi.PhaseTwoPermanentFailure.isPermanent(e)) {
+        try (var statement = connection.prepareStatement(markEntryBlocked)) {
+          statement.setString(1, entry.id());
+          statement.executeUpdate();
+        }
+        log.error(
+            "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
+                + "failed for a reason repeating cannot fix - the outbox entry '{}' is blocked and has "
+                + "to be cleaned up manually!",
+            entry.operation(),
+            entry.bpmnProcessId(),
+            entry.workflowModuleId(),
+            entry.aggregateId(),
+            entry.id(),
+            e);
+        return;
+      }
       if (entry.attempts() + 1 >= properties.getBlockAfterAttempts()) {
         try (var statement = connection.prepareStatement(markEntryBlocked)) {
           statement.setString(1, entry.id());

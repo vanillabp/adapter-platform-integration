@@ -38,7 +38,8 @@ public class SendSignalTest {
           .addClass(AggregatePersistence.class)
           .addClass(WorkflowService.class)
           .addClass(RecordingPhaseTwoListener.class)
-          .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"));
+          .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
+      .overrideRuntimeConfigKey("quarkus.datasource.jdbc.url", "jdbc:h2:mem:send-signal-it;DB_CLOSE_DELAY=-1");
 
   private static final String COUNT_SIGNAL_ENTRIES = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX "
       + "WHERE OPERATION = 'SEND_SIGNAL'";

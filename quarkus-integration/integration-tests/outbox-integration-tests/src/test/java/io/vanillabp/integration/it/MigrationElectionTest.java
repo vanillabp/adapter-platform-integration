@@ -43,7 +43,8 @@ public class MigrationElectionTest {
           .addClass(WorkflowService.class)
           .addClass(RecordingPhaseTwoListener.class)
           .addClass(PerAdapterAwarenessSource.class)
-          .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"));
+          .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
+      .overrideRuntimeConfigKey("quarkus.datasource.jdbc.url", "jdbc:h2:mem:migration-election-it;DB_CLOSE_DELAY=-1");
 
   @Inject
   WorkflowService workflowService;

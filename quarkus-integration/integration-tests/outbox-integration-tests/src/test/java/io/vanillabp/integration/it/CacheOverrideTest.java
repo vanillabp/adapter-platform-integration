@@ -45,7 +45,8 @@ public class CacheOverrideTest {
           .addClass(RecordingPhaseTwoListener.class)
           .addClass(PerAdapterAwarenessSource.class)
           .addClass(RecordingWorkflowAdapterCache.class)
-          .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"));
+          .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
+      .overrideRuntimeConfigKey("quarkus.datasource.jdbc.url", "jdbc:h2:mem:cache-override-it;DB_CLOSE_DELAY=-1");
 
   @Inject
   WorkflowService workflowService;

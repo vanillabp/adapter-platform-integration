@@ -53,7 +53,7 @@ jobs:
           git checkout -b release/${{ github.event.inputs.release_version }} origin/main
       - name: Set Maven release version
         run: |
-          mvn --batch-mode versions:set -DprocessAllModules=true -DnewVersion=${{ github.event.inputs.release_version }}
+          mvn --batch-mode --update-snapshots versions:set -DprocessAllModules=true -DnewVersion=${{ github.event.inputs.release_version }}
           find . -name pom.xml.versionsBackup -delete
       - name: Check for SNAPSHOT dependencies
         run: |
@@ -69,7 +69,7 @@ jobs:
           exit 0
       - name: Build & deploy to Maven Central
         run: |
-          mvn --batch-mode -DskipTests -DskipITs -Dgpg.passphrase=$GPG_PASSPHRASE \
+          mvn --batch-mode --update-snapshots -DskipTests -DskipITs -Dgpg.passphrase=$GPG_PASSPHRASE \
           clean deploy -P release,central-portal
         env:
           GPG_PASSPHRASE: "${{ secrets.MAVEN_GPG_PASSPHRASE }}"
@@ -103,9 +103,9 @@ jobs:
           echo "NEXT_SNAPSHOT=$major.$minor.${NEXT_PATCH}-SNAPSHOT" >> $GITHUB_ENV
       - name: Set next snapshot version
         run: |
-          mvn --batch-mode versions:set -DprocessAllModules=true -DnewVersion=${{ env.NEXT_SNAPSHOT }}
+          mvn --batch-mode --update-snapshots versions:set -DprocessAllModules=true -DnewVersion=${{ env.NEXT_SNAPSHOT }}
           find . -name pom.xml.versionsBackup -delete
-          mvn --batch-mode -DskipTests -DskipITs package
+          mvn --batch-mode --update-snapshots -DskipTests -DskipITs package
       - name: Commit next snapshot version
         run: |
           git add -A

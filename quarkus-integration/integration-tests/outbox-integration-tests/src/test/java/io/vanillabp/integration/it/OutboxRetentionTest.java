@@ -36,7 +36,8 @@ public class OutboxRetentionTest {
           .addClass(WorkflowService.class)
           .addClass(RecordingPhaseTwoListener.class)
           .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
-      .overrideConfigKey("vanillabp.outbox.retention", "PT1S");
+      .overrideConfigKey("vanillabp.outbox.retention", "PT1S")
+      .overrideRuntimeConfigKey("quarkus.datasource.jdbc.url", "jdbc:h2:mem:outbox-retention-it;DB_CLOSE_DELAY=-1");
 
   private static final String COUNT_ENTRIES_OF_AGGREGATE = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX "
       + "WHERE AGGREGATE_ID = '%s'";

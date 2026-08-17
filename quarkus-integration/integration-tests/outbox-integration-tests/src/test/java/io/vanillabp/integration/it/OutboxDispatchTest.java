@@ -47,7 +47,8 @@ public class OutboxDispatchTest {
           .addClass(AggregatePersistence.class)
           .addClass(WorkflowService.class)
           .addClass(RecordingPhaseTwoListener.class)
-          .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"));
+          .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
+      .overrideRuntimeConfigKey("quarkus.datasource.jdbc.url", "jdbc:h2:mem:outbox-dispatch-it;DB_CLOSE_DELAY=-1");
 
   private static final String COUNT_OUTBOX_ENTRIES = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX";
 

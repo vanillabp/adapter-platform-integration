@@ -570,6 +570,66 @@ public class MigrationProcessServiceTest {
 
 
   @Test
+  @DisplayName("A phase-two failure the adapter calls permanent is marked as such (story 63)")
+  public void permanentPhaseTwoFailuresAreMarked() {
+
+    when(processService.getAdapterId()).thenReturn("test-adapter");
+    final var rejected = new IllegalArgumentException("the engine rejects this request");
+    org.mockito.Mockito
+        .doThrow(rejected)
+        .when(processService)
+        .startWorkflowPhaseTwo(
+            org.mockito.ArgumentMatchers.eq("test-module"),
+            org.mockito.ArgumentMatchers.eq("TestProcess"),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.eq(42L));
+    when(processService.isPhaseTwoFailureRepeatable(rejected)).thenReturn(false);
+
+    final var testee = new MigrationProcessService<>(
+        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
+            .of(processService), phaseTwoOutboxResolver);
+
+    final var failure = assertThrowsExactly(
+        io.vanillabp.integration.spi.PhaseTwoPermanentFailure.class,
+        () -> testee.startWorkflowPhaseTwo(42L, "test-adapter", false));
+
+    assertEquals(rejected, failure.getCause());
+    // the store blocks the entry on this, so the message has to say why it will not
+    // be retried
+    assertTrue(failure.getMessage().contains("test-adapter"), failure.getMessage());
+    assertTrue(failure.getMessage().contains("repeating it cannot help"), failure.getMessage());
+
+  }
+
+  @Test
+  @DisplayName("A phase-two failure worth repeating travels unchanged - the store retries it")
+  public void repeatablePhaseTwoFailuresTravelUnchanged() {
+
+    when(processService.getAdapterId()).thenReturn("test-adapter");
+    final var conflict = new IllegalStateException("another transaction touched the same row");
+    org.mockito.Mockito
+        .doThrow(conflict)
+        .when(processService)
+        .startWorkflowPhaseTwo(
+            org.mockito.ArgumentMatchers.eq("test-module"),
+            org.mockito.ArgumentMatchers.eq("TestProcess"),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.eq(42L));
+    when(processService.isPhaseTwoFailureRepeatable(conflict)).thenReturn(true);
+
+    final var testee = new MigrationProcessService<>(
+        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
+            .of(processService), phaseTwoOutboxResolver);
+
+    assertEquals(
+        conflict,
+        assertThrowsExactly(
+            IllegalStateException.class,
+            () -> testee.startWorkflowPhaseTwo(42L, "test-adapter", false)));
+
+  }
+
+  @Test
   @DisplayName("Phase two of a start records which adapter holds the workflow - no probing needed")
   public void phaseTwoOfAStartFillsTheAdapterCache() {
 
