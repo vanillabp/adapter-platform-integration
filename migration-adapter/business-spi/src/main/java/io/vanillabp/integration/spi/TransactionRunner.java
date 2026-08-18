@@ -115,6 +115,33 @@ public interface TransactionRunner {
   boolean isRollbackOnly();
 
   /**
+   * Runs the given check as LATE as possible: right before the transaction currently
+   * open on this thread commits (story 87).
+   * <p>
+   * A remote BPMS is asked in phase one whether an operation still makes sense - is the
+   * task still there, does the model know this message - and the answer can go stale
+   * between the question and phase two. Asking right before the commit keeps that window
+   * as small as the platform allows, and a check which throws aborts the commit, which is
+   * exactly what a phase-one check is for.
+   * <p>
+   * Only whoever owns the transaction can offer this, which is why it lives here: an
+   * application which brought its own unit of work is the one that knows how to hook into
+   * it. The default runs the check immediately, which is what every runner did before this
+   * method existed - correct, just with a wider window. The platform implementations hook
+   * into their transaction (Spring: a <code>TransactionSynchronization</code>; Quarkus: an
+   * interposed JTA <code>Synchronization</code>) and fall back to running the check
+   * immediately when no transaction is active.
+   *
+   * @param check The check to run; throwing aborts the commit
+   */
+  default void beforeCommit(
+      final Runnable check) {
+
+    check.run();
+
+  }
+
+  /**
    * Whether the given failure says that the workflow aggregate was changed by
    * another writer in between (an optimistic locking conflict on an aggregate
    * carrying a version attribute). Only whoever owns the transaction can tell: Spring

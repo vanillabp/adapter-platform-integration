@@ -71,6 +71,38 @@ public class SpringTransactionRunner implements TransactionRunner {
   }
 
   /**
+   * Registers a {@link org.springframework.transaction.support.TransactionSynchronization}
+   * whose <code>beforeCommit</code> runs the check (story 87), so a phase-one check of a BPMS
+   * adapter runs as late as this platform allows - a throwing check aborts the commit.
+   * Without transaction synchronization active the check runs immediately.
+   */
+  @Override
+  public void beforeCommit(
+      final Runnable check) {
+
+    if (!org.springframework.transaction.support.TransactionSynchronizationManager
+        .isSynchronizationActive()) {
+      check.run();
+      return;
+    }
+    org.springframework.transaction.support.TransactionSynchronizationManager
+        .registerSynchronization(
+            new org.springframework.transaction.support.TransactionSynchronization() {
+
+              @Override
+              public void beforeCommit(
+                  final boolean readOnly) {
+
+                check.run();
+
+              }
+
+            });
+
+  }
+
+
+  /**
    * Whether this runner can work at all, which on Spring Boot means a unique
    * {@link PlatformTransactionManager} exists. Asked by
    * {@link io.vanillabp.integration.processservice.SpringTransactionRunnerResolver}: a

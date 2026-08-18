@@ -6,6 +6,7 @@ import io.quarkus.arc.Arc;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.vanillabp.integration.spi.TransactionRunner;
 import jakarta.transaction.Status;
+import jakarta.transaction.Synchronization;
 import jakarta.transaction.TransactionSynchronizationRegistry;
 
 /**
@@ -36,6 +37,38 @@ public class QuarkusTransactionRunner implements TransactionRunner {
     return withRequestContext(() -> QuarkusTransaction
         .requiringNew()
         .call(work::get));
+
+  }
+
+  /**
+   * Registers an interposed JTA {@link Synchronization} whose
+   * {@link Synchronization#beforeCompletion()} runs the check (story 87), so a phase-one
+   * check of an adapter runs as late as the platform allows. Without an active transaction
+   * the check runs immediately.
+   */
+  @Override
+  public void beforeCommit(
+      final Runnable check) {
+
+    if (transactionRegistry.getTransactionStatus() != Status.STATUS_ACTIVE) {
+      check.run();
+      return;
+    }
+    transactionRegistry.registerInterposedSynchronization(new Synchronization() {
+
+      @Override
+      public void beforeCompletion() {
+
+        check.run();
+
+      }
+
+      @Override
+      public void afterCompletion(
+          final int status) {
+      }
+
+    });
 
   }
 

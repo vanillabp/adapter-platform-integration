@@ -18,8 +18,8 @@ import io.vanillabp.integration.runtime.outbox.JdbcPhaseTwoOutbox;
 import io.vanillabp.integration.runtime.outbox.JdbcPhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.runtime.outbox.MongoPhaseTwoOutbox;
 import io.vanillabp.integration.runtime.outbox.MongoPhaseTwoOutboxDispatcher;
-import io.vanillabp.integration.runtime.processservice.EventualConsistencyTransactionSupport;
 import io.vanillabp.integration.runtime.processservice.PhaseTwoRouterProducer;
+import io.vanillabp.integration.runtime.processservice.QuarkusPreCommitRegistrar;
 import io.vanillabp.integration.runtime.processservice.WorkflowAdapterCacheProducer;
 import io.vanillabp.integration.runtime.util.UriSubstitute;
 import io.vanillabp.integration.runtime.util.UriSubstitution;
@@ -342,18 +342,18 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
-   * Registers {@link EventualConsistencyTransactionSupport} as a CDI bean. It is marked
-   * unremovable because it is not injected by application code but used by the VanillaBP
-   * runtime under the hoods.
+   * Registers {@link QuarkusPreCommitRegistrar} as a CDI bean (story 87): BPMS adapters
+   * hand their phase-one checks to it, so the check runs right before the transaction of
+   * the workflow aggregate commits. Unremovable, because no application code injects it.
    *
-   * @return The additional {@link EventualConsistencyTransactionSupport} bean
+   * @return The additional {@link QuarkusPreCommitRegistrar} bean
    */
   @BuildStep
-  AdditionalBeanBuildItem buildEventualConsistencyTransactionSupport() {
+  AdditionalBeanBuildItem buildPreCommitRegistrar() {
 
     return AdditionalBeanBuildItem
         .builder()
-        .addBeanClass(EventualConsistencyTransactionSupport.class)
+        .addBeanClass(QuarkusPreCommitRegistrar.class)
         .setUnremovable() // don't remove, since it is used under the hoods
         .build();
 

@@ -5,39 +5,27 @@
 The VanillaBP Quarkus extension's runtime module. It is responsible for bridging to the
 [VanillaBP migration adapter](../../migration-adapter) at runtime.
 
-## Eventual consistency and transactions
+## Running a check right before the commit
 
-Remote BPMSs (e.g. Camunda 8) are eventually consistent: after starting a workflow the
-BPMS may not know the workflow instance yet. To deal with this, the class
-`EventualConsistencyTransactionSupport` allows to register, per transaction,
+A phase-one check of a remote BPMS must not advance the process, but it may ASK - whether the
+task still exists, whether the model declares a message - and the answer can go stale between
+the question and the phase-two dispatch. The later the check runs, the smaller that window, so
+adapters hand their checks to the `PreCommitRegistrar` of the adapter SPI and
+`QuarkusPreCommitRegistrar` implements it here.
 
-1. **probes** which run right before the transaction is committed (a failing probe
-   marks the transaction rollback-only) and
-2. **after-commit actions** which run right after the transaction was committed
-   successfully (e.g. to inform the remote BPMS). Each action receives the result of
-   its probe.
+It resolves the transaction runner of the workflow aggregate first
+(`QuarkusTransactionRunnerResolver`, story 70), then calls `TransactionRunner#beforeCommit`.
+That indirection is the point: since an application may bring its own unit of work, the check
+has to be hooked into the unit of work VanillaBP actually uses, not into the platform's JTA
+transaction. `QuarkusTransactionRunner` implements the hook with an interposed JTA
+`Synchronization` whose `beforeCompletion()` runs the check - throwing there aborts the commit,
+which is what a failing phase-one check has to do. A runner of an application which does not
+implement the hook runs the check immediately, the behaviour of every adapter before story 87.
 
-### Design
-
-The bean is `@ApplicationScoped` and keeps its per-transaction state in the JTA
-`TransactionSynchronizationRegistry` (`getResource()`/`putResource()`), so no
-transaction-scoped bean lifecycle is needed. On the first `addProbeAndAction(...)` of a
-transaction an interposed `Synchronization` is registered:
-
-- probes run and `setRollbackOnly()` is called in `beforeCompletion()` — both is
-  allowed there;
-- after-commit actions run in `afterCompletion(status)` if
-  `status == Status.STATUS_COMMITTED`.
-
-### Why not `@TransactionScoped` + `@PreDestroy`?
-
-A previous implementation used a `@TransactionScoped` bean running the probes in a
-`@PreDestroy` callback. That cannot work in Quarkus: the transaction-scoped context is
-destroyed in an `afterCompletion()` synchronization (see
-[Quarkus issue #36880](https://github.com/quarkusio/quarkus/issues/36880)), so
-`@PreDestroy` runs *after* commit/rollback. At that point the transaction status is
-never `STATUS_ACTIVE`, `setRollbackOnly()` would be too late and the JTA specification
-forbids registering further synchronizations in `afterCompletion()`.
+An earlier, wider mechanism (`EventualConsistencyTransactionSupport`: probes before the commit
+plus actions after it, per transaction) was removed with story 87. It existed before the
+phase-two outbox took over the after-commit half, had no caller left, and existed on this
+platform only.
 
 ## Phase-two outbox
 
