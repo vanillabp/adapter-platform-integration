@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 
 import io.vanillabp.integration.adapter.migration.config.ClasspathFacts;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.runtime.support.BpmsAdapters;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import lombok.Builder;
 
@@ -89,8 +90,11 @@ public class QuarkusMigrationAdapterTransformer {
         .toList();
     if (adapterTypesProvidedByExtensions.isEmpty()) {
       throw new IllegalStateException(
-          "No extensions found with capabilities '%s*'! Add Quarkus extensions providing VanillaBP adapters."
-              .formatted(PREFIX_ADAPTER_PACKAGE));
+          """
+              No VanillaBP BPMS adapter found in classpath! No Quarkus extension publishing a \
+              capability '%s*' is loaded, so there is no BPMS which could run the workflows of a \
+              workflow module.%s"""
+              .formatted(PREFIX_ADAPTER_PACKAGE, BpmsAdapters.extensionsToAdd()));
     }
 
     // validate adapters provided by VanillaBP Quarkus adapter extensions

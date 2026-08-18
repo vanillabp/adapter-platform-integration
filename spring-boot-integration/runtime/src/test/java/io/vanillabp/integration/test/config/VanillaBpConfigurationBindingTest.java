@@ -178,7 +178,7 @@ public class VanillaBpConfigurationBindingTest {
 
           assertNotNull(context.getStartupFailure());
           assertTrue(rootMessage(context.getStartupFailure())
-              .contains("No adapters found in classpath! Add dependencies providing VanillaBP adapters."));
+              .contains("No VanillaBP BPMS adapter found in classpath!"));
 
         });
 

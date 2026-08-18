@@ -1,6 +1,7 @@
 package io.vanillabp.integration.runtime.test.processservice;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -31,6 +32,51 @@ public class QuarkusTransactionRunnerResolverTest {
   }
 
   private static class OrderAggregate implements HasWorkflowState {
+  }
+
+  /**
+   * A runner an application wrote, and the client proxy the bean container puts in front
+   * of it (its name is what the message used to carry - story 80).
+   */
+  private static class UnitOfWork implements TransactionRunner {
+
+    @Override
+    public <T> T requireNew(
+        final Supplier<T> work) {
+      return work.get();
+    }
+
+    @Override
+    public <T> T inCurrent(
+        final Supplier<T> work) {
+      return work.get();
+    }
+
+    @Override
+    public boolean isRollbackOnly() {
+      return false;
+    }
+
+  }
+
+  private static class UnitOfWork_ClientProxy extends UnitOfWork {
+  }
+
+  private static class OrderTransactions implements TransactionRunnerAware<OrderAggregate> {
+
+    @Override
+    public Class<OrderAggregate> getAggregateClass() {
+      return OrderAggregate.class;
+    }
+
+    @Override
+    public TransactionRunner getTransactionRunner() {
+      return APPLICATION_RUNNER;
+    }
+
+  }
+
+  private static class OrderTransactions_ClientProxy extends OrderTransactions {
   }
 
   private static final TransactionRunner PLATFORM_RUNNER = passThroughRunner();
@@ -90,6 +136,94 @@ public class QuarkusTransactionRunnerResolverTest {
     return new QuarkusTransactionRunnerResolver(
         InstanceDouble.of(awares), InstanceDouble.of(runners), InstanceDouble
             .of(List.<AggregatePersistenceAware<?>>of()), PLATFORM_RUNNER);
+
+  }
+
+  @Test
+  @DisplayName("A runner bean is named by the class it was declared as, not by its proxy")
+  public void plainRunnerBeanIsNamedByItsDeclaredClass() {
+
+    final var testee = new QuarkusTransactionRunnerResolver(
+        InstanceDouble.of(List.<TransactionRunnerAware<?>>of()), InstanceDouble
+            .ofDeclaredAs(
+                List.<TransactionRunner>of(new UnitOfWork_ClientProxy()),
+                List.of(UnitOfWork.class)), InstanceDouble
+                    .of(List.<AggregatePersistenceAware<?>>of()), PLATFORM_RUNNER);
+
+    assertEquals(
+        "the TransactionRunner bean '%s' of the application".formatted(UnitOfWork.class.getName()),
+        testee.describeResolutionFor(OrderAggregate.class));
+
+  }
+
+  @Test
+  @DisplayName("An aware bean is named by the class it was declared as, too")
+  public void awareBeanIsNamedByItsDeclaredClass() {
+
+    final var testee = new QuarkusTransactionRunnerResolver(
+        InstanceDouble
+            .ofDeclaredAs(
+                List.<TransactionRunnerAware<?>>of(new OrderTransactions_ClientProxy()),
+                List.of(OrderTransactions.class)), InstanceDouble.of(List.<TransactionRunner>of()), InstanceDouble
+                    .of(List.<AggregatePersistenceAware<?>>of()), PLATFORM_RUNNER);
+
+    assertEquals(
+        "the TransactionRunnerAware bean '%s' of the application"
+            .formatted(OrderTransactions.class.getName()),
+        testee.describeResolutionFor(OrderAggregate.class));
+
+  }
+
+  @Test
+  @DisplayName("Both ambiguity messages name declared classes as well")
+  public void ambiguityMessagesNameDeclaredClasses() {
+
+    final var tiedAwares = new QuarkusTransactionRunnerResolver(
+        InstanceDouble
+            .ofDeclaredAs(
+                List.<TransactionRunnerAware<?>>of(
+                    new OrderTransactions_ClientProxy(),
+                    new OrderTransactions_ClientProxy()),
+                List.of(OrderTransactions.class, OrderTransactions.class)), InstanceDouble
+                    .of(List.<TransactionRunner>of()), InstanceDouble
+                        .of(List.<AggregatePersistenceAware<?>>of()), PLATFORM_RUNNER);
+    final var awareFailure = assertThrowsExactly(
+        IllegalStateException.class,
+        () -> tiedAwares.resolveFor(OrderAggregate.class));
+    assertTrue(
+        awareFailure.getMessage().contains(OrderTransactions.class.getName()),
+        awareFailure.getMessage());
+    assertFalse(awareFailure.getMessage().contains("_ClientProxy"), awareFailure.getMessage());
+
+    final var severalRunners = new QuarkusTransactionRunnerResolver(
+        InstanceDouble.of(List.<TransactionRunnerAware<?>>of()), InstanceDouble
+            .ofDeclaredAs(
+                List.<TransactionRunner>of(new UnitOfWork_ClientProxy(), new UnitOfWork_ClientProxy()),
+                List.of(UnitOfWork.class, UnitOfWork.class)), InstanceDouble
+                    .of(List.<AggregatePersistenceAware<?>>of()), PLATFORM_RUNNER);
+    final var runnerFailure = assertThrowsExactly(
+        IllegalStateException.class,
+        () -> severalRunners.resolveFor(OrderAggregate.class));
+    assertTrue(
+        runnerFailure.getMessage().contains(UnitOfWork.class.getName()),
+        runnerFailure.getMessage());
+    assertFalse(runnerFailure.getMessage().contains("_ClientProxy"), runnerFailure.getMessage());
+
+  }
+
+  @Test
+  @DisplayName("Without bean metadata the runtime class is named - nothing is guessed away")
+  public void withoutBeanMetadataTheRuntimeClassIsNamed() {
+
+    final var testee = new QuarkusTransactionRunnerResolver(
+        InstanceDouble.of(List.<TransactionRunnerAware<?>>of()), InstanceDouble
+            .ofWithoutMetadata(List.<TransactionRunner>of(new UnitOfWork_ClientProxy())), InstanceDouble
+                .of(List.<AggregatePersistenceAware<?>>of()), PLATFORM_RUNNER);
+
+    assertEquals(
+        "the TransactionRunner bean '%s' of the application"
+            .formatted(UnitOfWork_ClientProxy.class.getName()),
+        testee.describeResolutionFor(OrderAggregate.class));
 
   }
 

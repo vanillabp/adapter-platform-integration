@@ -84,6 +84,18 @@ public class ApplicationOwnedStoresTest {
   @Any
   Instance<List<AdapterDeploymentService<Object, Object>>> deploymentServices;
 
+  @Inject
+  @Any
+  Instance<io.vanillabp.integration.spi.TransactionRunnerAware<?>> transactionRunnerAwares;
+
+  @Inject
+  @Any
+  Instance<io.vanillabp.integration.spi.TransactionRunner> transactionRunners;
+
+  @Inject
+  @Any
+  Instance<io.vanillabp.integration.spi.AggregatePersistenceAware<?>> aggregatePersistences;
+
   private DummyDeploymentService dummyAdapter() {
 
     return deploymentServices
@@ -176,6 +188,30 @@ public class ApplicationOwnedStoresTest {
             .invokeTask("test-module", "TestProcess", context("failingTask", "app-tx-1", "job-2")));
     assertEquals(1, runner.getRolledBack(), "the application's transaction was not rolled back");
     assertEquals("processed", persistence.stored("app-tx-1").getStatus());
+
+  }
+
+  @Test
+  @DisplayName("The startup line names the classes of the application, not the container's proxies")
+  public void theStartupLineNamesTheApplicationsClasses() {
+
+    // the resolver of the platform, wired with the very beans of this application: what it
+    // says about them is what the INFO line of story 70 carries
+    final var resolver = new io.vanillabp.integration.runtime.processservice.QuarkusTransactionRunnerResolver(
+        transactionRunnerAwares, transactionRunners, aggregatePersistences, runner);
+
+    final var aware = resolver.describeResolutionFor(AppTxAggregate.class);
+    assertEquals(
+        "the TransactionRunnerAware bean '%s' of the application".formatted(AppTxTransactions.class.getName()),
+        aware,
+        aware);
+
+    // an aggregate no aware bean covers falls to the plain runner bean - named the same way
+    final var plainBean = resolver.describeResolutionFor(Object.class);
+    assertEquals(
+        "the TransactionRunner bean '%s' of the application".formatted(AppTxTransactionRunner.class.getName()),
+        plainBean,
+        plainBean);
 
   }
 

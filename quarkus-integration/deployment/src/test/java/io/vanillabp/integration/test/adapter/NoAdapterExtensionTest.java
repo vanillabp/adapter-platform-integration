@@ -1,6 +1,6 @@
 package io.vanillabp.integration.test.adapter;
 
-import static io.vanillabp.integration.test.utils.AssertException.exceptionHavingMessage;
+import static io.vanillabp.integration.test.utils.AssertException.exceptionHavingMessageContaining;
 
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
@@ -25,8 +25,9 @@ public class NoAdapterExtensionTest {
           .addAsResource("application.yaml")
           .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
           .addClass(DummyAdapters.class))                              // necessary due to anonymous class in DummyAdapters
-      .assertException(exceptionHavingMessage(IllegalStateException.class,
-          "No extensions found with capabilities 'io.vanillabp.adapter.*'! Add Quarkus extensions providing VanillaBP adapters."));
+      .assertException(exceptionHavingMessageContaining(IllegalStateException.class,
+          "No VanillaBP BPMS adapter found in classpath!",
+          "https://github.com/vanillabp/adapter-platform-integration/wiki/BPMS-adapters"));
 
   @Test
   public void testAdapterConfiguration() {
