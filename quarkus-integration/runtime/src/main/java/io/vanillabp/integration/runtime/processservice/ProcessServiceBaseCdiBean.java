@@ -197,8 +197,11 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
         .unwrap(SmallRyeConfig.class)
         .getConfigMapping(QuarkusMigrationAdapterProperties.class)
         .outbox();
+    // which store an aggregate's transaction reaches: read off the persistence VanillaBP
+    // resolved for it, so an application with two persistences attributes nothing itself
+    final var persistenceTechnology = new QuarkusPersistenceTechnology(aggregatePersistences);
     final var phaseTwoOutboxResolver = new QuarkusPhaseTwoOutboxResolver(
-        phaseTwoOutboxAwares, phaseTwoOutboxes, outboxProperties
+        phaseTwoOutboxAwares, phaseTwoOutboxes, persistenceTechnology, outboxProperties
             .jdbc()
             .enabled(), outboxProperties
                 .mongo()
@@ -207,7 +210,7 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
         transactionRunnerAwares, applicationTransactionRunners, aggregatePersistences, new io.vanillabp.integration.runtime.workflowtask.QuarkusTransactionRunner(
             txRegistry));
     final var taskDeliveryLogResolver = new QuarkusTaskDeliveryLogResolver(
-        taskDeliveryLogAwares, taskDeliveryLogs, outboxProperties
+        taskDeliveryLogAwares, taskDeliveryLogs, persistenceTechnology, outboxProperties
             .jdbc()
             .enabled(), outboxProperties
                 .mongo()

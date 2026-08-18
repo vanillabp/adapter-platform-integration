@@ -35,7 +35,7 @@ public class QuarkusTransactionRunnerResolver implements TransactionRunnerResolv
 
   private final Instance<TransactionRunner> transactionRunners;
 
-  private final Instance<AggregatePersistenceAware<?>> aggregatePersistences;
+  private final QuarkusPersistenceTechnology persistenceTechnology;
 
   private final TransactionRunner platformRunner;
 
@@ -67,7 +67,7 @@ public class QuarkusTransactionRunnerResolver implements TransactionRunnerResolv
 
     this.transactionRunnerAwares = transactionRunnerAwares;
     this.transactionRunners = transactionRunners;
-    this.aggregatePersistences = aggregatePersistences;
+    this.persistenceTechnology = new QuarkusPersistenceTechnology(aggregatePersistences);
     this.platformRunner = platformRunner;
 
   }
@@ -105,8 +105,7 @@ public class QuarkusTransactionRunnerResolver implements TransactionRunnerResolv
       // the application brought the transaction and knows what it covers
       return TransactionCoverage.unknown();
     }
-    final var persistence = aggregatePersistenceOf(workflowAggregateClass);
-    if (!isMongoDefault(persistence)) {
+    if (persistenceTechnology.of(workflowAggregateClass) != QuarkusPersistenceTechnology.Technology.MONGO) {
       // JPA/Panache take part in the JTA transaction; an aggregate persistence of the
       // application is not something VanillaBP can judge
       return TransactionCoverage.unknown();
@@ -251,53 +250,6 @@ public class QuarkusTransactionRunnerResolver implements TransactionRunnerResolv
             .getClass()
             .getName()
         : declaredClass.getName();
-
-  }
-
-  private AggregatePersistenceAware<?> aggregatePersistenceOf(
-      final Class<?> workflowAggregateClass) {
-
-    final List<AggregatePersistenceAware<?>> persistences = aggregatePersistences
-        .stream()
-        .<AggregatePersistenceAware<?>>map(persistence -> persistence)
-        .toList();
-    return AwareSelection
-        .mostSpecific(
-            persistences,
-            AggregatePersistenceAware::getAggregateClass,
-            workflowAggregateClass)
-        .orElse(null);
-
-  }
-
-  /**
-   * The MongoDB-based aggregate persistence defaults of story 69, matched BY NAME: the
-   * MongoDB Panache extension is optional here, so this class must not carry a reference
-   * to them (nor to any MongoDB type).
-   */
-  private static final java.util.Set<String> MONGO_DEFAULT_PERSISTENCES = java.util.Set
-      .of(
-          "io.vanillabp.integration.runtime.persistence.PanacheMongoRepositoryAggregatePersistence",
-          "io.vanillabp.integration.runtime.persistence.PanacheMongoActiveRecordAggregatePersistence");
-
-  /**
-   * Whether the aggregate is stored by one of VanillaBP's MongoDB defaults (story 69) -
-   * the only case in which the platform knows a MongoDB session is involved. The
-   * generated per-aggregate subclasses are matched through their superclass.
-   */
-  private static boolean isMongoDefault(
-      final AggregatePersistenceAware<?> persistence) {
-
-    if (persistence == null) {
-      return false;
-    }
-    for (Class<?> candidate = persistence.getClass(); candidate != null; candidate = candidate
-        .getSuperclass()) {
-      if (MONGO_DEFAULT_PERSISTENCES.contains(candidate.getName())) {
-        return true;
-      }
-    }
-    return false;
 
   }
 

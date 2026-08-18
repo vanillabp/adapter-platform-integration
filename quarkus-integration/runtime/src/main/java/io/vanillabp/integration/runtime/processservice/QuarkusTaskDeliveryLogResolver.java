@@ -13,18 +13,19 @@ import jakarta.enterprise.inject.Instance;
 /**
  * Quarkus implementation of the core's {@link TaskDeliveryLogResolver}: resolves the
  * {@link TaskDeliveryLog} used for a workflow aggregate so a delivery record always rides
- * the aggregate's own transaction. It mirrors {@link QuarkusPhaseTwoOutboxResolver} -
- * including its one difference to Spring Boot: Quarkus has no platform-side knowledge of
- * which persistence manages an aggregate (aggregate persistence is always provided by the
- * application, see {@link io.vanillabp.integration.spi.AggregatePersistenceAware}), so a
- * mixed-persistence application attributes aggregates to logs via
- * {@link TaskDeliveryLogAware} beans.
+ * the aggregate's own transaction. It mirrors {@link QuarkusPhaseTwoOutboxResolver}: the
+ * most specific {@link TaskDeliveryLogAware} bean of the application wins, otherwise the
+ * platform default matching the technology which manages the aggregate
+ * ({@link QuarkusPersistenceTechnology}), and a single default clearly not matching it
+ * ends the boot rather than writing records next to the aggregate.
  */
 public class QuarkusTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
 
   private final Instance<TaskDeliveryLogAware<?>> taskDeliveryLogAwares;
 
   private final Instance<TaskDeliveryLog> taskDeliveryLogs;
+
+  private final QuarkusPersistenceTechnology persistenceTechnology;
 
   private final boolean jdbcLogEnabled;
 
@@ -33,11 +34,13 @@ public class QuarkusTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
   public QuarkusTaskDeliveryLogResolver(
       final Instance<TaskDeliveryLogAware<?>> taskDeliveryLogAwares,
       final Instance<TaskDeliveryLog> taskDeliveryLogs,
+      final QuarkusPersistenceTechnology persistenceTechnology,
       final boolean jdbcLogEnabled,
       final boolean mongoLogEnabled) {
 
     this.taskDeliveryLogAwares = taskDeliveryLogAwares;
     this.taskDeliveryLogs = taskDeliveryLogs;
+    this.persistenceTechnology = persistenceTechnology;
     this.jdbcLogEnabled = jdbcLogEnabled;
     this.mongoLogEnabled = mongoLogEnabled;
 
@@ -62,7 +65,7 @@ public class QuarkusTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
           .getTaskDeliveryLog();
     }
 
-    // 2./3. the single active log bean - or a guiding error if ambiguous
+    // 2./3. attribute by the technology managing the aggregate
     final var logs = taskDeliveryLogs
         .stream()
         .filter(this::isActive)
@@ -70,24 +73,83 @@ public class QuarkusTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
     if (logs.isEmpty()) {
       return null;
     }
-    if (logs.size() > 1) {
-      throw new IllegalStateException(
-          """
-              Several TaskDeliveryLog beans exist (%s), but none can be attributed to workflow \
-              aggregate '%s'! A delivery record must be enlisted in the transaction persisting the \
-              aggregate. To solve this either
-              - provide a bean implementing io.vanillabp.integration.spi.TaskDeliveryLogAware for \
-              this aggregate (returning the log matching its persistence), or
-              - deactivate the unwanted default ('vanillabp.outbox.jdbc.enabled' / \
-              'vanillabp.outbox.mongo.enabled')."""
-              .formatted(
-                  logs
-                      .stream()
-                      .map(deliveryLog -> deliveryLog.getClass().getName())
-                      .toList(),
-                  workflowAggregateClass.getName()));
+
+    final var technology = persistenceTechnology.of(workflowAggregateClass);
+
+    // 2. exactly one log: use it - unless it is the platform default of the other
+    // technology, which would record the delivery outside the aggregate's transaction
+    if (logs.size() == 1) {
+      final var deliveryLog = logs.getFirst();
+      if (mismatches(deliveryLog, technology)) {
+        throw new IllegalStateException(
+            buildAttributionErrorMessage(workflowAggregateClass, technology, logs));
+      }
+      return deliveryLog;
     }
-    return logs.getFirst();
+
+    // 3. several logs: the platform default of the aggregate's technology
+    return logs
+        .stream()
+        .filter(deliveryLog -> matches(deliveryLog, technology))
+        .findFirst()
+        .orElseThrow(() -> new IllegalStateException(
+            buildAttributionErrorMessage(workflowAggregateClass, technology, logs)));
+
+  }
+
+  /**
+   * Whether a log is the platform default serving the given technology. A log of the
+   * application matches nothing: only its own {@link TaskDeliveryLogAware} bean says
+   * which aggregates it serves.
+   */
+  private static boolean matches(
+      final TaskDeliveryLog deliveryLog,
+      final QuarkusPersistenceTechnology.Technology technology) {
+
+    return switch (technology) {
+      case JPA -> deliveryLog instanceof JdbcTaskDeliveryLog;
+      case MONGO -> deliveryLog instanceof MongoTaskDeliveryLog;
+      case UNKNOWN -> false;
+    };
+
+  }
+
+  /**
+   * Whether a log is the platform default of the OTHER technology - the one case in which
+   * a single log bean must not be used.
+   */
+  private static boolean mismatches(
+      final TaskDeliveryLog deliveryLog,
+      final QuarkusPersistenceTechnology.Technology technology) {
+
+    return switch (technology) {
+      case JPA -> deliveryLog instanceof MongoTaskDeliveryLog;
+      case MONGO -> deliveryLog instanceof JdbcTaskDeliveryLog;
+      case UNKNOWN -> false;
+    };
+
+  }
+
+  private static String buildAttributionErrorMessage(
+      final Class<?> workflowAggregateClass,
+      final QuarkusPersistenceTechnology.Technology technology,
+      final List<TaskDeliveryLog> logs) {
+
+    return """
+        The TaskDeliveryLog beans %s cannot be attributed to workflow aggregate '%s' (persistence \
+        technology detected: %s)! A delivery record must be enlisted in the transaction persisting \
+        the aggregate. To solve this either
+        - provide a bean implementing io.vanillabp.integration.spi.TaskDeliveryLogAware for this \
+        aggregate (returning the log matching its persistence), or
+        - enable the platform default matching the aggregate's persistence (add the corresponding \
+        extension; check 'vanillabp.outbox.jdbc.enabled' / 'vanillabp.outbox.mongo.enabled')."""
+        .formatted(
+            logs
+                .stream()
+                .map(deliveryLog -> deliveryLog.getClass().getName())
+                .toList(),
+            workflowAggregateClass.getName(),
+            technology);
 
   }
 
