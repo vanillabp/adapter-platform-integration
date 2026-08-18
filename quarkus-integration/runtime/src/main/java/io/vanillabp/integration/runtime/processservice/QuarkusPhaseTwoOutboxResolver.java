@@ -20,21 +20,25 @@ import jakarta.enterprise.inject.Instance;
  * <li>the single active {@link PhaseTwoOutbox} bean if exactly one exists (defaults
  * which are deactivated - <code>vanillabp.outbox.jdbc.enabled</code> /
  * <code>vanillabp.outbox.mongo.enabled</code> - or unusable - no datasource/MongoDB
- * client configured - are not considered),</li>
- * <li>with several active outbox beans a guiding {@link IllegalStateException} is
- * raised: unlike Spring Boot, Quarkus has no platform-side knowledge of which
- * persistence manages an aggregate (aggregate persistence is always provided by the
- * application, see
- * {@link io.vanillabp.integration.spi.AggregatePersistenceAware}), so the
- * application has to attribute aggregates to outboxes via {@link PhaseTwoOutboxAware}
- * beans in mixed-persistence setups.</li>
+ * client configured - are not considered), unless it is the platform default of the
+ * other technology: an entry written next to the aggregate instead of into its
+ * transaction breaks the atomicity this outbox promises, so that ends the boot,</li>
+ * <li>with several active outbox beans the platform default matching the technology
+ * which manages the aggregate ({@link QuarkusPersistenceTechnology}, read off the
+ * persistence VanillaBP resolved for it in story 69).</li>
  * </ol>
+ * An application therefore writes a {@link PhaseTwoOutboxAware} bean for two reasons
+ * only: it brought the aggregate's persistence itself, so the technology cannot be
+ * read off it, or it wants a store of its own for this aggregate. Anything else is
+ * attributed by the platform.
  */
 public class QuarkusPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
 
   private final Instance<PhaseTwoOutboxAware<?>> phaseTwoOutboxAwares;
 
   private final Instance<PhaseTwoOutbox> phaseTwoOutboxes;
+
+  private final QuarkusPersistenceTechnology persistenceTechnology;
 
   private final boolean jdbcOutboxEnabled;
 
@@ -43,11 +47,13 @@ public class QuarkusPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
   public QuarkusPhaseTwoOutboxResolver(
       final Instance<PhaseTwoOutboxAware<?>> phaseTwoOutboxAwares,
       final Instance<PhaseTwoOutbox> phaseTwoOutboxes,
+      final QuarkusPersistenceTechnology persistenceTechnology,
       final boolean jdbcOutboxEnabled,
       final boolean mongoOutboxEnabled) {
 
     this.phaseTwoOutboxAwares = phaseTwoOutboxAwares;
     this.phaseTwoOutboxes = phaseTwoOutboxes;
+    this.persistenceTechnology = persistenceTechnology;
     this.jdbcOutboxEnabled = jdbcOutboxEnabled;
     this.mongoOutboxEnabled = mongoOutboxEnabled;
 
@@ -72,7 +78,7 @@ public class QuarkusPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
           .getPhaseTwoOutbox();
     }
 
-    // 2./3. the single active outbox bean - or a guiding error if ambiguous
+    // 2./3. attribute by the technology managing the aggregate
     final var outboxes = phaseTwoOutboxes
         .stream()
         .filter(this::isActive)
@@ -80,24 +86,83 @@ public class QuarkusPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
     if (outboxes.isEmpty()) {
       return null;
     }
-    if (outboxes.size() > 1) {
-      throw new IllegalStateException(
-          """
-              Several PhaseTwoOutbox beans exist (%s), but none can be attributed to workflow \
-              aggregate '%s'! Outbox entries must be enlisted in the transaction persisting the \
-              aggregate. To solve this either
-              - provide a bean implementing io.vanillabp.integration.spi.PhaseTwoOutboxAware \
-              for this aggregate (returning the outbox matching its persistence), or
-              - deactivate the unwanted default outbox ('vanillabp.outbox.jdbc.enabled' / \
-              'vanillabp.outbox.mongo.enabled')."""
-              .formatted(
-                  outboxes
-                      .stream()
-                      .map(outbox -> outbox.getClass().getName())
-                      .toList(),
-                  workflowAggregateClass.getName()));
+
+    final var technology = persistenceTechnology.of(workflowAggregateClass);
+
+    // 2. exactly one outbox: use it - unless it is the platform default of the other
+    // technology, which would write the entry outside the aggregate's transaction
+    if (outboxes.size() == 1) {
+      final var outbox = outboxes.getFirst();
+      if (mismatches(outbox, technology)) {
+        throw new IllegalStateException(
+            buildAttributionErrorMessage(workflowAggregateClass, technology, outboxes));
+      }
+      return outbox;
     }
-    return outboxes.getFirst();
+
+    // 3. several outboxes: the platform default of the aggregate's technology
+    return outboxes
+        .stream()
+        .filter(outbox -> matches(outbox, technology))
+        .findFirst()
+        .orElseThrow(() -> new IllegalStateException(
+            buildAttributionErrorMessage(workflowAggregateClass, technology, outboxes)));
+
+  }
+
+  /**
+   * Whether an outbox is the platform default serving the given technology. An outbox
+   * of the application matches nothing: only its own
+   * {@link PhaseTwoOutboxAware} bean says which aggregates it serves.
+   */
+  private static boolean matches(
+      final PhaseTwoOutbox outbox,
+      final QuarkusPersistenceTechnology.Technology technology) {
+
+    return switch (technology) {
+      case JPA -> outbox instanceof JdbcPhaseTwoOutbox;
+      case MONGO -> outbox instanceof MongoPhaseTwoOutbox;
+      case UNKNOWN -> false;
+    };
+
+  }
+
+  /**
+   * Whether an outbox is the platform default of the OTHER technology - the one case in
+   * which a single outbox bean must not be used.
+   */
+  private static boolean mismatches(
+      final PhaseTwoOutbox outbox,
+      final QuarkusPersistenceTechnology.Technology technology) {
+
+    return switch (technology) {
+      case JPA -> outbox instanceof MongoPhaseTwoOutbox;
+      case MONGO -> outbox instanceof JdbcPhaseTwoOutbox;
+      case UNKNOWN -> false;
+    };
+
+  }
+
+  private static String buildAttributionErrorMessage(
+      final Class<?> workflowAggregateClass,
+      final QuarkusPersistenceTechnology.Technology technology,
+      final List<PhaseTwoOutbox> outboxes) {
+
+    return """
+        The PhaseTwoOutbox beans %s cannot be attributed to workflow aggregate '%s' (persistence \
+        technology detected: %s)! Outbox entries must be enlisted in the transaction persisting the \
+        aggregate. To solve this either
+        - provide a bean implementing io.vanillabp.integration.spi.PhaseTwoOutboxAware for this \
+        aggregate (returning the outbox matching its persistence), or
+        - enable the platform default matching the aggregate's persistence (add the corresponding \
+        extension; check 'vanillabp.outbox.jdbc.enabled' / 'vanillabp.outbox.mongo.enabled')."""
+        .formatted(
+            outboxes
+                .stream()
+                .map(outbox -> outbox.getClass().getName())
+                .toList(),
+            workflowAggregateClass.getName(),
+            technology);
 
   }
 

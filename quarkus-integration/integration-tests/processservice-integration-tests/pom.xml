@@ -17,5 +17,6 @@
     <module>default-persistence-tests</module>
     <module>default-persistence-mongo-tests</module>
     <module>discovery-tests</module>
+    <module>mixed-persistence-tests</module>
   </modules>
 </project>
