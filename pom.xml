@@ -35,6 +35,7 @@
     <module>bom</module>
     <module>build-tools/mapstruct-fluent-accessors</module>
     <module>test-utils</module>
+    <module>schema</module>
     <module>migration-adapter</module>
     <module>spring-boot-integration</module>
     <module>quarkus-integration</module>

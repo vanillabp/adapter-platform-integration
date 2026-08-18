@@ -115,6 +115,10 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
     }
     if (getProperties().isCreateSchema()) {
       getStore().createSchemaIfNotExists();
+    } else {
+      // the application creates its schema itself (story 75) - then a missing table is a
+      // deployment which forgot to apply the migration, and it is said at startup
+      getStore().validateSchemaExists();
     }
     retentionCleanup = new TaskDeliveryRetentionCleanup(
         getStore().getTableName(), getProperties().getRetention(), this::cleanUpExpiredRecords);

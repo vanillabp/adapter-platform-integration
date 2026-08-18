@@ -1,0 +1,277 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.vanillabp</groupId>
+    <artifactId>adapter-platform-integration</artifactId>
+    <version>2.0.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>vanillabp-schema</artifactId>
+  <name>VanillaBP schema</name>
+  <description>The tables VanillaBP needs, as a Liquibase changelog plus the SQL generated from it - for applications creating their schema with Liquibase or Flyway instead of at runtime.</description>
+
+  <licenses>
+    <license>
+      <name>Apache License, Version 2.0</name>
+      <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <id>VanillaBP</id>
+      <organization>Phactum Softwareentwicklung GmbH</organization>
+      <organizationUrl>https://www.phactum.at</organizationUrl>
+    </developer>
+  </developers>
+
+  <properties>
+    <liquibase.version>4.29.2</liquibase.version>
+    <!-- The VanillaBP version whose changesets are generated into a Flyway file. A release which
+         changes the schema adds changesets labelled with ITS version plus one execution per
+         database below, so a Flyway file always holds one release's statements only. -->
+    <schema.version>2.0.0</schema.version>
+    <h2.version>2.4.240</h2.version>
+    <postgresql.driver.version>42.7.3</postgresql.driver.version>
+    <generated.sql.directory>${project.build.directory}/generated-resources</generated.sql.directory>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.liquibase</groupId>
+      <artifactId>liquibase-core</artifactId>
+      <version>${liquibase.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <version>${h2.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-postgresql</artifactId>
+      <version>${testcontainers.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-junit-jupiter</artifactId>
+      <version>${testcontainers.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <version>${postgresql.driver.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>5.12.2</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.vanillabp</groupId>
+      <artifactId>test-utils</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+      <!-- the generated SQL: derived from the changelog at every build, so it cannot drift away
+           from it - the changelog is the reviewed artifact, the SQL is not committed -->
+      <resource>
+        <directory>${generated.sql.directory}</directory>
+      </resource>
+    </resources>
+    <plugins>
+      <!-- Nothing here is hand-written SQL: Liquibase generates the statements of every database
+           offline, without contacting one. That is what lets the databases nobody tests inherit
+           Liquibase's type mapping instead of our guesses. -->
+      <!-- Liquibase's offline mode remembers what it "applied" in a CSV. It has to be gone before
+           every generation, otherwise a second build reports "database is up to date" and writes
+           an empty file. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-clean-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>drop-offline-state</id>
+            <goals>
+              <goal>clean</goal>
+            </goals>
+            <phase>initialize</phase>
+            <configuration>
+              <excludeDefaultDirectories>true</excludeDefaultDirectories>
+              <filesets>
+                <fileset>
+                  <directory>${project.build.directory}/offline</directory>
+                </fileset>
+                <fileset>
+                  <directory>${generated.sql.directory}</directory>
+                </fileset>
+              </filesets>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.liquibase</groupId>
+        <artifactId>liquibase-maven-plugin</artifactId>
+        <version>${liquibase.version}</version>
+        <configuration>
+          <changeLogFile>vanillabp/schema/changelog.xml</changeLogFile>
+          <searchPath>${project.basedir}/src/main/resources</searchPath>
+        </configuration>
+        <executions>
+          <execution>
+            <id>generate-h2</id>
+            <goals>
+              <goal>updateSQL</goal>
+            </goals>
+            <phase>generate-resources</phase>
+            <configuration>
+              <url>offline:h2?changeLogFile=${project.build.directory}/offline/h2.csv</url>
+              <labelFilter>${schema.version}</labelFilter>
+              <migrationSqlOutputFile>${generated.sql.directory}/vanillabp/schema/flyway/h2/V${schema.version}__vanillabp_schema.sql</migrationSqlOutputFile>
+            </configuration>
+          </execution>
+          <execution>
+            <id>generate-postgresql</id>
+            <goals>
+              <goal>updateSQL</goal>
+            </goals>
+            <phase>generate-resources</phase>
+            <configuration>
+              <url>offline:postgresql?changeLogFile=${project.build.directory}/offline/postgresql.csv</url>
+              <labelFilter>${schema.version}</labelFilter>
+              <migrationSqlOutputFile>${generated.sql.directory}/vanillabp/schema/flyway/postgresql/V${schema.version}__vanillabp_schema.sql</migrationSqlOutputFile>
+            </configuration>
+          </execution>
+          <execution>
+            <id>generate-mysql</id>
+            <goals>
+              <goal>updateSQL</goal>
+            </goals>
+            <phase>generate-resources</phase>
+            <configuration>
+              <url>offline:mysql?changeLogFile=${project.build.directory}/offline/mysql.csv</url>
+              <labelFilter>${schema.version}</labelFilter>
+              <migrationSqlOutputFile>${generated.sql.directory}/vanillabp/schema/flyway/mysql/V${schema.version}__vanillabp_schema.sql</migrationSqlOutputFile>
+            </configuration>
+          </execution>
+          <execution>
+            <id>generate-mariadb</id>
+            <goals>
+              <goal>updateSQL</goal>
+            </goals>
+            <phase>generate-resources</phase>
+            <configuration>
+              <url>offline:mariadb?changeLogFile=${project.build.directory}/offline/mariadb.csv</url>
+              <labelFilter>${schema.version}</labelFilter>
+              <migrationSqlOutputFile>${generated.sql.directory}/vanillabp/schema/flyway/mariadb/V${schema.version}__vanillabp_schema.sql</migrationSqlOutputFile>
+            </configuration>
+          </execution>
+          <execution>
+            <id>generate-mssql</id>
+            <goals>
+              <goal>updateSQL</goal>
+            </goals>
+            <phase>generate-resources</phase>
+            <configuration>
+              <url>offline:mssql?changeLogFile=${project.build.directory}/offline/mssql.csv</url>
+              <labelFilter>${schema.version}</labelFilter>
+              <migrationSqlOutputFile>${generated.sql.directory}/vanillabp/schema/flyway/mssql/V${schema.version}__vanillabp_schema.sql</migrationSqlOutputFile>
+            </configuration>
+          </execution>
+          <execution>
+            <id>generate-oracle</id>
+            <goals>
+              <goal>updateSQL</goal>
+            </goals>
+            <phase>generate-resources</phase>
+            <configuration>
+              <url>offline:oracle?changeLogFile=${project.build.directory}/offline/oracle.csv</url>
+              <labelFilter>${schema.version}</labelFilter>
+              <migrationSqlOutputFile>${generated.sql.directory}/vanillabp/schema/flyway/oracle/V${schema.version}__vanillabp_schema.sql</migrationSqlOutputFile>
+            </configuration>
+          </execution>
+          <execution>
+            <id>generate-db2</id>
+            <goals>
+              <goal>updateSQL</goal>
+            </goals>
+            <phase>generate-resources</phase>
+            <configuration>
+              <url>offline:db2?changeLogFile=${project.build.directory}/offline/db2.csv</url>
+              <labelFilter>${schema.version}</labelFilter>
+              <migrationSqlOutputFile>${generated.sql.directory}/vanillabp/schema/flyway/db2/V${schema.version}__vanillabp_schema.sql</migrationSqlOutputFile>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Liquibase's header names the moment of generation, the only line which would differ
+           from build to build. It is replaced by a stable one; everything else Liquibase writes
+           (which changelog, which changeset, the comments of the changeset) stays, because that is
+           the provenance a reader of the file wants. -->
+      <!-- the PostgreSQL test runs against a container, so it is an IT -->
+      <plugin>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>3.1.0</version>
+        <executions>
+          <execution>
+            <id>stabilize-generation-header</id>
+            <goals>
+              <goal>run</goal>
+            </goals>
+            <!-- generate-resources, after the liquibase executions of that phase and before the
+                 resources plugin copies the files into the artifact -->
+            <phase>generate-resources</phase>
+            <configuration>
+              <target>
+                <replaceregexp byline="true">
+                  <regexp pattern="^-- Ran at: .*$"/>
+                  <substitution expression="-- Generated from the changelog by the build of VanillaBP ${schema.version} - do not edit"/>
+                  <fileset dir="${generated.sql.directory}" includes="**/*.sql"/>
+                </replaceregexp>
+                <!-- and the offline URL, which carries an absolute path of the build machine -->
+                <replaceregexp byline="true">
+                  <regexp pattern="^-- Against: .*offline:([a-z0-9]+).*$"/>
+                  <substitution expression="-- Database: \1 (generated offline, no database was contacted)"/>
+                  <fileset dir="${generated.sql.directory}" includes="**/*.sql"/>
+                </replaceregexp>
+              </target>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+    </plugins>
+  </build>
+</project>
