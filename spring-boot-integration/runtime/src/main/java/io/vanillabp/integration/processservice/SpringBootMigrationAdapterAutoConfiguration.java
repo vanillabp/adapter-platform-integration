@@ -420,6 +420,25 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   }
 
   /**
+   * The adapter-facing pre-commit hook (story 87): a BPMS adapter hands its phase-one check
+   * here and it runs right before the transaction of the workflow aggregate commits, so the
+   * window between the check and the phase-two dispatch stays as small as the platform
+   * allows. The runner of the aggregate is resolved first, which is what makes an
+   * application-owned unit of work (story 70) the one being hooked into.
+   *
+   * @param transactionRunnerResolver Resolves the runner of a workflow aggregate
+   * @return The pre-commit hook
+   */
+  @Bean
+  @ConditionalOnMissingBean(io.vanillabp.integration.adapter.spi.PreCommitRegistrar.class)
+  public io.vanillabp.integration.adapter.spi.PreCommitRegistrar vanillaBpPreCommitRegistrar(
+      final SpringTransactionRunnerResolver transactionRunnerResolver) {
+
+    return new SpringPreCommitRegistrar(transactionRunnerResolver);
+
+  }
+
+  /**
    * Resolves the phase-two outbox per workflow aggregate (mixed persistence,
    * dedicated outboxes) - injected into the process-service beans and invoked at
    * startup by {@link #vanillaBpProcessServiceStartupValidation}.
