@@ -53,12 +53,13 @@ public class NoAdapterBootTest {
           stringWriter.toString().contains("No VanillaBP BPMS adapter found in classpath!"),
           "expected the guiding message but got: "
               + stringWriter);
-      // the message names what to add - a developer should not have to search for it
+      // the message says where to look up an adapter - a developer should not have to
+      // search for it, and the list of adapters does not belong into compiled code
       Assertions.assertTrue(
           stringWriter
               .toString()
-              .contains("org.camunda.community.vanillabp:camunda7-adapter-spring-boot"),
-          "expected the artifacts to add but got: "
+              .contains("https://github.com/vanillabp/adapter-platform-integration/wiki/BPMS-adapters"),
+          "expected the link to the adapter list but got: "
               + stringWriter);
 
     }

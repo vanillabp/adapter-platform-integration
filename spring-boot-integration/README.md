@@ -37,9 +37,10 @@ created. It only speaks up when a workflow module is on the classpath, because a
 application without one has nothing to run and boots as it always did. The neighbouring
 case, an integration which is loaded but got no adapter with it, stays here in
 `SpringBootMigrationAdapterAutoConfiguration`, which knows the adapters actually loaded.
-Both messages name the adapter artifacts to add (`BpmsAdapters` of the support module) and
-say that the VanillaBP BOM does not manage their versions, since adapters are released on
-their own schedule.
+Both messages say where to look up an adapter (`BpmsAdapters` of the support module points at
+the wiki page listing them) and that the VanillaBP BOM does not manage adapter versions, since
+adapters are released on their own schedule. The adapters themselves are deliberately not
+listed in compiled code: a list in a JAR is out of date the day a new adapter appears.
 
 ## Configuration binding
 

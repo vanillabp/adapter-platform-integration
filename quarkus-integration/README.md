@@ -148,13 +148,14 @@ as possible at **build time**, following Quarkus' extension philosophy:
 
 ## What a message of this module names
 
-An application without a BPMS adapter hears which extensions would give it one. No Quarkus
-extension publishing a capability `io.vanillabp.adapter.*` means there is no BPMS to run a
-workflow module, so the build ends with that sentence, the list of adapter extensions and
-the note that their versions do not come from the VanillaBP BOM (`BpmsAdapters`, story
-81). The Spring Boot side says the same in its own words, but from its support module: there
-an adapter is what brings the integration along, so the integration cannot be the one to
-report its absence.
+An application without a BPMS adapter hears where to get one. No Quarkus extension
+publishing a capability `io.vanillabp.adapter.*` means there is no BPMS to run a workflow
+module, so the build ends with that sentence, a link to the wiki page listing every adapter
+with the name of its Quarkus extension, and the note that adapter versions do not come from
+the VanillaBP BOM (`BpmsAdapters`, story 81). The adapters are not listed in the code on
+purpose: they are released independently, so a list in a JAR ages badly. The Spring Boot
+side says the same in its own words, but from its support module: there an adapter is what
+brings the integration along, so the integration cannot be the one to report its absence.
 
 Where a message names a bean, it names the class the application wrote, not the runtime
 class. The runtime class of a normal-scoped CDI bean is the client proxy of the container,

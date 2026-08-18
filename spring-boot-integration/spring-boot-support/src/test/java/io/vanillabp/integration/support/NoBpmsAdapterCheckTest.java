@@ -26,7 +26,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 public class NoBpmsAdapterCheckTest {
 
   @Test
-  @DisplayName("A workflow module without an adapter ends the boot naming the artifacts to add")
+  @DisplayName("A workflow module without an adapter ends the boot pointing at the adapter list")
   public void aWorkflowModuleWithoutAnAdapterEndsTheBoot() {
 
     final var failure = assertThrowsExactly(
@@ -39,18 +39,10 @@ public class NoBpmsAdapterCheckTest {
     assertTrue(
         failure.getMessage().contains("META-INF/workflow-module"),
         failure.getMessage());
+    // the adapters themselves are NOT listed in compiled code - the message points at the
+    // wiki page carrying the complete list with the Maven coordinates
     assertTrue(
-        failure
-            .getMessage()
-            .contains("org.camunda.community.vanillabp:camunda7-adapter-spring-boot"),
-        failure.getMessage());
-    assertTrue(
-        failure
-            .getMessage()
-            .contains("org.camunda.community.vanillabp:camunda8-adapter-spring-boot"),
-        failure.getMessage());
-    assertTrue(
-        failure.getMessage().contains("io.vanillabp:process-engine-api-adapter-spring-boot"),
+        failure.getMessage().contains(BpmsAdapters.ADAPTERS_WIKI_URL),
         failure.getMessage());
     // adapters are released on their own schedule, so the BOM does not manage their version
     assertTrue(failure.getMessage().contains("BOM"), failure.getMessage());

@@ -27,9 +27,7 @@ public class NoAdapterExtensionTest {
           .addClass(DummyAdapters.class))                              // necessary due to anonymous class in DummyAdapters
       .assertException(exceptionHavingMessageContaining(IllegalStateException.class,
           "No VanillaBP BPMS adapter found in classpath!",
-          "org.camunda.community.vanillabp:camunda7-adapter-quarkus",
-          "org.camunda.community.vanillabp:camunda8-adapter-quarkus",
-          "io.vanillabp:process-engine-api-adapter-quarkus"));
+          "https://github.com/vanillabp/adapter-platform-integration/wiki/BPMS-adapters"));
 
   @Test
   public void testAdapterConfiguration() {
