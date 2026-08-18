@@ -203,6 +203,11 @@ public class JdbcPhaseTwoOutboxDispatcher {
 
     if (properties.isCreateSchema()) {
       createTableIfNotExists();
+    } else {
+      // the application creates its schema itself (story 75) - a missing table is then a
+      // deployment which forgot to apply the migration, and it is said at startup instead of at
+      // the first workflow start
+      validateTableExists();
     }
 
     executor = Executors.newSingleThreadScheduledExecutor(runnable -> {
@@ -256,6 +261,37 @@ public class JdbcPhaseTwoOutboxDispatcher {
               Could not create the phase-two outbox table '%s'! Set 'vanillabp.outbox.create-schema' \
               to 'false' and manage the schema manually if the DDL is not suitable for your database."""
               .formatted(tableName), e);
+    }
+
+  }
+
+  /**
+   * Verifies that the outbox table exists, for an application creating its schema itself
+   * (story 75). The message names the table, the property which would have created it and the
+   * artifact carrying the statements.
+   *
+   * @throws IllegalStateException If the table is missing
+   */
+  private void validateTableExists() {
+
+    try (var connection = dataSource.get().getConnection()) {
+      if (tableExists(connection, tableName)) {
+        return;
+      }
+      throw new IllegalStateException(
+          """
+              The phase-two outbox table '%s' does not exist! Starting a workflow on a remote BPMS \
+              writes an entry into it inside the caller's transaction, so without the table nothing \
+              can be started. Either
+              - apply the schema of VanillaBP with your migration tool: the artifact \
+              'io.vanillabp:vanillabp-schema' ships the Liquibase changelog \
+              'vanillabp/schema/changelog.xml' and the SQL generated from it for Flyway, or
+              - let VanillaBP create the table by setting 'vanillabp.outbox.create-schema' to \
+              'true' (the default)."""
+              .formatted(tableName));
+    } catch (final SQLException e) {
+      throw new IllegalStateException(
+          "Could not check whether the phase-two outbox table '%s' exists!".formatted(tableName), e);
     }
 
   }

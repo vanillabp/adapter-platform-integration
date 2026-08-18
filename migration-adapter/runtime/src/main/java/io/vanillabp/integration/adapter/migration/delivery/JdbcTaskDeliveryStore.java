@@ -232,6 +232,43 @@ public class JdbcTaskDeliveryStore {
 
   }
 
+  /**
+   * Verifies that the table exists, for an application which creates its schema itself (story 75).
+   * <p>
+   * Without this check a missing table surfaces at the first delivery, which is hours after the
+   * deployment and looks like a bug of the application. The message names the table, the property
+   * which would have created it and the artifact which contains the statements.
+   *
+   * @throws IllegalStateException If the table is missing
+   */
+  public void validateSchemaExists() {
+
+    Connection connection = null;
+    try {
+      connection = connectionAccess.acquire();
+      if (tableExists(connection, tableName)) {
+        return;
+      }
+      throw new IllegalStateException(
+          """
+              The task-delivery table '%s' does not exist! VanillaBP remembers every task delivery \
+              it processed in it, so a BPMS repeating a delivery is answered from it instead of \
+              running the handler twice. Either
+              - apply the schema of VanillaBP with your migration tool: the artifact \
+              'io.vanillabp:vanillabp-schema' ships the Liquibase changelog \
+              'vanillabp/schema/changelog.xml' and the SQL generated from it for Flyway, or
+              - let VanillaBP create the table by setting 'vanillabp.outbox.create-schema' to \
+              'true' (the default)."""
+              .formatted(tableName));
+    } catch (final SQLException e) {
+      throw new IllegalStateException(
+          "Could not check whether the task-delivery table '%s' exists!".formatted(tableName), e);
+    } finally {
+      release(connection);
+    }
+
+  }
+
   private void release(
       final Connection connection) {
 

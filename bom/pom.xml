@@ -108,6 +108,12 @@
         <artifactId>migration-adapter-spi</artifactId>
         <version>${project.version}</version>
       </dependency>
+      <!-- The tables VanillaBP needs, for an application creating its schema itself. -->
+      <dependency>
+        <groupId>io.vanillabp</groupId>
+        <artifactId>vanillabp-schema</artifactId>
+        <version>${project.version}</version>
+      </dependency>
       <!-- Optional helpers. -->
       <dependency>
         <groupId>io.vanillabp</groupId>
