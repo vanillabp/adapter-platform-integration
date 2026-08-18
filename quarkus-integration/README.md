@@ -146,6 +146,16 @@ as possible at **build time**, following Quarkus' extension philosophy:
      adapters in reverse start order and stop all process services afterwards
      (`VanillaBpShutdownObserver` → `VanillaBpDeploymentRunner.stop()`).
 
+## What a message of this module names
+
+Where a message names a bean, it names the class the application wrote, not the runtime
+class. The runtime class of a normal-scoped CDI bean is the client proxy of the container,
+and a name ending in `_ClientProxy` belongs to no file the developer can open.
+`Instance#handles()` yields a handle per bean, and `Handle#getBean().getBeanClass()` is the
+declared class, which is what `QuarkusTransactionRunnerResolver` reports (story 80). The
+suffix is never cut off a runtime class name: that guesses at a naming convention of the
+container and breaks the day the container changes it.
+
 ## Hints
 
 ### Logging during tests

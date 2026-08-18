@@ -1,5 +1,6 @@
 package io.vanillabp.integration.runtime.processservice;
 
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -11,6 +12,7 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.spi.TransactionRunnerAware;
 import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.inject.Instance.Handle;
 
 /**
  * Quarkus implementation of the core's {@link TransactionRunnerResolver} (story 70).
@@ -46,6 +48,15 @@ public class QuarkusTransactionRunnerResolver implements TransactionRunnerResolv
   }
 
   private record Resolution(TransactionRunner runner, Origin origin, String description) {
+  }
+
+  /**
+   * A bean of the application together with the name of the class it was DECLARED as
+   * (story 80).
+   *
+   * @param <T> The bean type
+   */
+  private record DeclaredBean<T>(T bean, String declaredClassName) {
   }
 
   public QuarkusTransactionRunnerResolver(
@@ -127,14 +138,13 @@ public class QuarkusTransactionRunnerResolver implements TransactionRunnerResolv
       final Class<?> workflowAggregateClass) {
 
     // 1. the most specific TransactionRunnerAware bean covering the aggregate class
-    final List<TransactionRunnerAware<?>> awares = transactionRunnerAwares
-        .stream()
-        .<TransactionRunnerAware<?>>map(aware -> aware)
-        .toList();
+    final var awares = declaredBeansOf(transactionRunnerAwares);
     final var mostSpecificAware = AwareSelection
         .mostSpecificDistinct(
             awares,
-            TransactionRunnerAware::getAggregateClass,
+            aware -> aware
+                .bean()
+                .getAggregateClass(),
             workflowAggregateClass,
             tied -> new IllegalStateException(
                 """
@@ -145,32 +155,29 @@ public class QuarkusTransactionRunnerResolver implements TransactionRunnerResolv
                     .formatted(
                         tied
                             .stream()
-                            .map(aware -> aware
-                                .getClass()
-                                .getName())
+                            .map(DeclaredBean::declaredClassName)
                             .toList(),
                         workflowAggregateClass.getName())));
     if (mostSpecificAware.isPresent()) {
       final var aware = mostSpecificAware.get();
       return new Resolution(
-          aware.getTransactionRunner(), Origin.AWARE, "the TransactionRunnerAware bean '%s' of the application"
-              .formatted(
-                  aware
-                      .getClass()
-                      .getName()));
+          aware
+              .bean()
+              .getTransactionRunner(), Origin.AWARE, "the TransactionRunnerAware bean '%s' of the application"
+                  .formatted(aware.declaredClassName()));
     }
 
     // 2. a plain TransactionRunner bean of the application
-    final var runners = transactionRunners
-        .stream()
-        .toList();
+    final var runners = declaredBeansOf(transactionRunners);
     if (runners.size() == 1) {
       return new Resolution(
-          runners.getFirst(), Origin.APPLICATION_BEAN, "the TransactionRunner bean '%s' of the application".formatted(
-              runners
-                  .getFirst()
-                  .getClass()
-                  .getName()));
+          runners
+              .getFirst()
+              .bean(), Origin.APPLICATION_BEAN, "the TransactionRunner bean '%s' of the application"
+                  .formatted(
+                      runners
+                          .getFirst()
+                          .declaredClassName()));
     }
     if (runners.size() > 1) {
       throw new IllegalStateException(
@@ -182,15 +189,68 @@ public class QuarkusTransactionRunnerResolver implements TransactionRunnerResolv
               .formatted(
                   runners
                       .stream()
-                      .map(runner -> runner
-                          .getClass()
-                          .getName())
+                      .map(DeclaredBean::declaredClassName)
                       .toList(),
                   workflowAggregateClass.getName()));
     }
 
     // 3. the platform's runner - JTA, always available
     return new Resolution(platformRunner, Origin.PLATFORM, "the JTA transaction of Quarkus");
+
+  }
+
+  /**
+   * The beans of an injection point together with the class each of them was DECLARED
+   * as (story 80): the runtime class of a normal-scoped CDI bean is the client proxy
+   * the container puts in front of it, and a name ending in <code>_ClientProxy</code>
+   * sends a reader looking for a class which is not in their sources. The bean
+   * metadata of the handle knows the declared class, so a message names what the
+   * application wrote.
+   * <p>
+   * The suffix is deliberately NOT stripped from a runtime class name: that would
+   * guess at a naming convention of the container and break the day the container
+   * changes it. Where no bean metadata is available the runtime class is named, which
+   * is still better than nothing.
+   *
+   * @param <T> The bean type
+   * @param instance The injection point
+   * @return The beans and their declared class names
+   */
+  private static <T> List<DeclaredBean<T>> declaredBeansOf(
+      final Instance<T> instance) {
+
+    final var result = new LinkedList<DeclaredBean<T>>();
+    for (final Handle<T> handle : instance.handles()) {
+      final var bean = handle.get();
+      if (bean == null) {
+        continue;
+      }
+      result.add(new DeclaredBean<>(bean, declaredClassNameOf(handle, bean)));
+    }
+    return result;
+
+  }
+
+  /**
+   * The name of the class a bean was declared as, falling back to the runtime class.
+   *
+   * @param handle The bean's handle
+   * @param bean The bean
+   * @return The class name to name in a message
+   */
+  private static String declaredClassNameOf(
+      final Handle<?> handle,
+      final Object bean) {
+
+    final var metadata = handle.getBean();
+    final var declaredClass = metadata == null
+        ? null
+        : metadata.getBeanClass();
+    return declaredClass == null
+        ? bean
+            .getClass()
+            .getName()
+        : declaredClass.getName();
 
   }
 
