@@ -169,6 +169,84 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   }
 
   @Override
+  public boolean isAggregateProperty(
+      final Class<?> workflowAggregateClass,
+      final String propertyName) {
+
+    if ((workflowAggregateClass == null) || (propertyName == null)) {
+      return false;
+    }
+    if (propertiesOf(workflowAggregateClass)
+        .stream()
+        .anyMatch(property -> property.name().equals(propertyName))) {
+      return true;
+    }
+    // MIGRATION (story 66, to be removed in 2.1 together with the Camunda 7 EL
+    // resolver's fallback): what VanillaBP 1 resolved and the sync model does not is an
+    // attribute of the aggregate as well, and it is the case which has to be named
+    // loudest - a model relying on such a name breaks silently. Neither of the two can
+    // ever be shared, so isSharedWithBpms answers false and the check reports them:
+    // a FIELD without a getter, and an isX() method returning something other than
+    // boolean (version 1 read those, the JavaBean rule does not).
+    return (findField(workflowAggregateClass, propertyName) != null) || (version1OnlyGetter(workflowAggregateClass,
+        propertyName) != null);
+
+  }
+
+  /**
+   * The <code>isX()</code> method of that name whose return type is NOT boolean - what
+   * VanillaBP 1 resolved and {@link #propertyNameOf(Method)} rejects.
+   *
+   * @param workflowAggregateClass The workflow-aggregate class
+   * @param propertyName The attribute's name
+   * @return The method or <code>null</code>
+   */
+  private static Method version1OnlyGetter(
+      final Class<?> workflowAggregateClass,
+      final String propertyName) {
+
+    if (propertyName.isEmpty()) {
+      return null;
+    }
+    final var methodName = "is"
+        + Character.toUpperCase(propertyName.charAt(0))
+        + propertyName.substring(1);
+    try {
+      final var method = workflowAggregateClass.getMethod(methodName);
+      return (method.getReturnType() == boolean.class) || (method.getReturnType() == Boolean.class)
+          ? null
+          : method;
+    } catch (final NoSuchMethodException notThere) {
+      return null;
+    }
+
+  }
+
+  @Override
+  public boolean isSharedWithBpms(
+      final Class<?> workflowAggregateClass,
+      final String propertyName,
+      final AggregateSyncMode adapterDefault) {
+
+    if ((workflowAggregateClass == null) || (propertyName == null)) {
+      return false;
+    }
+    final var declared = baseModeOf(workflowAggregateClass);
+    final var inherited = declared != null
+        ? declared
+        : adapterDefault == AggregateSyncMode.FULL;
+    return propertiesOf(workflowAggregateClass)
+        .stream()
+        .filter(property -> property.name().equals(propertyName))
+        .findFirst()
+        .map(property -> property.synced() != null
+            ? property.synced()
+            : inherited)
+        .orElse(false);
+
+  }
+
+  @Override
   public void validateSyncModel(
       final Class<?> workflowAggregateClass) {
 

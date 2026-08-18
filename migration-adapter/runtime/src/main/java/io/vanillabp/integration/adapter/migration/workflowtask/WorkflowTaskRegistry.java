@@ -945,6 +945,22 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
       final String workflowAggregateId,
       final io.vanillabp.integration.adapter.spi.AggregateSyncMode adapterDefault) {
 
+    return syncedValues(workflowModuleId, bpmnProcessId, workflowAggregateId, adapterDefault, false);
+
+  }
+
+  /**
+   * The shared values of an aggregate, read either after the caller's transaction
+   * committed (a remote BPMS completing a task) or within it (an embedded engine
+   * completing the task in the same transaction, story 66).
+   */
+  private Map<String, Object> syncedValues(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final io.vanillabp.integration.adapter.spi.AggregateSyncMode adapterDefault,
+      final boolean inCurrentTransaction) {
+
     if (aggregateSync == null) {
       return Map.of();
     }
@@ -959,23 +975,28 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
           workflowModuleId);
       return Map.of();
     }
-    // the caller's transaction (the one the @WorkflowTask ran in) is COMMITTED at
-    // this point - the aggregate is loaded in a new one. A failure must never
+    // for a remote BPMS the caller's transaction (the one the @WorkflowTask ran in) is
+    // COMMITTED at this point, so the aggregate is loaded in a new one; an embedded
+    // engine is still inside that transaction and reads there. A failure must never
     // prevent the task from being completed: the BPMS would redeliver it forever.
+    final java.util.function.Supplier<Map<String, Object>> read = () -> {
+      final var workflowAggregate = entry.processService.loadWorkflowAggregate(workflowAggregateId);
+      if (workflowAggregate == null) {
+        log.warn(
+            "The workflow aggregate '{}' of BPMN process '{}' of workflow module '{}' could not "
+                + "be loaded - only the technical aggregate-ID variable is sent to the BPMS",
+            workflowAggregateId,
+            bpmnProcessId,
+            workflowModuleId);
+        return Map.<String, Object>of();
+      }
+      return aggregateSync.syncedValues(workflowAggregate, adapterDefault);
+    };
+    final var runner = entry.processService.getTransactionRunner(transactionRunner);
     try {
-      return entry.processService.getTransactionRunner(transactionRunner).requireNew(() -> {
-        final var workflowAggregate = entry.processService.loadWorkflowAggregate(workflowAggregateId);
-        if (workflowAggregate == null) {
-          log.warn(
-              "The workflow aggregate '{}' of BPMN process '{}' of workflow module '{}' could not "
-                  + "be loaded - only the technical aggregate-ID variable is sent to the BPMS",
-              workflowAggregateId,
-              bpmnProcessId,
-              workflowModuleId);
-          return Map.<String, Object>of();
-        }
-        return aggregateSync.syncedValues(workflowAggregate, adapterDefault);
-      });
+      return inCurrentTransaction
+          ? runner.inCurrent(read)
+          : runner.requireNew(read);
     } catch (final RuntimeException e) {
       log.warn(
           "Could not determine the values of the workflow aggregate '{}' of BPMN process '{}' of "
@@ -991,11 +1012,33 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
   }
 
   @Override
+  public Map<String, Object> syncedWorkflowAggregateValuesInCurrentTransaction(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final io.vanillabp.integration.adapter.spi.AggregateSyncMode adapterDefault) {
+
+    // an embedded engine completes the task in the transaction the handler ran in, so
+    // the values have to be read from the aggregate as it is NOW - a new transaction
+    // would see the state before the handler or wait for the row this one holds
+    return syncedValues(
+        workflowModuleId,
+        bpmnProcessId,
+        workflowAggregateId,
+        adapterDefault,
+        true);
+
+  }
+
+  @Deprecated(forRemoval = true)
+  @Override
   public boolean workflowAggregateHasProperty(
       final String workflowModuleId,
       final String bpmnProcessId,
       final String propertyName) {
 
+    // the migration fallback of story 66: version 1 resolved attributes without a getter
+    // as well, so the reader looks at getters AND fields
     final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
     if ((entry == null) || (entry.processService == null)) {
       return false;
@@ -1004,6 +1047,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
 
   }
 
+  @Deprecated(forRemoval = true)
   @Override
   public Object resolveWorkflowAggregateProperty(
       final String workflowModuleId,
@@ -1015,13 +1059,37 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
     if (entry == null) {
       return null;
     }
-    // runs within the CALLER's transaction: embedded BPMS evaluate expressions
+    // runs within the CALLER's transaction: an embedded BPMS evaluates expressions
     // inside an engine transaction, the aggregate has to join it
     final var workflowAggregate = entry.processService.loadWorkflowAggregate(workflowAggregateId);
     if (workflowAggregate == null) {
       return null;
     }
     return AggregatePropertyReader.read(workflowAggregate, propertyName);
+
+  }
+
+  @Override
+  public java.util.Collection<String> unsharedWorkflowAggregateProperties(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final java.util.Collection<String> names,
+      final io.vanillabp.integration.adapter.spi.AggregateSyncMode adapterDefault) {
+
+    if ((aggregateSync == null) || (names == null) || names.isEmpty()) {
+      return List.of();
+    }
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    if ((entry == null) || (entry.processService == null)) {
+      return List.of();
+    }
+    final var aggregateClass = entry.processService.getWorkflowAggregateClass();
+    return names
+        .stream()
+        .distinct()
+        .filter(name -> aggregateSync.isAggregateProperty(aggregateClass, name))
+        .filter(name -> !aggregateSync.isSharedWithBpms(aggregateClass, name, adapterDefault))
+        .toList();
 
   }
 

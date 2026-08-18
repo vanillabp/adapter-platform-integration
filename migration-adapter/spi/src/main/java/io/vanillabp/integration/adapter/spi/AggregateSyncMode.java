@@ -6,15 +6,19 @@ package io.vanillabp.integration.adapter.spi;
  * {@code @SyncWithBPMS}/{@code @NoSyncWithBPMS} (an aggregate class annotation
  * overrides it, an attribute annotation overrides that, and so on).
  * <p>
- * <b>The default belongs to the adapter because the mechanics do:</b>
- * <ul>
- * <li>an EMBEDDED engine reads the aggregate LIVE while evaluating BPMN
- * expressions - it needs nothing pushed, so its default is {@link #NONE} and
- * whatever IS shared is written as pure context information for operators (e.g.
- * Camunda 7's Cockpit);</li>
- * <li>a REMOTE engine can only see what VanillaBP pushes as process variables -
- * its default is {@link #FULL}, otherwise no BPMN expression could work.</li>
- * </ul>
+ * <b>The default is about what a MODEL may read, not about how an engine reads it</b>
+ * (corrected by story 66). Every BPMS evaluates the expressions of its models itself,
+ * against what VanillaBP pushed as variables - an embedded engine included, even though
+ * it could reach into the application. So {@link #FULL} is the default of every adapter:
+ * an application which annotates nothing gets models which can read every attribute of
+ * their workflow aggregate, on every BPMS, and an application which minimizes
+ * ({@code @NoSyncWithBPMS} on the class, {@code @SyncWithBPMS} on what the models need)
+ * gets the same behaviour everywhere as well.
+ * <p>
+ * {@link #NONE} exists for an adapter whose BPMS is fed by a different mechanism
+ * entirely. Camunda 7 used it until story 66, where an EL resolver read the aggregate
+ * live: that made models which work on Camunda 7 fail on every remote BPMS, so the
+ * resolver is gone and the values are pushed like everywhere else.
  */
 public enum AggregateSyncMode {
 
