@@ -29,6 +29,7 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
+import io.vanillabp.integration.support.BpmsAdapters;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.integration.workflowmodule.WorkflowModules;
 import io.vanillabp.integration.workflowtask.SpringTransactionRunner;
@@ -94,15 +95,22 @@ public class SpringBootMigrationAdapterAutoConfiguration {
       final ApplicationContext applicationContext) {
 
     // ObjectProvider (not a required List): without any adapter on the classpath the
-    // bean creation still runs and the guiding message
-    // "No adapters found in classpath!" is actually reachable
+    // bean creation still runs and the guiding message about a missing adapter is
+    // actually reachable
     final var adaptersLoaded = adapterConfigurations
         .stream()
         .map(AdapterConfigurationBase::getAdapterType)
         .toList();
     if (adaptersLoaded.isEmpty()) {
+      // the neighbouring case - no integration at all, because the adapter which would
+      // have brought it is missing - is reported by NoBpmsAdapterCheck of module
+      // 'vanillabp-spring-boot-support' (story 81)
       throw new IllegalStateException(
-          "No adapters found in classpath! Add dependencies providing VanillaBP adapters.");
+          """
+              No VanillaBP BPMS adapter found in classpath! VanillaBP's Spring Boot integration is \
+              loaded, but no adapter, so there is no BPMS which could run the workflows of a \
+              workflow module.%s"""
+              .formatted(BpmsAdapters.artifactsToAdd()));
     }
 
     // convention over configuration (story 34): the classpath facts are what the

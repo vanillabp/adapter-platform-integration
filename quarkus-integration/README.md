@@ -148,6 +148,14 @@ as possible at **build time**, following Quarkus' extension philosophy:
 
 ## What a message of this module names
 
+An application without a BPMS adapter hears which extensions would give it one. No Quarkus
+extension publishing a capability `io.vanillabp.adapter.*` means there is no BPMS to run a
+workflow module, so the build ends with that sentence, the list of adapter extensions and
+the note that their versions do not come from the VanillaBP BOM (`BpmsAdapters`, story
+81). The Spring Boot side says the same in its own words, but from its support module: there
+an adapter is what brings the integration along, so the integration cannot be the one to
+report its absence.
+
 Where a message names a bean, it names the class the application wrote, not the runtime
 class. The runtime class of a normal-scoped CDI bean is the client proxy of the container,
 and a name ending in `_ClientProxy` belongs to no file the developer can open.

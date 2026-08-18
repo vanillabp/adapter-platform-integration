@@ -15,9 +15,31 @@ autoconfiguration mechanism to provide the best developer experience.
    2. Managing of VanillaBP adapters at runtime connecting to BPMSs.
 2. **[spring-boot-support](./spring-boot-support):**<br>
    A tiny collection of useful things in the context of Spring Boot to be used as
-   a dependency instead of `io.vanillabp:spi-for-java`.
+   a dependency instead of `io.vanillabp:spi-for-java`. It also carries the one
+   check which has to work without any of the rest (see below).
 3. **[integration-tests](./integration-tests):**<br>
    Modules which ensure the VanillaBP Spring Boot extension works as documented.
+
+## An application without a BPMS adapter
+
+On Spring Boot a BPMS adapter brings `vanillabp-spring-boot-integration` along, so an
+application which forgot the adapter dependency has no VanillaBP runtime at all - the
+autoconfiguration below `runtime` is not on the classpath and cannot report anything. What
+such an application does have is `vanillabp-spring-boot-support`, because every workflow
+module compiles against it. That is why the check reporting a missing adapter
+(`NoBpmsAdapterCheck`, story 81) lives in the support module and not here: it is the only
+VanillaBP code present in the case it was written for. Without it the bean container
+answers instead ("No qualifying bean of type `ProcessService<...>`"), a message mentioning
+neither an adapter nor VanillaBP.
+
+It is a `BeanFactoryPostProcessor`, so it runs before the first bean of the application is
+created. It only speaks up when a workflow module is on the classpath, because an
+application without one has nothing to run and boots as it always did. The neighbouring
+case, an integration which is loaded but got no adapter with it, stays here in
+`SpringBootMigrationAdapterAutoConfiguration`, which knows the adapters actually loaded.
+Both messages name the adapter artifacts to add (`BpmsAdapters` of the support module) and
+say that the VanillaBP BOM does not manage their versions, since adapters are released on
+their own schedule.
 
 ## Configuration binding
 
