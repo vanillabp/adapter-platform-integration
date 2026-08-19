@@ -4,6 +4,31 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## A workflow which ended can release its delivery records (2026-08-19)
+
+Story 76. Additive and switched off, so nothing changes for an application which does not
+configure it.
+
+The records of processed task deliveries were cleaned up by age alone until now
+(`vanillabp.outbox.retention`, seven days). Where
+`vanillabp.delivery.release-on-workflow-end` is set to `true`, globally or per workflow
+module, the records of a workflow are deleted the moment it ends instead: nothing of an
+ended instance can be redelivered, so the clock does not have to decide it. The deletion
+runs in the transaction of the end notification and is bounded by workflow module, BPMN
+process, workflow aggregate and by the moment of that notification, which keeps the
+records of a second workflow on the same aggregate.
+
+Switching it on has a price in the model: VanillaBP asks a BPMS to report the end of a
+workflow only where that end is used, so from then on every deployed process of the module
+carries the listener respectively the worker doing it. That is why it is off by default,
+and the retention stays the backstop for workflows still running, for aggregates whose
+workflow never ends and for stores which cannot delete.
+
+**Only relevant for stores of your own:** `TaskDeliveryLog.releaseRecordsOf(...)` is a new
+`default` method deleting nothing, so an existing store stays valid and keeps its records
+until the retention passed. Where the release is switched on and the store cannot serve it,
+the startup names the store and the property.
+
 ## A redelivered task no longer runs the handler twice (2026-08-14)
 
 Story 51. This is a behaviour change of the inbound direction, and it is on by default.

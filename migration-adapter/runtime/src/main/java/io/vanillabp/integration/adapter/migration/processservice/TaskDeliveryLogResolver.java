@@ -42,4 +42,23 @@ public interface TaskDeliveryLogResolver {
    */
   String remediesDescription();
 
+  /**
+   * The class of the given log AS THE APPLICATION WROTE IT - what the core reflects on to
+   * find out whether a store implements
+   * {@link TaskDeliveryLog#releaseRecordsOf(String, String, String, java.time.Instant)}
+   * or inherits the default doing nothing. A platform which hands out proxies (CDI client
+   * proxies, Spring AOP) has to unwrap them here: a proxy overrides every method of its
+   * target, the default implementation included, so reflecting on the proxy would report
+   * a release which does not exist.
+   *
+   * @param deliveryLog The resolved log
+   * @return The class the store is written in
+   */
+  default Class<?> storeClassOf(
+      final TaskDeliveryLog deliveryLog) {
+
+    return deliveryLog.getClass();
+
+  }
+
 }

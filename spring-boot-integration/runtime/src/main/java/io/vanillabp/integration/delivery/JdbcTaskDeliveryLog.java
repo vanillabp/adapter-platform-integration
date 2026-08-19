@@ -115,6 +115,18 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   }
 
   @Override
+  public int releaseRecordsOf(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final java.time.Instant recordedBefore) {
+
+    return store
+        .deleteRecordsOf(workflowModuleId, bpmnProcessId, workflowAggregateId, recordedBefore);
+
+  }
+
+  @Override
   public Connection acquire() throws SQLException {
 
     // bound to the Spring-managed transaction if one is running (which the recording

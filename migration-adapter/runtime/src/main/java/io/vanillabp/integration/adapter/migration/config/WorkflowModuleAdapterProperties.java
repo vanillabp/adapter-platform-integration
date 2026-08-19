@@ -35,4 +35,11 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
    */
   private TransactionsProperties transactions;
 
+  /**
+   * Overrides <code>vanillabp.delivery</code> for this workflow module. A setting left
+   * undefined here means the global one applies, so one module can release the records of
+   * its ended workflows while another keeps them for support.
+   */
+  private DeliveryProperties delivery;
+
 }

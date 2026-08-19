@@ -56,6 +56,10 @@ public class JdbcTaskDeliveryStore {
       DELETE FROM %s \
       WHERE RECORDED_AT < ?""";
 
+  private static final String DELETE_DELIVERIES_OF_WORKFLOW = """
+      DELETE FROM %s \
+      WHERE WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND AGGREGATE_ID = ? AND RECORDED_AT < ?""";
+
   private final JdbcConnectionAccess connectionAccess;
 
   private final String tableName;
@@ -66,6 +70,8 @@ public class JdbcTaskDeliveryStore {
 
   private final String deleteExpiredDeliveries;
 
+  private final String deleteDeliveriesOfWorkflow;
+
   public JdbcTaskDeliveryStore(
       final JdbcConnectionAccess connectionAccess,
       final String tableName) {
@@ -75,6 +81,7 @@ public class JdbcTaskDeliveryStore {
     this.selectDelivery = SELECT_DELIVERY.formatted(tableName);
     this.insertDelivery = INSERT_DELIVERY.formatted(tableName);
     this.deleteExpiredDeliveries = DELETE_EXPIRED_DELIVERIES.formatted(tableName);
+    this.deleteDeliveriesOfWorkflow = DELETE_DELIVERIES_OF_WORKFLOW.formatted(tableName);
 
   }
 
@@ -193,6 +200,54 @@ public class JdbcTaskDeliveryStore {
     } catch (final SQLException e) {
       log.warn("Could not clean up expired task-delivery records of table '{}'", tableName, e);
       return 0;
+    } finally {
+      release(connection);
+    }
+
+  }
+
+  /**
+   * Deletes the records of ONE ended workflow (see
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLog#releaseRecordsOf}). Runs in the
+   * transaction of the end notification, so it commits with it.
+   * <p>
+   * Unlike {@link #deleteExpired(Duration)} a failure is NOT swallowed: the retention
+   * cleanup runs again in an hour, this deletion has exactly one chance and belongs to a
+   * transaction which has to know whether its work went through.
+   *
+   * @param workflowModuleId The workflow module of the ended workflow
+   * @param bpmnProcessId The BPMN process of the ended workflow
+   * @param workflowAggregateId The ID of its workflow aggregate
+   * @param recordedBefore Only records written before this moment are deleted - what
+   *          keeps the records of a second workflow on the same aggregate
+   * @return The number of records deleted
+   */
+  // No index ships for these columns: AGGREGATE_ID holds up to 1024 characters, and an
+  // index over the three of them exceeds the key-length limit of MySQL (3072 bytes with
+  // utf8mb4) and of a DB2 database using 4K pages. An application whose table grows large
+  // adds one itself, prefixed the way its database needs it - the wiki says so.
+  public int deleteRecordsOf(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final Instant recordedBefore) {
+
+    Connection connection = null;
+    try {
+      connection = connectionAccess.acquire();
+      try (var statement = connection.prepareStatement(deleteDeliveriesOfWorkflow)) {
+        statement.setString(1, workflowModuleId);
+        statement.setString(2, bpmnProcessId);
+        statement.setString(3, workflowAggregateId);
+        statement.setTimestamp(4, Timestamp.from(recordedBefore));
+        return statement.executeUpdate();
+      }
+    } catch (final SQLException e) {
+      throw new RuntimeException(
+          """
+              Could not release the task-delivery records of workflow '%s' (BPMN process '%s' of \
+              workflow module '%s') in table '%s'!"""
+              .formatted(workflowAggregateId, bpmnProcessId, workflowModuleId, tableName), e);
     } finally {
       release(connection);
     }

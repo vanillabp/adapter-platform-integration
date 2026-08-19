@@ -67,17 +67,32 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                           Optional<List<String>> prioritizedAdapters,
                                           Map<String, QuarkusMigrationAdapterProperties.AdapterProperties> adapters,
                                           Map<String, QuarkusMigrationAdapterProperties.WorkflowProperties> workflows,
-                                          QuarkusMigrationAdapterProperties.TransactionsProperties transactions) implements QuarkusMigrationAdapterProperties.WorkflowModuleProperties {
+                                          QuarkusMigrationAdapterProperties.TransactionsProperties transactions,
+                                          QuarkusMigrationAdapterProperties.DeliveryProperties delivery) implements QuarkusMigrationAdapterProperties.WorkflowModuleProperties {
 
     /**
-     * Without a transaction section, which is what most of these fixtures need.
+     * Without a transaction and without a delivery section, which is what most of these
+     * fixtures need.
      */
     private WorkflowModuleProperties(
         final Optional<List<String>> prioritizedAdapters,
         final Map<String, QuarkusMigrationAdapterProperties.AdapterProperties> adapters,
         final Map<String, QuarkusMigrationAdapterProperties.WorkflowProperties> workflows) {
 
-      this(prioritizedAdapters, adapters, workflows, null);
+      this(prioritizedAdapters, adapters, workflows, null, null);
+
+    }
+
+    /**
+     * Without a delivery section.
+     */
+    private WorkflowModuleProperties(
+        final Optional<List<String>> prioritizedAdapters,
+        final Map<String, QuarkusMigrationAdapterProperties.AdapterProperties> adapters,
+        final Map<String, QuarkusMigrationAdapterProperties.WorkflowProperties> workflows,
+        final QuarkusMigrationAdapterProperties.TransactionsProperties transactions) {
+
+      this(prioritizedAdapters, adapters, workflows, transactions, null);
 
     }
 
@@ -85,6 +100,10 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
 
   private record TransactionsProperties(
                                         Optional<io.vanillabp.integration.adapter.migration.config.TransactionsProperties.UnguardedAggregateWrites> unguardedAggregateWrites) implements QuarkusMigrationAdapterProperties.TransactionsProperties {
+  }
+
+  private record DeliveryProperties(
+                                    Optional<Boolean> releaseOnWorkflowEnd) implements QuarkusMigrationAdapterProperties.DeliveryProperties {
   }
 
   private record JdbcOutboxProperties(
@@ -119,10 +138,11 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                             Map<String, QuarkusMigrationAdapterProperties.WorkflowModuleProperties> workflowModules,
                             QuarkusMigrationAdapterProperties.PhaseTwoOutboxProperties outbox,
                             QuarkusMigrationAdapterProperties.WorkflowAdapterCacheProperties workflowAdapterCache,
-                            QuarkusMigrationAdapterProperties.TransactionsProperties transactions) implements QuarkusMigrationAdapterProperties {
+                            QuarkusMigrationAdapterProperties.TransactionsProperties transactions,
+                            QuarkusMigrationAdapterProperties.DeliveryProperties delivery) implements QuarkusMigrationAdapterProperties {
 
     /**
-     * Without a transaction section.
+     * Without a transaction and without a delivery section.
      */
     private Properties(
         final Optional<List<String>> prioritizedAdapters,
@@ -132,7 +152,25 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
         final QuarkusMigrationAdapterProperties.PhaseTwoOutboxProperties outbox,
         final QuarkusMigrationAdapterProperties.WorkflowAdapterCacheProperties workflowAdapterCache) {
 
-      this(prioritizedAdapters, resourcesLocation, adapters, workflowModules, outbox, workflowAdapterCache, null);
+      this(
+          prioritizedAdapters, resourcesLocation, adapters, workflowModules, outbox, workflowAdapterCache, null, null);
+
+    }
+
+    /**
+     * Without a delivery section.
+     */
+    private Properties(
+        final Optional<List<String>> prioritizedAdapters,
+        final Optional<String> resourcesLocation,
+        final Map<String, QuarkusMigrationAdapterProperties.AdapterConfiguration> adapters,
+        final Map<String, QuarkusMigrationAdapterProperties.WorkflowModuleProperties> workflowModules,
+        final QuarkusMigrationAdapterProperties.PhaseTwoOutboxProperties outbox,
+        final QuarkusMigrationAdapterProperties.WorkflowAdapterCacheProperties workflowAdapterCache,
+        final QuarkusMigrationAdapterProperties.TransactionsProperties transactions) {
+
+      this(
+          prioritizedAdapters, resourcesLocation, adapters, workflowModules, outbox, workflowAdapterCache, transactions, null);
 
     }
 
@@ -324,6 +362,32 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     assertTrue(core.acceptsUnguardedAggregateWrites("loan-approval"));
     assertFalse(core.acceptsUnguardedAggregateWrites("payments"));
     assertFalse(core.acceptsUnguardedAggregateWrites("unconfigured-module"));
+
+  }
+
+  @Test
+  @DisplayName("Story 76: the release-on-workflow-end setting travels globally and per workflow module")
+  public void deliverySettingTravelsGloballyAndPerModule() {
+
+    final var properties = new Properties(
+        Optional.empty(), Optional.empty(), Map.of(), Map
+            .of(
+                "loan-approval",
+                new WorkflowModuleProperties(
+                    Optional.empty(), Map.of(), Map.of(), null, new DeliveryProperties(Optional.of(true))),
+                "payments",
+                new WorkflowModuleProperties(
+                    Optional.empty(), Map.of(), Map.of(), null, new DeliveryProperties(Optional
+                        .empty()))), null, null, null, new DeliveryProperties(Optional.of(false)));
+
+    final var core = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(properties);
+
+    assertEquals(Boolean.FALSE, core.getDelivery().getReleaseOnWorkflowEnd());
+    // the module's own value wins; a module saying nothing, and a module without any
+    // section at all, inherit what the application configured globally
+    assertTrue(core.releasesDeliveryRecordsOnWorkflowEnd("loan-approval"));
+    assertFalse(core.releasesDeliveryRecordsOnWorkflowEnd("payments"));
+    assertFalse(core.releasesDeliveryRecordsOnWorkflowEnd("unconfigured-module"));
 
   }
 
