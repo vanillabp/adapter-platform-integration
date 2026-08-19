@@ -1,5 +1,6 @@
 package io.vanillabp.integration.adapter.migration.workflowend;
 
+import java.time.Instant;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -207,7 +208,11 @@ public class WorkflowEndedHandlers {
 
   /**
    * Tells the application that a workflow ended: loads the aggregate, calls the
-   * method and saves the aggregate, in one transaction.
+   * method and saves the aggregate, in one transaction. Where the workflow module
+   * releases the records of its processed task deliveries (story 76), that deletion runs
+   * in the same transaction - and then this runs even without a
+   * <code>&#64;WorkflowEnded</code> method, which is why the adapters attach their
+   * listener in that case as well.
    *
    * @param <A> The workflow-aggregate type
    * @param processService The process service of the BPMN process
@@ -222,12 +227,87 @@ public class WorkflowEndedHandlers {
     // the notification proves which BPMS held this workflow
     processService.rememberWorkflowAdapter(context.getWorkflowAggregateId(), context.getAdapterId());
 
+    final var releaseRecords = processService.releasesDeliveryRecordsOnWorkflowEnd();
+    // the bound of the release, taken BEFORE anything is done: an aggregate may outlive
+    // its workflow and carry a second one, whose records are written after this moment
+    // and have to survive
+    final var recordedBefore = Instant.now();
+
+    final var handler = handlerOf(processService, context);
+    if ((handler == null) && !releaseRecords) {
+      return;
+    }
+
+    final Supplier<Void> transactionalWork = () -> {
+      if (handler != null) {
+        invokeHandler(processService, context, handler);
+      }
+      if (releaseRecords) {
+        processService.releaseDeliveryRecords(context.getWorkflowAggregateId(), recordedBefore);
+      }
+      return null;
+    };
+
+    io.vanillabp.integration.adapter.migration.transaction.AggregateWrite
+        .inTransaction(
+            transactionRunner,
+            context.runInCurrentTransaction(),
+            processService.getWorkflowModuleId(),
+            processService.getBpmnProcessId(),
+            context.getWorkflowAggregateId(),
+            handler != null
+                ? "reporting the end of the workflow"
+                : "releasing the task-delivery records of the ended workflow",
+            transactionalWork);
+
+  }
+
+  /**
+   * Loads the aggregate, calls the method and saves the aggregate - the part of the end
+   * notification which belongs to the application.
+   */
+  private static <A> void invokeHandler(
+      final MigrationProcessService<A> processService,
+      final WorkflowEndedContext context,
+      final WorkflowEndedHandler handler) {
+
+    final var workflowAggregate = processService
+        .loadWorkflowAggregate(context.getWorkflowAggregateId());
+    if (workflowAggregate == null) {
+      // NOT an error: an application may delete the aggregate of a workflow which
+      // ended, and a redelivered notification would find nothing either
+      log
+          .info(
+              "The workflow aggregate '{}' of BPMN process '{}' (workflow module '{}') does not "
+                  + "exist (any more) - the end of that workflow is not reported to '{}'",
+              context.getWorkflowAggregateId(),
+              processService.getBpmnProcessId(),
+              processService.getWorkflowModuleId(),
+              handler.describe());
+      return;
+    }
+    handler.invoke(workflowAggregate, context);
+    processService.saveWorkflowAggregate(workflowAggregate);
+
+  }
+
+  /**
+   * The <code>&#64;WorkflowEnded</code> method serving this notification, or
+   * <code>null</code> if the application has none - which is said in the log, since a
+   * method wired to the event but excluded by its version is a defect the developer has
+   * to see.
+   */
+  private <A> WorkflowEndedHandler handlerOf(
+      final MigrationProcessService<A> processService,
+      final WorkflowEndedContext context) {
+
     final var registered = handlers
         .get(
             new RegistryKey(processService.getWorkflowModuleId(), processService.getBpmnProcessId()));
     if (registered == null) {
       // the adapter attached a listener although nothing is registered - possible
-      // when a deployed model outlives the workflow service which asked for it
+      // when a deployed model outlives the workflow service which asked for it, and
+      // the normal case where the listener exists to release the delivery records
       log
           .debug(
               "No @WorkflowEnded method for BPMN process '{}' of workflow module '{}' - the end of "
@@ -235,7 +315,7 @@ public class WorkflowEndedHandlers {
               processService.getBpmnProcessId(),
               processService.getWorkflowModuleId(),
               context.getWorkflowAggregateId());
-      return;
+      return null;
     }
 
     final var wired = registered
@@ -251,68 +331,39 @@ public class WorkflowEndedHandlers {
                 processService.getBpmnProcessId())))
         .findFirst()
         .orElse(null);
-    if (handler == null) {
-      // a method wired to the event but excluded by its version is worth a warning: the
-      // application asked to be notified and is not, which no log level should hide
-      final var message = "No @WorkflowEnded method of BPMN process '{}' (workflow module '{}') "
-          + "serves end event '{}' of process version '{}' - the end of workflow '{}' is not "
-          + "reported.{}";
-      final var hint = io.vanillabp.integration.adapter.migration.workflowtask.VersionRange
-          .noVersionReportedHint(context.getProcessVersion());
-      if (wired.isEmpty()) {
-        log
-            .debug(
-                message,
-                processService.getBpmnProcessId(),
-                processService.getWorkflowModuleId(),
-                context.getEndEventId(),
-                context.getProcessVersion(),
-                context.getWorkflowAggregateId(),
-                hint);
-      } else {
-        log
-            .warn(
-                message,
-                processService.getBpmnProcessId(),
-                processService.getWorkflowModuleId(),
-                context.getEndEventId(),
-                context.getProcessVersion(),
-                context.getWorkflowAggregateId(),
-                hint);
-      }
-      return;
+    if (handler != null) {
+      return handler;
     }
 
-    final Supplier<Void> transactionalWork = () -> {
-      final var workflowAggregate = processService
-          .loadWorkflowAggregate(context.getWorkflowAggregateId());
-      if (workflowAggregate == null) {
-        // NOT an error: an application may delete the aggregate of a workflow which
-        // ended, and a redelivered notification would find nothing either
-        log
-            .info(
-                "The workflow aggregate '{}' of BPMN process '{}' (workflow module '{}') does not "
-                    + "exist (any more) - the end of that workflow is not reported to '{}'",
-                context.getWorkflowAggregateId(),
-                processService.getBpmnProcessId(),
-                processService.getWorkflowModuleId(),
-                handler.describe());
-        return null;
-      }
-      handler.invoke(workflowAggregate, context);
-      processService.saveWorkflowAggregate(workflowAggregate);
-      return null;
-    };
-
-    io.vanillabp.integration.adapter.migration.transaction.AggregateWrite
-        .inTransaction(
-            transactionRunner,
-            context.runInCurrentTransaction(),
-            processService.getWorkflowModuleId(),
-            processService.getBpmnProcessId(),
-            context.getWorkflowAggregateId(),
-            "reporting the end of the workflow",
-            transactionalWork);
+    // a method wired to the event but excluded by its version is worth a warning: the
+    // application asked to be notified and is not, which no log level should hide
+    final var message = "No @WorkflowEnded method of BPMN process '{}' (workflow module '{}') "
+        + "serves end event '{}' of process version '{}' - the end of workflow '{}' is not "
+        + "reported.{}";
+    final var hint = io.vanillabp.integration.adapter.migration.workflowtask.VersionRange
+        .noVersionReportedHint(context.getProcessVersion());
+    if (wired.isEmpty()) {
+      log
+          .debug(
+              message,
+              processService.getBpmnProcessId(),
+              processService.getWorkflowModuleId(),
+              context.getEndEventId(),
+              context.getProcessVersion(),
+              context.getWorkflowAggregateId(),
+              hint);
+    } else {
+      log
+          .warn(
+              message,
+              processService.getBpmnProcessId(),
+              processService.getWorkflowModuleId(),
+              context.getEndEventId(),
+              context.getProcessVersion(),
+              context.getWorkflowAggregateId(),
+              hint);
+    }
+    return null;
 
   }
 

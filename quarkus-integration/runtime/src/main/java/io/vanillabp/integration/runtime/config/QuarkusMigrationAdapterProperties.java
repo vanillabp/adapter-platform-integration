@@ -85,6 +85,13 @@ public interface QuarkusMigrationAdapterProperties {
   TransactionsProperties transactions();
 
   /**
+   * What VanillaBP does with the records of processed task deliveries (story 76).
+   *
+   * @return The delivery configuration
+   */
+  DeliveryProperties delivery();
+
+  /**
    * The adapter configuration. The properties in detail are defined by the
    * respective VanillaBP adapter Quarkus extension.
    */
@@ -425,6 +432,13 @@ public interface QuarkusMigrationAdapterProperties {
      */
     TransactionsProperties transactions();
 
+    /**
+     * Overrides <code>vanillabp.delivery</code> for this workflow module.
+     *
+     * @return The delivery configuration of this workflow module
+     */
+    DeliveryProperties delivery();
+
   }
 
   /**
@@ -441,6 +455,23 @@ public interface QuarkusMigrationAdapterProperties {
      * @return The setting, an empty Optional meaning "whatever applies globally"
      */
     Optional<io.vanillabp.integration.adapter.migration.config.TransactionsProperties.UnguardedAggregateWrites> unguardedAggregateWrites();
+
+  }
+
+  /**
+   * What VanillaBP does with the records of processed task deliveries: keep them until the
+   * retention passed, or delete them the moment their workflow ends (story 76).
+   */
+  interface DeliveryProperties {
+
+    /**
+     * Whether the records of a workflow are deleted when it ends. The default is
+     * <code>false</code>: switching it on makes every deployed model pay for the
+     * notification about the end of a workflow.
+     *
+     * @return The setting, an empty Optional meaning "whatever applies globally"
+     */
+    Optional<Boolean> releaseOnWorkflowEnd();
 
   }
 

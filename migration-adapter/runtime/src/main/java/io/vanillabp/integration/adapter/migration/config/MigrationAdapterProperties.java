@@ -87,6 +87,13 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   private TransactionsProperties transactions = new TransactionsProperties();
 
   /**
+   * What VanillaBP does with the records of processed task deliveries (properties
+   * section <code>vanillabp.delivery</code>, overridable per workflow module).
+   */
+  @Builder.Default
+  private DeliveryProperties delivery = new DeliveryProperties();
+
+  /**
    * Derived view of {@link #getAdapters()}: adapter ID mapped to the adapter's type.
    * An adapter entry without an explicit {@link AdapterConfigProperties#getType()
    * type} defaults to its ID being the type.
@@ -646,6 +653,51 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       final String workflowModuleId) {
 
     return "%s.workflow-modules.%s.transactions.unguarded-aggregate-writes"
+        .formatted(PREFIX, workflowModuleId);
+
+  }
+
+  /**
+   * Whether the workflows of the given workflow module release the records of their
+   * processed task deliveries when they end
+   * (<code>vanillabp.delivery.release-on-workflow-end</code>, overridable as
+   * <code>vanillabp.workflow-modules.&lt;id&gt;.delivery.release-on-workflow-end</code>).
+   * The module's setting wins where it is defined, the global one applies otherwise, and
+   * the default is to keep the records until the retention passed.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @return Whether an ended workflow releases its delivery records
+   */
+  public boolean releasesDeliveryRecordsOnWorkflowEnd(
+      final String workflowModuleId) {
+
+    final var module = workflowModules.get(workflowModuleId);
+    final var moduleSetting = (module != null) && (module.getDelivery() != null)
+        ? module
+            .getDelivery()
+            .getReleaseOnWorkflowEnd()
+        : null;
+    final var effective = moduleSetting != null
+        ? moduleSetting
+        : delivery != null
+            ? delivery.getReleaseOnWorkflowEnd()
+            : null;
+    return (effective != null) && effective;
+
+  }
+
+  /**
+   * The property naming the decision of
+   * {@link #releasesDeliveryRecordsOnWorkflowEnd(String)}, for the messages which have to
+   * tell where the behaviour they describe comes from.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @return The property key of the module-scoped override
+   */
+  public static String releaseOnWorkflowEndProperty(
+      final String workflowModuleId) {
+
+    return "%s.workflow-modules.%s.delivery.release-on-workflow-end"
         .formatted(PREFIX, workflowModuleId);
 
   }

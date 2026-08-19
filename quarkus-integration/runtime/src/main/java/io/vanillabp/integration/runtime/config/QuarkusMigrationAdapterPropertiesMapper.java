@@ -11,6 +11,7 @@ import org.mapstruct.factory.Mappers;
 
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
+import io.vanillabp.integration.adapter.migration.config.DeliveryProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.config.TaskAdapterProperties;
@@ -70,6 +71,10 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
   @Mapping(target = "unguardedAggregateWrites", qualifiedByName = "unwrapUnguardedAggregateWrites")
   TransactionsProperties toCore(
       QuarkusMigrationAdapterProperties.TransactionsProperties transactionsProperties);
+
+  @Mapping(target = "releaseOnWorkflowEnd", qualifiedByName = "unwrapBoolean")
+  DeliveryProperties toCore(
+      QuarkusMigrationAdapterProperties.DeliveryProperties deliveryProperties);
 
   @Mapping(target = "outfadedVersions", qualifiedByName = "unwrapOutfadedVersions")
   AdapterConfigProperties toCore(
@@ -133,6 +138,21 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
   @Named("unwrapUnguardedAggregateWrites")
   default TransactionsProperties.UnguardedAggregateWrites unwrapUnguardedAggregateWrites(
       final Optional<TransactionsProperties.UnguardedAggregateWrites> value) {
+
+    return value.orElse(null);
+
+  }
+
+  /**
+   * Unwraps an optional flag ({@code Optional.empty()} becomes {@code null}: a workflow
+   * module which says nothing inherits what the application configured globally).
+   *
+   * @param value The optional flag
+   * @return The flag or {@code null}
+   */
+  @Named("unwrapBoolean")
+  default Boolean unwrapBoolean(
+      final Optional<Boolean> value) {
 
     return value.orElse(null);
 

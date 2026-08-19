@@ -127,6 +127,32 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
 
   }
 
+  @Override
+  public int releaseRecordsOf(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final Instant recordedBefore) {
+
+    return (int) mongoTemplate
+        .remove(
+            Query
+                .query(
+                    Criteria
+                        .where("workflowModuleId")
+                        .is(workflowModuleId)
+                        .and("bpmnProcessId")
+                        .is(bpmnProcessId)
+                        .and("aggregateId")
+                        .is(workflowAggregateId)
+                        .and("recordedAt")
+                        .lt(recordedBefore)),
+            TaskDeliveryDocument.class,
+            collection)
+        .getDeletedCount();
+
+  }
+
   /**
    * Removes the record again where the transaction it was written in did not commit
    * (story 70). Without a MongoDB transaction covering it - no

@@ -1,0 +1,17 @@
+quarkus:
+  datasource:
+    db-kind: h2
+    jdbc:
+      url: jdbc:h2:mem:delivery-release;DB_CLOSE_DELAY=-1
+vanillabp:
+  delivery:
+    release-on-workflow-end: true
+  adapters:
+    demo1:
+      type: dummy
+      test: 1
+  workflow-modules:
+    test-module:
+      adapters:
+        demo1:
+          resources-location: classpath:processes/dummy

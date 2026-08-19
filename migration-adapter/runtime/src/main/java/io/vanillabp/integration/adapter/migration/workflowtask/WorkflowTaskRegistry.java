@@ -126,6 +126,13 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
   private final io.vanillabp.integration.adapter.migration.transaction.ConcurrentTokenCheck concurrentTokenCheck = new io.vanillabp.integration.adapter.migration.transaction.ConcurrentTokenCheck();
 
   /**
+   * The bound <code>vanillabp.*</code> tree - needed to answer whether a workflow module
+   * releases the records of its processed task deliveries when a workflow ends (story
+   * 76). May be <code>null</code> (tests): nothing is released then.
+   */
+  private final io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties properties;
+
+  /**
    * The process versions this application declares obsolete (story 57).
    */
   private final OutfadedProcessVersions outfadedVersions;
@@ -168,6 +175,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
     this.transactionRunner = transactionRunner;
     this.aggregateSync = aggregateSync;
     this.transactionAnnotations = transactionAnnotations;
+    this.properties = properties;
     this.outfadedVersions = new OutfadedProcessVersions(properties);
     this.deployedVersionsCheck = new DeployedProcessVersionsCheck(
         processVersions, outfadedVersions, this::tasksNotServedInVersion, this::handlersNotServingAnyVersion);
@@ -715,12 +723,23 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
 
   }
 
+  /**
+   * Whether the end of a workflow of that BPMN process has to be reported at all - asked
+   * by the adapters while wiring, so a model pays for a listener respectively a worker
+   * only where the end is used.
+   * <p>
+   * Beside an application's <code>&#64;WorkflowEnded</code> method there is a second
+   * reason to want it: a workflow module which releases the records of its processed task
+   * deliveries when a workflow ends (story 76) needs the notification to do so. That is
+   * why no adapter had to be touched for the release.
+   */
   @Override
   public boolean workflowEndedHandlerExists(
       final String workflowModuleId,
       final String bpmnProcessId) {
 
-    return workflowEndedHandlers.handlerExists(workflowModuleId, bpmnProcessId);
+    return workflowEndedHandlers.handlerExists(workflowModuleId, bpmnProcessId) || ((properties != null) && properties
+        .releasesDeliveryRecordsOnWorkflowEnd(workflowModuleId));
 
   }
 

@@ -1,9 +1,9 @@
 package io.vanillabp.integration.it;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.List;
 
 import javax.sql.DataSource;
@@ -17,6 +17,7 @@ import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.adapter.dummy.runtime.DummyDeploymentService;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
+import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import io.vanillabp.integration.test.delivery.DeliveryAggregate;
@@ -24,21 +25,26 @@ import io.vanillabp.integration.test.delivery.DeliveryAggregatePersistence;
 import io.vanillabp.integration.test.delivery.DeliveryProcessWiringSource;
 import io.vanillabp.integration.test.delivery.DeliveryWorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.spi.service.WorkflowEnd;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of the inbound idempotency (story 51) on Quarkus, with the default
- * JDBC-based delivery log doing the remembering: the dummy adapter delivers a task TWICE
- * under the same delivery identity - as a BPMS which never learned the result does - and
- * the <code>&#64;WorkflowTask</code> method has to run once while both deliveries are
- * answered with the same outcome. Also pinned: a delivery whose handler threw leaves no
- * record (its retry runs the handler again) and the task-level switch turns the feature
- * off.
+ * Acceptance test of the release of delivery records (story 76) on Quarkus, with the
+ * default JDBC-based delivery log: a workflow which ended deletes the records of its
+ * processed deliveries instead of leaving them to the retention. The workflow service of
+ * this test has NO <code>&#64;WorkflowEnded</code> method on purpose - the end
+ * notification is asked for by the release alone, which is what makes the feature work
+ * without touching any adapter.
+ * <p>
+ * Pinned as well: the record of a SECOND workflow on the same aggregate, written after the
+ * end of the first one, survives, and the records of another workflow stay untouched. The
+ * case with the option switched off is pinned by {@link InboundIdempotencyTest}, whose
+ * application does not configure the release.
  */
 @ExtendWith(SuppressOutputExtension.class)
-public class InboundIdempotencyTest {
+public class DeliveryRecordReleaseTest {
 
   private static final String MODULE = "test-module";
 
@@ -49,7 +55,7 @@ public class InboundIdempotencyTest {
   @RegisterExtension
   static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .withApplicationRoot(jar -> jar
-          .addAsResource("inbound-idempotency/application.yaml", "application.yaml")
+          .addAsResource("delivery-release/application.yaml", "application.yaml")
           .addClass(DeliveryAggregate.class)
           .addClass(DeliveryAggregatePersistence.class)
           .addClass(DeliveryWorkflowService.class)
@@ -82,10 +88,6 @@ public class InboundIdempotencyTest {
 
   }
 
-  /**
-   * One delivery of a task, as an adapter of a remote BPMS builds it: the delivery ID is
-   * what stays the same when the BPMS repeats it.
-   */
   private TaskInvocationContext delivery(
       final String taskDefinition,
       final String aggregateId,
@@ -117,6 +119,38 @@ public class InboundIdempotencyTest {
 
   }
 
+  /**
+   * The end of a workflow, as an adapter's process-end listener reports it.
+   */
+  private WorkflowEndedContext workflowEnded(
+      final String aggregateId) {
+
+    return new WorkflowEndedContext() {
+
+      @Override
+      public String getWorkflowAggregateId() {
+        return aggregateId;
+      }
+
+      @Override
+      public WorkflowEnd.Kind getKind() {
+        return WorkflowEnd.Kind.COMPLETED;
+      }
+
+      @Override
+      public Instant getEndTime() {
+        return Instant.now();
+      }
+
+      @Override
+      public String getEndEventId() {
+        return "Event_Done";
+      }
+
+    };
+
+  }
+
   private int recordCount(
       final String aggregateId) throws SQLException {
 
@@ -132,87 +166,39 @@ public class InboundIdempotencyTest {
   }
 
   @Test
-  @DisplayName("A repeated delivery runs the handler once and reports the recorded outcome")
-  public void repeatedDeliveriesRunTheHandlerOnce() throws SQLException {
+  @DisplayName("An ended workflow releases its records, and a second workflow on the same aggregate keeps its own")
+  public void anEndedWorkflowReleasesItsRecords() throws SQLException {
 
     final var dummyAdapter = dummyAdapter();
+    assertEquals(
+        List.of(PROCESS),
+        dummyAdapter.getProcessesWithEndListener(),
+        "the release needs the end of a workflow, so the listener is attached without a @WorkflowEnded method");
 
     persistence.store("4711");
-    final var first = dummyAdapter.invokeTask(MODULE, PROCESS, delivery("processTask", "4711", "job-1"));
-    final var second = dummyAdapter.invokeTask(MODULE, PROCESS, delivery("processTask", "4711", "job-1"));
+    persistence.store("4712");
+    dummyAdapter.invokeTask(MODULE, PROCESS, delivery("processTask", "4711", "job-1"));
+    dummyAdapter.invokeTask(MODULE, PROCESS, delivery("processTask", "4711", "job-2"));
+    dummyAdapter.invokeTask(MODULE, PROCESS, delivery("processTask", "4712", "job-3"));
+    assertEquals(2, recordCount("4711"));
+    assertEquals(1, recordCount("4712"));
 
-    assertEquals(WorkflowTaskOutcome.Kind.COMPLETED, first.kind());
-    assertEquals(WorkflowTaskOutcome.Kind.COMPLETED, second.kind());
-    assertEquals(1, persistence.get("4711").getInvocations());
+    dummyAdapter.notifyWorkflowEnded(MODULE, PROCESS, workflowEnded("4711"));
+
+    assertEquals(0, recordCount("4711"), "the ended workflow releases its records");
+    assertEquals(1, recordCount("4712"), "another workflow keeps its own");
+
+    // a SECOND workflow on the same aggregate: its delivery is processed after the end of
+    // the first one, so its record was written after the notification and stays
+    dummyAdapter.invokeTask(MODULE, PROCESS, delivery("processTask", "4711", "job-4"));
     assertEquals(1, recordCount("4711"));
 
-    // the next task instance of the same workflow is another delivery
-    dummyAdapter.invokeTask(MODULE, PROCESS, delivery("processTask", "4711", "job-2"));
-    assertEquals(2, persistence.get("4711").getInvocations());
-    assertEquals(2, recordCount("4711"));
-
-  }
-
-  @Test
-  @DisplayName("A repeated delivery of a BPMN error reports code and name again")
-  public void repeatedDeliveryReportsTheRecordedBpmnError() {
-
-    final var dummyAdapter = dummyAdapter();
-
-    persistence.store("4712");
-    final var error = dummyAdapter.invokeTask(MODULE, PROCESS, delivery("raiseBpmnError", "4712", "job-3"));
-    final var errorAgain = dummyAdapter.invokeTask(MODULE, PROCESS, delivery("raiseBpmnError", "4712", "job-3"));
-
-    assertEquals(WorkflowTaskOutcome.Kind.BPMN_ERROR, errorAgain.kind());
-    assertEquals(error.errorCode(), errorAgain.errorCode());
-    assertEquals("PAYMENT_FAILED", errorAgain.errorCode());
-    assertEquals("PaymentFailed", errorAgain.errorName());
-    assertEquals(1, persistence.get("4712").getInvocations());
-
-  }
-
-  @Test
-  @DisplayName("A rolled-back delivery leaves no record, so its retry runs the handler")
-  public void aRolledBackDeliveryLeavesNoRecord() throws SQLException {
-
-    final var dummyAdapter = dummyAdapter();
-
-    persistence.store("4713");
-    assertThrows(
-        IllegalStateException.class,
-        () -> dummyAdapter.invokeTask(MODULE, PROCESS, delivery("failTask", "4713", "job-4")));
-    assertEquals(0, recordCount("4713"));
-
-    assertThrows(
-        IllegalStateException.class,
-        () -> dummyAdapter.invokeTask(MODULE, PROCESS, delivery("failTask", "4713", "job-4")));
-    assertEquals(0, recordCount("4713"));
-
-  }
-
-  @Test
-  @DisplayName("Story 76: without the release nobody asks for the end of a workflow")
-  public void noEndListenerWithoutTheRelease() {
-
+    final var repeated = dummyAdapter.invokeTask(MODULE, PROCESS, delivery("processTask", "4711", "job-4"));
+    assertEquals(WorkflowTaskOutcome.Kind.COMPLETED, repeated.kind());
     assertEquals(
-        List.of(),
-        dummyAdapter().getProcessesWithEndListener(),
-        "a model must not pay for a listener nobody uses");
-
-  }
-
-  @Test
-  @DisplayName("Switched off for a task, nothing is remembered")
-  public void aTaskMayOptOut() throws SQLException {
-
-    final var dummyAdapter = dummyAdapter();
-
-    persistence.store("4714");
-    dummyAdapter.invokeTask(MODULE, PROCESS, delivery("undeduplicatedTask", "4714", "job-5"));
-    dummyAdapter.invokeTask(MODULE, PROCESS, delivery("undeduplicatedTask", "4714", "job-5"));
-
-    assertEquals(2, persistence.get("4714").getInvocations());
-    assertEquals(0, recordCount("4714"));
+        3,
+        persistence.get("4711").getInvocations(),
+        "the released records must not make a repeated delivery run the handler again");
 
   }
 

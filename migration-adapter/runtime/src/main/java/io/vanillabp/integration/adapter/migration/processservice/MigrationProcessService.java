@@ -682,6 +682,128 @@ public class MigrationProcessService<A> {
   }
 
   /**
+   * Whether an ended workflow of this BPMN process releases the records of its processed
+   * task deliveries (<code>vanillabp.delivery.release-on-workflow-end</code>, overridable
+   * per workflow module). Asked by the end-of-workflow path, and by the adapters through
+   * {@link io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker#workflowEndedHandlerExists}
+   * - where it is on, the end has to be reported even without an application handler.
+   *
+   * @return Whether the records are released when a workflow ends
+   */
+  public boolean releasesDeliveryRecordsOnWorkflowEnd() {
+
+    return (properties != null) && properties.releasesDeliveryRecordsOnWorkflowEnd(workflowModuleId);
+
+  }
+
+  /**
+   * Deletes the records of the processed task deliveries of ONE ended workflow. Invoked
+   * within the transaction of the end notification (see
+   * {@link io.vanillabp.integration.adapter.migration.workflowend.WorkflowEndedHandlers}),
+   * so the deletion commits with it - and a notification whose transaction is rolled back
+   * leaves the records where they were, to be released by the redelivered notification or
+   * by the retention.
+   *
+   * @param workflowAggregateId The ID of the ended workflow's aggregate
+   * @param recordedBefore Only records written before this moment are deleted - the bound
+   *          which keeps the records of a SECOND workflow on the same aggregate
+   * @return The number of records deleted
+   */
+  public int releaseDeliveryRecords(
+      final String workflowAggregateId,
+      final java.time.Instant recordedBefore) {
+
+    final var deliveryLog = resolveTaskDeliveryLog();
+    if (deliveryLog == null) {
+      return 0;
+    }
+    final var released = deliveryLog
+        .releaseRecordsOf(workflowModuleId, bpmnProcessId, workflowAggregateId, recordedBefore);
+    log.debug(
+        "Released {} task-delivery record(s) of the ended workflow '{}' (BPMN process '{}' of "
+            + "workflow module '{}')",
+        released,
+        workflowAggregateId,
+        bpmnProcessId,
+        workflowModuleId);
+    return released;
+
+  }
+
+  /**
+   * Validates AT STARTUP that the store resolved for this aggregate can do what
+   * <code>release-on-workflow-end</code> promises. A store which does not implement
+   * {@link TaskDeliveryLog#releaseRecordsOf(String, String, String, java.time.Instant)}
+   * keeps its records until the retention passed - which is not wrong, but it is not what
+   * the application configured, so it is said once at startup naming the store and the
+   * property.
+   * <p>
+   * Nothing happens where the release is switched off: an application which did not ask
+   * for it must not be told about a method its store does not have.
+   */
+  private void validateDeliveryRecordReleaseAtStartup() {
+
+    if (!releasesDeliveryRecordsOnWorkflowEnd()) {
+      return;
+    }
+    final var deliveryLog = resolveTaskDeliveryLog();
+    if (deliveryLog == null) {
+      // no store at all means no records at all - there is nothing to release, and the
+      // missing store is reported by the check for deduplication itself
+      return;
+    }
+    final var storeClass = taskDeliveryLogResolver != null
+        ? taskDeliveryLogResolver.storeClassOf(deliveryLog)
+        : deliveryLog.getClass();
+    if (implementsRelease(storeClass)) {
+      return;
+    }
+    log.warn(
+        """
+            The TaskDeliveryLog '{}' does not implement 'releaseRecordsOf', but '{}' is switched on \
+            for BPMN process '{}' of workflow module '{}' - the records of an ended workflow are \
+            NOT deleted when it ends but once 'vanillabp.outbox.retention' passed. To solve this \
+            either
+            - implement io.vanillabp.integration.spi.TaskDeliveryLog#releaseRecordsOf in '{}', or
+            - set '{}' to 'false' to state that the retention is what cleans up the records.""",
+        storeClass.getName(),
+        MigrationAdapterProperties.releaseOnWorkflowEndProperty(workflowModuleId),
+        bpmnProcessId,
+        workflowModuleId,
+        storeClass.getName(),
+        MigrationAdapterProperties.releaseOnWorkflowEndProperty(workflowModuleId));
+
+  }
+
+  /**
+   * Whether the given store implements the release itself instead of inheriting the
+   * default of {@link TaskDeliveryLog} which does nothing.
+   *
+   * @param storeClass The store's class, unwrapped by the platform integration
+   * @return Whether the store releases records
+   */
+  private static boolean implementsRelease(
+      final Class<?> storeClass) {
+
+    try {
+      // resolves to the override where there is one, and to the interface's default
+      // method otherwise - which is exactly the question asked here
+      final var method = storeClass
+          .getMethod(
+              "releaseRecordsOf",
+              String.class,
+              String.class,
+              String.class,
+              java.time.Instant.class);
+      return method.getDeclaringClass() != TaskDeliveryLog.class;
+    } catch (final NoSuchMethodException e) {
+      // a store compiled against an older SPI: it cannot release either
+      return false;
+    }
+
+  }
+
+  /**
    * Validates AT STARTUP that a delivery log is available if any prioritized adapter
    * may repeat a delivery
    * ({@link MigratableProcessService#deliversTasksAtLeastOnce()}) and deduplication is
@@ -695,6 +817,8 @@ public class MigrationProcessService<A> {
    * an embedded BPMS only must not be pushed towards a store it does not need.
    */
   public void validateTaskDeliveryLogAtStartup() {
+
+    validateDeliveryRecordReleaseAtStartup();
 
     final var atLeastOnceAdapters = adapterProcessServices
         .stream()

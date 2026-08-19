@@ -153,6 +153,21 @@ public class QuarkusTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
 
   }
 
+  /**
+   * Unwraps the CDI client proxy of a store: the proxy overrides every method of the bean
+   * class, the SPI's default doing nothing included, so reflecting on it would report a
+   * release which does not exist.
+   */
+  @Override
+  public Class<?> storeClassOf(
+      final TaskDeliveryLog deliveryLog) {
+
+    return io.quarkus.arc.ClientProxy
+        .unwrap(deliveryLog)
+        .getClass();
+
+  }
+
   @Override
   public String remediesDescription() {
 

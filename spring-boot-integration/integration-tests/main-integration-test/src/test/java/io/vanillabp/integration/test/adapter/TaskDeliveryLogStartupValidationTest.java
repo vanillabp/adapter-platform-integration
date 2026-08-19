@@ -74,6 +74,36 @@ public class TaskDeliveryLogStartupValidationTest {
 
   }
 
+  /**
+   * An application's own store, written before the release of story 76 existed: it
+   * inherits the SPI's default which deletes nothing.
+   */
+  @org.springframework.context.annotation.Configuration
+  static class LegacyDeliveryLogConfiguration {
+
+    @org.springframework.context.annotation.Bean
+    io.vanillabp.integration.spi.TaskDeliveryLog legacyDeliveryLog() {
+
+      return new io.vanillabp.integration.spi.TaskDeliveryLog() {
+
+        @Override
+        public java.util.Optional<io.vanillabp.integration.spi.TaskDelivery> recordedDelivery(
+            final String deliveryKey) {
+          return java.util.Optional.empty();
+        }
+
+        @Override
+        public boolean record(
+            final io.vanillabp.integration.spi.TaskDelivery delivery) {
+          return true;
+        }
+
+      };
+
+    }
+
+  }
+
   private final ApplicationContextRunner contextRunner = new ApplicationContextRunner();
 
   /**
@@ -105,16 +135,28 @@ public class TaskDeliveryLogStartupValidationTest {
       final Runnable assertions,
       final String... properties) {
 
+    bootWith(assertions, new Class<?>[0], properties);
+
+  }
+
+  private void bootWith(
+      final Runnable assertions,
+      final Class<?>[] userConfigurations,
+      final String... properties) {
+
     final var propertyValues = new java.util.LinkedList<String>(
         List.of("spring.config.location=classpath:application.yaml"));
     propertyValues.addAll(List.of(properties));
+    final var configurations = new java.util.LinkedList<Class<?>>(
+        List.of(
+            WorkflowModuleConfiguration.class,
+            TestPersistenceConfiguration.class,
+            OwnOutboxConfiguration.class));
+    configurations.addAll(List.of(userConfigurations));
     this.contextRunner
         .withPropertyValues(propertyValues.toArray(String[]::new))
         .withInitializer(new ConfigDataApplicationContextInitializer())
-        .withUserConfiguration(
-            WorkflowModuleConfiguration.class,
-            TestPersistenceConfiguration.class,
-            OwnOutboxConfiguration.class)
+        .withUserConfiguration(configurations.toArray(Class<?>[]::new))
         .withConfiguration(
             AutoConfigurations.of(
                 DummyAdapterConfiguration.class, DummyAdapterProcessServiceConfiguration.class,
@@ -155,6 +197,55 @@ public class TaskDeliveryLogStartupValidationTest {
     Assertions.assertTrue(message.contains("TaskDeliveryLog"));
     Assertions.assertTrue(message.contains("TaskDeliveryLogAware"));
     Assertions.assertTrue(message.contains("vanillabp.adapters.test.deduplicate-deliveries"));
+
+  }
+
+  @Test
+  public void aStoreWithoutTheReleaseIsReportedWhereTheReleaseIsSwitchedOn() {
+
+    // story 76: the application asked for records to disappear when a workflow ends, and
+    // its own store cannot do it - which is a misconfiguration, not a missing feature
+    final var messages = loggedByCore(
+        () -> bootWith(
+            () -> {
+            },
+            new Class<?>[]{
+                LegacyDeliveryLogConfiguration.class
+            },
+            "dummy-adapter.two-phase-commit=true",
+            "vanillabp.delivery.release-on-workflow-end=true"));
+
+    final var message = messages
+        .stream()
+        .filter(candidate -> candidate.contains("releaseRecordsOf"))
+        .findFirst()
+        .orElseThrow(
+            () -> new AssertionError("no warning about the missing release, logged: "
+                + messages));
+    Assertions.assertTrue(message.contains("TaskDeliveryLog"), message);
+    Assertions
+        .assertTrue(
+            message.contains("delivery.release-on-workflow-end"),
+            message);
+
+  }
+
+  @Test
+  public void aStoreWithoutTheReleaseIsSilentWhereNobodyAskedForIt() {
+
+    final var messages = loggedByCore(
+        () -> bootWith(
+            () -> {
+            },
+            new Class<?>[]{
+                LegacyDeliveryLogConfiguration.class
+            },
+            "dummy-adapter.two-phase-commit=true"));
+
+    Assertions.assertTrue(
+        messages.stream().noneMatch(message -> message.contains("releaseRecordsOf")),
+        "an application which did not ask for the release must not be told about it, logged: "
+            + messages);
 
   }
 

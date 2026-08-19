@@ -402,6 +402,37 @@ remembers a processed delivery and answers a repeated one from the record:
   boot. Unlike the outbox, nothing is broken without a log - the behaviour is the one
   every VanillaBP had before, and the wiki's rule about idempotent handlers covers it.
 
+#### The end of a workflow releases its records (story 76)
+
+Age alone is a poor answer to "how long does a record have to be kept": seven days are
+too long for a busy application and too short for a task genuinely open longer than
+that. The end of a workflow is the exact statement the retention only approximates,
+since nothing of an ended instance can be redelivered.
+
+- The switch is `vanillabp.delivery.release-on-workflow-end` (`DeliveryProperties`,
+  resolved by `MigrationAdapterProperties.releasesDeliveryRecordsOnWorkflowEnd`), global
+  and per workflow module, default `false`. It is adapter-INDEPENDENT: the records of
+  every BPMS live in the store of the aggregate, so this is a question about the
+  application's data.
+- Off by default because the end of a workflow is reported only where it is used:
+  adapters ask `WorkflowTaskRegistry.workflowEndedHandlerExists` while wiring, and that
+  method answers `true` where the release is switched on, even without a
+  `@WorkflowEnded` method. That is the whole reason no adapter had to change for this.
+- The deletion runs in `WorkflowEndedHandlers.workflowEnded`, inside the transaction that
+  notification opens anyway, bounded by workflow module, BPMN process, aggregate and by
+  an `Instant` taken BEFORE the notification is processed. The time bound is what keeps
+  the records of a SECOND workflow on the same aggregate, which is possible since
+  aggregates outlive their workflows.
+- `TaskDeliveryLog.releaseRecordsOf(...)` has a default deleting nothing, so every store
+  written before this stays valid. Whether a store implements it is answered by
+  reflection over the class the platform integration hands out
+  (`TaskDeliveryLogResolver.storeClassOf`, which unwraps CDI client proxies respectively
+  Spring AOP proxies - a proxy overrides the default method and would claim a release
+  which does not exist). A store which cannot release plus the option switched on is one
+  WARN at startup; with the option off nothing is logged.
+- The retention stays for everything the end of a workflow does not cover: workflows
+  still running, aggregates whose workflow never ends, stores without the release.
+
 #### Process versions (`version` attribute)
 
 The `version` attribute of `@WorkflowTask`, `@WorkflowStartedByBpms` and

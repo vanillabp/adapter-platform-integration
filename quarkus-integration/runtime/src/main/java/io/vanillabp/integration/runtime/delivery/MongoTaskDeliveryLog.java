@@ -262,6 +262,31 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
 
   }
 
+  @Override
+  public int releaseRecordsOf(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final java.time.Instant recordedBefore) {
+
+    final var collection = deliveryCollection();
+    // through the session of the running transaction where MongoDB Panache provides one:
+    // the deletion then commits with the end notification instead of being written
+    // immediately (story 70)
+    final var session = io.vanillabp.integration.runtime.mongo.MongoSessions
+        .activeSession(txRegistry);
+    final var filter = new Document()
+        .append("workflowModuleId", workflowModuleId)
+        .append("bpmnProcessId", bpmnProcessId)
+        .append("aggregateId", workflowAggregateId)
+        .append("recordedAt", new Document("$lt", Date.from(recordedBefore)));
+    final var result = session != null
+        ? collection.deleteMany(session, filter)
+        : collection.deleteMany(filter);
+    return (int) result.getDeletedCount();
+
+  }
+
   private MongoCollection<Document> deliveryCollection() {
 
     final var database = ConfigProvider

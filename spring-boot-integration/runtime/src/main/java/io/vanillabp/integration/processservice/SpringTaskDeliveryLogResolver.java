@@ -107,6 +107,20 @@ public class SpringTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
 
   }
 
+  /**
+   * Unwraps a proxied store: an application may put <code>&#64;Transactional</code> on
+   * its own {@link TaskDeliveryLog}, and the proxy Spring creates for it overrides every
+   * method of the target - the SPI's default doing nothing included. Reflecting on the
+   * proxy would therefore report a release which does not exist.
+   */
+  @Override
+  public Class<?> storeClassOf(
+      final TaskDeliveryLog deliveryLog) {
+
+    return org.springframework.aop.framework.AopProxyUtils.ultimateTargetClass(deliveryLog);
+
+  }
+
   @Override
   public String remediesDescription() {
 

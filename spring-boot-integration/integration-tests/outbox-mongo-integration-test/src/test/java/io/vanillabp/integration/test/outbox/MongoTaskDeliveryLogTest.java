@@ -145,6 +145,66 @@ public class MongoTaskDeliveryLogTest {
 
   }
 
+  /**
+   * A record of the given workflow, for the release which is bounded by exactly these
+   * three values plus the moment it runs at.
+   */
+  private TaskDelivery deliveryOf(
+      final String deliveryKey,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId) {
+
+    return new TaskDelivery(
+        deliveryKey, workflowModuleId, bpmnProcessId, workflowAggregateId, "processTask", "COMPLETED", null, null);
+
+  }
+
+  @Test
+  @DisplayName("Story 76: an ended workflow releases its records - and only its own")
+  public void theRecordsOfAnEndedWorkflowAreReleased() {
+
+    transactionTemplate.executeWithoutResult(status -> {
+      deliveryLog.record(deliveryOf("job-5", "test-module", "TestProcess", "4711"));
+      deliveryLog.record(deliveryOf("job-6", "test-module", "TestProcess", "4711"));
+      deliveryLog.record(deliveryOf("job-7", "test-module", "TestProcess", "4712"));
+      deliveryLog.record(deliveryOf("job-8", "test-module", "OtherProcess", "4711"));
+      deliveryLog.record(deliveryOf("job-9", "other-module", "TestProcess", "4711"));
+    });
+
+    final var released = deliveryLog
+        // a moment safely after the records were written: a store's timestamp has
+        // millisecond resolution, and the bound is strict
+        .releaseRecordsOf("test-module", "TestProcess", "4711", java.time.Instant.now().plusSeconds(1));
+
+    assertEquals(2, released);
+    assertTrue(deliveryLog.recordedDelivery("job-5").isEmpty());
+    assertTrue(deliveryLog.recordedDelivery("job-6").isEmpty());
+    assertTrue(deliveryLog.recordedDelivery("job-7").isPresent(), "another aggregate keeps its records");
+    assertTrue(deliveryLog.recordedDelivery("job-8").isPresent(), "another process keeps its records");
+    assertTrue(deliveryLog.recordedDelivery("job-9").isPresent(), "another workflow module keeps its records");
+
+  }
+
+  @Test
+  @DisplayName("Story 76: a record written after the end of the workflow survives the release")
+  public void aRecordWrittenAfterTheNotificationSurvives() {
+
+    // a moment safely before the record is written - see above on the resolution
+    final var endOfTheWorkflow = java.time.Instant.now().minusSeconds(1);
+    transactionTemplate
+        .executeWithoutResult(
+            status -> deliveryLog.record(deliveryOf("job-10", "test-module", "TestProcess", "4711")));
+
+    // the delivery of a SECOND workflow on the same aggregate, processed after the first
+    // one ended - the time bound is what keeps its record
+    final var released = deliveryLog.releaseRecordsOf("test-module", "TestProcess", "4711", endOfTheWorkflow);
+
+    assertEquals(0, released);
+    assertTrue(deliveryLog.recordedDelivery("job-10").isPresent());
+
+  }
+
   @Test
   @DisplayName("Records are deleted once the retention period passed")
   public void expiredRecordsAreDeleted() {
