@@ -26,6 +26,15 @@ Currently, these platforms are supported:
 Developers who want to use VanillaBP should refer to the [Wiki](https://github.com/vanillabp/adapter-platform-integration/wiki).  
 It contains conceptual documentation as well as platform-specific details.
 
+The versions this release is built and tested against are Spring Boot **4.1.0**, Quarkus **3.37.1** and Java **21**.
+Applications on a newer patch or minor of either platform are expected to work and are not tested here; a new major
+is an upgrade of VanillaBP itself, and `UPGRADE.md` says what it took. There are no release lines per platform
+version, unlike the
+[Camunda 8 adapter](https://github.com/camunda-community-hub/vanillabp-camunda8-adapter#release-lines), whose
+artifacts carry the cluster minor: Camunda 8 forces that because the client a build was compiled against is the
+lowest cluster version it accepts, while Spring Boot and Quarkus are dependencies of the application, which picks
+them itself.
+
 ## Contribution
 
 Developers who want to contribute to VanillaBP should familiarize themselves with the implementation details by
