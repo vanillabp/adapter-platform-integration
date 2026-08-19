@@ -55,6 +55,12 @@ jobs:
         run: |
           mvn --batch-mode --update-snapshots versions:set -DprocessAllModules=true -DnewVersion=${{ github.event.inputs.release_version }}
           find . -name pom.xml.versionsBackup -delete
+      - name: Pin the schema changelog of this version
+        run: |
+          # latest.xml becomes <version>.xml, the master changelog points at it and a checksum is
+          # written next to it - from then on the build fails if the file is ever edited, because a
+          # changeset which was applied to a database must not change
+          schema/bin/schema-version.sh pin ${{ github.event.inputs.release_version }}
       - name: Check for SNAPSHOT dependencies
         run: |
           SNAPSHOT_POMS=$(grep -R "<.*>.*SNAPSHOT<\/.*>" . --include=pom.xml || true)
@@ -101,6 +107,10 @@ jobs:
           IFS='.' read -r major minor patch <<< "$RELEASE_VERSION"
           NEXT_PATCH=$((patch + 1))
           echo "NEXT_SNAPSHOT=$major.$minor.${NEXT_PATCH}-SNAPSHOT" >> $GITHUB_ENV
+      - name: Open the schema changelog of the next version
+        run: |
+          NEXT_VERSION=${NEXT_SNAPSHOT%-SNAPSHOT}
+          schema/bin/schema-version.sh open "${NEXT_VERSION}"
       - name: Set next snapshot version
         run: |
           mvn --batch-mode --update-snapshots versions:set -DprocessAllModules=true -DnewVersion=${{ env.NEXT_SNAPSHOT }}

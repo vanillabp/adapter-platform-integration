@@ -1,17 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  The tables VanillaBP needs, described for Liquibase and NOT as SQL.
+  The tables VanillaBP needs, described for Liquibase and NOT as SQL. The SQL files next to this
+  changelog are GENERATED from it (see the module's README), so there is exactly one place where a
+  column is described.
 
-  Why not SQL: the databases nobody tests here inherit Liquibase's own testing of its type
-  mapping instead of our guesses. The SQL files next to this changelog are GENERATED from it
-  (see the module's README), so there is exactly one place where a column is described.
-
-  Rules for changing this file:
-  - a changeset which was released is never edited and never renumbered - append a new one,
-  - its id names the table and the VanillaBP version which introduced the change,
-  - its LABEL is that version, which is what lets the build generate one Flyway file per release
-    holding only that release's statements,
-  - a table name an application configured is a property, so a renamed table needs no fork.
+  THIS FILE CONTAINS NO CHANGESET, and a test makes sure it stays that way. It defines the
+  properties and includes one file per VanillaBP version: the released ones, which are immutable and
+  pinned by a checksum, and latest.xml, which is the version under development. A changeset that was
+  applied somewhere must never change - the checksum of a released file is what enforces it, and
+  keeping the versions in separate files is what makes the rule easy to follow.
 
   Not in here: the outbox of the Spring Boot integration (TXNO_OUTBOX). That schema belongs to
   gruelbox and its own migrator - see the wiki.
@@ -20,91 +17,16 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
 
-  <!-- override with -Dliquibase.vanillabp.outbox.table / in your own changelog which includes
-       this one, to match 'vanillabp.outbox.jdbc.table-name' -->
-  <property name="vanillabp.outbox.table" value="VANILLABP_PHASE_TWO_OUTBOX" />
+  <!-- override in your own changelog which includes this one, to match
+       'vanillabp.outbox.jdbc.table-name' -->
+  <property name="vanillabp.outbox.table" value="VANILLABP_PHASE_TWO_OUTBOX"/>
   <!-- matches 'vanillabp.delivery.jdbc.table-name' -->
-  <property name="vanillabp.delivery.table" value="VANILLABP_TASK_DELIVERY" />
+  <property name="vanillabp.delivery.table" value="VANILLABP_TASK_DELIVERY"/>
 
-  <changeSet author="VanillaBP" id="vanillabp-phase-two-outbox-2.0.0" labels="2.0.0">
-    <comment>
-      The phase-two outbox of a remote BPMS: one entry per operation which may only reach the BPMS
-      after the caller's transaction committed. IDEMPOTENCY_KEY is unique, which is what makes a
-      duplicate schedule a no-op; its 512 characters stay below MySQL's index key-length limit.
-    </comment>
-    <createTable tableName="${vanillabp.outbox.table}">
-      <column name="ID" type="VARCHAR(36)">
-        <constraints primaryKey="true" nullable="false" />
-      </column>
-      <column name="WORKFLOW_MODULE_ID" type="VARCHAR(255)">
-        <constraints nullable="false" />
-      </column>
-      <column name="BPMN_PROCESS_ID" type="VARCHAR(255)">
-        <constraints nullable="false" />
-      </column>
-      <column name="OPERATION" type="VARCHAR(255)">
-        <constraints nullable="false" />
-      </column>
-      <column name="AGGREGATE_ID" type="VARCHAR(1024)" />
-      <column name="ADAPTER_ID" type="VARCHAR(255)" />
-      <column name="ARGS" type="VARCHAR(2048)" />
-      <column name="IDEMPOTENCY_KEY" type="VARCHAR(512)">
-        <constraints unique="true" />
-      </column>
-      <column name="STATUS" type="VARCHAR(16)">
-        <constraints nullable="false" />
-      </column>
-      <column name="CREATED_AT" type="TIMESTAMP">
-        <constraints nullable="false" />
-      </column>
-      <column name="ATTEMPTS" type="INT">
-        <constraints nullable="false" />
-      </column>
-      <column name="NEXT_ATTEMPT_AT" type="TIMESTAMP">
-        <constraints nullable="false" />
-      </column>
-      <column name="DONE_AT" type="TIMESTAMP" />
-    </createTable>
-    <!-- MySQL's TIMESTAMP ends in 2038 and auto-initializes, which is why the runtime creates
-         DATETIME(6) there as well - an application which starts with the runtime's tables and
-         later switches to this changelog has to end up with the same columns. -->
-    <modifySql dbms="mysql,mariadb">
-      <replace replace="timestamp" with="datetime(6)" />
-    </modifySql>
-  </changeSet>
+  <!-- released versions, oldest first; the release adds a line here and never touches an existing
+       one -->
 
-  <changeSet author="VanillaBP" id="vanillabp-task-delivery-2.0.0" labels="2.0.0">
-    <comment>
-      The log of processed task deliveries: what a BPMS repeating a delivery is answered from. The
-      delivery key is the BPMS' identity of the delivery, 512 characters for the same index reason.
-    </comment>
-    <createTable tableName="${vanillabp.delivery.table}">
-      <column name="DELIVERY_KEY" type="VARCHAR(512)">
-        <constraints primaryKey="true" nullable="false" />
-      </column>
-      <column name="WORKFLOW_MODULE_ID" type="VARCHAR(255)">
-        <constraints nullable="false" />
-      </column>
-      <column name="BPMN_PROCESS_ID" type="VARCHAR(255)">
-        <constraints nullable="false" />
-      </column>
-      <column name="AGGREGATE_ID" type="VARCHAR(1024)" />
-      <column name="TASK_DEFINITION" type="VARCHAR(255)" />
-      <column name="OUTCOME" type="VARCHAR(32)">
-        <constraints nullable="false" />
-      </column>
-      <column name="BPMN_ERROR_CODE" type="VARCHAR(255)" />
-      <column name="BPMN_ERROR_NAME" type="VARCHAR(255)" />
-      <column name="RECORDED_AT" type="TIMESTAMP">
-        <constraints nullable="false" />
-      </column>
-    </createTable>
-    <!-- MySQL's TIMESTAMP ends in 2038 and auto-initializes, which is why the runtime creates
-         DATETIME(6) there as well - an application which starts with the runtime's tables and
-         later switches to this changelog has to end up with the same columns. -->
-    <modifySql dbms="mysql,mariadb">
-      <replace replace="timestamp" with="datetime(6)" />
-    </modifySql>
-  </changeSet>
+  <!-- the version under development -->
+  <include file="vanillabp/schema/latest.xml"/>
 
 </databaseChangeLog>
