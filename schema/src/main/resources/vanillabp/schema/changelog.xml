@@ -18,9 +18,11 @@
     xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
 
   <!-- override in your own changelog which includes this one, to match
-       'vanillabp.outbox.jdbc.table-name' -->
+       'vanillabp.outbox.jdbc.table' -->
   <property name="vanillabp.outbox.table" value="VANILLABP_PHASE_TWO_OUTBOX"/>
-  <!-- matches 'vanillabp.delivery.jdbc.table-name' -->
+  <!-- NOT configurable: VanillaBP creates and reads exactly this table
+       (JdbcTaskDeliveryStore.DEFAULT_TABLE_NAME), so overriding this property would
+       build a table nobody uses -->
   <property name="vanillabp.delivery.table" value="VANILLABP_TASK_DELIVERY"/>
 
   <!-- released versions, oldest first; the release adds a line here and never touches an existing
