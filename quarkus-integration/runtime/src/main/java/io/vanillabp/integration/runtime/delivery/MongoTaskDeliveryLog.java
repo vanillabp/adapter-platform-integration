@@ -172,7 +172,10 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
         .map(document -> new TaskDelivery(
             deliveryKey, document.getString("workflowModuleId"), document.getString("bpmnProcessId"), document
                 .getString("aggregateId"), document.getString("taskDefinition"), document
-                    .getString("outcome"), document.getString("bpmnErrorCode"), document.getString("bpmnErrorName")));
+                    .getString("outcome"), document.getString("bpmnErrorCode"), document
+                        .getString("bpmnErrorName"), document.getDate("recordedAt") == null
+                            ? null
+                            : document.getDate("recordedAt").toInstant()));
 
   }
 
@@ -195,7 +198,11 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
         .append("outcome", delivery.outcome())
         .append("bpmnErrorCode", delivery.bpmnErrorCode())
         .append("bpmnErrorName", delivery.bpmnErrorName())
-        .append("recordedAt", Date.from(java.time.Instant.now()));
+        .append(
+            "recordedAt",
+            Date.from(delivery.recordedAt() == null
+                ? java.time.Instant.now()
+                : delivery.recordedAt()));
     // a duplicate-key error inside a MongoDB transaction would abort it entirely, so the
     // common duplicate is read instead - the unique document ID stays the backstop
     if ((session != null) && (collection

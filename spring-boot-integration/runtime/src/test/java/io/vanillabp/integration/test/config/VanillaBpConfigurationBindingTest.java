@@ -299,6 +299,33 @@ public class VanillaBpConfigurationBindingTest {
   }
 
   @Test
+  @DisplayName("Story 89: the maximum age of an open task binds at all four levels")
+  public void maxTaskAgeBindsAtEveryLevel() {
+
+    contextRunner
+        .withPropertyValues(
+            "vanillabp.resources-location=classpath*:vanillabp-processes",
+            "vanillabp.adapters.test.type=dummy",
+            "vanillabp.workflow-modules.test-module.prioritized-adapters=test",
+            "vanillabp.delivery.max-task-age=P10D",
+            "vanillabp.workflow-modules.test-module.delivery.max-task-age=P20D",
+            "vanillabp.workflow-modules.test-module.workflows.TestProcess.delivery.max-task-age=P30D",
+            "vanillabp.workflow-modules.test-module.workflows.TestProcess.tasks.awaitSignature.delivery.max-task-age=P40D")
+        .run(context -> {
+
+          final var properties = context.getBean(MigrationAdapterProperties.class);
+          assertEquals(Duration.ofDays(10), properties.maxTaskAge("other-module", null, null));
+          assertEquals(Duration.ofDays(20), properties.maxTaskAge("test-module", "OtherProcess", null));
+          assertEquals(Duration.ofDays(30), properties.maxTaskAge("test-module", "TestProcess", "otherTask"));
+          assertEquals(
+              Duration.ofDays(40),
+              properties.maxTaskAge("test-module", "TestProcess", "awaitSignature"));
+
+        });
+
+  }
+
+  @Test
   @DisplayName("An adapter-owned overlay of the same prefix coexists with the platform binding")
   public void adapterOverlayCoexistsWithPlatformBinding() {
 
