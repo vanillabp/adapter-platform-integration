@@ -26,6 +26,7 @@ import com.gruelbox.transactionoutbox.TransactionOutbox;
 import com.gruelbox.transactionoutbox.spring.SpringInstantiator;
 import com.gruelbox.transactionoutbox.spring.SpringTransactionManager;
 
+import io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 import io.vanillabp.integration.spi.PhaseTwoCall;
@@ -50,7 +51,10 @@ import jakarta.persistence.EntityManagerFactory;
  * <code>vanillabp.outbox.jdbc.table</code>) is created automatically via gruelbox's
  * schema migration unless <code>vanillabp.outbox.create-schema</code> is set to
  * <code>false</code> (see the module's <code>README.md</code> for managing the schema
- * manually).
+ * manually). Wherever that migration is off - which a custom table name does as well -
+ * the table's existence is verified AT STARTUP (see
+ * {@link #validateOutboxTableExists(DataSource, String)}), because this one table is
+ * gruelbox's and therefore not covered by <code>io.vanillabp:vanillabp-schema</code>.
  * <p>
  * <strong>Contract mapping (deviations):</strong> the {@link PhaseTwoOutbox} contract
  * is mapped onto gruelbox's native capabilities: idempotency keys become
@@ -95,6 +99,13 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
   public static final String DEFAULT_TRANSACTION_OUTBOX_BEAN_NAME = "vanillaBpTransactionOutbox";
 
   /**
+   * The table gruelbox stores outbox entries in unless
+   * <code>vanillabp.outbox.jdbc.table</code> names another one - and the only table
+   * gruelbox's own schema migration ever creates.
+   */
+  public static final String DEFAULT_OUTBOX_TABLE_NAME = "TXNO_OUTBOX";
+
+  /**
    * The gruelbox {@link TransactionOutbox} enlisting entries in Spring-managed JDBC
    * transactions and instantiating the scheduled {@link GruelboxPhaseTwoDispatch}
    * from the application context.
@@ -122,10 +133,14 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
     // custom table name therefore requires the table to be created manually (see
     // 'vanillabp.outbox.jdbc.table')
     final var customTable = properties.getJdbc().getTable();
+    final var migrate = properties.isCreateSchema() && (customTable == null);
+    if (!migrate) {
+      validateOutboxTableExists(dataSource, customTable);
+    }
     final var persistorBuilder = DefaultPersistor
         .builder()
         .dialect(detectDialect(dataSource))
-        .migrate(properties.isCreateSchema() && (customTable == null));
+        .migrate(migrate);
     if (customTable != null) {
       persistorBuilder.tableName(customTable);
     }
@@ -240,6 +255,63 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
             the JPA workflow aggregates - name that one 'transactionManager' (Spring Boot's \
             convention) or define your own gruelbox TransactionOutbox bean named '%s'."""
             .formatted(transactionManagers.keySet(), DEFAULT_TRANSACTION_OUTBOX_BEAN_NAME));
+
+  }
+
+  /**
+   * Verifies that the outbox table exists whenever gruelbox's schema migration is switched
+   * off - by <code>vanillabp.outbox.create-schema</code> for an application applying its
+   * schema itself (story 75), or by a custom table name, which switches the migration off
+   * as well since it only ever targets {@value #DEFAULT_OUTBOX_TABLE_NAME}.
+   * <p>
+   * Unlike VanillaBP's own tables this one belongs to gruelbox, so the message points to
+   * gruelbox for the statements instead of to
+   * <code>io.vanillabp:vanillabp-schema</code>. Without the check a missing table surfaces
+   * at the first workflow started on a remote BPMS, hours after a deployment which booted
+   * cleanly.
+   *
+   * @param dataSource The data source holding the outbox table
+   * @param customTable The configured table name, <code>null</code> for the default
+   * @throws IllegalStateException If the table is missing
+   */
+  private static void validateOutboxTableExists(
+      final DataSource dataSource,
+      final String customTable) {
+
+    final var tableName = customTable == null ? DEFAULT_OUTBOX_TABLE_NAME : customTable;
+    try (var connection = dataSource.getConnection()) {
+      if (JdbcSchema.tableExists(connection, tableName)) {
+        return;
+      }
+    } catch (final SQLException e) {
+      throw new IllegalStateException(
+          "Could not check whether the phase-two outbox table '%s' exists!".formatted(tableName), e);
+    }
+    final var remedies = customTable == null
+        ? """
+            - apply gruelbox's schema with your migration tool: \
+            'com.gruelbox.transactionoutbox.DefaultPersistor.writeSchema(Writer)' writes the \
+            statements for the database you configure, or
+            - let gruelbox create the table by setting 'vanillabp.outbox.create-schema' to \
+            'true' (the default)."""
+        : """
+            - create the table yourself, structured like gruelbox's default table '%s': \
+            'com.gruelbox.transactionoutbox.DefaultPersistor.writeSchema(Writer)' writes the \
+            statements for the database you configure, or
+            - remove 'vanillabp.outbox.jdbc.table' and let gruelbox create '%s' (which needs \
+            'vanillabp.outbox.create-schema' to be 'true', the default)."""
+            .formatted(DEFAULT_OUTBOX_TABLE_NAME, DEFAULT_OUTBOX_TABLE_NAME);
+    throw new IllegalStateException(
+        """
+            The phase-two outbox table '%s' does not exist! Starting a workflow on a remote BPMS \
+            writes an entry into it inside the caller's transaction, so without the table nothing \
+            can be started. This table is gruelbox's own, not VanillaBP's: it is NOT part of \
+            'io.vanillabp:vanillabp-schema' and gruelbox's schema migration is switched off here. \
+            Either
+            %s
+            The wiki page 'Spring Boot integration', section 'Creating the tables with Liquibase or \
+            Flyway', describes the whole procedure."""
+            .formatted(tableName, remedies));
 
   }
 

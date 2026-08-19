@@ -17,6 +17,7 @@ import org.eclipse.microprofile.config.ConfigProvider;
 import io.quarkus.runtime.StartupEvent;
 import io.smallrye.config.SmallRyeConfig;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
+import io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterPropertiesMapper;
@@ -249,7 +250,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
     try (var connection = dataSource.get().getConnection()) {
       // existence is checked via JDBC metadata since 'CREATE TABLE IF NOT EXISTS'
       // is not supported by all databases (e.g. Oracle, SQL Server)
-      if (tableExists(connection, tableName)) {
+      if (JdbcSchema.tableExists(connection, tableName)) {
         return;
       }
       try (var statement = connection.createStatement()) {
@@ -275,7 +276,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
   private void validateTableExists() {
 
     try (var connection = dataSource.get().getConnection()) {
-      if (tableExists(connection, tableName)) {
+      if (JdbcSchema.tableExists(connection, tableName)) {
         return;
       }
       throw new IllegalStateException(
@@ -293,28 +294,6 @@ public class JdbcPhaseTwoOutboxDispatcher {
       throw new IllegalStateException(
           "Could not check whether the phase-two outbox table '%s' exists!".formatted(tableName), e);
     }
-
-  }
-
-  private static boolean tableExists(
-      final Connection connection,
-      final String tableName) throws SQLException {
-
-    final var metaData = connection.getMetaData();
-    // unquoted identifiers are folded to upper case by some databases (Oracle, H2)
-    // and to lower case by others (PostgreSQL) - check both spellings
-    for (final var name : List.of(
-        tableName,
-        tableName.toLowerCase())) {
-      try (var tables = metaData.getTables(null, null, name, new String[]{
-          "TABLE"
-      })) {
-        if (tables.next()) {
-          return true;
-        }
-      }
-    }
-    return false;
 
   }
 

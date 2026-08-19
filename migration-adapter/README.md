@@ -389,7 +389,11 @@ remembers a processed delivery and answers a repeated one from the record:
   aggregate's own transaction. `JdbcTaskDeliveryStore` and
   `TaskDeliveryRetentionCleanup` (package `delivery`) hold the SQL respectively the
   cleanup schedule both platforms share; the connection comes from
-  `JdbcConnectionAccess`, the one piece which cannot be platform-neutral.
+  `JdbcConnectionAccess`, the one piece which cannot be platform-neutral. Whether a
+  table is there is asked of the JDBC metadata by `jdbc.JdbcSchema#tableExists`, used
+  by every store which either creates its table or verifies that the application
+  created it - including the gruelbox outbox of the Spring Boot integration, whose
+  table is gruelbox's and therefore not shipped by `vanillabp-schema` (story 95).
 - The switch is the adapter-scoped `deduplicate-deliveries` (default `true`),
   resolvable per workflow module, workflow and task like every adapter-scoped key.
 - An adapter says whether it needs this at all:

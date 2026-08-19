@@ -98,7 +98,8 @@ public class PhaseTwoOutboxProperties {
      * (Spring Boot/gruelbox: <code>TXNO_OUTBOX</code>; Quarkus:
      * <code>VANILLABP_PHASE_TWO_OUTBOX</code>). NOTE: on Spring Boot the gruelbox
      * schema migration always targets the default table - a custom name requires
-     * the table (structured like <code>TXNO_OUTBOX</code>) to be created manually.
+     * the table (structured like <code>TXNO_OUTBOX</code>) to be created manually,
+     * which is verified at startup.
      */
     @Builder.Default
     private String table = null;

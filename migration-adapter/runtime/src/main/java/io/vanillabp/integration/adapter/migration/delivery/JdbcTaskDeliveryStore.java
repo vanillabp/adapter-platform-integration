@@ -6,9 +6,9 @@ import java.sql.SQLIntegrityConstraintViolationException;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 
+import io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema;
 import io.vanillabp.integration.spi.TaskDelivery;
 import lombok.extern.slf4j.Slf4j;
 
@@ -265,7 +265,7 @@ public class JdbcTaskDeliveryStore {
     Connection connection = null;
     try {
       connection = connectionAccess.acquire();
-      if (tableExists(connection, tableName)) {
+      if (JdbcSchema.tableExists(connection, tableName)) {
         return;
       }
       try (var statement = connection.createStatement()) {
@@ -301,7 +301,7 @@ public class JdbcTaskDeliveryStore {
     Connection connection = null;
     try {
       connection = connectionAccess.acquire();
-      if (tableExists(connection, tableName)) {
+      if (JdbcSchema.tableExists(connection, tableName)) {
         return;
       }
       throw new IllegalStateException(
@@ -354,28 +354,6 @@ public class JdbcTaskDeliveryStore {
     return (e instanceof SQLIntegrityConstraintViolationException) || ((e.getSQLState() != null) && e
         .getSQLState()
         .startsWith("23"));
-
-  }
-
-  private static boolean tableExists(
-      final Connection connection,
-      final String tableName) throws SQLException {
-
-    final var metaData = connection.getMetaData();
-    // unquoted identifiers are folded to upper case by some databases (Oracle, H2)
-    // and to lower case by others (PostgreSQL) - check both spellings
-    for (final var name : List.of(
-        tableName,
-        tableName.toLowerCase())) {
-      try (var tables = metaData.getTables(null, null, name, new String[]{
-          "TABLE"
-      })) {
-        if (tables.next()) {
-          return true;
-        }
-      }
-    }
-    return false;
 
   }
 
