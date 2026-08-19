@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The changesets of ONE version of VanillaBP. Released files carry a checksum next to them
+  (<name>.xml.sha256) and the build fails when the file no longer matches it: a changeset which was
+  applied somewhere must never change, and in an open-source project a rule nobody enforces is a
+  rule which will be broken by accident.
+
+  This file is the one under development. The release renames it to the version it releases and
+  writes the checksum; a new, empty latest.xml opens the next version. The rename does not change
+  what Liquibase records, because every file here declares the same logicalFilePath - that is what
+  the attribute is for.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd"
+    logicalFilePath="vanillabp/schema">
+
+  <changeSet author="VanillaBP" id="vanillabp-phase-two-outbox-2.0.0" labels="2.0.0">
+    <comment>
+      The phase-two outbox of a remote BPMS: one entry per operation which may only reach the BPMS
+      after the caller's transaction committed. IDEMPOTENCY_KEY is unique, which is what makes a
+      duplicate schedule a no-op; its 512 characters stay below MySQL's index key-length limit.
+    </comment>
+    <createTable tableName="${vanillabp.outbox.table}">
+      <column name="ID" type="VARCHAR(36)">
+        <constraints primaryKey="true" nullable="false" />
+      </column>
+      <column name="WORKFLOW_MODULE_ID" type="VARCHAR(255)">
+        <constraints nullable="false" />
+      </column>
+      <column name="BPMN_PROCESS_ID" type="VARCHAR(255)">
+        <constraints nullable="false" />
+      </column>
+      <column name="OPERATION" type="VARCHAR(255)">
+        <constraints nullable="false" />
+      </column>
+      <column name="AGGREGATE_ID" type="VARCHAR(1024)" />
+      <column name="ADAPTER_ID" type="VARCHAR(255)" />
+      <column name="ARGS" type="VARCHAR(2048)" />
+      <column name="IDEMPOTENCY_KEY" type="VARCHAR(512)">
+        <constraints unique="true" />
+      </column>
+      <column name="STATUS" type="VARCHAR(16)">
+        <constraints nullable="false" />
+      </column>
+      <column name="CREATED_AT" type="TIMESTAMP">
+        <constraints nullable="false" />
+      </column>
+      <column name="ATTEMPTS" type="INT">
+        <constraints nullable="false" />
+      </column>
+      <column name="NEXT_ATTEMPT_AT" type="TIMESTAMP">
+        <constraints nullable="false" />
+      </column>
+      <column name="DONE_AT" type="TIMESTAMP" />
+    </createTable>
+    <!-- MySQL's TIMESTAMP ends in 2038 and auto-initializes, which is why the runtime creates
+         DATETIME(6) there as well - an application which starts with the runtime's tables and
+         later switches to this changelog has to end up with the same columns. -->
+    <modifySql dbms="mysql,mariadb">
+      <replace replace="timestamp" with="datetime(6)" />
+    </modifySql>
+  </changeSet>
+
+  <changeSet author="VanillaBP" id="vanillabp-task-delivery-2.0.0" labels="2.0.0">
+    <comment>
+      The log of processed task deliveries: what a BPMS repeating a delivery is answered from. The
+      delivery key is the BPMS' identity of the delivery, 512 characters for the same index reason.
+    </comment>
+    <createTable tableName="${vanillabp.delivery.table}">
+      <column name="DELIVERY_KEY" type="VARCHAR(512)">
+        <constraints primaryKey="true" nullable="false" />
+      </column>
+      <column name="WORKFLOW_MODULE_ID" type="VARCHAR(255)">
+        <constraints nullable="false" />
+      </column>
+      <column name="BPMN_PROCESS_ID" type="VARCHAR(255)">
+        <constraints nullable="false" />
+      </column>
+      <column name="AGGREGATE_ID" type="VARCHAR(1024)" />
+      <column name="TASK_DEFINITION" type="VARCHAR(255)" />
+      <column name="OUTCOME" type="VARCHAR(32)">
+        <constraints nullable="false" />
+      </column>
+      <column name="BPMN_ERROR_CODE" type="VARCHAR(255)" />
+      <column name="BPMN_ERROR_NAME" type="VARCHAR(255)" />
+      <column name="RECORDED_AT" type="TIMESTAMP">
+        <constraints nullable="false" />
+      </column>
+    </createTable>
+    <!-- MySQL's TIMESTAMP ends in 2038 and auto-initializes, which is why the runtime creates
+         DATETIME(6) there as well - an application which starts with the runtime's tables and
+         later switches to this changelog has to end up with the same columns. -->
+    <modifySql dbms="mysql,mariadb">
+      <replace replace="timestamp" with="datetime(6)" />
+    </modifySql>
+  </changeSet>
+
+</databaseChangeLog>
