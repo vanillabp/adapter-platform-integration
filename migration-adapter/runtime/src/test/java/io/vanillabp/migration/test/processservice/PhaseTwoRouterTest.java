@@ -1,5 +1,6 @@
 package io.vanillabp.migration.test.processservice;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
@@ -41,6 +42,61 @@ public class PhaseTwoRouterTest {
     when(processService.getBpmnProcessId()).thenReturn("TestProcess");
 
     testee.register(processService);
+
+  }
+
+  @Test
+  @DisplayName("A dispatch is counted, a repeated one as a retry, and a failure by whether it can be repeated")
+  public void dispatchesAreCounted() {
+
+    when(processService.getWorkflowModuleId()).thenReturn("test-module");
+    when(processService.getBpmnProcessId()).thenReturn("TestProcess");
+    when(processService.convertAggregateId("42")).thenReturn(42L);
+
+    final var registry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+    final var metrics = new io.vanillabp.integration.adapter.migration.observability.MicrometerVanillaBpMetrics();
+    metrics.bindTo(registry);
+    testee.setMetrics(metrics);
+    registerProcessService();
+
+    final var call = PhaseTwoCall
+        .of(PhaseTwoOperation.START_WORKFLOW, "test-module", "TestProcess", "42", "test-adapter", Map.of());
+    testee.dispatch(call);
+    testee.dispatch(call, true);
+
+    assertEquals(
+        2.0,
+        registry
+            .get(io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.OUTBOX_DISPATCHES)
+            .tag(
+                io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.TAG_OPERATION,
+                PhaseTwoOperation.START_WORKFLOW.name())
+            .counter()
+            .count());
+    assertEquals(
+        1.0,
+        registry
+            .get(io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.OUTBOX_RETRIES)
+            .counter()
+            .count());
+
+    // a failure the adapter called permanent is told apart from one worth repeating
+    Mockito
+        .doThrow(new io.vanillabp.integration.spi.PhaseTwoPermanentFailure("no such process", null))
+        .when(processService)
+        .startWorkflowPhaseTwo(42L, "test-adapter", false);
+    assertThrowsExactly(
+        io.vanillabp.integration.spi.PhaseTwoPermanentFailure.class,
+        () -> testee.dispatch(call));
+    assertEquals(
+        1.0,
+        registry
+            .get(io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.OUTBOX_FAILURES)
+            .tag(
+                io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.TAG_PERMANENT,
+                "true")
+            .counter()
+            .count());
 
   }
 

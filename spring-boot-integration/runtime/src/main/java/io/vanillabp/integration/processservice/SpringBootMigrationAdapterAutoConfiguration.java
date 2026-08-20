@@ -219,9 +219,30 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    */
   @Bean
   @ConditionalOnMissingBean(PhaseTwoRouter.class)
-  public PhaseTwoRouter vanillaBpPhaseTwoRouter() {
+  public PhaseTwoRouter vanillaBpPhaseTwoRouter(
+      final org.springframework.beans.factory.ObjectProvider<io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics> metrics) {
 
-    return new PhaseTwoRouter();
+    final var router = new PhaseTwoRouter();
+    router.setMetrics(vanillaBpMetricsOf(metrics));
+    return router;
+
+  }
+
+  /**
+   * The metrics implementation to use: the Micrometer one where the application
+   * brings Micrometer,
+   * {@link io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics#NONE}
+   * otherwise. Micrometer is optional, so the bean may legitimately be absent.
+   *
+   * @param metrics The provider of the metrics bean
+   * @return What to record into, never <code>null</code>
+   */
+  public static io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics vanillaBpMetricsOf(
+      final org.springframework.beans.factory.ObjectProvider<io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics> metrics) {
+
+    return metrics
+        .getIfAvailable(
+            () -> io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.NONE);
 
   }
 
@@ -319,6 +340,109 @@ public class SpringBootMigrationAdapterAutoConfiguration {
 
       return new io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheMeters(
           statistics);
+
+    }
+
+    /**
+     * What VanillaBP counts about its deliveries and its outbox (story 92). It is a
+     * {@code MeterBinder} as well, so the Actuator hands it the registry the same way
+     * it hands it to the election cache's meters - nothing of VanillaBP asks for a
+     * registry itself.
+     *
+     * @return The metrics of deliveries and outbox
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public io.vanillabp.integration.adapter.migration.observability.MicrometerVanillaBpMetrics vanillaBpMetrics() {
+
+      return new io.vanillabp.integration.adapter.migration.observability.MicrometerVanillaBpMetrics();
+
+    }
+
+    /**
+     * Publishes how many entries wait in each outbox store, for the stores which can
+     * count them
+     * ({@link io.vanillabp.integration.spi.PhaseTwoOutbox#pendingCalls()}). The
+     * gauge is tagged with the bean name of the store, because an application may
+     * run several of them (mixed persistence, a dedicated outbox for one aggregate).
+     * <p>
+     * The stores are resolved lazily: touching them while the beans are built would
+     * materialize persistence infrastructure long before the application asked for
+     * it.
+     *
+     * @param metrics The metrics to register the gauges with
+     * @param outboxes All outbox stores of the application
+     * @return The registration, run once the context is ready
+     */
+    @Bean
+    public org.springframework.beans.factory.SmartInitializingSingleton vanillaBpOutboxPendingGauges(
+        final io.vanillabp.integration.adapter.migration.observability.MicrometerVanillaBpMetrics metrics,
+        final org.springframework.beans.factory.ObjectProvider<io.vanillabp.integration.spi.PhaseTwoOutbox> outboxes) {
+
+      return () -> outboxes
+          .stream()
+          .filter(outbox -> outbox
+              .pendingCalls()
+              .isPresent())
+          .forEach(outbox -> metrics
+              .registerPendingOutboxEntries(
+                  outbox
+                      .getClass()
+                      .getSimpleName(),
+                  () -> outbox
+                      .pendingCalls()
+                      .orElse(0)));
+
+    }
+
+  }
+
+  /**
+   * Asks every BPMS adapter what it can say about its BPMS - the platform-neutral
+   * half of the health contribution (story 92). The adapters are resolved on every
+   * call, so an adapter which materializes late is asked as well.
+   *
+   * @param deploymentServices The adapters' deployment services, one per configured
+   *          adapter id
+   * @return The report
+   */
+  @Bean
+  @ConditionalOnMissingBean
+  public io.vanillabp.integration.adapter.migration.health.AdapterHealthReport vanillaBpAdapterHealthReport(
+      final org.springframework.beans.factory.ObjectProvider<io.vanillabp.integration.adapter.spi.AdapterDeploymentService<?, ?>> deploymentServices) {
+
+    return new io.vanillabp.integration.adapter.migration.health.AdapterHealthReport(
+        () -> deploymentServices
+            .stream()
+            .toList());
+
+  }
+
+  /**
+   * Publishes the adapters' health under the component <code>vanillabp</code> of
+   * Spring Boot's health endpoint, where the application brings the health support.
+   * An application without it boots unchanged and publishes nothing.
+   */
+  @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
+  // by NAME for the same reason the metrics configuration uses names: the annotation
+  // of a nested configuration class is read reflectively
+  @org.springframework.boot.autoconfigure.condition.ConditionalOnClass(
+      name = "org.springframework.boot.health.contributor.HealthIndicator")
+  public static class AdapterHealthConfiguration {
+
+    /**
+     * The bean name decides the name of the health component, so it has to stay
+     * <code>vanillabp</code> + the suffix Spring Boot strips.
+     *
+     * @param report What the adapters answered
+     * @return The health indicator
+     */
+    @Bean("vanillabpHealthIndicator")
+    @ConditionalOnMissingBean(name = "vanillabpHealthIndicator")
+    public io.vanillabp.integration.health.VanillaBpHealthIndicator vanillabpHealthIndicator(
+        final io.vanillabp.integration.adapter.migration.health.AdapterHealthReport report) {
+
+      return new io.vanillabp.integration.health.VanillaBpHealthIndicator(report);
 
     }
 

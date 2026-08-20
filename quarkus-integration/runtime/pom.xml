@@ -24,6 +24,13 @@
       <artifactId>micrometer-core</artifactId>
       <optional>true</optional>
     </dependency>
+    <!-- optional: the adapters' health is published only for an application using
+         the SmallRye Health extension (see VanillaBpReadinessCheck) -->
+    <dependency>
+      <groupId>org.eclipse.microprofile.health</groupId>
+      <artifactId>microprofile-health-api</artifactId>
+      <optional>true</optional>
+    </dependency>
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-narayana-jta</artifactId>

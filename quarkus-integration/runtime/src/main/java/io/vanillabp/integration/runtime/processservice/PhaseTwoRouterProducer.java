@@ -23,12 +23,39 @@ import jakarta.transaction.TransactionSynchronizationRegistry;
 @ApplicationScoped
 public class PhaseTwoRouterProducer {
 
+  /**
+   * @param transactionRegistry Provides the transaction a dispatch runs in
+   * @param metrics What dispatches are counted into (story 92); unsatisfied where the
+   *          application uses no Micrometer extension
+   * @return The router
+   */
   @Produces
   @Singleton
   public PhaseTwoRouter phaseTwoRouter(
-      final TransactionSynchronizationRegistry transactionRegistry) {
+      final TransactionSynchronizationRegistry transactionRegistry,
+      final jakarta.enterprise.inject.Instance<io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics> metrics) {
 
-    return new PhaseTwoRouter(new QuarkusTransactionRunner(transactionRegistry));
+    final var router = new PhaseTwoRouter(new QuarkusTransactionRunner(transactionRegistry));
+    router.setMetrics(vanillaBpMetricsOf(metrics));
+    return router;
+
+  }
+
+  /**
+   * The metrics implementation to use: the Micrometer one where the application uses
+   * the Micrometer extension,
+   * {@link io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics#NONE}
+   * otherwise.
+   *
+   * @param metrics The injected metrics
+   * @return What to record into, never <code>null</code>
+   */
+  public static io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics vanillaBpMetricsOf(
+      final jakarta.enterprise.inject.Instance<io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics> metrics) {
+
+    return ((metrics != null) && metrics.isResolvable())
+        ? metrics.get()
+        : io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.NONE;
 
   }
 

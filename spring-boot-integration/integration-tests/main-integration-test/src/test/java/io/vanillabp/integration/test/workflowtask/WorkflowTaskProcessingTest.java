@@ -165,7 +165,9 @@ public class WorkflowTaskProcessingTest {
                   new BpmnTaskSpec("Activity_Error", "raiseBpmnError"),
                   new BpmnTaskSpec("Activity_Fail", "failTask"),
                   new BpmnTaskSpec("Activity_Async", "asyncTask"),
-                  new BpmnTaskSpec("Activity_Bind", "bindParameters"))
+                  new BpmnTaskSpec("Activity_Bind", "bindParameters"),
+                  new BpmnTaskSpec("Activity_Mdc", "recordMdc"),
+                  new BpmnTaskSpec("Activity_MdcFail", "recordMdcAndFail"))
               : List.of();
 
     }

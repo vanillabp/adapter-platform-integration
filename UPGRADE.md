@@ -4,6 +4,36 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Metrics, health and a logging context around every delivery (2026-08-20)
+
+Story 92. Additive and without a single new property: nothing changes for an application
+which does nothing.
+
+Where Micrometer is on the classpath, VanillaBP now publishes what it does with your work
+under `vanillabp.*`: task deliveries by outcome, how long each took, redeliveries answered
+from the delivery record, and the phase-two outbox with its backlog, its retries and its
+failures. Without Micrometer nothing is registered and nothing fails, exactly as for the
+election cache's meters. The names, the tags and the question each one answers are in the
+wiki page [Observability](https://github.com/vanillabp/adapter-platform-integration/wiki/Observability).
+
+Where the platform has a health endpoint, the BPMS adapters contribute what they know about
+their BPMS under the name `vanillabp` (Spring Boot: a health component of
+`/actuator/health`, needs `spring-boot-health` on the classpath; Quarkus: a readiness check
+of `/q/health/ready`, needs the SmallRye Health extension). An adapter which is not
+configured yet reports UNKNOWN and does not make the application unhealthy.
+
+Every task delivery and every phase-two dispatch now runs inside six MDC keys naming the
+adapter, the workflow module, the BPMN process, the workflow aggregate, the task and the
+BPMS' own delivery id. VanillaBP restores the previous values afterwards and touches no
+other key, so an existing log configuration keeps working; a pattern to paste is in the
+wiki page.
+
+**Only relevant for adapters and for stores of your own:**
+`AdapterDeploymentService.checkHealth()` and `PhaseTwoOutbox.pendingCalls()` are new
+`default` methods contributing nothing, so existing implementations stay valid. An adapter
+which contributes no health is absent from the endpoint rather than reported as healthy,
+and a store which cannot count its waiting entries publishes no gauge.
+
 ## A workflow which ended can release its delivery records (2026-08-19)
 
 Story 76. Additive and switched off, so nothing changes for an application which does not

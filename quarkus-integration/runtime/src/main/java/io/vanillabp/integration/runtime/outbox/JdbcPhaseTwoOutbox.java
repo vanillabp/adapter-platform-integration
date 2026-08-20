@@ -98,6 +98,35 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
 
   }
 
+  /**
+   * Counts the entries waiting for their dispatch. A single indexed count over the
+   * outbox table, which holds what did not run yet plus what is kept until the
+   * retention passes - the same table the dispatcher polls.
+   */
+  @Override
+  public java.util.OptionalLong pendingCalls() {
+
+    if (!dataSource.isResolvable()) {
+      return java.util.OptionalLong.empty();
+    }
+    final var countPending = "SELECT COUNT(*) FROM %s WHERE STATUS = ?"
+        .formatted(tableName(dispatcher.getProperties()));
+    try (var connection = dataSource.get().getConnection(); var statement = connection.prepareStatement(countPending)) {
+      statement.setString(1, JdbcPhaseTwoOutboxDispatcher.STATUS_OPEN);
+      try (var resultSet = statement.executeQuery()) {
+        return resultSet.next()
+            ? java.util.OptionalLong.of(resultSet.getLong(1))
+            : java.util.OptionalLong.empty();
+      }
+    } catch (final SQLException e) {
+      // a metric must never be the reason an application fails - the gauge reports
+      // nothing for this collection and the next one tries again
+      log.debug("Could not count the pending entries of the JDBC phase-two outbox", e);
+      return java.util.OptionalLong.empty();
+    }
+
+  }
+
   @Override
   public boolean schedule(
       final PhaseTwoCall call) {

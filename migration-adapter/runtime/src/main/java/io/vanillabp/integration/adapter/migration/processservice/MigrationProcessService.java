@@ -133,6 +133,27 @@ public class MigrationProcessService<A> {
   private volatile TransactionRunner transactionRunner;
 
   /**
+   * What the application counts about its deliveries (story 92). Handed in by the
+   * platform integration after construction, because it exists once per application
+   * while process services exist per BPMN process;
+   * {@link io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics#NONE}
+   * until then and for an application without a metrics backend.
+   */
+  private volatile io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics metrics = io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.NONE;
+
+  /**
+   * @param metrics What to count deliveries into, never <code>null</code>
+   */
+  public void setMetrics(
+      final io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics metrics) {
+
+    this.metrics = metrics == null
+        ? io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.NONE
+        : metrics;
+
+  }
+
+  /**
    * Creates a process service without an adapter cache (elections probe every
    * time) - kept for tests; the platform integrations always pass the cache.
    */
@@ -550,6 +571,65 @@ public class MigrationProcessService<A> {
       final TransactionRunner platformTransactionRunner,
       final List<String> rollbackRuleRemedies) {
 
+    // story 92: everything the application logs while its handler runs carries the
+    // workflow it runs for, and the delivery is counted and measured - here, because
+    // this is the one place every BPMS passes through
+    final var startedAt = System.nanoTime();
+    WorkflowTaskOutcome outcome = null;
+    try (var ignored = io.vanillabp.integration.adapter.migration.observability.DeliveryMdc
+        .ofTaskDelivery(
+            context.getAdapterId(),
+            workflowModuleId,
+            bpmnProcessId,
+            context.getWorkflowAggregateId(),
+            context.getTaskDefinition(),
+            context.getDeliveryId())) {
+      outcome = deliverWorkflowTask(handler, context, platformTransactionRunner, rollbackRuleRemedies);
+      return outcome;
+    } finally {
+      metrics
+          .taskDelivered(
+              context.getAdapterId(),
+              workflowModuleId,
+              bpmnProcessId,
+              context.getTaskDefinition(),
+              deliveryOutcomeOf(outcome),
+              System.nanoTime() - startedAt);
+    }
+
+  }
+
+  /**
+   * How a delivery ended, as the metrics see it: a delivery which produced no outcome
+   * threw, which means the transaction was rolled back and the BPMS gets the work
+   * back.
+   *
+   * @param outcome The outcome or <code>null</code> if the delivery threw
+   * @return The outcome to count
+   */
+  private static io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DeliveryOutcome deliveryOutcomeOf(
+      final WorkflowTaskOutcome outcome) {
+
+    if (outcome == null) {
+      return io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DeliveryOutcome.FAILED;
+    }
+    return switch (outcome.kind()) {
+      case COMPLETED ->
+        io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DeliveryOutcome.COMPLETED;
+      case COMPLETION_PENDING ->
+        io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DeliveryOutcome.PENDING;
+      case BPMN_ERROR ->
+        io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DeliveryOutcome.BPMN_ERROR;
+    };
+
+  }
+
+  private WorkflowTaskOutcome deliverWorkflowTask(
+      final WorkflowTaskHandler handler,
+      final TaskInvocationContext context,
+      final TransactionRunner platformTransactionRunner,
+      final List<String> rollbackRuleRemedies) {
+
     // the runner of the application where it contributed one for this aggregate, the
     // platform's otherwise (story 70) - resolved once and cached by the process service
     final var runner = getTransactionRunner(platformTransactionRunner);
@@ -600,6 +680,12 @@ public class MigrationProcessService<A> {
               workflowModuleId,
               context.getWorkflowAggregateId(),
               recorded.get().kind());
+          metrics
+              .taskRedeliveryDeduplicated(
+                  context.getAdapterId(),
+                  workflowModuleId,
+                  bpmnProcessId,
+                  context.getTaskDefinition());
           return recorded.get();
         }
       }
