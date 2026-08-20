@@ -45,6 +45,20 @@ contributors know what you are working on.
 plug in. To learn which BPMS are supported, visit [https://www.vanillabp.io](https://www.vanillabp.io), which also
 links to the corresponding adapter repositories.
 
+### Where a snapshot comes from
+
+Snapshots in GitHub Packages are published from `main`, and from nowhere else. There is one
+`2.0.0-SNAPSHOT` per module, so a branch which published would overwrite what `main` published and
+a consumer could end up resolving a set of modules that never existed in any single tree. That is
+not theoretical: eighteen blueprint jobs failed on 2026-08-20 with a `NoSuchMethodError` naming a
+method which existed on one story branch, because one module came from there and another from
+`main`.
+
+A pull request therefore builds and tests without deploying, and the publish job of `main` runs
+under a concurrency group so two pushes cannot interleave. Please do not add a branch trigger to
+try something out quickly; a locally installed snapshot does the same job without reaching anybody
+else.
+
 ### Modules
 
 Each `README.md` file lists information about its submodules and links to their respective README files.
