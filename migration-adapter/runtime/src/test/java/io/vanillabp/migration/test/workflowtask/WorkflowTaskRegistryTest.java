@@ -51,7 +51,18 @@ import io.vanillabp.spi.service.WorkflowTask;
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowTaskRegistryTest {
 
-  public static class Aggregate {
+  /**
+   * The base class an aggregate inherits attributes from - the shape story 66's
+   * attribute resolution has to cope with, because a V1 application typically has its
+   * ID and its tenant on a base entity.
+   */
+  public static class BaseAggregate {
+
+    String tenantId;
+
+  }
+
+  public static class Aggregate extends BaseAggregate {
 
     String id;
 
@@ -74,6 +85,8 @@ public class WorkflowTaskRegistryTest {
 
     TaskEvent.Event event;
 
+    boolean urgent;
+
     public String getId() {
       return id;
     }
@@ -84,6 +97,10 @@ public class WorkflowTaskRegistryTest {
 
     public String getParameterValue() {
       return parameterValue;
+    }
+
+    public boolean isUrgent() {
+      return urgent;
     }
 
   }
@@ -147,6 +164,11 @@ public class WorkflowTaskRegistryTest {
     @Override
     public Class<Aggregate> getAggregateClass() {
       return Aggregate.class;
+    }
+
+    @Override
+    public String getAggregateIdName() {
+      return "aggregateId";
     }
 
     @Override
@@ -308,6 +330,19 @@ public class WorkflowTaskRegistryTest {
       aggregate.processedBy = "laterVersions";
       aggregate.taskId = taskId;
 
+    }
+
+  }
+
+  /**
+   * A V1 aggregate may compute an attribute in its getter - and that computation may
+   * fail. An expression resolved while the engine transaction runs must not be the
+   * place where that surfaces as an engine failure.
+   */
+  public static class BrokenGetterAggregate extends Aggregate {
+
+    public String getBoom() {
+      throw new IllegalStateException("computing the attribute failed");
     }
 
   }
@@ -1696,6 +1731,168 @@ public class WorkflowTaskRegistryTest {
       } finally {
         persistence.failLoad = false;
       }
+
+    }
+
+  }
+
+  /**
+   * Story 66's migration fallback for an EMBEDDED BPMS: it resolves BPMN expressions
+   * against the workflow aggregate while its own transaction runs. Version 1 resolved
+   * an attribute without a getter as well, so the order is getter, boolean getter,
+   * field - and the field is looked up along the class hierarchy, because a V1
+   * aggregate typically inherits from a base entity. The two methods are deprecated
+   * for removal, and the Camunda 7 adapter's expression resolver calls them today.
+   */
+  @Nested
+  @DisplayName("Attribute resolution for an embedded BPMS (story 66)")
+  class AttributeResolution {
+
+    @Test
+    @DisplayName("An attribute is announced through its getter, its boolean getter or its field")
+    public void anAttributeIsAnnouncedThroughGetterBooleanGetterOrField() {
+
+      assertTrue(registry.workflowAggregateHasProperty(MODULE, PROCESS, "processedBy"), "getter");
+      assertTrue(registry.workflowAggregateHasProperty(MODULE, PROCESS, "urgent"), "boolean getter");
+      assertTrue(registry.workflowAggregateHasProperty(MODULE, PROCESS, "taskId"), "field without getter");
+      assertTrue(registry.workflowAggregateHasProperty(MODULE, PROCESS, "tenantId"), "field of the base class");
+      assertFalse(registry.workflowAggregateHasProperty(MODULE, PROCESS, "somethingElse"));
+      assertFalse(registry.workflowAggregateHasProperty(MODULE, PROCESS, ""));
+      assertFalse(registry.workflowAggregateHasProperty(MODULE, PROCESS, null));
+
+    }
+
+    @Test
+    @DisplayName("An unknown BPMN process announces no attribute and reads none, instead of failing the expression")
+    public void anUnknownProcessAnnouncesNoAttribute() {
+
+      // the expression may name something entirely unrelated to VanillaBP - saying
+      // "not mine" lets the engine resolve it elsewhere
+      assertFalse(registry.workflowAggregateHasProperty(MODULE, "NoSuchProcess", "processedBy"));
+      assertNull(registry.resolveWorkflowAggregateProperty(MODULE, "NoSuchProcess", "4711", "processedBy"));
+
+    }
+
+    @Test
+    @DisplayName("The value comes from the getter, the boolean getter or the field - the base class included")
+    public void theValueIsReadInTheDocumentedOrder() {
+
+      final var aggregate = persistence.aggregates.get("4711");
+      aggregate.processedBy = "read by getter";
+      aggregate.urgent = true;
+      aggregate.taskId = "Task_1";
+      aggregate.tenantId = "tenant-4711";
+
+      assertEquals("read by getter", registry.resolveWorkflowAggregateProperty(MODULE, PROCESS, "4711",
+          "processedBy"));
+      assertEquals(Boolean.TRUE, registry.resolveWorkflowAggregateProperty(MODULE, PROCESS, "4711", "urgent"));
+      assertEquals("Task_1", registry.resolveWorkflowAggregateProperty(MODULE, PROCESS, "4711", "taskId"));
+      // announcing an inherited attribute and then reading it as null is the silent
+      // half-failure this asserts against: both steps walk the class hierarchy
+      assertEquals("tenant-4711", registry.resolveWorkflowAggregateProperty(MODULE, PROCESS, "4711", "tenantId"));
+
+    }
+
+    @Test
+    @DisplayName("An unknown attribute and a missing aggregate read as null")
+    public void anUnknownAttributeAndAMissingAggregateReadAsNull() {
+
+      assertNull(registry.resolveWorkflowAggregateProperty(MODULE, PROCESS, "4711", "somethingElse"));
+      assertNull(registry.resolveWorkflowAggregateProperty(MODULE, PROCESS, "0815", "processedBy"));
+
+    }
+
+    @Test
+    @DisplayName("A getter which throws is reported and read as null, not thrown into the engine transaction")
+    public void aThrowingGetterIsReportedAndReadAsNull() {
+
+      final var broken = new BrokenGetterAggregate();
+      broken.id = "0816";
+      persistence.aggregates.put("0816", broken);
+
+      assertNull(registry.resolveWorkflowAggregateProperty(MODULE, PROCESS, "0816", "boom"));
+
+    }
+
+  }
+
+  /**
+   * The three questions an embedded BPMS asks the registry outside a task invocation:
+   * whether an element is wired at all, and what the aggregate-ID variable is called.
+   * Each of them can be asked for something unknown, and the answer is what a
+   * developer sees when a model and the code drift apart.
+   */
+  @Nested
+  @DisplayName("Questions of an embedded BPMS")
+  class EmbeddedBpmsQuestions {
+
+    @Test
+    @DisplayName("A wired element is recognised by task definition and by activity ID")
+    public void aWiredElementIsRecognisedByBothNames() {
+
+      assertTrue(registry.workflowTaskHandlerExists(MODULE, PROCESS, "doSomething"));
+      assertTrue(registry.workflowTaskHandlerExists(MODULE, PROCESS, "explicitDefinition"));
+      assertTrue(registry.workflowTaskHandlerExists(MODULE, PROCESS, "Activity_4711"));
+      assertFalse(registry.workflowTaskHandlerExists(MODULE, PROCESS, "noSuchElement"));
+      assertFalse(registry.workflowTaskHandlerExists(MODULE, "NoSuchProcess", "doSomething"));
+
+    }
+
+    @Test
+    @DisplayName("The aggregate-ID variable is named by the aggregate's persistence")
+    public void theAggregateIdVariableIsNamedByThePersistence() {
+
+      assertEquals("aggregateId", registry.resolveWorkflowAggregateIdName(MODULE, PROCESS));
+
+    }
+
+    @Test
+    @DisplayName("Asking an unknown process for the ID variable names the known processes and the missing @WorkflowService")
+    public void askingAnUnknownProcessNamesTheKnownOnes() {
+
+      final var exception = assertThrows(
+          IllegalStateException.class,
+          () -> registry.resolveWorkflowAggregateIdName(MODULE, "NoSuchProcess"));
+
+      assertTrue(exception.getMessage().contains("@WorkflowService"), exception.getMessage());
+      assertTrue(exception.getMessage().contains("NoSuchProcess"), exception.getMessage());
+      assertTrue(
+          exception.getMessage().contains("'%s' (module '%s')".formatted(PROCESS, MODULE)),
+          exception.getMessage());
+
+    }
+
+    @Test
+    @DisplayName("A BPMS-initiated start of a process without @WorkflowService names the start event and the known processes")
+    public void aStartOfAnUnknownProcessNamesTheStartEvent() {
+
+      final var exception = assertThrows(
+          IllegalStateException.class,
+          () -> registry.startWorkflowByBpms(MODULE, "NoSuchProcess",
+              new io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartContext() {
+
+                @Override
+                public String getStartEventId() {
+                  return "TimerStart_1";
+                }
+
+                @Override
+                public io.vanillabp.spi.service.BpmsStartTrigger.Kind getKind() {
+                  return io.vanillabp.spi.service.BpmsStartTrigger.Kind.TIMER;
+                }
+
+                @Override
+                public java.time.Instant getTriggerTime() {
+                  return java.time.Instant.EPOCH;
+                }
+
+              }));
+
+      assertTrue(exception.getMessage().contains("TimerStart_1"), exception.getMessage());
+      assertTrue(exception.getMessage().contains("@WorkflowService"), exception.getMessage());
+      assertTrue(
+          exception.getMessage().contains("'%s' (module '%s')".formatted(PROCESS, MODULE)),
+          exception.getMessage());
 
     }
 

@@ -19,6 +19,16 @@
       <version>${project.version}</version>
     </dependency>
     <dependency>
+      <groupId>io.vanillabp.adapter</groupId>
+      <artifactId>migration-adapter-spi</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.vanillabp</groupId>
+      <artifactId>vanillabp-integration-spi</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
       <groupId>io.vanillabp</groupId>
       <artifactId>vanillabp-spring-boot-integration</artifactId>
       <version>${project.version}</version>
@@ -59,6 +69,16 @@
     <dependency>
       <groupId>io.vanillabp.springboot</groupId>
       <artifactId>fatjar-integration-test</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.vanillabp.springboot</groupId>
+      <artifactId>outbox-mixed-integration-test</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.vanillabp.springboot</groupId>
+      <artifactId>transaction-annotation-integration-test</artifactId>
       <version>${project.version}</version>
     </dependency>
   </dependencies>

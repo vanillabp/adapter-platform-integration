@@ -80,6 +80,9 @@ Top-level modules (by directory name) are:
    Support for using VanillaBP in Quarkus applications. [Details...](./quarkus-integration)
 5. **test-coverage-report:**<br>
    A module that generates test coverage reports. Click the [platform's badge](#documentation-and-supported-platforms)  to open the respective report.
+   Its `coverage-gate` module is built last and breaks the build below the line (`coverage.threshold` in the root POM,
+   in percent of covered instructions - the same number the badge shows) or when a module produces coverage data no
+   aggregated report reads.
 6. **test-utils:**<br>
    A small module providing utilities used by tests across all platforms.
 
@@ -135,7 +138,8 @@ platforms at once — the details and their reasoning are in each module's `READ
 6. **Never read state back from the BPMS into the aggregate.** The aggregate is the single source of truth; the only
    values read from a BPMS are those a `@TaskParam` explicitly asks for.
 7. **Tests: acceptance tests first**, per platform, with the dummy adapter as the BPMS double; coverage is measured
-   separately per platform (>90%). A story is proven by its acceptance test, not by unit coverage.
+   separately per platform (>90% of instructions, enforced by `test-coverage-report/coverage-gate`). A story is proven
+   by its acceptance test, not by unit coverage.
 
 ### Building
 

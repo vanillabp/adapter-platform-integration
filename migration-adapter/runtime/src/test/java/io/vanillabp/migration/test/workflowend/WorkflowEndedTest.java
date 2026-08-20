@@ -185,6 +185,34 @@ public class WorkflowEndedTest {
 
   }
 
+  /**
+   * The application's own failure while it reacts to the end - the notification runs in
+   * the transaction which ends the workflow, so this must not be swallowed.
+   */
+  static class FailingService {
+
+    @WorkflowEnded
+    public void ended(
+        final Aggregate aggregate) {
+
+      throw new IllegalStateException("the application refused the end");
+
+    }
+
+  }
+
+  static class CheckedExceptionService {
+
+    @WorkflowEnded
+    public void ended(
+        final Aggregate aggregate) throws Exception {
+
+      throw new Exception("a checked one");
+
+    }
+
+  }
+
   static class ReturningService {
 
     @WorkflowEnded
@@ -413,6 +441,44 @@ public class WorkflowEndedTest {
 
     assertTrue(exception.getMessage().contains(WorkflowEnd.class.getName()));
     assertTrue(exception.getMessage().contains(Aggregate.class.getName()));
+
+  }
+
+  @Test
+  @DisplayName("A failure of the application propagates unchanged, so its transaction rolls back")
+  public void aFailureOfTheApplicationPropagatesUnchanged() {
+
+    final var testee = registry(FailingService.class, FailingService::new, new TransactionRunnerStub());
+    storeAggregate("4716");
+
+    final var exception = assertThrows(
+        IllegalStateException.class,
+        () -> testee
+            .workflowEnded(MODULE, PROCESS, context("4716", WorkflowEnd.Kind.COMPLETED, null, false)));
+
+    // wrapping it would hide the application's own message and, worse, could let a
+    // caller treat it as a VanillaBP defect
+    assertEquals("the application refused the end", exception.getMessage());
+
+  }
+
+  @Test
+  @DisplayName("A checked exception of the application is reported naming the method which threw it")
+  public void aCheckedExceptionIsReportedNamingTheMethod() {
+
+    final var testee = registry(
+        CheckedExceptionService.class, CheckedExceptionService::new, new TransactionRunnerStub());
+    storeAggregate("4717");
+
+    final var exception = assertThrows(
+        IllegalStateException.class,
+        () -> testee
+            .workflowEnded(MODULE, PROCESS, context("4717", WorkflowEnd.Kind.COMPLETED, null, false)));
+
+    assertTrue(exception.getMessage().contains(CheckedExceptionService.class.getName()), exception.getMessage());
+    assertTrue(exception.getMessage().contains("ended"), exception.getMessage());
+    assertTrue(exception.getMessage().contains("checked exception"), exception.getMessage());
+    assertEquals("a checked one", exception.getCause().getMessage());
 
   }
 

@@ -94,16 +94,24 @@ class AggregatePropertyReader {
       return null;
     }
 
-    try {
-      final var field = aggregateClass.getDeclaredField(propertyName);
-      field.setAccessible(true);
-      return field.get(workflowAggregate);
-    } catch (final NoSuchFieldException e) {
-      return null;
-    } catch (final Exception e) {
-      log.warn("Could not access field '{}' of '{}'", propertyName, aggregateClass.getName(), e);
-      return null;
+    // the field is looked up along the class hierarchy, exactly like has() does it -
+    // an aggregate inheriting its attributes from a base entity is the common case,
+    // and answering 'the attribute exists' while reading it as null would leave the
+    // BPMN expression with a silent null
+    var currentClass = aggregateClass;
+    while ((currentClass != null) && (currentClass != Object.class)) {
+      try {
+        final var field = currentClass.getDeclaredField(propertyName);
+        field.setAccessible(true);
+        return field.get(workflowAggregate);
+      } catch (final NoSuchFieldException e) {
+        currentClass = currentClass.getSuperclass();
+      } catch (final Exception e) {
+        log.warn("Could not access field '{}' of '{}'", propertyName, aggregateClass.getName(), e);
+        return null;
+      }
     }
+    return null;
 
   }
 
