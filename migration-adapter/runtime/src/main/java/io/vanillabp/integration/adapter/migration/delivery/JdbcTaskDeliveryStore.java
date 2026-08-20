@@ -42,7 +42,7 @@ public class JdbcTaskDeliveryStore {
 
   private static final String SELECT_DELIVERY = """
       SELECT WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, TASK_DEFINITION, OUTCOME, \
-      BPMN_ERROR_CODE, BPMN_ERROR_NAME \
+      BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT \
       FROM %s \
       WHERE DELIVERY_KEY = ?""";
 
@@ -112,11 +112,15 @@ public class JdbcTaskDeliveryStore {
           if (!resultSet.next()) {
             return Optional.empty();
           }
+          final var recordedAt = resultSet.getTimestamp(8);
           return Optional
               .of(
                   new TaskDelivery(
                       deliveryKey, resultSet.getString(1), resultSet.getString(2), resultSet.getString(3), resultSet
-                          .getString(4), resultSet.getString(5), resultSet.getString(6), resultSet.getString(7)));
+                          .getString(4), resultSet.getString(5), resultSet.getString(6), resultSet
+                              .getString(7), recordedAt == null
+                                  ? null
+                                  : recordedAt.toInstant()));
         }
       }
     } catch (final SQLException e) {
@@ -151,7 +155,11 @@ public class JdbcTaskDeliveryStore {
         statement.setString(6, delivery.outcome());
         statement.setString(7, delivery.bpmnErrorCode());
         statement.setString(8, delivery.bpmnErrorName());
-        statement.setTimestamp(9, Timestamp.from(Instant.now()));
+        statement.setTimestamp(
+            9,
+            Timestamp.from(delivery.recordedAt() == null
+                ? Instant.now()
+                : delivery.recordedAt()));
         statement.executeUpdate();
       }
       return true;

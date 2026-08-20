@@ -1,5 +1,6 @@
 package io.vanillabp.integration.adapter.migration.config;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -703,6 +704,121 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
+   * How long a task of the given scope may stay open before VanillaBP reports it
+   * (<code>vanillabp.delivery.max-task-age</code>, overridable per workflow module, per
+   * workflow and per task). The most specific level which configured a value wins, the
+   * same way adapter-scoped properties resolve; nothing configured anywhere means
+   * {@link DeliveryProperties#DEFAULT_MAX_TASK_AGE}.
+   * <p>
+   * A result of {@link Duration#ZERO} means the check is switched off.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID or <code>null</code>
+   * @param taskDefinition The task definition or <code>null</code>
+   * @return The maximum age, never <code>null</code>
+   */
+  public Duration maxTaskAge(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String taskDefinition) {
+
+    final var module = workflowModuleId != null
+        ? workflowModules.get(workflowModuleId)
+        : null;
+    final var workflow = (module != null) && (bpmnProcessId != null)
+        ? module.getWorkflows().get(bpmnProcessId)
+        : null;
+    final var task = (workflow != null) && (taskDefinition != null)
+        ? workflow.getTasks().get(taskDefinition)
+        : null;
+
+    final var configured = Stream
+        .of(
+            task != null ? task.getDelivery() : null,
+            workflow != null ? workflow.getDelivery() : null,
+            module != null ? module.getDelivery() : null,
+            delivery)
+        .filter(java.util.Objects::nonNull)
+        .map(DeliveryProperties::getMaxTaskAge)
+        .filter(java.util.Objects::nonNull)
+        .findFirst();
+    return configured.orElse(DeliveryProperties.DEFAULT_MAX_TASK_AGE);
+
+  }
+
+  /**
+   * The property naming the decision of {@link #maxTaskAge(String, String, String)},
+   * for the message which reports a task older than it.
+   *
+   * @return The property key of the global setting
+   */
+  public static String maxTaskAgeProperty() {
+
+    return "%s.delivery.max-task-age".formatted(PREFIX);
+
+  }
+
+  /**
+   * Refuses a negative maximum age at every level it may be configured at: a negative
+   * duration would report every task on its first redelivery, which is a typo rather
+   * than a decision. Zero is allowed and switches the check off.
+   */
+  private void validateMaxTaskAge() {
+
+    final var offenders = new LinkedList<String>();
+    checkMaxTaskAge(delivery, "%s.delivery".formatted(PREFIX), offenders);
+    workflowModules
+        .values()
+        .forEach(module -> {
+          final var modulePrefix = "%s.workflow-modules.%s".formatted(PREFIX, module.getWorkflowModuleId());
+          checkMaxTaskAge(module.getDelivery(), "%s.delivery".formatted(modulePrefix), offenders);
+          module
+              .getWorkflows()
+              .values()
+              .forEach(workflow -> {
+                final var workflowPrefix = "%s.workflows.%s".formatted(modulePrefix, workflow.getBpmnProcessId());
+                checkMaxTaskAge(workflow.getDelivery(), "%s.delivery".formatted(workflowPrefix), offenders);
+                workflow
+                    .getTasks()
+                    .forEach((
+                        taskDefinition,
+                        task) -> checkMaxTaskAge(
+                            task.getDelivery(),
+                            "%s.tasks.%s.delivery".formatted(workflowPrefix, taskDefinition),
+                            offenders));
+              });
+        });
+    if (offenders.isEmpty()) {
+      return;
+    }
+    throw new IllegalStateException(
+        """
+            A negative maximum age was configured for open tasks:
+              %s
+            The value says how long a task may wait for its asynchronous completion before VanillaBP \
+            reports it, so it has to be positive - the default is %s. Use '0' to switch the report off \
+            for that scope."""
+            .formatted(
+                String.join("\n  ", offenders),
+                DeliveryProperties.DEFAULT_MAX_TASK_AGE_ISO));
+
+  }
+
+  private static void checkMaxTaskAge(
+      final DeliveryProperties properties,
+      final String keyPrefix,
+      final List<String> offenders) {
+
+    if ((properties == null) || (properties.getMaxTaskAge() == null)) {
+      return;
+    }
+    if (properties.getMaxTaskAge().isNegative()) {
+      offenders.add("%s.max-task-age".formatted(keyPrefix));
+    }
+
+  }
+
+  /**
    * Provides the resources location according to the given properties, resolved in
    * this order (story 34):
    * <ol>
@@ -884,6 +1000,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       workflowAdapterCache = new WorkflowAdapterCacheProperties();
     }
     workflowAdapterCache.validate();
+    validateMaxTaskAge();
 
     if (knownWorkflowModuleIds.isEmpty()) {
       throw new IllegalStateException("No workflow-modules where given!");

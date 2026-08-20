@@ -73,6 +73,7 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
       QuarkusMigrationAdapterProperties.TransactionsProperties transactionsProperties);
 
   @Mapping(target = "releaseOnWorkflowEnd", qualifiedByName = "unwrapBoolean")
+  @Mapping(target = "maxTaskAge", qualifiedByName = "unwrapDuration")
   DeliveryProperties toCore(
       QuarkusMigrationAdapterProperties.DeliveryProperties deliveryProperties);
 
@@ -153,6 +154,21 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
   @Named("unwrapBoolean")
   default Boolean unwrapBoolean(
       final Optional<Boolean> value) {
+
+    return value.orElse(null);
+
+  }
+
+  /**
+   * Unwraps an optional duration ({@code Optional.empty()} becomes {@code null}: a level
+   * which says nothing inherits what the next less specific one configured).
+   *
+   * @param value The optional duration
+   * @return The duration or {@code null}
+   */
+  @Named("unwrapDuration")
+  default java.time.Duration unwrapDuration(
+      final Optional<java.time.Duration> value) {
 
     return value.orElse(null);
 

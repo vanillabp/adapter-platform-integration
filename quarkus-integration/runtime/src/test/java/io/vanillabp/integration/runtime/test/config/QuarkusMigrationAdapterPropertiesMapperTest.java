@@ -54,13 +54,39 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
   }
 
   private record TaskProperties(
-                                Map<String, QuarkusMigrationAdapterProperties.AdapterProperties> adapters) implements QuarkusMigrationAdapterProperties.TaskProperties {
+                                Map<String, QuarkusMigrationAdapterProperties.AdapterProperties> adapters,
+                                QuarkusMigrationAdapterProperties.DeliveryProperties delivery) implements QuarkusMigrationAdapterProperties.TaskProperties {
+
+    /**
+     * Without a delivery section, which is what most of these fixtures need.
+     */
+    private TaskProperties(
+        final Map<String, QuarkusMigrationAdapterProperties.AdapterProperties> adapters) {
+
+      this(adapters, null);
+
+    }
+
   }
 
   private record WorkflowProperties(
                                     Optional<List<String>> prioritizedAdapters,
                                     Map<String, QuarkusMigrationAdapterProperties.AdapterProperties> adapters,
-                                    Map<String, QuarkusMigrationAdapterProperties.TaskProperties> tasks) implements QuarkusMigrationAdapterProperties.WorkflowProperties {
+                                    Map<String, QuarkusMigrationAdapterProperties.TaskProperties> tasks,
+                                    QuarkusMigrationAdapterProperties.DeliveryProperties delivery) implements QuarkusMigrationAdapterProperties.WorkflowProperties {
+
+    /**
+     * Without a delivery section, which is what most of these fixtures need.
+     */
+    private WorkflowProperties(
+        final Optional<List<String>> prioritizedAdapters,
+        final Map<String, QuarkusMigrationAdapterProperties.AdapterProperties> adapters,
+        final Map<String, QuarkusMigrationAdapterProperties.TaskProperties> tasks) {
+
+      this(prioritizedAdapters, adapters, tasks, null);
+
+    }
+
   }
 
   private record WorkflowModuleProperties(
@@ -103,7 +129,20 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
   }
 
   private record DeliveryProperties(
-                                    Optional<Boolean> releaseOnWorkflowEnd) implements QuarkusMigrationAdapterProperties.DeliveryProperties {
+                                    Optional<Boolean> releaseOnWorkflowEnd,
+                                    Optional<Duration> maxTaskAge) implements QuarkusMigrationAdapterProperties.DeliveryProperties {
+
+    /**
+     * Only the release setting, which is what the fixtures written before the maximum
+     * age existed need.
+     */
+    private DeliveryProperties(
+        final Optional<Boolean> releaseOnWorkflowEnd) {
+
+      this(releaseOnWorkflowEnd, Optional.empty());
+
+    }
+
   }
 
   private record JdbcOutboxProperties(
@@ -388,6 +427,32 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     assertTrue(core.releasesDeliveryRecordsOnWorkflowEnd("loan-approval"));
     assertFalse(core.releasesDeliveryRecordsOnWorkflowEnd("payments"));
     assertFalse(core.releasesDeliveryRecordsOnWorkflowEnd("unconfigured-module"));
+
+  }
+
+  @Test
+  @DisplayName("Story 89: the maximum age of an open task travels through all four levels")
+  public void maxTaskAgeTravelsThroughEveryLevel() {
+
+    final var task = new TaskProperties(
+        Map.of(), new DeliveryProperties(Optional.empty(), Optional.of(Duration.ofDays(40))));
+    final var workflow = new WorkflowProperties(
+        Optional.empty(), Map.of(), Map.of("awaitSignature", task), new DeliveryProperties(
+            Optional.empty(), Optional.of(Duration.ofDays(30))));
+    final var module = new WorkflowModuleProperties(
+        Optional.empty(), Map.of(), Map.of("LoanApproval", workflow), null, new DeliveryProperties(
+            Optional.empty(), Optional.of(Duration.ofDays(20))));
+    final var properties = new Properties(
+        Optional.empty(), Optional.empty(), Map.of(), Map.of("loan-approval",
+            module), null, null, null, new DeliveryProperties(Optional.empty(), Optional.of(Duration.ofDays(10))));
+
+    final var core = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(properties);
+    core.validateAndLink();
+
+    assertEquals(Duration.ofDays(10), core.maxTaskAge("payments", null, null));
+    assertEquals(Duration.ofDays(20), core.maxTaskAge("loan-approval", "OtherProcess", null));
+    assertEquals(Duration.ofDays(30), core.maxTaskAge("loan-approval", "LoanApproval", "otherTask"));
+    assertEquals(Duration.ofDays(40), core.maxTaskAge("loan-approval", "LoanApproval", "awaitSignature"));
 
   }
 
