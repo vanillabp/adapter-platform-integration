@@ -162,10 +162,18 @@ disable an unwanted default via its `enabled` flag:
    application's `@EnableScheduling` setup stays unaffected. The outbox table
    `TXNO_OUTBOX` is created by gruelbox's auto-DDL — set
    `vanillabp.outbox.create-schema: false` to manage the schema manually (use
-   gruelbox's `DefaultPersistor.writeSchema(Writer)` or the DDL from the gruelbox
-   documentation for your database). NOTE: gruelbox's migrations always target the
+   gruelbox's `DefaultPersistor.writeSchema(Writer)`, which emits its migrations as
+   SQL for the configured dialect). NOTE: gruelbox's migrations always target the
    DEFAULT table, so a custom `vanillabp.outbox.jdbc.table` requires that table
-   (structured like `TXNO_OUTBOX`) to be created manually. The default's beans
+   (structured like `TXNO_OUTBOX`) to be created manually. Wherever the migration is
+   off, the auto-configuration verifies AT STARTUP that the table exists
+   (`validateOutboxTableExists`) and ends the boot naming table and property. This
+   table is the one piece of a schema handover `io.vanillabp:vanillabp-schema` does
+   not cover, because the schema belongs to gruelbox (story 95, decided against
+   shipping foreign DDL and against replacing gruelbox for now); VanillaBP's own two
+   tables are checked by `JdbcTaskDeliveryStore#validateSchemaExists` respectively the
+   Quarkus dispatcher, all three through
+   `io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema#tableExists`. The default's beans
    reference each other BY NAME (`vanillaBpTransactionOutbox`), so additional
    user-defined gruelbox instances (e.g. a dedicated hot-process outbox) do not
    suppress the default; with several transaction managers (mixed persistence)
