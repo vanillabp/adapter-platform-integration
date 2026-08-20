@@ -16,6 +16,8 @@ import io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore
 import io.vanillabp.integration.adapter.migration.delivery.TaskDeliveryRetentionCleanup;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterPropertiesMapper;
+import io.vanillabp.integration.runtime.processservice.PlatformDefaultStore;
+import io.vanillabp.integration.runtime.processservice.QuarkusPersistenceTechnology;
 import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.spi.TaskDeliveryLog;
 import jakarta.annotation.PreDestroy;
@@ -40,7 +42,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @ApplicationScoped
 @Slf4j
-public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAccess {
+public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAccess, PlatformDefaultStore {
 
   @Inject
   Instance<DataSource> dataSource;
@@ -54,6 +56,13 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
 
   private volatile TaskDeliveryRetentionCleanup retentionCleanup;
 
+  @Override
+  public QuarkusPersistenceTechnology.Technology technology() {
+
+    return QuarkusPersistenceTechnology.Technology.JPA;
+
+  }
+
   /**
    * Whether this default log is usable: the extension registers the bean at build time,
    * but without a configured datasource it cannot store anything - an unusable default
@@ -62,6 +71,7 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
    *
    * @return Whether a datasource is available
    */
+  @Override
   public boolean isAvailable() {
 
     return dataSource.isResolvable();

@@ -4,8 +4,6 @@ import java.util.List;
 
 import io.vanillabp.integration.adapter.migration.processservice.AwareSelection;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxResolver;
-import io.vanillabp.integration.runtime.outbox.JdbcPhaseTwoOutbox;
-import io.vanillabp.integration.runtime.outbox.MongoPhaseTwoOutbox;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.PhaseTwoOutboxAware;
 import jakarta.enterprise.inject.Instance;
@@ -31,6 +29,11 @@ import jakarta.enterprise.inject.Instance;
  * only: it brought the aggregate's persistence itself, so the technology cannot be
  * read off it, or it wants a store of its own for this aggregate. Anything else is
  * attributed by the platform.
+ * <p>
+ * Which default serves which technology, and whether it is usable at all, is asked through
+ * {@link PlatformDefaultStore} rather than by naming the implementations: the MongoDB ones
+ * exist only where the MongoDB client extension does, and a native image resolves every
+ * referenced method while it is built (story 85).
  */
 public class QuarkusPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
 
@@ -119,11 +122,7 @@ public class QuarkusPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
       final PhaseTwoOutbox outbox,
       final QuarkusPersistenceTechnology.Technology technology) {
 
-    return switch (technology) {
-      case JPA -> outbox instanceof JdbcPhaseTwoOutbox;
-      case MONGO -> outbox instanceof MongoPhaseTwoOutbox;
-      case UNKNOWN -> false;
-    };
+    return (outbox instanceof final PlatformDefaultStore store) && (store.technology() == technology);
 
   }
 
@@ -135,11 +134,8 @@ public class QuarkusPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
       final PhaseTwoOutbox outbox,
       final QuarkusPersistenceTechnology.Technology technology) {
 
-    return switch (technology) {
-      case JPA -> outbox instanceof MongoPhaseTwoOutbox;
-      case MONGO -> outbox instanceof JdbcPhaseTwoOutbox;
-      case UNKNOWN -> false;
-    };
+    return (technology != QuarkusPersistenceTechnology.Technology.UNKNOWN) && (outbox instanceof final PlatformDefaultStore store) && (store
+        .technology() != technology);
 
   }
 
@@ -186,13 +182,24 @@ public class QuarkusPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
   private boolean isActive(
       final PhaseTwoOutbox outbox) {
 
-    if (outbox instanceof JdbcPhaseTwoOutbox jdbcOutbox) {
-      return jdbcOutboxEnabled && jdbcOutbox.isAvailable();
-    }
-    if (outbox instanceof MongoPhaseTwoOutbox mongoOutbox) {
-      return mongoOutboxEnabled && mongoOutbox.isAvailable();
+    if (outbox instanceof final PlatformDefaultStore store) {
+      return isEnabled(store.technology()) && store.isAvailable();
     }
     return true;
+
+  }
+
+  /**
+   * Whether the default serving a technology was left switched on
+   * (<code>vanillabp.outbox.jdbc.enabled</code> /
+   * <code>vanillabp.outbox.mongo.enabled</code>).
+   */
+  private boolean isEnabled(
+      final QuarkusPersistenceTechnology.Technology technology) {
+
+    return technology == QuarkusPersistenceTechnology.Technology.MONGO
+        ? mongoOutboxEnabled
+        : jdbcOutboxEnabled;
 
   }
 

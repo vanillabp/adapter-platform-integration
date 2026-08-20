@@ -14,6 +14,7 @@ import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.ObjectSubstitutionBuildItem;
 import io.vanillabp.integration.deployment.processservice.VanillaBpMigratableProcessServiceBuildItem;
 import io.vanillabp.integration.runtime.deployment.VanillaBpShutdownObserver;
+import io.vanillabp.integration.runtime.mongo.MongoClientDeploymentProbe;
 import io.vanillabp.integration.runtime.outbox.JdbcPhaseTwoOutbox;
 import io.vanillabp.integration.runtime.outbox.JdbcPhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.runtime.outbox.MongoPhaseTwoOutbox;
@@ -244,6 +245,36 @@ public class VanillaBpBuildStepProcessor {
           .setUnremovable() // don't remove, since it is used under the hoods
           .build());
     }
+
+  }
+
+  /**
+   * Registers the probe telling whether the MongoDB deployment is a replica set (see
+   * {@link io.vanillabp.integration.runtime.processservice.MongoDeploymentProbe}), which
+   * the startup check of story 70 needs for an aggregate MongoDB Panache manages.
+   * <p>
+   * Guarded by the MongoDB client capability like the outbox and the delivery log, and for
+   * one more reason than they have: the implementation is the only class on the way to the
+   * coverage verdict which names a MongoDB type. A native image resolves every referenced
+   * method while it is built, so an application with a relational database and no MongoDB
+   * must not reach it at all (story 85).
+   *
+   * @param capabilities Capabilities of the project's extensions
+   * @param additionalBeans Producer used to register the probe
+   */
+  @BuildStep
+  void buildMongoDeploymentProbe(
+      final Capabilities capabilities,
+      final BuildProducer<AdditionalBeanBuildItem> additionalBeans) {
+
+    if (!capabilities.isPresent(Capability.MONGODB_CLIENT)) {
+      return;
+    }
+    additionalBeans.produce(AdditionalBeanBuildItem
+        .builder()
+        .addBeanClass(MongoClientDeploymentProbe.class)
+        .setUnremovable() // don't remove, since it is looked up under the hoods
+        .build());
 
   }
 

@@ -64,6 +64,54 @@ jobs:
         uses: actions/upload-pages-artifact@v4
         with:
           path: coverage
+  native-build:
+    # The one test of story 85 which cannot be a JUnit test: an application with a
+    # relational database and no MongoDB has to link as a native image. GraalVM resolves
+    # every method a linked class refers to while it builds, so a reference into an
+    # optional extension nobody asked for ends the build - which is what happened before
+    # the MongoDB parts moved behind beans the extension registers only where the MongoDB
+    # client is present. Its own job: the native build takes minutes and must not delay
+    # publishing.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          java-version: 21
+          distribution: temurin
+          cache: maven
+      # the deployment modules of both extensions are named explicitly: an extension's
+      # augmentation part is not a dependency of the application, so '-am' alone would
+      # leave them to be resolved from the registry - and the build step under test lives
+      # in one of them
+      - name: Build what the application needs
+        run: mvn -s $GITHUB_WORKSPACE/.github/workflows/github-packages-settings.xml
+          --batch-mode --no-transfer-progress --update-snapshots -DskipTests
+          -pl quarkus-integration/deployment,quarkus-integration/integration-tests/dummy-adapter/deployment,quarkus-integration/integration-tests/native-image-tests
+          -am install
+        env:
+          USER_NAME: "${{ secrets.VANILLABP_USER_NAME }}"
+          USER_TOKEN: "${{ secrets.VANILLABP_USER_TOKEN }}"
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          CI: false
+      - name: Build the application as a native image
+        run: mvn -s $GITHUB_WORKSPACE/.github/workflows/github-packages-settings.xml
+          --batch-mode --no-transfer-progress
+          -pl quarkus-integration/integration-tests/native-image-tests
+          -Dnative -Dquarkus.native.container-build=true package
+        env:
+          USER_NAME: "${{ secrets.VANILLABP_USER_NAME }}"
+          USER_TOKEN: "${{ secrets.VANILLABP_USER_TOKEN }}"
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          CI: false
+      # a binary which cannot start is no proof: the application boots, deploys its
+      # workflow module, starts a workflow and reads the aggregate back. Its exit code
+      # is the result
+      - name: Boot the native image
+        run: ./quarkus-integration/integration-tests/native-image-tests/target/*-runner
   deploy-coverage-report:
     if: "${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch }}"
     environment:

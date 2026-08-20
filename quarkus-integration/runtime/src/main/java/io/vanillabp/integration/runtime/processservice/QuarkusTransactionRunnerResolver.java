@@ -28,6 +28,12 @@ import jakarta.enterprise.inject.Instance.Handle;
  * answers it well - it enlists itself in the JTA transaction and starts a MongoDB
  * transaction, so the aggregate is covered as long as the deployment is a replica set.
  * An aggregate persistence of the application is not judged at all.
+ * <p>
+ * Whether the deployment is one is asked through {@link MongoDeploymentProbe}, a bean which
+ * only exists where the MongoDB client extension does. Nothing reachable from here names a
+ * MongoDB type, and that is a rule rather than a detail: a native image resolves every
+ * referenced method while it is built, so an application with a relational database and no
+ * MongoDB would not build otherwise (story 85).
  */
 public class QuarkusTransactionRunnerResolver implements TransactionRunnerResolver {
 
@@ -36,6 +42,8 @@ public class QuarkusTransactionRunnerResolver implements TransactionRunnerResolv
   private final Instance<TransactionRunner> transactionRunners;
 
   private final QuarkusPersistenceTechnology persistenceTechnology;
+
+  private final Instance<MongoDeploymentProbe> mongoDeploymentProbes;
 
   private final TransactionRunner platformRunner;
 
@@ -63,11 +71,13 @@ public class QuarkusTransactionRunnerResolver implements TransactionRunnerResolv
       final Instance<TransactionRunnerAware<?>> transactionRunnerAwares,
       final Instance<TransactionRunner> transactionRunners,
       final Instance<AggregatePersistenceAware<?>> aggregatePersistences,
+      final Instance<MongoDeploymentProbe> mongoDeploymentProbes,
       final TransactionRunner platformRunner) {
 
     this.transactionRunnerAwares = transactionRunnerAwares;
     this.transactionRunners = transactionRunners;
     this.persistenceTechnology = new QuarkusPersistenceTechnology(aggregatePersistences);
+    this.mongoDeploymentProbes = mongoDeploymentProbes;
     this.platformRunner = platformRunner;
 
   }
@@ -110,7 +120,11 @@ public class QuarkusTransactionRunnerResolver implements TransactionRunnerResolv
       // application is not something VanillaBP can judge
       return TransactionCoverage.unknown();
     }
-    final var replicaSet = QuarkusMongoDeployment.isReplicaSet();
+    final var replicaSet = mongoDeploymentProbes.isResolvable()
+        ? mongoDeploymentProbes
+            .get()
+            .isReplicaSet()
+        : null;
     if (!Boolean.FALSE.equals(replicaSet)) {
       return TransactionCoverage.covered();
     }

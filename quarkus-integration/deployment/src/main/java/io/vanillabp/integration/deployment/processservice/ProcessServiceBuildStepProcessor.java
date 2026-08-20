@@ -79,7 +79,7 @@ public class ProcessServiceBuildStepProcessor {
    * @param migrationAdapterProperties Properties of the migration adapter previously built and validated as a dependency
    * @param workflowModulesFound Information about all workflow modules found in the project
    * @param generatedBeanBuildItemBuildProducer {@link BuildProducer} used to collect generated {@link ProcessService} beans
-   * @param reflectiveClassBuildItemProducer {@link BuildProducer} used to register aggregates whose ID VanillaBP reads by reflection
+   * @param reflectiveClassBuildItemProducer {@link BuildProducer} used to register the classes VanillaBP scans by reflection: the workflow services and the aggregates whose ID it reads
    * @param unremovableBeanBuildItemProducer {@link BuildProducer} used to keep repositories alive which only VanillaBP uses
    * @param additionalBeanBuildItemBuildProducer {@link BuildProducer} used to collect beans provided in module "runtime"
    */
@@ -150,6 +150,18 @@ public class ProcessServiceBuildStepProcessor {
                     .className(declaringClass.name())
                     .usageDescription("Workflow service annotated with @"
                         + WorkflowService.class.getName())
+                    .build());
+            // the core finds the @WorkflowTask, @WorkflowStartedByBpms and @WorkflowEnded
+            // methods by scanning the class at RUNTIME, and a native image reflects only
+            // on what it was told about - without this every BPMN process is reported as
+            // incompletely wired at startup, although the methods are right there
+            reflectiveClassBuildItemProducer
+                .produce(ReflectiveClassBuildItem
+                    .builder(declaringClass
+                        .name()
+                        .toString())
+                    .methods()
+                    .reason("VanillaBP scans the workflow service's methods by reflection")
                     .build());
             final var declaringModuleId = workflowModulesFound
                 .getWorkflowModuleId(

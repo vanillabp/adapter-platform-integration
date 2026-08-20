@@ -35,6 +35,13 @@ public class QuarkusPreCommitRegistrar implements PreCommitRegistrar {
   @Any
   Instance<AggregatePersistenceAware<?>> aggregatePersistences;
 
+  /**
+   * Unsatisfied in an application without the MongoDB client extension - see
+   * {@link MongoDeploymentProbe}.
+   */
+  @Inject
+  Instance<MongoDeploymentProbe> mongoDeploymentProbes;
+
   @Inject
   TransactionSynchronizationRegistry transactionRegistry;
 
@@ -46,7 +53,7 @@ public class QuarkusPreCommitRegistrar implements PreCommitRegistrar {
       synchronized (this) {
         if (resolver == null) {
           resolver = new QuarkusTransactionRunnerResolver(
-              transactionRunnerAwares, applicationTransactionRunners, aggregatePersistences, new QuarkusTransactionRunner(transactionRegistry));
+              transactionRunnerAwares, applicationTransactionRunners, aggregatePersistences, mongoDeploymentProbes, new QuarkusTransactionRunner(transactionRegistry));
         }
       }
     }

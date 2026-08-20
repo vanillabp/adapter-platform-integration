@@ -4,8 +4,6 @@ import java.util.List;
 
 import io.vanillabp.integration.adapter.migration.processservice.AwareSelection;
 import io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver;
-import io.vanillabp.integration.runtime.delivery.JdbcTaskDeliveryLog;
-import io.vanillabp.integration.runtime.delivery.MongoTaskDeliveryLog;
 import io.vanillabp.integration.spi.TaskDeliveryLog;
 import io.vanillabp.integration.spi.TaskDeliveryLogAware;
 import jakarta.enterprise.inject.Instance;
@@ -18,6 +16,11 @@ import jakarta.enterprise.inject.Instance;
  * platform default matching the technology which manages the aggregate
  * ({@link QuarkusPersistenceTechnology}), and a single default clearly not matching it
  * ends the boot rather than writing records next to the aggregate.
+ * <p>
+ * Which default serves which technology, and whether it is usable at all, is asked through
+ * {@link PlatformDefaultStore} rather than by naming the implementations: the MongoDB ones
+ * exist only where the MongoDB client extension does, and a native image resolves every
+ * referenced method while it is built (story 85).
  */
 public class QuarkusTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
 
@@ -106,11 +109,7 @@ public class QuarkusTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
       final TaskDeliveryLog deliveryLog,
       final QuarkusPersistenceTechnology.Technology technology) {
 
-    return switch (technology) {
-      case JPA -> deliveryLog instanceof JdbcTaskDeliveryLog;
-      case MONGO -> deliveryLog instanceof MongoTaskDeliveryLog;
-      case UNKNOWN -> false;
-    };
+    return (deliveryLog instanceof final PlatformDefaultStore store) && (store.technology() == technology);
 
   }
 
@@ -122,11 +121,8 @@ public class QuarkusTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
       final TaskDeliveryLog deliveryLog,
       final QuarkusPersistenceTechnology.Technology technology) {
 
-    return switch (technology) {
-      case JPA -> deliveryLog instanceof MongoTaskDeliveryLog;
-      case MONGO -> deliveryLog instanceof JdbcTaskDeliveryLog;
-      case UNKNOWN -> false;
-    };
+    return (technology != QuarkusPersistenceTechnology.Technology.UNKNOWN) && (deliveryLog instanceof final PlatformDefaultStore store) && (store
+        .technology() != technology);
 
   }
 
@@ -188,13 +184,24 @@ public class QuarkusTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
   private boolean isActive(
       final TaskDeliveryLog deliveryLog) {
 
-    if (deliveryLog instanceof JdbcTaskDeliveryLog jdbcLog) {
-      return jdbcLogEnabled && jdbcLog.isAvailable();
-    }
-    if (deliveryLog instanceof MongoTaskDeliveryLog mongoLog) {
-      return mongoLogEnabled && mongoLog.isAvailable();
+    if (deliveryLog instanceof final PlatformDefaultStore store) {
+      return isEnabled(store.technology()) && store.isAvailable();
     }
     return true;
+
+  }
+
+  /**
+   * Whether the default serving a technology was left switched on - the log shares the
+   * outbox' switches (<code>vanillabp.outbox.jdbc.enabled</code> /
+   * <code>vanillabp.outbox.mongo.enabled</code>).
+   */
+  private boolean isEnabled(
+      final QuarkusPersistenceTechnology.Technology technology) {
+
+    return technology == QuarkusPersistenceTechnology.Technology.MONGO
+        ? mongoLogEnabled
+        : jdbcLogEnabled;
 
   }
 

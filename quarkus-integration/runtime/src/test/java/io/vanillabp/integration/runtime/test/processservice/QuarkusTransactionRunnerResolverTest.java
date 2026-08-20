@@ -14,11 +14,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.vanillabp.integration.adapter.migration.processservice.TransactionCoverage;
+import io.vanillabp.integration.runtime.persistence.PanacheMongoActiveRecordAggregatePersistence;
+import io.vanillabp.integration.runtime.processservice.MongoDeploymentProbe;
 import io.vanillabp.integration.runtime.processservice.QuarkusTransactionRunnerResolver;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.spi.TransactionRunnerAware;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import jakarta.enterprise.inject.Instance;
 
 /**
  * Story 70 on Quarkus: which runner serves an aggregate. The platform's own runner is always
@@ -135,7 +138,7 @@ public class QuarkusTransactionRunnerResolverTest {
 
     return new QuarkusTransactionRunnerResolver(
         InstanceDouble.of(awares), InstanceDouble.of(runners), InstanceDouble
-            .of(List.<AggregatePersistenceAware<?>>of()), PLATFORM_RUNNER);
+            .of(List.<AggregatePersistenceAware<?>>of()), noProbe(), PLATFORM_RUNNER);
 
   }
 
@@ -148,7 +151,7 @@ public class QuarkusTransactionRunnerResolverTest {
             .ofDeclaredAs(
                 List.<TransactionRunner>of(new UnitOfWork_ClientProxy()),
                 List.of(UnitOfWork.class)), InstanceDouble
-                    .of(List.<AggregatePersistenceAware<?>>of()), PLATFORM_RUNNER);
+                    .of(List.<AggregatePersistenceAware<?>>of()), noProbe(), PLATFORM_RUNNER);
 
     assertEquals(
         "the TransactionRunner bean '%s' of the application".formatted(UnitOfWork.class.getName()),
@@ -165,7 +168,7 @@ public class QuarkusTransactionRunnerResolverTest {
             .ofDeclaredAs(
                 List.<TransactionRunnerAware<?>>of(new OrderTransactions_ClientProxy()),
                 List.of(OrderTransactions.class)), InstanceDouble.of(List.<TransactionRunner>of()), InstanceDouble
-                    .of(List.<AggregatePersistenceAware<?>>of()), PLATFORM_RUNNER);
+                    .of(List.<AggregatePersistenceAware<?>>of()), noProbe(), PLATFORM_RUNNER);
 
     assertEquals(
         "the TransactionRunnerAware bean '%s' of the application"
@@ -186,7 +189,7 @@ public class QuarkusTransactionRunnerResolverTest {
                     new OrderTransactions_ClientProxy()),
                 List.of(OrderTransactions.class, OrderTransactions.class)), InstanceDouble
                     .of(List.<TransactionRunner>of()), InstanceDouble
-                        .of(List.<AggregatePersistenceAware<?>>of()), PLATFORM_RUNNER);
+                        .of(List.<AggregatePersistenceAware<?>>of()), noProbe(), PLATFORM_RUNNER);
     final var awareFailure = assertThrowsExactly(
         IllegalStateException.class,
         () -> tiedAwares.resolveFor(OrderAggregate.class));
@@ -200,7 +203,7 @@ public class QuarkusTransactionRunnerResolverTest {
             .ofDeclaredAs(
                 List.<TransactionRunner>of(new UnitOfWork_ClientProxy(), new UnitOfWork_ClientProxy()),
                 List.of(UnitOfWork.class, UnitOfWork.class)), InstanceDouble
-                    .of(List.<AggregatePersistenceAware<?>>of()), PLATFORM_RUNNER);
+                    .of(List.<AggregatePersistenceAware<?>>of()), noProbe(), PLATFORM_RUNNER);
     final var runnerFailure = assertThrowsExactly(
         IllegalStateException.class,
         () -> severalRunners.resolveFor(OrderAggregate.class));
@@ -218,7 +221,7 @@ public class QuarkusTransactionRunnerResolverTest {
     final var testee = new QuarkusTransactionRunnerResolver(
         InstanceDouble.of(List.<TransactionRunnerAware<?>>of()), InstanceDouble
             .ofWithoutMetadata(List.<TransactionRunner>of(new UnitOfWork_ClientProxy())), InstanceDouble
-                .of(List.<AggregatePersistenceAware<?>>of()), PLATFORM_RUNNER);
+                .of(List.<AggregatePersistenceAware<?>>of()), noProbe(), PLATFORM_RUNNER);
 
     assertEquals(
         "the TransactionRunner bean '%s' of the application"
@@ -302,6 +305,93 @@ public class QuarkusTransactionRunnerResolverTest {
         () -> testee.resolveFor(OrderAggregate.class));
 
     assertTrue(failure.getMessage().contains("TransactionRunnerAware"), failure.getMessage());
+
+  }
+
+  /**
+   * An aggregate MongoDB Panache manages - the only case in which the platform knows what
+   * the JTA transaction reaches, and therefore the only one it judges.
+   */
+  private static class ShipmentAggregate {
+  }
+
+  /**
+   * What an application without the MongoDB client extension has: no probe at all, which is
+   * the whole point of story 85 - nothing on the way to the verdict names a MongoDB type,
+   * so a native image of such an application links.
+   */
+  private static Instance<MongoDeploymentProbe> noProbe() {
+
+    return InstanceDouble.of(List.<MongoDeploymentProbe>of());
+
+  }
+
+  private static Instance<MongoDeploymentProbe> probeAnswering(
+      final Boolean replicaSet) {
+
+    return InstanceDouble.of(List.<MongoDeploymentProbe>of(() -> replicaSet));
+
+  }
+
+  private static QuarkusTransactionRunnerResolver mongoAggregateResolver(
+      final Instance<MongoDeploymentProbe> probes) {
+
+    return new QuarkusTransactionRunnerResolver(
+        InstanceDouble.of(List.<TransactionRunnerAware<?>>of()), InstanceDouble
+            .of(List.<TransactionRunner>of()), InstanceDouble
+                .of(
+                    List
+                        .<AggregatePersistenceAware<?>>of(
+                            new PanacheMongoActiveRecordAggregatePersistence<>(ShipmentAggregate.class))), probes, PLATFORM_RUNNER);
+
+  }
+
+  @Test
+  @DisplayName("A MongoDB deployment which is no replica set is named, with the way out")
+  public void mongoDeploymentWithoutReplicaSetIsNamed() {
+
+    final var coverage = mongoAggregateResolver(probeAnswering(Boolean.FALSE))
+        .coverageOf(ShipmentAggregate.class);
+
+    assertEquals(TransactionCoverage.Verdict.UNGUARDED, coverage.verdict());
+    assertTrue(coverage.message().contains(ShipmentAggregate.class.getName()), coverage.message());
+    assertTrue(coverage.message().contains("replica set"), coverage.message());
+
+  }
+
+  @Test
+  @DisplayName("On a replica set the MongoDB transaction covers the aggregate")
+  public void replicaSetCoversTheAggregate() {
+
+    assertEquals(
+        TransactionCoverage.Verdict.COVERED,
+        mongoAggregateResolver(probeAnswering(Boolean.TRUE))
+            .coverageOf(ShipmentAggregate.class)
+            .verdict());
+
+  }
+
+  @Test
+  @DisplayName("A question the deployment did not answer does not become a verdict")
+  public void unansweredProbeIsNoVerdict() {
+
+    assertEquals(
+        TransactionCoverage.Verdict.COVERED,
+        mongoAggregateResolver(probeAnswering(null))
+            .coverageOf(ShipmentAggregate.class)
+            .verdict());
+
+  }
+
+  @Test
+  @DisplayName("Without the MongoDB extension nothing is probed, and nothing is claimed")
+  public void withoutTheMongoExtensionNothingIsProbed() {
+
+    assertEquals(
+        TransactionCoverage.Verdict.COVERED,
+        mongoAggregateResolver(noProbe())
+            .coverageOf(ShipmentAggregate.class)
+            .verdict());
 
   }
 

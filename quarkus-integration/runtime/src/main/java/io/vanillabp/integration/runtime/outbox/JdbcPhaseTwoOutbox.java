@@ -8,6 +8,8 @@ import java.util.UUID;
 
 import javax.sql.DataSource;
 
+import io.vanillabp.integration.runtime.processservice.PlatformDefaultStore;
+import io.vanillabp.integration.runtime.processservice.QuarkusPersistenceTechnology;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -41,7 +43,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @ApplicationScoped
 @Slf4j
-public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
+public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore {
 
   /**
    * The default name of the table used to store outbox entries (override via
@@ -83,6 +85,13 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
   @Inject
   JdbcPhaseTwoOutboxDispatcher dispatcher;
 
+  @Override
+  public QuarkusPersistenceTechnology.Technology technology() {
+
+    return QuarkusPersistenceTechnology.Technology.JPA;
+
+  }
+
   /**
    * Whether this default outbox is usable: the extension registers the bean at
    * build time, but without a configured datasource it cannot store anything - an
@@ -92,6 +101,7 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
    *
    * @return Whether a datasource is available
    */
+  @Override
   public boolean isAvailable() {
 
     return dataSource.isResolvable();
