@@ -125,6 +125,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
       return;
     }
     if (getProperties().isCreateSchema()) {
+      // MongoDB answers a createIndex of an index which is already there with its name, so
+      // two instances starting at the same moment do not collide over it
       deliveryCollection().createIndex(Indexes.ascending("lastSeenAt"));
     }
     retentionCleanup = new TaskDeliveryRetentionCleanup(

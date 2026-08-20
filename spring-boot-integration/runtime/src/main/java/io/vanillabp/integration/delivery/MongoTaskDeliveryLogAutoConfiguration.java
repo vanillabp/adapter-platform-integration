@@ -82,7 +82,8 @@ public class MongoTaskDeliveryLogAutoConfiguration {
     return () -> {
       if (vanillaBpProperties.getOutbox().isCreateSchema()) {
         // the retention deletes by the moment a record was last seen (story 97), so that is
-        // the field the cleanup scans
+        // the field the cleanup scans; MongoDB answers a createIndex of an index which is
+        // already there with its name, so two instances starting together do not collide
         mongoTemplate
             .indexOps(MongoTaskDeliveryLog.DEFAULT_COLLECTION_NAME)
             .createIndex(new Index()

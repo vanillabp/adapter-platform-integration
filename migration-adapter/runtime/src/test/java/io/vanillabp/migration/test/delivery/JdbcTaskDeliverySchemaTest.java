@@ -1,6 +1,7 @@
 package io.vanillabp.migration.test.delivery;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -153,6 +154,91 @@ public class JdbcTaskDeliverySchemaTest {
         () -> storeOn("outdated-created").createSchemaIfNotExists());
 
     assertTrue(failure.getMessage().contains("LAST_SEEN_AT"), failure.getMessage());
+
+  }
+
+  /**
+   * A connection whose statements wait for the other thread. Both stores get past "the table is
+   * not there" before either of them runs the DDL, which is the race of two instances starting
+   * together - without a sleep and without a real race in the test.
+   */
+  private static JdbcConnectionAccess synchronizedAt(
+      final String database,
+      final java.util.concurrent.CyclicBarrier barrier) {
+
+    return () -> {
+      final var connection = h2(database).acquire();
+      return (Connection) java.lang.reflect.Proxy
+          .newProxyInstance(
+              Connection.class.getClassLoader(),
+              new Class<?>[]{
+                  Connection.class
+      },
+              (
+                  proxy,
+                  method,
+                  args) -> {
+                if ("createStatement".equals(method.getName())) {
+                  barrier.await(30, java.util.concurrent.TimeUnit.SECONDS);
+                }
+                try {
+                  return method.invoke(connection, args);
+                } catch (final java.lang.reflect.InvocationTargetException e) {
+                  throw e.getCause();
+                }
+              });
+    };
+
+  }
+
+  @Test
+  @DisplayName("Two instances creating the schema at the same moment both come through")
+  public void twoInstancesCreateTheSchemaAtOnce() throws Exception {
+
+    final var barrier = new java.util.concurrent.CyclicBarrier(2);
+    final var failures = new java.util.concurrent.CopyOnWriteArrayList<Throwable>();
+    final Runnable create = () -> {
+      try {
+        new JdbcTaskDeliveryStore(synchronizedAt("concurrent", barrier), "VANILLABP_TASK_DELIVERY")
+            .createSchemaIfNotExists();
+      } catch (final Throwable e) {
+        failures.add(e);
+      }
+    };
+
+    final var first = new Thread(create, "first-instance");
+    final var second = new Thread(create, "second-instance");
+    first.start();
+    second.start();
+    first.join(60000);
+    second.join(60000);
+
+    assertTrue(
+        failures.isEmpty(),
+        "the instance which lost the race has nothing left to do, it has not failed: "
+            + failures);
+
+    try (Connection connection = h2("concurrent").acquire(); var tables = connection.getMetaData().getTables(null, null,
+        "VANILLABP_TASK_DELIVERY", null)) {
+      assertTrue(tables.next(), "the table exists");
+      assertFalse(tables.next(), "exactly once");
+    }
+
+    assertDoesNotThrow(() -> storeOn("concurrent").validateSchemaExists());
+
+  }
+
+  @Test
+  @DisplayName("A metadata question which cannot be answered is a 'no', not an exception")
+  public void anUnanswerableMetadataQuestionIsANo() throws SQLException {
+
+    final Connection closed = h2("quiet").acquire();
+    closed.close();
+
+    assertFalse(
+        io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema
+            .tableExistsQuietly(closed, "VANILLABP_TASK_DELIVERY"),
+        "the caller is on the failure path already - it must not fail there a second time");
 
   }
 

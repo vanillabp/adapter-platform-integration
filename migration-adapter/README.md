@@ -513,6 +513,23 @@ the record of a task nobody hands out any more expires as it always did.
   `createSchemaIfNotExists` therefore verify the columns added later as well, and the
   message names the `ALTER TABLE` which repairs it.
 
+#### Two instances creating the schema at once
+
+`createSchemaIfNotExists` asks the JDBC metadata and then runs the DDL, because
+`CREATE TABLE IF NOT EXISTS` is not portable. Between the question and the statement another
+instance may have created the same table: a rolling deployment or a scale-up from zero starts
+two of them at the same moment, and the loser used to end its boot over a "table already
+exists".
+
+A refused DDL therefore asks the metadata once more, through a connection of its own
+(`JdbcSchema.tableExistsQuietly` - a failed statement leaves the current connection in an
+aborted transaction where the pool does not commit each statement by itself). Is the table
+there, the loser has nothing left to do and says so on DEBUG; is it still missing, the DDL
+really failed and the message is the one it always was. Deliberately no SQL state: every
+database reports that collision differently, and the metadata question is the portable answer.
+The Quarkus phase-two outbox does the same for its own table. The MongoDB stores need nothing:
+MongoDB answers a `createIndex` of an index which is already there with its name.
+
 #### Process versions (`version` attribute)
 
 The `version` attribute of `@WorkflowTask`, `@WorkflowStartedByBpms` and

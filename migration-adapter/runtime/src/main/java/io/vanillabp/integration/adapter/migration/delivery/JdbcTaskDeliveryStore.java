@@ -377,6 +377,9 @@ public class JdbcTaskDeliveryStore {
             "CREATE INDEX %s_AGE ON %s (LAST_SEEN_AT)".formatted(tableName, tableName));
       }
     } catch (final SQLException e) {
+      if (createdConcurrently()) {
+        return;
+      }
       throw new IllegalStateException(
           """
               Could not create the task-delivery table '%s'! Set 'vanillabp.outbox.create-schema' to \
@@ -384,6 +387,34 @@ public class JdbcTaskDeliveryStore {
               the table needs a unique DELIVERY_KEY and is described in the platform integration's \
               README."""
               .formatted(tableName), e);
+    } finally {
+      release(connection);
+    }
+
+  }
+
+  /**
+   * Whether the DDL failed because another instance created the table between the check and the
+   * statement. Two instances starting together both see no table and both create it, and the
+   * loser's deployment is fine - it just has nothing left to do (see
+   * {@link JdbcSchema#tableExistsQuietly(Connection, String)}).
+   *
+   * @return Whether the table is there now
+   */
+  private boolean createdConcurrently() {
+
+    Connection connection = null;
+    try {
+      connection = connectionAccess.acquire();
+      if (!JdbcSchema.tableExistsQuietly(connection, tableName)) {
+        return false;
+      }
+      log.debug(
+          "The task-delivery table '{}' was created by another instance starting at the same moment",
+          tableName);
+      return true;
+    } catch (final SQLException e) {
+      return false;
     } finally {
       release(connection);
     }

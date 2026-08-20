@@ -210,6 +210,10 @@ manages an aggregate.
 - The same run refreshes the records of the tasks which are still open (story 97): the core
   collects the keys the BPMS redelivered, `cleanUpExpiredRecords` writes them before it
   deletes anything, and the JDBC store batches while the MongoDB one bulk-writes.
+- `JdbcPhaseTwoOutboxDispatcher` creates its table the same way the core's delivery store does,
+  including the answer to two instances creating it at the same moment: a refused DDL asks the
+  metadata again through a connection of its own and stays quiet where the table is there now.
+  See the migration adapter's README for why this is not a question of SQL states.
 
 ## What is published where (story 92)
 
