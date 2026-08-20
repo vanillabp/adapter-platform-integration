@@ -96,6 +96,10 @@ public class ApplicationOwnedStoresTest {
   @Any
   Instance<io.vanillabp.integration.spi.AggregatePersistenceAware<?>> aggregatePersistences;
 
+  /** Unsatisfied here: this application has no MongoDB client extension. */
+  @Inject
+  Instance<io.vanillabp.integration.runtime.processservice.MongoDeploymentProbe> mongoDeploymentProbes;
+
   private DummyDeploymentService dummyAdapter() {
 
     return deploymentServices
@@ -198,7 +202,7 @@ public class ApplicationOwnedStoresTest {
     // the resolver of the platform, wired with the very beans of this application: what it
     // says about them is what the INFO line of story 70 carries
     final var resolver = new io.vanillabp.integration.runtime.processservice.QuarkusTransactionRunnerResolver(
-        transactionRunnerAwares, transactionRunners, aggregatePersistences, runner);
+        transactionRunnerAwares, transactionRunners, aggregatePersistences, mongoDeploymentProbes, runner);
 
     final var aware = resolver.describeResolutionFor(AppTxAggregate.class);
     assertEquals(

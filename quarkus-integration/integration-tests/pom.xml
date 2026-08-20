@@ -23,6 +23,7 @@
     <module>processservice-integration-tests</module>
     <module>outbox-integration-tests</module>
     <module>outbox-mongo-integration-tests</module>
+    <module>native-image-tests</module>
   </modules>
 
   <properties>

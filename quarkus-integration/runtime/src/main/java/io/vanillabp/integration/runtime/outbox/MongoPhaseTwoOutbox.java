@@ -8,6 +8,8 @@ import org.bson.Document;
 import com.mongodb.MongoWriteException;
 import com.mongodb.client.MongoClient;
 
+import io.vanillabp.integration.runtime.processservice.PlatformDefaultStore;
+import io.vanillabp.integration.runtime.processservice.QuarkusPersistenceTechnology;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -54,7 +56,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @ApplicationScoped
 @Slf4j
-public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
+public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore {
 
   public static final String STATUS_OPEN = "OPEN";
 
@@ -71,6 +73,13 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
   @Inject
   MongoPhaseTwoOutboxDispatcher dispatcher;
 
+  @Override
+  public QuarkusPersistenceTechnology.Technology technology() {
+
+    return QuarkusPersistenceTechnology.Technology.MONGO;
+
+  }
+
   /**
    * Whether this default outbox is usable: the extension registers the bean at
    * build time, but without a MongoDB client (and database) it cannot store
@@ -80,6 +89,7 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
    *
    * @return Whether a MongoDB client is available
    */
+  @Override
   public boolean isAvailable() {
 
     return mongoClient.isResolvable();

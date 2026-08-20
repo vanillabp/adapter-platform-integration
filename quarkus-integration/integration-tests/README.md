@@ -9,6 +9,12 @@ A collection of integration tests to guarantee desired functionality.
 1. **[dummy-adapter](./dummy-adapter):**<br>
    This adapter is a template for new adapters and is used as a adapter
    by the integration tests.
+2. **[native-image-tests](./native-image-tests):**<br>
+   An application with a relational database and no MongoDB anywhere. It has no test class:
+   building it is the assertion, in JVM mode on every build and as a native image where the
+   profile `native-image` is active (`-Dnative`). Its main starts a workflow and reads the
+   aggregate back, so running the binary checks the boot as well. See the section about
+   optional extensions in the [runtime module's README](../runtime/README.md).
 
 ## Noteworthy & Contributors
 

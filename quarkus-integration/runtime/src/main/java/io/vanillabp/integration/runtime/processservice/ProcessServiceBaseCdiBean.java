@@ -129,6 +129,14 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
   Instance<AggregatePersistenceAware<?>> aggregatePersistences;
 
   /**
+   * Answers whether the MongoDB deployment is a replica set, which the startup check needs
+   * for an aggregate MongoDB Panache manages. Unsatisfied in an application without the
+   * MongoDB client extension - see {@link MongoDeploymentProbe}.
+   */
+  @Inject
+  Instance<MongoDeploymentProbe> mongoDeploymentProbes;
+
+  /**
    * The core-owned router dispatching committed phase-two outbox entries. This bean
    * registers itself (including the aggregate-ID converter) at bean creation.
    */
@@ -214,7 +222,7 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
                 .mongo()
                 .enabled());
     final var transactionRunnerResolver = new QuarkusTransactionRunnerResolver(
-        transactionRunnerAwares, applicationTransactionRunners, aggregatePersistences, new io.vanillabp.integration.runtime.workflowtask.QuarkusTransactionRunner(
+        transactionRunnerAwares, applicationTransactionRunners, aggregatePersistences, mongoDeploymentProbes, new io.vanillabp.integration.runtime.workflowtask.QuarkusTransactionRunner(
             txRegistry));
     final var taskDeliveryLogResolver = new QuarkusTaskDeliveryLogResolver(
         taskDeliveryLogAwares, taskDeliveryLogs, persistenceTechnology, outboxProperties

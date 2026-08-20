@@ -102,6 +102,51 @@ index creation to manage the schema manually, e.g. by Flyway or Liquibase — th
 also create the unique constraint on `IDEMPOTENCY_KEY` / the partial unique index
 on `idempotencyKey` yourself).
 
+## Optional extensions and the native image
+
+`quarkus-mongodb-client` and `quarkus-mongodb-panache` are optional dependencies of this
+module, so every class naming one of their types has to stay unreachable in an application
+which brought neither. On the JVM that takes care of itself, because a class is loaded when
+it is first used. A native image is stricter: GraalVM links the whole reachable graph while
+it builds and stops at the first method it cannot resolve. Story 85 found three such methods,
+each of them called from a resolver every application runs.
+
+Two rules keep them out of that graph.
+
+- Whatever names a MongoDB type is a bean the extension registers only under
+  `Capability.MONGODB_CLIENT`: `MongoPhaseTwoOutbox`, `MongoTaskDeliveryLog` and
+  `MongoClientDeploymentProbe`.
+- The resolvers ask an interface instead of naming those classes. `PlatformDefaultStore`
+  answers which persistence technology a store of the platform serves and whether it is
+  usable at all, `MongoDeploymentProbe` answers whether the MongoDB deployment is a replica
+  set. Without the extension the injection point is simply unsatisfied, and that is the
+  answer the resolver needs anyway.
+
+The persistence detection has followed the rule from the start: `QuarkusPersistenceTechnology`
+matches VanillaBP's own persistence implementations by their class NAME.
+
+What keeps all of this honest is the module
+[native-image-tests](../integration-tests/native-image-tests): an application with H2 and no
+MongoDB anywhere, whose native build is the assertion. Locally:
+
+```shell
+./mvnw install -DskipTests -am -pl quarkus-integration/deployment,\
+  quarkus-integration/integration-tests/dummy-adapter/deployment,\
+  quarkus-integration/integration-tests/native-image-tests
+./mvnw package -pl quarkus-integration/integration-tests/native-image-tests -Dnative
+./quarkus-integration/integration-tests/native-image-tests/target/*-runner
+```
+
+The deployment modules of both extensions are named explicitly, because an extension's
+augmentation part is no dependency of the application: `-am` alone would leave them to the
+local repository, where a stale copy hides whatever the build step was just changed to do.
+
+Docker pulls the Mandrel builder image, so no GraalVM has to be installed. The last line
+is there because a binary which cannot start proves nothing: the application's main boots
+it, starts a workflow and reads the aggregate back, and its exit code says whether that
+worked. It found the second half of story 85, the BPMN resources missing from the image. In
+CI the job `native-build` runs the same three commands.
+
 ## Noteworthy & Contributors
 
 [VanillaBP](https://www.github.com/vanillabp/spi-for-java) was developed by [Phactum](https://www.phactum.at) with the

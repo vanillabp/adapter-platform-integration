@@ -14,6 +14,7 @@ import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.deployment.workflowmodule.VanillaBpWorkflowModulesBuildItem;
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
@@ -107,10 +108,16 @@ public class DeploymentPipelineBuildStepProcessor {
    * watched for dev-mode hot deployment (note: only files existing at build time
    * are watched; adding a NEW BPMN file in dev mode requires touching a watched
    * file or restarting).
+   * <p>
+   * The indexed files are registered for the native image as well. A native image only
+   * carries the resources it was told about, so without that registration the index would
+   * name files the running application cannot open, and the deployment pipeline would end
+   * the startup saying exactly that (story 85).
    *
    * @param applicationArchives The archives of this Quarkus build
    * @param workflowModulesFound Information about all workflow modules found
    * @param watchedFiles Producer registering the BPMN files for dev-mode hot deployment
+   * @param nativeImageResources Producer putting the BPMN files into the native image
    * @param syntheticBeans Producer used to register the recorded index as a bean
    * @param recorder The recorder building the runtime object
    */
@@ -120,6 +127,7 @@ public class DeploymentPipelineBuildStepProcessor {
       final ApplicationArchivesBuildItem applicationArchives,
       final VanillaBpWorkflowModulesBuildItem workflowModulesFound,
       final BuildProducer<HotDeploymentWatchedFileBuildItem> watchedFiles,
+      final BuildProducer<NativeImageResourceBuildItem> nativeImageResources,
       final BuildProducer<SyntheticBeanBuildItem> syntheticBeans,
       final DeploymentRecorder recorder) {
 
@@ -135,7 +143,10 @@ public class DeploymentPipelineBuildStepProcessor {
                     .ifPresent(bpmnResourcePaths::add))));
 
     bpmnResourcePaths
-        .forEach(path -> watchedFiles.produce(new HotDeploymentWatchedFileBuildItem(path)));
+        .forEach(path -> {
+          watchedFiles.produce(new HotDeploymentWatchedFileBuildItem(path));
+          nativeImageResources.produce(new NativeImageResourceBuildItem(path));
+        });
 
     // pass items in serializable kinds of list (recorder bytecode serialization)
     final var workflowModuleIds = workflowModulesFound

@@ -23,6 +23,8 @@ import io.vanillabp.integration.adapter.migration.delivery.OpenTaskTouches;
 import io.vanillabp.integration.adapter.migration.delivery.TaskDeliveryRetentionCleanup;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterPropertiesMapper;
+import io.vanillabp.integration.runtime.processservice.PlatformDefaultStore;
+import io.vanillabp.integration.runtime.processservice.QuarkusPersistenceTechnology;
 import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.spi.TaskDeliveryLog;
 import jakarta.annotation.PreDestroy;
@@ -56,7 +58,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @ApplicationScoped
 @Slf4j
-public class MongoTaskDeliveryLog implements TaskDeliveryLog {
+public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultStore {
 
   /**
    * The collection holding the records - the same name the Spring Boot MongoDB log uses,
@@ -77,12 +79,20 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
   private final OpenTaskTouches touches = new OpenTaskTouches(
       DEFAULT_COLLECTION_NAME, this::refreshLastSeen);
 
+  @Override
+  public QuarkusPersistenceTechnology.Technology technology() {
+
+    return QuarkusPersistenceTechnology.Technology.MONGO;
+
+  }
+
   /**
    * Whether this default log is usable: the extension registers the bean at build time,
    * but without a MongoDB client it cannot store anything.
    *
    * @return Whether a MongoDB client is available
    */
+  @Override
   public boolean isAvailable() {
 
     return mongoClient.isResolvable();
