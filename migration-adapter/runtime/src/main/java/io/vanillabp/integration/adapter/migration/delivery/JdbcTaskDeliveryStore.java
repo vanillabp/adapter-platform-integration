@@ -6,6 +6,7 @@ import java.sql.SQLIntegrityConstraintViolationException;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema;
@@ -20,10 +21,12 @@ import lombok.extern.slf4j.Slf4j;
  * persists the workflow aggregate, otherwise the record and the aggregate would not
  * commit together.
  * <p>
- * A record is INSERTed once and never updated: the delivery key is the primary key, so
+ * A record is INSERTed once and never rewritten: the delivery key is the primary key, so
  * two nodes processing the same delivery concurrently end up with one record and the
  * loser learns it from the constraint violation ({@link #record(TaskDelivery)} returns
- * <code>false</code> then, exactly like a duplicate outbox entry).
+ * <code>false</code> then, exactly like a duplicate outbox entry). The only column which
+ * ever changes afterwards is <code>LAST_SEEN_AT</code>, the moment the BPMS last
+ * redelivered the task the record answers - what the retention counts from (story 97).
  * <p>
  * The DDL is kept portable the same way the Quarkus outbox does it: table existence is
  * checked via JDBC metadata (<code>CREATE TABLE IF NOT EXISTS</code> is not supported
@@ -49,12 +52,20 @@ public class JdbcTaskDeliveryStore {
   private static final String INSERT_DELIVERY = """
       INSERT INTO %s \
       (DELIVERY_KEY, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, TASK_DEFINITION, OUTCOME, \
-      BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT) \
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""";
+      BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, LAST_SEEN_AT) \
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""";
+
+  // one key per execution instead of an IN list, whose length is capped differently by
+  // every database (Oracle at 1000 expressions, SQL Server at about 2100 parameters) -
+  // the statement is executed as a JDBC batch, which knows no such limit
+  private static final String TOUCH_DELIVERY = """
+      UPDATE %s \
+      SET LAST_SEEN_AT = ? \
+      WHERE DELIVERY_KEY = ?""";
 
   private static final String DELETE_EXPIRED_DELIVERIES = """
       DELETE FROM %s \
-      WHERE RECORDED_AT < ?""";
+      WHERE LAST_SEEN_AT < ?""";
 
   private static final String DELETE_DELIVERIES_OF_WORKFLOW = """
       DELETE FROM %s \
@@ -68,9 +79,13 @@ public class JdbcTaskDeliveryStore {
 
   private final String insertDelivery;
 
+  private final String touchDelivery;
+
   private final String deleteExpiredDeliveries;
 
   private final String deleteDeliveriesOfWorkflow;
+
+  private final OpenTaskTouches touches;
 
   public JdbcTaskDeliveryStore(
       final JdbcConnectionAccess connectionAccess,
@@ -80,8 +95,10 @@ public class JdbcTaskDeliveryStore {
     this.tableName = tableName;
     this.selectDelivery = SELECT_DELIVERY.formatted(tableName);
     this.insertDelivery = INSERT_DELIVERY.formatted(tableName);
+    this.touchDelivery = TOUCH_DELIVERY.formatted(tableName);
     this.deleteExpiredDeliveries = DELETE_EXPIRED_DELIVERIES.formatted(tableName);
     this.deleteDeliveriesOfWorkflow = DELETE_DELIVERIES_OF_WORKFLOW.formatted(tableName);
+    this.touches = new OpenTaskTouches(tableName, this::refreshLastSeen);
 
   }
 
@@ -155,11 +172,13 @@ public class JdbcTaskDeliveryStore {
         statement.setString(6, delivery.outcome());
         statement.setString(7, delivery.bpmnErrorCode());
         statement.setString(8, delivery.bpmnErrorName());
-        statement.setTimestamp(
-            9,
-            Timestamp.from(delivery.recordedAt() == null
-                ? Instant.now()
-                : delivery.recordedAt()));
+        final var recordedAt = Timestamp.from(delivery.recordedAt() == null
+            ? Instant.now()
+            : delivery.recordedAt());
+        statement.setTimestamp(9, recordedAt);
+        // the record was seen the moment it was written; a redelivery of a task which
+        // stays open moves this one and leaves RECORDED_AT where it is
+        statement.setTimestamp(10, recordedAt);
         statement.executeUpdate();
       }
       return true;
@@ -188,15 +207,81 @@ public class JdbcTaskDeliveryStore {
   }
 
   /**
-   * Deletes the records older than the given retention period - the deduplication
-   * window closes with them. A plain, idempotent DELETE: several application instances
-   * may run it concurrently.
+   * Remembers that the record of this delivery is still answering the redeliveries of an
+   * open task, so the retention has to count from now rather than from the moment the
+   * handler ran (story 97). Nothing is written here - the key is collected and the next
+   * {@link #deleteExpired(Duration)} writes what accumulated.
+   *
+   * @param deliveryKey The delivery's identity
+   */
+  public void stillOpen(
+      final String deliveryKey) {
+
+    touches.remember(deliveryKey);
+
+  }
+
+  /**
+   * Writes <code>LAST_SEEN_AT</code> for the open tasks redelivered since the last run.
+   * Called by {@link #deleteExpired(Duration)} and usable on demand (e.g. by tests).
+   *
+   * @return The number of records refreshed
+   */
+  public int refreshOpenTasks() {
+
+    return touches.flush();
+
+  }
+
+  /**
+   * Writes <code>LAST_SEEN_AT</code> of one block of records, as a JDBC batch of the same
+   * statement. A key whose record was deleted meanwhile updates nothing, which is the
+   * right answer: the record is gone and the next redelivery writes a new one.
+   *
+   * @param deliveryKeys The keys of one block
+   */
+  private void refreshLastSeen(
+      final List<String> deliveryKeys) {
+
+    Connection connection = null;
+    try {
+      connection = connectionAccess.acquire();
+      try (var statement = connection.prepareStatement(touchDelivery)) {
+        final var now = Timestamp.from(Instant.now());
+        for (final var deliveryKey : deliveryKeys) {
+          statement.setTimestamp(1, now);
+          statement.setString(2, deliveryKey);
+          statement.addBatch();
+        }
+        statement.executeBatch();
+      }
+    } catch (final SQLException e) {
+      throw new RuntimeException(
+          "Could not refresh the records of %d open tasks in table '%s'!"
+              .formatted(deliveryKeys.size(), tableName), e);
+    } finally {
+      release(connection);
+    }
+
+  }
+
+  /**
+   * Refreshes the records of the open tasks redelivered since the last run and then
+   * deletes the records nobody has seen for the given retention period - the
+   * deduplication window closes with them. A plain, idempotent DELETE: several
+   * application instances may run it concurrently.
+   * <p>
+   * The two belong together and in this order: refreshing first is what keeps the record
+   * of a task which is still being redelivered, and deleting by <code>LAST_SEEN_AT</code>
+   * is what lets the record of a task nobody redelivers any more expire after all.
    *
    * @param retention How long a record is kept
    * @return The number of records deleted
    */
   public int deleteExpired(
       final Duration retention) {
+
+    refreshOpenTasks();
 
     Connection connection = null;
     try {
@@ -263,7 +348,16 @@ public class JdbcTaskDeliveryStore {
   }
 
   /**
-   * Creates the table (and the index the cleanup reads) unless it exists already.
+   * The columns a table has to carry beyond the ones every version of VanillaBP wrote.
+   * Only what was ADDED later belongs in here: a table which predates the addition exists
+   * and looks fine, and the missing column would surface at the first write.
+   */
+  private static final List<String> ADDED_COLUMNS = List.of("LAST_SEEN_AT");
+
+  /**
+   * Creates the table (and the index the cleanup reads) unless it exists already. A table
+   * which exists is checked for the columns a later version of VanillaBP added, because
+   * creating nothing is the one case in which a table of an older version passes unnoticed.
    *
    * @throws IllegalStateException If the DDL fails - naming the way out (manage the
    *           schema manually)
@@ -274,14 +368,18 @@ public class JdbcTaskDeliveryStore {
     try {
       connection = connectionAccess.acquire();
       if (JdbcSchema.tableExists(connection, tableName)) {
+        validateColumns(connection);
         return;
       }
       try (var statement = connection.createStatement()) {
         statement.executeUpdate(buildCreateTable(connection, tableName));
         statement.executeUpdate(
-            "CREATE INDEX %s_AGE ON %s (RECORDED_AT)".formatted(tableName, tableName));
+            "CREATE INDEX %s_AGE ON %s (LAST_SEEN_AT)".formatted(tableName, tableName));
       }
     } catch (final SQLException e) {
+      if (createdConcurrently()) {
+        return;
+      }
       throw new IllegalStateException(
           """
               Could not create the task-delivery table '%s'! Set 'vanillabp.outbox.create-schema' to \
@@ -296,13 +394,47 @@ public class JdbcTaskDeliveryStore {
   }
 
   /**
-   * Verifies that the table exists, for an application which creates its schema itself (story 75).
+   * Whether the DDL failed because another instance created the table between the check and the
+   * statement. Two instances starting together both see no table and both create it, and the
+   * loser's deployment is fine - it just has nothing left to do (see
+   * {@link JdbcSchema#tableExistsQuietly(Connection, String)}).
+   *
+   * @return Whether the table is there now
+   */
+  private boolean createdConcurrently() {
+
+    Connection connection = null;
+    try {
+      connection = connectionAccess.acquire();
+      if (!JdbcSchema.tableExistsQuietly(connection, tableName)) {
+        return false;
+      }
+      log.debug(
+          "The task-delivery table '{}' was created by another instance starting at the same moment",
+          tableName);
+      return true;
+    } catch (final SQLException e) {
+      return false;
+    } finally {
+      release(connection);
+    }
+
+  }
+
+  /**
+   * Verifies that the table exists AND carries the columns this version writes, for an
+   * application which creates its schema itself (story 75).
    * <p>
    * Without this check a missing table surfaces at the first delivery, which is hours after the
    * deployment and looks like a bug of the application. The message names the table, the property
    * which would have created it and the artifact which contains the statements.
+   * <p>
+   * The columns are checked for the same reason (story 97): an application which applied an
+   * earlier changelog of VanillaBP has the table but not everything the current version writes
+   * into it, and a table which exists would otherwise pass the check and fail at the first
+   * delivery.
    *
-   * @throws IllegalStateException If the table is missing
+   * @throws IllegalStateException If the table or one of its columns is missing
    */
   public void validateSchemaExists() {
 
@@ -310,6 +442,7 @@ public class JdbcTaskDeliveryStore {
     try {
       connection = connectionAccess.acquire();
       if (JdbcSchema.tableExists(connection, tableName)) {
+        validateColumns(connection);
         return;
       }
       throw new IllegalStateException(
@@ -328,6 +461,38 @@ public class JdbcTaskDeliveryStore {
           "Could not check whether the task-delivery table '%s' exists!".formatted(tableName), e);
     } finally {
       release(connection);
+    }
+
+  }
+
+  /**
+   * Verifies the columns which a later version of VanillaBP added to the table. The
+   * message names the column, the statement which adds it and the artifact whose
+   * changelog does it, because that is the whole remedy.
+   *
+   * @param connection The connection to the database holding the table
+   * @throws IllegalStateException If a column is missing
+   */
+  private void validateColumns(
+      final Connection connection) throws SQLException {
+
+    for (final var column : ADDED_COLUMNS) {
+      if (JdbcSchema.columnExists(connection, tableName, column)) {
+        continue;
+      }
+      throw new IllegalStateException(
+          """
+              The task-delivery table '%s' has no column '%s'! It was added to the table of \
+              VanillaBP after your database was created, and without it the records of the tasks \
+              your application leaves open cannot be kept alive - they would expire while the tasks \
+              are still being redelivered. Either
+              - apply the current schema of VanillaBP with your migration tool: the artifact \
+              'io.vanillabp:vanillabp-schema' ships the Liquibase changelog \
+              'vanillabp/schema/changelog.xml' and the SQL generated from it for Flyway, or
+              - add the column yourself: ALTER TABLE %s ADD %s TIMESTAMP (the type your database \
+              uses for the existing column RECORDED_AT), filled with the value of RECORDED_AT and \
+              NOT NULL."""
+              .formatted(tableName, column, tableName, column));
     }
 
   }
@@ -400,8 +565,9 @@ public class JdbcTaskDeliveryStore {
         OUTCOME VARCHAR(32) NOT NULL, \
         BPMN_ERROR_CODE VARCHAR(255), \
         BPMN_ERROR_NAME VARCHAR(255), \
-        RECORDED_AT %s NOT NULL)"""
-        .formatted(tableName, timestampType);
+        RECORDED_AT %s NOT NULL, \
+        LAST_SEEN_AT %s NOT NULL)"""
+        .formatted(tableName, timestampType, timestampType);
 
   }
 

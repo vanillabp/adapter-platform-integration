@@ -2,6 +2,7 @@ package io.vanillabp.integration.test.delivery;
 
 import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.TaskException;
+import io.vanillabp.spi.service.TaskId;
 import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 
@@ -41,6 +42,21 @@ public class DeliveryWorkflowService {
     aggregate.setInvocations(aggregate.getInvocations() + 1);
     aggregate.setStatus("must-never-be-visible");
     throw new IllegalStateException("something broke");
+
+  }
+
+  /**
+   * A task the application completes later, so it stays open from the BPMS' point of view
+   * and is redelivered until somebody completes it - the record which answers those
+   * redeliveries is what story 97 keeps alive.
+   */
+  @WorkflowTask
+  public void awaitCompletion(
+      final DeliveryAggregate aggregate,
+      @TaskId final String taskId) {
+
+    aggregate.setInvocations(aggregate.getInvocations() + 1);
+    aggregate.setStatus("awaiting-completion");
 
   }
 

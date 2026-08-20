@@ -1,0 +1,19 @@
+quarkus:
+  datasource:
+    db-kind: h2
+    jdbc:
+      url: jdbc:h2:mem:open-task;DB_CLOSE_DELAY=-1
+vanillabp:
+  outbox:
+    retention: PT1H
+  delivery:
+    max-task-age: PT1H
+  adapters:
+    demo1:
+      type: dummy
+      test: 1
+  workflow-modules:
+    test-module:
+      adapters:
+        demo1:
+          resources-location: classpath:processes/dummy

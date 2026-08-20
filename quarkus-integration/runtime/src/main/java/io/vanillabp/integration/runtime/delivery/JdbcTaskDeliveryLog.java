@@ -127,14 +127,24 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   }
 
   /**
-   * Deletes the records whose retention period passed - run by the background cleanup and
-   * usable on demand (e.g. by tests).
+   * Refreshes the records of the open tasks redelivered since the last run and deletes the
+   * records whose retention period passed - run by the background cleanup and usable on
+   * demand (e.g. by tests). Both are the store's business and happen in that order (story
+   * 97).
    *
    * @return The number of records deleted
    */
   public int cleanUpExpiredRecords() {
 
     return getStore().deleteExpired(getProperties().getRetention());
+
+  }
+
+  @Override
+  public void stillOpen(
+      final String deliveryKey) {
+
+    getStore().stillOpen(deliveryKey);
 
   }
 

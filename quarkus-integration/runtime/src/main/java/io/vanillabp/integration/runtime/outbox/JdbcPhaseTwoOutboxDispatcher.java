@@ -257,11 +257,38 @@ public class JdbcPhaseTwoOutboxDispatcher {
         statement.executeUpdate(buildCreateTable(connection, tableName));
       }
     } catch (SQLException e) {
+      if (createdConcurrently()) {
+        return;
+      }
       throw new IllegalStateException(
           """
               Could not create the phase-two outbox table '%s'! Set 'vanillabp.outbox.create-schema' \
               to 'false' and manage the schema manually if the DDL is not suitable for your database."""
               .formatted(tableName), e);
+    }
+
+  }
+
+  /**
+   * Whether the DDL failed because another instance created the table between the check and the
+   * statement. Two instances starting together (a rolling deployment, a scale-up from zero) both
+   * see no table and both create it, and the loser's boot must not end over it - it just has
+   * nothing left to do (see {@link JdbcSchema#tableExistsQuietly(Connection, String)}).
+   *
+   * @return Whether the table is there now
+   */
+  private boolean createdConcurrently() {
+
+    try (var connection = dataSource.get().getConnection()) {
+      if (!JdbcSchema.tableExistsQuietly(connection, tableName)) {
+        return false;
+      }
+      log.debug(
+          "The phase-two outbox table '{}' was created by another instance starting at the same moment",
+          tableName);
+      return true;
+    } catch (final SQLException e) {
+      return false;
     }
 
   }

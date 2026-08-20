@@ -1,6 +1,7 @@
 package io.vanillabp.migration.test.delivery;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -20,6 +21,11 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * Story 75: an application which creates its schema with Liquibase or Flyway switches VanillaBP's
  * table creation off. A missing table is then a deployment which forgot to apply the migration, and
  * that has to be said at startup - not at the first delivery, hours later.
+ * <p>
+ * Story 97 added a column to the table, which is the case the check of story 75 did not catch: a
+ * table created by an earlier version of VanillaBP exists, so the check passed and the missing
+ * column surfaced at the first delivery. The columns added later are therefore verified as well,
+ * whether the application hands the schema over or lets VanillaBP create it.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class JdbcTaskDeliverySchemaTest {
@@ -88,10 +94,151 @@ public class JdbcTaskDeliverySchemaTest {
                   BPMN_ERROR_CODE VARCHAR(255), \
                   BPMN_ERROR_NAME VARCHAR(255), \
                   RECORDED_AT TIMESTAMP NOT NULL, \
+                  LAST_SEEN_AT TIMESTAMP NOT NULL, \
                   CONSTRAINT PK_VANILLABP_TASK_DELIVERY PRIMARY KEY (DELIVERY_KEY))""");
     }
 
     assertDoesNotThrow(() -> storeOn("changelog").validateSchemaExists());
+
+  }
+
+  /**
+   * The table as VanillaBP created it before the second timestamp existed - the case a check
+   * looking at tables only cannot see.
+   */
+  private static void createTableOfAnEarlierVersion(
+      final String database) throws SQLException {
+
+    try (Connection connection = h2(database).acquire(); var statement = connection.createStatement()) {
+      statement
+          .executeUpdate(
+              """
+                  CREATE TABLE VANILLABP_TASK_DELIVERY (\
+                  DELIVERY_KEY VARCHAR(512) PRIMARY KEY, \
+                  WORKFLOW_MODULE_ID VARCHAR(255) NOT NULL, \
+                  BPMN_PROCESS_ID VARCHAR(255) NOT NULL, \
+                  AGGREGATE_ID VARCHAR(1024), \
+                  TASK_DEFINITION VARCHAR(255), \
+                  OUTCOME VARCHAR(32) NOT NULL, \
+                  BPMN_ERROR_CODE VARCHAR(255), \
+                  BPMN_ERROR_NAME VARCHAR(255), \
+                  RECORDED_AT TIMESTAMP NOT NULL)""");
+    }
+
+  }
+
+  @Test
+  @DisplayName("A table of an earlier version ends the startup naming the column and the way to add it")
+  public void aMissingColumnIsReportedAtStartup() throws SQLException {
+
+    createTableOfAnEarlierVersion("outdated");
+
+    final var failure = assertThrows(
+        IllegalStateException.class,
+        () -> storeOn("outdated").validateSchemaExists());
+
+    assertTrue(failure.getMessage().contains("LAST_SEEN_AT"), failure.getMessage());
+    assertTrue(failure.getMessage().contains("ALTER TABLE VANILLABP_TASK_DELIVERY"), failure.getMessage());
+    assertTrue(failure.getMessage().contains("io.vanillabp:vanillabp-schema"), failure.getMessage());
+
+  }
+
+  @Test
+  @DisplayName("Even where VanillaBP creates the schema itself, a table of an earlier version is named")
+  public void aMissingColumnIsReportedWhereTheTableIsCreated() throws SQLException {
+
+    createTableOfAnEarlierVersion("outdated-created");
+
+    final var failure = assertThrows(
+        IllegalStateException.class,
+        () -> storeOn("outdated-created").createSchemaIfNotExists());
+
+    assertTrue(failure.getMessage().contains("LAST_SEEN_AT"), failure.getMessage());
+
+  }
+
+  /**
+   * A connection whose statements wait for the other thread. Both stores get past "the table is
+   * not there" before either of them runs the DDL, which is the race of two instances starting
+   * together - without a sleep and without a real race in the test.
+   */
+  private static JdbcConnectionAccess synchronizedAt(
+      final String database,
+      final java.util.concurrent.CyclicBarrier barrier) {
+
+    return () -> {
+      final var connection = h2(database).acquire();
+      return (Connection) java.lang.reflect.Proxy
+          .newProxyInstance(
+              Connection.class.getClassLoader(),
+              new Class<?>[]{
+                  Connection.class
+      },
+              (
+                  proxy,
+                  method,
+                  args) -> {
+                if ("createStatement".equals(method.getName())) {
+                  barrier.await(30, java.util.concurrent.TimeUnit.SECONDS);
+                }
+                try {
+                  return method.invoke(connection, args);
+                } catch (final java.lang.reflect.InvocationTargetException e) {
+                  throw e.getCause();
+                }
+              });
+    };
+
+  }
+
+  @Test
+  @DisplayName("Two instances creating the schema at the same moment both come through")
+  public void twoInstancesCreateTheSchemaAtOnce() throws Exception {
+
+    final var barrier = new java.util.concurrent.CyclicBarrier(2);
+    final var failures = new java.util.concurrent.CopyOnWriteArrayList<Throwable>();
+    final Runnable create = () -> {
+      try {
+        new JdbcTaskDeliveryStore(synchronizedAt("concurrent", barrier), "VANILLABP_TASK_DELIVERY")
+            .createSchemaIfNotExists();
+      } catch (final Throwable e) {
+        failures.add(e);
+      }
+    };
+
+    final var first = new Thread(create, "first-instance");
+    final var second = new Thread(create, "second-instance");
+    first.start();
+    second.start();
+    first.join(60000);
+    second.join(60000);
+
+    assertTrue(
+        failures.isEmpty(),
+        "the instance which lost the race has nothing left to do, it has not failed: "
+            + failures);
+
+    try (Connection connection = h2("concurrent").acquire(); var tables = connection.getMetaData().getTables(null, null,
+        "VANILLABP_TASK_DELIVERY", null)) {
+      assertTrue(tables.next(), "the table exists");
+      assertFalse(tables.next(), "exactly once");
+    }
+
+    assertDoesNotThrow(() -> storeOn("concurrent").validateSchemaExists());
+
+  }
+
+  @Test
+  @DisplayName("A metadata question which cannot be answered is a 'no', not an exception")
+  public void anUnanswerableMetadataQuestionIsANo() throws SQLException {
+
+    final Connection closed = h2("quiet").acquire();
+    closed.close();
+
+    assertFalse(
+        io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema
+            .tableExistsQuietly(closed, "VANILLABP_TASK_DELIVERY"),
+        "the caller is on the failure path already - it must not fail there a second time");
 
   }
 

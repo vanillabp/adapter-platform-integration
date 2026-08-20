@@ -468,12 +468,67 @@ waiting legitimately.
 - Deliberately no callback into the application. An application which knows its task is
   obsolete has `ProcessService#cancelTask`; one which lost track of it could not answer a
   liveness question truthfully anyway.
-- Residual: the record itself still expires with `vanillabp.outbox.retention`, and its
-  timestamp is never refreshed (refreshing it would erase the very age this measures). A
-  task open longer than the retention therefore loses the record which answers its
-  redelivery, exactly as before this story - the story shrinks the exposure from the old
-  fourteen-day horizon to the retention, it does not remove it. Roadmap entry 97 carries
-  the decision about what to do with a pending record when the retention passes.
+- The record itself used to expire with `vanillabp.outbox.retention` while its task was
+  still open, which is the exposure this story shrank from the old fourteen-day horizon to
+  the retention without removing it. Story 97 closed it with a second timestamp on the
+  record (see the next section); the age measured here keeps counting from the first one,
+  which is why refreshing that one was never an option.
+
+#### The record of a task which is still open (story 97)
+
+The record which answers the redeliveries of an open task was deleted once
+`vanillabp.outbox.retention` passed, seven days by default. A task open for longer lost the
+record, and the next redelivery reached the `@WorkflowTask` method a second time.
+
+The record therefore carries a second timestamp. `RECORDED_AT` keeps meaning the moment the
+handler ran, which is what the age of an open task is measured from, and `LAST_SEEN_AT`
+carries the moment the BPMS last redelivered that task. The retention cleanup deletes by the
+second one, so a task which is still being redelivered keeps the record answering it while
+the record of a task nobody hands out any more expires as it always did.
+
+- `MigrationProcessService.stillOpen` is the trigger, and it belongs to the core rather
+  than to any adapter: it runs on every redelivery whose recorded outcome is
+  `COMPLETION_PENDING`, whichever BPMS redelivered. It reports the key to the store through
+  `TaskDeliveryLog.stillOpen(deliveryKey)`, whose default implementation does nothing, so
+  a store written by an application stays valid.
+- Nothing is written there. The redelivery runs in the transaction of the workflow
+  aggregate, and an UPDATE per renewal of every open task has no business in it, so the key
+  lands in `OpenTaskTouches` and the timer which already runs the retention cleanup writes
+  what accumulated. Losing that memory to a crash costs one interval of refreshments,
+  because a record only expires when a whole retention passes without a single one. The
+  memory is bounded for the same reason.
+- Writing goes in blocks of `OpenTaskTouches.BLOCK_SIZE` keys: one
+  `UPDATE ... SET LAST_SEEN_AT = ? WHERE DELIVERY_KEY = ?` executed as a JDBC batch instead
+  of an `IN` list, whose length is capped differently by every database (Oracle at 1000
+  expressions, SQL Server at about 2100 parameters). The MongoDB stores of both platforms
+  do the same with an unordered bulk write per block.
+- Two alternatives were rejected for the same reason: a cleanup which skips
+  `COMPLETION_PENDING`, and one collective `UPDATE ... WHERE OUTCOME = 'COMPLETION_PENDING'`.
+  Either of them keeps the record of a task which never completes alive for good, and a
+  store which only grows is worse than the defect being fixed.
+- The column belongs to `io.vanillabp:vanillabp-schema` (changelog plus generated SQL). The
+  startup check of story 75 looked at the TABLE only, which is exactly the case a new column
+  slips through: a table created by an earlier version exists, so the check passed and the
+  missing column would have surfaced at the first delivery. `validateSchemaExists` and
+  `createSchemaIfNotExists` therefore verify the columns added later as well, and the
+  message names the `ALTER TABLE` which repairs it.
+
+#### Two instances creating the schema at once
+
+`createSchemaIfNotExists` asks the JDBC metadata and then runs the DDL, because
+`CREATE TABLE IF NOT EXISTS` is not portable. Between the question and the statement another
+instance may have created the same table: a rolling deployment or a scale-up from zero starts
+two of them at the same moment, and the loser used to end its boot over a "table already
+exists".
+
+A refused DDL therefore asks the metadata once more, through a connection of its own
+(`JdbcSchema.tableExistsQuietly` - a failed statement leaves the current connection in an
+aborted transaction where the pool does not commit each statement by itself). Is the table
+there, the loser has nothing left to do and says so on DEBUG; is it still missing, the DDL
+really failed and the message is the one it always was. Deliberately no SQL state: every
+database reports that collision differently, and the metadata question is the portable answer.
+The Quarkus phase-two outbox does the same for its own table. The MongoDB stores need nothing:
+MongoDB answers a `createIndex` of an index which is already there with its name.
 
 #### Process versions (`version` attribute)
 

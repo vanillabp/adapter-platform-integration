@@ -96,6 +96,9 @@ aggregate is detected once in `SpringPersistenceTechnology`, shared by both reso
   `TaskDeliveryRetentionCleanup`). Table and index are created from a
   `SmartInitializingSingleton`, not while the bean is built - the DDL must not
   materialize the data source before the application's configuration is complete.
+- The same run refreshes the records of the tasks which are still open (story 97): the core
+  collects the keys the BPMS redelivered, `cleanUpExpiredRecords` writes them before it
+  deletes anything, and the JDBC store batches while the MongoDB one bulk-writes.
 
 ## What is published where (story 92)
 

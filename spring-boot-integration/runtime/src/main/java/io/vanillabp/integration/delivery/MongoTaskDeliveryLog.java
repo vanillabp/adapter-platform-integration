@@ -5,12 +5,17 @@ import java.time.Instant;
 import java.util.Optional;
 
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.mongodb.core.BulkOperations;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
+import org.springframework.data.mongodb.core.query.UpdateDefinition;
+import org.springframework.data.util.Pair;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import io.vanillabp.integration.adapter.migration.delivery.OpenTaskTouches;
 import io.vanillabp.integration.adapter.migration.delivery.TaskDeliveryRetentionCleanup;
 import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.spi.TaskDeliveryLog;
@@ -47,6 +52,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
 
   private final TaskDeliveryRetentionCleanup retentionCleanup;
 
+  private final OpenTaskTouches touches;
+
   public MongoTaskDeliveryLog(
       final MongoTemplate mongoTemplate,
       final String collection,
@@ -57,6 +64,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
     this.retention = retention;
     this.retentionCleanup = new TaskDeliveryRetentionCleanup(
         collection, retention, this::cleanUpExpiredRecords);
+    this.touches = new OpenTaskTouches(collection, this::refreshLastSeen);
 
   }
 
@@ -112,13 +120,17 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
     }
 
     try {
+      // the record was seen the moment it was written; a redelivery of a task which stays
+      // open moves lastSeenAt and leaves recordedAt where it is
+      final var recordedAt = delivery.recordedAt() == null
+          ? Instant.now()
+          : delivery.recordedAt();
       mongoTemplate.insert(
           new TaskDeliveryDocument(
               delivery.deliveryKey(), delivery.workflowModuleId(), delivery.bpmnProcessId(), delivery
                   .workflowAggregateId(), delivery.taskDefinition(), delivery
-                      .outcome(), delivery.bpmnErrorCode(), delivery.bpmnErrorName(), delivery.recordedAt() == null
-                          ? Instant.now()
-                          : delivery.recordedAt()),
+                      .outcome(), delivery.bpmnErrorCode(), delivery
+                          .bpmnErrorName(), recordedAt, recordedAt),
           collection);
       compensateUnlessCommitted(delivery);
       return true;
@@ -215,19 +227,56 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
   }
 
   /**
-   * Deletes the records whose retention period passed - run by the background cleanup and
-   * usable on demand (e.g. by tests).
+   * Refreshes the records of the open tasks redelivered since the last run and deletes the
+   * records nobody has seen for the retention period - run by the background cleanup and
+   * usable on demand (e.g. by tests). Refreshing first is what keeps the record of a task
+   * which is still being redelivered (story 97).
    *
    * @return The number of records deleted
    */
   public long cleanUpExpiredRecords() {
 
+    touches.flush();
+
     return mongoTemplate
         .remove(
-            Query.query(Criteria.where("recordedAt").lt(Instant.now().minus(retention))),
+            Query.query(Criteria.where("lastSeenAt").lt(Instant.now().minus(retention))),
             TaskDeliveryDocument.class,
             collection)
         .getDeletedCount();
+
+  }
+
+  @Override
+  public void stillOpen(
+      final String deliveryKey) {
+
+    touches.remember(deliveryKey);
+
+  }
+
+  /**
+   * Moves <code>lastSeenAt</code> of one block of records, in one unordered bulk write. A
+   * key whose record was deleted meanwhile matches nothing, which is the right answer: the
+   * record is gone and the next redelivery writes a new one.
+   *
+   * @param deliveryKeys The keys of one block
+   */
+  private void refreshLastSeen(
+      final java.util.List<String> deliveryKeys) {
+
+    final var now = Instant.now();
+    mongoTemplate
+        .bulkOps(BulkOperations.BulkMode.UNORDERED, TaskDeliveryDocument.class, collection)
+        .updateOne(
+            deliveryKeys
+                .stream()
+                .map(deliveryKey -> Pair
+                    .of(
+                        Query.query(Criteria.where("_id").is(deliveryKey)),
+                        (UpdateDefinition) Update.update("lastSeenAt", now)))
+                .toList())
+        .execute();
 
   }
 

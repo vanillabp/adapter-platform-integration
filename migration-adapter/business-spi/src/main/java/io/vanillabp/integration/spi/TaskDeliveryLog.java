@@ -30,9 +30,10 @@ import java.util.Optional;
  * <strong>Retention:</strong> records are deleted asynchronously once
  * <code>vanillabp.outbox.retention</code> passed (default 7 days) - the same
  * retention the outbox uses, since both keep a deduplication window open. A BPMS
- * redelivering a task later than that runs the business code again; a task open for
- * longer than the retention is a workflow waiting for something, not a delivery in
- * flight.
+ * redelivering a task later than that runs the business code again. The period counts
+ * from the last redelivery the record answered ({@link #stillOpen(String)}), so a task
+ * which stays open keeps the record answering it and the clock starts once nobody hands
+ * that task out any more.
  * <p>
  * <strong>Release at the end of a workflow:</strong> where
  * <code>vanillabp.delivery.release-on-workflow-end</code> is switched on, the records of
@@ -73,6 +74,39 @@ public interface TaskDeliveryLog {
    */
   boolean record(
       TaskDelivery delivery);
+
+  /**
+   * Reports that the BPMS delivered a task again whose record says the task is still
+   * open, so this record is still in use and has to outlive the retention. Called by the
+   * core within the transaction of that redelivery, for every delivery answered with
+   * <code>COMPLETION_PENDING</code>.
+   * <p>
+   * A store deleting by age keeps a SECOND timestamp per record for it: the retention
+   * counts from the last redelivery, while {@link TaskDelivery#recordedAt()} keeps
+   * meaning the moment the handler ran - which is what the age of an open task is
+   * measured from (<code>vanillabp.delivery.max-task-age</code>). Refreshing
+   * <code>recordedAt</code> instead would erase that age, and keeping every pending
+   * record forever would leave the record of a task nobody ever completes in the store
+   * for good.
+   * <p>
+   * <strong>Not a write per call.</strong> An open task is redelivered as often as the
+   * BPMS renews its lock, and the redelivery runs in the transaction of the workflow
+   * aggregate. Implementations therefore remember the key and refresh their records in
+   * bulk, out of band - the stores VanillaBP ships do it from the timer which already
+   * runs the retention cleanup. Losing such a memory to a crash costs one interval of
+   * refreshments and nothing more, because a record only expires when a whole retention
+   * passes without a single one.
+   * <p>
+   * The default implementation does nothing, which keeps every store written before this
+   * existed valid: its records expire as they always did.
+   *
+   * @param deliveryKey The identity of the redelivered delivery (see
+   *          {@link TaskDelivery#deliveryKey()})
+   */
+  default void stillOpen(
+      final String deliveryKey) {
+
+  }
 
   /**
    * Deletes the records of ONE workflow, called when it ended and nothing of it can be

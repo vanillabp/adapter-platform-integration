@@ -9,11 +9,17 @@ import org.eclipse.microprofile.config.ConfigProvider;
 import com.mongodb.MongoWriteException;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
+import com.mongodb.client.model.BulkWriteOptions;
+import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Indexes;
+import com.mongodb.client.model.UpdateOneModel;
+import com.mongodb.client.model.Updates;
+import com.mongodb.client.model.WriteModel;
 
 import io.quarkus.runtime.StartupEvent;
 import io.smallrye.config.SmallRyeConfig;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
+import io.vanillabp.integration.adapter.migration.delivery.OpenTaskTouches;
 import io.vanillabp.integration.adapter.migration.delivery.TaskDeliveryRetentionCleanup;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterPropertiesMapper;
@@ -68,6 +74,9 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
 
   private volatile TaskDeliveryRetentionCleanup retentionCleanup;
 
+  private final OpenTaskTouches touches = new OpenTaskTouches(
+      DEFAULT_COLLECTION_NAME, this::refreshLastSeen);
+
   /**
    * Whether this default log is usable: the extension registers the bean at build time,
    * but without a MongoDB client it cannot store anything.
@@ -116,7 +125,9 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
       return;
     }
     if (getProperties().isCreateSchema()) {
-      deliveryCollection().createIndex(Indexes.ascending("recordedAt"));
+      // MongoDB answers a createIndex of an index which is already there with its name, so
+      // two instances starting at the same moment do not collide over it
+      deliveryCollection().createIndex(Indexes.ascending("lastSeenAt"));
     }
     retentionCleanup = new TaskDeliveryRetentionCleanup(
         DEFAULT_COLLECTION_NAME, getProperties().getRetention(), this::cleanUpExpiredRecords);
@@ -125,19 +136,53 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
   }
 
   /**
-   * Deletes the records whose retention period passed - run by the background cleanup and
-   * usable on demand (e.g. by tests).
+   * Refreshes the records of the open tasks redelivered since the last run and deletes the
+   * records nobody has seen for the retention period - run by the background cleanup and
+   * usable on demand (e.g. by tests). Refreshing first is what keeps the record of a task
+   * which is still being redelivered (story 97).
    *
    * @return The number of records deleted
    */
   public long cleanUpExpiredRecords() {
 
+    touches.flush();
+
     return deliveryCollection()
         .deleteMany(
             new Document(
-                "recordedAt", new Document("$lt", Date
+                "lastSeenAt", new Document("$lt", Date
                     .from(java.time.Instant.now().minus(getProperties().getRetention())))))
         .getDeletedCount();
+
+  }
+
+  @Override
+  public void stillOpen(
+      final String deliveryKey) {
+
+    touches.remember(deliveryKey);
+
+  }
+
+  /**
+   * Moves <code>lastSeenAt</code> of one block of records, in one round trip. A key whose
+   * record was deleted meanwhile matches nothing, which is the right answer: the record is
+   * gone and the next redelivery writes a new one.
+   *
+   * @param deliveryKeys The keys of one block
+   */
+  private void refreshLastSeen(
+      final java.util.List<String> deliveryKeys) {
+
+    final var now = new Date();
+    deliveryCollection()
+        .bulkWrite(
+            deliveryKeys
+                .stream()
+                .map(deliveryKey -> (WriteModel<Document>) new UpdateOneModel<Document>(
+                    Filters.eq("_id", deliveryKey), Updates.set("lastSeenAt", now)))
+                .toList(),
+            new BulkWriteOptions().ordered(false));
 
   }
 
@@ -189,6 +234,9 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
     // (story 70)
     final var session = io.vanillabp.integration.runtime.mongo.MongoSessions
         .activeSession(txRegistry);
+    final var recordedAt = Date.from(delivery.recordedAt() == null
+        ? java.time.Instant.now()
+        : delivery.recordedAt());
     final var record = new Document()
         .append("_id", delivery.deliveryKey())
         .append("workflowModuleId", delivery.workflowModuleId())
@@ -198,11 +246,10 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
         .append("outcome", delivery.outcome())
         .append("bpmnErrorCode", delivery.bpmnErrorCode())
         .append("bpmnErrorName", delivery.bpmnErrorName())
-        .append(
-            "recordedAt",
-            Date.from(delivery.recordedAt() == null
-                ? java.time.Instant.now()
-                : delivery.recordedAt()));
+        .append("recordedAt", recordedAt)
+        // the record was seen the moment it was written; a redelivery of a task which
+        // stays open moves lastSeenAt and leaves recordedAt where it is
+        .append("lastSeenAt", recordedAt);
     // a duplicate-key error inside a MongoDB transaction would abort it entirely, so the
     // common duplicate is read instead - the unique document ID stays the backstop
     if ((session != null) && (collection
