@@ -87,6 +87,17 @@ class WorkflowTaskScanner {
       if (subscribedEvents.isEmpty()) {
         subscribedEvents.add(TaskEvent.Event.CREATED);
       }
+      // story 99: the process variables the method reads - the core is the only place
+      // these names exist, and an adapter whose BPMS ships a variable payload with
+      // every delivery needs them to keep that payload at what is read
+      final var taskParameters = Arrays
+          .stream(method.getParameters())
+          .map(parameter -> parameter.getAnnotation(TaskParam.class))
+          .filter(java.util.Objects::nonNull)
+          .map(TaskParam::value)
+          .distinct()
+          .sorted()
+          .toList();
       for (final var annotation : annotations) {
         handlers.add(buildHandler(
             workflowServiceClass,
@@ -95,7 +106,8 @@ class WorkflowTaskScanner {
             binders,
             annotation,
             asynchronousTask,
-            subscribedEvents));
+            subscribedEvents,
+            taskParameters));
       }
     }
     if (!transactionDefects.isEmpty()) {
@@ -148,7 +160,8 @@ class WorkflowTaskScanner {
       final List<ParameterBinder> binders,
       final WorkflowTask annotation,
       final boolean asynchronousTask,
-      final java.util.Set<TaskEvent.Event> subscribedEvents) {
+      final java.util.Set<TaskEvent.Event> subscribedEvents,
+      final List<String> taskParameters) {
 
     final var location = "%s#%s".formatted(workflowServiceClass.getName(), method.getName());
     // a public method of a package-private bean class is not accessible through
@@ -176,7 +189,7 @@ class WorkflowTaskScanner {
         .map(version -> VersionRange.parse(version, location))
         .toList();
     return new WorkflowTaskHandler(
-        workflowServiceClass, method, workflowServiceBean, binders, taskDefinition, activityId, versions, asynchronousTask, subscribedEvents);
+        workflowServiceClass, method, workflowServiceBean, binders, taskDefinition, activityId, versions, asynchronousTask, subscribedEvents, taskParameters);
 
   }
 

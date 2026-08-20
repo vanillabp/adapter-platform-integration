@@ -1029,6 +1029,175 @@ public class WorkflowTaskRegistryTest {
 
   }
 
+  /**
+   * Two methods serving ONE BPMN element in different process versions, each reading a
+   * variable of its own - what a subscription serving that element has to bring along.
+   */
+  static class ParameterizedVersionsService {
+
+    @WorkflowTask(taskDefinition = "parameterized", version = "1")
+    public void firstVersion(
+        final Aggregate aggregate,
+        @TaskParam("ratingProvider") final String ratingProvider) {
+
+      aggregate.parameterValue = ratingProvider;
+
+    }
+
+    @WorkflowTask(taskDefinition = "parameterized", version = ">1")
+    public void laterVersions(
+        final Aggregate aggregate,
+        @TaskParam("rating") final String rating,
+        @TaskParam("ratingProvider") final String ratingProvider) {
+
+      aggregate.parameterValue = rating + ratingProvider;
+
+    }
+
+  }
+
+  @Nested
+  @DisplayName("Declared task parameters (story 99)")
+  class DeclaredTaskParameters {
+
+    @Test
+    @DisplayName("The names of a method's @TaskParam parameters are reported to the adapter")
+    public void theDeclaredNamesAreReported() {
+
+      assertEquals(
+          List.of("status"),
+          List.copyOf(registry.taskParameterNames(MODULE, PROCESS, "withBindings")),
+          "the adapter cannot see what a method reads - the core scanned it while wiring");
+
+    }
+
+    @Test
+    @DisplayName("A method reading nothing but its aggregate declares no parameter")
+    public void aMethodWithoutTaskParamDeclaresNothing() {
+
+      assertTrue(registry.taskParameterNames(MODULE, PROCESS, "doSomething").isEmpty());
+
+    }
+
+    @Test
+    @DisplayName("A method wired by activity ID is found by that ID")
+    public void anActivityIdWiringIsAnsweredToo() {
+
+      assertTrue(registry.taskParameterNames(MODULE, PROCESS, "Activity_4711").isEmpty());
+      assertTrue(registry.taskParameterNames(MODULE, PROCESS, "unknownTask").isEmpty());
+      assertTrue(registry.taskParameterNames(MODULE, "UnknownProcess", "withBindings").isEmpty());
+
+    }
+
+    @Test
+    @DisplayName("Several methods serving one element contribute the UNION of their parameters")
+    public void theUnionOfEveryMethodServingTheElement() {
+
+      registry.registerWorkflowService(
+          MODULE,
+          "ParameterizedProcess",
+          ParameterizedVersionsService.class,
+          ParameterizedVersionsService::new,
+          beans::get,
+          createProcessService());
+
+      assertEquals(
+          List.of("rating", "ratingProvider"),
+          List.copyOf(registry.taskParameterNames(MODULE, "ParameterizedProcess", "parameterized")),
+          "whichever version is delivered has to find its variable, and the list is sorted so a "
+              + "subscription naming it stays the same across restarts");
+
+    }
+
+    @Test
+    @DisplayName("An adapter not implementing the SPI method sees the previous behaviour")
+    public void theDefaultAnswersNothing() {
+
+      final var untouched = new io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker() {
+
+        @Override
+        public void validateTaskWiring(
+            final String workflowModuleId,
+            final String bpmnProcessId,
+            final java.util.Collection<BpmnTaskSpec> tasks) {
+        }
+
+        @Override
+        public void validateNoUnwiredWorkflowTaskMethods(
+            final String workflowModuleId) {
+        }
+
+        @Override
+        public WorkflowTaskOutcome invokeWorkflowTask(
+            final String workflowModuleId,
+            final String bpmnProcessId,
+            final TaskInvocationContext context) {
+
+          return null;
+
+        }
+
+        @Override
+        public boolean workflowAggregateHasProperty(
+            final String workflowModuleId,
+            final String bpmnProcessId,
+            final String propertyName) {
+
+          return false;
+
+        }
+
+        @Override
+        public Object resolveWorkflowAggregateProperty(
+            final String workflowModuleId,
+            final String bpmnProcessId,
+            final String workflowAggregateId,
+            final String propertyName) {
+
+          return null;
+
+        }
+
+        @Override
+        public boolean workflowTaskHandlerExists(
+            final String workflowModuleId,
+            final String bpmnProcessId,
+            final String taskDefinitionOrActivityId) {
+
+          return false;
+
+        }
+
+        @Override
+        public Map<String, Object> syncedWorkflowAggregateValues(
+            final String workflowModuleId,
+            final String bpmnProcessId,
+            final String workflowAggregateId,
+            final io.vanillabp.integration.adapter.spi.AggregateSyncMode adapterDefault) {
+
+          return Map.of();
+
+        }
+
+        @Override
+        public String resolveWorkflowAggregateIdName(
+            final String workflowModuleId,
+            final String bpmnProcessId) {
+
+          return "id";
+
+        }
+
+      };
+
+      assertTrue(
+          untouched.taskParameterNames(MODULE, PROCESS, "withBindings").isEmpty(),
+          "the SPI method is additive: an adapter which never heard of it keeps the behaviour it had");
+
+    }
+
+  }
+
   @Nested
   @DisplayName("Wiring validation")
   class WiringValidation {

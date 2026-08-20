@@ -236,6 +236,44 @@ public interface WorkflowTaskInvoker {
       String taskDefinitionOrActivityId);
 
   /**
+   * The process variables the <code>&#64;WorkflowTask</code> method(s) serving the
+   * given task definition (or BPMN activity ID) read with
+   * <code>&#64;TaskParam</code> - the names as the annotation spells them.
+   * <p>
+   * A <code>&#64;TaskParam</code> is how the application reads what the BPMS
+   * GENERATED on this path: a value an input or output mapping produced, the result
+   * of a script or a decision, something the model computed rather than the
+   * workflow aggregate holds. A BPMS which hands its worker a variable payload has
+   * to know these names to keep that payload down to what is actually read, and the
+   * core is the only place they exist - the adapter sees a
+   * {@link TaskInvocationContext#getTaskParameter(String)} call one name at a time,
+   * and only once the delivery is already there.
+   * <p>
+   * Several methods may serve one element (different process versions, story 48), so
+   * the answer is the UNION of their parameters: the delivery has to satisfy
+   * whichever of them runs. The names are sorted and duplicate-free, which is what a
+   * subscription comparing itself across restarts needs (a Camunda 8 job stream is
+   * equivalent to another one only if the fetched variables match).
+   * <p>
+   * The default answers nothing, which switches the derivation off rather than
+   * making an adapter fetch an incomplete list.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param taskDefinitionOrActivityId The task definition or BPMN activity ID
+   * @return The declared parameter names, sorted; empty if no method is registered
+   *         or none of them declares a <code>&#64;TaskParam</code>
+   */
+  default Collection<String> taskParameterNames(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String taskDefinitionOrActivityId) {
+
+    return java.util.List.of();
+
+  }
+
+  /**
    * Whether two BPMN processes of one workflow module work on the SAME workflow
    * aggregate - which is what the declaration says: one class declares the process
    * to be started as its {@code bpmnProcess} and the others as
