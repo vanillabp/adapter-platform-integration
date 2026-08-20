@@ -170,6 +170,10 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                                 Duration timeToLive) implements QuarkusMigrationAdapterProperties.WorkflowAdapterCacheProperties {
   }
 
+  private record MetricsProperties(
+                                   Duration gaugeCache) implements QuarkusMigrationAdapterProperties.MetricsProperties {
+  }
+
   private record Properties(
                             Optional<List<String>> prioritizedAdapters,
                             Optional<String> resourcesLocation,
@@ -178,7 +182,8 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                             QuarkusMigrationAdapterProperties.PhaseTwoOutboxProperties outbox,
                             QuarkusMigrationAdapterProperties.WorkflowAdapterCacheProperties workflowAdapterCache,
                             QuarkusMigrationAdapterProperties.TransactionsProperties transactions,
-                            QuarkusMigrationAdapterProperties.DeliveryProperties delivery) implements QuarkusMigrationAdapterProperties {
+                            QuarkusMigrationAdapterProperties.DeliveryProperties delivery,
+                            QuarkusMigrationAdapterProperties.MetricsProperties metrics) implements QuarkusMigrationAdapterProperties {
 
     /**
      * Without a transaction and without a delivery section.
@@ -192,7 +197,7 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
         final QuarkusMigrationAdapterProperties.WorkflowAdapterCacheProperties workflowAdapterCache) {
 
       this(
-          prioritizedAdapters, resourcesLocation, adapters, workflowModules, outbox, workflowAdapterCache, null, null);
+          prioritizedAdapters, resourcesLocation, adapters, workflowModules, outbox, workflowAdapterCache, null, null, null);
 
     }
 
@@ -209,7 +214,25 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
         final QuarkusMigrationAdapterProperties.TransactionsProperties transactions) {
 
       this(
-          prioritizedAdapters, resourcesLocation, adapters, workflowModules, outbox, workflowAdapterCache, transactions, null);
+          prioritizedAdapters, resourcesLocation, adapters, workflowModules, outbox, workflowAdapterCache, transactions, null, null);
+
+    }
+
+    /**
+     * Without a metrics section.
+     */
+    private Properties(
+        final Optional<List<String>> prioritizedAdapters,
+        final Optional<String> resourcesLocation,
+        final Map<String, QuarkusMigrationAdapterProperties.AdapterConfiguration> adapters,
+        final Map<String, QuarkusMigrationAdapterProperties.WorkflowModuleProperties> workflowModules,
+        final QuarkusMigrationAdapterProperties.PhaseTwoOutboxProperties outbox,
+        final QuarkusMigrationAdapterProperties.WorkflowAdapterCacheProperties workflowAdapterCache,
+        final QuarkusMigrationAdapterProperties.TransactionsProperties transactions,
+        final QuarkusMigrationAdapterProperties.DeliveryProperties delivery) {
+
+      this(
+          prioritizedAdapters, resourcesLocation, adapters, workflowModules, outbox, workflowAdapterCache, transactions, delivery, null);
 
     }
 
@@ -344,6 +367,38 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     final var coreDefaults = new io.vanillabp.integration.adapter.migration.config.WorkflowAdapterCacheProperties();
     assertEquals(coreDefaults.getMaxEntries(), mappedDefaults.getMaxEntries());
     assertEquals(coreDefaults.getTimeToLive(), mappedDefaults.getTimeToLive());
+
+  }
+
+  @Test
+  @DisplayName("Story 92: the interface's @WithDefault gauge-cache equals the core default")
+  public void metricsDefaultsMatchCoreDefaults() {
+
+    final var config = new SmallRyeConfigBuilder()
+        .withMapping(QuarkusMigrationAdapterProperties.class)
+        .build();
+    final var mappedDefaults = QuarkusMigrationAdapterPropertiesMapper.INSTANCE
+        .toCore(
+            config
+                .getConfigMapping(QuarkusMigrationAdapterProperties.class)
+                .metrics());
+
+    final var coreDefaults = new io.vanillabp.integration.adapter.migration.config.MetricsProperties();
+    assertEquals(coreDefaults.getGaugeCache(), mappedDefaults.getGaugeCache());
+
+  }
+
+  @Test
+  @DisplayName("Story 92: a configured gauge-cache travels into the core model")
+  public void configuredGaugeCacheTravels() {
+
+    final var properties = new Properties(
+        Optional.empty(), Optional.empty(), Map.of(), Map
+            .of(), null, null, null, null, new MetricsProperties(Duration.ofSeconds(30)));
+
+    final var core = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(properties);
+
+    assertEquals(Duration.ofSeconds(30), core.getMetrics().getGaugeCache());
 
   }
 

@@ -22,11 +22,20 @@ import jakarta.inject.Singleton;
 @ApplicationScoped
 public class VanillaBpMetricsProducer {
 
+  /**
+   * @param properties The VanillaBP configuration, carrying how long the measurement of
+   *          a gauge which has to ask somebody is reused
+   * @return The meters of deliveries and outbox
+   */
   @Produces
   @Singleton
-  public MicrometerVanillaBpMetrics vanillaBpMetrics() {
+  public MicrometerVanillaBpMetrics vanillaBpMetrics(
+      final io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties properties) {
 
-    return new MicrometerVanillaBpMetrics();
+    return new MicrometerVanillaBpMetrics(
+        properties
+            .getMetrics()
+            .resolvedGaugeCache());
 
   }
 
@@ -63,9 +72,7 @@ public class VanillaBpMetricsProducer {
           .forEach(outbox -> metrics
               .registerPendingOutboxEntries(
                   storeNameOf(outbox),
-                  () -> outbox
-                      .pendingCalls()
-                      .orElse(0)));
+                  outbox::pendingCalls));
     }
 
   }

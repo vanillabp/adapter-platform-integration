@@ -1059,6 +1059,37 @@ does is inside it, and nothing had to be repeated per BPMS.
   On Quarkus the gauges are registered by a `StartupEvent` observer running AFTER the outbox
   dispatchers, because a store asked before its table exists cannot count.
 
+### Reading a metric must not cost anything
+
+A counter is a number we already hold. A gauge is a question asked at the moment somebody
+collects, and `outbox.pending` asks a database. Prometheus collects every fifteen seconds by
+default, a dashboard collects alongside it, and every instance answers each of them - so a
+gauge which queries turns watching a system into load on it. Nobody expects looking to be
+expensive, which is exactly why it has to be designed in rather than remembered.
+
+`CachedGaugeValue` (adapter SPI, `io.vanillabp.integration.adapter.spi.observability`) is how
+it is kept: it holds one measurement for `vanillabp.metrics.gauge-cache` (`MetricsProperties`,
+default ten seconds, `PT0S` switches the holding off for a test which needs the real value).
+
+Three decisions inside it are worth knowing before changing it:
+
+- It sits in the adapter SPI, not in this module's runtime. A BPMS adapter registers gauges of
+  its own and owes the same promise, and the adapters depend on the SPI. What does NOT belong
+  in it is a value already in memory - a counter, the free permits of a semaphore - because
+  holding those would only make them stale. Camunda 8's execution slots are that case.
+- Concurrent collectors are serialized on a lock rather than allowed to race. The second
+  collector waits for the first one's answer and then finds it fresh, so eight collectors at
+  the same moment are one query and not eight. Handing the second one a stale value instead
+  would be cheaper and was rejected: on the first collection there is nothing stale to hand
+  out, and the wait is bounded by the query the first collector is already paying for.
+- A measurement which throws is answered as absent for the rest of the window and taken again
+  in the next one. Not caching the failure would hammer a database which is down; caching it
+  forever would poison the gauge. The exception never leaves the class, because a metric must
+  not be the reason an application fails.
+
+The wrapping happens in `MicrometerVanillaBpMetrics#registerPendingOutboxEntries`, not in the
+platform modules and not in the stores. One place, so a store cannot forget.
+
 ## Modules
 
 1. **business-spi:** (artifact `io.vanillabp:vanillabp-integration-spi`)<br>

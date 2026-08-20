@@ -28,11 +28,22 @@ BPMS' own delivery id. VanillaBP restores the previous values afterwards and tou
 other key, so an existing log configuration keeps working; a pattern to paste is in the
 wiki page.
 
+One property comes with this, and it exists to keep a promise rather than to offer a
+choice: `vanillabp.metrics.gauge-cache` (default `PT10S`) is how long the measurement of a
+gauge which has to ask somebody is reused. Counting the waiting outbox entries is a
+database query, a gauge is read on every collection, and every instance of your application
+answers every collector separately - so without holding, a dashboard would turn watching
+the outbox into load on it. Ten seconds is one collection interval, a little under
+Prometheus' default scrape. `PT0S` measures on every collection, which is what a test wants.
+
 **Only relevant for adapters and for stores of your own:**
 `AdapterDeploymentService.checkHealth()` and `PhaseTwoOutbox.pendingCalls()` are new
 `default` methods contributing nothing, so existing implementations stay valid. An adapter
 which contributes no health is absent from the endpoint rather than reported as healthy,
-and a store which cannot count its waiting entries publishes no gauge.
+and a store which cannot count its waiting entries publishes no gauge. An adapter
+registering a gauge whose value costs a query wraps it in
+`io.vanillabp.integration.adapter.spi.observability.CachedGaugeValue`, which is the class
+behind the property above; a gauge reading something already in memory needs none of it.
 
 ## A workflow which ended can release its delivery records (2026-08-19)
 

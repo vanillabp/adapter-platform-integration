@@ -95,6 +95,14 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   private DeliveryProperties delivery = new DeliveryProperties();
 
   /**
+   * What VanillaBP publishes as metrics (properties section
+   * <code>vanillabp.metrics</code>) - today only how long the measurement of a gauge
+   * which has to ask somebody is reused.
+   */
+  @Builder.Default
+  private MetricsProperties metrics = new MetricsProperties();
+
+  /**
    * Derived view of {@link #getAdapters()}: adapter ID mapped to the adapter's type.
    * An adapter entry without an explicit {@link AdapterConfigProperties#getType()
    * type} defaults to its ID being the type.
@@ -1000,6 +1008,11 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       workflowAdapterCache = new WorkflowAdapterCacheProperties();
     }
     workflowAdapterCache.validate();
+    if (metrics == null) {
+      // a binder mapping an absent section onto null must not cost the defaults
+      metrics = new MetricsProperties();
+    }
+    metrics.validate();
     validateMaxTaskAge();
 
     if (knownWorkflowModuleIds.isEmpty()) {

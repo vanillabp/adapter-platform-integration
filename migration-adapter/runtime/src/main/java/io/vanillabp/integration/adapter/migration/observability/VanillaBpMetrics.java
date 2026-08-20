@@ -1,6 +1,7 @@
 package io.vanillabp.integration.adapter.migration.observability;
 
-import java.util.function.LongSupplier;
+import java.util.OptionalLong;
+import java.util.function.Supplier;
 
 /**
  * What VanillaBP counts and measures while it delivers work, expressed without any
@@ -207,13 +208,22 @@ public interface VanillaBpMetrics {
    * Registers where the number of waiting outbox entries is read from. Called once
    * per outbox store by the platform integration, for the stores which can count
    * them.
+   * <p>
+   * Counting them is a QUERY, and a gauge is read on every collection, so the
+   * implementation is expected to hold one measurement for
+   * <code>vanillabp.metrics.gauge-cache</code> rather than to ask on every collection
+   * (see
+   * {@link io.vanillabp.integration.adapter.spi.observability.CachedGaugeValue}). A
+   * measurement which could not be taken stays {@link OptionalLong#empty()} all the way
+   * to the backend, where it is a gap rather than a zero.
    *
    * @param store The name of the outbox store, used as the <code>store</code> tag
-   * @param pending Reports the number of entries waiting to be dispatched
+   * @param pending Reports the number of entries waiting to be dispatched, empty where
+   *          the store cannot say right now
    */
   default void registerPendingOutboxEntries(
       final String store,
-      final LongSupplier pending) {
+      final Supplier<OptionalLong> pending) {
 
   }
 

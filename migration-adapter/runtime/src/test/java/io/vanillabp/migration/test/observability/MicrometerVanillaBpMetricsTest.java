@@ -166,10 +166,14 @@ public class MicrometerVanillaBpMetricsTest {
   public void pendingOutboxEntriesAreGauged() {
 
     final var pending = new java.util.concurrent.atomic.AtomicLong(3);
-    final var metrics = new MicrometerVanillaBpMetrics();
+    // no holding period, so the test sees what the store says right now
+    final var metrics = new MicrometerVanillaBpMetrics(java.time.Duration.ZERO);
 
     // registered BEFORE the registry exists - which is what a startup does
-    metrics.registerPendingOutboxEntries("JdbcPhaseTwoOutbox", pending::get);
+    metrics
+        .registerPendingOutboxEntries(
+            "JdbcPhaseTwoOutbox",
+            () -> java.util.OptionalLong.of(pending.get()));
 
     final var registry = new SimpleMeterRegistry();
     metrics.bindTo(registry);
@@ -192,6 +196,56 @@ public class MicrometerVanillaBpMetricsTest {
                 .gauge()
                 .value(),
             "a gauge reports what the store says now, not what it said at startup");
+
+  }
+
+  @Test
+  @DisplayName("Reading the pending gauge does not query the store on every collection")
+  public void thePendingGaugeIsHeldBetweenCollections() {
+
+    final var queries = new java.util.concurrent.atomic.AtomicInteger();
+    final var metrics = new MicrometerVanillaBpMetrics(java.time.Duration.ofMinutes(5));
+    metrics
+        .registerPendingOutboxEntries(
+            "JdbcPhaseTwoOutbox",
+            () -> java.util.OptionalLong.of(queries.incrementAndGet()));
+
+    final var registry = new SimpleMeterRegistry();
+    metrics.bindTo(registry);
+    final var gauge = registry
+        .get(VanillaBpMetrics.OUTBOX_PENDING)
+        .gauge();
+
+    Assertions.assertEquals(1.0, gauge.value());
+    Assertions.assertEquals(1.0, gauge.value());
+    Assertions.assertEquals(1.0, gauge.value());
+
+    Assertions
+        .assertEquals(
+            1,
+            queries.get(),
+            "a dashboard next to a scrape must not turn watching the outbox into load on it");
+
+  }
+
+  @Test
+  @DisplayName("A store which cannot say leaves a gap rather than reporting zero")
+  public void anUnavailableStoreReportsNoMeasurement() {
+
+    final var metrics = new MicrometerVanillaBpMetrics(java.time.Duration.ZERO);
+    metrics.registerPendingOutboxEntries("JdbcPhaseTwoOutbox", java.util.OptionalLong::empty);
+
+    final var registry = new SimpleMeterRegistry();
+    metrics.bindTo(registry);
+
+    Assertions
+        .assertTrue(
+            Double
+                .isNaN(registry
+                    .get(VanillaBpMetrics.OUTBOX_PENDING)
+                    .gauge()
+                    .value()),
+            "a zero would be a claim nobody checked");
 
   }
 

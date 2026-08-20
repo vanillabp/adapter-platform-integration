@@ -23,6 +23,8 @@ import io.vanillabp.adapter.dummy.springboot.DummyAdapterConfiguration;
 import io.vanillabp.adapter.dummy.springboot.deployment.DeploymentService;
 import io.vanillabp.adapter.dummy.springboot.deployment.DummyHealthSource;
 import io.vanillabp.adapter.dummy.springboot.processservice.DummyAdapterProcessServiceConfiguration;
+import io.vanillabp.integration.adapter.migration.config.MetricsProperties;
+import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.observability.DeliveryMdc;
 import io.vanillabp.integration.adapter.migration.observability.MicrometerVanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
@@ -440,11 +442,9 @@ public class ObservabilityTest {
 
   }
 
-  @Test
-  @DisplayName("Without Micrometer the application boots and reports no metrics")
-  public void withoutMicrometerNoMeters() {
+  private ApplicationContextRunner contextRunner() {
 
-    new ApplicationContextRunner()
+    return new ApplicationContextRunner()
         .withPropertyValues("spring.config.location=classpath:application.yaml")
         .withInitializer(new ConfigDataApplicationContextInitializer())
         .withUserConfiguration(WorkflowModuleConfiguration.class, TestPersistenceConfiguration.class)
@@ -453,7 +453,72 @@ public class ObservabilityTest {
                 .of(
                     DummyAdapterConfiguration.class, DummyAdapterProcessServiceConfiguration.class,
                     WorkflowModuleAutoConfiguration.class,
-                    SpringBootMigrationAdapterAutoConfiguration.class))
+                    SpringBootMigrationAdapterAutoConfiguration.class));
+
+  }
+
+  @Test
+  @DisplayName("How long a gauge's measurement is held is configured and validated at startup")
+  public void theGaugeCacheIsBoundAndValidated() {
+
+    contextRunner()
+        .run(context -> Assertions
+            .assertEquals(
+                MetricsProperties.DEFAULT_GAUGE_CACHE,
+                context
+                    .getBean(MigrationAdapterProperties.class)
+                    .getMetrics()
+                    .resolvedGaugeCache(),
+                "an unconfigured application holds a measurement for one collection interval"));
+
+    contextRunner()
+        .withPropertyValues("vanillabp.metrics.gauge-cache=PT0S")
+        .run(context -> Assertions
+            .assertEquals(
+                java.time.Duration.ZERO,
+                context
+                    .getBean(MigrationAdapterProperties.class)
+                    .getMetrics()
+                    .resolvedGaugeCache(),
+                "zero is how a test asks for the real value on every collection"));
+
+    contextRunner()
+        .withPropertyValues("vanillabp.metrics.gauge-cache=-PT1S")
+        .run(context -> {
+          final var failure = context.getStartupFailure();
+          Assertions.assertNotNull(failure, "a negative span has to end the boot");
+          Assertions
+              .assertTrue(
+                  messagesOf(failure).contains(MetricsProperties.GAUGE_CACHE_PROPERTY),
+                  "and the message has to name the property but got: "
+                      + messagesOf(failure));
+        });
+
+  }
+
+  /**
+   * The messages along the chain of causes - a startup failure wraps the guiding one.
+   */
+  private static String messagesOf(
+      final Throwable failure) {
+
+    final var messages = new StringBuilder();
+    for (var cause = failure; cause != null; cause = cause.getCause() == cause
+        ? null
+        : cause.getCause()) {
+      messages
+          .append(cause.getMessage())
+          .append('\n');
+    }
+    return messages.toString();
+
+  }
+
+  @Test
+  @DisplayName("Without Micrometer the application boots and reports no metrics")
+  public void withoutMicrometerNoMeters() {
+
+    contextRunner()
         .withClassLoader(new FilteredClassLoader(MeterRegistry.class))
         .run(context -> {
 

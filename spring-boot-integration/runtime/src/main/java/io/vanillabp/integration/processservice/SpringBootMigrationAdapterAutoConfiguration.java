@@ -349,13 +349,19 @@ public class SpringBootMigrationAdapterAutoConfiguration {
      * it hands it to the election cache's meters - nothing of VanillaBP asks for a
      * registry itself.
      *
+     * @param properties The VanillaBP configuration, carrying how long the measurement
+     *          of a gauge which has to ask somebody is reused
      * @return The metrics of deliveries and outbox
      */
     @Bean
     @ConditionalOnMissingBean
-    public io.vanillabp.integration.adapter.migration.observability.MicrometerVanillaBpMetrics vanillaBpMetrics() {
+    public io.vanillabp.integration.adapter.migration.observability.MicrometerVanillaBpMetrics vanillaBpMetrics(
+        final io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties properties) {
 
-      return new io.vanillabp.integration.adapter.migration.observability.MicrometerVanillaBpMetrics();
+      return new io.vanillabp.integration.adapter.migration.observability.MicrometerVanillaBpMetrics(
+          properties
+              .getMetrics()
+              .resolvedGaugeCache());
 
     }
 
@@ -389,9 +395,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
                   outbox
                       .getClass()
                       .getSimpleName(),
-                  () -> outbox
-                      .pendingCalls()
-                      .orElse(0)));
+                  outbox::pendingCalls));
 
     }
 
