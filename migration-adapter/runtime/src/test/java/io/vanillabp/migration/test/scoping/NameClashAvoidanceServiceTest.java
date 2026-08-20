@@ -12,7 +12,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mockito;
+import org.slf4j.LoggerFactory;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
@@ -366,6 +370,47 @@ public class NameClashAvoidanceServiceTest {
     Mockito
         .verify(prefixing, Mockito.never())
         .warnAboutUnscopedIdentifiers(Mockito.anyString(), Mockito.anyBoolean());
+
+  }
+
+  @Test
+  @DisplayName("The report of the adapter names the property keys of both ways out")
+  public void theReportNamesThePropertyKeys() {
+
+    // the SPI's own text, not a mock: it is the only place a developer learns that
+    // nothing keeps the identifiers of two workflow modules apart, and it is useless
+    // if the keys in it are wrong
+    @SuppressWarnings("unchecked")
+    final AdapterDeploymentService<Object, Object> adapter = Mockito
+        .mock(AdapterDeploymentService.class, Mockito.withSettings().defaultAnswer(Mockito.CALLS_REAL_METHODS));
+    Mockito.lenient().doReturn(ADAPTER).when(adapter).getAdapterId();
+    Mockito.lenient().doReturn(NameClashAvoidance.NONE).when(adapter).defaultNameClashAvoidance();
+
+    final var root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
+    final var recorded = new ListAppender<ILoggingEvent>();
+    recorded.start();
+    root.addAppender(recorded);
+    try {
+      serviceWith(null, adapter).modeFor(MODULE, PROCESS, ADAPTER);
+    } finally {
+      root.detachAppender(recorded);
+    }
+
+    final var reported = recorded.list
+        .stream()
+        .map(ILoggingEvent::getFormattedMessage)
+        .collect(java.util.stream.Collectors.joining("\n"));
+    assertTrue(reported.contains(MODULE), reported);
+    assertTrue(
+        reported.contains("vanillabp.adapters.%s.name-clash-avoidance: use-prefix".formatted(ADAPTER)),
+        reported);
+    assertTrue(
+        reported.contains("vanillabp.adapters.%s.name-clash-avoidance: by-adapter".formatted(ADAPTER)),
+        reported);
+    assertTrue(
+        reported.contains("vanillabp.workflow-modules.%s.adapters.%s.name-clash-avoidance".formatted(MODULE, ADAPTER)),
+        reported);
+    assertTrue(reported.contains("nothing is configured"), reported);
 
   }
 

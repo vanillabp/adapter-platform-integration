@@ -256,6 +256,18 @@ public class BpmsInitiatedStartTest {
 
   }
 
+  static class CheckedExceptionService {
+
+    @WorkflowStartedByBpms
+    public void fail(
+        final Aggregate aggregate) throws Exception {
+
+      throw new Exception("a checked one");
+
+    }
+
+  }
+
   static class NullReturningService {
 
     @WorkflowStartedByBpms
@@ -759,6 +771,32 @@ public class BpmsInitiatedStartTest {
 
     assertEquals("no aggregate today", exception.getMessage());
     // the transaction stub propagates instead of committing: nothing was saved
+    assertTrue(persistence.aggregates.isEmpty());
+
+  }
+
+  @Test
+  @DisplayName("A checked exception of the application is reported naming the method which threw it")
+  public void aCheckedExceptionIsReportedNamingTheMethod() {
+
+    final var persistence = stringIdPersistence();
+    final var testee = registry(new TransactionRunnerStub());
+    testee
+        .registerWorkflowService(
+            MODULE, PROCESS, CheckedExceptionService.class, CheckedExceptionService::new, type -> null,
+            processService(persistence, Aggregate.class));
+
+    final var exception = assertThrows(
+        IllegalStateException.class,
+        () -> testee
+            .startWorkflowByBpms(
+                MODULE, PROCESS, context(BpmsStartTrigger.Kind.TIMER, TIMER_EVENT, Map.of())));
+
+    // reflection hands a checked exception over wrapped, and the wrapper says nothing
+    // about where it came from - the method's name is what the developer needs
+    assertTrue(exception.getMessage().contains(CheckedExceptionService.class.getName()), exception.getMessage());
+    assertTrue(exception.getMessage().contains("checked exception"), exception.getMessage());
+    assertEquals("a checked one", exception.getCause().getMessage());
     assertTrue(persistence.aggregates.isEmpty());
 
   }

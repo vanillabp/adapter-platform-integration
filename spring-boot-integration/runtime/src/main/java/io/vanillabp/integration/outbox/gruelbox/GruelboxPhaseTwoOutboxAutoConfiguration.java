@@ -248,7 +248,7 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
    * @throws IllegalStateException If several transaction managers exist and none is
    *           named <code>transactionManager</code>
    */
-  private static PlatformTransactionManager selectJdbcTransactionManager(
+  static PlatformTransactionManager selectJdbcTransactionManager(
       final Map<String, PlatformTransactionManager> transactionManagers) {
 
     if (transactionManagers.size() == 1) {
@@ -331,11 +331,14 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
   /**
    * Detects the gruelbox SQL dialect from the data source's metadata.
    *
+   * Package-private so the mapping and the message for an unsupported database can be
+   * asserted without a database of each product.
+   *
    * @param dataSource The data source used for the outbox table
    * @return The dialect
    * @throws IllegalStateException If the database is not supported by gruelbox
    */
-  private static Dialect detectDialect(
+  static Dialect detectDialect(
       final DataSource dataSource) {
 
     final String productName;

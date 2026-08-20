@@ -20,6 +20,18 @@
       <scope>compile</scope>
     </dependency>
     <dependency>
+      <groupId>io.vanillabp.adapter</groupId>
+      <artifactId>migration-adapter-spi</artifactId>
+      <version>${project.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.vanillabp</groupId>
+      <artifactId>vanillabp-integration-spi</artifactId>
+      <version>${project.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
       <groupId>io.vanillabp</groupId>
       <artifactId>vanillabp-quarkus-integration</artifactId>
       <version>${project.version}</version>
@@ -31,6 +43,10 @@
       <version>${project.version}</version>
       <scope>compile</scope>
     </dependency>
+    <!-- 'vanillabp-quarkus-support' is deliberately NOT aggregated: its only class is an
+         UNSELECTED CDI alternative which exists so an IDE can resolve injection points of
+         ProcessService. Unselected alternatives are ignored for bean resolution, so the class
+         is unreachable at runtime by design and no test could ever cover it. -->
     <dependency>
       <groupId>io.vanillabp.quarkus</groupId>
       <artifactId>main-integration-test</artifactId>
@@ -70,6 +86,36 @@
     <dependency>
       <groupId>io.vanillabp.quarkus</groupId>
       <artifactId>outbox-mongo-integration-tests</artifactId>
+      <version>${project.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.vanillabp.quarkus</groupId>
+      <artifactId>deployment-integration-tests</artifactId>
+      <version>${project.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.vanillabp.quarkus</groupId>
+      <artifactId>default-persistence-tests</artifactId>
+      <version>${project.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.vanillabp.quarkus</groupId>
+      <artifactId>default-persistence-mongo-tests</artifactId>
+      <version>${project.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.vanillabp.quarkus</groupId>
+      <artifactId>mixed-persistence-tests</artifactId>
+      <version>${project.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.vanillabp.quarkus</groupId>
+      <artifactId>noindex-integration-test</artifactId>
       <version>${project.version}</version>
       <scope>compile</scope>
     </dependency>

@@ -11,6 +11,7 @@ import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mockito;
 
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
@@ -412,6 +413,29 @@ public class SendSignalTest {
     // the failure is reported, but only after every other BPMS was asked
     assertTrue(exception.getMessage().contains("first-adapter"));
     assertEquals(List.of("OrderReceived"), reachable.phaseOne);
+
+  }
+
+  @Test
+  @DisplayName("An adapter whose BPMS has no signals says so, naming both ways out")
+  public void anAdapterWithoutSignalsSaysSo() {
+
+    // the SPI's own default, not a stub: an adapter which never implemented signals
+    // inherits it, and its text is the only thing the developer gets
+    @SuppressWarnings("unchecked")
+    final MigratableProcessService<Object> signalless = Mockito
+        .mock(MigratableProcessService.class, Mockito.withSettings().defaultAnswer(Mockito.CALLS_REAL_METHODS));
+    Mockito.lenient().doReturn("first-adapter").when(signalless).getAdapterId();
+
+    final var exception = assertThrows(
+        UnsupportedOperationException.class,
+        () -> processService(List.of(signalless), null).sendSignal("OrderReceived"));
+
+    assertTrue(exception.getMessage().contains("first-adapter"), exception.getMessage());
+    assertTrue(exception.getMessage().contains("OrderReceived"), exception.getMessage());
+    assertTrue(exception.getMessage().contains(MODULE), exception.getMessage());
+    assertTrue(exception.getMessage().contains("prioritized adapters"), exception.getMessage());
+    assertTrue(exception.getMessage().contains("message"), exception.getMessage());
 
   }
 

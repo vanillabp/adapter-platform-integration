@@ -217,6 +217,46 @@ public class PhaseTwoRouterTest {
   }
 
   @Test
+  @DisplayName("A broadcast signal is dispatched by module and process, without touching an aggregate ID")
+  public void signalIsDispatchedWithoutAnAggregateId() {
+
+    registerProcessService();
+
+    // a signal is not about one workflow: the entry carries no aggregate ID, and
+    // asking for one would fail the dispatch of an entry which is perfectly fine
+    testee
+        .dispatch(PhaseTwoCall
+            .of(
+                PhaseTwoOperation.SEND_SIGNAL, "test-module", "TestProcess", null, "test-adapter", Map
+                    .of(PhaseTwoCall.ARG_SIGNAL_NAME, "OrderCancelled")));
+
+    verify(processService).sendSignalPhaseTwo("OrderCancelled", "test-adapter");
+    verify(processService, Mockito.never()).convertAggregateId(Mockito.any());
+
+  }
+
+  @Test
+  @DisplayName("A broadcast signal for a removed BPMN process names the signal and where the entry stays")
+  public void signalForAnUnknownProcessFailsGuiding() {
+
+    registerProcessService();
+
+    final var exception = assertThrowsExactly(
+        IllegalStateException.class,
+        () -> testee
+            .dispatch(PhaseTwoCall
+                .of(
+                    PhaseTwoOperation.SEND_SIGNAL, "test-module", "RemovedProcess", null, "test-adapter", Map
+                        .of(PhaseTwoCall.ARG_SIGNAL_NAME, "OrderCancelled"))));
+
+    assertTrue(exception.getMessage().contains("OrderCancelled"), exception.getMessage());
+    assertTrue(exception.getMessage().contains("RemovedProcess"), exception.getMessage());
+    assertTrue(exception.getMessage().contains("test-module"), exception.getMessage());
+    assertTrue(exception.getMessage().contains("outbox store"), exception.getMessage());
+
+  }
+
+  @Test
   @DisplayName("An operation of an extension is dispatched to the extension's own handler")
   public void extensionOperationIsDispatchedToItsHandler() {
 

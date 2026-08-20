@@ -72,6 +72,10 @@
          3.37.1 manages 1.16.6, Spring Boot 4.1.0 manages 1.17.0) -->
     <micrometer.version>1.16.6</micrometer.version>
     <testcontainers.version>2.0.5</testcontainers.version>
+    <!-- the line each platform's aggregated report has to stay above, in PERCENT of
+         covered instructions - enforced by test-coverage-report/coverage-gate -->
+    <coverage.threshold.spring-boot>90</coverage.threshold.spring-boot>
+    <coverage.threshold.quarkus>90</coverage.threshold.quarkus>
   </properties>
 
   <dependencyManagement>
