@@ -895,7 +895,8 @@ public class MigrationProcessService<A> {
     deliveryLog.record(
         new TaskDelivery(
             deliveryKey, workflowModuleId, bpmnProcessId, context.getWorkflowAggregateId(), context
-                .getTaskDefinition(), outcome.kind().name(), outcome.errorCode(), outcome.errorName()));
+                .getTaskDefinition(), outcome.kind().name(), outcome.errorCode(), outcome
+                    .errorName(), java.time.Instant.now()));
 
   }
 
@@ -914,7 +915,7 @@ public class MigrationProcessService<A> {
           .of(
               switch (WorkflowTaskOutcome.Kind.valueOf(delivery.outcome())) {
                 case COMPLETED -> WorkflowTaskOutcome.completed();
-                case COMPLETION_PENDING -> WorkflowTaskOutcome.completionPending();
+                case COMPLETION_PENDING -> stillOpen(delivery, context);
                 case BPMN_ERROR -> WorkflowTaskOutcome
                     .bpmnError(delivery.bpmnErrorCode(), delivery.bpmnErrorName());
               });
@@ -929,6 +930,98 @@ public class MigrationProcessService<A> {
           delivery.outcome());
       return java.util.Optional.empty();
     }
+
+  }
+
+  /**
+   * How long a task left open by a <code>&#64;TaskId</code> handler has been waiting,
+   * and whether that passed the maximum age configured for it
+   * (<code>vanillabp.delivery.max-task-age</code>, resolvable per workflow module,
+   * workflow and task).
+   * <p>
+   * This is the one place in VanillaBP which can answer the question at all. The record
+   * was written when the handler ran and it is what answers every redelivery of that
+   * task, so the distance between its timestamp and now IS the age of the open task -
+   * no clock, no scheduler and no second bookkeeping are involved, and the granularity
+   * follows whatever rhythm the BPMS redelivers in.
+   * <p>
+   * Reporting is one WARN per task, not one per redelivery: a task open for a year would
+   * otherwise fill the log with the same line every time its lock is renewed. The memory
+   * of what was already reported is bounded and lives in this process service - losing
+   * an entry costs one repeated WARN, which is why it needs nothing durable.
+   *
+   * @param delivery The record answering this delivery
+   * @param context The invocation context of the repeated delivery
+   * @return The outcome, carrying the age and whether it passed the maximum
+   */
+  private WorkflowTaskOutcome stillOpen(
+      final TaskDelivery delivery,
+      final TaskInvocationContext context) {
+
+    if (delivery.recordedAt() == null) {
+      // a store written before the timestamp was part of the record - the task is
+      // open, its age is simply not known
+      return WorkflowTaskOutcome.completionPending();
+    }
+    final var openFor = java.time.Duration.between(delivery.recordedAt(), java.time.Instant.now());
+    final var maxTaskAge = properties == null
+        ? io.vanillabp.integration.adapter.migration.config.DeliveryProperties.DEFAULT_MAX_TASK_AGE
+        : properties.maxTaskAge(workflowModuleId, bpmnProcessId, context.getTaskDefinition());
+    final var exceeded = !maxTaskAge.isZero() && (openFor.compareTo(maxTaskAge) > 0);
+    if (exceeded && reportTaskAgeOnce(delivery.deliveryKey())) {
+      log.warn(
+          """
+              Task '{}' of BPMN process '{}' of workflow module '{}' has been waiting for its \
+              asynchronous completion for {}, which is longer than the {} configured by '{}' for it. \
+              Workflow aggregate: '{}'. Either the application still owes this task a \
+              'ProcessService#completeTask' respectively 'cancelTask', or nobody will ever send it \
+              and the workflow waits forever. Raise the maximum age where such a wait is legitimate \
+              (it may be set per workflow module, workflow and task), or set it to '0' to switch \
+              this report off.""",
+          context.getTaskDefinition(),
+          bpmnProcessId,
+          workflowModuleId,
+          openFor,
+          maxTaskAge,
+          MigrationAdapterProperties.maxTaskAgeProperty(),
+          context.getWorkflowAggregateId());
+    }
+    return WorkflowTaskOutcome.completionPending(openFor, exceeded);
+
+  }
+
+  /**
+   * How many open tasks this process service remembers having reported. A bound rather
+   * than a growing set: the entry is a hint, and forgetting one costs one repeated WARN.
+   */
+  private static final int REPORTED_TASK_AGES = 1000;
+
+  private final java.util.Map<String, Boolean> reportedTaskAges = java.util.Collections
+      .synchronizedMap(new java.util.LinkedHashMap<String, Boolean>(16, 0.75f, true) {
+
+        private static final long serialVersionUID = 1L;
+
+        @Override
+        protected boolean removeEldestEntry(
+            final java.util.Map.Entry<String, Boolean> eldest) {
+
+          return size() > REPORTED_TASK_AGES;
+
+        }
+
+      });
+
+  /**
+   * Whether the given task's age is reported now - <code>true</code> exactly once per
+   * delivery key, which is once per task.
+   *
+   * @param deliveryKey The identity of the delivery answering this task
+   * @return Whether to log the report
+   */
+  private boolean reportTaskAgeOnce(
+      final String deliveryKey) {
+
+    return reportedTaskAges.putIfAbsent(deliveryKey, Boolean.TRUE) == null;
 
   }
 

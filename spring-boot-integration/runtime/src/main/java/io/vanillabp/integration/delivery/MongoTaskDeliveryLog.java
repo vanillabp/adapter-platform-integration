@@ -89,7 +89,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
         .map(document -> new TaskDelivery(
             document.getId(), document.getWorkflowModuleId(), document.getBpmnProcessId(), document
                 .getAggregateId(), document.getTaskDefinition(), document
-                    .getOutcome(), document.getBpmnErrorCode(), document.getBpmnErrorName()));
+                    .getOutcome(), document.getBpmnErrorCode(), document
+                        .getBpmnErrorName(), document.getRecordedAt()));
 
   }
 
@@ -115,7 +116,9 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
           new TaskDeliveryDocument(
               delivery.deliveryKey(), delivery.workflowModuleId(), delivery.bpmnProcessId(), delivery
                   .workflowAggregateId(), delivery.taskDefinition(), delivery
-                      .outcome(), delivery.bpmnErrorCode(), delivery.bpmnErrorName(), Instant.now()),
+                      .outcome(), delivery.bpmnErrorCode(), delivery.bpmnErrorName(), delivery.recordedAt() == null
+                          ? Instant.now()
+                          : delivery.recordedAt()),
           collection);
       compensateUnlessCommitted(delivery);
       return true;

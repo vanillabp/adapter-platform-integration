@@ -473,6 +473,16 @@ public interface QuarkusMigrationAdapterProperties {
      */
     Optional<Boolean> releaseOnWorkflowEnd();
 
+    /**
+     * How long a task may stay open before VanillaBP reports it. The default is thirty
+     * days and reporting only, see the core's
+     * {@link io.vanillabp.integration.adapter.migration.config.DeliveryProperties#getMaxTaskAge()}.
+     *
+     * @return The setting, an empty Optional meaning "whatever the next less specific
+     *         level says"
+     */
+    Optional<Duration> maxTaskAge();
+
   }
 
   /**
@@ -499,6 +509,13 @@ public interface QuarkusMigrationAdapterProperties {
      */
     Map<String, TaskProperties> tasks();
 
+    /**
+     * Overrides <code>vanillabp.delivery</code> for this workflow.
+     *
+     * @return The delivery configuration of this workflow
+     */
+    DeliveryProperties delivery();
+
   }
 
   /**
@@ -511,6 +528,14 @@ public interface QuarkusMigrationAdapterProperties {
      * The properties of adapters specific to this task.
      */
     Map<String, AdapterProperties> adapters();
+
+    /**
+     * Overrides <code>vanillabp.delivery</code> for this task - the most specific level
+     * the maximum age of an open task may be set at.
+     *
+     * @return The delivery configuration of this task
+     */
+    DeliveryProperties delivery();
 
   }
 

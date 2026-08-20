@@ -31,4 +31,12 @@ public class TaskAdapterProperties {
   @Builder.Default
   private Map<String, AdapterProperties> adapters = Map.of();
 
+  /**
+   * Overrides <code>vanillabp.delivery</code> for this task - the most specific level
+   * the maximum age of an open task may be set at, which is where it belongs: the one
+   * task waiting for a signature is the reason the whole application does not get a
+   * longer age.
+   */
+  private DeliveryProperties delivery;
+
 }

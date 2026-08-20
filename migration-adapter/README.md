@@ -437,6 +437,44 @@ since nothing of an ended instance can be redelivered.
 - The retention stays for everything the end of a workflow does not cover: workflows
   still running, aggregates whose workflow never ends, stores without the release.
 
+#### How old an open task is (story 89)
+
+A `@TaskId` handler leaves its task open, and from there on nothing asks whether the
+completion is still coming: the BPMS keeps redelivering the task, the core answers every
+redelivery from the record it wrote when the handler ran, and a Camunda 8 adapter renews
+the job's lock on the way. A workflow waiting forever therefore looks exactly like one
+waiting legitimately.
+
+- `TaskDelivery` carries `recordedAt`, the moment the delivery was processed. Every store
+  persisted it from the beginning, because the retention deletes by it; what story 89 added
+  is the SPI component and the mapping in the four stores. The core sets the value when it
+  builds the record, so the timestamp is the processing moment and not whatever a store's
+  clock says.
+- `MigrationProcessService.stillOpen` measures the distance to now on every redelivery
+  answered with `COMPLETION_PENDING` and compares it to
+  `MigrationAdapterProperties.maxTaskAge(module, process, task)`
+  (`vanillabp.delivery.max-task-age`, default `P30D`, `0` switching it off). The property is
+  adapter-INDEPENDENT like the rest of `DeliveryProperties`, and it resolves globally, per
+  workflow module, per workflow and per task, most specific first - which is why
+  `WorkflowAdapterProperties` and `TaskAdapterProperties` gained a `delivery` section.
+- The report is one WARN per delivery key rather than per redelivery, remembered in a
+  bounded LRU map of the process service. Forgetting an entry costs one repeated message,
+  which is why nothing durable is involved.
+- What happens beyond the report belongs to the BPMS. `WorkflowTaskOutcome` therefore
+  carries `openFor` and `maxAgeExceeded`, and an adapter which has somewhere better to put
+  the finding reads them - Camunda 8 stops renewing the lock and fails the job into an
+  incident where `async-task-max-age-action` says so. An adapter without a lock to renew
+  ignores both and the report is all that happens.
+- Deliberately no callback into the application. An application which knows its task is
+  obsolete has `ProcessService#cancelTask`; one which lost track of it could not answer a
+  liveness question truthfully anyway.
+- Residual: the record itself still expires with `vanillabp.outbox.retention`, and its
+  timestamp is never refreshed (refreshing it would erase the very age this measures). A
+  task open longer than the retention therefore loses the record which answers its
+  redelivery, exactly as before this story - the story shrinks the exposure from the old
+  fourteen-day horizon to the retention, it does not remove it. Roadmap entry 97 carries
+  the decision about what to do with a pending record when the retention passes.
+
 #### Process versions (`version` attribute)
 
 The `version` attribute of `@WorkflowTask`, `@WorkflowStartedByBpms` and

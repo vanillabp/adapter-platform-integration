@@ -35,4 +35,12 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   @Builder.Default
   private Map<String, TaskAdapterProperties> tasks = Map.of();
 
+  /**
+   * Overrides <code>vanillabp.delivery</code> for this workflow. Only the settings which
+   * belong to a single workflow are read here - the maximum age of an open task, since
+   * one process may wait for a partner for weeks while every other one is done in
+   * minutes.
+   */
+  private DeliveryProperties delivery;
+
 }
