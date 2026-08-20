@@ -66,6 +66,14 @@ public class WorkflowTaskHandler {
   private final java.util.Set<io.vanillabp.spi.service.TaskEvent.Event> subscribedEvents;
 
   /**
+   * The process variables the method reads with <code>&#64;TaskParam</code>, sorted and
+   * duplicate-free (story 99). The core reports them to the adapters through
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker#taskParameterNames},
+   * so a BPMS delivering a variable payload knows what to put into it.
+   */
+  private final List<String> taskParameters;
+
+  /**
    * Whether some BPMN task matched this handler during wiring validation - input
    * for the per-module unwired-methods check (a handler registered under several
    * BPMN processes via {@code secondaryBpmnProcesses} legitimately matches in only
@@ -82,7 +90,8 @@ public class WorkflowTaskHandler {
       final String activityId,
       final List<VersionRange> versions,
       final boolean asynchronousTask,
-      final java.util.Set<io.vanillabp.spi.service.TaskEvent.Event> subscribedEvents) {
+      final java.util.Set<io.vanillabp.spi.service.TaskEvent.Event> subscribedEvents,
+      final List<String> taskParameters) {
 
     this.workflowServiceClass = workflowServiceClass;
     this.method = method;
@@ -93,6 +102,16 @@ public class WorkflowTaskHandler {
     this.versions = versions;
     this.asynchronousTask = asynchronousTask;
     this.subscribedEvents = subscribedEvents;
+    this.taskParameters = taskParameters;
+
+  }
+
+  /**
+   * @return The process variables the method reads with <code>&#64;TaskParam</code>
+   */
+  List<String> getTaskParameters() {
+
+    return taskParameters;
 
   }
 

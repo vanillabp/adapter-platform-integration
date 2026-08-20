@@ -788,6 +788,32 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
 
   }
 
+  @Override
+  public Collection<String> taskParameterNames(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String taskDefinitionOrActivityId) {
+
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    if (entry == null) {
+      return List.of();
+    }
+    // the UNION over every method serving this element: methods wired to one BPMN
+    // element differ in the process version they serve (story 48), and the delivery
+    // has to satisfy whichever of them runs. Sorted, because a subscription which
+    // names variables is compared to itself across restarts
+    return entry.handlers
+        .stream()
+        .filter(candidate -> sameWiring(candidate.getTaskDefinition(),
+            taskDefinitionOrActivityId) || sameWiring(candidate.getActivityId(), taskDefinitionOrActivityId))
+        .map(WorkflowTaskHandler::getTaskParameters)
+        .flatMap(List::stream)
+        .distinct()
+        .sorted()
+        .toList();
+
+  }
+
   /**
    * The sentence a delivery from an OUTFADED version deserves - without it the
    * developer reads "no method matches" and looks for a wiring defect, while the

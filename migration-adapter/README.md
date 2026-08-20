@@ -363,6 +363,36 @@ and that adapter does not process workflows). A failure of the first-priority ad
 always fails the boot, regardless of the policy, because new workflows could not be
 started otherwise.
 
+#### The variables a handler reads (`taskParameterNames`, story 99)
+
+A `@TaskParam` takes what the BPMS GENERATED on this path through the model: the target of
+an input or output mapping, the result of a script or a decision, a value the model
+computed rather than the workflow aggregate holds. Most applications need none of it, and
+it can never be ruled out, because a model may produce a value the application has to see.
+
+Those names exist in exactly one place, and it is here. `WorkflowTaskScanner` reads them
+off the annotations while it builds the parameter binders, `WorkflowTaskHandler` keeps them
+and `WorkflowTaskRegistry#taskParameterNames(module, process, taskDefinitionOrActivityId)`
+reports the union over every handler serving that element - a union, because methods
+serving different process versions share one BPMN element and whichever of them runs has to
+find its variable. The list is sorted and duplicate-free, which a subscription comparing
+itself across restarts needs (a Camunda 8 job stream is equivalent to another one only when
+the fetched variables match).
+
+Why the core has to say it: at runtime an adapter pulls the values one name at a time
+through `TaskInvocationContext#getTaskParameter(name)`, and by then the delivery has already
+happened. A BPMS which ships a variable payload with every delivery has to know the names
+BEFORE it subscribes, and the only other place it could look is the BPMN model - which is a
+guess, since the model may declare names nobody reads and a handler may read a name no model
+declares. Camunda 8 derived the list that way between stories 93 and 99; the model scan is
+gone with this story rather than kept as a second source for one answer.
+
+The method is a `default` returning an empty collection, so an adapter which never heard of
+it keeps the behaviour it had. BPMS-initiated starts deliberately have no counterpart: the
+core copies EVERY variable such a start carries into the workflow aggregate it builds
+(`BpmsInitiatedStartExecution#writeVariables`), so a start worker has to ask for all of them
+regardless of what any `@TaskParam` names.
+
 #### Deliveries VanillaBP already processed (`TaskDeliveryLog` SPI, story 51)
 
 The inbound counterpart of the outbox. A remote BPMS reports the outcome AFTER the
