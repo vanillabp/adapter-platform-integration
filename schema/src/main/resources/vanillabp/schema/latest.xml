@@ -66,6 +66,9 @@
     <comment>
       The log of processed task deliveries: what a BPMS repeating a delivery is answered from. The
       delivery key is the BPMS' identity of the delivery, 512 characters for the same index reason.
+      RECORDED_AT is the moment the handler ran and never moves, because the age of a task left open
+      is measured from it; LAST_SEEN_AT is the moment the BPMS last redelivered that task, and the
+      retention deletes by it, so a task which is still being redelivered keeps its record.
     </comment>
     <createTable tableName="${vanillabp.delivery.table}">
       <column name="DELIVERY_KEY" type="VARCHAR(512)">
@@ -85,6 +88,9 @@
       <column name="BPMN_ERROR_CODE" type="VARCHAR(255)" />
       <column name="BPMN_ERROR_NAME" type="VARCHAR(255)" />
       <column name="RECORDED_AT" type="TIMESTAMP">
+        <constraints nullable="false" />
+      </column>
+      <column name="LAST_SEEN_AT" type="TIMESTAMP">
         <constraints nullable="false" />
       </column>
     </createTable>

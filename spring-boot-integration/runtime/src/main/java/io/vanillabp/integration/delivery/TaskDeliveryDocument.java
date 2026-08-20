@@ -46,8 +46,16 @@ public class TaskDeliveryDocument {
   private String bpmnErrorName;
 
   /**
-   * When the delivery was processed - the retention cleanup deletes by this field.
+   * When the delivery was processed. The age of an open task is measured from here, so
+   * this value never moves.
    */
   private Instant recordedAt;
+
+  /**
+   * When the BPMS last redelivered the task this record answers, which is what the
+   * retention cleanup deletes by (story 97). Written together with
+   * {@link #recordedAt} and moved forward while an open task keeps being redelivered.
+   */
+  private Instant lastSeenAt;
 
 }

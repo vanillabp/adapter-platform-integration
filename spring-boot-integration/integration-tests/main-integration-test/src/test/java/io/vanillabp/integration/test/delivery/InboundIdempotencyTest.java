@@ -150,7 +150,8 @@ public class InboundIdempotencyTest {
                   new BpmnTaskSpec("Activity_Process", "processTask"),
                   new BpmnTaskSpec("Activity_Error", "raiseBpmnError"),
                   new BpmnTaskSpec("Activity_Fail", "failTask"),
-                  new BpmnTaskSpec("Activity_Undeduplicated", "undeduplicatedTask"))
+                  new BpmnTaskSpec("Activity_Undeduplicated", "undeduplicatedTask"),
+                  new BpmnTaskSpec("Activity_Await", "awaitCompletion"))
               : List.of();
 
     }

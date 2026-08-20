@@ -669,7 +669,7 @@ public class MigrationProcessService<A> {
       if (deliveryLog != null) {
         final var recorded = deliveryLog
             .recordedDelivery(deliveryKey)
-            .flatMap(delivery -> recordedOutcomeOf(delivery, context));
+            .flatMap(delivery -> recordedOutcomeOf(deliveryLog, delivery, context));
         if (recorded.isPresent()) {
           log.info(
               "Skipping the repeated delivery of task '{}' (BPMN process '{}' of workflow module "
@@ -993,6 +993,7 @@ public class MigrationProcessService<A> {
    * any log at all, and the WARN says why.
    */
   private java.util.Optional<WorkflowTaskOutcome> recordedOutcomeOf(
+      final TaskDeliveryLog deliveryLog,
       final TaskDelivery delivery,
       final TaskInvocationContext context) {
 
@@ -1001,7 +1002,7 @@ public class MigrationProcessService<A> {
           .of(
               switch (WorkflowTaskOutcome.Kind.valueOf(delivery.outcome())) {
                 case COMPLETED -> WorkflowTaskOutcome.completed();
-                case COMPLETION_PENDING -> stillOpen(delivery, context);
+                case COMPLETION_PENDING -> stillOpen(deliveryLog, delivery, context);
                 case BPMN_ERROR -> WorkflowTaskOutcome
                     .bpmnError(delivery.bpmnErrorCode(), delivery.bpmnErrorName());
               });
@@ -1035,14 +1036,25 @@ public class MigrationProcessService<A> {
    * otherwise fill the log with the same line every time its lock is renewed. The memory
    * of what was already reported is bounded and lives in this process service - losing
    * an entry costs one repeated WARN, which is why it needs nothing durable.
+   * <p>
+   * This is also the one place which knows that a record is still in use, whichever BPMS
+   * redelivered: the store is told so (story 97) and keeps the record alive as long as
+   * redeliveries keep coming, while the timestamp this age is measured from stays where
+   * it is. The store collects the key rather than writing it here - the redelivery runs
+   * in the transaction of the workflow aggregate, and an UPDATE per renewal of every open
+   * task has no business in it.
    *
+   * @param deliveryLog The store the record came from
    * @param delivery The record answering this delivery
    * @param context The invocation context of the repeated delivery
    * @return The outcome, carrying the age and whether it passed the maximum
    */
   private WorkflowTaskOutcome stillOpen(
+      final TaskDeliveryLog deliveryLog,
       final TaskDelivery delivery,
       final TaskInvocationContext context) {
+
+    deliveryLog.stillOpen(delivery.deliveryKey());
 
     if (delivery.recordedAt() == null) {
       // a store written before the timestamp was part of the record - the task is

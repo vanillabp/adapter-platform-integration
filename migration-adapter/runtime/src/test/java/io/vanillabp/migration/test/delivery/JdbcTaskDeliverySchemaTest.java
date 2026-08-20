@@ -20,6 +20,11 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * Story 75: an application which creates its schema with Liquibase or Flyway switches VanillaBP's
  * table creation off. A missing table is then a deployment which forgot to apply the migration, and
  * that has to be said at startup - not at the first delivery, hours later.
+ * <p>
+ * Story 97 added a column to the table, which is the case the check of story 75 did not catch: a
+ * table created by an earlier version of VanillaBP exists, so the check passed and the missing
+ * column surfaced at the first delivery. The columns added later are therefore verified as well,
+ * whether the application hands the schema over or lets VanillaBP create it.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class JdbcTaskDeliverySchemaTest {
@@ -88,10 +93,66 @@ public class JdbcTaskDeliverySchemaTest {
                   BPMN_ERROR_CODE VARCHAR(255), \
                   BPMN_ERROR_NAME VARCHAR(255), \
                   RECORDED_AT TIMESTAMP NOT NULL, \
+                  LAST_SEEN_AT TIMESTAMP NOT NULL, \
                   CONSTRAINT PK_VANILLABP_TASK_DELIVERY PRIMARY KEY (DELIVERY_KEY))""");
     }
 
     assertDoesNotThrow(() -> storeOn("changelog").validateSchemaExists());
+
+  }
+
+  /**
+   * The table as VanillaBP created it before the second timestamp existed - the case a check
+   * looking at tables only cannot see.
+   */
+  private static void createTableOfAnEarlierVersion(
+      final String database) throws SQLException {
+
+    try (Connection connection = h2(database).acquire(); var statement = connection.createStatement()) {
+      statement
+          .executeUpdate(
+              """
+                  CREATE TABLE VANILLABP_TASK_DELIVERY (\
+                  DELIVERY_KEY VARCHAR(512) PRIMARY KEY, \
+                  WORKFLOW_MODULE_ID VARCHAR(255) NOT NULL, \
+                  BPMN_PROCESS_ID VARCHAR(255) NOT NULL, \
+                  AGGREGATE_ID VARCHAR(1024), \
+                  TASK_DEFINITION VARCHAR(255), \
+                  OUTCOME VARCHAR(32) NOT NULL, \
+                  BPMN_ERROR_CODE VARCHAR(255), \
+                  BPMN_ERROR_NAME VARCHAR(255), \
+                  RECORDED_AT TIMESTAMP NOT NULL)""");
+    }
+
+  }
+
+  @Test
+  @DisplayName("A table of an earlier version ends the startup naming the column and the way to add it")
+  public void aMissingColumnIsReportedAtStartup() throws SQLException {
+
+    createTableOfAnEarlierVersion("outdated");
+
+    final var failure = assertThrows(
+        IllegalStateException.class,
+        () -> storeOn("outdated").validateSchemaExists());
+
+    assertTrue(failure.getMessage().contains("LAST_SEEN_AT"), failure.getMessage());
+    assertTrue(failure.getMessage().contains("ALTER TABLE VANILLABP_TASK_DELIVERY"), failure.getMessage());
+    assertTrue(failure.getMessage().contains("io.vanillabp:vanillabp-schema"), failure.getMessage());
+
+  }
+
+  @Test
+  @DisplayName("Even where VanillaBP creates the schema itself, a table of an earlier version is named")
+  public void aMissingColumnIsReportedWhereTheTableIsCreated() throws SQLException {
+
+    createTableOfAnEarlierVersion("outdated-created");
+
+    final var failure = assertThrows(
+        IllegalStateException.class,
+        () -> storeOn("outdated-created").createSchemaIfNotExists());
+
+    assertTrue(failure.getMessage().contains("LAST_SEEN_AT"), failure.getMessage());
 
   }
 

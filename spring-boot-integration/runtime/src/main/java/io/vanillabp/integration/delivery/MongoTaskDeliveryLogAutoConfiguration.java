@@ -81,10 +81,12 @@ public class MongoTaskDeliveryLogAutoConfiguration {
 
     return () -> {
       if (vanillaBpProperties.getOutbox().isCreateSchema()) {
+        // the retention deletes by the moment a record was last seen (story 97), so that is
+        // the field the cleanup scans
         mongoTemplate
             .indexOps(MongoTaskDeliveryLog.DEFAULT_COLLECTION_NAME)
             .createIndex(new Index()
-                .on("recordedAt", Sort.Direction.ASC));
+                .on("lastSeenAt", Sort.Direction.ASC));
       }
       deliveryLog.start();
     };

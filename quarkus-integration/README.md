@@ -207,6 +207,9 @@ manages an aggregate.
   `vanillabp.outbox.create-schema` is disabled) and to start the core's
   `TaskDeliveryRetentionCleanup`, which calls `cleanUpExpiredRecords` per
   `vanillabp.outbox.retention`.
+- The same run refreshes the records of the tasks which are still open (story 97): the core
+  collects the keys the BPMS redelivered, `cleanUpExpiredRecords` writes them before it
+  deletes anything, and the JDBC store batches while the MongoDB one bulk-writes.
 
 ## What is published where (story 92)
 

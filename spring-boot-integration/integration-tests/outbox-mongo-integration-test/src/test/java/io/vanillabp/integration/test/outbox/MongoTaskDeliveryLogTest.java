@@ -222,4 +222,80 @@ public class MongoTaskDeliveryLogTest {
 
   }
 
+  /**
+   * A record written the given time ago - both of its timestamps, exactly as the insert
+   * writes them.
+   */
+  private TaskDelivery backdated(
+      final String deliveryKey,
+      final java.time.Duration age) {
+
+    return new TaskDelivery(
+        deliveryKey, "test-module", "TestProcess", "4711", "awaitCompletion", "COMPLETION_PENDING", null, null, java.time.Instant
+            .now()
+            .minus(age));
+
+  }
+
+  @Test
+  @DisplayName("Story 97: the record of a task which is still redelivered survives the retention")
+  public void theRecordOfAnOpenTaskSurvivesTheRetention() {
+
+    // this context runs with a retention of zero, which cannot tell a record kept from one
+    // deleted - a log of its own on the same collection brings the hour this needs
+    final var anHourOfRetention = new MongoTaskDeliveryLog(
+        mongoTemplate, COLLECTION, java.time.Duration.ofHours(1));
+
+    transactionTemplate.executeWithoutResult(status -> {
+      deliveryLog.record(backdated("job-open", java.time.Duration.ofHours(2)));
+      deliveryLog.record(backdated("job-forgotten", java.time.Duration.ofHours(2)));
+    });
+
+    // the BPMS redelivered the open task, which is what the core reports to the store
+    anHourOfRetention.stillOpen("job-open");
+    final var deleted = anHourOfRetention.cleanUpExpiredRecords();
+
+    assertEquals(1, deleted);
+    assertTrue(
+        deliveryLog.recordedDelivery("job-open").isPresent(),
+        "a task which is still being redelivered keeps the record answering it");
+    assertTrue(
+        deliveryLog.recordedDelivery("job-forgotten").isEmpty(),
+        "a record nobody has seen for a whole retention expires");
+
+    final var kept = mongoTemplate
+        .findById("job-open", io.vanillabp.integration.delivery.TaskDeliveryDocument.class, COLLECTION);
+    assertTrue(
+        kept.getLastSeenAt().isAfter(kept.getRecordedAt()),
+        "the moment it was last seen moved, the moment it was recorded did not");
+    assertTrue(
+        kept.getRecordedAt().isBefore(java.time.Instant.now().minus(java.time.Duration.ofMinutes(90))),
+        "so the age of the open task is still measured from the moment the handler ran");
+
+  }
+
+  @Test
+  @DisplayName("Story 97: more open tasks than one block are refreshed in blocks")
+  public void moreOpenTasksThanOneBlockAreRefreshed() {
+
+    final var anHourOfRetention = new MongoTaskDeliveryLog(
+        mongoTemplate, COLLECTION, java.time.Duration.ofHours(1));
+    final var tasks = io.vanillabp.integration.adapter.migration.delivery.OpenTaskTouches.BLOCK_SIZE + 100;
+
+    transactionTemplate.executeWithoutResult(status -> {
+      for (var i = 0; i < tasks; i++) {
+        deliveryLog.record(backdated("job-"
+            + i, java.time.Duration.ofHours(2)));
+      }
+    });
+    for (var i = 0; i < tasks; i++) {
+      anHourOfRetention.stillOpen("job-"
+          + i);
+    }
+
+    assertEquals(0, anHourOfRetention.cleanUpExpiredRecords(), "every one of them survives");
+    assertEquals(tasks, mongoTemplate.getCollection(COLLECTION).countDocuments());
+
+  }
+
 }

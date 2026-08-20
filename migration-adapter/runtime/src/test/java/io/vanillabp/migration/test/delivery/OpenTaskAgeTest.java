@@ -154,6 +154,14 @@ public class OpenTaskAgeTest {
 
     final List<String> recorded = new ArrayList<>();
 
+    final List<String> stillOpen = new ArrayList<>();
+
+    @Override
+    public void stillOpen(
+        final String deliveryKey) {
+      stillOpen.add(deliveryKey);
+    }
+
     @Override
     public Optional<TaskDelivery> recordedDelivery(
         final String deliveryKey) {
@@ -509,6 +517,32 @@ public class OpenTaskAgeTest {
           .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
           .forEach(messages::add);
     }
+
+  }
+
+  @Test
+  @DisplayName("Story 97: every redelivery tells the store the record is still in use, and the age stays put")
+  public void aRedeliveryKeepsTheRecordAliveWithoutMovingTheAge() {
+
+    final var testee = registry(properties(Duration.ofHours(1), null, null, null));
+    storeAggregate("4715");
+
+    testee.invokeWorkflowTask(MODULE, PROCESS, delivery("4715", "job-1"));
+    assertTrue(deliveryLog.stillOpen.isEmpty(), "the delivery which ran the handler is no redelivery");
+
+    deliveryLog.backdateBy(Duration.ofHours(3));
+    final var second = testee.invokeWorkflowTask(MODULE, PROCESS, delivery("4715", "job-1"));
+    final var third = testee.invokeWorkflowTask(MODULE, PROCESS, delivery("4715", "job-1"));
+
+    assertEquals(
+        2,
+        deliveryLog.stillOpen.size(),
+        "every redelivery of the open task reaches the store, which is what keeps its record");
+    assertEquals(deliveryLog.recorded.getFirst(), deliveryLog.stillOpen.getFirst(), "under the recorded key");
+    assertEquals(deliveryLog.recorded.getFirst(), deliveryLog.stillOpen.getLast());
+    assertTrue(second.openFor().toHours() >= 3, "and the age keeps counting from the moment the handler ran");
+    assertTrue(third.openFor().toHours() >= 3);
+    assertTrue(third.maxAgeExceeded(), "so the maximum age still fires");
 
   }
 
