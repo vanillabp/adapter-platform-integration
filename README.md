@@ -80,9 +80,9 @@ Top-level modules (by directory name) are:
    Support for using VanillaBP in Quarkus applications. [Details...](./quarkus-integration)
 5. **test-coverage-report:**<br>
    A module that generates test coverage reports. Click the [platform's badge](#documentation-and-supported-platforms)  to open the respective report.
-   Its `coverage-gate` module is built last and breaks the build below the line (`coverage.threshold` in the root POM,
-   in percent of covered instructions - the same number the badge shows) or when a module produces coverage data no
-   aggregated report reads.
+   Its `coverage-gate` module is built last and breaks the build below the line
+   (`coverage.threshold.spring-boot` and `coverage.threshold.quarkus` in the root POM, in percent of covered
+   instructions - the same number the badge shows) or when a module produces coverage data no aggregated report reads.
 6. **test-utils:**<br>
    A small module providing utilities used by tests across all platforms.
 

@@ -32,7 +32,6 @@ public class CoverageGateTest {
 
   private static final Path ROOT = CoverageGate.repositoryRoot("coverage.repository.root");
 
-  private static final double THRESHOLD = Double.parseDouble(System.getProperty("coverage.threshold"));
 
   private static final List<Path> AGGREGATE_POMS = List
       .of(
@@ -65,7 +64,7 @@ public class CoverageGateTest {
   @DisplayName("The Spring Boot report is above the coverage threshold")
   public void theSpringBootReportIsAboveTheThreshold() {
 
-    assertAboveThreshold("Spring Boot", 0);
+    assertAboveThreshold("Spring Boot", 0, "coverage.threshold.spring-boot");
 
   }
 
@@ -73,13 +72,21 @@ public class CoverageGateTest {
   @DisplayName("The Quarkus report is above the coverage threshold")
   public void theQuarkusReportIsAboveTheThreshold() {
 
-    assertAboveThreshold("Quarkus", 1);
+    assertAboveThreshold("Quarkus", 1, "coverage.threshold.quarkus");
 
   }
 
+  /**
+   * The threshold is read per platform, because a repository may hold a different line
+   * on each of them. Where they differ, the lower one is a floor against regression and
+   * the reason belongs into the root POM next to the property.
+   */
   private void assertAboveThreshold(
       final String platform,
-      final int report) {
+      final int report,
+      final String thresholdProperty) {
+
+    final var threshold = Double.parseDouble(System.getProperty(thresholdProperty));
 
     final var coverage = CoverageGate
         .read(
@@ -90,14 +97,14 @@ public class CoverageGateTest {
             CoverageGate.Metric.INSTRUCTIONS);
 
     assertTrue(
-        coverage.percentage() >= THRESHOLD,
+        coverage.percentage() >= threshold,
         () -> """
             %s - below the %s %% VanillaBP measures per platform. Coverage is measured separately \
             per platform, so this platform's own tests have to close the gap: sort the per-package \
             numbers of the report's jacoco.csv by MISSED instructions, not by percentage, and put \
             the test where the uncovered code belongs. Code nobody can reach is dead and gets \
             deleted rather than covered."""
-            .formatted(coverage, THRESHOLD));
+            .formatted(coverage, threshold));
 
   }
 
