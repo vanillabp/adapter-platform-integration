@@ -70,6 +70,13 @@
       <scope>test</scope>
     </dependency>
     <dependency>
+      <!-- the health support the adapters' health indicator needs (optional in the
+           integration itself, see VanillaBpHealthIndicator) -->
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-health</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
       <groupId>io.vanillabp</groupId>
       <artifactId>test-utils</artifactId>
     </dependency>

@@ -370,8 +370,19 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                       supplierContext.bean(
                           io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics.class));
 
+              // what deliveries of this process are counted into (story 92); absent
+              // where the application brings no metrics backend
+              final var metrics = SpringBootMigrationAdapterAutoConfiguration
+                  .vanillaBpMetricsOf(
+                      supplierContext
+                          .beanProvider(
+                              io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.class));
+
               final var processServiceBean = new ProcessServiceSpringBean<A>(
                   workflowModuleId, bpmnProcessId, workflowAggregateType, properties, aggregatePersistenceAware, migratableProcessServices, phaseTwoOutboxResolver, phaseTwoRouter, workflowAdapterCache, taskDeliveryLogResolver, transactionRunnerResolver);
+              processServiceBean
+                  .getMigrationProcessService()
+                  .setMetrics(metrics);
 
               // register ALL classes declaring this aggregate under ALL their
               // declared BPMN process IDs: @WorkflowTask handlers per (module,
@@ -397,6 +408,7 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                       key -> {
                         final var secondaryProcessService = new MigrationProcessService<A>(
                             declaringModuleId, declaredProcessId, workflowAggregateType, properties, aggregatePersistenceAware, migratableProcessServices, phaseTwoOutboxResolver, workflowAdapterCache, taskDeliveryLogResolver, transactionRunnerResolver);
+                        secondaryProcessService.setMetrics(metrics);
                         if (phaseTwoRouter != null) {
                           phaseTwoRouter.register(secondaryProcessService);
                         }

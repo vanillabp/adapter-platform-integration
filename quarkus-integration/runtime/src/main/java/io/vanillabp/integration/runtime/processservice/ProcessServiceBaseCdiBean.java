@@ -157,6 +157,13 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
   @Inject
   Instance<io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics> workflowAdapterCacheStatistics;
 
+  /**
+   * What deliveries of this process are counted into (story 92); unsatisfied where
+   * the application uses no Micrometer extension.
+   */
+  @Inject
+  Instance<io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics> vanillaBpMetrics;
+
   @Getter
   MigrationProcessService<A> migrationProcessService;
 
@@ -225,6 +232,8 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
                 : null);
     this.migrationProcessService = new MigrationProcessService<>(
         getWorkflowModuleId(), getBpmnProcessId(), getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, phaseTwoOutboxResolver, electionCache, taskDeliveryLogResolver, transactionRunnerResolver);
+    this.migrationProcessService
+        .setMetrics(PhaseTwoRouterProducer.vanillaBpMetricsOf(vanillaBpMetrics));
 
     // register as phase-two dispatch target: outbox entries for this workflow
     // module/BPMN process are routed here after the local transaction was committed
@@ -282,6 +291,8 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
           key -> {
             final var secondaryProcessService = new MigrationProcessService<>(
                 moduleId, bpmnProcessId, getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, phaseTwoOutboxResolver, electionCache, taskDeliveryLogResolver, transactionRunnerResolver);
+            secondaryProcessService
+                .setMetrics(PhaseTwoRouterProducer.vanillaBpMetricsOf(vanillaBpMetrics));
             if (phaseTwoRouter.isResolvable()) {
               phaseTwoRouter
                   .get()

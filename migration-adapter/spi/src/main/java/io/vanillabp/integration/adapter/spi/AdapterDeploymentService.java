@@ -4,6 +4,7 @@ import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
 
+import io.vanillabp.integration.adapter.spi.health.AdapterHealth;
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
 
 /**
@@ -34,6 +35,38 @@ public interface AdapterDeploymentService<BPMN, PC> extends ExtensionWiringServi
    * @return The type of the adapter implementing this interface
    */
   String getAdapterType();
+
+  /**
+   * What this adapter can say about the BPMS it talks to right now, asked by the
+   * platform integration whenever a health endpoint is called (Spring Boot Actuator's
+   * health, Quarkus' readiness). The typical implementation is the cheapest question
+   * the BPMS answers - Camunda 8 asks the cluster for its topology, which is what
+   * Camunda's own starter does.
+   * <p>
+   * The default is <code>null</code>: an adapter which has nothing to check is
+   * ABSENT from the endpoint rather than reported as healthy, and an adapter written
+   * before this existed keeps working unchanged.
+   * <p>
+   * Two rules of the contract are worth repeating here, because they are easy to get
+   * wrong (see {@link AdapterHealth}):
+   * <ul>
+   * <li>an adapter whose connection is not configured yet answers
+   * {@link AdapterHealth.Status#UNKNOWN}, never {@link AdapterHealth.Status#DOWN} -
+   * the application booted with a guiding warning on purpose;</li>
+   * <li>the implementation must RETURN rather than throw, and it must come back
+   * within a bounded time - the platform calls it on the thread serving the health
+   * request. A failure to reach the BPMS is a {@link AdapterHealth.Status#DOWN} with
+   * the reason in the description, not an exception (the core turns a thrown one into
+   * {@link AdapterHealth.Status#DOWN} as a backstop).</li>
+   * </ul>
+   *
+   * @return What the adapter found, or <code>null</code> to contribute nothing
+   */
+  default AdapterHealth checkHealth() {
+
+    return null;
+
+  }
 
   /**
    * Reads the given BPMN input stream and transforms it into the model type.

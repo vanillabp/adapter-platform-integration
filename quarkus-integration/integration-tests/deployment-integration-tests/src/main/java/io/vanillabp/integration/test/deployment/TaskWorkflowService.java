@@ -57,6 +57,25 @@ public class TaskWorkflowService {
 
   }
 
+  /**
+   * What the logging context held while the handler ran - the assertion of the MDC
+   * VanillaBP puts around every delivery (story 92).
+   */
+  public static final java.util.Map<String, String> MDC_DURING_TASK = new java.util.concurrent.ConcurrentHashMap<>();
+
+  @WorkflowTask
+  public void recordMdc(
+      final TaskAggregate aggregate) {
+
+    MDC_DURING_TASK.clear();
+    final var context = org.slf4j.MDC.getCopyOfContextMap();
+    if (context != null) {
+      MDC_DURING_TASK.putAll(context);
+    }
+    aggregate.setStatus("mdc-recorded");
+
+  }
+
   @WorkflowTask
   public void failTask(
       final TaskAggregate aggregate) {

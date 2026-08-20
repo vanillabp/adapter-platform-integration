@@ -44,6 +44,41 @@ public class TaskProcessingWorkflowService {
 
   }
 
+  /**
+   * What the logging context held while the handler ran - the assertion of the MDC
+   * VanillaBP puts around every delivery (story 92). A map rather than a log line,
+   * because a test has to see the keys and not their rendering.
+   */
+  public static final java.util.Map<String, String> MDC_DURING_TASK = new java.util.concurrent.ConcurrentHashMap<>();
+
+  @WorkflowTask
+  public void recordMdc(
+      final TaskProcessingAggregate aggregate) {
+
+    captureMdc();
+    aggregate.setStatus("mdc-recorded");
+
+  }
+
+  @WorkflowTask
+  public void recordMdcAndFail(
+      final TaskProcessingAggregate aggregate) {
+
+    captureMdc();
+    throw new IllegalStateException("failed after recording the context");
+
+  }
+
+  private static void captureMdc() {
+
+    MDC_DURING_TASK.clear();
+    final var context = org.slf4j.MDC.getCopyOfContextMap();
+    if (context != null) {
+      MDC_DURING_TASK.putAll(context);
+    }
+
+  }
+
   @WorkflowTask
   public void failTask(
       final TaskProcessingAggregate aggregate) {

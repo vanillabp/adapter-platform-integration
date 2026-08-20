@@ -54,6 +54,26 @@ public final class PhaseTwoRouter {
    */
   private final TransactionRunner transactionRunner;
 
+  /**
+   * What the application counts about its outbox (story 92). Handed in by the
+   * platform integration;
+   * {@link io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics#NONE}
+   * for an application without a metrics backend.
+   */
+  private volatile io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics metrics = io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.NONE;
+
+  /**
+   * @param metrics What to count dispatches into, never <code>null</code>
+   */
+  public void setMetrics(
+      final io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics metrics) {
+
+    this.metrics = metrics == null
+        ? io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.NONE
+        : metrics;
+
+  }
+
   public PhaseTwoRouter() {
 
     this(new PhaseTwoOperationRegistry(), null);
@@ -187,14 +207,30 @@ public final class PhaseTwoRouter {
     // its own runner here as well, and an entry of an extension - which routes to no
     // process service - gets the platform's.
     final var runner = runnerFor(call);
-    if (runner == null) {
-      dispatch.dispatch(call, previouslyAttempted);
-      return;
+    metrics.outboxDispatchStarted(call.operation(), previouslyAttempted);
+    // story 92: whatever the dispatch logs - and a broken BPMS connection logs a lot -
+    // names the workflow it belongs to, exactly like a task delivery does
+    try (var ignored = io.vanillabp.integration.adapter.migration.observability.DeliveryMdc
+        .ofPhaseTwoDispatch(
+            call.adapterId(),
+            call.workflowModuleId(),
+            call.bpmnProcessId(),
+            call.workflowAggregateId())) {
+      if (runner == null) {
+        dispatch.dispatch(call, previouslyAttempted);
+        return;
+      }
+      runner.requireTransaction(() -> {
+        dispatch.dispatch(call, previouslyAttempted);
+        return null;
+      });
+    } catch (final RuntimeException e) {
+      metrics
+          .outboxDispatchFailed(
+              call.operation(),
+              io.vanillabp.integration.spi.PhaseTwoPermanentFailure.isPermanent(e));
+      throw e;
     }
-    runner.requireTransaction(() -> {
-      dispatch.dispatch(call, previouslyAttempted);
-      return null;
-    });
 
   }
 

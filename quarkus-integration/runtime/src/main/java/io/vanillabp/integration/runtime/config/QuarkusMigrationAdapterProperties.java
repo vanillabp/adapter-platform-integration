@@ -92,6 +92,13 @@ public interface QuarkusMigrationAdapterProperties {
   DeliveryProperties delivery();
 
   /**
+   * What VanillaBP publishes as metrics (story 92).
+   *
+   * @return The metrics configuration
+   */
+  MetricsProperties metrics();
+
+  /**
    * The adapter configuration. The properties in detail are defined by the
    * respective VanillaBP adapter Quarkus extension.
    */
@@ -399,6 +406,25 @@ public interface QuarkusMigrationAdapterProperties {
      */
     @WithDefault("PT1H")
     Duration timeToLive();
+
+  }
+
+  /**
+   * What VanillaBP publishes as metrics. There is one setting, and it exists because
+   * reading a metric must not cost anything worth noticing (story 92).
+   */
+  interface MetricsProperties {
+
+    /**
+     * How long the measurement of a gauge which has to ask somebody - the number of
+     * waiting outbox entries, for instance - is reused before it is taken again. Ten
+     * seconds is one collection interval, a little under Prometheus' default scrape;
+     * <code>PT0S</code> measures on every collection.
+     *
+     * @return The duration one measurement is held for
+     */
+    @WithDefault("PT10S")
+    Duration gaugeCache();
 
   }
 

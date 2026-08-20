@@ -12,6 +12,7 @@ import org.mapstruct.factory.Mappers;
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.DeliveryProperties;
+import io.vanillabp.integration.adapter.migration.config.MetricsProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.config.TaskAdapterProperties;
@@ -76,6 +77,9 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
   @Mapping(target = "maxTaskAge", qualifiedByName = "unwrapDuration")
   DeliveryProperties toCore(
       QuarkusMigrationAdapterProperties.DeliveryProperties deliveryProperties);
+
+  MetricsProperties toCore(
+      QuarkusMigrationAdapterProperties.MetricsProperties metricsProperties);
 
   @Mapping(target = "outfadedVersions", qualifiedByName = "unwrapOutfadedVersions")
   AdapterConfigProperties toCore(

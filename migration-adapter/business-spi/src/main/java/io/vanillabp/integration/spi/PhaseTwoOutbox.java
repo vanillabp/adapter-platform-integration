@@ -359,4 +359,23 @@ public interface PhaseTwoOutbox {
 
   }
 
+  /**
+   * How many entries are waiting to be dispatched right now (story 92). It is the
+   * number an operator looks at first when a BPMS is unreachable: phase two is where
+   * a broken connection piles up, and a rising figure says the application is fine
+   * while the BPMS is not.
+   * <p>
+   * The default is {@link java.util.OptionalLong#empty()}, which means "this store
+   * cannot say" - no meter is published then, which is honest, whereas a zero would
+   * be a claim. A store implementing it answers with a cheap query; it is called
+   * whenever the metrics backend collects, so an expensive scan does not belong here.
+   *
+   * @return The number of entries waiting, or empty if the store cannot count them
+   */
+  default java.util.OptionalLong pendingCalls() {
+
+    return java.util.OptionalLong.empty();
+
+  }
+
 }

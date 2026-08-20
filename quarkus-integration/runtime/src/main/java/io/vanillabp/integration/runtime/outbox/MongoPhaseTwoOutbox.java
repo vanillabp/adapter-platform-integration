@@ -86,6 +86,29 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
 
   }
 
+  /**
+   * Counts the entries waiting for their dispatch - a single count over the same
+   * collection the dispatcher polls.
+   */
+  @Override
+  public java.util.OptionalLong pendingCalls() {
+
+    if (!mongoClient.isResolvable()) {
+      return java.util.OptionalLong.empty();
+    }
+    try {
+      return java.util.OptionalLong
+          .of(dispatcher
+              .outboxCollection()
+              .countDocuments(new Document("status", STATUS_OPEN)));
+    } catch (final RuntimeException e) {
+      // a metric must never be the reason an application fails
+      log.debug("Could not count the pending entries of the MongoDB phase-two outbox", e);
+      return java.util.OptionalLong.empty();
+    }
+
+  }
+
   @Override
   public boolean schedule(
       final PhaseTwoCall call) {

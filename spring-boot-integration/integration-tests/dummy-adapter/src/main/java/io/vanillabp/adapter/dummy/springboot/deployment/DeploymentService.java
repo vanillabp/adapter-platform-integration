@@ -61,6 +61,22 @@ public class DeploymentService implements AdapterDeploymentService<Object, Objec
   private final ObjectProvider<DummyProcessVersionSource> processVersionSource;
 
   /**
+   * Test hook standing in for what a real adapter asks its BPMS (see
+   * {@link DummyHealthSource}).
+   */
+  private final ObjectProvider<DummyHealthSource> healthSource;
+
+  @Override
+  public io.vanillabp.integration.adapter.spi.health.AdapterHealth checkHealth() {
+
+    final var source = healthSource.getIfAvailable();
+    return source == null
+        ? null
+        : source.healthOf(adapterId);
+
+  }
+
+  /**
    * The versions of the deployed BPMN processes, cached like a real adapter caches
    * them - the test's {@link DummyProcessVersionSource} plays the BPMS query.
    */

@@ -59,7 +59,10 @@ class MongoDbSpringDataUtilTest {
   @EnableAutoConfiguration(
       exclude = {
           SslAutoConfiguration.class, // MongoDb is not available via SSL
-          WorkflowModuleAutoConfiguration.class, // see resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports
+          // ... and without it there are no SslBundles, which the health support wants
+          // to report on. It arrived with story 92 as an optional dependency of this
+          // module, so it is on this module's test classpath as well
+          org.springframework.boot.health.autoconfigure.application.SslHealthContributorAutoConfiguration.class, WorkflowModuleAutoConfiguration.class, // see resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports
           SpringBootMigrationAdapterAutoConfiguration.class // see resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports
       })
   @EnableMongoRepositories(

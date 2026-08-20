@@ -97,6 +97,29 @@ aggregate is detected once in `SpringPersistenceTechnology`, shared by both reso
   `SmartInitializingSingleton`, not while the bean is built - the DDL must not
   materialize the data source before the application's configuration is complete.
 
+## What is published where (story 92)
+
+Both contributions are optional dependencies of this module, so an application which brings
+neither boots unchanged.
+
+Metrics ride on `micrometer-core`. `MicrometerVanillaBpMetrics` is a bean of the nested
+`WorkflowAdapterCacheMetricsConfiguration`, conditional on the `MeterRegistry` class BY NAME:
+the annotation of a nested configuration class is read reflectively, so a class literal of an
+absent optional dependency would blow up before the condition is evaluated. The Actuator's
+metrics auto-configuration binds it like any other `MeterBinder`. The pending-entry gauges of
+the outbox stores are registered by a `SmartInitializingSingleton`, not while the beans are
+built: resolving the stores earlier would materialize persistence infrastructure before the
+application asked for it.
+
+Health rides on `spring-boot-health` (Spring Boot 4 moved `HealthIndicator` out of the
+Actuator artifact into that one). The bean is named `vanillabpHealthIndicator`, because the
+bean name minus the suffix is what names the health component, and it has to stay `vanillabp`.
+
+The process services get the metrics from `ProcessServiceBeanRegistrar` right after they are
+built, primary and secondary alike; `PhaseTwoRouter` gets them from the auto-configuration.
+A setter rather than another constructor parameter: the metrics exist once per application
+while process services exist per BPMN process, and that constructor is long enough.
+
 ## Noteworthy & Contributors
 
 [VanillaBP](https://www.github.com/vanillabp/spi-for-java) was developed by [Phactum](https://www.phactum.at) with the

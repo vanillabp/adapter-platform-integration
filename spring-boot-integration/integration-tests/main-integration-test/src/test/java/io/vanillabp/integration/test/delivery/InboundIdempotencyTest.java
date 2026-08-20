@@ -280,6 +280,14 @@ public class InboundIdempotencyTest {
     try (var testApp = buildTestApp(); var context = runTestApplication(testApp)) {
 
       final var dummyAdapter = context.getBean("DummyAdapter_DeploymentService_test", DeploymentService.class);
+
+      // story 92: a redelivery answered from the record is counted, because a rising
+      // rate means the BPMS hands work out again - usually too short a lock
+      final var registry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+      context
+          .getBean(io.vanillabp.integration.adapter.migration.observability.MicrometerVanillaBpMetrics.class)
+          .bindTo(registry);
+
       // (a) the same delivery twice: handler once, both answered COMPLETED
       storeAggregate("4711");
       final var first = dummyAdapter.invokeTask(MODULE, PROCESS, delivery("processTask", "4711", "job-1"));
@@ -323,6 +331,19 @@ public class InboundIdempotencyTest {
       dummyAdapter.invokeTask(MODULE, PROCESS, delivery("undeduplicatedTask", "4714", "job-5"));
       Assertions.assertEquals(2, DeliveryConfiguration.AGGREGATES.get("4714").getInvocations());
       Assertions.assertEquals(0, recordCount(context, "4714"));
+
+      // (e) what the metrics saw: exactly the two redeliveries answered from a record
+      // (a) and (b), and nothing for the deliveries which ran the handler
+      Assertions.assertEquals(
+          2.0,
+          registry
+              .get(
+                  io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.TASK_REDELIVERIES_DEDUPLICATED)
+              .counters()
+              .stream()
+              .mapToDouble(io.micrometer.core.instrument.Counter::count)
+              .sum(),
+          "a repeated delivery answered from the record is what this meter counts");
 
     }
 

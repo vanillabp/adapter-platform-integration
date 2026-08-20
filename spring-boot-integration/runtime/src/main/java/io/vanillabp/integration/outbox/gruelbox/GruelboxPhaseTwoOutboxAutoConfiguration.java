@@ -163,13 +163,26 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
 
   /**
    * @param transactionOutbox The gruelbox transaction outbox
+   * @param dataSource The data source holding gruelbox' table, used to count the
+   *          entries waiting for their dispatch (story 92)
+   * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree, naming the
+   *          table where the application configured one of its own
    * @return The {@link PhaseTwoOutbox} used by the process services
    */
   @Bean(DEFAULT_OUTBOX_BEAN_NAME)
   public GruelboxPhaseTwoOutbox vanillaBpGruelboxPhaseTwoOutbox(
-      @Qualifier(DEFAULT_TRANSACTION_OUTBOX_BEAN_NAME) final TransactionOutbox transactionOutbox) {
+      @Qualifier(DEFAULT_TRANSACTION_OUTBOX_BEAN_NAME) final TransactionOutbox transactionOutbox,
+      final DataSource dataSource,
+      final VanillaBpConfigurationProperties vanillaBpProperties) {
 
-    return new GruelboxPhaseTwoOutbox(transactionOutbox);
+    final var customTable = vanillaBpProperties
+        .getOutbox()
+        .getJdbc()
+        .getTable();
+    return new GruelboxPhaseTwoOutbox(
+        transactionOutbox, dataSource, customTable == null
+            ? DEFAULT_OUTBOX_TABLE_NAME
+            : customTable);
 
   }
 

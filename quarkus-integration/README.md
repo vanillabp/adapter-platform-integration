@@ -208,6 +208,29 @@ manages an aggregate.
   `TaskDeliveryRetentionCleanup`, which calls `cleanUpExpiredRecords` per
   `vanillabp.outbox.retention`.
 
+## What is published where (story 92)
+
+Both contributions follow the recipe the election cache's meters established: the runtime
+module declares an optional dependency (`micrometer-core`, `microprofile-health-api`), the
+producer references its types, and a build step registers the producer only when the matching
+EXTENSION is on the deployment classpath. The extension's processor class is the signal, not
+the presence of the API classes: those can arrive transitively without the extension, and then
+nothing produces the `MeterRegistry` the producer needs.
+
+- `VanillaBpMetricsBuildStepProcessor` looks for `io.quarkus.micrometer.deployment.MicrometerProcessor`
+  and registers `VanillaBpMetricsProducer`.
+- `VanillaBpHealthBuildStepProcessor` looks for
+  `io.quarkus.smallrye.health.deployment.SmallRyeHealthProcessor` and registers
+  `VanillaBpReadinessCheck`.
+
+Both beans are `setUnremovable()`: Micrometer resp. SmallRye Health collect them at startup,
+nothing injects them.
+
+The pending-entry gauges of the outbox stores are registered by a `StartupEvent` observer with
+`@Priority(APPLICATION + 800)`, which is later than the outbox dispatchers' own observers. They
+create their table on startup, and a store asked before its table exists cannot count, so
+without the priority the gauge would silently never appear.
+
 ## Noteworthy & Contributors
 
 [VanillaBP](https://www.github.com/vanillabp/spi-for-java) was developed by [Phactum](https://www.phactum.at) with the

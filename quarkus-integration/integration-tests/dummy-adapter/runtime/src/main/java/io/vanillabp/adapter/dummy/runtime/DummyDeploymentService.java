@@ -71,6 +71,23 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
   private final Instance<DummyProcessVersionSource> processVersionSource;
 
   /**
+   * Test hook standing in for what a real adapter asks its BPMS (see
+   * {@link DummyHealthSource}).
+   */
+  private final Instance<DummyHealthSource> healthSource;
+
+  @Override
+  public io.vanillabp.integration.adapter.spi.health.AdapterHealth checkHealth() {
+
+    return healthSource.isResolvable()
+        ? healthSource
+            .get()
+            .healthOf(adapterId)
+        : null;
+
+  }
+
+  /**
    * The versions of the deployed BPMN processes, cached like a real adapter caches
    * them - the test's {@link DummyProcessVersionSource} plays the BPMS query.
    */
@@ -140,7 +157,8 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
       final BpmsInitiatedStartInvoker bpmsInitiatedStartInvoker,
       final Instance<DummyBpmsInitiatedStartSource> bpmsInitiatedStartSource,
       final WorkflowEndedInvoker workflowEndedInvoker,
-      final Instance<DummyProcessVersionSource> processVersionSource) {
+      final Instance<DummyProcessVersionSource> processVersionSource,
+      final Instance<DummyHealthSource> healthSource) {
 
     this.adapterId = adapterId;
     this.listeners = listeners;
@@ -150,6 +168,7 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
     this.bpmsInitiatedStartSource = bpmsInitiatedStartSource;
     this.workflowEndedInvoker = workflowEndedInvoker;
     this.processVersionSource = processVersionSource;
+    this.healthSource = healthSource;
 
   }
 

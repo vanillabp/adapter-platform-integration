@@ -1020,6 +1020,76 @@ The core answers the part it owns, and only that part:
   warns once per BPMN process where there is none. An aggregate with a version attribute stays
   quiet, because then the collision is the exception above instead of a lost write.
 
+## What an operator gets to see (story 92)
+
+Three things about one delivery, built in the core because every BPMS passes through it:
+the delivery is counted and measured, the log lines written while it runs name the workflow,
+and the adapters answer a health question the platform publishes.
+
+`MigrationProcessService#executeWorkflowTask` is the single place all of it hangs on. It is
+where the transaction is opened, so a timer around it measures the handler plus the commit
+rather than the handler alone, and it is where a delivery which throws still produces an
+outcome to count. Everything the adapters do is upstream of it, everything the application
+does is inside it, and nothing had to be repeated per BPMS.
+
+- `VanillaBpMetrics` is plain Java with a no-op `NONE`, and `MicrometerVanillaBpMetrics`
+  implements it plus `MeterBinder`. That is the same optional-Micrometer wiring the election
+  cache uses (`WorkflowAdapterCacheMeters`), and reusing it is the point: both platforms apply
+  `MeterBinder` beans to their registries by themselves, so no code of ours ever asks for a
+  registry. Before the binding there is no registry and every record is dropped, which is the
+  normal state while beans are being built.
+  The meters are cached per tag combination, because a delivery must not pay for its own
+  measurement, and the tag values are what a deployment fixes: adapter id, workflow module,
+  BPMN process, task definition. Never an aggregate id or a job key - those would grow one
+  time series per workflow, and they belong in the log anyway.
+- `DeliveryMdc` is a `try`-with-resources remembering the previous values of its six keys and
+  putting them back, so a thread the application uses for other work is handed over unchanged.
+  It is used around the task delivery and around the phase-two dispatch in `PhaseTwoRouter`,
+  which is where a broken BPMS connection does its logging.
+- Health is `AdapterDeploymentService#checkHealth()`, defaulting to `null`. Absent is honest,
+  `UP` would be a claim nobody checked, and an adapter written before this existed keeps
+  working. `AdapterHealthReport` collects the answers, turns a thrown exception into `DOWN`
+  (a health endpoint has to answer even when an adapter misbehaves) and computes the overall
+  status, where `UNKNOWN` is not worse than `UP`: an adapter which is not configured yet is
+  not an outage.
+- The outbox backlog is `PhaseTwoOutbox#pendingCalls()`, an `OptionalLong` defaulting to empty.
+  A store which cannot count publishes no gauge, which is honest where a zero would not be.
+  All four stores VanillaBP ships implement it with one indexed count; gruelbox has no API for
+  it, so its store reads the table gruelbox created, along the index gruelbox created with it.
+  On Quarkus the gauges are registered by a `StartupEvent` observer running AFTER the outbox
+  dispatchers, because a store asked before its table exists cannot count.
+
+### Reading a metric must not cost anything
+
+A counter is a number we already hold. A gauge is a question asked at the moment somebody
+collects, and `outbox.pending` asks a database. Prometheus collects every fifteen seconds by
+default, a dashboard collects alongside it, and every instance answers each of them - so a
+gauge which queries turns watching a system into load on it. Nobody expects looking to be
+expensive, which is exactly why it has to be designed in rather than remembered.
+
+`CachedGaugeValue` (adapter SPI, `io.vanillabp.integration.adapter.spi.observability`) is how
+it is kept: it holds one measurement for `vanillabp.metrics.gauge-cache` (`MetricsProperties`,
+default ten seconds, `PT0S` switches the holding off for a test which needs the real value).
+
+Three decisions inside it are worth knowing before changing it:
+
+- It sits in the adapter SPI, not in this module's runtime. A BPMS adapter registers gauges of
+  its own and owes the same promise, and the adapters depend on the SPI. What does NOT belong
+  in it is a value already in memory - a counter, the free permits of a semaphore - because
+  holding those would only make them stale. Camunda 8's execution slots are that case.
+- Concurrent collectors are serialized on a lock rather than allowed to race. The second
+  collector waits for the first one's answer and then finds it fresh, so eight collectors at
+  the same moment are one query and not eight. Handing the second one a stale value instead
+  would be cheaper and was rejected: on the first collection there is nothing stale to hand
+  out, and the wait is bounded by the query the first collector is already paying for.
+- A measurement which throws is answered as absent for the rest of the window and taken again
+  in the next one. Not caching the failure would hammer a database which is down; caching it
+  forever would poison the gauge. The exception never leaves the class, because a metric must
+  not be the reason an application fails.
+
+The wrapping happens in `MicrometerVanillaBpMetrics#registerPendingOutboxEntries`, not in the
+platform modules and not in the stores. One place, so a store cannot forget.
+
 ## Modules
 
 1. **business-spi:** (artifact `io.vanillabp:vanillabp-integration-spi`)<br>
