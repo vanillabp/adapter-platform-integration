@@ -40,18 +40,28 @@ import lombok.extern.slf4j.Slf4j;
 public class WorkflowModuleBuildStepProcessor {
 
   /**
-   * Priority of workflow-module-specific YAML config files. A tick more important than the original "application.yaml".
+   * Priority of workflow-module-specific YAML config files. Below the classpath "application.yaml" (255),
+   * because a workflow module ships defaults and the application always wins.
+   * <p>
+   * The distance to {@link #PROPERTIES_CONFIGFILE_ORDINAL} is the same 5 SmallRye keeps between
+   * "application.yaml" and "application.properties", so YAML beats properties among a module's own
+   * files just like it does among the application's. The distance to the application's weakest file
+   * (250) leaves room for the bump SmallRye adds per active profile: a profile-specific file is
+   * loaded at the ordinal of its base file plus one per profile
+   * ({@code AbstractLocationConfigSourceLoader.ConfigurableProfileConfigSourceFactory}), so even a
+   * dozen active profiles cannot lift a module file above "application.properties".
    *
    * @see WorkflowModuleBuildStepProcessor#buildWorkflowModuleSpecificConfigFilesConfigBuilder(List, VanillaBpWorkflowModulesBuildItem, BuildProducer)
    */
-  public static final int YAML_CONFIGFILE_ORDINAL = 256;
+  public static final int YAML_CONFIGFILE_ORDINAL = 235;
 
   /**
-   * Priority of workflow-module-specific Properties config files. A tick more important than the original "application.properties".
+   * Priority of workflow-module-specific Properties config files. Below the classpath
+   * "application.properties" (250) and below {@link #YAML_CONFIGFILE_ORDINAL}, see there.
    *
    * @see WorkflowModuleBuildStepProcessor#buildWorkflowModuleSpecificConfigFilesConfigBuilder(List, VanillaBpWorkflowModulesBuildItem, BuildProducer)
    */
-  public static final int PROPERTIES_CONFIGFILE_ORDINAL = 251;
+  public static final int PROPERTIES_CONFIGFILE_ORDINAL = 230;
 
   /**
    * Finds all workflow modules specified by <code>META-INF/workflow-module</code> files in their
@@ -137,28 +147,27 @@ public class WorkflowModuleBuildStepProcessor {
    *       <td>External configuration file outside of the JAR</td>
    *     </tr>
    *     <tr>
-   *       <td><b><code>XXX.yaml</code> (classpath, if <code>quarkus-config-yaml</code> is enabled)</b></td>
-   *       <td><nobr><b>256</b></nobr></td>
-   *       <td><b>YAML on the classpath specific to a certain workflow module having ID &quot;XXX&quot;.
-   *       Lower priority than filesystem <i>application.yaml</i> since external files may be used to
-   *       override values without the need for rebuilding and deploying the application.</b></td>
-   *     </tr>
-   *     <tr>
    *       <td><code>application.yaml</code> (classpath, if <code>quarkus-config-yaml</code> is enabled)</td>
    *       <td><nobr>255</nobr></td>
    *       <td>YAML on classpath; Quarkus gives YAML higher priority than classpath properties</td>
    *     </tr>
    *     <tr>
-   *       <td><b><code>XXX.properties</code> (classpath, e.g. <code>src/main/resources</code>)</b></td>
-   *       <td><nobr><b>251</b></nobr></td>
-   *       <td><b>Properties on the classpath specific to a certain workflow module having ID &quot;XXX&quot;.
-   *       Lower priority than filesystem <i>application.properties</i> since external files may be used to
-   *       override values without the need for rebuilding and deploying the application.</b></td>
-   *     </tr>
-   *     <tr>
    *       <td><code>application.properties</code> (classpath, e.g. <code>src/main/resources</code>)</td>
    *       <td><nobr>250</nobr></td>
    *       <td>Default classpath application.properties</td>
+   *     </tr>
+   *     <tr>
+   *       <td><b><code>XXX.yaml</code> (classpath, if <code>quarkus-config-yaml</code> is enabled)</b></td>
+   *       <td><nobr><b>235</b></nobr></td>
+   *       <td><b>YAML on the classpath specific to a certain workflow module having ID &quot;XXX&quot;.
+   *       A workflow module ships defaults, so everything the application configures wins over it -
+   *       its classpath files as much as a file next to the runner.</b></td>
+   *     </tr>
+   *     <tr>
+   *       <td><b><code>XXX.properties</code> (classpath, e.g. <code>src/main/resources</code>)</b></td>
+   *       <td><nobr><b>230</b></nobr></td>
+   *       <td><b>Properties on the classpath specific to a certain workflow module having ID &quot;XXX&quot;.
+   *       Below the module's own YAML, mirroring the distance between the application's two files.</b></td>
    *     </tr>
    *     <tr>
    *       <td><code>META-INF/microprofile-config.properties</code> (classpath)</td>
@@ -167,6 +176,18 @@ public class WorkflowModuleBuildStepProcessor {
    *     </tr>
    *   </tbody>
    * </table>
+   *
+   * <p>Profiles are not in the table because they are not separate rows: SmallRye loads
+   * <code>name-{profile}.ext</code> at the ordinal of <code>name.ext</code> raised by one per active
+   * profile, so <code>XXX-prod.yaml</code> beats <code>XXX.yaml</code> and
+   * <code>application-prod.yaml</code> beats <code>application.yaml</code>, each within its own band.
+   * The 15 between 235 and 250 is what keeps the two bands apart.
+   *
+   * <p>Until story 101 the two module ordinals were 256 and 251, one tick ABOVE the application's
+   * classpath files. A workflow module could therefore not be reconfigured from
+   * <code>application.yaml</code>, which is the normal place to do it, and Spring Boot answered the
+   * same question differently. Both platforms now agree: system properties, environment variables,
+   * the application's configuration wherever it lives, <code>XXX-{profile}</code>, <code>XXX</code>.
    *
    * @param features All features provided by extensions
    * @param workflowModules All workflow modules found

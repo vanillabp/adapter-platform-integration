@@ -26,8 +26,10 @@ Spring Boot auto-configuration (`META-INF/spring/...AutoConfiguration.imports`):
 
 Additionally, `WorkflowModulePropertiesEnvironmentPostProcessor` (registered in
 `spring.factories`) merges workflow-module-specific config files into the Spring
-`Environment` before regular config resources, so module properties take precedence
-over `application.*`.
+`Environment`. They are appended at the END of the property sources, because a
+workflow module ships defaults: everything the application configures wins over
+them. Appending is what keeps that true for an application bringing sources this
+integration cannot know about, so no source name is matched to find a position.
 
 ### Workflow module detection
 
@@ -272,3 +274,14 @@ public class BankingSystemProperties {
 This setup shown above ensures property values are part of the workflow module. The bean of the class
 `LoanApprovalProperties` can be injected into services of the workflow module to access those properties set by
 Spring Boot according to the active Spring profiles.
+
+#### These files are defaults
+
+`loan-approval.yaml` above sets the banking system's URL to an invalid value on purpose, which only works
+because the application can override it. That is the rule: a workflow module file is the weakest source in the
+environment, so system properties, environment variables and every configuration file of the application beat
+it, while `loan-approval-environment-dev.yaml` still beats `loan-approval.yaml`. It also means a placeholder
+written in a module file (`${external-systems.banking.hostname}`) resolves against whatever the application
+configured. Both directions have acceptance tests in
+`integration-tests/workflowmodule-integration-tests/submodule-integration-test`, and Quarkus answers the same
+way through the ordinals in `WorkflowModuleBuildStepProcessor`.

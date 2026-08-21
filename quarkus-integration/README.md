@@ -62,9 +62,12 @@ as possible at **build time**, following Quarkus' extension philosophy:
    module ID); the root archive acts as the *global* module fallback.
 4. **Workflow-module-specific configuration:** Config sources for
    `<module-id>[-<profile>].properties/.yaml` files are generated as `ConfigBuilder`
-   classes with config ordinals slightly above `application.*` (properties: 251,
-   YAML: 256), so module properties take precedence. The files are also registered for
-   dev-mode hot reload.
+   classes with config ordinals BELOW `application.*` (properties: 230, YAML: 235
+   against 250 and 255), because a workflow module ships defaults and the application
+   always wins. The gap to 250 absorbs the ordinal SmallRye adds per active profile, so
+   a module's `-prod` file cannot climb above the application's files. The reasoning and
+   the full ordinal table live in the javadoc of `WorkflowModuleBuildStepProcessor`. The
+   files are also registered for dev-mode hot reload.
 5. **Aggregate persistence:** a CDI bean implementing `AggregatePersistenceAware`
    always wins, the most specific generic type first (`AggregatePersistenceResolver`,
    Jandex-based). For an aggregate having none, VanillaBP asks the aggregate what it

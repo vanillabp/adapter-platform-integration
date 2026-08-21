@@ -5,7 +5,6 @@ import java.util.Map;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import io.smallrye.config.SmallRyeConfig;
 import io.vanillabp.integration.test.multibpmn.Aggregate1;
 import io.vanillabp.integration.test.multibpmn.Aggregate2;
 import io.vanillabp.integration.test.sample.Aggregate;
@@ -57,6 +56,33 @@ public class MultipleWorkflowServicesTestIIntrospectionController {
   @ConfigProperty(name = "no-module.test-unmodified", defaultValue = "-1")
   int noModuleUnmodifiedProperty;
 
+  /**
+   * Story 101: written as <code>${urls.external-system}</code> in the workflow
+   * module's own file and resolved against the application's configuration.
+   */
+  @ConfigProperty(name = "test-module.external-system-url", defaultValue = "-")
+  String testModuleExternalSystemUrl;
+
+  /**
+   * Story 101: shipped by the workflow module and overridden by the
+   * application's classpath <code>application.yaml</code>.
+   */
+  @ConfigProperty(name = "test-module.overridden-from-classpath", defaultValue = "-")
+  String testModuleOverriddenFromClasspath;
+
+  /**
+   * Story 101: shipped by the workflow module and overridden by a configuration
+   * file next to the runner.
+   */
+  @ConfigProperty(name = "test-module.overridden-from-external-file", defaultValue = "-")
+  String testModuleOverriddenFromExternalFile;
+
+  /**
+   * Story 101: shipped by the workflow module's profile-specific file only.
+   */
+  @ConfigProperty(name = "test-module.profile-only", defaultValue = "-")
+  String testModuleProfileOnly;
+
   @GET
   @Path("/workflow-modules")
   public Map<String, String> getWorkflowModules() {
@@ -90,15 +116,34 @@ public class MultipleWorkflowServicesTestIIntrospectionController {
 
   }
 
+  /**
+   * Story 101: the precedence of a workflow module's files against the
+   * application's, read once through an injected {@link ConfigProperty} and
+   * once through the {@link org.eclipse.microprofile.config.Config} itself, so
+   * that both ways of reading are covered.
+   *
+   * @return The values the configuration resolved to
+   */
+  @GET
+  @Path("/precedence-properties")
+  public Map<String, String> getPrecedenceProperties() {
+
+    final var config = ConfigProvider.getConfig();
+
+    return Map.of(
+        "injected-external-system-url", testModuleExternalSystemUrl,
+        "external-system-url", config.getValue("test-module.external-system-url", String.class),
+        "injected-overridden-from-classpath", testModuleOverriddenFromClasspath,
+        "overridden-from-classpath", config.getValue("test-module.overridden-from-classpath", String.class),
+        "injected-overridden-from-external-file", testModuleOverriddenFromExternalFile,
+        "overridden-from-external-file", config.getValue("test-module.overridden-from-external-file", String.class),
+        "profile-only", testModuleProfileOnly);
+
+  }
+
   @GET
   @Path("/unmodified-properties")
   public Map<String, Integer> getUnmodifiedTestProperties() {
-
-    SmallRyeConfig config = (SmallRyeConfig) ConfigProvider.getConfig();
-    config.getConfigSources().forEach(cs -> System.out.println(cs.getName()
-        + " -> keys: "
-        + cs.getPropertyNames())
-    );
 
     return Map.of(
         "test-module", testModuleUnmodifiedProperty,

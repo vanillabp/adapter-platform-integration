@@ -17,7 +17,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
  * Validate properties read from application and workflow module properties
- * respecting additional profiles.
+ * respecting additional profiles. Story 101: the profile-specific file of a
+ * workflow module beats its plain one, and both lose against the application.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AdditionalProfileTest {
@@ -54,7 +55,9 @@ public class AdditionalProfileTest {
         Map.of(
             "test-module", 21, // loaded from test-module-testprofile.yaml
             "multi-bpmn-module", 121, // loaded from multi-bpmn-module-testprofile.yaml
-            "no-module", 52), // loaded from test-module-testprofile.yaml overriding application.yaml
+            // story 101: multi-bpmn-module-testprofile.yaml also sets this key, and loses -
+            // application.yaml is the strongest source of the application configuring it
+            "no-module", 48),
         workflowModules);
 
   }
@@ -79,6 +82,31 @@ public class AdditionalProfileTest {
             "multi-bpmn-module", 47120, // loaded from multi-bpmn-module-testprofile.properties
             "no-module", 4746), // loaded from application-testprofile.yaml
         workflowModules);
+
+  }
+
+  @Test
+  public void testTheApplicationWinsOverTheModulesProfileFile() {
+
+    @SuppressWarnings("unchecked")
+    final Map<String, String> properties = RestAssured
+        .given()
+        .baseUri("http://localhost")
+        .port(FreePortUtil.getFreePort())
+        .get("introspect/precedence-properties")
+        .then()
+        .statusCode(200)
+        .extract()
+        .as(Map.class);
+
+    // test-module-testprofile.yaml sets this one too, and loses
+    Assertions.assertEquals(
+        "from-the-applications-classpath",
+        properties.get("overridden-from-classpath"));
+    // nothing of the application configures this one, so the module's profile file stays
+    Assertions.assertEquals(
+        "from-the-workflow-module-testprofile",
+        properties.get("profile-only"));
 
   }
 
