@@ -4,6 +4,59 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## A workflow module's configuration is a default again (2026-08-21)
+
+Story 101, and a regression against Version 1 rather than a new rule.
+
+A file named after a workflow module (`loan-approval.yaml`, `loan-approval-prod.properties`) carries
+defaults. Everything the application configures wins over it, whichever file the application uses.
+From strongest to weakest: system properties, environment variables, the application's configuration
+wherever it lives, `{module}-{profile}`, `{module}`. Both platforms answer it that way now; until
+today they answered it differently, and on Spring Boot neither answer was the one Version 1 gave.
+
+Spring Boot inserted the module's property source directly below the system environment, so only an
+environment variable or a `-D` could override a value a module shipped. `application-prod.yaml`
+lost, and so did every other file of the application. Quarkus gave the module ordinals 256 and 251
+against 255 and 250 for the application's classpath files, so a module beat `application.yaml` but
+lost against a file next to the runner. Either way an application could not reconfigure a module it
+consumed in the place where you would look for it.
+
+Version 1 never put these files into the environment at all. It collected them into a
+`YamlPropertiesFactoryBean` and handed the result to a `PropertySourcesPlaceholderConfigurer`
+through `setProperties(...)`, whose `localOverride` stays `false`: the configurer resolves against
+the environment first and against those local properties second. A module file was a fallback, and
+`application-prod.yaml` won over it. So what broke here is a rule which was never written down but
+was always true.
+
+On Spring Boot the module's property sources are now appended at the END of the environment instead
+of being inserted after the system environment. No source name is matched to find the position any
+more, which is what makes it hold for an application bringing config data sources VanillaBP cannot
+know about (`spring.config.import`, an external location, a source another `EnvironmentPostProcessor`
+added). On Quarkus the two ordinals moved from 256/251 to **235/230**, below the classpath
+`application.yaml` (255) and `application.properties` (250). The 15 to the application's weakest
+file is deliberate: SmallRye loads a profile-specific file a tick above its base file, once per
+active profile, and the gap keeps a module's `-prod` variant below the application however many
+profiles are active.
+
+Inside a module nothing changed: `loan-approval-prod.yaml` still beats `loan-approval.yaml`, and
+YAML still beats `.properties` for the same base name. Nothing Version 2 added is taken back either.
+These values remain proper configuration properties, visible to `Environment#getProperty` and
+`@ConfigurationProperties` respectively `@ConfigProperty`, not only to `${...}` and `@Value`, which
+is what Version 1 could not do.
+
+If you moved a value out of your `application.yaml` because a module file kept beating it, move it
+back. If you deliberately relied on a module file overriding the application, that no longer works:
+put the value where the application configures it, or use a system property or an environment
+variable, which still win over everything.
+
+Adapter properties answer a different question and are unchanged.
+`vanillabp.workflow-modules.<mod>.adapters.<id>.<key>` still beats `vanillabp.adapters.<id>.<key>`
+because it is the more specific key, whichever file either of them stands in. Precedence decides who
+wins for the same key, specificity decides between different keys, and the level resolution in
+`MigrationAdapterProperties` runs on the configuration after it was merged. A module writing its own
+`vanillabp.workflow-modules.<its id>.*` therefore still beats an adapter-wide value of the
+application, and the application takes that back by writing the module-level key itself.
+
 ## Metrics, health and a logging context around every delivery (2026-08-20)
 
 Story 92. Additive and without a single new property: nothing changes for an application

@@ -22,3 +22,8 @@ no-module:
   test: 48
   test2: 4748
   test-unmodified: 7
+urls:
+  external-system: https://es.com
+test-module:
+  overridden-from-classpath: from-the-applications-classpath
+  overridden-from-external-file: from-the-applications-classpath

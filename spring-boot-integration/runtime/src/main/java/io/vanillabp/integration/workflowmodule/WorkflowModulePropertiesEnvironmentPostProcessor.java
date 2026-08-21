@@ -14,9 +14,7 @@ import org.springframework.boot.env.PropertySourceLoader;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.core.Ordered;
 import org.springframework.core.env.ConfigurableEnvironment;
-import org.springframework.core.env.MutablePropertySources;
 import org.springframework.core.env.PropertySource;
-import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.ResourcePatternResolver;
 import org.springframework.core.io.support.ResourcePatternUtils;
@@ -47,12 +45,23 @@ import org.springframework.core.io.support.ResourcePatternUtils;
  * place their configuration files in a module-specific subdirectory, avoiding
  * classpath conflicts with other modules.
  *
- * <p>Workflow module property sources are inserted right below the system
- * environment (i.e. below system properties and environment variables but with
- * higher priority than {@code application.yaml}/{@code application.properties}),
- * matching the behavior of the Quarkus implementation. Profile-specific variants
- * have higher priority than base variants. YAML has higher priority than
- * {@code .properties} for the same base name.
+ * <p>A workflow module ships <b>defaults</b>: its files are appended at the very
+ * end of the environment, below every source the application brings - system
+ * properties, environment variables, {@code application.yaml} and
+ * {@code application.properties} wherever they live, an external configuration
+ * file, {@code defaultProperties}. Whatever the application configures wins,
+ * whichever file it uses. Among the module's own files the order is unchanged:
+ * profile-specific variants beat base variants, and YAML beats
+ * {@code .properties} for the same base name. Quarkus answers the same way
+ * (see {@code WorkflowModuleBuildStepProcessor}).
+ *
+ * <p>Appending instead of inserting after a named source is deliberate. An
+ * application may bring config data sources this integration cannot know about
+ * ({@code spring.config.import}, {@code spring.config.additional-location}, a
+ * source contributed by another {@link EnvironmentPostProcessor}), and matching
+ * the name of one known source would put the module's files above all of them.
+ * The end of the list is the only position which stays correct whatever the
+ * application brings.
  *
  * <p><b>Limitation:</b> Multi-document YAML using
  * {@code spring.config.activate.on-profile} is not supported inside workflow
@@ -110,12 +119,12 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
       }
       propertySources.addAll(load(resolver, moduleId, null));
 
-      // insert right below system properties and environment variables but above
-      // all config files: adding after the system environment property source in
-      // reverse order keeps the priority order collected above
+      // append below every source the application brings: adding in the order
+      // collected above keeps the priority order among the module's own files,
+      // and the end of the list needs no assumption about what the application
+      // put into its environment
       propertySources
-          .reversed()
-          .forEach(propertySource -> addPropertySource(environment.getPropertySources(), propertySource));
+          .forEach(propertySource -> environment.getPropertySources().addLast(propertySource));
     }
 
   }
@@ -185,26 +194,6 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
               });
         })
         .toList();
-
-  }
-
-  /**
-   * Add a property source right below system properties and environment
-   * variables but above all config files. Using the well-known name of the
-   * system environment property source is stable across Spring Boot versions
-   * (in contrast to matching names of config data property sources).
-   */
-  private void addPropertySource(
-      final MutablePropertySources propertySources,
-      final PropertySource<?> propertySource) {
-
-    if (propertySources.contains(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME)) {
-      propertySources.addAfter(
-          StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME,
-          propertySource);
-    } else {
-      propertySources.addFirst(propertySource);
-    }
 
   }
 

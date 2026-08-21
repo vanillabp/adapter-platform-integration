@@ -1,0 +1,2 @@
+test-module:
+  overridden-from-external-file: from-the-file-next-to-the-runner

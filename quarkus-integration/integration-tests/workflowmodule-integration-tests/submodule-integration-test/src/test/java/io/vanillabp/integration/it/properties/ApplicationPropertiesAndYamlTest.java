@@ -53,7 +53,7 @@ public class ApplicationPropertiesAndYamlTest {
         Map.of(
             "test-module", 11, // loaded from test-module.yaml
             "multi-bpmn-module", 101, // loaded from multi-bpmn-module.yaml
-            "no-module", 48), // loaded from test-module.yaml overriding application.yaml
+            "no-module", 48), // loaded from application.yaml (yaml beats properties)
         workflowModules);
 
   }

@@ -7,3 +7,6 @@ vanillabp:
 test-module:
   test: 11
   test-unmodified: 8
+  external-system-url: "${urls.external-system:no-value-from-the-application}"
+  overridden-from-classpath: from-the-workflow-module
+  overridden-from-external-file: from-the-workflow-module
