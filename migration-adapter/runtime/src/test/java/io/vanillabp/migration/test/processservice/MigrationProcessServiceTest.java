@@ -32,6 +32,13 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 @ExtendWith(SuppressOutputExtension.class)
 public class MigrationProcessServiceTest {
 
+  /**
+   * What a probe is asked about (story 107). Any scope does here: the adapters of this
+   * test answer from what the test told them, not from a deployment.
+   */
+  private static final io.vanillabp.integration.adapter.spi.WorkflowScope SCOPE = io.vanillabp.integration.adapter.spi.WorkflowScope
+      .of("test-module", "TestProcess");
+
   @Mock
   private MigratableProcessService<Object> processService;
 
@@ -293,7 +300,7 @@ public class MigrationProcessServiceTest {
   public void redispatchedStartSkipsIfWorkflowIsKnown() {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
-    when(processService.awarenessOfWorkflowForRedispatch(aggregatePersistence, 42L))
+    when(processService.awarenessOfWorkflowForRedispatch(SCOPE, aggregatePersistence, 42L))
         .thenReturn(io.vanillabp.integration.adapter.spi.WorkflowAwareness.ACTIVE);
 
     final var testee = new MigrationProcessService<>(
@@ -312,7 +319,7 @@ public class MigrationProcessServiceTest {
   public void redispatchedStartProceedsIfWorkflowIsUnknown() {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
-    when(processService.awarenessOfWorkflowForRedispatch(aggregatePersistence, 42L))
+    when(processService.awarenessOfWorkflowForRedispatch(SCOPE, aggregatePersistence, 42L))
         .thenReturn(io.vanillabp.integration.adapter.spi.WorkflowAwareness.UNKNOWN_TO_BPMS);
 
     final var testee = new MigrationProcessService<>(
@@ -330,7 +337,7 @@ public class MigrationProcessServiceTest {
   public void redispatchedStartFailsIfBpmsIsUnavailable() {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
-    when(processService.awarenessOfWorkflowForRedispatch(aggregatePersistence, 42L))
+    when(processService.awarenessOfWorkflowForRedispatch(SCOPE, aggregatePersistence, 42L))
         .thenReturn(io.vanillabp.integration.adapter.spi.WorkflowAwareness.BPMS_UNAVAILABLE);
 
     final var testee = new MigrationProcessService<>(
@@ -359,7 +366,7 @@ public class MigrationProcessServiceTest {
 
     testee.startWorkflowPhaseTwo(42L, "test-adapter", false);
 
-    verify(processService, never()).awarenessOfWorkflowForRedispatch(any(), any());
+    verify(processService, never()).awarenessOfWorkflowForRedispatch(any(), any(), any());
     verify(processService).startWorkflowPhaseTwo("test-module", "TestProcess", aggregatePersistence, 42L);
 
   }
@@ -369,7 +376,7 @@ public class MigrationProcessServiceTest {
   public void redispatchedStartByMessageSkipsIfWorkflowIsKnown() {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
-    when(processService.awarenessOfWorkflowForRedispatch(aggregatePersistence, 42L))
+    when(processService.awarenessOfWorkflowForRedispatch(SCOPE, aggregatePersistence, 42L))
         .thenReturn(io.vanillabp.integration.adapter.spi.WorkflowAwareness.COMPLETED);
 
     final var testee = new MigrationProcessService<>(

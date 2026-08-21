@@ -15,8 +15,9 @@ import io.vanillabp.spi.process.WorkflowHistory;
  *
  * An adapter answers the four awareness probes ({@link #awarenessOfTask},
  * {@link #awarenessOfUserTask}, {@link #awarenessOfWorkflow} and
- * {@link #awarenessOfWorkflowForRedispatch}) ONLY for the workflows and tasks of its
- * OWN SCOPE. The scope of an adapter instance is what IT deployed: the workflow
+ * {@link #awarenessOfWorkflowForRedispatch}) ONLY for the workflows and tasks of the
+ * {@link WorkflowScope} it is GIVEN, which is a narrower question than what its own
+ * instance holds. The scope of an adapter instance is what IT deployed: the workflow
  * modules, their BPMN processes, and whatever the BPMS uses to keep those apart - a
  * tenant, prefixed identifiers, an engine table prefix, a database. Anything else is
  * {@link WorkflowAwareness#UNKNOWN_TO_BPMS} and never
@@ -71,18 +72,20 @@ public interface MigratableProcessService<A> {
    * NEITHER of them proves that the task belongs to this adapter's scope - see the
    * election contract in the type javadoc, which is what decides the answer.
    *
+   * @param scope The workflow module and BPMN processes being asked about
    * @param workflowAggregateId The ID of the workflow aggregate the task belongs to
    * @param taskId The task's ID
-   * @return The BPMS' awareness of the task, answered for this adapter's scope only
+   * @return The BPMS' awareness of the task within that scope
    */
   WorkflowAwareness awarenessOfTask(
+      WorkflowScope scope,
       Object workflowAggregateId,
       String taskId);
 
   /**
    * Determine whether the target BPMS is aware of the workflow belonging to the
    * given workflow aggregate. This instance-level method exists (in addition to
-   * {@link #awarenessOfTask(Object, String)}) because message correlation has no
+   * {@link #awarenessOfTask(WorkflowScope, Object, String)}) because message correlation has no
    * task ID to ask for.
    * <p>
    * <b>Contract:</b> {@link WorkflowAwareness#BPMS_UNAVAILABLE} means &quot;do not
@@ -99,12 +102,14 @@ public interface MigratableProcessService<A> {
    * has to be known at PROBE time: the election runs before any other SPI method
    * of an operation, so an adapter must never derive it from a previous call.
    *
+   * @param scope The workflow module and BPMN processes being asked about
    * @param aggregatePersistence The workflow aggregate's persistence support
    * @param workflowAggregateId The ID of the workflow aggregate
-   * @return The BPMS' awareness of the workflow, answered for this adapter's scope
-   *         only (see the election contract in the type javadoc)
+   * @return The BPMS' awareness of the workflow within that scope (see the election
+   *         contract in the type javadoc)
    */
   WorkflowAwareness awarenessOfWorkflow(
+      WorkflowScope scope,
       AggregatePersistenceAware<A> aggregatePersistence,
       Object workflowAggregateId);
 
@@ -116,42 +121,44 @@ public interface MigratableProcessService<A> {
    * consumed without starting a second instance).
    * <p>
    * <b>Contract - stricter than
-   * {@link #awarenessOfWorkflow(AggregatePersistenceAware, Object)}:</b> the
+   * {@link #awarenessOfWorkflow(WorkflowScope, AggregatePersistenceAware, Object)}:</b> the
    * answer must NEVER be optimistic. Answering {@link WorkflowAwareness#ACTIVE}
    * or {@link WorkflowAwareness#COMPLETED} SKIPS the start - a wrong
    * &quot;known&quot; therefore LOSES a workflow, whereas a wrong
    * &quot;unknown&quot; merely produces the duplicate the at-least-once residual
    * permits anyway. An adapter that cannot query the BPMS reliably (e.g. Camunda 8
    * without secondary storage, where
-   * {@link #awarenessOfWorkflow(AggregatePersistenceAware, Object)} deliberately
+   * {@link #awarenessOfWorkflow(WorkflowScope, AggregatePersistenceAware, Object)} deliberately
    * answers an optimistic ACTIVE for the election) must override this method and
    * return {@link WorkflowAwareness#UNKNOWN_TO_BPMS} - the start proceeds and the
    * adapter's idempotency contract of {@link #startWorkflowPhaseTwo} applies.
    * <p>
    * The default delegates to
-   * {@link #awarenessOfWorkflow(AggregatePersistenceAware, Object)} - correct for
+   * {@link #awarenessOfWorkflow(WorkflowScope, AggregatePersistenceAware, Object)} - correct for
    * adapters whose workflow awareness is an honest engine query.
    * <p>
    * The scope rule of the election contract (type javadoc) applies here as well, and
    * for the same reason in the other direction: a workflow of ANOTHER scope is no
    * evidence that THIS adapter already started the one being re-dispatched.
    *
+   * @param scope The workflow module and BPMN processes being asked about
    * @param aggregatePersistence The workflow aggregate's persistence support
    * @param workflowAggregateId The ID of the workflow aggregate
    * @return The BPMS' awareness of the workflow - unsure means
    *         {@link WorkflowAwareness#UNKNOWN_TO_BPMS}
    */
   default WorkflowAwareness awarenessOfWorkflowForRedispatch(
+      final WorkflowScope scope,
       final AggregatePersistenceAware<A> aggregatePersistence,
       final Object workflowAggregateId) {
 
-    return awarenessOfWorkflow(aggregatePersistence, workflowAggregateId);
+    return awarenessOfWorkflow(scope, aggregatePersistence, workflowAggregateId);
 
   }
 
   /**
    * How long this BPMS may need until a workflow it holds becomes findable by
-   * {@link #awarenessOfWorkflow(AggregatePersistenceAware, Object)}, and how often
+   * {@link #awarenessOfWorkflow(WorkflowScope, AggregatePersistenceAware, Object)}, and how often
    * to ask meanwhile.
    * <p>
    * The default is {@link WorkflowVisibilityDelay#none()}: a BPMS answering from the
@@ -170,17 +177,19 @@ public interface MigratableProcessService<A> {
 
   /**
    * Determine whether the target BPMS is aware of the given USER task. Same
-   * contract as {@link #awarenessOfTask(Object, String)} - user tasks have their
+   * contract as {@link #awarenessOfTask(WorkflowScope, Object, String)} - user tasks have their
    * own probe because their IDs live in a different namespace than service-task
    * IDs (e.g. Camunda 7 task ID vs. execution ID, Camunda 8 user-task key vs. job
    * key).
    *
+   * @param scope The workflow module and BPMN processes being asked about
    * @param workflowAggregateId The ID of the workflow aggregate the task belongs to
    * @param taskId The user task's ID
-   * @return The BPMS' awareness of the user task, answered for this adapter's scope
-   *         only (see the election contract in the type javadoc)
+   * @return The BPMS' awareness of the user task within that scope (see the election
+   *         contract in the type javadoc)
    */
   WorkflowAwareness awarenessOfUserTask(
+      WorkflowScope scope,
       Object workflowAggregateId,
       String taskId);
 
@@ -736,7 +745,7 @@ public interface MigratableProcessService<A> {
 
   /**
    * The viewer/history API - read-only, no phases: the adapter holding the
-   * workflow (elected by probing {@link #awarenessOfWorkflow(AggregatePersistenceAware, Object)}) answers.
+   * workflow (elected by probing {@link #awarenessOfWorkflow(WorkflowScope, AggregatePersistenceAware, Object)}) answers.
    * <p>
    * Returns the process definitions used by the workflow of the given aggregate:
    * the definition the workflow itself runs on (its {@code usedByElements} is

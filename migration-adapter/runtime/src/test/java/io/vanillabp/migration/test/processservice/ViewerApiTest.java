@@ -42,6 +42,13 @@ import io.vanillabp.spi.process.WorkflowNotFoundException;
 @ExtendWith(SuppressOutputExtension.class)
 public class ViewerApiTest {
 
+  /**
+   * What a probe is asked about (story 107). Any scope does here: the adapters of this
+   * test answer from what the test told them, not from a deployment.
+   */
+  private static final io.vanillabp.integration.adapter.spi.WorkflowScope SCOPE = io.vanillabp.integration.adapter.spi.WorkflowScope
+      .of("test-module", "TestProcess");
+
   @Mock
   private MigratableProcessService<Object> firstAdapter;
 
@@ -84,8 +91,9 @@ public class ViewerApiTest {
     final var processService = createProcessService();
     when(aggregatePersistence.getAggregateId(aggregate)).thenReturn("42");
     // the first adapter does not know the workflow, the second one runs it
-    when(firstAdapter.awarenessOfWorkflow(aggregatePersistence, "42")).thenReturn(WorkflowAwareness.UNKNOWN_TO_BPMS);
-    when(secondAdapter.awarenessOfWorkflow(aggregatePersistence, "42")).thenReturn(WorkflowAwareness.ACTIVE);
+    when(firstAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42"))
+        .thenReturn(WorkflowAwareness.UNKNOWN_TO_BPMS);
+    when(secondAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42")).thenReturn(WorkflowAwareness.ACTIVE);
     when(secondAdapter.getProcessDefinitions(
         eq("test-module"), eq("TestProcess"), any(), eq("42"), eq(null)))
         .thenReturn(
@@ -110,7 +118,7 @@ public class ViewerApiTest {
 
     final var processService = createProcessService();
     when(aggregatePersistence.getAggregateId(aggregate)).thenReturn("42");
-    when(firstAdapter.awarenessOfWorkflow(aggregatePersistence, "42")).thenReturn(WorkflowAwareness.COMPLETED);
+    when(firstAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42")).thenReturn(WorkflowAwareness.COMPLETED);
     when(firstAdapter.getWorkflowHistory(
         eq("test-module"), eq("TestProcess"), any(), eq("42"), eq(null)))
         .thenReturn(
@@ -129,8 +137,10 @@ public class ViewerApiTest {
 
     final var processService = createProcessService();
     when(aggregatePersistence.getAggregateId(aggregate)).thenReturn("42");
-    when(firstAdapter.awarenessOfWorkflow(aggregatePersistence, "42")).thenReturn(WorkflowAwareness.UNKNOWN_TO_BPMS);
-    when(secondAdapter.awarenessOfWorkflow(aggregatePersistence, "42")).thenReturn(WorkflowAwareness.UNKNOWN_TO_BPMS);
+    when(firstAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42"))
+        .thenReturn(WorkflowAwareness.UNKNOWN_TO_BPMS);
+    when(secondAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42"))
+        .thenReturn(WorkflowAwareness.UNKNOWN_TO_BPMS);
 
     final var exception = assertThrowsExactly(
         WorkflowNotFoundException.class,
@@ -149,7 +159,7 @@ public class ViewerApiTest {
 
     final var processService = createProcessService();
     when(aggregatePersistence.getAggregateId(aggregate)).thenReturn("42");
-    when(firstAdapter.awarenessOfWorkflow(aggregatePersistence, "42")).thenReturn(WorkflowAwareness.ACTIVE);
+    when(firstAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42")).thenReturn(WorkflowAwareness.ACTIVE);
     when(firstAdapter.getWorkflowHistory(
         eq("test-module"), eq("TestProcess"), any(), eq("42"), eq("some-context")))
         .thenReturn(null);

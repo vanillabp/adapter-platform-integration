@@ -19,6 +19,13 @@ import jakarta.inject.Inject;
 @ExtendWith(SuppressOutputExtension.class)
 public class AdapterConfigurationTest {
 
+  /**
+   * What a probe is asked about (story 107). Any scope does here: the adapters of this
+   * test answer from what the test told them, not from a deployment.
+   */
+  private static final io.vanillabp.integration.adapter.spi.WorkflowScope SCOPE = io.vanillabp.integration.adapter.spi.WorkflowScope
+      .of("test-module", "TestProcess");
+
   // Start the unit test with the extension loaded, and sample classes
   @RegisterExtension
   static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
@@ -90,10 +97,10 @@ public class AdapterConfigurationTest {
 
     Assertions.assertEquals(
         WorkflowAwareness.UNKNOWN_TO_BPMS,
-        migratableProcessService.awarenessOfTask("42", "task-id"));
+        migratableProcessService.awarenessOfTask(SCOPE, "42", "task-id"));
     Assertions.assertEquals(
         WorkflowAwareness.UNKNOWN_TO_BPMS,
-        migratableProcessService.awarenessOfWorkflow(null, "42"));
+        migratableProcessService.awarenessOfWorkflow(SCOPE, null, "42"));
 
   }
 

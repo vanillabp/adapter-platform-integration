@@ -40,6 +40,7 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
 
   @Override
   public WorkflowAwareness awarenessOfTask(
+      final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
       final Object workflowAggregateId,
       final String taskId) {
 
@@ -62,6 +63,7 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
 
   @Override
   public WorkflowAwareness awarenessOfUserTask(
+      final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
       final Object workflowAggregateId,
       final String taskId) {
 
@@ -79,6 +81,7 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
 
   @Override
   public WorkflowAwareness awarenessOfWorkflow(
+      final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
       final io.vanillabp.integration.spi.AggregatePersistenceAware<A> aggregatePersistence,
       final Object workflowAggregateId) {
 

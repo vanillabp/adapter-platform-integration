@@ -82,15 +82,20 @@ then fails naming the adapter — it NEVER falls back. New workflows always star
 the first-priority adapter (no probing).
 
 What the walk cannot do is check the answers, and story 105 is where that duty is
-written down: an adapter answers ONLY for the workflows and tasks of the scope it
-deployed into, everything else is `UNKNOWN_TO_BPMS`. Two adapter ids may address one
-backend (the migration from one scoping to another) and two workflow modules of one
-backend may carry the same aggregate ID, so neither a task ID nor an aggregate ID
-tells the core whose workflow it is. Only the adapter knows, which is why the contract
-sits in `MigratableProcessService` and `ElectionScopeContractTest` holds both halves:
-the walk reaching the holder where the answers are scoped, and stopping at the wrong
-adapter where one claims more than it holds. Camunda 8 (story 103) and Camunda 7
-(story 104) are what happens without it.
+written down: an adapter answers ONLY for the workflows and tasks of the scope it is
+asked about, everything else is `UNKNOWN_TO_BPMS`. Since story 107 every probe is
+handed that scope as a `WorkflowScope` — the workflow module and the BPMN processes
+the calling process service serves, secondary ones included, which the platform
+integrations collect when they register the process services
+(`MigrationProcessService.setServedBpmnProcessIds`). Before that a probe knew only the
+workflow-aggregate ID, and neither it nor a task ID says whose workflow it is: two
+adapter ids may address one backend (the migration from one scoping to another) and
+two workflow modules of one backend may carry the same aggregate ID. Only the adapter
+can compare the scope, which is why the contract sits in `MigratableProcessService`,
+and `ElectionScopeContractTest` holds three halves of it: the walk reaching the holder
+where the answers are scoped, stopping at the wrong adapter where one claims more than
+it holds, and not claiming a workflow of another workflow module of the same adapter.
+Camunda 8 (story 103) and Camunda 7 (story 104) are what happens without it.
 
 Successful elections populate a `WorkflowAdapterCache`
 (business SPI; key = workflow module, BPMN process, serialized aggregate ID →

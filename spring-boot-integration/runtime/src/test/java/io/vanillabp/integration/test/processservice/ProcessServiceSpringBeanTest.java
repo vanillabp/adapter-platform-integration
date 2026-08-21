@@ -28,6 +28,13 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 @ExtendWith(MockitoExtension.class)
 public class ProcessServiceSpringBeanTest {
 
+  /**
+   * What a probe is asked about (story 107). Any scope does here: the adapters of this
+   * test answer from what the test told them, not from a deployment.
+   */
+  private static final io.vanillabp.integration.adapter.spi.WorkflowScope SCOPE = io.vanillabp.integration.adapter.spi.WorkflowScope
+      .of("test-module", "TestProcess");
+
   @Mock
   private MigratableProcessService<Object> migratableProcessService;
 
@@ -96,7 +103,7 @@ public class ProcessServiceSpringBeanTest {
 
     final var aggregate = new Object();
     when(aggregatePersistenceAware.getAggregateId(aggregate)).thenReturn("4711");
-    when(migratableProcessService.awarenessOfWorkflow(aggregatePersistenceAware, "4711"))
+    when(migratableProcessService.awarenessOfWorkflow(SCOPE, aggregatePersistenceAware, "4711"))
         .thenReturn(io.vanillabp.integration.adapter.spi.WorkflowAwareness.UNKNOWN_TO_BPMS);
 
     // no transaction is active (see cleanupTransactionState) - reads must not

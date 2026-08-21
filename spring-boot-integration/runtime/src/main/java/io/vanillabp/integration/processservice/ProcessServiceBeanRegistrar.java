@@ -400,6 +400,17 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
               processServicesByKey.put(
                   "%s|%s".formatted(workflowModuleId, bpmnProcessId),
                   processServiceBean.getMigrationProcessService());
+              // story 107: what an awareness probe is asked about is the workflow module
+              // AND every BPMN process serving this aggregate there - a secondary process
+              // of the same @WorkflowService runs on the same workflow, so an instance of
+              // it is a legitimate answer. Collected while the services are registered,
+              // because this is the only place which sees all declaring classes at once.
+              final var processIdsByModule = new java.util.LinkedHashMap<String, java.util.List<String>>();
+              final var moduleOfProcessService = new java.util.LinkedHashMap<MigrationProcessService<A>, String>();
+              moduleOfProcessService.put(processServiceBean.getMigrationProcessService(), workflowModuleId);
+              processIdsByModule
+                  .computeIfAbsent(workflowModuleId, module -> new java.util.LinkedList<>())
+                  .add(bpmnProcessId);
               for (final var declaringClass : serviceClasses) {
                 final var declaringModuleId = workflowModuleOf(allWorkflowModules, declaringClass);
                 for (final var declaredProcessId : declaredBpmnProcessIds(declaringClass)) {
@@ -414,6 +425,12 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                         }
                         return secondaryProcessService;
                       });
+                  moduleOfProcessService.put(processService, declaringModuleId);
+                  final var declaredIds = processIdsByModule
+                      .computeIfAbsent(declaringModuleId, module -> new java.util.LinkedList<>());
+                  if (!declaredIds.contains(declaredProcessId)) {
+                    declaredIds.add(declaredProcessId);
+                  }
                   final var declaringBeanProvider = supplierContext.beanProvider(declaringClass);
                   taskRegistry.registerWorkflowService(
                       declaringModuleId,
@@ -424,6 +441,14 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                       processService);
                 }
               }
+
+              // every process service of this aggregate answers for the processes of ITS
+              // workflow module (story 107)
+              moduleOfProcessService
+                  .forEach((
+                      processService,
+                      moduleId) -> processService
+                          .setServedBpmnProcessIds(processIdsByModule.get(moduleId)));
 
               return processServiceBean;
 

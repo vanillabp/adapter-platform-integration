@@ -50,6 +50,20 @@ public class ElectionScopeContractTest {
   private static final String AGGREGATE_OF_THE_SECOND = "42";
 
   /**
+   * What the probes of these tests are asked about: the module and process the locator
+   * was built for.
+   */
+  private static final io.vanillabp.integration.adapter.spi.WorkflowScope SCOPE = io.vanillabp.integration.adapter.spi.WorkflowScope
+      .of(MODULE, PROCESS);
+
+  /**
+   * Another workflow module served by the same adapter (story 107).
+   */
+  private static final io.vanillabp.integration.adapter.spi.WorkflowScope OTHER_SCOPE = io.vanillabp.integration.adapter.spi.WorkflowScope
+      .of("other-module", "OtherProcess");
+
+
+  /**
    * An adapter which answers for its own scope, which here is a set of workflow
    * aggregate ids - a test double needs nothing of the tenant, prefix or table prefix
    * a real BPMS keeps its scopes apart with, only the ability to say "not mine".
@@ -60,6 +74,12 @@ public class ElectionScopeContractTest {
   static class ScopedAdapter extends WorkflowLocatorTest.ProbeAdapter {
 
     private final Set<String> ownWorkflows;
+
+    /**
+     * The scope those workflows live in - an adapter serving several workflow modules
+     * answers for the one it is ASKED about, not for all of them (story 107).
+     */
+    private io.vanillabp.integration.adapter.spi.WorkflowScope ownScope = SCOPE;
 
     private final WorkflowAwareness answerForOwn;
 
@@ -87,11 +107,20 @@ public class ElectionScopeContractTest {
 
     }
 
+    ScopedAdapter holdingThemIn(
+        final io.vanillabp.integration.adapter.spi.WorkflowScope scope) {
+
+      this.ownScope = scope;
+      return this;
+
+    }
+
     WorkflowAwareness answerFor(
+        final io.vanillabp.integration.adapter.spi.WorkflowScope asked,
         final Object workflowAggregateId) {
 
       probes.incrementAndGet();
-      return ownWorkflows.contains(String.valueOf(workflowAggregateId))
+      return ownScope.equals(asked) && ownWorkflows.contains(String.valueOf(workflowAggregateId))
           ? answerForOwn
           : WorkflowAwareness.UNKNOWN_TO_BPMS;
 
@@ -99,23 +128,26 @@ public class ElectionScopeContractTest {
 
     @Override
     public WorkflowAwareness awarenessOfTask(
+        final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
         final Object workflowAggregateId,
         final String taskId) {
-      return answerFor(workflowAggregateId);
+      return answerFor(scope, workflowAggregateId);
     }
 
     @Override
     public WorkflowAwareness awarenessOfUserTask(
+        final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
         final Object workflowAggregateId,
         final String taskId) {
-      return answerFor(workflowAggregateId);
+      return answerFor(scope, workflowAggregateId);
     }
 
     @Override
     public WorkflowAwareness awarenessOfWorkflow(
+        final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
         final io.vanillabp.integration.spi.AggregatePersistenceAware<Object> aggregatePersistence,
         final Object workflowAggregateId) {
-      return answerFor(workflowAggregateId);
+      return answerFor(scope, workflowAggregateId);
     }
 
   }
@@ -142,6 +174,7 @@ public class ElectionScopeContractTest {
 
     @Override
     public WorkflowAwareness awarenessOfTask(
+        final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
         final Object workflowAggregateId,
         final String taskId) {
       return claim();
@@ -149,6 +182,7 @@ public class ElectionScopeContractTest {
 
     @Override
     public WorkflowAwareness awarenessOfUserTask(
+        final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
         final Object workflowAggregateId,
         final String taskId) {
       return claim();
@@ -156,6 +190,7 @@ public class ElectionScopeContractTest {
 
     @Override
     public WorkflowAwareness awarenessOfWorkflow(
+        final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
         final io.vanillabp.integration.spi.AggregatePersistenceAware<Object> aggregatePersistence,
         final Object workflowAggregateId) {
       return claim();
@@ -169,11 +204,11 @@ public class ElectionScopeContractTest {
   private static final List<ProbeUnderTest> PROBES = List
       .of(
           new ProbeUnderTest(
-              "service task", adapter -> adapter.awarenessOfTask(AGGREGATE_OF_THE_SECOND, "task-1")),
+              "service task", adapter -> adapter.awarenessOfTask(SCOPE, AGGREGATE_OF_THE_SECOND, "task-1")),
           new ProbeUnderTest(
-              "user task", adapter -> adapter.awarenessOfUserTask(AGGREGATE_OF_THE_SECOND, "user-task-1")),
+              "user task", adapter -> adapter.awarenessOfUserTask(SCOPE, AGGREGATE_OF_THE_SECOND, "user-task-1")),
           new ProbeUnderTest(
-              "workflow", adapter -> adapter.awarenessOfWorkflow(null, AGGREGATE_OF_THE_SECOND)));
+              "workflow", adapter -> adapter.awarenessOfWorkflow(SCOPE, null, AGGREGATE_OF_THE_SECOND)));
 
   /**
    * @param name What the probe locates, for the assertion messages
@@ -252,6 +287,30 @@ public class ElectionScopeContractTest {
               0,
               holder.probes.get(),
               () -> "and the adapter which really holds it is never asked ("
+                  + probe.name()
+                  + ")");
+        });
+
+  }
+
+  @Test
+  @DisplayName("A workflow of another workflow module of the SAME adapter is not claimed")
+  public void anotherModuleOfTheSameAdapterIsNotClaimed() {
+
+    PROBES
+        .forEach(probe -> {
+          // one adapter, two workflow modules: the workflow with this aggregate id lives
+          // in the other one. Until story 107 the probe was not told which module was
+          // meant and answered for everything the adapter held.
+          final var adapter = new ScopedAdapter("only-adapter", Set.of(AGGREGATE_OF_THE_SECOND))
+              .holdingThemIn(OTHER_SCOPE);
+
+          final var location = locate(probe, adapter);
+
+          assertEquals(
+              WorkflowAwareness.UNKNOWN_TO_BPMS,
+              location.awareness(),
+              () -> "the aggregate id is the adapter's and the workflow module is not the one asked about ("
                   + probe.name()
                   + ")");
         });

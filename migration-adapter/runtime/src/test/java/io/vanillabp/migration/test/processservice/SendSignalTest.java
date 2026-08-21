@@ -91,6 +91,7 @@ public class SendSignalTest {
 
     @Override
     public WorkflowAwareness awarenessOfTask(
+        final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
         final Object workflowAggregateId,
         final String taskId) {
       return WorkflowAwareness.UNKNOWN_TO_BPMS;
@@ -98,6 +99,7 @@ public class SendSignalTest {
 
     @Override
     public WorkflowAwareness awarenessOfWorkflow(
+        final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
         final io.vanillabp.integration.spi.AggregatePersistenceAware<Object> aggregatePersistence,
         final Object workflowAggregateId) {
       return WorkflowAwareness.UNKNOWN_TO_BPMS;
@@ -105,6 +107,7 @@ public class SendSignalTest {
 
     @Override
     public WorkflowAwareness awarenessOfUserTask(
+        final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
         final Object workflowAggregateId,
         final String taskId) {
       return WorkflowAwareness.UNKNOWN_TO_BPMS;
