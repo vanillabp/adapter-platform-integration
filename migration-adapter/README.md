@@ -81,6 +81,17 @@ falls through to the next adapter, `COMPLETED` is a warned no-op,
 then fails naming the adapter — it NEVER falls back. New workflows always start in
 the first-priority adapter (no probing).
 
+What the walk cannot do is check the answers, and story 105 is where that duty is
+written down: an adapter answers ONLY for the workflows and tasks of the scope it
+deployed into, everything else is `UNKNOWN_TO_BPMS`. Two adapter ids may address one
+backend (the migration from one scoping to another) and two workflow modules of one
+backend may carry the same aggregate ID, so neither a task ID nor an aggregate ID
+tells the core whose workflow it is. Only the adapter knows, which is why the contract
+sits in `MigratableProcessService` and `ElectionScopeContractTest` holds both halves:
+the walk reaching the holder where the answers are scoped, and stopping at the wrong
+adapter where one claims more than it holds. Camunda 8 (story 103) and Camunda 7
+(story 104) are what happens without it.
+
 Successful elections populate a `WorkflowAdapterCache`
 (business SPI; key = workflow module, BPMN process, serialized aggregate ID →
 adapter ID). The next election probes the cached adapter first. Entries are HINTS,
