@@ -15,15 +15,18 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.ObjectProvider;
 
 import io.vanillabp.integration.adapter.migration.deployment.DeploymentService;
 import io.vanillabp.integration.deployment.SpringBootDeploymentService;
 import io.vanillabp.integration.processservice.ProcessServiceSpringBean;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.workflowmodule.WorkflowModules;
 import io.vanillabp.spi.process.ProcessService;
 
+@ExtendWith(SuppressOutputExtension.class)
 public class SpringBootDeploymentServiceTest {
 
   @Test
