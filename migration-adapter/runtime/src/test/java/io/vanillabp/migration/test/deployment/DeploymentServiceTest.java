@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -1393,6 +1394,161 @@ public class DeploymentServiceTest {
 
       verify(adapter1WiringService, never()).wireBpmn(anyString(), anyString(), anyString(), any(), any());
       verify(adapter1WiringService, never()).startWorkflowProcessing(anyString(), any());
+
+    }
+
+  }
+
+
+  /**
+   * Story 34's rule: several ids of ONE adapter type only make sense if they address
+   * DIFFERENT systems, and whether two configurations differ is BPMS knowledge, so the
+   * adapter decides. The SPI documents WHEN the adapter is asked - once per type, on the
+   * first deployment service of that type, with the ids in priority order and before
+   * anything reaches a BPMS. Nothing held that until story 106.
+   */
+  @Nested
+  @DisplayName("Several ids of one adapter type Tests")
+  class DistinctAdapterInstancesTests {
+
+    @Test
+    @DisplayName("A single id of a type is not asked whether its instances differ")
+    public void aSingleIdIsNotAsked() {
+
+      final var properties = propertiesWithGlobalPriorities(List.of("adapter-test1"));
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+      when(adapter1DeploymentService.getAdapterType()).thenReturn("dummy");
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of());
+
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService), List.of());
+
+      testee.deployResources(List.of("test-module"), oneBpmnFile());
+
+      verify(adapter1DeploymentService, never()).validateDistinctAdapterInstances(any());
+
+    }
+
+    @Test
+    @DisplayName("Two ids of ONE type are asked once, on the first service, in priority order")
+    public void twoIdsOfOneTypeAreAskedOnce() {
+
+      // the service order and the priority order differ on purpose
+      final var properties = propertiesWithGlobalPriorities(List.of("adapter-test2", "adapter-test1"));
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+      when(adapter2DeploymentService.getAdapterId()).thenReturn("adapter-test2");
+      when(adapter1DeploymentService.getAdapterType()).thenReturn("dummy");
+      when(adapter2DeploymentService.getAdapterType()).thenReturn("dummy");
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of());
+      when(adapter2DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of());
+
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService, adapter2DeploymentService), List.of());
+
+      testee.deployResources(List.of("test-module"), oneBpmnFile());
+
+      verify(adapter1DeploymentService)
+          .validateDistinctAdapterInstances(List.of("adapter-test2", "adapter-test1"));
+      verify(adapter2DeploymentService, never()).validateDistinctAdapterInstances(any());
+
+    }
+
+    @Test
+    @DisplayName("Two ids of DIFFERENT types are two single instances - neither is asked")
+    public void twoTypesAreNotAsked() {
+
+      final var properties = propertiesWithGlobalPriorities(List.of("adapter-test1", "adapter-test2"));
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+      when(adapter2DeploymentService.getAdapterId()).thenReturn("adapter-test2");
+      when(adapter1DeploymentService.getAdapterType()).thenReturn("dummy");
+      when(adapter2DeploymentService.getAdapterType()).thenReturn("another-dummy");
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of());
+      when(adapter2DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of());
+
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService, adapter2DeploymentService), List.of());
+
+      testee.deployResources(List.of("test-module"), oneBpmnFile());
+
+      verify(adapter1DeploymentService, never()).validateDistinctAdapterInstances(any());
+      verify(adapter2DeploymentService, never()).validateDistinctAdapterInstances(any());
+
+    }
+
+    @Test
+    @DisplayName("Ids which cannot be told apart end the boot before any BPMN was read")
+    public void aFailingValidationEndsTheBootBeforeDeploying() {
+
+      final var properties = propertiesWithGlobalPriorities(List.of("adapter-test1", "adapter-test2"));
+      lenient().when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+      lenient().when(adapter2DeploymentService.getAdapterId()).thenReturn("adapter-test2");
+      when(adapter1DeploymentService.getAdapterType()).thenReturn("dummy");
+      when(adapter2DeploymentService.getAdapterType()).thenReturn("dummy");
+      doThrow(new IllegalStateException("Both adapter ids address the same engine!"))
+          .when(adapter1DeploymentService)
+          .validateDistinctAdapterInstances(any());
+
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService, adapter2DeploymentService), List.of());
+
+      final var exception = assertThrows(
+          IllegalStateException.class,
+          () -> testee.deployResources(List.of("test-module"), oneBpmnFile()));
+      assertTrue(exception.getMessage().contains("address the same engine"));
+
+      verify(adapter1DeploymentService, never())
+          .readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean());
+      verify(adapter2DeploymentService, never())
+          .readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean());
+
+    }
+
+    private Function<String, Map<String, InputStream>> oneBpmnFile() {
+
+      return location -> Map.of("process.bpmn", createDummyBpmnInputStream());
+
+    }
+
+    /**
+     * Properties whose GLOBAL prioritized adapters are the given ids, in that order -
+     * which is the order the adapter is told about, no matter how the deployment
+     * services happen to be sorted.
+     */
+    private MigrationAdapterProperties propertiesWithGlobalPriorities(
+        final List<String> prioritizedAdapters) {
+
+      final var adapters = new LinkedHashMap<String, AdapterConfigProperties>();
+      final var adapterProperties = new LinkedHashMap<String, AdapterProperties>();
+      for (final var adapterId : prioritizedAdapters) {
+        adapters.put(adapterId, AdapterConfigProperties.ofType("dummy"));
+        adapterProperties
+            .put(adapterId, AdapterProperties
+                .builder()
+                .resourcesLocation("classpath:test-module/processes/"
+                    + adapterId)
+                .build());
+      }
+
+      final var properties = MigrationAdapterProperties
+          .builder()
+          .prioritizedAdapters(prioritizedAdapters)
+          .adapters(adapters)
+          .workflowModules(Map.of(
+              "test-module",
+              WorkflowModuleAdapterProperties
+                  .builder()
+                  .workflowModuleId("test-module")
+                  .prioritizedAdapters(prioritizedAdapters)
+                  .adapters(adapterProperties)
+                  .build()))
+          .build();
+      properties.validateAndLink();
+      return properties;
 
     }
 

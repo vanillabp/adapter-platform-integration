@@ -140,6 +140,10 @@ platforms at once — the details and their reasoning are in each module's `READ
 7. **Tests: acceptance tests first**, per platform, with the dummy adapter as the BPMS double; coverage is measured
    separately per platform (>90% of instructions, enforced by `test-coverage-report/coverage-gate`). A story is proven
    by its acceptance test, not by unit coverage.
+8. **A sentence which promises behavior is part of the behavior.** A javadoc, `README.md` or wiki sentence promising
+   something either has a test which fails when that stops being true, or it says that it is an assumption and what
+   would disprove it. A story which changes behavior re-reads the claims about that behavior before it is done
+   (story 106 walked the SPIs and the wikis once to start from a clean state).
 
 ### Building
 

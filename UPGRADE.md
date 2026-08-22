@@ -4,6 +4,59 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## name-clash-avoidance is `by-adapter` again, on every adapter (2026-08-22)
+
+Story 106, and it concerns every application which never configured
+`vanillabp.adapters.<id>.name-clash-avoidance`.
+
+Story 35 made `by-adapter` the default because that is what VanillaBP 1 deployed: a tenant
+named after the workflow module, on Camunda 7 as well as on Camunda 8 (version 1's
+`use-tenants` was on and the tenant defaulted to the workflow module id). On 2026-08-11 both
+Camunda adapters overrode that default with `none` - Camunda 8 because a cluster from the
+stock image has multi-tenancy switched off and rejected the boot of an application which
+configured nothing, Camunda 7 for symmetry. Neither change was recorded here, and both broke
+what an upgraded version-1 application finds: its workflows live in their tenants, and a
+deployment without a tenant does not address them.
+
+The default is `by-adapter` again, and overriding it is not an adapter's decision to make.
+What an adapter does instead is say what its BPMS needs:
+
+- **Camunda 7** needs nothing. A tenant id is an attribute of the deployment, so the engine
+  accepts any name and creates nothing.
+- **Camunda 8** needs multi-tenancy enabled and the tenant present. Where the cluster refuses,
+  the boot ends with a message naming both ways out, `use-prefix` and `none` (the second one
+  is version 1's `use-tenants: false`). The message names `none` since this story; it used to
+  name prefixing only.
+- **Process-Engine-API** has no isolation of its own and refuses `by-adapter` while deploying,
+  which is unchanged.
+
+What to do, per application:
+
+- **upgraded from version 1, cluster with multi-tenancy or Camunda 7:** nothing. The tenants
+  are back.
+- **Camunda 8 on a cluster without multi-tenancy:** add
+  `vanillabp.adapters.<id>.name-clash-avoidance: none` (or `use-prefix`, which keeps modules
+  apart without a tenant). Without it the boot ends, naming exactly these two.
+- **built against a VanillaBP 2 snapshot between 2026-08-11 and 2026-08-22:** if you relied on
+  the `none` default, say so explicitly with the same property. Switching the mode of a running
+  application is a BPMS migration, not a property change - see the wiki.
+
+## Platform beans: ProcessServiceBase has no unsupported stubs left (2026-08-22)
+
+Story 106, and it concerns whoever writes a PLATFORM integration. Applications and BPMS
+adapters are not affected.
+
+`ProcessServiceBase` carried four overrides (`completeTask`, `cancelTask`,
+`completeUserTask`, `cancelUserTask`) which threw "not yet supported by VanillaBP 2! It
+will be implemented in an upcoming story". Both platform beans have implemented all four
+for a while, so the stubs were unreachable and the message was wrong. They are gone: the
+operations are abstract in the base as they are in `ProcessService`, and a platform bean
+which forgets one no longer compiles.
+
+Nothing to do for an existing platform integration which implements the operations. One
+which relied on inheriting the stub gets a compile error naming the method, which is the
+point.
+
 ## Adapters: the awareness probes are told which workflow is meant (2026-08-21)
 
 Story 107, and it concerns whoever WRITES an adapter. Applications are not affected;

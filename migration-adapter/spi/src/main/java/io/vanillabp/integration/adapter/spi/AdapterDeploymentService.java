@@ -131,9 +131,11 @@ public interface AdapterDeploymentService<BPMN, PC> extends ExtensionWiringServi
    * cluster and client id).</li>
    * </ul>
    * Called ONCE per adapter type at startup (before any deployment) on the first
-   * deployment service of that type, and only if more than one id of the type is
-   * configured. Ids which cannot be told apart must fail the boot with a guiding
-   * message naming the property which makes them distinct.
+   * deployment service of that type, with the ids in the order they are prioritized,
+   * and only if more than one id of the type is configured - see
+   * {@code DeploymentServiceTest$DistinctAdapterInstancesTests}, which is what holds
+   * that. Ids which cannot be told apart must fail the boot with a guiding message
+   * naming the property which makes them distinct.
    * <p>
    * The default does nothing - an adapter whose instances cannot be compared (the
    * connection is provided by the application) should say so in its documentation
@@ -149,12 +151,20 @@ public interface AdapterDeploymentService<BPMN, PC> extends ExtensionWiringServi
 
   /**
    * The {@link NameClashAvoidance} mode which applies to this adapter as long as the
-   * application configures none at any level. {@link NameClashAvoidance#BY_ADAPTER}
-   * - version 1's behavior - unless the adapter's BPMS makes another mode the better
-   * starting point: the Camunda 8 adapter defaults to
-   * {@link NameClashAvoidance#NONE} because a cluster started from the stock image
-   * has multi-tenancy switched off and rejects tenant ids, so an application
-   * configuring nothing would not even boot.
+   * application configures none at any level. {@link NameClashAvoidance#BY_ADAPTER} -
+   * version 1's behavior, which every adapter keeps, so an application upgrading
+   * without touching its configuration keeps addressing the workflows it started
+   * before (Camunda 7 and Camunda 8 both deployed a tenant named after the workflow
+   * module in version 1). Overriding it is a last resort rather than a taste: an
+   * application which never configured the mode would silently deploy under other
+   * identifiers than before, and its running workflows would not be found.
+   * <p>
+   * What an adapter DOES do is say what its BPMS needs for the mode. The
+   * Process-Engine-API has no isolation of its own and refuses
+   * {@link NameClashAvoidance#BY_ADAPTER} while deploying; a Camunda 8 cluster
+   * without multi-tenancy rejects a tenant id, and the adapter turns that into a boot
+   * failure naming {@link NameClashAvoidance#USE_PREFIX} and
+   * {@link NameClashAvoidance#NONE} as the ways out.
    * <p>
    * Whichever mode an adapter picks, the core keeps the choice visible:
    * {@link NameClashAvoidance#NONE} is reported at startup by

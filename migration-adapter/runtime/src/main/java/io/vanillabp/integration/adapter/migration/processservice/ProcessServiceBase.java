@@ -3,25 +3,20 @@ package io.vanillabp.integration.adapter.migration.processservice;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Platform-neutral base of the platform integrations' {@link ProcessService} beans.
- * All operations not yet implemented by VanillaBP 2 throw an
- * {@link UnsupportedOperationException} saying so - a silent no-op would hide the
- * missing implementation from the application developer, and an
- * {@link AbstractMethodError} would not explain it. The stubs are replaced by real
- * implementations story by story.
+ * Platform-neutral base of the platform integrations' {@link ProcessService} beans:
+ * the messages both platforms would otherwise word twice.
+ * <p>
+ * It carried stubs for the operations VanillaBP 2 did not implement yet, which threw
+ * an {@link UnsupportedOperationException} saying so rather than being a silent
+ * no-op. There are none left, and the stubs are gone with them: every operation of
+ * {@link ProcessService} is now abstract here as well, so a platform bean which
+ * forgets one does not compile - which is a better guard than a message promising an
+ * upcoming story. What a single BPMS cannot do is answered by its adapter, naming
+ * that adapter (see {@code MigratableProcessService}).
  *
  * @param <A> The workflow-aggregate-class
  */
 public abstract class ProcessServiceBase<A> implements ProcessService<A> {
-
-  private static UnsupportedOperationException notYetSupported(
-      final String operation) {
-
-    return new UnsupportedOperationException(
-        "'%s' is not yet supported by VanillaBP 2! It will be implemented in an upcoming story."
-            .formatted(operation));
-
-  }
 
   /**
    * Builds the exception thrown when {@link #startWorkflow(Object)} is called
@@ -59,44 +54,6 @@ public abstract class ProcessServiceBase<A> implements ProcessService<A> {
             method calling 'sendSignal' with @Transactional \
             (org.springframework.transaction.annotation.Transactional on Spring Boot, \
             jakarta.transaction.Transactional on Quarkus).""");
-
-  }
-
-  @Override
-  public A completeUserTask(
-      final A workflowAggregate,
-      final String taskId) {
-
-    throw notYetSupported("completeUserTask");
-
-  }
-
-  @Override
-  public A cancelUserTask(
-      final A workflowAggregate,
-      final String taskId,
-      final String bpmnErrorCode) {
-
-    throw notYetSupported("cancelUserTask");
-
-  }
-
-  @Override
-  public A completeTask(
-      final A workflowAggregate,
-      final String taskId) {
-
-    throw notYetSupported("completeTask");
-
-  }
-
-  @Override
-  public A cancelTask(
-      final A workflowAggregate,
-      final String taskId,
-      final String bpmnErrorCode) {
-
-    throw notYetSupported("cancelTask");
 
   }
 

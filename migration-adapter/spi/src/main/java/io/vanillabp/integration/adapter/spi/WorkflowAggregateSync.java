@@ -8,16 +8,21 @@ import java.util.Map;
  * ({@link AggregateSyncMode}). Implemented ONCE by the core (the model is
  * BPMS-neutral) and handed to every adapter by the platform integration.
  * <p>
- * What an adapter does with the values is its own decision: a remote BPMS pushes
- * them as process variables at every sync point (instance creation, task
- * completion, message correlation, user-task completion), an embedded BPMS reads
- * the aggregate live and writes them as context information only.
+ * Every adapter pushes the values as process variables at every sync point (instance
+ * creation, task completion, message correlation, user-task completion), an embedded
+ * BPMS included: an engine evaluates its models against its own variables, so a
+ * model reading anything else would work on one BPMS and fail on the next. Camunda 7
+ * read the aggregate live until story 66 and does not any more.
  * <p>
  * <b>The workflow aggregate's ID is never part of these values</b> - how a BPMS
  * identifies the workflow is the adapter's concern (Camunda 7: the business key;
  * Camunda 8 / Process-Engine-API: a process variable named after the aggregate's
  * ID property, see {@code AggregatePersistenceAware#getAggregateIdName()}). That
- * variable is technical and is ALWAYS set, no matter what the sync model says.
+ * variable is technical and is ALWAYS set, no matter what the sync model says: an
+ * aggregate annotated {@code @NoSyncWithBPMS} would otherwise be unaddressable. Both
+ * halves are held, the first by {@code WorkflowTaskRegistryTest} of the migration
+ * adapter, the second by {@code PeaSharedValuesTest} of the Process-Engine-API
+ * adapter (Camunda 8 is story 116).
  */
 public interface WorkflowAggregateSync {
 
