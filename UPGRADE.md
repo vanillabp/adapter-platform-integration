@@ -4,6 +4,39 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Adapters: the awareness probes are told which workflow is meant (2026-08-21)
+
+Story 107, and it concerns whoever WRITES an adapter. Applications are not affected;
+`spi-for-java` is untouched.
+
+The four awareness probes of `MigratableProcessService` take a `WorkflowScope` as their
+first parameter now:
+
+```java
+WorkflowAwareness awarenessOfTask(WorkflowScope scope, Object workflowAggregateId, String taskId);
+WorkflowAwareness awarenessOfUserTask(WorkflowScope scope, Object workflowAggregateId, String taskId);
+WorkflowAwareness awarenessOfWorkflow(WorkflowScope scope, AggregatePersistenceAware<A> persistence, Object workflowAggregateId);
+WorkflowAwareness awarenessOfWorkflowForRedispatch(WorkflowScope scope, AggregatePersistenceAware<A> persistence, Object workflowAggregateId);
+```
+
+The scope names the workflow module and the BPMN processes the calling process service
+serves, the primary one first. An adapter answers for THAT scope and for nothing else:
+anything belonging to another module or another process is `UNKNOWN_TO_BPMS`, which is
+what lets the election reach the adapter really holding the workflow.
+
+Why it was necessary: a probe used to be told the workflow-aggregate id alone. Aggregate
+ids are unique per aggregate type and not across an application, so two workflow modules
+whose aggregates count from one both hold an id `1`, and an adapter serving both answered
+`ACTIVE` for either. That costs nothing while one BPMS is configured and wins the election
+against the right BPMS as soon as a migration runs. Camunda 7 and Camunda 8 both had it
+(stories 103 and 104), which is how the SPI got the contract in story 105 and the
+parameter here.
+
+For an adapter of your own: translate the scope into what your BPMS knows the processes by
+(a tenant, prefixed identifiers, a table prefix) and filter your query with it. The
+Camunda 7 adapter does it with `processDefinitionKeyIn` plus `tenantIdIn`, the Camunda 8
+adapter compares the tenant and the scoped process definition id of every search hit.
+
 ## A workflow module's configuration is a default again (2026-08-21)
 
 Story 101, and a regression against Version 1 rather than a new rule.

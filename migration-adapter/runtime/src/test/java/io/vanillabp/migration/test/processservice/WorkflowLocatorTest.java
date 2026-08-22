@@ -31,6 +31,13 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowLocatorTest {
 
+  /**
+   * What a probe is asked about (story 107). Any scope does here: the adapters of this
+   * test answer from what the test told them, not from a deployment.
+   */
+  private static final io.vanillabp.integration.adapter.spi.WorkflowScope SCOPE = io.vanillabp.integration.adapter.spi.WorkflowScope
+      .of("test-module", "TestProcess");
+
   private static final String MODULE = "test-module";
 
   private static final String PROCESS = "TestProcess";
@@ -91,6 +98,7 @@ public class WorkflowLocatorTest {
 
     @Override
     public WorkflowAwareness awarenessOfTask(
+        final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
         final Object workflowAggregateId,
         final String taskId) {
       return answer();
@@ -98,6 +106,7 @@ public class WorkflowLocatorTest {
 
     @Override
     public WorkflowAwareness awarenessOfWorkflow(
+        final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
         final io.vanillabp.integration.spi.AggregatePersistenceAware<Object> aggregatePersistence,
         final Object workflowAggregateId) {
       return answer();
@@ -164,6 +173,7 @@ public class WorkflowLocatorTest {
 
     @Override
     public io.vanillabp.integration.adapter.spi.WorkflowAwareness awarenessOfUserTask(
+        final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
         final Object workflowAggregateId,
         final String taskId) {
       return io.vanillabp.integration.adapter.spi.WorkflowAwareness.UNKNOWN_TO_BPMS;
@@ -261,7 +271,7 @@ public class WorkflowLocatorTest {
     return new WorkflowLocator(MODULE, PROCESS, cache)
         .locate(
             List.of(adapters),
-            adapter -> adapter.awarenessOfTask("42", "task-1"),
+            adapter -> adapter.awarenessOfTask(SCOPE, "42", "task-1"),
             "42",
             "task 'task-1' of workflow aggregate '42'");
 
@@ -370,7 +380,7 @@ public class WorkflowLocatorTest {
     final var location = new WorkflowLocator(MODULE, PROCESS, null)
         .locate(
             List.<MigratableProcessService<Object>>of(adapter),
-            candidate -> candidate.awarenessOfWorkflow(null, Map.of()),
+            candidate -> candidate.awarenessOfWorkflow(SCOPE, null, Map.of()),
             "42",
             "workflow of aggregate '42'");
 

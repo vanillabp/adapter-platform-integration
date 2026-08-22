@@ -36,6 +36,17 @@ import lombok.extern.slf4j.Slf4j;
  * answer without any hint is a workflow nobody ever heard of, which fails
  * immediately.
  * <p>
+ * <b>What the walk cannot do.</b> It stops at the first
+ * {@link WorkflowAwareness#ACTIVE} and is therefore only as right as the answers it
+ * gets. Whether a workflow belongs to an adapter is the ADAPTER's question, not this
+ * one's: two adapter ids may address one backend (the migration from one scoping to
+ * another), and two workflow modules of one backend may carry the same aggregate ID,
+ * so neither a task ID nor an aggregate ID tells the core anything. The election
+ * contract in {@code MigratableProcessService} is where that duty is written down,
+ * and {@code ElectionScopeContractTest} shows both halves: the walk reaching the
+ * holder where the adapters answer for their own scope, and stopping at the wrong one
+ * where an adapter claims more than it holds.
+ * <p>
  * Walk contract (see {@code MigratableProcessService}):
  * <ul>
  * <li>{@link WorkflowAwareness#ACTIVE} - this adapter executes the operation, stop

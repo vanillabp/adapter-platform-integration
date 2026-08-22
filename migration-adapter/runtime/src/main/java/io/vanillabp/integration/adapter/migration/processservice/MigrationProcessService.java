@@ -1384,7 +1384,8 @@ public class MigrationProcessService<A> {
       final Object workflowAggregateId,
       final String operationDescription) {
 
-    final var awareness = adapter.awarenessOfWorkflowForRedispatch(aggregatePersistenceSupport, workflowAggregateId);
+    final var awareness = adapter.awarenessOfWorkflowForRedispatch(workflowScope(), aggregatePersistenceSupport,
+        workflowAggregateId);
     switch (awareness) {
       case ACTIVE, COMPLETED -> {
         log.info(
@@ -1439,7 +1440,7 @@ public class MigrationProcessService<A> {
         "completing",
         (
             adapter,
-            aggregateId) -> adapter.awarenessOfTask(aggregateId, taskId),
+            aggregateId) -> adapter.awarenessOfTask(workflowScope(), aggregateId, taskId),
         (
             adapter,
             attachedAggregate) -> adapter
@@ -1472,7 +1473,7 @@ public class MigrationProcessService<A> {
         "canceling",
         (
             adapter,
-            aggregateId) -> adapter.awarenessOfTask(aggregateId, taskId),
+            aggregateId) -> adapter.awarenessOfTask(workflowScope(), aggregateId, taskId),
         (
             adapter,
             attachedAggregate) -> adapter
@@ -1523,7 +1524,7 @@ public class MigrationProcessService<A> {
         "completing user",
         (
             adapter,
-            aggregateId) -> adapter.awarenessOfUserTask(aggregateId, taskId),
+            aggregateId) -> adapter.awarenessOfUserTask(workflowScope(), aggregateId, taskId),
         (
             adapter,
             attachedAggregate) -> adapter
@@ -1556,7 +1557,7 @@ public class MigrationProcessService<A> {
         "canceling user",
         (
             adapter,
-            aggregateId) -> adapter.awarenessOfUserTask(aggregateId, taskId),
+            aggregateId) -> adapter.awarenessOfUserTask(workflowScope(), aggregateId, taskId),
         (
             adapter,
             attachedAggregate) -> adapter
@@ -1587,7 +1588,7 @@ public class MigrationProcessService<A> {
         "completing user",
         (
             adapter,
-            aggregateId) -> adapter.awarenessOfUserTask(aggregateId, taskId),
+            aggregateId) -> adapter.awarenessOfUserTask(workflowScope(), aggregateId, taskId),
         adapter -> adapter
             .completeUserTaskPhaseTwo(
                 workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, taskId));
@@ -1613,7 +1614,7 @@ public class MigrationProcessService<A> {
         "canceling user",
         (
             adapter,
-            aggregateId) -> adapter.awarenessOfUserTask(aggregateId, taskId),
+            aggregateId) -> adapter.awarenessOfUserTask(workflowScope(), aggregateId, taskId),
         adapter -> adapter
             .cancelUserTaskPhaseTwo(
                 workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, taskId,
@@ -1649,7 +1650,7 @@ public class MigrationProcessService<A> {
 
     final var location = workflowLocator.locate(
         adapterProcessServices,
-        adapter -> adapter.awarenessOfWorkflow(aggregatePersistenceSupport, aggregateId),
+        adapter -> adapter.awarenessOfWorkflow(workflowScope(), aggregatePersistenceSupport, aggregateId),
         aggregateId,
         subject);
 
@@ -1722,7 +1723,7 @@ public class MigrationProcessService<A> {
 
     final var location = workflowLocator.locate(
         adapterProcessServices,
-        adapter -> adapter.awarenessOfWorkflow(aggregatePersistenceSupport, aggregateId),
+        adapter -> adapter.awarenessOfWorkflow(workflowScope(), aggregatePersistenceSupport, aggregateId),
         aggregateId,
         subject);
 
@@ -1782,7 +1783,7 @@ public class MigrationProcessService<A> {
 
     final var location = workflowLocator.locate(
         adapterProcessServices,
-        adapter -> adapter.awarenessOfWorkflow(aggregatePersistenceSupport, workflowAggregateId),
+        adapter -> adapter.awarenessOfWorkflow(workflowScope(), aggregatePersistenceSupport, workflowAggregateId),
         workflowAggregateId,
         subject);
 
@@ -1799,6 +1800,46 @@ public class MigrationProcessService<A> {
               .aggregateChangedPhaseTwo(
                   workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, taskId));
     }
+
+  }
+
+  /**
+   * The BPMN processes this process service serves, the primary one first (story 107).
+   * <p>
+   * A {@code @WorkflowService} declares one primary process and may declare
+   * {@code secondaryBpmnProcesses}; all of them run on this aggregate, so an instance of
+   * any of them is a legitimate answer to an awareness probe. The platform integration
+   * knows the full list when it registers the process service and sets it here. Where it
+   * is not set - a test constructing this service directly - the primary process is the
+   * scope, which is what the core knew before this story.
+   */
+  private java.util.List<String> servedBpmnProcessIds;
+
+  /**
+   * @param servedBpmnProcessIds The plain BPMN process ids of this aggregate's workflow
+   *          services, the primary one first
+   */
+  public void setServedBpmnProcessIds(
+      final java.util.List<String> servedBpmnProcessIds) {
+
+    this.servedBpmnProcessIds = (servedBpmnProcessIds == null) || servedBpmnProcessIds.isEmpty()
+        ? null
+        : List.copyOf(servedBpmnProcessIds);
+
+  }
+
+  /**
+   * What an awareness probe is asked about: this workflow module and the processes this
+   * service serves. Built per call rather than cached, because the platform sets the
+   * process ids after construction.
+   *
+   * @return The scope handed to every probe
+   */
+  private io.vanillabp.integration.adapter.spi.WorkflowScope workflowScope() {
+
+    return servedBpmnProcessIds == null
+        ? io.vanillabp.integration.adapter.spi.WorkflowScope.of(workflowModuleId, bpmnProcessId)
+        : new io.vanillabp.integration.adapter.spi.WorkflowScope(workflowModuleId, servedBpmnProcessIds);
 
   }
 
@@ -1914,7 +1955,7 @@ public class MigrationProcessService<A> {
 
     final var location = workflowLocator.locate(
         adapterProcessServices,
-        adapter -> adapter.awarenessOfWorkflow(aggregatePersistenceSupport, workflowAggregateId),
+        adapter -> adapter.awarenessOfWorkflow(workflowScope(), aggregatePersistenceSupport, workflowAggregateId),
         workflowAggregateId,
         subject);
 
@@ -2191,7 +2232,7 @@ public class MigrationProcessService<A> {
 
     final var location = workflowLocator.locate(
         adapterProcessServices,
-        adapter -> adapter.awarenessOfWorkflow(aggregatePersistenceSupport, aggregateId),
+        adapter -> adapter.awarenessOfWorkflow(workflowScope(), aggregatePersistenceSupport, aggregateId),
         aggregateId,
         subject);
 
@@ -2347,7 +2388,7 @@ public class MigrationProcessService<A> {
         "completing",
         (
             adapter,
-            aggregateId) -> adapter.awarenessOfTask(aggregateId, taskId),
+            aggregateId) -> adapter.awarenessOfTask(workflowScope(), aggregateId, taskId),
         adapter -> adapter
             .completeTaskPhaseTwo(
                 workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, taskId));
@@ -2373,7 +2414,7 @@ public class MigrationProcessService<A> {
         "canceling",
         (
             adapter,
-            aggregateId) -> adapter.awarenessOfTask(aggregateId, taskId),
+            aggregateId) -> adapter.awarenessOfTask(workflowScope(), aggregateId, taskId),
         adapter -> adapter
             .cancelTaskPhaseTwo(
                 workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, taskId,

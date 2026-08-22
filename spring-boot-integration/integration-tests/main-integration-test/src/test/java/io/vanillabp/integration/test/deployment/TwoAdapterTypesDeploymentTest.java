@@ -164,6 +164,7 @@ public class TwoAdapterTypesDeploymentTest {
 
     @Override
     public WorkflowAwareness awarenessOfTask(
+        final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
         final Object workflowAggregateId,
         final String taskId) {
       return WorkflowAwareness.UNKNOWN_TO_BPMS;
@@ -171,6 +172,7 @@ public class TwoAdapterTypesDeploymentTest {
 
     @Override
     public WorkflowAwareness awarenessOfWorkflow(
+        final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
         final io.vanillabp.integration.spi.AggregatePersistenceAware<Object> aggregatePersistence,
         final Object workflowAggregateId) {
       return WorkflowAwareness.UNKNOWN_TO_BPMS;
@@ -239,6 +241,7 @@ public class TwoAdapterTypesDeploymentTest {
 
     @Override
     public io.vanillabp.integration.adapter.spi.WorkflowAwareness awarenessOfUserTask(
+        final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
         final Object workflowAggregateId,
         final String taskId) {
       return io.vanillabp.integration.adapter.spi.WorkflowAwareness.UNKNOWN_TO_BPMS;

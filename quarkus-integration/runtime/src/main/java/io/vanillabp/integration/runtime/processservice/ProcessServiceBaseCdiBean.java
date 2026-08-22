@@ -278,6 +278,15 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
     processServicesByKey.put(
         "%s|%s".formatted(getWorkflowModuleId(), getBpmnProcessId()),
         migrationProcessService);
+    // story 107: an awareness probe is asked about a workflow module AND every BPMN
+    // process serving this aggregate there, secondary processes of the same
+    // @WorkflowService included - they run on the same workflow
+    final var processIdsByModule = new java.util.LinkedHashMap<String, java.util.List<String>>();
+    final var moduleOfProcessService = new java.util.LinkedHashMap<MigrationProcessService<A>, String>();
+    moduleOfProcessService.put(migrationProcessService, getWorkflowModuleId());
+    processIdsByModule
+        .computeIfAbsent(getWorkflowModuleId(), module -> new java.util.LinkedList<>())
+        .add(getBpmnProcessId());
     for (final var registration : getWorkflowTaskRegistrations().split(";")) {
       final var parts = registration.split("\\|");
       final var moduleId = parts[0];
@@ -308,6 +317,12 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
             }
             return secondaryProcessService;
           });
+      moduleOfProcessService.put(processService, moduleId);
+      final var declaredIds = processIdsByModule
+          .computeIfAbsent(moduleId, module -> new java.util.LinkedList<>());
+      if (!declaredIds.contains(bpmnProcessId)) {
+        declaredIds.add(bpmnProcessId);
+      }
       registry.registerWorkflowService(
           moduleId,
           bpmnProcessId,
@@ -326,6 +341,13 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
           },
           processService);
     }
+
+    // every process service of this aggregate answers for the processes of ITS workflow
+    // module (story 107)
+    moduleOfProcessService
+        .forEach((
+            processService,
+            moduleId) -> processService.setServedBpmnProcessIds(processIdsByModule.get(moduleId)));
 
   }
 
