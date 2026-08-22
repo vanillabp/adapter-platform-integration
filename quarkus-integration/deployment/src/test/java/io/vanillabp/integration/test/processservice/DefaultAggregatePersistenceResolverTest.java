@@ -9,12 +9,14 @@ import org.jboss.jandex.IndexView;
 import org.jboss.jandex.Indexer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.data.repository.CrudRepository;
 
 import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import io.quarkus.hibernate.orm.panache.PanacheRepository;
 import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import io.vanillabp.integration.deployment.processservice.DefaultAggregatePersistenceResolver;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
  * Story 69: which of VanillaBP's persistence implementations serves an aggregate is
@@ -26,6 +28,7 @@ import io.vanillabp.integration.deployment.processservice.DefaultAggregatePersis
  * MongoDB client for every test application of this module. They are covered
  * end-to-end by {@code default-persistence-mongo-tests}.
  */
+@ExtendWith(SuppressOutputExtension.class)
 public class DefaultAggregatePersistenceResolverTest {
 
   /* -------------------------------------------------- */

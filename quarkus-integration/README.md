@@ -172,18 +172,46 @@ container and breaks the day the container changes it.
 
 ### Logging during tests
 
-To minimize build output three actions were taken:
+Three things, and since story 109 each one is there for a reason that was measured:
 
-1. Logs are redirected to file using `maven-surefire-plugin` configuration
-   `redirectTestOutputToFile`.
-2. Logs of Quarkus builds are set to log-level `ERROR` using
-   `systemPropertyVariables` of `maven-surefire-plugin` with
-   `<quarkus.log.level>ERROR</quarkus.log.level>`.
-3. In tests the logging is captured and printed only in case of failures
-   by adding `@ExtendWith(SuppressOutputExtension.class)`.
+1. `@ExtendWith(SuppressOutputExtension.class)` on every test class buffers what the class
+   prints and writes it out when a test fails. Since story 109 that includes what is logged
+   through JBoss LogManager, which the swap of `System.out` alone never reached.
+2. `<quarkus.log.level>INFO</quarkus.log.level>`, not `ERROR` as before: a record dropped
+   by its level reaches no handler, so it never reaches the capture either, and a failing
+   class then replays nothing worth reading.
+3. `redirectTestOutputToFile`, because the tests of these modules boot their application IN
+   the test JVM and Quarkus logs that boot into a log context of its own. It happens in the
+   Quarkus extension's `beforeAll`, after ours and before our first `beforeEach`, so nothing
+   captures it: 311 lines in a green run of `deployment-integration-tests` without the
+   redirection.
 
-In case of errors one might disable one or all of them for finding
-the root cause of the problem.
+The price of the third one is that the replay of a failing class lands in
+`target/failsafe-reports/<class>-output.txt` and Surefire prints only its last line. The
+workflow therefore uploads these reports as an artifact when a build fails, so a red run is
+one download away from the whole log.
+
+The Quarkus test modules of the adapter repositories need no redirection: their tests boot
+their application in a FORKED JVM, which writes its own log file, and what they print in
+the test JVM is a dozen lines per class from before the first callback.
+
+Which window the third one covers is worth knowing, because it was found the hard way
+(story 109). These modules run under JBoss LogManager, installed by the Surefire
+property `java.util.logging.manager`, and a handler of that log manager holds the
+`System.out` which existed when the handler was created. Replacing `System.out`, which
+is all the extension used to do, therefore reached nothing logged through it: the
+augmentation line of a `QuarkusProdModeTest` and every Testcontainers line of the
+Camunda 8 Quarkus tests went straight into the log of a green build.
+
+The extension now hands every stream handler it finds below the root logger, nested
+handlers of `QuarkusDelayedHandler` included, a stream which resolves `System.out` at
+write time. So the handler follows the capture and the failure replay keeps working,
+which switching the console handler off would have cost. What it cannot cover is output
+written BEFORE its first callback, since there is no handler to redirect yet: a static
+initializer which starts a container is the case in the Camunda 8 adapter, and only
+configuration reaches that. `JbossLogManagerCaptureTest` in
+`integration-tests/deployment-integration-tests` holds the mechanism; removing the
+redirection makes it fail with the marker printed to the console.
 
 ## The store of processed task deliveries
 

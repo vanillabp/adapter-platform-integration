@@ -22,6 +22,7 @@ import io.vanillabp.integration.processservice.ProcessServiceSpringBean;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOperation;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
  * Tests the aggregate-ID handling of outbox dispatches through the
@@ -33,6 +34,7 @@ import io.vanillabp.integration.spi.PhaseTwoOperation;
  * outbox entry permanently; an ID type known to not round-trip fails at startup.
  */
 @ExtendWith(MockitoExtension.class)
+@ExtendWith(SuppressOutputExtension.class)
 public class PhaseTwoAggregateIdConverterTest {
 
   @Mock

@@ -1075,7 +1075,11 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
 
   }
 
+  // the suppression is not a doubt about the deprecation, it is what keeps it quiet:
+  // 'forRemoval' raises the mandatory 'removal' lint at every implementation, and
+  // @Deprecated on the override does not silence it. Goes with the fallback in 2.1.
   @Deprecated(forRemoval = true)
+  @SuppressWarnings("removal")
   @Override
   public boolean workflowAggregateHasProperty(
       final String workflowModuleId,
@@ -1093,6 +1097,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
   }
 
   @Deprecated(forRemoval = true)
+  @SuppressWarnings("removal")
   @Override
   public Object resolveWorkflowAggregateProperty(
       final String workflowModuleId,

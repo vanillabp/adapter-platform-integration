@@ -34,10 +34,16 @@ jobs:
           java-version: 21
           distribution: temurin
           cache: maven
+      # 'install' and not 'install verify': install runs every phase verify has, so
+      # naming both made Maven walk two lifecycles per module. The tests noticed and
+      # skipped their second run, the compiler did not, so every javac warning was
+      # reported twice - once per compilation - and a reviewer could not tell two
+      # occurrences of one problem from two problems. The local repository is still
+      # written because the native-build job below resolves from it.
       - name: Build and test
         if: "${{ github.event_name == 'pull_request' }}"
         run: mvn -s $GITHUB_WORKSPACE/.github/workflows/github-packages-settings.xml
-          --batch-mode --no-transfer-progress --update-snapshots install verify
+          --batch-mode --no-transfer-progress --update-snapshots install
         env:
           USER_NAME: "${{ secrets.VANILLABP_USER_NAME }}"
           USER_TOKEN: "${{ secrets.VANILLABP_USER_TOKEN }}"
@@ -52,6 +58,20 @@ jobs:
           USER_TOKEN: "${{ secrets.VANILLABP_USER_TOKEN }}"
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           CI: false
+      # what a failing test printed is in these reports, and for the modules booting a
+      # Quarkus application in the test JVM it is ONLY there: their output is redirected
+      # to file because that boot logs into a log context no extension reaches (story
+      # 109). Surefire prints its last line, which is never the interesting one.
+      - name: Upload the test reports of a failed build
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            **/target/surefire-reports/**
+            **/target/failsafe-reports/**
+          retention-days: 7
+          if-no-files-found: ignore
       - name: Merge coverage reports
         if: "${{ github.event_name == 'push' }}"
         run: |

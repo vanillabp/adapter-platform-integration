@@ -1,0 +1,19 @@
+<configuration>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- The file exists for the root level alone. Logback defaults to DEBUG, and
+         docker-java debug-logs every request to the daemon including its wire content:
+         2208 lines in a green build, measured on run 32563913869. INFO and not WARN,
+         because what a level drops reaches no appender and therefore no capture either,
+         and a failing test should be able to say what the container did. What INFO still
+         prints in a green build is the handful of lines from before the first extension
+         callback - Docker detection runs in an ExecutionCondition, the image pull and the
+         Ryuk reaper start with it - and those are the ones no extension can reach. -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

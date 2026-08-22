@@ -4,10 +4,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.jboss.jandex.*;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.vanillabp.integration.deployment.processservice.AggregatePersistenceResolver;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
+@ExtendWith(SuppressOutputExtension.class)
 class AggregatePersistenceResolverTest {
 
   /* -------------------------------------------------- */

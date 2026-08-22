@@ -142,6 +142,8 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
     System.setErr(new PrintStream(
         new TeeOutputStream(allBuffer, errBuffer)));
 
+    redirectJulConsoleHandlers();
+
     capturedOutput = new CapturedOutput(
         classLevelAllBuffer, allBuffer, classLevelOutBuffer, outBuffer, classLevelErrBuffer, errBuffer);
 
@@ -231,6 +233,153 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
   public String getCapturedOutput() {
 
     return capturedOutput != null ? capturedOutput.getAll() : "";
+
+  }
+
+  /**
+   * Redirecting {@code System.out} is not enough for a test running under JBoss
+   * LogManager, which the Quarkus test modules install through the Surefire property
+   * {@code java.util.logging.manager}. A handler of that log manager holds the
+   * {@code System.out} it found when it was created, so everything logged through it goes
+   * to the real console no matter what this extension does afterwards. The augmentation
+   * line of a {@code QuarkusProdModeTest} and the Testcontainers lines of story 109 came
+   * from there.
+   * <p>
+   * Every stream handler reachable from the root logger is given a stream which resolves
+   * {@code System.out} at WRITE time, so it follows this extension into the capture buffer
+   * and back out when the streams are restored. Nothing has to be undone, and a failing
+   * class still replays what the application logged - which is the half a switched off
+   * console handler would have broken.
+   * <p>
+   * The walk goes through nested handlers, because Quarkus puts its console handler
+   * inside {@code QuarkusDelayedHandler} while the application boots. It runs on every
+   * capture, since handlers appear and are replaced during that boot, and it is
+   * idempotent. Where JBoss LogManager is absent, nothing happens at all.
+   */
+  private static void redirectJulConsoleHandlers() {
+
+    final var logManager = java.util.logging.LogManager.getLogManager();
+    if (!logManager.getClass().getName().startsWith("org.jboss.logmanager.")) {
+      return;
+    }
+    final var rootLogger = logManager.getLogger("");
+    if (rootLogger == null) {
+      return;
+    }
+    for (final var handler : rootLogger.getHandlers()) {
+      redirectHandlerTree(handler, 0);
+    }
+
+  }
+
+  private static void redirectHandlerTree(
+      final java.util.logging.Handler handler,
+      final int depth) {
+
+    if ((handler == null) || (depth > 8)) {
+      // a handler nesting deeper than this is a cycle, and a cycle is not this
+      // extension's problem to solve
+      return;
+    }
+    redirectIfStreamHandler(handler);
+    for (final var nested : nestedHandlersOf(handler)) {
+      redirectHandlerTree(nested, depth + 1);
+    }
+
+  }
+
+  private static java.util.logging.Handler[] nestedHandlersOf(
+      final java.util.logging.Handler handler) {
+
+    try {
+      final var getHandlers = handler.getClass().getMethod("getHandlers");
+      final var nested = getHandlers.invoke(handler);
+      return nested instanceof java.util.logging.Handler[] handlers
+          ? handlers
+          : new java.util.logging.Handler[0];
+    } catch (NoSuchMethodException e) {
+      return new java.util.logging.Handler[0];
+    } catch (Exception e) {
+      return new java.util.logging.Handler[0];
+    }
+
+  }
+
+  private static void redirectIfStreamHandler(
+      final java.util.logging.Handler handler) {
+
+    final java.lang.reflect.Method setOutputStream;
+    try {
+      setOutputStream = handler.getClass().getMethod("setOutputStream", OutputStream.class);
+    } catch (NoSuchMethodException e) {
+      // not a stream handler: a file or a socket handler prints nowhere near the build log
+      return;
+    }
+    try {
+      final var installed = currentOutputStreamOf(handler);
+      if (installed instanceof CurrentSystemOut) {
+        return;
+      }
+      setOutputStream.invoke(handler, new CurrentSystemOut());
+    } catch (Exception e) {
+      throw new IllegalStateException(
+          "Could not redirect the handler '%s' of JBoss LogManager - without it a test prints into the log of a green build"
+              .formatted(handler.getClass().getName()), e);
+    }
+
+  }
+
+  private static Object currentOutputStreamOf(
+      final java.util.logging.Handler handler) {
+
+    // 'getOutputStream' is not public API of every version, and not knowing what is
+    // installed only costs one redundant redirect
+    try {
+      final var getOutputStream = handler.getClass().getMethod("getOutputStream");
+      return getOutputStream.invoke(handler);
+    } catch (Exception e) {
+      return null;
+    }
+
+  }
+
+  /**
+   * Writes to whatever {@code System.out} is at the time of the write, and refuses to be
+   * closed: the handler owning it must not close a stream this extension restores.
+   */
+  private static class CurrentSystemOut extends OutputStream {
+
+    @Override
+    public void write(
+        final int b) {
+
+      System.out.write(b);
+
+    }
+
+    @Override
+    public void write(
+        final byte[] b,
+        final int off,
+        final int len) {
+
+      System.out.write(b, off, len);
+
+    }
+
+    @Override
+    public void flush() {
+
+      System.out.flush();
+
+    }
+
+    @Override
+    public void close() {
+
+      System.out.flush();
+
+    }
 
   }
 

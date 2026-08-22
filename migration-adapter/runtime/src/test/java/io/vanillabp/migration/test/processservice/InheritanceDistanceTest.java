@@ -2,9 +2,12 @@ package io.vanillabp.migration.test.processservice;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.vanillabp.integration.adapter.migration.processservice.AwareSelection;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
+@ExtendWith(SuppressOutputExtension.class)
 public class InheritanceDistanceTest {
 
   interface IA {

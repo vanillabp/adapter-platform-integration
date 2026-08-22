@@ -9,8 +9,10 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.vanillabp.integration.spi.AggregateIdTypes;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.persistence.Id;
 
 /**
@@ -19,6 +21,7 @@ import jakarta.persistence.Id;
  * {@code getAggregateIdName}, {@code getAggregateIdType} and {@code getAggregateId}
  * from it.
  */
+@ExtendWith(SuppressOutputExtension.class)
 public class AggregateIdTypesTest {
 
   public static class AnnotatedField {

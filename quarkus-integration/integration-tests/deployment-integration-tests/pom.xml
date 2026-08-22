@@ -82,19 +82,4 @@
     </dependency>
   </dependencies>
 
-  <build>
-    <plugins>
-      <plugin>
-        <artifactId>maven-surefire-plugin</artifactId>
-        <configuration>
-          <systemPropertyVariables>
-            <!-- some tests assert WARN log-record content (deployment-failure
-                 policy, skipped-adapter messages) - the parent's ERROR level
-                 would filter them before the in-memory log handler sees them -->
-            <quarkus.log.level>WARN</quarkus.log.level>
-          </systemPropertyVariables>
-        </configuration>
-      </plugin>
-    </plugins>
-  </build>
 </project>
