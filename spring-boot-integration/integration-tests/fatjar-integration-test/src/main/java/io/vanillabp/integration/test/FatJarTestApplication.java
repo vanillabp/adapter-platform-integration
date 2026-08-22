@@ -20,6 +20,10 @@ import io.vanillabp.spi.process.ProcessService;
  * the context stops workflow processing via the SmartLifecycle stop path).
  */
 @SpringBootApplication
+// three aggregates none of which this application persists: it starts, reports the
+// workflow module of each process service and shuts down. Story 114 asks an application to
+// say who owns its aggregates, and the sample module's double answers for all of them
+@org.springframework.context.annotation.Import(io.vanillabp.integration.test.sample.NoPersistenceForTheSampleAggregate.class)
 public class FatJarTestApplication {
 
   public static void main(

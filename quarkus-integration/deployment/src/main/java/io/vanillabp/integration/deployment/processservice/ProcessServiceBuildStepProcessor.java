@@ -227,7 +227,7 @@ public class ProcessServiceBuildStepProcessor {
             final var defaultPersistence = DefaultAggregatePersistenceResolver
                 .resolve(combinedIndex.getIndex(), workflowAggregateType.name())
                 .orElseThrow(() -> new IllegalStateException(
-                    missingAggregatePersistenceMessage(workflowAggregateType)));
+                    missingAggregatePersistenceMessage(workflowAggregateType, workflowModuleId)));
             log.info(
                 "Using VanillaBP's {} persistence for workflow aggregate '{}'{}",
                 defaultPersistence.idiom(),
@@ -295,10 +295,15 @@ public class ProcessServiceBuildStepProcessor {
    * were expected to use.
    */
   private static String missingAggregatePersistenceMessage(
-      final Type workflowAggregateType) {
+      final Type workflowAggregateType,
+      final String workflowModuleId) {
 
+    // the workflow module travels along since story 114, where Spring Boot learned to
+    // report the same defect: an application with several modules should not have to
+    // guess which one the aggregate belongs to, and the two platforms report the same
+    // thing in the same words
     return """
-        VanillaBP does not know how to persist the workflow aggregate '%s'!
+        VanillaBP does not know how to persist the workflow aggregate '%s' of workflow module '%s'!
         Either the aggregate uses one of the persistence idioms VanillaBP serves out of the box:
         - a Panache repository for the aggregate (PanacheRepository/PanacheRepositoryBase, or \
         PanacheMongoRepository/PanacheMongoRepositoryBase): https://quarkus.io/guides/hibernate-orm-panache#solution-2-using-the-repository-pattern
@@ -312,6 +317,7 @@ public class ProcessServiceBuildStepProcessor {
         which is responsible to persist this aggregate."""
         .formatted(
             workflowAggregateType.name(),
+            workflowModuleId,
             AggregatePersistenceAware.class.getName(),
             workflowAggregateType
                 .name()
