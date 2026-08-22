@@ -185,6 +185,24 @@ To minimize build output three actions were taken:
 In case of errors one might disable one or all of them for finding
 the root cause of the problem.
 
+Which window the third one covers is worth knowing, because it was found the hard way
+(story 109). These modules run under JBoss LogManager, installed by the Surefire
+property `java.util.logging.manager`, and a handler of that log manager holds the
+`System.out` which existed when the handler was created. Replacing `System.out`, which
+is all the extension used to do, therefore reached nothing logged through it: the
+augmentation line of a `QuarkusProdModeTest` and every Testcontainers line of the
+Camunda 8 Quarkus tests went straight into the log of a green build.
+
+The extension now hands every stream handler it finds below the root logger, nested
+handlers of `QuarkusDelayedHandler` included, a stream which resolves `System.out` at
+write time. So the handler follows the capture and the failure replay keeps working,
+which switching the console handler off would have cost. What it cannot cover is output
+written BEFORE its first callback, since there is no handler to redirect yet: a static
+initializer which starts a container is the case in the Camunda 8 adapter, and only
+configuration reaches that. `JbossLogManagerCaptureTest` in
+`integration-tests/deployment-integration-tests` holds the mechanism; removing the
+redirection makes it fail with the marker printed to the console.
+
 ## The store of processed task deliveries
 
 `io.vanillabp.integration.runtime.delivery` implements the core's `TaskDeliveryLog`
