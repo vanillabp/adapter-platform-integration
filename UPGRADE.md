@@ -4,6 +4,32 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## An aggregate without a persistence ends the startup (2026-08-22)
+
+Story 114 changed this, story 106 found that it was never written down here. It concerns
+applications AND adapter repositories.
+
+`AggregatePersistenceAware#getAggregateIdType()` used to catch every exception and answer
+`null`, which by contract means "a custom persistence layer owns the serialized form". A
+workflow aggregate whose Spring Data repository is simply missing looked exactly like that
+deliberate answer: the application booted and failed at its first task. It now ends the
+startup, naming the aggregate, the workflow module and three ways out.
+
+What that means in practice:
+
+- **an application whose aggregates have their repository:** nothing changes;
+- **an application which owns the serialized form on purpose:** contribute an
+  `AggregatePersistenceAware` for those aggregates (or override `getAggregateIdType()` to
+  return `null` explicitly). Being asked out loud is the point;
+- **a test application without any persistence** - which every adapter repository has -
+  has to say so as well, with an `AggregatePersistenceAware<Object>` double whose methods
+  throw. The Camunda 8 adapter's smoke application got one in story 106; a `SpringDataUtil`
+  stub whose `getRepository` throws is no longer enough, because that throw is exactly what
+  the check now reports.
+
+Quarkus applications were unaffected: there the same defect already failed the BUILD, and
+the message names the workflow module now.
+
 ## name-clash-avoidance is `by-adapter` again, on every adapter (2026-08-22)
 
 Story 106, and it concerns every application which never configured
