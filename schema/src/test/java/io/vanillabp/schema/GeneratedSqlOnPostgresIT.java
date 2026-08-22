@@ -25,8 +25,13 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * databases this module promises, and the test which proves that a generated file is not only
  * syntactically plausible but accepted by the server.
  */
-@Testcontainers
+// the extension comes FIRST on purpose: JUnit registers declarative extensions in the
+// order they are written, and the Testcontainers extension starts the container in its
+// own beforeAll. Written the other way round, the Docker client had already logged 2208
+// debug lines through an appender holding the real stdout before anything could capture
+// them - a green build carrying the whole conversation with the Docker daemon.
 @ExtendWith(SuppressOutputExtension.class)
+@Testcontainers
 public class GeneratedSqlOnPostgresIT {
 
   @Container

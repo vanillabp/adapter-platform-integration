@@ -38,6 +38,19 @@ public final class TestClassConventions {
 
   private static final String SUPPRESSION = SuppressOutputExtension.class.getSimpleName();
 
+  /**
+   * Annotations are matched at the start of a line, never anywhere in the file: a Javadoc
+   * paragraph explaining {@code @Testcontainers} is prose, and reading it as a
+   * registration reported a class which had done everything right.
+   */
+  private static final Pattern TESTCONTAINERS_ANNOTATION = Pattern
+      .compile("^@Testcontainers\\b", Pattern.MULTILINE);
+
+  private static final Pattern SUPPRESSION_ANNOTATION = Pattern
+      .compile("^@ExtendWith\\("
+          + SUPPRESSION
+          + "\\b", Pattern.MULTILINE);
+
   private TestClassConventions() {
   }
 
@@ -91,6 +104,90 @@ public final class TestClassConventions {
                 .collect(Collectors.joining("\n")),
             SUPPRESSION,
             SUPPRESSION);
+
+  }
+
+  /**
+   * The test classes which let another extension start containers BEFORE
+   * {@link SuppressOutputExtension} is registered.
+   * <p>
+   * JUnit registers declarative extensions in the order they are written, and the
+   * Testcontainers extension starts what it manages in its own {@code beforeAll}. Written
+   * after {@code @Testcontainers}, the extension arrives too late: the Docker client has
+   * already logged through an appender holding the real stdout. Measured on the schema
+   * module of adapter-platform-integration, that was 2208 debug lines in a green build.
+   *
+   * @param repositoryRoot The repository's root directory
+   * @return The offending source files, relative to the root, in a stable order
+   */
+  public static List<Path> testClassesSuppressingTooLate(
+      final Path repositoryRoot) {
+
+    try (var files = Files.walk(repositoryRoot)) {
+      return files
+          .filter(TestClassConventions::isTestSourceFile)
+          .filter(file -> suppressesTooLate(read(file)))
+          .map(repositoryRoot::relativize)
+          .sorted()
+          .toList();
+    } catch (IOException e) {
+      throw new UncheckedIOException(
+          "Could not read the test sources below '%s'".formatted(repositoryRoot), e);
+    }
+
+  }
+
+  /**
+   * The message of a failing order check: which classes, and what to do about them.
+   *
+   * @param offenders What {@link #testClassesSuppressingTooLate(Path)} returned
+   * @return A message naming every offending class
+   */
+  public static String describeTestClassesSuppressingTooLate(
+      final Collection<Path> offenders) {
+
+    return """
+        %d test class(es) register %s AFTER '@Testcontainers', so the container is started \
+        before anything captures what the Docker client logs:
+        %s
+        Write '@ExtendWith(%s.class)' above '@Testcontainers'. What starts even earlier \
+        than that - Docker detection from an ExecutionCondition, the Ryuk reaper, an image \
+        pull - is reached by no extension at all and needs a 'logback-test.xml' holding \
+        'org.testcontainers', 'tc' and 'com.github.dockerjava' at WARN."""
+        .formatted(
+            offenders.size(),
+            SUPPRESSION,
+            offenders
+                .stream()
+                .map(offender -> "  "
+                    + offender)
+                .collect(Collectors.joining("\n")),
+            SUPPRESSION);
+
+  }
+
+  private static boolean suppressesTooLate(
+      final String source) {
+
+    if (lacksSuppression(source)) {
+      // that is the other check's finding, and reporting it twice helps nobody
+      return false;
+    }
+    final var containers = firstMatch(TESTCONTAINERS_ANNOTATION, source);
+    if (containers < 0) {
+      return false;
+    }
+    final var suppression = firstMatch(SUPPRESSION_ANNOTATION, source);
+    return (suppression < 0) || (containers < suppression);
+
+  }
+
+  private static int firstMatch(
+      final Pattern pattern,
+      final String source) {
+
+    final var matcher = pattern.matcher(source);
+    return matcher.find() ? matcher.start() : -1;
 
   }
 

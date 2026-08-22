@@ -1,0 +1,22 @@
+<configuration>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Without this the module logged the whole conversation with the Docker daemon:
+         Logback defaults to DEBUG and docker-java debug-logs every request including its
+         wire content, 2208 lines of a green build (measured on run 32563913869). Docker
+         detection, the Ryuk reaper and the image pull also happen before any JUnit
+         extension runs, so SuppressOutputExtension cannot swallow that part - the level
+         does. Same reasoning, same three loggers as the Camunda 8 adapter's spring-boot
+         module. -->
+    <logger name="org.testcontainers" level="WARN"/>
+    <logger name="tc" level="WARN"/>
+    <logger name="com.github.dockerjava" level="WARN"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>
