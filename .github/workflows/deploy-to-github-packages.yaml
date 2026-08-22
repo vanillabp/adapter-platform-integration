@@ -58,6 +58,20 @@ jobs:
           USER_TOKEN: "${{ secrets.VANILLABP_USER_TOKEN }}"
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           CI: false
+      # what a failing test printed is in these reports, and for the modules booting a
+      # Quarkus application in the test JVM it is ONLY there: their output is redirected
+      # to file because that boot logs into a log context no extension reaches (story
+      # 109). Surefire prints its last line, which is never the interesting one.
+      - name: Upload the test reports of a failed build
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            **/target/surefire-reports/**
+            **/target/failsafe-reports/**
+          retention-days: 7
+          if-no-files-found: ignore
       - name: Merge coverage reports
         if: "${{ github.event_name == 'push' }}"
         run: |

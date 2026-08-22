@@ -47,12 +47,21 @@
         <plugin>
           <artifactId>maven-surefire-plugin</artifactId>
           <configuration>
-            <!-- show LOG only in case of errors (last line of file will be printed) -->
+            <!-- The tests here boot their application IN this JVM, and Quarkus logs that
+                 boot into a log context of its own: it happens in the Quarkus extension's
+                 beforeAll, after this extension's and before its first beforeEach, so
+                 nothing captures it. Measured on deployment-integration-tests: 311 lines
+                 in a GREEN run of 35 tests. Hence the file - and the workflow uploads
+                 these reports when a build fails, so the full log of a red run is one
+                 download away instead of the last line Surefire prints (story 109). -->
             <redirectTestOutputToFile>true</redirectTestOutputToFile>
             <reportsDirectory>${project.build.directory}/failsafe-reports</reportsDirectory>
             <systemPropertyVariables>
               <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
-              <quarkus.log.level>ERROR</quarkus.log.level>
+              <!-- INFO and not ERROR: what a level drops reaches no handler, so it never
+                   reaches the capture either and a failing class replays nothing worth
+                   reading. -->
+              <quarkus.log.level>INFO</quarkus.log.level>
               <maven.home>${maven.home}</maven.home>
               <maven.repo>${settings.localRepository}</maven.repo>
               <!--suppress UnresolvedMavenProperty - filled by goal jacoco-maven-plugin:prepare-agent in root pom.xml -->
