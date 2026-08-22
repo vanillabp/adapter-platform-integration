@@ -173,4 +173,32 @@ class JpaSpringDataUtilTest {
 
   }
 
+  /**
+   * Story 114: what the fallback persistence does with that, which is where an
+   * application used to boot and fail at its first task instead.
+   */
+  @Test
+  public void aggregateWithoutRepositoryIsReportedWhileStarting() {
+
+    final var support = new io.vanillabp.integration.utils.impl.SpringDataUtilBasedAggregatePersistenceSupport<>(
+        jpaSpringDataUtil, EntityWithoutRepository.class, "loan-approval");
+
+    final var reported = Assertions
+        .assertThrows(IllegalStateException.class, support::getAggregateIdType);
+
+    assertTrue(
+        reported.getMessage().contains(EntityWithoutRepository.class.getName()),
+        () -> "the aggregate is named: "
+            + reported.getMessage());
+    assertTrue(
+        reported.getMessage().contains("loan-approval"),
+        () -> "and its workflow module: "
+            + reported.getMessage());
+    assertEquals(
+        "No Spring Data repository defined for '%s'!".formatted(EntityWithoutRepository.class.getName()),
+        reported.getCause().getMessage(),
+        "what Spring Data said stays readable underneath");
+
+  }
+
 }

@@ -324,8 +324,12 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                               - add spring-boot-starter-data-mongodb to classpath and configure the MongoDb connection, if you use MongoDb for persistence of aggregates
                               - add your own implementation of io.vanillabp.integration.utils.SpringDataUtil, if you use an alternative persistence""");
                     }
+                    // the workflow module travels along for the message of story 114:
+                    // an aggregate without a repository is reported while the
+                    // application starts, and naming the module is what makes the
+                    // report actionable in an application with several of them
                     return new SpringDataUtilBasedAggregatePersistenceSupport(
-                        springDataUtil, workflowAggregateType);
+                        springDataUtil, workflowAggregateType, workflowModuleId);
                   });
 
               final var migratableProcessServices = supplierContext

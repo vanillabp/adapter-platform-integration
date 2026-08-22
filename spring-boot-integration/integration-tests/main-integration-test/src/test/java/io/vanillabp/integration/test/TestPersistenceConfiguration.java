@@ -9,6 +9,12 @@ import io.vanillabp.integration.utils.SpringDataUtil;
 /**
  * Provides a {@link SpringDataUtil} stub so tests not concerned with persistence do
  * not need a database. Any usage of the stub fails loudly.
+ * <p>
+ * Resolving a repository is not usage, and since story 114 it must not fail: the
+ * platform asks for the aggregate's repository while the application starts, so that an
+ * application says what is missing instead of failing at its first task. The repository
+ * this stub hands out throws from every method it has, which keeps the loud failure
+ * exactly where it was - at the first read or write.
  */
 @Configuration
 public class TestPersistenceConfiguration {
@@ -25,9 +31,23 @@ public class TestPersistenceConfiguration {
       }
 
       @Override
+      @SuppressWarnings("unchecked")
       public <O> CrudRepository<O, Object> getRepository(
           final Class<O> type) {
-        throw new UnsupportedOperationException("no persistence in this test");
+        // answering the startup question, and nothing else: every method of this
+        // repository throws (story 114)
+        return (CrudRepository<O, Object>) java.lang.reflect.Proxy
+            .newProxyInstance(
+                getClass().getClassLoader(),
+                new Class<?>[]{
+                    CrudRepository.class
+        },
+                (
+                    proxy,
+                    method,
+                    args) -> {
+                  throw new UnsupportedOperationException("no persistence in this test");
+                });
       }
 
       @Override
