@@ -34,10 +34,16 @@ jobs:
           java-version: 21
           distribution: temurin
           cache: maven
+      # 'install' and not 'install verify': install runs every phase verify has, so
+      # naming both made Maven walk two lifecycles per module. The tests noticed and
+      # skipped their second run, the compiler did not, so every javac warning was
+      # reported twice - once per compilation - and a reviewer could not tell two
+      # occurrences of one problem from two problems. The local repository is still
+      # written because the native-build job below resolves from it.
       - name: Build and test
         if: "${{ github.event_name == 'pull_request' }}"
         run: mvn -s $GITHUB_WORKSPACE/.github/workflows/github-packages-settings.xml
-          --batch-mode --no-transfer-progress --update-snapshots install verify
+          --batch-mode --no-transfer-progress --update-snapshots install
         env:
           USER_NAME: "${{ secrets.VANILLABP_USER_NAME }}"
           USER_TOKEN: "${{ secrets.VANILLABP_USER_TOKEN }}"
