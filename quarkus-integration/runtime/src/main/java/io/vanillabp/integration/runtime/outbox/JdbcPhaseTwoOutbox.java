@@ -109,6 +109,52 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
   }
 
   /**
+   * The adapter ids the OPEN entries of one BPMN process are waiting for (story 120): an
+   * id which is not configured any more means that it was renamed or removed too early,
+   * and both leave the workflow of a START entry unstarted.
+   */
+  @Override
+  public java.util.Set<String> adapterIdsOfPendingCalls(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    if (!dataSource.isResolvable()) {
+      return java.util.Set.of();
+    }
+    final var tableName = tableName(dispatcher.getProperties());
+    final var selectAdapterIds = """
+        SELECT DISTINCT ADAPTER_ID FROM %s \
+        WHERE WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND STATUS = ? AND ADAPTER_ID IS NOT NULL"""
+        .formatted(tableName);
+    try (var connection = dataSource.get().getConnection(); var statement = connection
+        .prepareStatement(selectAdapterIds)) {
+      statement.setString(1, workflowModuleId);
+      statement.setString(2, bpmnProcessId);
+      statement.setString(3, JdbcPhaseTwoOutboxDispatcher.STATUS_OPEN);
+      try (var resultSet = statement.executeQuery()) {
+        final var adapterIds = new java.util.LinkedHashSet<String>();
+        while (resultSet.next()) {
+          adapterIds.add(resultSet.getString(1));
+        }
+        return adapterIds;
+      }
+    } catch (final java.sql.SQLException e) {
+      // a startup diagnosis must not keep an application from booting: unanswered is
+      // what a store which cannot tell answers anyway
+      log
+          .debug(
+              "Could not read the adapter ids of open outbox entries of BPMN process '{}' "
+                  + "(workflow module '{}') from table '{}'",
+              bpmnProcessId,
+              workflowModuleId,
+              tableName,
+              e);
+      return java.util.Set.of();
+    }
+
+  }
+
+  /**
    * Counts the entries waiting for their dispatch. A single indexed count over the
    * outbox table, which holds what did not run yet plus what is kept until the
    * retention passes - the same table the dispatcher polls.

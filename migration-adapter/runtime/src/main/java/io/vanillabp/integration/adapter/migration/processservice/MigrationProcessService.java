@@ -890,6 +890,112 @@ public class MigrationProcessService<A> {
   }
 
   /**
+   * Reports AT STARTUP an adapter id which the persisted state still names although the
+   * application does not configure it any more (story 120).
+   * <p>
+   * VanillaBP persists the adapter id twice: an outbox entry of a START operation names
+   * the adapter elected in phase one, and the key of every delivery record is built from
+   * the delivering adapter. An id which is gone from the configuration therefore has two
+   * readings, and both cost the application something:
+   * <ul>
+   * <li>the id was RENAMED. Nothing serves the old name any more, so an outbox entry
+   * fails, is repeated and is finally blocked - the aggregate was persisted and its
+   * workflow never started - and a redelivery finds no record, so the
+   * <code>&#64;WorkflowTask</code> method runs a second time;</li>
+   * <li>the id was removed while entries or open tasks were still left, which is the last
+   * step of a migration done one step too early.</li>
+   * </ul>
+   * Neither is reported by anything else until the entry is dispatched respectively the
+   * task is delivered again, which is why this asks the stores instead of waiting. It
+   * WARNS rather than failing the boot: the entries are not lost, they wait, and a boot
+   * failure would stop the very application which is about to repair its configuration.
+   * <code>vanillabp.retired-adapters</code> states that the leftovers are known and turns
+   * the message into a DEBUG line.
+   * <p>
+   * Only stores which are already resolved are asked - this runs after the outbox and the
+   * delivery-log validations, so an application which needs neither is not made to
+   * materialize one for a question about it. A store which cannot answer (the SPI default,
+   * an empty set) is not asked twice and nothing is invented.
+   */
+  public void validatePersistedAdapterIdsAtStartup() {
+
+    reportUnconfiguredAdapterIds(
+        phaseTwoOutbox == null
+            ? java.util.Set.<String>of()
+            : phaseTwoOutbox.adapterIdsOfPendingCalls(workflowModuleId, bpmnProcessId),
+        "waiting phase-two outbox entries",
+        "the workflow was persisted and never started");
+    reportUnconfiguredAdapterIds(
+        taskDeliveryLog == null
+            ? java.util.Set.<String>of()
+            : taskDeliveryLog.adapterIdsOfOpenTasks(workflowModuleId, bpmnProcessId),
+        "records of tasks which are still open",
+        "a redelivery runs the @WorkflowTask method a second time");
+
+  }
+
+  /**
+   * Says once per adapter id and store what the persisted state names and the
+   * configuration does not.
+   *
+   * @param persistedAdapterIds What the store answered
+   * @param whatIsLeftOver How the leftovers are named in the message
+   * @param whatItCosts What happens if nothing is done about it
+   */
+  private void reportUnconfiguredAdapterIds(
+      final java.util.Set<String> persistedAdapterIds,
+      final String whatIsLeftOver,
+      final String whatItCosts) {
+
+    if ((persistedAdapterIds == null) || persistedAdapterIds.isEmpty()) {
+      return;
+    }
+    final var configuredAdapterIds = properties.adapterTypes().keySet();
+    persistedAdapterIds
+        .stream()
+        .filter(java.util.Objects::nonNull)
+        .filter(adapterId -> !configuredAdapterIds.contains(adapterId))
+        .sorted()
+        .forEach(adapterId -> {
+          if (properties.getRetiredAdapters().contains(adapterId)) {
+            log
+                .debug(
+                    "The adapter id '{}' is not configured any more and has {} of BPMN process '{}' "
+                        + "(workflow module '{}'). Retired deliberately ('{}.retired-adapters').",
+                    adapterId,
+                    whatIsLeftOver,
+                    bpmnProcessId,
+                    workflowModuleId,
+                    MigrationAdapterProperties.PREFIX);
+            return;
+          }
+          log
+              .warn(
+                  """
+                      The adapter id '{}' is NOT configured any more, but it still has {} of BPMN \
+                      process '{}' (workflow module '{}'). VanillaBP persists the adapter id to know \
+                      what belongs to which BPMS, so there are two readings and both cost you \
+                      something: the id was RENAMED - then {} - or it was removed while its BPMS \
+                      still had work left. To solve this either
+                        - configure '{}.adapters.{}.*' again (a rename: put the old name back; a \
+                      migration: keep the old BPMS until nothing of it is left), or
+                        - state that you know about the leftovers: {}.retired-adapters: [{}]
+                      An adapter id is a name to choose once: see the wiki, 'BPMS migration' - \
+                      'Naming adapter ids, and never renaming them'.""",
+                  adapterId,
+                  whatIsLeftOver,
+                  bpmnProcessId,
+                  workflowModuleId,
+                  whatItCosts,
+                  MigrationAdapterProperties.PREFIX,
+                  adapterId,
+                  MigrationAdapterProperties.PREFIX,
+                  adapterId);
+        });
+
+  }
+
+  /**
    * Validates AT STARTUP that a delivery log is available if any prioritized adapter
    * may repeat a delivery
    * ({@link MigratableProcessService#deliversTasksAtLeastOnce()}) and deduplication is
@@ -980,9 +1086,10 @@ public class MigrationProcessService<A> {
     }
     deliveryLog.record(
         new TaskDelivery(
-            deliveryKey, workflowModuleId, bpmnProcessId, context.getWorkflowAggregateId(), context
-                .getTaskDefinition(), outcome.kind().name(), outcome.errorCode(), outcome
-                    .errorName(), java.time.Instant.now()));
+            deliveryKey, context.getAdapterId(), workflowModuleId, bpmnProcessId, context
+                .getWorkflowAggregateId(), context
+                    .getTaskDefinition(), outcome.kind().name(), outcome.errorCode(), outcome
+                        .errorName(), java.time.Instant.now()));
 
   }
 

@@ -86,6 +86,7 @@ public class JdbcTaskDeliverySchemaTest {
               """
                   CREATE TABLE VANILLABP_TASK_DELIVERY (\
                   DELIVERY_KEY VARCHAR(512) NOT NULL, \
+                  ADAPTER_ID VARCHAR(255), \
                   WORKFLOW_MODULE_ID VARCHAR(255) NOT NULL, \
                   BPMN_PROCESS_ID VARCHAR(255) NOT NULL, \
                   AGGREGATE_ID VARCHAR(1024), \
@@ -124,6 +125,51 @@ public class JdbcTaskDeliverySchemaTest {
                   BPMN_ERROR_NAME VARCHAR(255), \
                   RECORDED_AT TIMESTAMP NOT NULL)""");
     }
+
+  }
+
+  /**
+   * The table as story 97 left it: with LAST_SEEN_AT, without the ADAPTER_ID story 120
+   * added.
+   */
+  private static void createTableWithoutAdapterId(
+      final String database) throws SQLException {
+
+    try (Connection connection = h2(database).acquire(); var statement = connection.createStatement()) {
+      statement
+          .executeUpdate(
+              """
+                  CREATE TABLE VANILLABP_TASK_DELIVERY (\
+                  DELIVERY_KEY VARCHAR(512) PRIMARY KEY, \
+                  WORKFLOW_MODULE_ID VARCHAR(255) NOT NULL, \
+                  BPMN_PROCESS_ID VARCHAR(255) NOT NULL, \
+                  AGGREGATE_ID VARCHAR(1024), \
+                  TASK_DEFINITION VARCHAR(255), \
+                  OUTCOME VARCHAR(32) NOT NULL, \
+                  BPMN_ERROR_CODE VARCHAR(255), \
+                  BPMN_ERROR_NAME VARCHAR(255), \
+                  RECORDED_AT TIMESTAMP NOT NULL, \
+                  LAST_SEEN_AT TIMESTAMP NOT NULL)""");
+    }
+
+  }
+
+  @Test
+  @DisplayName("A table without ADAPTER_ID is named as well, with what VanillaBP cannot do without it")
+  public void aTableWithoutTheAdapterIdIsReported() throws SQLException {
+
+    createTableWithoutAdapterId("without-adapter-id");
+
+    final var failure = assertThrows(
+        IllegalStateException.class,
+        () -> storeOn("without-adapter-id").validateSchemaExists());
+
+    assertTrue(failure.getMessage().contains("ADAPTER_ID"), failure.getMessage());
+    assertTrue(
+        failure.getMessage().contains("ALTER TABLE VANILLABP_TASK_DELIVERY ADD ADAPTER_ID VARCHAR(255)"),
+        failure.getMessage());
+    // what is lost without it, which is the reason to act at all
+    assertTrue(failure.getMessage().contains("renamed adapter id"), failure.getMessage());
 
   }
 

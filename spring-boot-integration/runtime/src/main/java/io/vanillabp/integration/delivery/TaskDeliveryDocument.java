@@ -28,6 +28,13 @@ public class TaskDeliveryDocument {
   @Id
   private String id;
 
+  /**
+   * The adapter which delivered the task (story 120). Part of the delivery key as well,
+   * but only as text and hashed once the key grows too long, so a query needs it as a
+   * field of its own. Absent in a document written before it existed.
+   */
+  private String adapterId;
+
   private String workflowModuleId;
 
   private String bpmnProcessId;

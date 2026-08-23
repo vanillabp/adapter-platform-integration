@@ -186,6 +186,17 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                             QuarkusMigrationAdapterProperties.MetricsProperties metrics) implements QuarkusMigrationAdapterProperties {
 
     /**
+     * The adapter ids retired deliberately (story 120) - none of these fixtures names any,
+     * so the mapper's list is empty and the startup check has nothing to keep quiet about.
+     */
+    @Override
+    public Optional<List<String>> retiredAdapters() {
+
+      return Optional.empty();
+
+    }
+
+    /**
      * Without a transaction and without a delivery section.
      */
     private Properties(

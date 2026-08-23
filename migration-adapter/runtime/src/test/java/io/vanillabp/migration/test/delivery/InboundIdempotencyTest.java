@@ -508,7 +508,7 @@ public class InboundIdempotencyTest {
     deliveryLog.records.put(
         key,
         new TaskDelivery(
-            key, recorded.workflowModuleId(), recorded.bpmnProcessId(), recorded
+            key, recorded.adapterId(), recorded.workflowModuleId(), recorded.bpmnProcessId(), recorded
                 .workflowAggregateId(), recorded.taskDefinition(), "WHATEVER", null, null, recorded
                     .recordedAt()));
 

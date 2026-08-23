@@ -124,6 +124,19 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
 
   }
 
+  /**
+   * The adapter ids the OPEN records of one BPMN process belong to (story 120) - the
+   * shared store answers it with one query over the columns it indexes anyway.
+   */
+  @Override
+  public java.util.Set<String> adapterIdsOfOpenTasks(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return store.adapterIdsOfOpenTasks(workflowModuleId, bpmnProcessId);
+
+  }
+
   @Override
   public int releaseRecordsOf(
       final String workflowModuleId,

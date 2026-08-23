@@ -360,6 +360,34 @@ public interface PhaseTwoOutbox {
   }
 
   /**
+   * The adapter ids the entries of one workflow's BPMN process are waiting for - every
+   * entry which is not DONE yet and names an adapter
+   * ({@link PhaseTwoCall#adapterId()}, set for the START operations; the probing
+   * operations carry none and are not part of any answer). Story 120.
+   * <p>
+   * Asked once at startup, and only for one question: an adapter id which entries are
+   * waiting for although it is not configured any more means that the id was RENAMED or
+   * was removed too early. Both end the same way, and today only the dispatch says so -
+   * the entry fails, is repeated and finally blocked, while the workflow it would have
+   * started was persisted long ago.
+   * <p>
+   * The default answers an empty set, which means "this store cannot say": the check is
+   * then skipped rather than invented. A store implementing it answers a cheap query;
+   * it is called once per BPMN process at startup and never at runtime.
+   *
+   * @param workflowModuleId The workflow module to ask about
+   * @param bpmnProcessId The BPMN process to ask about
+   * @return The adapter ids of entries waiting, empty if the store cannot say
+   */
+  default java.util.Set<String> adapterIdsOfPendingCalls(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return java.util.Set.of();
+
+  }
+
+  /**
    * How many entries are waiting to be dispatched right now (story 92). It is the
    * number an operator looks at first when a BPMS is unreachable: phase two is where
    * a broken connection piles up, and a rising figure says the application is fine

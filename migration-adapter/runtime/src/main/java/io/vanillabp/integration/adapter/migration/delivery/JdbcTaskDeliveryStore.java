@@ -44,16 +44,26 @@ public class JdbcTaskDeliveryStore {
   public static final String DEFAULT_TABLE_NAME = "VANILLABP_TASK_DELIVERY";
 
   private static final String SELECT_DELIVERY = """
-      SELECT WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, TASK_DEFINITION, OUTCOME, \
+      SELECT ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, TASK_DEFINITION, OUTCOME, \
       BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT \
       FROM %s \
       WHERE DELIVERY_KEY = ?""";
 
+  /**
+   * The adapter ids the OPEN records of one BPMN process belong to (story 120). Asked once
+   * per BPMN process at startup, never at runtime, and answered from the same index the
+   * cleanup uses; a record written before ADAPTER_ID existed carries none and is skipped.
+   */
+  private static final String SELECT_ADAPTER_IDS_OF_OPEN_TASKS = """
+      SELECT DISTINCT ADAPTER_ID \
+      FROM %s \
+      WHERE WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND OUTCOME = ? AND ADAPTER_ID IS NOT NULL""";
+
   private static final String INSERT_DELIVERY = """
       INSERT INTO %s \
-      (DELIVERY_KEY, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, TASK_DEFINITION, OUTCOME, \
-      BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, LAST_SEEN_AT) \
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""";
+      (DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, TASK_DEFINITION, \
+      OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, LAST_SEEN_AT) \
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""";
 
   // one key per execution instead of an IN list, whose length is capped differently by
   // every database (Oracle at 1000 expressions, SQL Server at about 2100 parameters) -
@@ -85,6 +95,8 @@ public class JdbcTaskDeliveryStore {
 
   private final String deleteDeliveriesOfWorkflow;
 
+  private final String selectAdapterIdsOfOpenTasks;
+
   private final OpenTaskTouches touches;
 
   public JdbcTaskDeliveryStore(
@@ -98,6 +110,7 @@ public class JdbcTaskDeliveryStore {
     this.touchDelivery = TOUCH_DELIVERY.formatted(tableName);
     this.deleteExpiredDeliveries = DELETE_EXPIRED_DELIVERIES.formatted(tableName);
     this.deleteDeliveriesOfWorkflow = DELETE_DELIVERIES_OF_WORKFLOW.formatted(tableName);
+    this.selectAdapterIdsOfOpenTasks = SELECT_ADAPTER_IDS_OF_OPEN_TASKS.formatted(tableName);
     this.touches = new OpenTaskTouches(tableName, this::refreshLastSeen);
 
   }
@@ -129,13 +142,13 @@ public class JdbcTaskDeliveryStore {
           if (!resultSet.next()) {
             return Optional.empty();
           }
-          final var recordedAt = resultSet.getTimestamp(8);
+          final var recordedAt = resultSet.getTimestamp(9);
           return Optional
               .of(
                   new TaskDelivery(
                       deliveryKey, resultSet.getString(1), resultSet.getString(2), resultSet.getString(3), resultSet
                           .getString(4), resultSet.getString(5), resultSet.getString(6), resultSet
-                              .getString(7), recordedAt == null
+                              .getString(7), resultSet.getString(8), recordedAt == null
                                   ? null
                                   : recordedAt.toInstant()));
         }
@@ -144,6 +157,58 @@ public class JdbcTaskDeliveryStore {
       throw new RuntimeException(
           "Could not read the record of task delivery '%s' from table '%s'!"
               .formatted(deliveryKey, tableName), e);
+    } finally {
+      release(connection);
+    }
+
+  }
+
+  /**
+   * The adapter ids the OPEN records of one BPMN process belong to (story 120): a record
+   * whose outcome is <code>COMPLETION_PENDING</code> answers redeliveries of a task the
+   * application has not completed yet, so its adapter id is one the configuration still
+   * has to know.
+   *
+   * @param workflowModuleId The workflow module to ask about
+   * @param bpmnProcessId The BPMN process to ask about
+   * @return The adapter ids found, never <code>null</code>
+   */
+  public java.util.Set<String> adapterIdsOfOpenTasks(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    Connection connection = null;
+    try {
+      connection = connectionAccess.acquire();
+      try (var statement = connection.prepareStatement(selectAdapterIdsOfOpenTasks)) {
+        statement.setString(1, workflowModuleId);
+        statement.setString(2, bpmnProcessId);
+        statement
+            .setString(
+                3,
+                io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome.Kind.COMPLETION_PENDING
+                    .name());
+        try (var resultSet = statement.executeQuery()) {
+          final var adapterIds = new java.util.LinkedHashSet<String>();
+          while (resultSet.next()) {
+            adapterIds.add(resultSet.getString(1));
+          }
+          return adapterIds;
+        }
+      }
+    } catch (final SQLException e) {
+      // a startup diagnosis must not be the reason an application fails to boot: the
+      // question stays unanswered and the check is silent, which is what a store saying
+      // "I cannot tell" does anyway
+      log
+          .debug(
+              "Could not read the adapter ids of open task-delivery records of BPMN process '{}' "
+                  + "(workflow module '{}') from table '{}'",
+              bpmnProcessId,
+              workflowModuleId,
+              tableName,
+              e);
+      return java.util.Set.of();
     } finally {
       release(connection);
     }
@@ -165,20 +230,21 @@ public class JdbcTaskDeliveryStore {
       connection = connectionAccess.acquire();
       try (var statement = connection.prepareStatement(insertDelivery)) {
         statement.setString(1, delivery.deliveryKey());
-        statement.setString(2, delivery.workflowModuleId());
-        statement.setString(3, delivery.bpmnProcessId());
-        statement.setString(4, delivery.workflowAggregateId());
-        statement.setString(5, delivery.taskDefinition());
-        statement.setString(6, delivery.outcome());
-        statement.setString(7, delivery.bpmnErrorCode());
-        statement.setString(8, delivery.bpmnErrorName());
+        statement.setString(2, delivery.adapterId());
+        statement.setString(3, delivery.workflowModuleId());
+        statement.setString(4, delivery.bpmnProcessId());
+        statement.setString(5, delivery.workflowAggregateId());
+        statement.setString(6, delivery.taskDefinition());
+        statement.setString(7, delivery.outcome());
+        statement.setString(8, delivery.bpmnErrorCode());
+        statement.setString(9, delivery.bpmnErrorName());
         final var recordedAt = Timestamp.from(delivery.recordedAt() == null
             ? Instant.now()
             : delivery.recordedAt());
-        statement.setTimestamp(9, recordedAt);
+        statement.setTimestamp(10, recordedAt);
         // the record was seen the moment it was written; a redelivery of a task which
         // stays open moves this one and leaves RECORDED_AT where it is
-        statement.setTimestamp(10, recordedAt);
+        statement.setTimestamp(11, recordedAt);
         statement.executeUpdate();
       }
       return true;
@@ -352,7 +418,27 @@ public class JdbcTaskDeliveryStore {
    * Only what was ADDED later belongs in here: a table which predates the addition exists
    * and looks fine, and the missing column would surface at the first write.
    */
-  private static final List<String> ADDED_COLUMNS = List.of("LAST_SEEN_AT");
+  private static final List<AddedColumn> ADDED_COLUMNS = List
+      .of(
+          new AddedColumn(
+              "LAST_SEEN_AT", "TIMESTAMP (the type your database uses for the existing column RECORDED_AT), filled with the value of RECORDED_AT and NOT NULL", "the records of the tasks your application leaves open cannot be kept alive - they would expire while the tasks are still being redelivered"),
+          new AddedColumn(
+              "ADAPTER_ID", "VARCHAR(255) (nullable: a record written before the column existed has no adapter id)", "VanillaBP cannot tell at startup that an adapter id which open records still belong to is not configured any more, which is what a renamed adapter id looks like (story 120)"));
+
+  /**
+   * A column a later version of VanillaBP added: its name, the statement which adds it and
+   * what is lost without it. All three belong in the message, because that is the whole
+   * remedy.
+   *
+   * @param name The column's name
+   * @param definition What to add it as
+   * @param whatIsLost What VanillaBP cannot do without it
+   */
+  private record AddedColumn(
+                             String name,
+                             String definition,
+                             String whatIsLost) {
+  }
 
   /**
    * Creates the table (and the index the cleanup reads) unless it exists already. A table
@@ -477,22 +563,19 @@ public class JdbcTaskDeliveryStore {
       final Connection connection) throws SQLException {
 
     for (final var column : ADDED_COLUMNS) {
-      if (JdbcSchema.columnExists(connection, tableName, column)) {
+      if (JdbcSchema.columnExists(connection, tableName, column.name())) {
         continue;
       }
       throw new IllegalStateException(
           """
               The task-delivery table '%s' has no column '%s'! It was added to the table of \
-              VanillaBP after your database was created, and without it the records of the tasks \
-              your application leaves open cannot be kept alive - they would expire while the tasks \
-              are still being redelivered. Either
+              VanillaBP after your database was created, and without it %s. Either
               - apply the current schema of VanillaBP with your migration tool: the artifact \
               'io.vanillabp:vanillabp-schema' ships the Liquibase changelog \
               'vanillabp/schema/changelog.xml' and the SQL generated from it for Flyway, or
-              - add the column yourself: ALTER TABLE %s ADD %s TIMESTAMP (the type your database \
-              uses for the existing column RECORDED_AT), filled with the value of RECORDED_AT and \
-              NOT NULL."""
-              .formatted(tableName, column, tableName, column));
+              - add the column yourself: ALTER TABLE %s ADD %s %s."""
+              .formatted(tableName, column.name(), column.whatIsLost(), tableName, column.name(), column
+                  .definition()));
     }
 
   }
@@ -558,6 +641,7 @@ public class JdbcTaskDeliveryStore {
     return """
         CREATE TABLE %s (\
         DELIVERY_KEY VARCHAR(512) PRIMARY KEY, \
+        ADAPTER_ID VARCHAR(255), \
         WORKFLOW_MODULE_ID VARCHAR(255) NOT NULL, \
         BPMN_PROCESS_ID VARCHAR(255) NOT NULL, \
         AGGREGATE_ID VARCHAR(1024), \

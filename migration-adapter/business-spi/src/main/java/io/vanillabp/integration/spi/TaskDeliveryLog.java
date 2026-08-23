@@ -109,6 +109,35 @@ public interface TaskDeliveryLog {
   }
 
   /**
+   * The adapter ids the OPEN records of one workflow's BPMN process belong to - a record
+   * whose outcome is <code>COMPLETION_PENDING</code>, i.e. a task VanillaBP still answers
+   * redeliveries for (story 120).
+   * <p>
+   * Asked once at startup, and only for one question: an adapter id which holds open
+   * records although it is not configured any more means that the id was RENAMED or was
+   * removed too early. Both cost the same, and both are silent today - the delivery key
+   * is built from the delivering adapter, so under a new name a redelivery finds no
+   * record and the <code>&#64;WorkflowTask</code> method runs a second time.
+   * <p>
+   * The default answers an empty set, which means "this store cannot say": the check is
+   * then skipped rather than invented. A store implementing it answers a cheap query over
+   * {@link TaskDelivery#adapterId()}, {@link TaskDelivery#workflowModuleId()} and
+   * {@link TaskDelivery#bpmnProcessId()}; records written before that field existed carry
+   * no adapter id and are not part of any answer.
+   *
+   * @param workflowModuleId The workflow module to ask about
+   * @param bpmnProcessId The BPMN process to ask about
+   * @return The adapter ids of open records, empty if the store cannot say
+   */
+  default java.util.Set<String> adapterIdsOfOpenTasks(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return java.util.Set.of();
+
+  }
+
+  /**
    * Deletes the records of ONE workflow, called when it ended and nothing of it can be
    * redelivered any more. Invoked within the transaction of that notification, so the
    * deletion commits with whatever else that transaction does.

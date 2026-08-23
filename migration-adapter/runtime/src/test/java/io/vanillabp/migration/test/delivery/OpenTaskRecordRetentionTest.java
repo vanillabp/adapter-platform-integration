@@ -62,9 +62,54 @@ public class OpenTaskRecordRetentionTest {
 
     testee.record(
         new TaskDelivery(
-            deliveryKey, "test-module", "TestProcess", "4711", "awaitCompletion", outcome, null, null, Instant
+            deliveryKey, "adapter", "test-module", "TestProcess", "4711", "awaitCompletion", outcome, null, null, Instant
                 .now()
                 .minus(age)));
+
+  }
+
+  /**
+   * A record of the given adapter, written just now.
+   */
+  private void recordOf(
+      final String adapterId,
+      final String deliveryKey,
+      final String outcome) {
+
+    testee
+        .record(
+            new TaskDelivery(
+                deliveryKey, adapterId, "test-module", "TestProcess", "4711", "awaitCompletion", outcome, null, null, Instant
+                    .now()));
+
+  }
+
+  @org.junit.jupiter.api.Test
+  @DisplayName("The adapter ids of OPEN records are answered, per workflow module and process")
+  public void openRecordsAnswerTheirAdapterIds() {
+
+    recordOf("old-bpms", "open-of-old", "COMPLETION_PENDING");
+    recordOf("new-bpms", "open-of-new", "COMPLETION_PENDING");
+    // a completed task is no leftover: nothing is redelivered for it any more
+    recordOf("done-bpms", "completed", "COMPLETED");
+    // a record written before the column existed has no adapter id and is no answer
+    testee
+        .record(
+            new TaskDelivery(
+                "open-without-adapter", null, "test-module", "TestProcess", "4711", "awaitCompletion", "COMPLETION_PENDING", null, null, Instant
+                    .now()));
+
+    assertEquals(
+        java.util.Set.of("old-bpms", "new-bpms"),
+        testee.adapterIdsOfOpenTasks("test-module", "TestProcess"));
+    assertEquals(
+        java.util.Set.of(),
+        testee.adapterIdsOfOpenTasks("other-module", "TestProcess"),
+        "another workflow module is another question");
+    assertEquals(
+        java.util.Set.of(),
+        testee.adapterIdsOfOpenTasks("test-module", "OtherProcess"),
+        "another BPMN process is another question");
 
   }
 

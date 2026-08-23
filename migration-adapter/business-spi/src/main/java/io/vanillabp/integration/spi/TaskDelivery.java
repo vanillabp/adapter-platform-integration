@@ -19,6 +19,13 @@ import java.time.Instant;
  *          process, the event and the delivery ID the adapter reported. A
  *          redelivery of the same task yields the same key, a genuinely new task
  *          instance a different one
+ * @param adapterId The ID of the adapter which delivered the task. It is part of the
+ *          {@link #deliveryKey()} as well, but only as text and hashed once the key grows
+ *          too long, so a store cannot answer questions about it - which is why it is a
+ *          field of its own since story 120: it lets a store report the adapter ids its
+ *          open records belong to, and it tells whoever looks into the store which BPMS
+ *          delivered. May be <code>null</code> in a record written before that field
+ *          existed
  * @param workflowModuleId The ID of the workflow module the workflow belongs to
  * @param bpmnProcessId The BPMN process ID of the workflow
  * @param workflowAggregateId The workflow aggregate's ID in serialized form
@@ -42,6 +49,7 @@ import java.time.Instant;
  */
 public record TaskDelivery(
                            String deliveryKey,
+                           String adapterId,
                            String workflowModuleId,
                            String bpmnProcessId,
                            String workflowAggregateId,

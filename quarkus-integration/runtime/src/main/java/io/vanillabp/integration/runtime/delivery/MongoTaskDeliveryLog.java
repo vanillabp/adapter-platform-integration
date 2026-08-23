@@ -225,12 +225,13 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
                     .find(new Document("_id", deliveryKey))
                     .first())
         .map(document -> new TaskDelivery(
-            deliveryKey, document.getString("workflowModuleId"), document.getString("bpmnProcessId"), document
-                .getString("aggregateId"), document.getString("taskDefinition"), document
-                    .getString("outcome"), document.getString("bpmnErrorCode"), document
-                        .getString("bpmnErrorName"), document.getDate("recordedAt") == null
-                            ? null
-                            : document.getDate("recordedAt").toInstant()));
+            deliveryKey, document.getString("adapterId"), document.getString("workflowModuleId"), document
+                .getString("bpmnProcessId"), document
+                    .getString("aggregateId"), document.getString("taskDefinition"), document
+                        .getString("outcome"), document.getString("bpmnErrorCode"), document
+                            .getString("bpmnErrorName"), document.getDate("recordedAt") == null
+                                ? null
+                                : document.getDate("recordedAt").toInstant()));
 
   }
 
@@ -249,6 +250,9 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
         : delivery.recordedAt());
     final var record = new Document()
         .append("_id", delivery.deliveryKey())
+        // the delivering adapter as a field of its own (story 120): the delivery key
+        // carries it too, but hashed once the key grows too long
+        .append("adapterId", delivery.adapterId())
         .append("workflowModuleId", delivery.workflowModuleId())
         .append("bpmnProcessId", delivery.bpmnProcessId())
         .append("aggregateId", delivery.workflowAggregateId())
@@ -323,6 +327,30 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
     }
 
     return true;
+
+  }
+
+  /**
+   * The adapter ids the OPEN records of one BPMN process belong to (story 120): asked once
+   * per BPMN process at startup.
+   */
+  @Override
+  public java.util.Set<String> adapterIdsOfOpenTasks(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    final var filter = new Document("workflowModuleId", workflowModuleId)
+        .append("bpmnProcessId", bpmnProcessId)
+        .append(
+            "outcome",
+            io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome.Kind.COMPLETION_PENDING
+                .name())
+        .append("adapterId", new Document("$ne", null));
+    final var adapterIds = new java.util.LinkedHashSet<String>();
+    deliveryCollection()
+        .distinct("adapterId", filter, String.class)
+        .forEach(adapterIds::add);
+    return adapterIds;
 
   }
 

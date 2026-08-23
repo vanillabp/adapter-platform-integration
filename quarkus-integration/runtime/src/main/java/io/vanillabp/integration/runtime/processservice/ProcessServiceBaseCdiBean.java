@@ -370,6 +370,9 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
     // hears about the store first, which is the more specific gap
     migrationProcessService.validateTransactionRunnerAtStartup();
     migrationProcessService.validateTaskDeliveryLogAtStartup();
+    // last: it asks the stores the two checks above resolved, so an application which
+    // needs neither is not made to materialize one for a question about it
+    migrationProcessService.validatePersistedAdapterIdsAtStartup();
 
   }
 

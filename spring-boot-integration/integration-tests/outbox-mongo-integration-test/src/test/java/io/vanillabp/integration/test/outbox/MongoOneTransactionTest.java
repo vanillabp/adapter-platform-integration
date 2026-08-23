@@ -128,7 +128,7 @@ public class MongoOneTransactionTest {
       deliveryLog
           .record(
               new TaskDelivery(
-                  "test-module|SampleWorkflowService|one-transaction|job-1", "test-module", "SampleWorkflowService", started
+                  "test-module|SampleWorkflowService|one-transaction|job-1", "test-adapter", "test-module", "SampleWorkflowService", started
                       .getId(), "someTask", "COMPLETED", null, null, java.time.Instant.now()));
 
       // still inside the transaction: nothing of this is visible to anybody else
@@ -158,7 +158,7 @@ public class MongoOneTransactionTest {
           deliveryLog
               .record(
                   new TaskDelivery(
-                      "test-module|SampleWorkflowService|rolled-back|job-1", "test-module", "SampleWorkflowService", started
+                      "test-module|SampleWorkflowService|rolled-back|job-1", "test-adapter", "test-module", "SampleWorkflowService", started
                           .getId(), "someTask", "COMPLETED", null, null, java.time.Instant.now()));
           throw new RuntimeException("no commit for this one");
         }));

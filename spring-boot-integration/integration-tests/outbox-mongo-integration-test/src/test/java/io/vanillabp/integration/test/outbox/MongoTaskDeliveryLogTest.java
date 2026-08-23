@@ -90,7 +90,7 @@ public class MongoTaskDeliveryLogTest {
       final String outcome) {
 
     return new TaskDelivery(
-        deliveryKey, "test-module", "TestProcess", "4711", "processTask", outcome, "PAYMENT_FAILED", "PaymentFailed", java.time.Instant
+        deliveryKey, "test-adapter", "test-module", "TestProcess", "4711", "processTask", outcome, "PAYMENT_FAILED", "PaymentFailed", java.time.Instant
             .now());
 
   }
@@ -157,7 +157,7 @@ public class MongoTaskDeliveryLogTest {
       final String workflowAggregateId) {
 
     return new TaskDelivery(
-        deliveryKey, workflowModuleId, bpmnProcessId, workflowAggregateId, "processTask", "COMPLETED", null, null, java.time.Instant
+        deliveryKey, "test-adapter", workflowModuleId, bpmnProcessId, workflowAggregateId, "processTask", "COMPLETED", null, null, java.time.Instant
             .now());
 
   }
@@ -231,7 +231,7 @@ public class MongoTaskDeliveryLogTest {
       final java.time.Duration age) {
 
     return new TaskDelivery(
-        deliveryKey, "test-module", "TestProcess", "4711", "awaitCompletion", "COMPLETION_PENDING", null, null, java.time.Instant
+        deliveryKey, "test-adapter", "test-module", "TestProcess", "4711", "awaitCompletion", "COMPLETION_PENDING", null, null, java.time.Instant
             .now()
             .minus(age));
 

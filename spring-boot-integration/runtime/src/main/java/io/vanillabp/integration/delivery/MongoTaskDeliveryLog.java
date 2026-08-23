@@ -95,10 +95,11 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
             mongoTemplate
                 .findById(deliveryKey, TaskDeliveryDocument.class, collection))
         .map(document -> new TaskDelivery(
-            document.getId(), document.getWorkflowModuleId(), document.getBpmnProcessId(), document
-                .getAggregateId(), document.getTaskDefinition(), document
-                    .getOutcome(), document.getBpmnErrorCode(), document
-                        .getBpmnErrorName(), document.getRecordedAt()));
+            document.getId(), document.getAdapterId(), document.getWorkflowModuleId(), document
+                .getBpmnProcessId(), document
+                    .getAggregateId(), document.getTaskDefinition(), document
+                        .getOutcome(), document.getBpmnErrorCode(), document
+                            .getBpmnErrorName(), document.getRecordedAt()));
 
   }
 
@@ -127,10 +128,11 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
           : delivery.recordedAt();
       mongoTemplate.insert(
           new TaskDeliveryDocument(
-              delivery.deliveryKey(), delivery.workflowModuleId(), delivery.bpmnProcessId(), delivery
-                  .workflowAggregateId(), delivery.taskDefinition(), delivery
-                      .outcome(), delivery.bpmnErrorCode(), delivery
-                          .bpmnErrorName(), recordedAt, recordedAt),
+              delivery.deliveryKey(), delivery.adapterId(), delivery.workflowModuleId(), delivery
+                  .bpmnProcessId(), delivery
+                      .workflowAggregateId(), delivery.taskDefinition(), delivery
+                          .outcome(), delivery.bpmnErrorCode(), delivery
+                              .bpmnErrorName(), recordedAt, recordedAt),
           collection);
       compensateUnlessCommitted(delivery);
       return true;
@@ -139,6 +141,34 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
       logRecordedAlready(delivery);
       return false;
     }
+
+  }
+
+  /**
+   * The adapter ids the OPEN records of one BPMN process belong to (story 120): asked once
+   * per BPMN process at startup, so an adapter id which such a record still belongs to
+   * while the configuration does not know it any more can be named.
+   */
+  @Override
+  public java.util.Set<String> adapterIdsOfOpenTasks(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    final var query = org.springframework.data.mongodb.core.query.Query
+        .query(
+            org.springframework.data.mongodb.core.query.Criteria
+                .where("workflowModuleId")
+                .is(workflowModuleId)
+                .and("bpmnProcessId")
+                .is(bpmnProcessId)
+                .and("outcome")
+                .is(
+                    io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome.Kind.COMPLETION_PENDING
+                        .name())
+                .and("adapterId")
+                .ne(null));
+    return new java.util.LinkedHashSet<>(
+        mongoTemplate.findDistinct(query, "adapterId", collection, String.class));
 
   }
 
