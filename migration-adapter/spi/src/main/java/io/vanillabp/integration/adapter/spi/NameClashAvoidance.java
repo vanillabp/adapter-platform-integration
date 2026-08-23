@@ -17,14 +17,26 @@ package io.vanillabp.integration.adapter.spi;
  * in this setting and put it first in
  * <code>vanillabp.prioritized-adapters</code> - existing workflows keep running in
  * the old adapter id, new ones start in the new one.
+ * <p>
+ * <b>Two ids on ONE backend is what that costs.</b> The election then has to tell
+ * two adapters apart which see the same tasks and workflows, so the adapter needs a
+ * way to answer for its own scope only (see the election contract of
+ * {@link MigratableProcessService}). Whether it has one is the adapter's answer, and
+ * it may end the boot instead: Camunda 8 requires the cluster's query API for it
+ * (story 103), and two Camunda 7 ids are two embedded engines, which need a
+ * <code>table-prefix</code> or a <code>data-source-name</code> of their own no
+ * matter which modes they use. The adapter's documentation says what applies.
  */
 public enum NameClashAvoidance {
 
   /**
    * Nothing is scoped - the application guarantees that its identifiers are unique
    * across all of its workflow modules. The least surprising choice for an
-   * application consisting of exactly one workflow module, and the default of
-   * adapters whose BPMS cannot isolate without being set up for it (Camunda 8).
+   * application consisting of exactly one workflow module, and what an application on
+   * a BPMS which cannot isolate says: a Camunda 8 cluster without multi-tenancy
+   * rejects a tenant id, and this mode (version 1's <code>use-tenants: false</code>)
+   * is one of the two answers its startup message names. It is never a default,
+   * because a mode nobody chose must not be the one which scopes nothing.
    * <p>
    * Since this mode protects nothing, every adapter reports it at startup per
    * workflow module and names its own alternatives
@@ -35,9 +47,12 @@ public enum NameClashAvoidance {
   /**
    * The BPMS' own isolation mechanism is used - for Camunda 7 and Camunda 8 a
    * TENANT named after the workflow module (the name is overridable by the
-   * adapter's <code>tenant-id</code>). This is what VanillaBP 1 did, which is why
-   * it is the default of every adapter whose BPMS isolates out of the box
-   * ({@link AdapterDeploymentService#defaultNameClashAvoidance()}).
+   * adapter's <code>tenant-id</code>). This is what VanillaBP 1 did, which is why it
+   * is the default of every adapter
+   * ({@link AdapterDeploymentService#defaultNameClashAvoidance()}): an application
+   * upgrading without touching its configuration finds its running workflows again.
+   * Each adapter holds that in its own test
+   * ({@code Camunda7DeploymentServiceTest}, {@code Camunda8DeploymentServiceTest}).
    * <p>
    * An adapter whose BPMS has no such mechanism rejects this mode at startup with a
    * guiding message instead of silently deploying everything into one scope.

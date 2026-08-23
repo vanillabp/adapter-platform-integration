@@ -130,8 +130,13 @@ public interface BpmsInitiatedStartContext {
    * This adapter's default for aggregates carrying no
    * {@code @SyncWithBPMS}/{@code @NoSyncWithBPMS} annotation of their own - decides
    * which aggregate values are reported back in
-   * {@link BpmsInitiatedStartResult#variables()}. Embedded BPMS reading the
-   * aggregate live answer {@link AggregateSyncMode#NONE}.
+   * {@link BpmsInitiatedStartResult#variables()}.
+   * <p>
+   * {@link AggregateSyncMode#NONE} switches the reporting off, which is the answer of
+   * an EMBEDDED BPMS: it notifies inside its own transaction, so the values would
+   * have to be read before the aggregate is committed, and it reaches the same values
+   * at its next sync point anyway. A remote BPMS answers with its sharing default,
+   * which is {@link AggregateSyncMode#FULL} for every VanillaBP adapter (story 66).
    *
    * @return The adapter's sync default
    */
