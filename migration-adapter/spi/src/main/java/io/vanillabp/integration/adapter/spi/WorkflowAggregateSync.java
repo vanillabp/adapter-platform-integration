@@ -21,8 +21,8 @@ import java.util.Map;
  * variable is technical and is ALWAYS set, no matter what the sync model says: an
  * aggregate annotated {@code @NoSyncWithBPMS} would otherwise be unaddressable. Both
  * halves are held, the first by {@code WorkflowTaskRegistryTest} of the migration
- * adapter, the second by {@code PeaSharedValuesTest} of the Process-Engine-API
- * adapter (Camunda 8 is story 116).
+ * adapter, the second by {@code PeaSharedValuesTest} respectively
+ * {@code Camunda8SharedValuesTest} of the adapters storing the ID in a variable.
  */
 public interface WorkflowAggregateSync {
 
