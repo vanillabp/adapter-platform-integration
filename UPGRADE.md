@@ -4,6 +4,46 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Spring Boot: an adapter id named in `prioritized-adapters` gets its beans (2026-08-23)
+
+Story 119, a defect rather than a change: the documented convention was not held, so an
+application may have worked around it and can now drop the workaround.
+
+`vanillabp.adapters.<id>.type` is only needed for a CUSTOM adapter id; an id which IS an
+adapter type takes its name as its type, and an id named in `prioritized-adapters` needs no
+section at all. On Spring Boot the second half did not hold in one shape: the adapters'
+bean registrars bind `vanillabp.*` themselves, before the core normalizes it, and they
+derived such an id only where NOTHING at all had bound onto the CORE model. An adapter
+section consisting entirely of the adapter's OWN keys (`rest-address`, `webapps`,
+`database-schema-update`) is invisible to that model, so whether an adapter got its beans
+depended on whether some OTHER section happened to carry a core key such as
+`name-clash-avoidance` or `type`.
+
+The migration setup is where it hurts, and the wiki's own example had that shape:
+
+```yaml
+vanillabp:
+  prioritized-adapters:
+    - camunda8
+    - camunda7
+  adapters:
+    camunda8:
+      rest-address: http://localhost:8080
+      name-clash-avoidance: use-prefix
+    camunda7:
+      webapps:
+        admin-user: { id: demo, password: demo }
+```
+
+Before this fix the Camunda 7 adapter registered no instance here, and the election found
+nothing serving the id it was told to ask. Naming `type: camunda7` was the workaround.
+
+Nothing to do for an application which names its types. One which added a `type` only to
+get past this can remove it again, and one which relied on the accident of an all-empty
+core model keeps working. Quarkus was never affected: its producers read the core
+properties after normalization. Held by `AdapterBeanRegistrarSupportTest`, seven cases,
+two of which fail against the old code.
+
 ## An aggregate without a persistence ends the startup (2026-08-22)
 
 Story 114 changed this, story 106 found that it was never written down here. It concerns
