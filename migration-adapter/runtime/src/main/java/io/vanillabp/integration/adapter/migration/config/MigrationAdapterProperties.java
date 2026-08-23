@@ -103,6 +103,22 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   private MetricsProperties metrics = new MetricsProperties();
 
   /**
+   * Adapter ids this application USED to have and deliberately does not configure any
+   * more - the last step of a BPMS migration, once nothing runs in the old BPMS any
+   * more (story 120).
+   * <p>
+   * VanillaBP persists the adapter id of an entry of the phase-two outbox and of every
+   * delivery record, so an id which such an entry still waits for and which nobody
+   * serves is worth a startup message: it means the id was RENAMED, which loses
+   * workflows, or it was removed too early. Naming it here says that it is the second
+   * case and that the leftovers are known, and turns the message into a DEBUG line. The
+   * decision stays visible in the configuration instead of being drowned in a log
+   * filter, exactly like an adapter's <code>accept-unscoped-identifiers</code>.
+   */
+  @Builder.Default
+  private List<String> retiredAdapters = List.of();
+
+  /**
    * Derived view of {@link #getAdapters()}: adapter ID mapped to the adapter's type.
    * An adapter entry without an explicit {@link AdapterConfigProperties#getType()
    * type} defaults to its ID being the type.

@@ -50,6 +50,7 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
   QuarkusMigrationAdapterPropertiesMapper INSTANCE = Mappers.getMapper(QuarkusMigrationAdapterPropertiesMapper.class);
 
   @Mapping(target = "prioritizedAdapters", qualifiedByName = "unwrapStringList")
+  @Mapping(target = "retiredAdapters", qualifiedByName = "unwrapStringList")
   // derived from the classpath facts by MigrationAdapterProperties#normalize, not
   // bound from properties (story 34's resources-location convention)
   @Mapping(target = "conventionalResourcesLocations", ignore = true)

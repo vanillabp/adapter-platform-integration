@@ -632,6 +632,11 @@ public class SpringBootMigrationAdapterAutoConfiguration {
           processService
               .getMigrationProcessService()
               .validateTaskDeliveryLogAtStartup();
+          // last: it asks the stores the two checks above resolved, so an application
+          // which needs neither is not made to materialize one for a question about it
+          processService
+              .getMigrationProcessService()
+              .validatePersistedAdapterIdsAtStartup();
         });
 
   }

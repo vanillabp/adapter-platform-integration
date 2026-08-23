@@ -40,6 +40,18 @@ public interface QuarkusMigrationAdapterProperties {
   Optional<List<String>> prioritizedAdapters();
 
   /**
+   * Adapter ids this application USED to have and deliberately does not configure any
+   * more - the last step of a BPMS migration (story 120). VanillaBP persists the adapter
+   * id of an outbox entry and of every delivery record, so an id which such an entry
+   * still waits for and which nobody serves is reported at startup: it means the id was
+   * RENAMED, which loses workflows, or that it was removed too early. Naming it here says
+   * that it is the second case, and turns the message into a DEBUG line.
+   *
+   * @return The adapter ids retired deliberately
+   */
+  Optional<List<String>> retiredAdapters();
+
+  /**
    * Where to load VanillaBP BPMN files from, which are NOT specific to any adapter.
    */
   Optional<String> resourcesLocation();

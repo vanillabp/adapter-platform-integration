@@ -4,6 +4,42 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## A renamed adapter id is noticed at startup (2026-08-23)
+
+Story 120. It adds a column to the task-delivery table, a property, and a startup message.
+
+**Why.** VanillaBP persists the adapter id twice: an outbox entry of a START operation names
+the adapter elected in phase one, and the delivery key of every record is built from the
+delivering adapter. An adapter id which disappears from the configuration therefore has two
+readings, and both cost the application something - a workflow which was persisted and never
+started, or a `@WorkflowTask` method which runs a second time. Until now only the dispatch
+respectively the next redelivery said so, hours later.
+
+**What changed:**
+
+- `TaskDelivery` carries the delivering `adapterId` as a field of its own. It is part of the
+  delivery key as well, but only as text and hashed once the key grows too long, so no store
+  could answer a question about it. **The task-delivery table gains a column
+  `ADAPTER_ID VARCHAR(255)`, nullable** - a record written before it existed has none and is
+  simply not part of any answer. Applications letting VanillaBP create the schema get it
+  automatically; applications managing the schema themselves apply the current changelog of
+  `io.vanillabp:vanillabp-schema` or add the column, and the startup names it if they forget.
+  A MongoDB store writes the field without any migration;
+- two `default` methods on the store SPIs, `PhaseTwoOutbox#adapterIdsOfPendingCalls` and
+  `TaskDeliveryLog#adapterIdsOfOpenTasks`, both asked once per BPMN process at startup and
+  never at runtime. The default answers an empty set, which means "this store cannot say" and
+  keeps the check silent - which is what the gruelbox-based outbox of the Spring Boot
+  integration answers, because it keeps its entries as a serialized invocation with no adapter
+  id to query. The shipped JDBC and MongoDB stores answer;
+- **`vanillabp.retired-adapters`** names the adapter ids an application USED to have. The last
+  step of a migration is removing an id, and where something is still left in the stores the
+  startup would name it: this property says that the leftovers are known and turns the WARN
+  into a DEBUG line. It stays in the configuration, so the decision stays visible.
+
+**What to do.** Nothing, unless you manage the schema yourself (apply the changelog) or you
+finished a migration and want the startup quiet (name the id in `retired-adapters`). An
+application which renamed an adapter id in the past hears about it now, which is the point.
+
 ## Spring Boot: an adapter id named in `prioritized-adapters` gets its beans (2026-08-23)
 
 Story 119, a defect rather than a change: the documented convention was not held, so an

@@ -74,6 +74,10 @@
       <column name="DELIVERY_KEY" type="VARCHAR(512)">
         <constraints primaryKey="true" nullable="false" />
       </column>
+      <!-- the adapter which delivered: part of the delivery key as well, but only as text and
+           hashed once the key grows too long, so a query needs it as a column of its own (story
+           120). Nullable, because a record written before it existed has none. -->
+      <column name="ADAPTER_ID" type="VARCHAR(255)" />
       <column name="WORKFLOW_MODULE_ID" type="VARCHAR(255)">
         <constraints nullable="false" />
       </column>

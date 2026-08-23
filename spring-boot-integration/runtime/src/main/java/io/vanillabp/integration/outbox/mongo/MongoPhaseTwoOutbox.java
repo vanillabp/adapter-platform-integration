@@ -50,6 +50,32 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
   private final String collection;
 
   /**
+   * The adapter ids the OPEN entries of one BPMN process are waiting for (story 120): an
+   * id which is not configured any more means that it was renamed or removed too early,
+   * and both leave the workflow of a START entry unstarted.
+   */
+  @Override
+  public java.util.Set<String> adapterIdsOfPendingCalls(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    final var query = Query
+        .query(
+            Criteria
+                .where("workflowModuleId")
+                .is(workflowModuleId)
+                .and("bpmnProcessId")
+                .is(bpmnProcessId)
+                .and("status")
+                .is(PhaseTwoOutboxEntry.STATUS_OPEN)
+                .and("adapterId")
+                .ne(null));
+    return new java.util.LinkedHashSet<>(
+        mongoTemplate.findDistinct(query, "adapterId", collection, String.class));
+
+  }
+
+  /**
    * Counts the entries waiting for their dispatch - a single count over the same
    * collection the dispatcher polls.
    */

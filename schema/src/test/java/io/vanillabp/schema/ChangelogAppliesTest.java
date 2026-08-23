@@ -102,9 +102,9 @@ public class ChangelogAppliesTest {
       assertEquals(
           java.util.List
               .of(
-                  "DELIVERY_KEY", "WORKFLOW_MODULE_ID", "BPMN_PROCESS_ID", "AGGREGATE_ID",
-                  "TASK_DEFINITION", "OUTCOME", "BPMN_ERROR_CODE", "BPMN_ERROR_NAME", "RECORDED_AT",
-                  "LAST_SEEN_AT"),
+                  "DELIVERY_KEY", "ADAPTER_ID", "WORKFLOW_MODULE_ID", "BPMN_PROCESS_ID",
+                  "AGGREGATE_ID", "TASK_DEFINITION", "OUTCOME", "BPMN_ERROR_CODE", "BPMN_ERROR_NAME",
+                  "RECORDED_AT", "LAST_SEEN_AT"),
           java.util.List.copyOf(delivery.keySet()));
 
     }
