@@ -148,7 +148,7 @@ public class AggregateWriteConflictTest {
       logWatcher.list
           .stream()
           .filter(event -> event.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.WARN))
-          .map(event -> event.getFormattedMessage())
+          .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
           .forEach(messages::add);
     }
 

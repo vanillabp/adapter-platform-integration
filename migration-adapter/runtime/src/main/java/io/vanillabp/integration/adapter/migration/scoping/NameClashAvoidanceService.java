@@ -209,7 +209,7 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
         null,
         adapterId,
         AdapterProperties::getPrefixTaskDefinitionsPerProcess);
-    return configured == null || configured.booleanValue();
+    return (configured == null) || configured;
 
   }
 

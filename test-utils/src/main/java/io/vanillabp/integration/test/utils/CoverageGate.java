@@ -173,7 +173,7 @@ public final class CoverageGate {
               .getParent()
               .getParent())
           .map(CoverageGate::artifactIdOf)
-          .filter(artifactId -> artifactId != null)
+          .filter(java.util.Objects::nonNull)
           .filter(artifactId -> !deliberatelyNotAggregated.contains(artifactId))
           .filter(artifactId -> !aggregated.contains(artifactId))
           .distinct()

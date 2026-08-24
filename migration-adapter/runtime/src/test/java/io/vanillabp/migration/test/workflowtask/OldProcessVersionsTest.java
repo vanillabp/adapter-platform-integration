@@ -28,6 +28,7 @@ import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.service.WorkflowTask;
+import lombok.Getter;
 
 /**
  * The startup check for old process versions: does this application still serve the OLDER versions
@@ -45,13 +46,10 @@ public class OldProcessVersionsTest {
 
   private static final String ADAPTER = "c7";
 
+  @Getter
   public static class Aggregate {
 
     String id;
-
-    public String getId() {
-      return id;
-    }
 
   }
 
@@ -471,7 +469,7 @@ public class OldProcessVersionsTest {
     return logWatcher.list
         .stream()
         .filter(event -> event.getLevel().isGreaterOrEqual(level))
-        .map(event -> event.getFormattedMessage())
+        .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
         .toList();
 
   }

@@ -33,6 +33,7 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.service.WorkflowTask;
+import lombok.Getter;
 
 /**
  * Two branches of one workflow write the same workflow aggregate. What is
@@ -71,13 +72,10 @@ public class AggregateWriteConflictTest {
 
   public static class Aggregate {
 
+    @Getter
     String id;
 
     int invocations;
-
-    public String getId() {
-      return id;
-    }
 
   }
 
@@ -431,7 +429,7 @@ public class AggregateWriteConflictTest {
       logWatcher.list
           .stream()
           .filter(event -> event.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.WARN))
-          .map(event -> event.getFormattedMessage())
+          .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
           .forEach(messages::add);
     }
 

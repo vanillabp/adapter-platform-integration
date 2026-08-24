@@ -17,6 +17,7 @@ import io.vanillabp.integration.adapter.spi.AggregateSyncMode;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.service.NoSyncWithBPMS;
 import io.vanillabp.spi.service.SyncWithBPMS;
+import lombok.Getter;
 
 /**
  * The sync model: which attributes of a workflow aggregate are shared
@@ -54,19 +55,12 @@ public class AggregateSyncSupportTest {
     BIG
   }
 
+  @Getter
   public static class PlainAggregate {
 
     private String content = "hello";
 
     private ItemSize size = ItemSize.BIG;
-
-    public String getContent() {
-      return content;
-    }
-
-    public ItemSize getSize() {
-      return size;
-    }
 
     public boolean isShippedAsBigItem() {
       return size == ItemSize.BIG;
@@ -91,20 +85,13 @@ public class AggregateSyncSupportTest {
 
   }
 
+  @Getter
   public static class OptOutByAttributeAggregate {
 
     private String content = "hello";
 
     @NoSyncWithBPMS
     private String creditCardNumber = "4711";
-
-    public String getContent() {
-      return content;
-    }
-
-    public String getCreditCardNumber() {
-      return creditCardNumber;
-    }
 
   }
 
@@ -121,19 +108,12 @@ public class AggregateSyncSupportTest {
 
   }
 
+  @Getter
   public static class OptInByAttributeAggregate {
 
     private ItemSize size = ItemSize.NORMAL;
 
     private String secret = "s3cr3t";
-
-    public ItemSize getSize() {
-      return size;
-    }
-
-    public String getSecret() {
-      return secret;
-    }
 
     @SyncWithBPMS
     public boolean isShippedAsNormalItem() {
@@ -155,19 +135,12 @@ public class AggregateSyncSupportTest {
   }
 
   @NoSyncWithBPMS
+  @Getter
   public static class OptInAggregate {
 
     private ItemSize size = ItemSize.NORMAL;
 
     private String secret = "s3cr3t";
-
-    public ItemSize getSize() {
-      return size;
-    }
-
-    public String getSecret() {
-      return secret;
-    }
 
     @SyncWithBPMS
     public boolean isShippedAsNormalItem() {
@@ -190,6 +163,7 @@ public class AggregateSyncSupportTest {
 
   }
 
+  @Getter
   public static class Item {
 
     private long itemId;
@@ -203,17 +177,10 @@ public class AggregateSyncSupportTest {
       this.size = size;
     }
 
-    public long getItemId() {
-      return itemId;
-    }
-
-    public ItemSize getSize() {
-      return size;
-    }
-
   }
 
   @NoSyncWithBPMS
+  @Getter
   public static class NarrowedItem {
 
     private long itemId;
@@ -230,13 +197,10 @@ public class AggregateSyncSupportTest {
       return itemId;
     }
 
-    public String getInternalNote() {
-      return internalNote;
-    }
-
   }
 
   @NoSyncWithBPMS
+  @Getter
   public static class NestedAggregate {
 
     private Set<Item> inheritedItems = Set.of(new Item(1, ItemSize.NORMAL));
@@ -253,10 +217,6 @@ public class AggregateSyncSupportTest {
     @SyncWithBPMS
     public List<NarrowedItem> getNarrowedItems() {
       return narrowedItems;
-    }
-
-    public Item getHidden() {
-      return hidden;
     }
 
   }
@@ -284,6 +244,7 @@ public class AggregateSyncSupportTest {
 
   }
 
+  @Getter
   public static class DerivingItem {
 
     private long itemId = 7;
@@ -293,10 +254,6 @@ public class AggregateSyncSupportTest {
     @SyncWithBPMS
     public long getItemId() {
       return itemId;
-    }
-
-    public String getInternalNote() {
-      return internalNote;
     }
 
   }
@@ -323,6 +280,7 @@ public class AggregateSyncSupportTest {
 
   }
 
+  @Getter
   public static class AmbiguousAggregate {
 
     @SyncWithBPMS
@@ -332,18 +290,6 @@ public class AggregateSyncSupportTest {
     private String creditCardNumber = "4711";
 
     private String status = "new";
-
-    public String getCustomerName() {
-      return customerName;
-    }
-
-    public String getCreditCardNumber() {
-      return creditCardNumber;
-    }
-
-    public String getStatus() {
-      return status;
-    }
 
   }
 
@@ -469,6 +415,7 @@ public class AggregateSyncSupportTest {
 
   }
 
+  @Getter
   public static class BidirectionalOrder {
 
     private final List<BidirectionalItem> items = new java.util.LinkedList<>();
@@ -480,12 +427,9 @@ public class AggregateSyncSupportTest {
       }
     }
 
-    public List<BidirectionalItem> getItems() {
-      return items;
-    }
-
   }
 
+  @Getter
   public static class BidirectionalItem {
 
     private final BidirectionalOrder order;
@@ -502,13 +446,6 @@ public class AggregateSyncSupportTest {
     /**
      * The back reference every ordinary JPA entity has.
      */
-    public BidirectionalOrder getOrder() {
-      return order;
-    }
-
-    public int getPosition() {
-      return position;
-    }
 
   }
 

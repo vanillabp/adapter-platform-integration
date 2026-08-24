@@ -120,20 +120,6 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
   }
 
   /**
-   * Unwraps optional lists ({@code Optional.empty()} becomes an empty list,
-   * matching the core model's default).
-   *
-   * @param value The optional list
-   * @return The unwrapped list or an empty list
-   */
-  /**
-   * Unwraps an optional string ({@code Optional.empty()} becomes {@code null},
-   * matching the core model's "platform default" semantic).
-   *
-   * @param value The optional string
-   * @return The unwrapped string or {@code null}
-   */
-  /**
    * Unwraps the setting whether unguarded aggregate writes are accepted
    * ({@code Optional.empty()} becomes {@code null}: a workflow module which says nothing
    * inherits what the application configured globally).
@@ -179,6 +165,13 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
 
   }
 
+  /**
+   * Unwraps an optional string ({@code Optional.empty()} becomes {@code null},
+   * matching the core model's "platform default" semantic).
+   *
+   * @param value The optional string
+   * @return The unwrapped string or {@code null}
+   */
   @Named("unwrapString")
   default String unwrapString(
       final Optional<String> value) {
@@ -206,6 +199,13 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
 
   }
 
+  /**
+   * Unwraps optional lists ({@code Optional.empty()} becomes an empty list,
+   * matching the core model's default).
+   *
+   * @param value The optional list
+   * @return The unwrapped list or an empty list
+   */
   @Named("unwrapStringList")
   default List<String> unwrapList(
       final Optional<List<String>> value) {

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.OutfadedVersionsInUsePolicy;
 
@@ -116,7 +117,7 @@ public class OutfadedProcessVersions {
             bpmnProcessId,
             null,
             adapterId,
-            adapter -> adapter.getOutfadedVersionsInUse());
+            AdapterProperties::getOutfadedVersionsInUse);
     return configured == null
         ? OutfadedVersionsInUsePolicy.LOG
         : configured;

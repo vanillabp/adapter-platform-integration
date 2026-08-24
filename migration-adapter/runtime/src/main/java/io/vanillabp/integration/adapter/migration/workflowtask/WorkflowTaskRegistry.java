@@ -852,23 +852,6 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
   }
 
   /**
-   * Which of the given tasks of ONE deployed version no <code>&#64;WorkflowTask</code>
-   * method serves - the version-aware sibling of {@link #validateTaskWiring}, used by
-   * the startup check for old process versions.
-   * <p>
-   * Two differences to the wiring validation, and both matter. It asks per VERSION, so
-   * a method carrying <code>version = "3"</code> counts for version 3 and for nothing
-   * else. And it marks NOTHING as wired: serving an old version says nothing about the
-   * reverse direction {@link #validateNoUnwiredWorkflowTaskMethods} decides, and a
-   * method kept only for an old version must still match a task of the deployed model.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The plain BPMN process ID
-   * @param version The version identifier the BPMS reported
-   * @param tasks The tasks of that version's model
-   * @return The tasks no method serves in that version
-   */
-  /**
    * The methods of that BPMN process which serve NO version worth serving - the
    * versions the BPMS holds, minus the ones the configuration faded out.
    * All three annotations carry a <code>version</code> attribute, so all three are
@@ -913,6 +896,23 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
 
   }
 
+  /**
+   * Which of the given tasks of ONE deployed version no <code>&#64;WorkflowTask</code>
+   * method serves - the version-aware sibling of {@link #validateTaskWiring}, used by
+   * the startup check for old process versions.
+   * <p>
+   * Two differences to the wiring validation, and both matter. It asks per VERSION, so
+   * a method carrying <code>version = "3"</code> counts for version 3 and for nothing
+   * else. And it marks NOTHING as wired: serving an old version says nothing about the
+   * reverse direction {@link #validateNoUnwiredWorkflowTaskMethods} decides, and a
+   * method kept only for an old version must still match a task of the deployed model.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @param version The version identifier the BPMS reported
+   * @param tasks The tasks of that version's model
+   * @return The tasks no method serves in that version
+   */
   public Collection<BpmnTaskSpec> tasksNotServedInVersion(
       final String workflowModuleId,
       final String bpmnProcessId,

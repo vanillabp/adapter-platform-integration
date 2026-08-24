@@ -150,7 +150,7 @@ public class WorkflowVisibilityDelayTest {
     // the message names the cause which applies on an eventually consistent BPMS
     assertTrue(
         exception.getMessage().contains("searchable"),
-        () -> exception.getMessage());
+        exception::getMessage);
 
   }
 

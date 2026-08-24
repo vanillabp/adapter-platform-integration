@@ -197,6 +197,7 @@ class MongoDbSpringDataUtilTest {
       mongoDbSpringDataUtil.unproxy(entity);
       Assertions.fail("unproxy(...) should have thrown an UnsupportedOperationException");
     } catch (final UnsupportedOperationException e) {
+      // the expected outcome - MongoDB knows no proxies, so unproxying is not offered
     }
 
   }

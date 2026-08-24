@@ -41,6 +41,7 @@ import io.vanillabp.spi.service.TaskException;
 import io.vanillabp.spi.service.TaskId;
 import io.vanillabp.spi.service.TaskParam;
 import io.vanillabp.spi.service.WorkflowTask;
+import lombok.Getter;
 
 /**
  * Unit tests of the core-owned <code>&#64;WorkflowTask</code> handler model: method
@@ -64,8 +65,10 @@ public class WorkflowTaskRegistryTest {
 
   public static class Aggregate extends BaseAggregate {
 
+    @Getter
     String id;
 
+    @Getter
     String processedBy;
 
     Object element;
@@ -79,29 +82,15 @@ public class WorkflowTaskRegistryTest {
      * whole class: everything else IS shared.
      */
     @io.vanillabp.spi.service.NoSyncWithBPMS
+    @Getter
     String parameterValue;
 
     String taskId;
 
     TaskEvent.Event event;
 
+    @Getter
     boolean urgent;
-
-    public String getId() {
-      return id;
-    }
-
-    public String getProcessedBy() {
-      return processedBy;
-    }
-
-    public String getParameterValue() {
-      return parameterValue;
-    }
-
-    public boolean isUrgent() {
-      return urgent;
-    }
 
   }
 

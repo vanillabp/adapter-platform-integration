@@ -719,7 +719,7 @@ public class WorkflowTaskScannerEdgeCasesTest {
       }
       return logWatcher.list
           .stream()
-          .map(event -> event.getFormattedMessage())
+          .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
           .toList();
 
     }

@@ -379,7 +379,7 @@ public class WorkflowLocatorTest {
 
     final var location = new WorkflowLocator(MODULE, PROCESS, null)
         .locate(
-            List.<MigratableProcessService<Object>>of(adapter),
+            List.of(adapter),
             candidate -> candidate.awarenessOfWorkflow(SCOPE, null, Map.of()),
             "42",
             "workflow of aggregate '42'");

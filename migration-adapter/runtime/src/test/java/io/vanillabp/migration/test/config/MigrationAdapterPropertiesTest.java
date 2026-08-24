@@ -761,7 +761,7 @@ public class MigrationAdapterPropertiesTest {
         .builder()
         .adapters(java.util.Map.of("c8", adapterUsingPrefixes()))
         .prioritizedAdapters(java.util.List.of("c8"))
-        .workflowModules(java.util.Map.<String, WorkflowModuleAdapterProperties>of(
+        .workflowModules(java.util.Map.of(
             "loan__approval", new WorkflowModuleAdapterProperties()))
         .build();
     final var exception = org.junit.jupiter.api.Assertions.assertThrows(
@@ -776,7 +776,7 @@ public class MigrationAdapterPropertiesTest {
         .builder()
         .adapters(java.util.Map.of("c8", AdapterConfigProperties.ofType("camunda8")))
         .prioritizedAdapters(java.util.List.of("c8"))
-        .workflowModules(java.util.Map.<String, WorkflowModuleAdapterProperties>of(
+        .workflowModules(java.util.Map.of(
             "loan__approval", new WorkflowModuleAdapterProperties()))
         .build()
         .validateWorkflowModuleIdsAgainstPrefixing();

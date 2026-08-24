@@ -297,9 +297,9 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
       return nested instanceof java.util.logging.Handler[] handlers
           ? handlers
           : new java.util.logging.Handler[0];
-    } catch (NoSuchMethodException e) {
-      return new java.util.logging.Handler[0];
     } catch (Exception e) {
+      // a handler without getHandlers(), or one refusing the call: it wraps nothing
+      // this extension could redirect
       return new java.util.logging.Handler[0];
     }
 

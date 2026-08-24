@@ -369,7 +369,6 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                           supplierContext
                               .beanProvider(io.vanillabp.integration.spi.WorkflowAdapterCache.class)
                               .stream()
-                              .map(io.vanillabp.integration.spi.WorkflowAdapterCache.class::cast)
                               .toList()),
                       supplierContext.bean(
                           io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics.class));

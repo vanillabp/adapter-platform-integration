@@ -129,7 +129,7 @@ public class NameClashAvoidanceServiceTest {
 
     return new NameClashAvoidanceService(
         propertiesWith(adapterLevel, null, null,
-            null), () -> List.<AdapterDeploymentService<?, ?>>of(deploymentService));
+            null), () -> List.of(deploymentService));
 
   }
 

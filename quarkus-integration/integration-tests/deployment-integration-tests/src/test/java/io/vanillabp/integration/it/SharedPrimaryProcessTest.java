@@ -18,6 +18,8 @@ import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.WorkflowService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  * The case which stays allowed: several classes may declare the same
@@ -44,7 +46,6 @@ public class SharedPrimaryProcessTest {
 
   @Test
   @DisplayName("Two classes serving one process build one ProcessService for that process")
-  @SuppressWarnings("unchecked")
   public void sharedPrimaryProcessIsNotAmbiguous() {
 
     assertNotNull(processService);
@@ -54,18 +55,11 @@ public class SharedPrimaryProcessTest {
 
   }
 
+  @Getter
+  @Setter
   public static class SharedAggregate {
 
     private String id;
-
-    public String getId() {
-      return id;
-    }
-
-    public void setId(
-        final String id) {
-      this.id = id;
-    }
 
   }
 

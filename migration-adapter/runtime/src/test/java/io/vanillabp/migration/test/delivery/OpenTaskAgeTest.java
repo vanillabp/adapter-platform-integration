@@ -40,6 +40,7 @@ import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.service.TaskId;
 import io.vanillabp.spi.service.WorkflowTask;
+import lombok.Getter;
 
 /**
  * How old an open task is, and what VanillaBP does about it.
@@ -73,13 +74,10 @@ public class OpenTaskAgeTest {
 
   public static class Aggregate {
 
+    @Getter
     String id;
 
     int invocations;
-
-    public String getId() {
-      return id;
-    }
 
   }
 

@@ -99,7 +99,7 @@ public class QuarkusStoreAttributionTest {
 
     return new QuarkusPersistenceTechnology(
         InstanceDouble.of(
-            List.<AggregatePersistenceAware<?>>of(
+            List.of(
                 new PanacheActiveRecordAggregatePersistence<>(OrderAggregate.class),
                 new PanacheMongoActiveRecordAggregatePersistence<>(ShipmentAggregate.class),
                 new LedgerPersistence())));

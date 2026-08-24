@@ -36,6 +36,7 @@ import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.service.TaskException;
 import io.vanillabp.spi.service.WorkflowTask;
+import lombok.Getter;
 
 /**
  * A BPMS repeating a delivery must not run the business code twice. What is
@@ -67,13 +68,10 @@ public class InboundIdempotencyTest {
 
   public static class Aggregate {
 
+    @Getter
     String id;
 
     int invocations;
-
-    public String getId() {
-      return id;
-    }
 
   }
 
@@ -542,7 +540,7 @@ public class InboundIdempotencyTest {
     return logWatcher.list
         .stream()
         .filter(event -> event.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.WARN))
-        .map(event -> event.getFormattedMessage())
+        .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
         .toList();
 
   }

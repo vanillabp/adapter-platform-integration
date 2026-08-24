@@ -38,6 +38,7 @@ import io.vanillabp.integration.test.utils.CapturedOutput;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.springboot.SpringBootTestApplication;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
+import lombok.Getter;
 
 /**
  * Acceptance test of <code>&#64;WorkflowTask</code> processing with the
@@ -394,6 +395,7 @@ public class WorkflowTaskProcessingTest {
    * An aggregate whose sync model is ambiguous: attributes annotated
    * both ways while the class states no mode of its own.
    */
+  @Getter
   public static class AmbiguousSyncAggregate {
 
     @io.vanillabp.spi.service.SyncWithBPMS
@@ -401,14 +403,6 @@ public class WorkflowTaskProcessingTest {
 
     @io.vanillabp.spi.service.NoSyncWithBPMS
     private String creditCardNumber;
-
-    public String getCustomerName() {
-      return customerName;
-    }
-
-    public String getCreditCardNumber() {
-      return creditCardNumber;
-    }
 
   }
 

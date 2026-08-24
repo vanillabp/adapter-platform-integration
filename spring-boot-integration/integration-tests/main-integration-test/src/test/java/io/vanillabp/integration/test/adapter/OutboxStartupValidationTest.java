@@ -48,7 +48,7 @@ public class OutboxStartupValidationTest {
 
           Assertions.assertNotNull(context.getStartupFailure(), "boot has to fail with a guiding message");
 
-          var cause = (Throwable) context.getStartupFailure();
+          var cause = context.getStartupFailure();
           while (cause.getCause() != null) {
             cause = cause.getCause();
           }

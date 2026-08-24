@@ -40,6 +40,7 @@ import io.vanillabp.spi.service.BpmsStartTrigger;
 import io.vanillabp.spi.service.WorkflowEnded;
 import io.vanillabp.spi.service.WorkflowStartedByBpms;
 import io.vanillabp.spi.service.WorkflowTask;
+import lombok.Getter;
 
 /**
  * What the <code>version</code> attribute of <code>&#64;WorkflowTask</code>,
@@ -61,13 +62,10 @@ public class ProcessVersionMatchingTest {
 
   public static class Aggregate {
 
+    @Getter
     String id;
 
     String servedBy;
-
-    public String getId() {
-      return id;
-    }
 
   }
 
@@ -222,7 +220,7 @@ public class ProcessVersionMatchingTest {
     }
     return logWatcher.list
         .stream()
-        .map(event -> event.getFormattedMessage())
+        .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
         .toList();
 
   }

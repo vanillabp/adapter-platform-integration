@@ -36,6 +36,7 @@ import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.service.WorkflowEnd;
 import io.vanillabp.spi.service.WorkflowEnded;
+import lombok.Getter;
 
 /**
  * A workflow which ended releases the records of its processed task deliveries,
@@ -66,13 +67,10 @@ public class DeliveryRecordReleaseTest {
 
   public static class Aggregate {
 
+    @Getter
     String id;
 
     String status;
-
-    public String getId() {
-      return id;
-    }
 
   }
 
@@ -404,7 +402,7 @@ public class DeliveryRecordReleaseTest {
     return logWatcher.list
         .stream()
         .filter(event -> event.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.WARN))
-        .map(event -> event.getFormattedMessage())
+        .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
         .toList();
 
   }

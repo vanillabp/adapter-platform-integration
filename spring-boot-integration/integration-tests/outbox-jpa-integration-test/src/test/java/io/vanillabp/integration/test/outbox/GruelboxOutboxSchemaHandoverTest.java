@@ -54,7 +54,7 @@ public class GruelboxOutboxSchemaHandoverTest {
 
     final var failure = context.getStartupFailure();
     assertNotNull(failure, "the boot has to end with a guiding message");
-    var cause = (Throwable) failure;
+    var cause = failure;
     while (cause.getCause() != null) {
       cause = cause.getCause();
     }

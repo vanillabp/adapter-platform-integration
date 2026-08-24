@@ -551,7 +551,7 @@ public class DeploymentService {
               bpmnModel,
               currentContext));
     }
-    return Optional.ofNullable(context);
+    return Optional.of(context);
 
   }
 

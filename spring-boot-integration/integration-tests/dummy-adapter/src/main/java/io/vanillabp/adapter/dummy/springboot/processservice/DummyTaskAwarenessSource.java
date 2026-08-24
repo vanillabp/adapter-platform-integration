@@ -4,7 +4,7 @@ import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 
 /**
  * Test hook steering the dummy adapter's
- * {@link MigratableProcessService#awarenessOfTask(Object, String)} answer -
+ * {@link MigratableProcessService#awarenessOfTask} answer -
  * infrastructure tests probe the core's adapter election (the
  * {@code WorkflowLocator} walk) without a real BPMS. Without such a bean the dummy
  * does not know any task.
@@ -26,15 +26,6 @@ public interface DummyTaskAwarenessSource {
       String taskId);
 
   /**
-   * The awareness the dummy adapter reports for a USER task - defaults to the
-   * service-task answer.
-   *
-   * @param adapterId The dummy adapter's ID
-   * @param workflowAggregateId The ID of the workflow aggregate
-   * @param taskId The user task's ID
-   * @return The awareness or <code>null</code> to let another source answer
-   */
-  /**
    * The awareness the dummy adapter reports for a WORKFLOW - defaults to the
    * service-task answer (probes for message correlation).
    *
@@ -50,6 +41,15 @@ public interface DummyTaskAwarenessSource {
 
   }
 
+  /**
+   * The awareness the dummy adapter reports for a USER task - defaults to the
+   * service-task answer.
+   *
+   * @param adapterId The dummy adapter's ID
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param taskId The user task's ID
+   * @return The awareness or <code>null</code> to let another source answer
+   */
   default WorkflowAwareness awarenessOfUserTask(
       final String adapterId,
       final Object workflowAggregateId,

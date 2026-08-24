@@ -180,16 +180,6 @@ public class BpmsInitiatedStarts {
   }
 
   /**
-   * Registers the start events an adapter reported while wiring a deployed BPMN
-   * process and validates the application's methods against them.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The BPMN process ID
-   * @param startEvents The BPMS-initiated start events of the process
-   * @throws IllegalStateException If a method serves a process without such a start
-   *           event, or names a start event the process does not have
-   */
-  /**
    * The @WorkflowStartedByBpms methods of that BPMN process whose version specification matches
    * NONE of the given versions: the versions the BPMS holds, minus the ones
    * the configuration faded out. Such a method never runs, and the start says so.
@@ -221,6 +211,16 @@ public class BpmsInitiatedStarts {
 
   }
 
+  /**
+   * Registers the start events an adapter reported while wiring a deployed BPMN
+   * process and validates the application's methods against them.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param startEvents The BPMS-initiated start events of the process
+   * @throws IllegalStateException If a method serves a process without such a start
+   *           event, or names a start event the process does not have
+   */
   public void validate(
       final String workflowModuleId,
       final String bpmnProcessId,

@@ -490,7 +490,8 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    * application without transactional persistence still boots and gets a guiding
    * message when the first task is processed).
    *
-   * @param transactionManager The application's transaction manager, resolved lazily
+   * @param platformTransactionRunner The platform's transaction runner, resolving the
+   *          transaction manager lazily
    * @param aggregateSync The core's sync model - validated per registered
    *          workflow-aggregate class at startup and used to answer the
    *          shared values of an aggregate an adapter does not hold

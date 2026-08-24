@@ -89,7 +89,7 @@ public record PhaseTwoCall(
     // no requireNonNull: an operation which is not about ONE workflow carries no
     // aggregate ID (a broadcast signal)
     args = args == null ? Map.of() : Map.copyOf(args);
-    idempotencyKey = idempotencyKey == null ? Optional.empty() : idempotencyKey;
+    idempotencyKey = Objects.requireNonNullElseGet(idempotencyKey, Optional::empty);
   }
 
   /**

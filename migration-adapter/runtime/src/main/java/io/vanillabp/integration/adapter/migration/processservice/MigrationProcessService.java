@@ -23,6 +23,9 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
+// no Lombok here: the accessors are the deliberate surface of this class,
+// and generating them would hide which of its fields are meant to be read
+@SuppressWarnings("LombokGetterMayBeUsed")
 public class MigrationProcessService<A> {
 
   @Getter
@@ -458,15 +461,6 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Loads the workflow aggregate by its serialized ID within the CALLER's
-   * transaction - used to resolve aggregate attributes referenced by BPMN
-   * expressions of embedded BPMS (the expression evaluates inside an engine
-   * transaction the aggregate has to join).
-   *
-   * @param serializedAggregateId The aggregate ID in serialized form
-   * @return The aggregate or <code>null</code>
-   */
-  /**
    * The name of the aggregate's ID property (see
    * {@link AggregatePersistenceAware#getAggregateIdName()}) - remote BPMS store
    * the aggregate's ID as a process variable of this name.
@@ -479,6 +473,15 @@ public class MigrationProcessService<A> {
 
   }
 
+  /**
+   * Loads the workflow aggregate by its serialized ID within the CALLER's
+   * transaction - used to resolve aggregate attributes referenced by BPMN
+   * expressions of embedded BPMS (the expression evaluates inside an engine
+   * transaction the aggregate has to join).
+   *
+   * @param serializedAggregateId The aggregate ID in serialized form
+   * @return The aggregate or <code>null</code>
+   */
   public A loadWorkflowAggregate(
       final String serializedAggregateId) {
 

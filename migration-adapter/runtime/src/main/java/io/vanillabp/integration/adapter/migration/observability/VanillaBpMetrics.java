@@ -3,6 +3,8 @@ package io.vanillabp.integration.adapter.migration.observability;
 import java.util.OptionalLong;
 import java.util.function.Supplier;
 
+import lombok.Getter;
+
 /**
  * What VanillaBP counts and measures while it delivers work, expressed without any
  * metrics library: the core records, and whoever wants the numbers implements this
@@ -100,6 +102,7 @@ public interface VanillaBpMetrics {
    * How a task delivery ended, as the <code>outcome</code> tag of
    * {@link #TASK_DELIVERIES} sees it.
    */
+  @Getter
   enum DeliveryOutcome {
 
     /**
@@ -131,12 +134,6 @@ public interface VanillaBpMetrics {
         final String tagValue) {
 
       this.tagValue = tagValue;
-
-    }
-
-    public String getTagValue() {
-
-      return tagValue;
 
     }
 

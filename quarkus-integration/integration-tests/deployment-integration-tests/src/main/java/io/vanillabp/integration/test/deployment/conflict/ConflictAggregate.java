@@ -4,6 +4,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  * The workflow aggregate of the version-conflict acceptance test: a JPA
@@ -13,6 +15,8 @@ import jakarta.persistence.Version;
  */
 @Entity
 @Table(name = "CONFLICT_TEST_AGGREGATE")
+@Getter
+@Setter
 public class ConflictAggregate {
 
   @Id
@@ -22,32 +26,5 @@ public class ConflictAggregate {
 
   @Version
   private Long version;
-
-  public String getId() {
-    return id;
-  }
-
-  public void setId(
-      final String id) {
-    this.id = id;
-  }
-
-  public String getContent() {
-    return content;
-  }
-
-  public void setContent(
-      final String content) {
-    this.content = content;
-  }
-
-  public Long getVersion() {
-    return version;
-  }
-
-  public void setVersion(
-      final Long version) {
-    this.version = version;
-  }
 
 }
