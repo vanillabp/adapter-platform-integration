@@ -235,14 +235,14 @@ public class ObservabilityTest {
                   .build());
       final var unreachable = readinessCheck.call();
       assertEquals(HealthCheckResponse.Status.DOWN, unreachable.getStatus());
-      final var data = unreachable
+      final var details = unreachable
           .getData()
           .orElseThrow();
-      assertEquals("Connection refused", data.get(ADAPTER
+      assertEquals("Connection refused", details.get(ADAPTER
           + ".description"));
       assertEquals(
           "http://localhost:26500",
-          data.get(ADAPTER
+          details.get(ADAPTER
               + ".address"),
           "the address is what lets an operator act without reading the configuration");
 

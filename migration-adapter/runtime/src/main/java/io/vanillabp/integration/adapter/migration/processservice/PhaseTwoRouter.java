@@ -35,8 +35,7 @@ import io.vanillabp.integration.spi.TransactionRunner;
  * its own {@link io.vanillabp.integration.spi.PhaseTwoOperationDispatch} - the
  * process-service routing below applies to core operations only.
  */
-// no Lombok here: the accessors are the deliberate surface of this class,
-// and generating them would hide which of its fields are meant to be read
+// see decision 1 in the repository's README.md
 @SuppressWarnings("LombokGetterMayBeUsed")
 public final class PhaseTwoRouter {
 
