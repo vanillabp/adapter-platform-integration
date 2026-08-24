@@ -6,7 +6,7 @@ import io.vanillabp.spi.process.ProcessDefinition;
 import io.vanillabp.spi.process.WorkflowHistory;
 
 /**
- * Test hook steering the dummy adapter's viewer/history answers (story 26) -
+ * Test hook steering the dummy adapter's viewer/history answers -
  * acceptance tests exercise the core's read path (election, per-adapter
  * namespacing of process definition ids, guiding errors) without a real BPMS.
  * Without such a bean the dummy knows no definitions, no BPMN XML and no history.

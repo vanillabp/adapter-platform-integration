@@ -10,7 +10,7 @@
 
   <artifactId>native-image-tests</artifactId>
   <name>Quarkus integration - Integration tests - Native image</name>
-  <description>An application with a relational database and no MongoDB anywhere, built as a native image (story 85). The build is the test: GraalVM resolves every referenced method while it builds, so a reference to an optional extension nobody asked for ends it.</description>
+  <description>An application with a relational database and no MongoDB anywhere, built as a native image. The build is the test: GraalVM resolves every referenced method while it builds, so a reference to an optional extension nobody asked for ends it.</description>
 
   <dependencies>
     <dependency>

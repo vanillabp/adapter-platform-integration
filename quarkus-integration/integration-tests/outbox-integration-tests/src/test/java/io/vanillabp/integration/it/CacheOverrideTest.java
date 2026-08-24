@@ -25,7 +25,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * The cache-override SPI (story 25): an application-provided
+ * The cache-override SPI: an application-provided
  * {@code WorkflowAdapterCache} bean replaces VanillaBP's in-memory
  * {@code @DefaultBean} - the election consults AND populates the application's
  * bean (this is how cluster setups share elections via their own cache
@@ -93,7 +93,7 @@ public class CacheOverrideTest {
         "the successful election must be stored in the application's cache but got: "
             + cache.getPuts());
 
-    // its lookups are counted like every other cache's (story 58) - a metric which
+    // its lookups are counted like every other cache's - a metric which
     // disappeared once an application plugs in its own cache would surprise exactly
     // the operator who needs it
     assertTrue(

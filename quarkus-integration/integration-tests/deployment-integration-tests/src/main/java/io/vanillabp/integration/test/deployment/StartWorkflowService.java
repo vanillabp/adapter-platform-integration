@@ -22,7 +22,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 public class StartWorkflowService {
 
   /**
-   * Story 43: the same workflow service also wants to know when a workflow ended.
+   * The same workflow service also wants to know when a workflow ended.
    */
   @WorkflowEnded
   public void workflowEnded(

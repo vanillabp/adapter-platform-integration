@@ -28,8 +28,8 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Acceptance test of the per-adapter-id bean convention (adapter-config-model story
- * 26d) - the structural foundation of the migration scenario: TWO adapter ids of ONE
+ * Acceptance test of the per-adapter-id bean convention (the adapter config model) - the
+ * structural foundation of the migration scenario: TWO adapter ids of ONE
  * type boot together, the adapter registers one {@code MigratableProcessService} and
  * one {@code AdapterDeploymentService} element bean PER configured id, BOTH
  * deployment services receive {@code deployResources}, and a workflow module

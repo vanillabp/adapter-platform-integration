@@ -1,30 +1,17 @@
 package io.vanillabp.integration.test.deployment;
 
+import lombok.Getter;
+import lombok.Setter;
+
 /**
- * The aggregate of the multi-instance resolver test (story 71).
+ * The aggregate of the multi-instance resolver test.
  */
+@Getter
+@Setter
 public class ResolverAggregate {
 
   private String id;
 
   private String resolved;
-
-  public String getId() {
-    return id;
-  }
-
-  public void setId(
-      final String id) {
-    this.id = id;
-  }
-
-  public String getResolved() {
-    return resolved;
-  }
-
-  public void setResolved(
-      final String resolved) {
-    this.resolved = resolved;
-  }
 
 }

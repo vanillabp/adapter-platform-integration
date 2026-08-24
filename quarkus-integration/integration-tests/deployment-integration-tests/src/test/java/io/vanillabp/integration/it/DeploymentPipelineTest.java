@@ -21,7 +21,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of the Quarkus runtime deployment pipeline (story 26b): at boot
+ * Acceptance test of the Quarkus runtime deployment pipeline: at boot
  * the platform runs
  * <code>readBpmn &rarr; prepareBpmn &rarr; wireBpmn &rarr; deployResources &rarr;
  * startWorkflowProcessing</code> for the workflow module's BPMN resources - exactly

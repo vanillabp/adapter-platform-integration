@@ -36,9 +36,10 @@ import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.service.TaskException;
 import io.vanillabp.spi.service.WorkflowTask;
+import lombok.Getter;
 
 /**
- * Story 51: a BPMS repeating a delivery must not run the business code twice. What is
+ * A BPMS repeating a delivery must not run the business code twice. What is
  * pinned here is the CORE's part of it - which delivery is remembered, what a repeated
  * one is answered with, and when nothing is remembered at all:
  * <ul>
@@ -67,13 +68,10 @@ public class InboundIdempotencyTest {
 
   public static class Aggregate {
 
+    @Getter
     String id;
 
     int invocations;
-
-    public String getId() {
-      return id;
-    }
 
   }
 
@@ -224,8 +222,7 @@ public class InboundIdempotencyTest {
 
   /**
    * Properties where the given switch values are configured - <code>null</code> means
-   * "not configured at that level", so the resolution order of the story's key can be
-   * exercised.
+   * "not configured at that level", so the resolution order of the key can be exercised.
    */
   private MigrationAdapterProperties properties(
       final Boolean adapterLevel,
@@ -524,8 +521,8 @@ public class InboundIdempotencyTest {
   }
 
   /**
-   * The messages a logger emitted while the given work ran - the guiding messages of
-   * this story are WARNings, and "normal" logging is switched off during tests.
+   * The messages a logger emitted while the given work ran - the guiding messages are
+   * WARNings, and "normal" logging is switched off during tests.
    */
   private List<String> loggedBy(
       final Class<?> loggingClass,
@@ -543,7 +540,7 @@ public class InboundIdempotencyTest {
     return logWatcher.list
         .stream()
         .filter(event -> event.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.WARN))
-        .map(event -> event.getFormattedMessage())
+        .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
         .toList();
 
   }

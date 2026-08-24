@@ -7,7 +7,7 @@ import io.vanillabp.integration.adapter.migration.workflowtask.TransactionAnnota
 
 /**
  * The transaction annotations Spring Boot honors, handed to the core's startup check of
- * <code>&#64;WorkflowTask</code> methods (story 40b). Which annotations these are was
+ * <code>&#64;WorkflowTask</code> methods. Which annotations these are was
  * read off {@code AnnotationTransactionAttributeSource} of {@code spring-tx}: it
  * registers a parser for Spring's own annotation, {@code JtaTransactionAnnotationParser}
  * for {@code jakarta.transaction.Transactional} and {@code Ejb3TransactionAnnotationParser}

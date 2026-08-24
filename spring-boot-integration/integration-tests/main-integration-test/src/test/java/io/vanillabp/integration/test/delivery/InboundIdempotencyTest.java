@@ -38,7 +38,7 @@ import io.vanillabp.integration.test.utils.springboot.SpringBootTestApplication;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 
 /**
- * Acceptance test of the inbound idempotency (story 51) on Spring Boot, with the default
+ * Acceptance test of the inbound idempotency on Spring Boot, with the default
  * JDBC-based delivery log doing the remembering: the dummy adapter delivers a task TWICE
  * under the same delivery identity - as a BPMS which never learned the result does - and
  * the <code>&#64;WorkflowTask</code> method has to run once while both deliveries are
@@ -161,7 +161,7 @@ public class InboundIdempotencyTest {
   /**
    * The delivery-log store settings are the outbox' ones; the task
    * 'undeduplicatedTask' switches the feature off for itself, which is the
-   * per-task resolution of the story's key.
+   * per-task resolution of that key.
    */
   private static final String APPLICATION_YAML = """
       vanillabp:
@@ -282,7 +282,7 @@ public class InboundIdempotencyTest {
 
       final var dummyAdapter = context.getBean("DummyAdapter_DeploymentService_test", DeploymentService.class);
 
-      // story 92: a redelivery answered from the record is counted, because a rising
+      // A redelivery answered from the record is counted, because a rising
       // rate means the BPMS hands work out again - usually too short a lock
       final var registry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
       context

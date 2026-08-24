@@ -26,7 +26,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.workflowtask.SpringTransactionRunner;
 
 /**
- * Story 87: a phase-one check of an adapter runs right before the commit, and it runs in the
+ * A phase-one check of an adapter runs right before the commit, and it runs in the
  * unit of work of the aggregate - which may be one the application brought.
  */
 @ExtendWith(SuppressOutputExtension.class)

@@ -18,7 +18,7 @@ import io.vanillabp.integration.test.utils.CapturedOutput;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Story 109: what a test logs through JBoss LogManager is captured like everything else.
+ * What a test logs through JBoss LogManager is captured like everything else.
  * <p>
  * Redirecting <code>System.out</code> alone never reached it. The Quarkus test modules
  * install that log manager (Surefire property
@@ -60,20 +60,20 @@ public class JbossLogManagerCaptureTest {
       final CapturedOutput captured) {
 
     // without this the test would pass for the wrong reason: under the JDK's own log
-    // manager the capture works through System.out and proves nothing about story 109
+    // manager the capture works through System.out and proves nothing about this
     assertTrue(
         LogManager.getLogManager().getClass().getName().startsWith("org.jboss.logmanager."),
         () -> "This module has to run under JBoss LogManager, but the installed manager is "
             + LogManager.getLogManager().getClass().getName());
 
-    Logger.getLogger(getClass().getName()).log(Level.SEVERE, "story-109-marker");
+    Logger.getLogger(getClass().getName()).log(Level.SEVERE, "jboss-log-manager-marker");
 
     assertTrue(
-        captured.getAll().contains("story-109-marker"),
+        captured.getAll().contains("jboss-log-manager-marker"),
         () -> "The line went past the capture, so it reached the console: "
             + captured.getAll());
     assertFalse(
-        captured.getAll().contains("story-109-absent-marker"),
+        captured.getAll().contains("never-logged-marker"),
         "the capture reports what was logged, nothing else");
 
   }

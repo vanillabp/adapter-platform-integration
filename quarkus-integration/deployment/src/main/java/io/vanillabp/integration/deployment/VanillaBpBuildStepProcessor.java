@@ -251,13 +251,13 @@ public class VanillaBpBuildStepProcessor {
   /**
    * Registers the probe telling whether the MongoDB deployment is a replica set (see
    * {@link io.vanillabp.integration.runtime.processservice.MongoDeploymentProbe}), which
-   * the startup check of story 70 needs for an aggregate MongoDB Panache manages.
+   * the transaction-runner startup check needs for an aggregate MongoDB Panache manages.
    * <p>
    * Guarded by the MongoDB client capability like the outbox and the delivery log, and for
    * one more reason than they have: the implementation is the only class on the way to the
    * coverage verdict which names a MongoDB type. A native image resolves every referenced
    * method while it is built, so an application with a relational database and no MongoDB
-   * must not reach it at all (story 85).
+   * must not reach it at all.
    *
    * @param capabilities Capabilities of the project's extensions
    * @param additionalBeans Producer used to register the probe
@@ -373,7 +373,7 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
-   * Registers {@link QuarkusPreCommitRegistrar} as a CDI bean (story 87): BPMS adapters
+   * Registers {@link QuarkusPreCommitRegistrar} as a CDI bean: BPMS adapters
    * hand their phase-one checks to it, so the check runs right before the transaction of
    * the workflow aggregate commits. Unremovable, because no application code injects it.
    *

@@ -9,7 +9,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
 /**
- * The workflow service of the transaction-contract acceptance test (story 40b). None of
+ * The workflow service of the transaction-contract acceptance test. None of
  * the handlers reaching the nested transactional bean carries a transaction annotation
  * itself: they are the case the startup check cannot cover and the runtime check has to
  * catch.

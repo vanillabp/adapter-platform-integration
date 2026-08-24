@@ -18,7 +18,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * What the phase-two outbox reports about itself on Spring Boot (story 92). gruelbox
+ * What the phase-two outbox reports about itself on Spring Boot. gruelbox
  * has no API for its backlog, so the number is read off its own table - which is why
  * this test runs against the real store rather than a double.
  */

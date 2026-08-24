@@ -40,7 +40,7 @@ import io.vanillabp.integration.test.utils.springboot.SpringBootTestApplication;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 
 /**
- * Acceptance test of what an operator gets to see (story 92) on Spring Boot: every
+ * Acceptance test of what an operator gets to see on Spring Boot: every
  * task delivery is counted by outcome and measured, it carries a logging context
  * naming the workflow it belongs to, and the BPMS adapters contribute what they know
  * about their BPMS to the health endpoint.

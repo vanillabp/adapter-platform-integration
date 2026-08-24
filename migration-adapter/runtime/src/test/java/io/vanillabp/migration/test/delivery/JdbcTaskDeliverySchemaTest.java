@@ -18,13 +18,13 @@ import io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Story 75: an application which creates its schema with Liquibase or Flyway switches VanillaBP's
+ * An application which creates its schema with Liquibase or Flyway switches VanillaBP's
  * table creation off. A missing table is then a deployment which forgot to apply the migration, and
  * that has to be said at startup - not at the first delivery, hours later.
  * <p>
- * Story 97 added a column to the table, which is the case the check of story 75 did not catch: a
- * table created by an earlier version of VanillaBP exists, so the check passed and the missing
- * column surfaced at the first delivery. The columns added later are therefore verified as well,
+ * A column added to the table later is the case a check for the TABLE alone does not catch: a
+ * table created by an earlier version of VanillaBP exists, so the check passes and the missing
+ * column surfaces at the first delivery. The columns added later are therefore verified as well,
  * whether the application hands the schema over or lets VanillaBP create it.
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -129,8 +129,7 @@ public class JdbcTaskDeliverySchemaTest {
   }
 
   /**
-   * The table as story 97 left it: with LAST_SEEN_AT, without the ADAPTER_ID story 120
-   * added.
+   * The table of an earlier version: with LAST_SEEN_AT, without ADAPTER_ID.
    */
   private static void createTableWithoutAdapterId(
       final String database) throws SQLException {

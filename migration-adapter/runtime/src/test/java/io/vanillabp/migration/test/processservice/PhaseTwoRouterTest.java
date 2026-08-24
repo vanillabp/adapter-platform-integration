@@ -101,7 +101,7 @@ public class PhaseTwoRouterTest {
   }
 
   @Test
-  @DisplayName("Dispatch runs inside the transaction the platform provides (story 67)")
+  @DisplayName("Dispatch runs inside the transaction the platform provides")
   public void dispatchRunsInsideTheProvidedTransaction() {
 
     when(processService.getWorkflowModuleId()).thenReturn("test-module");

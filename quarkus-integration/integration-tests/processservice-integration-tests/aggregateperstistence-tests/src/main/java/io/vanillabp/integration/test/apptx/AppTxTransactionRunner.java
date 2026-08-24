@@ -9,7 +9,7 @@ import io.vanillabp.integration.spi.TransactionRunner;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * The unit of work of the application, counting what VanillaBP does with it (story 70).
+ * The unit of work of the application, counting what VanillaBP does with it.
  * Also what an outbox needs: work which runs after the commit.
  */
 @ApplicationScoped

@@ -36,9 +36,10 @@ import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.service.WorkflowEnd;
 import io.vanillabp.spi.service.WorkflowEnded;
+import lombok.Getter;
 
 /**
- * Story 76: a workflow which ended releases the records of its processed task deliveries,
+ * A workflow which ended releases the records of its processed task deliveries,
  * so the deduplication window is closed by the workflow instead of by the clock. What is
  * pinned here is the CORE's part of it:
  * <ul>
@@ -66,13 +67,10 @@ public class DeliveryRecordReleaseTest {
 
   public static class Aggregate {
 
+    @Getter
     String id;
 
     String status;
-
-    public String getId() {
-      return id;
-    }
 
   }
 
@@ -404,7 +402,7 @@ public class DeliveryRecordReleaseTest {
     return logWatcher.list
         .stream()
         .filter(event -> event.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.WARN))
-        .map(event -> event.getFormattedMessage())
+        .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
         .toList();
 
   }

@@ -14,7 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Story 60: one workflow aggregate has one {@code ProcessService}, so one of the
+ * One workflow aggregate has one {@code ProcessService}, so one of the
  * classes declaring the aggregate names the process {@code startWorkflow} starts.
  * That used to be whichever class the classpath scan returned first - an order coming
  * from the file system.

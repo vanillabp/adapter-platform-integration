@@ -46,7 +46,7 @@ public class TaskProcessingWorkflowService {
 
   /**
    * What the logging context held while the handler ran - the assertion of the MDC
-   * VanillaBP puts around every delivery (story 92). A map rather than a log line,
+   * VanillaBP puts around every delivery. A map rather than a log line,
    * because a test has to see the keys and not their rendering.
    */
   public static final java.util.Map<String, String> MDC_DURING_TASK = new java.util.concurrent.ConcurrentHashMap<>();

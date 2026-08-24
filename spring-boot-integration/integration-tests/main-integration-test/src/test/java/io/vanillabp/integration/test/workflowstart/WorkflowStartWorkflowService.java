@@ -20,7 +20,7 @@ import io.vanillabp.spi.service.WorkflowStartedByBpms;
 public class WorkflowStartWorkflowService {
 
   /**
-   * Story 43: the same workflow service also wants to know when a workflow ended.
+   * The same workflow service also wants to know when a workflow ended.
    */
   @WorkflowEnded
   public void workflowEnded(

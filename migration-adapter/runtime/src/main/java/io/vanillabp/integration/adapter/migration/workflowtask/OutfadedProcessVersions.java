@@ -4,11 +4,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.OutfadedVersionsInUsePolicy;
 
 /**
- * The versions of a BPMN process an application declares obsolete (story 57):
+ * The versions of a BPMN process an application declares obsolete:
  * <code>vanillabp.adapters.&lt;id&gt;.outfaded-versions</code>, resolvable per workflow
  * module and workflow like every adapter-scoped property.
  * <p>
@@ -116,7 +117,7 @@ public class OutfadedProcessVersions {
             bpmnProcessId,
             null,
             adapterId,
-            adapter -> adapter.getOutfadedVersionsInUse());
+            AdapterProperties::getOutfadedVersionsInUse);
     return configured == null
         ? OutfadedVersionsInUsePolicy.LOG
         : configured;

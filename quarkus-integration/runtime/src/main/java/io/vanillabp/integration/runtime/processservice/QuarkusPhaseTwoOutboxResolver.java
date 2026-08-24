@@ -23,7 +23,7 @@ import jakarta.enterprise.inject.Instance;
  * transaction breaks the atomicity this outbox promises, so that ends the boot,</li>
  * <li>with several active outbox beans the platform default matching the technology
  * which manages the aggregate ({@link QuarkusPersistenceTechnology}, read off the
- * persistence VanillaBP resolved for it in story 69).</li>
+ * persistence VanillaBP resolved for it).</li>
  * </ol>
  * An application therefore writes a {@link PhaseTwoOutboxAware} bean for two reasons
  * only: it brought the aggregate's persistence itself, so the technology cannot be
@@ -33,7 +33,7 @@ import jakarta.enterprise.inject.Instance;
  * Which default serves which technology, and whether it is usable at all, is asked through
  * {@link PlatformDefaultStore} rather than by naming the implementations: the MongoDB ones
  * exist only where the MongoDB client extension does, and a native image resolves every
- * referenced method while it is built (story 85).
+ * referenced method while it is built.
  */
 public class QuarkusPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
 

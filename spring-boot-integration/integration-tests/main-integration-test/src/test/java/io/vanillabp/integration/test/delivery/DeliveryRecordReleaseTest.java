@@ -39,7 +39,7 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.service.WorkflowEnd;
 
 /**
- * Acceptance test of the release of delivery records (story 76) on Spring Boot, with the
+ * Acceptance test of the release of delivery records on Spring Boot, with the
  * default JDBC-based delivery log: a workflow which ended deletes the records of its
  * processed deliveries instead of leaving them to the retention. The workflow service of
  * this test has NO <code>&#64;WorkflowEnded</code> method on purpose - the notification is

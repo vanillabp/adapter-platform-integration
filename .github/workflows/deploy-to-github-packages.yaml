@@ -60,8 +60,8 @@ jobs:
           CI: false
       # what a failing test printed is in these reports, and for the modules booting a
       # Quarkus application in the test JVM it is ONLY there: their output is redirected
-      # to file because that boot logs into a log context no extension reaches (story
-      # 109). Surefire prints its last line, which is never the interesting one.
+      # to file because that boot logs into a log context no extension reaches.
+      # Surefire prints its last line, which is never the interesting one.
       - name: Upload the test reports of a failed build
         if: failure()
         uses: actions/upload-artifact@v4
@@ -85,7 +85,7 @@ jobs:
         with:
           path: coverage
   native-build:
-    # The one test of story 85 which cannot be a JUnit test: an application with a
+    # The one native-image test which cannot be a JUnit test: an application with a
     # relational database and no MongoDB has to link as a native image. GraalVM resolves
     # every method a linked class refers to while it builds, so a reference into an
     # optional extension nobody asked for ends the build - which is what happened before

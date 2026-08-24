@@ -14,9 +14,11 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.WorkflowService;
 import jakarta.enterprise.context.ApplicationScoped;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
- * Story 60: one workflow aggregate has one {@code ProcessService}, so one of the
+ * One workflow aggregate has one {@code ProcessService}, so one of the
  * classes declaring the aggregate names the process {@code startWorkflow} starts.
  * That used to be whichever class was found first - an order coming from the file
  * system. Two classes naming DIFFERENT processes now end the build with a message
@@ -58,18 +60,11 @@ public class AmbiguousPrimaryProcessTest {
     // the assertion happens on the build exception (assertException above)
   }
 
+  @Getter
+  @Setter
   public static class AmbiguousAggregate {
 
     private String id;
-
-    public String getId() {
-      return id;
-    }
-
-    public void setId(
-        final String id) {
-      this.id = id;
-    }
 
   }
 

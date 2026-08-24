@@ -23,7 +23,7 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
 
   /**
    * Creates the bean without a transaction-runner resolver - kept for tests; the bean
-   * registrar always passes one (story 70).
+   * registrar always passes one.
    */
   public ProcessServiceSpringBean(
       final String workflowModuleId,
@@ -285,7 +285,7 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
 
   /**
    * Whether nothing is open the aggregate could be persisted in. The question goes to the
-   * runner serving this aggregate (story 70): an application storing its aggregates in a
+   * runner serving this aggregate: an application storing its aggregates in a
    * system Spring does not manage has its own unit of work, and Spring's answer would be
    * wrong for it. Without a resolver (tests) Spring answers.
    */

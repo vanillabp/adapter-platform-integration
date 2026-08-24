@@ -24,9 +24,9 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * The election cache's bounds are configurable (story 58) and reach the in-memory
- * default. This application does NOT use the Micrometer extension, which is the
- * other half of the story: it boots exactly as before and publishes no meters.
+ * The election cache's bounds are configurable and reach the in-memory
+ * default. This application does NOT use the Micrometer extension, which is the other
+ * half of the case: it boots exactly as it would without the cache and publishes no meters.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowAdapterCacheConfigurationTest {

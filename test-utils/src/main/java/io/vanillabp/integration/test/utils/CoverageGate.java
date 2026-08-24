@@ -17,7 +17,7 @@ import java.util.stream.Stream;
  * The two questions a repository's coverage gate has to answer, kept out of the
  * repositories so all four of them ask them the same way.
  * <p>
- * The gate exists because of what story 76 found: seven modules of
+ * The gate exists because of what an audit found: seven modules of
  * <code>adapter-platform-integration</code> produced execution data which no
  * aggregated report ever read, so everything covered ONLY by them counted as missed.
  * That is why {@link #modulesMissingFromAggregates} comes first - a threshold checked
@@ -173,7 +173,7 @@ public final class CoverageGate {
               .getParent()
               .getParent())
           .map(CoverageGate::artifactIdOf)
-          .filter(artifactId -> artifactId != null)
+          .filter(java.util.Objects::nonNull)
           .filter(artifactId -> !deliberatelyNotAggregated.contains(artifactId))
           .filter(artifactId -> !aggregated.contains(artifactId))
           .distinct()
@@ -200,7 +200,7 @@ public final class CoverageGate {
 
     return """
         %d module(s) produce coverage data which no aggregated report reads: %s. Everything covered \
-        ONLY by their tests counts as missed, which is what story 76 found and story 49 repaired. \
+        ONLY by their tests counts as missed, which is exactly what this gate is about. \
         Add each of them as a <dependency> to the report of its platform (%s) - or, if its data \
         belongs to no report, say so in this test's list of deliberate exceptions and why."""
         .formatted(

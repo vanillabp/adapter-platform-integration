@@ -143,7 +143,7 @@
           <configuration>
             <!-- deterministic order: the default 'filesystem' differs between a
                  developer machine and the GitHub runner, which hid an order-dependent
-                 test for a day (see prompts/bugfix-flaky-test.md) -->
+                 test for a day -->
             <runOrder>alphabetical</runOrder>
           </configuration>
         </plugin>

@@ -21,7 +21,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * Store-name configuration of the JDBC default outbox (story 26i): with
+ * Store-name configuration of the JDBC default outbox: with
  * <code>vanillabp.outbox.jdbc.table</code> set, the outbox stores (and the
  * dispatcher polls) the configured table - the default table is never created.
  * Every outbox instance needs its own store, so a dedicated outbox for a high-load

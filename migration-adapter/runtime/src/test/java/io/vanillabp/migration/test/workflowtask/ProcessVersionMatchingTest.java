@@ -40,9 +40,10 @@ import io.vanillabp.spi.service.BpmsStartTrigger;
 import io.vanillabp.spi.service.WorkflowEnded;
 import io.vanillabp.spi.service.WorkflowStartedByBpms;
 import io.vanillabp.spi.service.WorkflowTask;
+import lombok.Getter;
 
 /**
- * Story 48: what the <code>version</code> attribute of <code>&#64;WorkflowTask</code>,
+ * What the <code>version</code> attribute of <code>&#64;WorkflowTask</code>,
  * <code>&#64;WorkflowStartedByBpms</code> and <code>&#64;WorkflowEnded</code> means.
  * <p>
  * Two things are tested here: version ranges pick the method serving a process version
@@ -61,13 +62,10 @@ public class ProcessVersionMatchingTest {
 
   public static class Aggregate {
 
+    @Getter
     String id;
 
     String servedBy;
-
-    public String getId() {
-      return id;
-    }
 
   }
 
@@ -204,8 +202,8 @@ public class ProcessVersionMatchingTest {
   }
 
   /**
-   * The messages a logger emitted while the given work ran - the guiding messages of
-   * this story are WARNings, and "normal" logging is switched off during tests.
+   * The messages a logger emitted while the given work ran - the guiding messages are
+   * WARNings, and "normal" logging is switched off during tests.
    */
   private List<String> loggedBy(
       final Class<?> loggingClass,
@@ -222,7 +220,7 @@ public class ProcessVersionMatchingTest {
     }
     return logWatcher.list
         .stream()
-        .map(event -> event.getFormattedMessage())
+        .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
         .toList();
 
   }

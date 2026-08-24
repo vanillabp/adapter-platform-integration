@@ -228,7 +228,7 @@ public interface MigratableProcessService<A> {
 
   /**
    * Whether a phase-two operation which failed with the given exception is worth
-   * repeating (story 63).
+   * repeating.
    * <p>
    * The outbox repeats a failed dispatch until the entry is blocked. That is what
    * makes a progressing operation survivable which lost a concurrency conflict - an

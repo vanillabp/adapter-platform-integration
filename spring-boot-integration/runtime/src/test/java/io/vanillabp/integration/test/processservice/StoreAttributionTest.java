@@ -29,8 +29,8 @@ import io.vanillabp.integration.spi.TaskDeliveryLogAware;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Which store a workflow aggregate's outbox entries and delivery records go to (stories
- * 70 and 84). Both have to be written in the transaction persisting the aggregate, so
+ * Which store a workflow aggregate's outbox entries and delivery records go to. Both have
+ * to be written in the transaction persisting the aggregate, so
  * guessing wrong is worse than not answering: a record committing separately breaks
  * exactly the atomicity it exists for.
  * <p>

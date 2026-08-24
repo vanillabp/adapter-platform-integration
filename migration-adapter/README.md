@@ -81,11 +81,11 @@ falls through to the next adapter, `COMPLETED` is a warned no-op,
 then fails naming the adapter — it NEVER falls back. New workflows always start in
 the first-priority adapter (no probing).
 
-What the walk cannot do is check the answers, and story 105 is where that duty is
+What the walk cannot do is check the answers, and the SPI is where that duty is
 written down: an adapter answers ONLY for the workflows and tasks of the scope it is
-asked about, everything else is `UNKNOWN_TO_BPMS`. Since story 107 every probe is
-handed that scope as a `WorkflowScope` — the workflow module and the BPMN processes
-the calling process service serves, secondary ones included, which the platform
+asked about, everything else is `UNKNOWN_TO_BPMS`. Every probe is handed that scope as a
+`WorkflowScope` — the workflow module and the BPMN processes the calling process service
+serves, secondary ones included, which the platform
 integrations collect when they register the process services
 (`MigrationProcessService.setServedBpmnProcessIds`). Before that a probe knew only the
 workflow-aggregate ID, and neither it nor a task ID says whose workflow it is: two
@@ -95,7 +95,7 @@ can compare the scope, which is why the contract sits in `MigratableProcessServi
 and `ElectionScopeContractTest` holds three halves of it: the walk reaching the holder
 where the answers are scoped, stopping at the wrong adapter where one claims more than
 it holds, and not claiming a workflow of another workflow module of the same adapter.
-Camunda 8 (story 103) and Camunda 7 (story 104) are what happens without it.
+The shared-cluster setups of Camunda 8 and Camunda 7 are what happens without it.
 
 Successful elections populate a `WorkflowAdapterCache`
 (business SPI; key = workflow module, BPMN process, serialized aggregate ID →
@@ -109,7 +109,7 @@ implementing `WorkflowAdapterCache` replaces it — cluster setups plug their ow
 shared cache infrastructure this way (VanillaBP deliberately ships no distributed
 implementation).
 
-### Sizing the election cache, and knowing when to (story 58)
+### Sizing the election cache, and knowing when to
 
 Both bounds are properties of the platform, not of an adapter:
 `vanillabp.workflow-adapter-cache.max-entries` and `.time-to-live`
@@ -158,7 +158,7 @@ key finds the workflow by the process variable carrying the aggregate's ID, and 
 variable is named after the aggregate's ID attribute
 (`AggregatePersistenceAware.getAggregateIdName()`). The election runs BEFORE every other
 SPI method of an operation, so an adapter must never derive the name from a previous
-call - Camunda 8 did exactly that until story 54 and searched under a placeholder name,
+call - Camunda 8 did exactly that once and searched under a placeholder name,
 which found nothing on a cluster with secondary storage and reported every workflow as
 unknown.
 
@@ -166,7 +166,7 @@ To migrate, one puts the new BPMS first in the priority list and keeps the old o
 the list: new instances start in the new BPMS while existing instances complete in the
 old one.
 
-### Waiting for a workflow to become visible (story 54)
+### Waiting for a workflow to become visible
 
 An election which asks a BPMS answering from an eventually consistent read model
 (Camunda 8 searches its query API, fed by an exporter) gets an honest "unknown" for a
@@ -379,7 +379,7 @@ and that adapter does not process workflows). A failure of the first-priority ad
 always fails the boot, regardless of the policy, because new workflows could not be
 started otherwise.
 
-#### The variables a handler reads (`taskParameterNames`, story 99)
+#### The variables a handler reads (`taskParameterNames`)
 
 A `@TaskParam` takes what the BPMS GENERATED on this path through the model: the target of
 an input or output mapping, the result of a script or a decision, a value the model
@@ -400,8 +400,8 @@ through `TaskInvocationContext#getTaskParameter(name)`, and by then the delivery
 happened. A BPMS which ships a variable payload with every delivery has to know the names
 BEFORE it subscribes, and the only other place it could look is the BPMN model - which is a
 guess, since the model may declare names nobody reads and a handler may read a name no model
-declares. Camunda 8 derived the list that way between stories 93 and 99; the model scan is
-gone with this story rather than kept as a second source for one answer.
+declares. Camunda 8 derived the list that way for a while; the model scan is gone rather
+than kept as a second source for one answer.
 
 The method is a `default` returning an empty collection, so an adapter which never heard of
 it keeps the behaviour it had. BPMS-initiated starts deliberately have no counterpart: the
@@ -409,7 +409,7 @@ core copies EVERY variable such a start carries into the workflow aggregate it b
 (`BpmsInitiatedStartExecution#writeVariables`), so a start worker has to ask for all of them
 regardless of what any `@TaskParam` names.
 
-#### Deliveries VanillaBP already processed (`TaskDeliveryLog` SPI, story 51)
+#### Deliveries VanillaBP already processed (`TaskDeliveryLog` SPI)
 
 The inbound counterpart of the outbox. A remote BPMS reports the outcome AFTER the
 local transaction was committed, so a crash in between makes it deliver the same task
@@ -439,7 +439,7 @@ remembers a processed delivery and answers a repeated one from the record:
   table is there is asked of the JDBC metadata by `jdbc.JdbcSchema#tableExists`, used
   by every store which either creates its table or verifies that the application
   created it - including the gruelbox outbox of the Spring Boot integration, whose
-  table is gruelbox's and therefore not shipped by `vanillabp-schema` (story 95).
+  table is gruelbox's and therefore not shipped by `vanillabp-schema`.
 - The switch is the adapter-scoped `deduplicate-deliveries` (default `true`),
   resolvable per workflow module, workflow and task like every adapter-scoped key.
 - An adapter says whether it needs this at all:
@@ -452,7 +452,7 @@ remembers a processed delivery and answers a repeated one from the record:
   boot. Unlike the outbox, nothing is broken without a log - the behaviour is the one
   every VanillaBP had before, and the wiki's rule about idempotent handlers covers it.
 
-#### The end of a workflow releases its records (story 76)
+#### The end of a workflow releases its records
 
 Age alone is a poor answer to "how long does a record have to be kept": seven days are
 too long for a busy application and too short for a task genuinely open longer than
@@ -483,7 +483,7 @@ since nothing of an ended instance can be redelivered.
 - The retention stays for everything the end of a workflow does not cover: workflows
   still running, aggregates whose workflow never ends, stores without the release.
 
-#### How old an open task is (story 89)
+#### How old an open task is
 
 A `@TaskId` handler leaves its task open, and from there on nothing asks whether the
 completion is still coming: the BPMS keeps redelivering the task, the core answers every
@@ -492,8 +492,8 @@ the job's lock on the way. A workflow waiting forever therefore looks exactly li
 waiting legitimately.
 
 - `TaskDelivery` carries `recordedAt`, the moment the delivery was processed. Every store
-  persisted it from the beginning, because the retention deletes by it; what story 89 added
-  is the SPI component and the mapping in the four stores. The core sets the value when it
+  persisted it from the beginning, because the retention deletes by it; what came later is
+  the SPI component and the mapping in the four stores. The core sets the value when it
   builds the record, so the timestamp is the processing moment and not whatever a store's
   clock says.
 - `MigrationProcessService.stillOpen` measures the distance to now on every redelivery
@@ -515,12 +515,12 @@ waiting legitimately.
   obsolete has `ProcessService#cancelTask`; one which lost track of it could not answer a
   liveness question truthfully anyway.
 - The record itself used to expire with `vanillabp.outbox.retention` while its task was
-  still open, which is the exposure this story shrank from the old fourteen-day horizon to
-  the retention without removing it. Story 97 closed it with a second timestamp on the
-  record (see the next section); the age measured here keeps counting from the first one,
+  still open, which is the exposure the retention shrank from the old fourteen-day horizon
+  without removing it. A second timestamp on the record closed it (see the next section);
+  the age measured here keeps counting from the first one,
   which is why refreshing that one was never an option.
 
-#### The record of a task which is still open (story 97)
+#### The record of a task which is still open
 
 The record which answers the redeliveries of an open task was deleted once
 `vanillabp.outbox.retention` passed, seven days by default. A task open for longer lost the
@@ -553,7 +553,7 @@ the record of a task nobody hands out any more expires as it always did.
   Either of them keeps the record of a task which never completes alive for good, and a
   store which only grows is worse than the defect being fixed.
 - The column belongs to `io.vanillabp:vanillabp-schema` (changelog plus generated SQL). The
-  startup check of story 75 looked at the TABLE only, which is exactly the case a new column
+  startup check used to look at the TABLE only, which is exactly the case a new column
   slips through: a table created by an earlier version exists, so the check passed and the
   missing column would have surfaced at the first delivery. `validateSchemaExists` and
   `createSchemaIfNotExists` therefore verify the columns added later as well, and the
@@ -625,7 +625,7 @@ the local transaction, starting is split into two phases
   fails with a guiding message naming the remedies (the same message remains as a
   runtime backstop).
 
-**What phase two may expect (story 67):** the dispatch calls back into the
+**What phase two may expect:** the dispatch calls back into the
 application - a remote BPMS adapter loads the workflow aggregate to build what it
 sends to the BPMS - and it does so on the outbox dispatcher's own thread, where
 nothing the application relies on is active by itself. VanillaBP therefore provides
@@ -799,7 +799,7 @@ place where neither election nor aggregate applies:
   module boundaries is deliberately left to the application - a module is a scope,
   and which modules a signal is meant for is a business question.
 - `MigrationProcessService.sendSignal(name)` fans out over the DEPLOYMENT UNION of the
-  workflow module (`getDeploymentAdaptersFor`, story 27), not over the prioritized
+  workflow module (`getDeploymentAdaptersFor`), not over the prioritized
   adapters of the calling process service. During a migration the subscriptions are
   spread across the BPMS, and a partial broadcast is worse than none.
 - Every adapter is asked before the first failure is reported: a broadcast which
@@ -837,7 +837,7 @@ in the same transaction may reach a remote BPMS in the other order. That is docu
 rather than fixed - inventing an order here would promise something the stores do not
 implement, and an application which needs one can keep the calls in separate transactions.
 
-WHAT is pushed stays the sync model's business (story 28). This operation adds no second
+WHAT is pushed stays the sync model's business. This operation adds no second
 way of choosing values, which is what keeps the aggregate the single source of truth.
 
 ### Workflows the BPMS starts itself (`BpmsInitiatedStartInvoker`)
@@ -853,7 +853,7 @@ Adapters use the SPI (`io.vanillabp.integration.adapter.spi.workflowstart`) twic
   start events of the deployed process the BPMS fires on its own. The core registers
   them and reports an application method serving a process (or a start event) which
   has none. Signal names are reported PLAIN - scoping stays invisible above the BPMS
-  boundary (story 35). Throwing honors the `deployment-failure` policy.
+  boundary. Throwing honors the `deployment-failure` policy.
 - `startWorkflowByBpms(module, process, context)` when the BPMS reports such a start.
   The context carries values only: start event id, kind, trigger time, the BPMS' own
   identity of the start, the variables the model set, and whether the aggregate has to
@@ -1047,7 +1047,7 @@ the message names the required version and every artifact to raise (starting wit
 BOM), following the [configuration/error-message principle](#features) of guiding the
 developer instead of just reporting.
 
-## The older versions a BPMS still holds (story 57)
+## The older versions a BPMS still holds
 
 A BPMS keeps every version of a process it was ever given while the application brings only
 its newest model, so "does this application still serve version 1" is a question only the
@@ -1077,7 +1077,7 @@ it means is not.
   wired), and which methods serve no version worth serving at all
   (`handlersNotServingAnyVersion`, for all three annotations carrying a `version`).
 
-Two rules of the reverse direction come from this story. A method whose version range
+Two rules govern the reverse direction. A method whose version range
 excludes the deployed version needs no task in the deployed model - without that exemption
 an application could only serve an old version by keeping a dead task in its current BPMN -
 and the same exemption applies to a `@WorkflowStartedByBpms` method naming a start event the
@@ -1085,7 +1085,7 @@ new model dropped. What used to be caught by those checks is caught by the dead-
 warning instead, which reports rather than fails: a version which does not exist YET is
 normal during a rolling deployment.
 
-## Two writers on one workflow aggregate (story 59)
+## Two writers on one workflow aggregate
 
 A workflow aggregate has one workflow, which reads like one writer - until the process holds
 a second token. Then one branch writes in the transaction VanillaBP owns for its task and the
@@ -1113,15 +1113,15 @@ The core answers the part it owns, and only that part:
 - Nothing is retried. A handler may have called a remote API before the commit failed, so a
   quiet retry would repeat that call and hide the failure at the same time. The adapter gets
   the original exception and maps it to its BPMS' retry semantics.
-- The startup hint is split the way story 57 is split. The adapter reads its model and reports
-  the elements which can produce a second token
+- The startup hint is split the same way as the old-versions check. The adapter reads its
+  model and reports the elements which can produce a second token
   (`WorkflowTaskInvoker#reportConcurrentTokenElements`), the core decides what it means:
   `ConcurrentTokenCheck` asks the aggregate class for a version attribute, by the SIMPLE name
   of the annotation so JPA and Spring Data are covered without a dependency on either, and
   warns once per BPMN process where there is none. An aggregate with a version attribute stays
   quiet, because then the collision is the exception above instead of a lost write.
 
-## What an operator gets to see (story 92)
+## What an operator gets to see
 
 Three things about one delivery, built in the core because every BPMS passes through it:
 the delivery is counted and measured, the log lines written while it runs name the workflow,
@@ -1200,10 +1200,10 @@ platform modules and not in the stores. One place, so a store cannot forget.
    persistence abstraction used on all platforms — the outbox contract
    (`PhaseTwoOutbox` incl. `PhaseTwoCall`/`PhaseTwoOperation`, plus the
    per-aggregate attribution `PhaseTwoOutboxAware`), and the transaction the work runs in
-   (`TransactionRunner` plus the per-aggregate attribution `TransactionRunnerAware`, story
-   70): custom outboxes and custom transactions are
+   (`TransactionRunner` plus the per-aggregate attribution `TransactionRunnerAware`):
+   custom outboxes and custom transactions are
    contributed by APPLICATIONS, not by adapters, so these types live here (the outbox types
-   moved from the adapter SPI in story 26i). It is provided to applications
+   moved here from the adapter SPI). It is provided to applications
    transitively through the platform support modules (`vanillabp-spring-boot-support`
    / `vanillabp-quarkus-support`).
 2. **spi:** (artifact `io.vanillabp.adapter:migration-adapter-spi`)<br>

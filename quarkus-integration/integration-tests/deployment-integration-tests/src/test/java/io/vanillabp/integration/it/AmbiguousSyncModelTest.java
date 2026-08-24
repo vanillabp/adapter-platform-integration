@@ -18,9 +18,11 @@ import io.vanillabp.spi.service.SyncWithBPMS;
 import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 import jakarta.enterprise.context.ApplicationScoped;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
- * Story 28b: an aggregate whose attributes are annotated BOTH ways while the class
+ * An aggregate whose attributes are annotated BOTH ways while the class
  * itself states no mode cannot be interpreted - is the rest shared with the BPMS or
  * not? The boot is aborted with a message naming the class, the conflicting
  * attributes and the fix, and it happens at STARTUP (when the workflow aggregate is
@@ -60,6 +62,8 @@ public class AmbiguousSyncModelTest {
     // the assertion happens on the startup exception (assertException above)
   }
 
+  @Getter
+  @Setter
   public static class AmbiguousAggregate {
 
     private String id;
@@ -69,23 +73,6 @@ public class AmbiguousSyncModelTest {
 
     @NoSyncWithBPMS
     private String creditCardNumber;
-
-    public String getId() {
-      return id;
-    }
-
-    public void setId(
-        final String id) {
-      this.id = id;
-    }
-
-    public String getCustomerName() {
-      return customerName;
-    }
-
-    public String getCreditCardNumber() {
-      return creditCardNumber;
-    }
 
   }
 

@@ -29,9 +29,11 @@ import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.service.WorkflowEnd;
 import io.vanillabp.spi.service.WorkflowEnded;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
- * Telling the application that a workflow ended (story 43): the aggregate is loaded,
+ * Telling the application that a workflow ended: the aggregate is loaded,
  * the method is called and the aggregate is saved - and everything about it is
  * optional, so a process without such a method reports nothing and an aggregate
  * already deleted is not an error.
@@ -45,27 +47,15 @@ public class WorkflowEndedTest {
 
   private static final Instant END_TIME = Instant.parse("2026-08-13T09:15:00Z");
 
+  @Setter
   public static class Aggregate {
 
+    @Getter
     String id;
 
     String status;
 
     String endedAs;
-
-    public String getId() {
-      return id;
-    }
-
-    public void setStatus(
-        final String status) {
-      this.status = status;
-    }
-
-    public void setEndedAs(
-        final String endedAs) {
-      this.endedAs = endedAs;
-    }
 
   }
 

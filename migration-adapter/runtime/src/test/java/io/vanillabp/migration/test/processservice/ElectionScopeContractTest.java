@@ -20,14 +20,14 @@ import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The election contract of {@code MigratableProcessService} (story 105): an adapter
+ * The election contract of {@code MigratableProcessService}: an adapter
  * answers the awareness probes ONLY for the workflows and tasks of its own scope.
  * <p>
  * The core cannot enforce that. Which adapters may be asked is its business, which
  * workflows an adapter owns is only the adapter's, so the contract is a duty of the
  * implementations and this is where it is written down as a test. Two stories arrived
- * at it the hard way: Camunda 8 (story 103) had two adapter ids on one cluster where
- * every key is global, and Camunda 7 (story 104) answers for any workflow module of
+ * at it the hard way: Camunda 8 had two adapter ids on one cluster where
+ * every key is global, and Camunda 7 answers for any workflow module of
  * its engine carrying the same aggregate id. Both read an SPI which never said
  * otherwise.
  * <p>
@@ -57,7 +57,7 @@ public class ElectionScopeContractTest {
       .of(MODULE, PROCESS);
 
   /**
-   * Another workflow module served by the same adapter (story 107).
+   * Another workflow module served by the same adapter.
    */
   private static final io.vanillabp.integration.adapter.spi.WorkflowScope OTHER_SCOPE = io.vanillabp.integration.adapter.spi.WorkflowScope
       .of("other-module", "OtherProcess");
@@ -77,7 +77,7 @@ public class ElectionScopeContractTest {
 
     /**
      * The scope those workflows live in - an adapter serving several workflow modules
-     * answers for the one it is ASKED about, not for all of them (story 107).
+     * answers for the one it is ASKED about, not for all of them.
      */
     private io.vanillabp.integration.adapter.spi.WorkflowScope ownScope = SCOPE;
 
@@ -300,8 +300,8 @@ public class ElectionScopeContractTest {
     PROBES
         .forEach(probe -> {
           // one adapter, two workflow modules: the workflow with this aggregate id lives
-          // in the other one. Until story 107 the probe was not told which module was
-          // meant and answered for everything the adapter held.
+          // in the other one. A probe which is not told which module is meant would
+          // answer for everything the adapter holds.
           final var adapter = new ScopedAdapter("only-adapter", Set.of(AGGREGATE_OF_THE_SECOND))
               .holdingThemIn(OTHER_SCOPE);
 

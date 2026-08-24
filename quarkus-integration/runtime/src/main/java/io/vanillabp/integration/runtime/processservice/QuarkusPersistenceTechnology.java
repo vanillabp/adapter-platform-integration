@@ -11,13 +11,13 @@ import jakarta.enterprise.inject.Instance;
  * Detects which persistence technology manages a workflow aggregate, asked by everything
  * which has to write something in the aggregate's OWN transaction: the phase-two outbox
  * ({@link QuarkusPhaseTwoOutboxResolver}), the log of processed task deliveries
- * ({@link QuarkusTaskDeliveryLogResolver}) and the coverage verdict of story 70
+ * ({@link QuarkusTaskDeliveryLogResolver}) and the coverage verdict
  * ({@link QuarkusTransactionRunnerResolver}).
  * <p>
  * The counterpart on Spring Boot reads the technology off the aggregate's Spring Data
  * repository. Here it is read off the persistence VanillaBP resolved for the aggregate:
  * where the application wrote no {@link AggregatePersistenceAware}, VanillaBP picked one of
- * its own implementations while the application was built (story 69) and generated the bean
+ * its own implementations while the application was built and generated the bean
  * providing it. That choice names the store, and the generated per-aggregate subclasses are
  * matched through their superclass.
  * <p>
@@ -33,14 +33,14 @@ public class QuarkusPersistenceTechnology {
     UNKNOWN
   }
 
-  /** The MongoDB-based aggregate persistence defaults of story 69. */
+  /** The MongoDB-based aggregate persistence defaults. */
   private static final Set<String> MONGO_DEFAULT_PERSISTENCES = Set
       .of(
           "io.vanillabp.integration.runtime.persistence.PanacheMongoRepositoryAggregatePersistence",
           "io.vanillabp.integration.runtime.persistence.PanacheMongoActiveRecordAggregatePersistence");
 
   /**
-   * The relational defaults of story 69. Spring Data on Quarkus is the JPA one, the
+   * The relational defaults. Spring Data on Quarkus is the JPA one, the
    * extension knows no other store.
    */
   private static final Set<String> JDBC_DEFAULT_PERSISTENCES = Set
@@ -73,8 +73,7 @@ public class QuarkusPersistenceTechnology {
   /**
    * The persistence serving an aggregate: the most specific
    * {@link AggregatePersistenceAware} covering its class, which is either an
-   * implementation of the application or the bean generated for one of VanillaBP's own
-   * (story 69).
+   * implementation of the application or the bean generated for one of VanillaBP's own.
    *
    * @param workflowAggregateClass The workflow aggregate's class
    * @return The persistence or <code>null</code> if there is none

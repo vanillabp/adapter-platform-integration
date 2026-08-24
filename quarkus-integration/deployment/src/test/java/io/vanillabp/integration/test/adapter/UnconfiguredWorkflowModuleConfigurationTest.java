@@ -16,7 +16,7 @@ import jakarta.inject.Inject;
 /**
  * A section for a workflow module which is NOT in the classpath stays a WARN (the
  * module may arrive later), while the module actually found in the classpath needs
- * no section at all - its own one is derived (story 34).
+ * no section at all - its own one is derived.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class UnconfiguredWorkflowModuleConfigurationTest {

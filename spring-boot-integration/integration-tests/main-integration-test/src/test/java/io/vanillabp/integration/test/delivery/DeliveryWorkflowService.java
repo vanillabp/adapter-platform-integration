@@ -48,7 +48,7 @@ public class DeliveryWorkflowService {
   /**
    * A task the application completes later, so it stays open from the BPMS' point of view
    * and is redelivered until somebody completes it - the record which answers those
-   * redeliveries is what story 97 keeps alive.
+   * redeliveries is what the open-task retention keeps alive.
    */
   @WorkflowTask
   public void awaitCompletion(

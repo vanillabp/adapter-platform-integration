@@ -15,7 +15,7 @@ package io.vanillabp.integration.adapter.spi.workflowtask;
  * @param optional Whether a matching <code>&#64;WorkflowTask</code> method is
  *          OPTIONAL: <code>false</code> for service-like tasks (an unmatched task
  *          fails the wiring validation with a guiding message), <code>true</code>
- *          for USER tasks (story 24) - their notification handlers are optional
+ *          for USER tasks - their notification handlers are optional
  *          (a user task without a handler is simply processed through forms/task
  *          lists), but a matching method is still marked as wired so the
  *          per-module unwired-methods check does not report it

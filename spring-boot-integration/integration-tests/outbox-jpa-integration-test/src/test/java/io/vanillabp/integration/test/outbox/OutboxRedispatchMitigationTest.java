@@ -18,7 +18,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * The START re-dispatch mitigation (story 25): a recovered/retried START outbox
+ * The START re-dispatch mitigation: a recovered/retried START outbox
  * entry (attempts &gt; 0) probes {@code awarenessOfWorkflowForRedispatch} on the
  * recorded adapter BEFORE re-dispatching - a workflow already known there means
  * the previous dispatch already started it, so the entry is consumed WITHOUT a

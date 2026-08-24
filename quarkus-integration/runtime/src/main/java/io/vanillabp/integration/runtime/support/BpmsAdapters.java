@@ -1,7 +1,7 @@
 package io.vanillabp.integration.runtime.support;
 
 /**
- * The wording the message about missing BPMS adapter extensions ends with (story 81).
+ * The wording the message about missing BPMS adapter extensions ends with.
  * <p>
  * A developer whose application has no adapter should not have to search for what to add,
  * but the list of adapters does not belong into compiled code either: adapters are

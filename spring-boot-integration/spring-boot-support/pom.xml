@@ -42,7 +42,7 @@
       <groupId>org.springframework</groupId>
       <artifactId>spring-context</artifactId>
     </dependency>
-    <!-- story 81: the check reporting an application which has a workflow module but no
+    <!-- the check reporting an application which has a workflow module but no
          BPMS adapter is an autoconfiguration of this module - the only VanillaBP code on
          the classpath of such an application. -->
     <dependency>

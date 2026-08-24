@@ -34,7 +34,7 @@ import io.vanillabp.spi.process.WorkflowHistory;
 import io.vanillabp.spi.process.WorkflowNotFoundException;
 
 /**
- * The core's part of the viewer/history API (story 26): electing the adapter
+ * The core's part of the viewer/history API: electing the adapter
  * holding the workflow, namespacing the adapter-native process definition ids and
  * the guiding errors of the two SPI exceptions.
  */
@@ -43,7 +43,7 @@ import io.vanillabp.spi.process.WorkflowNotFoundException;
 public class ViewerApiTest {
 
   /**
-   * What a probe is asked about (story 107). Any scope does here: the adapters of this
+   * What a probe is asked about. Any scope does here: the adapters of this
    * test answer from what the test told them, not from a deployment.
    */
   private static final io.vanillabp.integration.adapter.spi.WorkflowScope SCOPE = io.vanillabp.integration.adapter.spi.WorkflowScope

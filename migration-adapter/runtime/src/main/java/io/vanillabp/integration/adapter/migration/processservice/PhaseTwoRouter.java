@@ -35,6 +35,8 @@ import io.vanillabp.integration.spi.TransactionRunner;
  * its own {@link io.vanillabp.integration.spi.PhaseTwoOperationDispatch} - the
  * process-service routing below applies to core operations only.
  */
+// see decision 1 in the repository's README.md
+@SuppressWarnings("LombokGetterMayBeUsed")
 public final class PhaseTwoRouter {
 
   private record RegistrationKey(
@@ -55,7 +57,7 @@ public final class PhaseTwoRouter {
   private final TransactionRunner transactionRunner;
 
   /**
-   * What the application counts about its outbox (story 92). Handed in by the
+   * What the application counts about its outbox. Handed in by the
    * platform integration;
    * {@link io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics#NONE}
    * for an application without a metrics backend.
@@ -202,13 +204,13 @@ public final class PhaseTwoRouter {
     // application (the aggregate has to be loaded to build what the BPMS is told).
     // Whatever that needs - a transaction, an active CDI request context - is
     // VanillaBP's to provide here, once for every outbox implementation, instead of
-    // in each of them. Which transaction it is, belongs to the aggregate of the entry
-    // (story 70): an application storing this aggregate in a system of its own gets
+    // in each of them. Which transaction it is, belongs to the aggregate of the entry:
+    // an application storing this aggregate in a system of its own gets
     // its own runner here as well, and an entry of an extension - which routes to no
     // process service - gets the platform's.
     final var runner = runnerFor(call);
     metrics.outboxDispatchStarted(call.operation(), previouslyAttempted);
-    // story 92: whatever the dispatch logs - and a broken BPMS connection logs a lot -
+    // Whatever the dispatch logs - and a broken BPMS connection logs a lot -
     // names the workflow it belongs to, exactly like a task delivery does
     try (var ignored = io.vanillabp.integration.adapter.migration.observability.DeliveryMdc
         .ofPhaseTwoDispatch(

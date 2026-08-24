@@ -14,7 +14,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
  * What the platform-neutral half of the health contribution does with the adapters'
- * answers (story 92): nothing is invented for an adapter which says nothing, an
+ * answers: nothing is invented for an adapter which says nothing, an
  * adapter which throws is a defect worth seeing, and an adapter which is not
  * configured yet is not an outage.
  */

@@ -180,18 +180,8 @@ public class BpmsInitiatedStarts {
   }
 
   /**
-   * Registers the start events an adapter reported while wiring a deployed BPMN
-   * process and validates the application's methods against them.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The BPMN process ID
-   * @param startEvents The BPMS-initiated start events of the process
-   * @throws IllegalStateException If a method serves a process without such a start
-   *           event, or names a start event the process does not have
-   */
-  /**
    * The @WorkflowStartedByBpms methods of that BPMN process whose version specification matches
-   * NONE of the given versions (story 57): the versions the BPMS holds, minus the ones
+   * NONE of the given versions: the versions the BPMS holds, minus the ones
    * the configuration faded out. Such a method never runs, and the start says so.
    *
    * @param workflowModuleId The workflow module ID
@@ -221,6 +211,16 @@ public class BpmsInitiatedStarts {
 
   }
 
+  /**
+   * Registers the start events an adapter reported while wiring a deployed BPMN
+   * process and validates the application's methods against them.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param startEvents The BPMS-initiated start events of the process
+   * @throws IllegalStateException If a method serves a process without such a start
+   *           event, or names a start event the process does not have
+   */
   public void validate(
       final String workflowModuleId,
       final String bpmnProcessId,
@@ -257,7 +257,7 @@ public class BpmsInitiatedStarts {
       entry.handlers
           .stream()
           .filter(handler -> handler.getStartEventId() != null)
-          // story 57: a method kept for an OLDER version names a start event the
+          // A method kept for an OLDER version names a start event the
           // deployed model may not have any more - that is what it is for. Whether
           // such a version still exists is answered by the startup check, which
           // reports a method serving no held version as dead.
@@ -285,7 +285,7 @@ public class BpmsInitiatedStarts {
 
   /**
    * Whether the method exists for versions OLDER than the one this boot deployed
-   * (story 57) - it then names an element of a model which is not the deployed one.
+   * - it then names an element of a model which is not the deployed one.
    */
   private boolean servesOnlyOlderVersions(
       final String workflowModuleId,

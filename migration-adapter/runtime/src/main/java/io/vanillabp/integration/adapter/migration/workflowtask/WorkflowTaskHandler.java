@@ -15,6 +15,8 @@ import io.vanillabp.spi.service.TaskException;
  * process ID) in the {@link WorkflowTaskRegistry} and invoked by
  * {@link io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService#executeWorkflowTask}.
  */
+// see decision 1 in the repository's README.md
+@SuppressWarnings("LombokGetterMayBeUsed")
 public class WorkflowTaskHandler {
 
   /**
@@ -67,7 +69,7 @@ public class WorkflowTaskHandler {
 
   /**
    * The process variables the method reads with <code>&#64;TaskParam</code>, sorted and
-   * duplicate-free (story 99). The core reports them to the adapters through
+   * duplicate-free. The core reports them to the adapters through
    * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker#taskParameterNames},
    * so a BPMS delivering a variable payload knows what to put into it.
    */
@@ -183,7 +185,7 @@ public class WorkflowTaskHandler {
 
   /**
    * The version specification(s) this method names, for messages about a method
-   * serving no version the BPMS holds (story 57).
+   * serving no version the BPMS holds.
    *
    * @return The specifications, comma separated
    */

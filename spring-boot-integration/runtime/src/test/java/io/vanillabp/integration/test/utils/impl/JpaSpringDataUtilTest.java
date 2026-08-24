@@ -174,7 +174,7 @@ class JpaSpringDataUtilTest {
   }
 
   /**
-   * Story 114: what the fallback persistence does with that, which is where an
+   * What the fallback persistence does with that, which is where an
    * application used to boot and fail at its first task instead.
    */
   @Test

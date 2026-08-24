@@ -22,8 +22,8 @@ package io.vanillabp.integration.adapter.spi;
  * two adapters apart which see the same tasks and workflows, so the adapter needs a
  * way to answer for its own scope only (see the election contract of
  * {@link MigratableProcessService}). Whether it has one is the adapter's answer, and
- * it may end the boot instead: Camunda 8 requires the cluster's query API for it
- * (story 103), and two Camunda 7 ids are two embedded engines, which need a
+ * it may end the boot instead: Camunda 8 requires the cluster's query API for it,
+ * and two Camunda 7 ids are two embedded engines, which need a
  * <code>table-prefix</code> or a <code>data-source-name</code> of their own no
  * matter which modes they use. The adapter's documentation says what applies.
  */

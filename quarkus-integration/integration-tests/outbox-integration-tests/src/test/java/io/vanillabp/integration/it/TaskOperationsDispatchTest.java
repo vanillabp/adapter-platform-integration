@@ -26,7 +26,7 @@ import jakarta.transaction.UserTransaction;
 
 /**
  * {@code completeTask}/{@code cancelTask} through the Quarkus JDBC phase-two
- * outbox (story 22): the adapter is elected by probing, the task ID and the BPMN
+ * outbox: the adapter is elected by probing, the task ID and the BPMN
  * error code travel in the outbox entry's ARGS column, phase two dispatches after
  * the commit, a rollback leaves nothing and an unknown task raises the guiding
  * {@link TaskNotFoundException}.

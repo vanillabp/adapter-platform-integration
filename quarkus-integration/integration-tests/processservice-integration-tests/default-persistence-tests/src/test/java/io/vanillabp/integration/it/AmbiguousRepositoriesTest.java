@@ -18,7 +18,7 @@ import io.vanillabp.integration.test.persistence.SingleTaskWiringSource;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Story 69: two repositories for one aggregate are not a coin flip. The build fails
+ * Two repositories for one aggregate are not a coin flip. The build fails
  * and the message names both of them, so the developer either keeps one or writes
  * the {@code AggregatePersistenceAware} deciding it.
  */

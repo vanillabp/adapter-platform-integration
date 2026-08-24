@@ -13,8 +13,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.workflowtask.SpringTransactionRunner;
 
 /**
- * Which failures Spring Boot reports as "somebody else changed the workflow aggregate"
- * (story 59). The transaction runner is asked without any transaction manager, since
+ * Which failures Spring Boot reports as "somebody else changed the workflow aggregate".
+ * The transaction runner is asked without any transaction manager, since
  * the classification looks at the exception alone.
  */
 @ExtendWith(SuppressOutputExtension.class)

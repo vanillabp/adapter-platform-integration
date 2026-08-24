@@ -3,7 +3,7 @@ package io.vanillabp.integration.adapter.spi;
 import java.util.List;
 
 /**
- * Which workflow an awareness probe is being asked about (story 107): the workflow module
+ * Which workflow an awareness probe is being asked about: the workflow module
  * and the BPMN processes the calling process service serves.
  * <p>
  * <b>Why the probes need it.</b> Until this record existed, a probe was told the
@@ -22,7 +22,7 @@ import java.util.List;
  * the primary alone would drop the others, which would trade one defect for another.
  * <p>
  * The ids are the PLAIN ones, as the application models and configures them. What the BPMS
- * knows them by is the adapter's business (name-clash avoidance, story 35).
+ * knows them by is the adapter's business (name-clash avoidance).
  *
  * @param workflowModuleId The workflow module of the calling process service
  * @param bpmnProcessIds The plain BPMN process ids it serves, the primary one first

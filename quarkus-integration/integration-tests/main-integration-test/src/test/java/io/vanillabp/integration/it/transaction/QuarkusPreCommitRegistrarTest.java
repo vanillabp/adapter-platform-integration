@@ -17,7 +17,7 @@ import jakarta.transaction.RollbackException;
 import jakarta.transaction.UserTransaction;
 
 /**
- * Story 87: a BPMS adapter hands its phase-one check to the platform and it runs right
+ * A BPMS adapter hands its phase-one check to the platform and it runs right
  * before the transaction of the workflow aggregate commits. On Quarkus that is an interposed
  * JTA synchronization, so what this test pins is the ORDER (the check runs after everything
  * the caller did, not when it was handed over) and that a failing check takes the commit with

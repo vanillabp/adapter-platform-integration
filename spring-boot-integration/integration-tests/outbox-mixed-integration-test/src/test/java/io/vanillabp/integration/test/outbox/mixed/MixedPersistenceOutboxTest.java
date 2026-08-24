@@ -30,7 +30,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Acceptance test of the per-aggregate outbox selection (story 26i) in a
+ * Acceptance test of the per-aggregate outbox selection in a
  * MIXED-PERSISTENCE application (JPA/H2 + MongoDB/TestContainers replica set) with a
  * dedicated outbox for one "hot" process:
  * <ul>

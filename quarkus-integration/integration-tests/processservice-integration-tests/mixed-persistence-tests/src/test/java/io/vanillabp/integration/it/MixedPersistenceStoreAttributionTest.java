@@ -29,11 +29,11 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * Story 84: an application with two persistences. One aggregate is a Hibernate ORM Panache
+ * An application with two persistences. One aggregate is a Hibernate ORM Panache
  * active record, the other a MongoDB Panache active record, so both platform defaults of the
  * phase-two outbox and of the delivery log are active and none of them can serve both.
  * <p>
- * Before this story such an application did not boot: the startup validation resolved the
+ * Such an application used not to boot at all: the startup validation resolved the
  * outbox, found two candidates and ended with a message telling the application to attribute
  * them itself. Now the store is read off the persistence VanillaBP resolved for each
  * aggregate, so this test starting at all is half of the assertion. The other half is where

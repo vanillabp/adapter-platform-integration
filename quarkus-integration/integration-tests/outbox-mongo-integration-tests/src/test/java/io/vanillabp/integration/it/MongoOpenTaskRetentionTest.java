@@ -28,7 +28,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * Story 97 in the MongoDB store on Quarkus: the record which answers the redeliveries of an
+ * The open-task retention in the MongoDB store on Quarkus: the record which answers the redeliveries of an
  * OPEN task outlives the retention as long as the BPMS keeps redelivering that task, and
  * the record of a task nobody hands out any more expires as it always did. The moment the
  * handler ran stays where it is, because the age of the open task is measured from it.

@@ -7,7 +7,7 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Process service for the adapter id DERIVED from the classpath (story 34): with a
+ * Process service for the adapter id DERIVED from the classpath: with a
  * single adapter type in the classpath and no adapter section, the adapter id is
  * the adapter type itself - here {@code dummy} (the type produced by
  * {@link DummyAdapters}).

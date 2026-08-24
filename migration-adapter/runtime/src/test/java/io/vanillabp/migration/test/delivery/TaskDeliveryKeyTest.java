@@ -15,7 +15,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.service.TaskEvent;
 
 /**
- * What tells two task deliveries apart (story 51): the delivery ID an adapter reports is
+ * What tells two task deliveries apart: the delivery ID an adapter reports is
  * unique within ITS BPMS only, so the key is qualified by adapter, workflow module, BPMN
  * process and event - and it is hashed where it would outgrow what a store can index.
  */

@@ -12,7 +12,7 @@ import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Startup validation of the phase-two outbox (story 26i): the mocked adapter
+ * Startup validation of the phase-two outbox: the mocked adapter
  * requires a two-phase commit for starting workflows
  * ({@link TwoPhaseTestMigratableProcessService}) but neither a JDBC datasource nor a
  * MongoDB client is available - the BOOT has to fail with a guiding message naming

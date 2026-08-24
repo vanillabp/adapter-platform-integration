@@ -4,7 +4,7 @@ import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * The Panache repository VanillaBP picks the aggregate persistence from (story 69), which
+ * The Panache repository VanillaBP picks the aggregate persistence from, which
  * is what makes the application ask for the transaction coverage of a relational store.
  */
 @ApplicationScoped

@@ -26,7 +26,7 @@
       <artifactId>quarkus-junit-internal</artifactId>
       <scope>test</scope>
     </dependency>
-    <!-- needed by the runtime test of story 70 (QuarkusExtensionTest builds a bean
+    <!-- needed by the transaction-runner runtime test (QuarkusExtensionTest builds a bean
          archive containing the test class) -->
     <dependency>
       <groupId>io.quarkus</groupId>

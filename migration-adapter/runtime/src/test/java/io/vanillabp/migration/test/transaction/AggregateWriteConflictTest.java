@@ -33,9 +33,10 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.service.WorkflowTask;
+import lombok.Getter;
 
 /**
- * Story 59: two branches of one workflow write the same workflow aggregate. What is
+ * Two branches of one workflow write the same workflow aggregate. What is
  * pinned here is the CORE's part of it:
  * <ul>
  * <li>a version conflict on the commit VanillaBP owns is recognized by asking the
@@ -71,13 +72,10 @@ public class AggregateWriteConflictTest {
 
   public static class Aggregate {
 
+    @Getter
     String id;
 
     int invocations;
-
-    public String getId() {
-      return id;
-    }
 
   }
 
@@ -431,7 +429,7 @@ public class AggregateWriteConflictTest {
       logWatcher.list
           .stream()
           .filter(event -> event.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.WARN))
-          .map(event -> event.getFormattedMessage())
+          .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
           .forEach(messages::add);
     }
 

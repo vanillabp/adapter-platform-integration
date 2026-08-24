@@ -8,7 +8,7 @@ import org.springframework.data.mongodb.core.MongoTemplate;
  * Asks a MongoDB deployment whether it is a replica set, which is the condition of every
  * MongoDB transaction: without one, a session started by a
  * <code>MongoTransactionManager</code> fails at its first write with "Transaction numbers
- * are only allowed on a replica set member or mongos" (story 70).
+ * are only allowed on a replica set member or mongos".
  * <p>
  * A class of its own, because <code>spring-data-mongodb</code> is optional here - it is
  * only loaded where {@link SpringTransactionRunnerResolver} found MongoDB in the

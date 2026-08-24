@@ -23,7 +23,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * THE migration scenario on Quarkus (story 25): instances were started while
+ * THE migration scenario on Quarkus: instances were started while
  * adapter 'old-bpms' was first priority; the configuration was then flipped
  * ('new-bpms' promoted). Operations on OLD instances still route to 'old-bpms'
  * (probing election), NEW workflows start in 'new-bpms', and the second operation

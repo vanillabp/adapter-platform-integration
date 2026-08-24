@@ -189,7 +189,7 @@ public class GruelboxOutboxWiringTest {
   @DisplayName("An application managing the schema itself is stopped at startup when the table is missing")
   public void aMissingTableStopsTheStartupInsteadOfTheFirstWorkflow() {
 
-    // story 75: without the check the missing table surfaces at the first workflow
+    // Without the check the missing table surfaces at the first workflow
     // started on a remote BPMS, hours after a deployment which booted cleanly
     final var properties = new VanillaBpConfigurationProperties();
     properties.getOutbox().setCreateSchema(false);

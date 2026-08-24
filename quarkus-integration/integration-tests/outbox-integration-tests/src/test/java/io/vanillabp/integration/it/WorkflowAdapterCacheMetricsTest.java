@@ -26,7 +26,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * Sizing and observing the election cache on Quarkus (story 58): the bounds come
+ * Sizing and observing the election cache on Quarkus: the bounds come
  * from <code>vanillabp.workflow-adapter-cache.*</code>, and an application using the
  * Micrometer extension gets the cache's numbers as meters - Quarkus applies every
  * {@code MeterBinder} bean to its registry, so nothing but the bean is needed.

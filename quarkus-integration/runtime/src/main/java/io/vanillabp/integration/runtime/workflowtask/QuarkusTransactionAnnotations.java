@@ -8,7 +8,7 @@ import io.vanillabp.integration.adapter.migration.workflowtask.TransactionAnnota
 
 /**
  * The transaction annotations Quarkus honors, handed to the core's startup check of
- * <code>&#64;WorkflowTask</code> methods (story 40b).
+ * <code>&#64;WorkflowTask</code> methods.
  * <p>
  * Quarkus honors {@code jakarta.transaction.Transactional} through Narayana. Spring's
  * annotation works ONLY with the extension {@code quarkus-spring-tx}, whose

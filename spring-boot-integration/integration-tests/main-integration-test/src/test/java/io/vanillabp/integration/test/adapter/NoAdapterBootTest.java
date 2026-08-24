@@ -23,7 +23,7 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
  * This is the case of an application which HAS VanillaBP's Spring Boot integration (as a
  * dependency of its own, or as the leftover of a removed adapter). An application which
  * never had an adapter has no integration either, and is reported by
- * {@code NoBpmsAdapterCheck} of module 'vanillabp-spring-boot-support' (story 81).
+ * {@code NoBpmsAdapterCheck} of module 'vanillabp-spring-boot-support'.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class NoAdapterBootTest {

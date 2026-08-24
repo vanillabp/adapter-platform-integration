@@ -15,7 +15,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * Documents the current, honest behavior for TWO adapter ids of ONE type (B2
  * regression test at the platform level): the mocked adapter provides a single
  * process service serving adapter id 'test' only, while 'test2' (same type) is
- * prioritized first. The election's fail-fast fires AT STARTUP (since story 26i the
+ * prioritized first. The election's fail-fast fires AT STARTUP (the
  * process services are validated by a StartupEvent observer) with a guiding message
  * naming the unserved adapter id - workflows must never silently start in the wrong
  * BPMS. Full per-adapter-id multiplicity is introduced by the adapter-config-model

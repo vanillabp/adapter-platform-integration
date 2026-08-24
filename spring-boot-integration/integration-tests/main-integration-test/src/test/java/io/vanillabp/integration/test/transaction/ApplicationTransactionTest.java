@@ -37,7 +37,7 @@ import io.vanillabp.integration.test.utils.springboot.SpringBootTestApplication;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 
 /**
- * Acceptance test of the transaction-contract safeguards (story 40b) on Spring Boot: a
+ * Acceptance test of the transaction-contract safeguards on Spring Boot: a
  * transaction annotation of the application in the call chain of a
  * <code>&#64;WorkflowTask</code> handler marks VanillaBP's transaction rollback-only,
  * and neither the aggregate changes nor the state of the BPMS can be committed

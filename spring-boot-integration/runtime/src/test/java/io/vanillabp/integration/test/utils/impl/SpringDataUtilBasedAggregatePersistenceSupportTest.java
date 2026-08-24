@@ -87,7 +87,7 @@ public class SpringDataUtilBasedAggregatePersistenceSupportTest {
   }
 
   /**
-   * Story 114: the ID type is where the core asks while the application starts, so it is
+   * The ID type is where the core asks while the application starts, so it is
    * where a missing repository has to speak up. It used to answer <code>null</code>, which
    * is the contract's "a custom layer owns the serialized form" - the application then
    * booted and failed at the first task delivery.

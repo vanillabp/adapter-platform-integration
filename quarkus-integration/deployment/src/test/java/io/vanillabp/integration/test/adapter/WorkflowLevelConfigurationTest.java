@@ -18,7 +18,7 @@ import io.vanillabp.spi.process.ProcessService;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of workflow-level properties (story 27, formerly rejected as "not
+ * Acceptance test of workflow-level properties (formerly rejected as "not
  * yet supported"): the workflow module prioritizes adapter id 'test' while the
  * workflow 'SampleWorkflowService' overrides to 'test2' - the resolution is performed
  * ONCE, by the core on the bound tree, so this CDI-level test proves the Quarkus

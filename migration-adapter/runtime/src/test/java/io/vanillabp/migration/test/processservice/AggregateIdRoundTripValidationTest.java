@@ -17,8 +17,8 @@ import io.vanillabp.integration.spi.AggregateIdTypes;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Startup check of the aggregate-ID round-trip (story 26c, moved to the core in
- * story 26i): the ID crosses the phase-two outbox serialized as a String, so an ID
+ * Startup check of the aggregate-ID round-trip: the ID crosses the phase-two outbox
+ * serialized as a String, so an ID
  * type which does not convert from/to String losslessly has to fail the startup
  * with a guiding message. The ID type is detected as the interface default of
  * {@code AggregatePersistenceAware#getAggregateIdType()} does.

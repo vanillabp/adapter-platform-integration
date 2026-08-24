@@ -37,7 +37,7 @@ import io.vanillabp.integration.test.utils.springboot.SpringBootTestApplication;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 
 /**
- * Acceptance test of <code>&#64;WorkflowTask(version = ...)</code> (story 48) with the
+ * Acceptance test of <code>&#64;WorkflowTask(version = ...)</code> with the
  * dummy adapter standing in for a BPMS: the version the adapter reports decides which
  * method serves a delivered task, ranges made of numbers are compared without asking
  * the BPMS, and a range naming a version TAG is resolved through the catalog the

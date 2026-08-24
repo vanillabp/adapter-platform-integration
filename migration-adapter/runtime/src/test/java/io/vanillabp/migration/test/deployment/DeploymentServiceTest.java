@@ -1157,9 +1157,6 @@ public class DeploymentServiceTest {
   }
 
   /**
-   * Creates properties with multiple configured adapters (in given priority) and a workflow module.
-   */
-  /**
    * Properties of module 'test-module' with the given module-level prioritized
    * adapters and ONE workflow having its own (possibly empty) prioritized-adapters
    * override. Adapter sections exist for all adapter ids of both lists.
@@ -1206,6 +1203,9 @@ public class DeploymentServiceTest {
 
   }
 
+  /**
+   * Creates properties with multiple configured adapters (in given priority) and a workflow module.
+   */
   private MigrationAdapterProperties createPropertiesWithAdapters(
       final String... adapterIds) {
 
@@ -1239,9 +1239,6 @@ public class DeploymentServiceTest {
   }
 
   /**
-   * Creates a dummy InputStream for BPMN tests.
-   */
-  /**
    * An input stream tracking whether it was closed - used to pin the
    * stream-ownership contract of the deployment pipeline.
    */
@@ -1249,6 +1246,9 @@ public class DeploymentServiceTest {
 
     private boolean closed = false;
 
+    /**
+     * Creates a dummy InputStream for BPMN tests.
+     */
     private CountingCloseInputStream() {
       super("<bpmn>dummy</bpmn>".getBytes(StandardCharsets.UTF_8));
     }
@@ -1401,11 +1401,11 @@ public class DeploymentServiceTest {
 
 
   /**
-   * Story 34's rule: several ids of ONE adapter type only make sense if they address
+   * The rule: several ids of ONE adapter type only make sense if they address
    * DIFFERENT systems, and whether two configurations differ is BPMS knowledge, so the
    * adapter decides. The SPI documents WHEN the adapter is asked - once per type, on the
    * first deployment service of that type, with the ids in priority order and before
-   * anything reaches a BPMS. Nothing held that until story 106.
+   * anything reaches a BPMS, and this is what holds it.
    */
   @Nested
   @DisplayName("Several ids of one adapter type Tests")

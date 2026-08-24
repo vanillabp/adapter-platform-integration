@@ -127,7 +127,7 @@ serialized aggregate ID is converted back to the aggregate's ID type by the CORE
 answer authoritatively, a `null` ID type means the custom persistence layer owns
 the serialized form and the String is passed through unchanged).
 
-The outbox is selected **per workflow aggregate** (story 26i): the most specific
+The outbox is selected **per workflow aggregate**: the most specific
 `PhaseTwoOutboxAware` bean wins; without one, the platform default matching the
 persistence technology managing the aggregate is used (detected from the
 aggregate's Spring Data repository type - `SpringPhaseTwoOutboxResolver`). Both
@@ -171,7 +171,7 @@ disable an unwanted default via its `enabled` flag:
    off, the auto-configuration verifies AT STARTUP that the table exists
    (`validateOutboxTableExists`) and ends the boot naming table and property. This
    table is the one piece of a schema handover `io.vanillabp:vanillabp-schema` does
-   not cover, because the schema belongs to gruelbox (story 95, decided against
+   not cover, because the schema belongs to gruelbox (decided against
    shipping foreign DDL and against replacing gruelbox for now); VanillaBP's own two
    tables are checked by `JdbcTaskDeliveryStore#validateSchemaExists` respectively the
    Quarkus dispatcher, all three through

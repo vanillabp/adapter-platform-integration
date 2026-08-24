@@ -40,15 +40,16 @@ import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.service.TaskId;
 import io.vanillabp.spi.service.WorkflowTask;
+import lombok.Getter;
 
 /**
- * Story 89: how old an open task is, and what VanillaBP does about it.
+ * How old an open task is, and what VanillaBP does about it.
  * <p>
  * A task left open by a <code>&#64;TaskId</code> handler is answered from its delivery
  * record on every redelivery, which is what keeps the handler from running twice. The
  * record carries the moment the handler ran, so the core can measure how long the
- * application has owed that task its completion - the generic half of the story, which
- * holds for every BPMS. What is pinned here:
+ * application has owed that task its completion - the generic half, which holds for
+ * every BPMS. What is pinned here:
  * <ul>
  * <li>a redelivery of an open task reports COMPLETION_PENDING and does not touch the
  * workflow aggregate;</li>
@@ -73,13 +74,10 @@ public class OpenTaskAgeTest {
 
   public static class Aggregate {
 
+    @Getter
     String id;
 
     int invocations;
-
-    public String getId() {
-      return id;
-    }
 
   }
 
@@ -523,7 +521,7 @@ public class OpenTaskAgeTest {
   }
 
   @Test
-  @DisplayName("Story 97: every redelivery tells the store the record is still in use, and the age stays put")
+  @DisplayName("Every redelivery tells the store the record is still in use, and the age stays put")
   public void aRedeliveryKeepsTheRecordAliveWithoutMovingTheAge() {
 
     final var testee = registry(properties(Duration.ofHours(1), null, null, null));

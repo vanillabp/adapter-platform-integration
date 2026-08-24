@@ -12,6 +12,8 @@ import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartCont
  * One <code>&#64;WorkflowStartedByBpms</code> method of a workflow service class,
  * with its parameter binders and the start event it serves.
  */
+// see decision 1 in the repository's README.md
+@SuppressWarnings("LombokGetterMayBeUsed")
 public class BpmsInitiatedStartHandler {
 
   /**
@@ -110,7 +112,7 @@ public class BpmsInitiatedStartHandler {
 
   /**
    * The version specification(s) this method names, for messages about a method
-   * serving no version the BPMS holds (story 57).
+   * serving no version the BPMS holds.
    *
    * @return The specifications, comma separated
    */

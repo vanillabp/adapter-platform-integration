@@ -31,7 +31,7 @@ import lombok.extern.slf4j.Slf4j;
  * <code>vanillabp-phase-two-outbox</code>) so both platforms share the same store
  * layout.
  * <p>
- * <strong>One transaction where MongoDB Panache provides a session (story 70):</strong>
+ * <strong>One transaction where MongoDB Panache provides a session:</strong>
  * MongoDB Panache enlists itself in the Narayana transaction - it starts a
  * <code>ClientSession</code> with a MongoDB transaction and keeps it as a transaction
  * resource - and this outbox writes through that very session. Aggregate and outbox entry
@@ -97,7 +97,7 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
   }
 
   /**
-   * The adapter ids the OPEN entries of one BPMN process are waiting for (story 120): an
+   * The adapter ids the OPEN entries of one BPMN process are waiting for: an
    * id which is not configured any more means that it was renamed or removed too early,
    * and both leave the workflow of a START entry unstarted.
    */
@@ -176,7 +176,7 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
         .append("nextAttemptAt", java.util.Date.from(now));
     // the session of the running transaction where MongoDB Panache provides one: the
     // entry then commits with the aggregate instead of being written immediately
-    // (story 70)
+    //
     final var session = io.vanillabp.integration.runtime.mongo.MongoSessions
         .activeSession(txRegistry);
     // within a MongoDB transaction a duplicate-key error would abort the whole

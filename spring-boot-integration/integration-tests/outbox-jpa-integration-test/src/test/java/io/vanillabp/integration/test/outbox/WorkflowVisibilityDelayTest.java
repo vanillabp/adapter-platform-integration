@@ -22,7 +22,7 @@ import io.vanillabp.spi.process.ProcessService;
 import io.vanillabp.spi.process.WorkflowNotFoundException;
 
 /**
- * Story 54: operating on a workflow which was started moments ago, on a BPMS whose
+ * Operating on a workflow which was started moments ago, on a BPMS whose
  * awareness probe reads an eventually consistent model.
  * <p>
  * The everyday sequence is "start a workflow, then correlate the message which lets
@@ -77,7 +77,7 @@ public class WorkflowVisibilityDelayTest {
   /**
    * Starts a workflow and returns right after the commit, deliberately WITHOUT
    * waiting for phase two: on a remote BPMS the instance is created asynchronously,
-   * and an operation in the next transaction is exactly the case this story is
+   * and an operation in the next transaction is exactly the case the visibility delay is
    * about. Scheduling the start already records which adapter holds the workflow.
    */
   private Aggregate started(
@@ -150,7 +150,7 @@ public class WorkflowVisibilityDelayTest {
     // the message names the cause which applies on an eventually consistent BPMS
     assertTrue(
         exception.getMessage().contains("searchable"),
-        () -> exception.getMessage());
+        exception::getMessage);
 
   }
 

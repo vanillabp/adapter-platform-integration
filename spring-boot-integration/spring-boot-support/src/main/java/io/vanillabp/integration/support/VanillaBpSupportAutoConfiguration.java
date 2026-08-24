@@ -5,7 +5,7 @@ import org.springframework.context.annotation.Bean;
 
 /**
  * The only autoconfiguration of this module: it reports an application which has a
- * workflow module but no BPMS adapter (story 81).
+ * workflow module but no BPMS adapter.
  * <p>
  * Everything else VanillaBP does on Spring Boot is configured by
  * <code>vanillabp-spring-boot-integration</code>, which a BPMS adapter brings along. This

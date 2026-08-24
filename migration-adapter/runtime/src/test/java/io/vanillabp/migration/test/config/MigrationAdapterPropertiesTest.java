@@ -83,7 +83,7 @@ public class MigrationAdapterPropertiesTest {
   @Test
   public void testNoResourceLocationGivenIsDerivedByConvention() {
 
-    // story 34: no resources-location configured is the NORMAL case - the location
+    // No resources-location configured is the NORMAL case - the location
     // follows the convention '<workflow module>/processes/<adapter id>'
     final var properties = new MigrationAdapterProperties();
     properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
@@ -107,8 +107,8 @@ public class MigrationAdapterPropertiesTest {
   public void testResourcesLocationOfTheApplicationsOwnWorkflowModule() {
 
     // the single workflow module declared by the application's MAIN artifact: its
-    // BPMN lives below 'processes/' - no module id in the path. Story 68: the
-    // module's OWN location is searched first, because a workflow module tested
+    // BPMN lives below 'processes/' - no module id in the path. The module's OWN
+    // location is searched first, because a workflow module tested
     // inside its own Maven module is the main artifact as well while its files sit
     // below the module id
     final var properties = new MigrationAdapterProperties();
@@ -134,7 +134,7 @@ public class MigrationAdapterPropertiesTest {
   public void testOneLocationOnlyForAModuleWhichIsNotTheMainArtifact() {
 
     // a module shipped as its own artifact keeps ONE location: the root of the
-    // application is another module's business (story 68)
+    // application is another module's business
     final var properties = new MigrationAdapterProperties();
     properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
     properties.setPrioritizedAdapters(List.of("adapter-test"));
@@ -439,7 +439,7 @@ public class MigrationAdapterPropertiesTest {
         IllegalStateException.class,
         () -> properties.validateProperties(List.of("adapter1", "adapter2"), List.of("test-module")));
 
-    // story 34: SEVERAL adapter types in the classpath are never guessed - the
+    // SEVERAL adapter types in the classpath are never guessed - the
     // message asks for the ORDER, not for adapter sections
     assertTrue(
         exception.getMessage().contains("Several VanillaBP adapters were found in classpath"),
@@ -453,7 +453,7 @@ public class MigrationAdapterPropertiesTest {
   @Test
   public void testSingleAdapterTypeInClasspathNeedsNoConfigurationAtAll() {
 
-    // story 34's headline: one adapter dependency, one workflow module, no property
+    // the headline: one adapter dependency, one workflow module, no property
     final var properties = new MigrationAdapterProperties();
 
     properties.validateProperties(List.of("only-adapter"), List.of("test-module"));
@@ -507,7 +507,7 @@ public class MigrationAdapterPropertiesTest {
   @Test
   public void testWorkflowLevelConfigurationIsAccepted() {
 
-    // regression for the former "not yet supported" rejection (story 27): a
+    // regression for the former "not yet supported" rejection: a
     // workflow-level prioritized-adapters override passes the validation and is
     // resolved by getPrioritizedAdaptersFor
     final var properties = new MigrationAdapterProperties();
@@ -761,7 +761,7 @@ public class MigrationAdapterPropertiesTest {
         .builder()
         .adapters(java.util.Map.of("c8", adapterUsingPrefixes()))
         .prioritizedAdapters(java.util.List.of("c8"))
-        .workflowModules(java.util.Map.<String, WorkflowModuleAdapterProperties>of(
+        .workflowModules(java.util.Map.of(
             "loan__approval", new WorkflowModuleAdapterProperties()))
         .build();
     final var exception = org.junit.jupiter.api.Assertions.assertThrows(
@@ -776,7 +776,7 @@ public class MigrationAdapterPropertiesTest {
         .builder()
         .adapters(java.util.Map.of("c8", AdapterConfigProperties.ofType("camunda8")))
         .prioritizedAdapters(java.util.List.of("c8"))
-        .workflowModules(java.util.Map.<String, WorkflowModuleAdapterProperties>of(
+        .workflowModules(java.util.Map.of(
             "loan__approval", new WorkflowModuleAdapterProperties()))
         .build()
         .validateWorkflowModuleIdsAgainstPrefixing();

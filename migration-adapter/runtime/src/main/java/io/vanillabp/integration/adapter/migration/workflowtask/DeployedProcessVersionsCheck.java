@@ -14,11 +14,11 @@ import io.vanillabp.integration.adapter.spi.version.DeployedProcessVersion;
 import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 
 /**
- * The startup check of story 57: a BPMS keeps every version of a process it was ever
- * given, and workflows keep running on them, while the application only brings the
- * newest model with it. Whether the application still SERVES the older versions is
- * therefore a question nobody asked in version 2 until now, and the first news of a
- * version nobody serves used to be an incident on a live workflow.
+ * The startup check for old process versions: a BPMS keeps every version of a process
+ * it was ever given, and workflows keep running on them, while the application only
+ * brings the newest model with it. Whether the application still SERVES the older
+ * versions is therefore a question worth asking while it boots - without it the first
+ * news of a version nobody serves is an incident on a live workflow.
  * <p>
  * The check runs once per BPMN process after its workflow module was deployed. Reading
  * an old model belongs to the adapter ({@link ProcessVersionCatalogAccess}), deciding
@@ -65,8 +65,8 @@ public class DeployedProcessVersionsCheck {
   }
 
   /**
-   * What the check reads from an adapter's catalog - narrowed to the two questions of
-   * this story so a test double does not have to be a whole catalog.
+   * What the check reads from an adapter's catalog - narrowed to its two questions so a
+   * test double does not have to be a whole catalog.
    */
   public interface ProcessVersionCatalogAccess {
 
@@ -187,7 +187,7 @@ public class DeployedProcessVersionsCheck {
   }
 
   /**
-   * Reports the methods which serve no version worth serving (story 57). "Worth
+   * Reports the methods which serve no version worth serving. "Worth
    * serving" is what the BPMS holds minus what the configuration faded out, so fading
    * out a version also tells the developer which methods just became pointless - the
    * code-side counterpart of <code>outfaded-versions-in-use</code>, which speaks about

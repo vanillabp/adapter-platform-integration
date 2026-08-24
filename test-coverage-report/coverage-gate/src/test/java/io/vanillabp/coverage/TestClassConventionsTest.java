@@ -11,7 +11,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.TestClassConventions;
 
 /**
- * The gate of story 108, in the module which already gates the repository as a whole:
+ * A gate in the module which already gates the repository as a whole:
  * every test class registers {@link SuppressOutputExtension}.
  * <p>
  * It sits here and not in every module because the check reads sources, so one run

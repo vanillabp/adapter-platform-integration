@@ -17,7 +17,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
  * Validate properties read from application and workflow module properties
- * respecting additional profiles. Story 101: the profile-specific file of a
+ * respecting additional profiles: the profile-specific file of a
  * workflow module beats its plain one, and both lose against the application.
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -55,7 +55,7 @@ public class AdditionalProfileTest {
         Map.of(
             "test-module", 21, // loaded from test-module-testprofile.yaml
             "multi-bpmn-module", 121, // loaded from multi-bpmn-module-testprofile.yaml
-            // story 101: multi-bpmn-module-testprofile.yaml also sets this key, and loses -
+            // multi-bpmn-module-testprofile.yaml also sets this key, and loses -
             // application.yaml is the strongest source of the application configuring it
             "no-module", 48),
         workflowModules);

@@ -12,10 +12,10 @@ import jakarta.inject.Inject;
 import jakarta.transaction.TransactionSynchronizationRegistry;
 
 /**
- * Quarkus implementation of the adapter-facing {@link PreCommitRegistrar} (story 87).
+ * Quarkus implementation of the adapter-facing {@link PreCommitRegistrar}.
  * <p>
  * It resolves the transaction runner of the workflow aggregate first, so a phase-one check
- * hooks into the unit of work VanillaBP actually uses - which since story 70 may be one the
+ * hooks into the unit of work VanillaBP actually uses - which may be one the
  * APPLICATION contributed. The resolution is the same one the process services use
  * ({@link QuarkusTransactionRunnerResolver}), built from the same beans, and it caches per
  * aggregate class.

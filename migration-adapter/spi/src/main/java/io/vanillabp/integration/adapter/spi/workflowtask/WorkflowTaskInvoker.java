@@ -48,7 +48,7 @@ public interface WorkflowTaskInvoker {
    * non-interrupting event subprocess. Called during <code>wireBpmn</code>, since
    * only the adapter can read its BPMN dialect.
    * <p>
-   * What it means is the core's decision (story 59): concurrent tokens mean two
+   * What it means is the core's decision: concurrent tokens mean two
    * branches writing the same workflow aggregate, and an aggregate without a version
    * attribute loses the writes of whichever branch commits first, without any error.
    * The core knows the aggregate class, so it warns once per BPMN process - naming
@@ -110,7 +110,7 @@ public interface WorkflowTaskInvoker {
 
   /**
    * The values shared with the BPMS, read within the transaction of the CALLER
-   * instead of a new one - what an EMBEDDED engine needs (story 66).
+   * instead of a new one - what an EMBEDDED engine needs.
    * <p>
    * An embedded engine invokes a <code>&#64;WorkflowTask</code> handler inside its own
    * transaction and completes the task in the same one, so the values have to be read
@@ -151,7 +151,7 @@ public interface WorkflowTaskInvoker {
    * Whether the workflow aggregate of the given BPMN process HAS such an attribute -
    * answered from the aggregate's class, so no aggregate is loaded.
    *
-   * @deprecated Story 66 pushes the shared values as process variables, so an embedded
+   * @deprecated The shared values are pushed as process variables, so an embedded
    *             engine resolves expressions against them like every other BPMS. This
    *             method serves the MIGRATION fallback of the Camunda 7 adapter only (an
    *             application upgrading from version 1 has no variables in its running
@@ -173,7 +173,7 @@ public interface WorkflowTaskInvoker {
    * Reads an attribute of the workflow aggregate identified by the given serialized ID,
    * within the CALLER's transaction - getter, boolean getter or field, in this order.
    *
-   * @deprecated The migration fallback of story 66, removed in 2.1 - see
+   * @deprecated The migration fallback, removed in 2.1 - see
    *             {@link #workflowAggregateHasProperty(String, String, String)}.
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
@@ -191,7 +191,7 @@ public interface WorkflowTaskInvoker {
 
   /**
    * Which of the given names are attributes of the workflow aggregate that are NOT
-   * shared with the BPMS - the question behind the startup check of story 66.
+   * shared with the BPMS - the question behind the startup check for such expressions.
    * <p>
    * An embedded engine can read the BPMN model, and only the core knows what an
    * aggregate shares. So the adapter collects the identifiers its models read (a
@@ -221,7 +221,7 @@ public interface WorkflowTaskInvoker {
   /**
    * Whether a <code>&#64;WorkflowTask</code> method is registered for the given
    * task definition (or BPMN activity ID) - used for OPTIONAL notifications
-   * (user-task lifecycle events, story 24): the adapter checks before invoking so
+   * (user-task lifecycle events): the adapter checks before invoking so
    * a user task without a handler is silently skipped instead of raising the
    * guiding no-handler error meant for mandatory service tasks.
    *
@@ -249,7 +249,7 @@ public interface WorkflowTaskInvoker {
    * {@link TaskInvocationContext#getTaskParameter(String)} call one name at a time,
    * and only once the delivery is already there.
    * <p>
-   * Several methods may serve one element (different process versions, story 48), so
+   * Several methods may serve one element (different process versions), so
    * the answer is the UNION of their parameters: the delivery has to satisfy
    * whichever of them runs. The names are sorted and duplicate-free, which is what a
    * subscription comparing itself across restarts needs (a Camunda 8 job stream is
@@ -283,7 +283,7 @@ public interface WorkflowTaskInvoker {
    * continues the same business case and has to reach the same aggregate, whereas a
    * process with an aggregate of its own must not be handed the caller's identity.
    * Camunda 7 needs the answer because it does not pass its business key - which
-   * carries the aggregate's ID - to a called process on its own (story 61).
+   * carries the aggregate's ID - to a called process on its own.
    * <p>
    * The default is <code>false</code>: the core answers this, and a test double of
    * this SPI should not invent an answer which makes an adapter change a model.
@@ -316,7 +316,7 @@ public interface WorkflowTaskInvoker {
    * soon as the expression returns.
    * <p>
    * ONE such method is enough for the answer to be <code>true</code>: several
-   * methods may serve one element (different process versions, story 48), and an
+   * methods may serve one element (different process versions), and an
    * element which cannot stay open is wired wrongly as soon as any of them wants to
    * keep it open.
    *
@@ -345,7 +345,7 @@ public interface WorkflowTaskInvoker {
    * worker of a REMOTE BPMS completing a task after a
    * <code>&#64;WorkflowTask</code> method ran: the engine only sees what the
    * adapter pushes, so a gateway right after the task would otherwise evaluate the
-   * values of the last sync point (story 28b).
+   * values of the last sync point.
    * <p>
    * The aggregate is loaded in its OWN transaction - the task's transaction is
    * committed at that point (the at-least-once order load-invoke-save-commit-
@@ -425,7 +425,7 @@ public interface WorkflowTaskInvoker {
 
   /**
    * The version the BPMS assigned to the model THIS boot deployed, reported by the
-   * adapter right after its deployment (story 57). It tells the core two things it
+   * adapter right after its deployment. It tells the core two things it
    * cannot know otherwise: which versions of that process are OLDER, so the startup
    * check knows what to look at, and which version must never be covered by
    * <code>outfaded-versions</code> - fading out the version the application just

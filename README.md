@@ -121,6 +121,8 @@ This repository contains the following VanillaBP functionality:
 These are the conventions the current implementation follows. Keeping to them is what makes a new feature reach all
 platforms at once — the details and their reasoning are in each module's `README.md` and in
 [`UPGRADE.md`](./UPGRADE.md), which records every breaking change and why it was made.
+They are not the citation targets of the code: what a comment points at is an entry of the
+[decision log](#decision-log) further down.
 
 1. **Features are implemented in `migration-adapter`** (plain Java). A platform integration only does what only it
    can do: read configuration, scan/analyze business code, create beans, run transactions. If a feature needs
@@ -143,7 +145,7 @@ platforms at once — the details and their reasoning are in each module's `READ
 8. **A sentence which promises behavior is part of the behavior.** A javadoc, `README.md` or wiki sentence promising
    something either has a test which fails when that stops being true, or it says that it is an assumption and what
    would disprove it. A story which changes behavior re-reads the claims about that behavior before it is done
-   (story 106 walked the SPIs and the wikis once to start from a clean state).
+   (the SPIs and the wikis were walked once to start from a clean state).
 
 ### Building
 
@@ -160,6 +162,22 @@ mvn install verify
 necessary because the Quarkus integration tests load modules not from the
 `target` directories of submodules, but from the local Maven repository
 populated by `mvn install`.
+
+## Decision log
+
+Decisions this repository's code points at. A number is handed out once and never reused or
+renumbered, so a citation stays resolvable; a decision which gets overturned keeps its entry,
+marked as superseded and naming the entry which replaced it.
+
+### 1. A class opens its fields one by one, not as a whole
+
+The process service, the delivery store and the handlers of the core hold dozens of fields,
+most of them collaborators nobody outside the class needs. Which of them a caller may read
+belongs to the surface of the class, so an accessor is declared per field, and `@Getter` on the
+class is refused even where an IDE offers it: it would publish the current field list and then
+keep publishing whatever field a later change adds.
+`@SuppressWarnings("LombokGetterMayBeUsed")` on such a class is what keeps that offer from
+coming back.
 
 ## Noteworthy & Contributors
 

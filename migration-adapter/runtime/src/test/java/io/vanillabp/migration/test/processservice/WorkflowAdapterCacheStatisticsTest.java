@@ -16,7 +16,7 @@ import io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapter
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * What the election cache reports about itself (story 58): the bounds come from the
+ * What the election cache reports about itself: the bounds come from the
  * configuration, an entry dropped for lack of space before it was ever read is told
  * apart from one which did its job, and the warning about eviction pressure appears
  * only where hints were really lost - and then at most once per hour.

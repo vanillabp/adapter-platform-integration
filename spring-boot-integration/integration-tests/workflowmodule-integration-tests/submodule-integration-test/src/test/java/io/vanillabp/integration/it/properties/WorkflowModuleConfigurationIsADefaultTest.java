@@ -15,7 +15,7 @@ import io.vanillabp.integration.test.TestApplication;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Story 101: a file of a workflow module ships defaults. The application wins
+ * A file of a workflow module ships defaults. The application wins
  * over it, whichever of its own files carries the value.
  *
  * <p>Three sources of the same key meet here: <i>test-module.yaml</i> inside the

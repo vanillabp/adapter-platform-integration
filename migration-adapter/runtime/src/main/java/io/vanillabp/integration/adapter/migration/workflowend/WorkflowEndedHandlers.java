@@ -47,7 +47,7 @@ public class WorkflowEndedHandlers {
 
   /**
    * The &#64;WorkflowEnded methods of that BPMN process whose version specification
-   * matches NONE of the given versions (story 57): the versions the BPMS holds, minus
+   * matches NONE of the given versions: the versions the BPMS holds, minus
    * the ones the configuration faded out. Such a method never runs, and the start says
    * so.
    *
@@ -209,7 +209,7 @@ public class WorkflowEndedHandlers {
   /**
    * Tells the application that a workflow ended: loads the aggregate, calls the
    * method and saves the aggregate, in one transaction. Where the workflow module
-   * releases the records of its processed task deliveries (story 76), that deletion runs
+   * releases the records of its processed task deliveries, that deletion runs
    * in the same transaction - and then this runs even without a
    * <code>&#64;WorkflowEnded</code> method, which is why the adapters attach their
    * listener in that case as well.

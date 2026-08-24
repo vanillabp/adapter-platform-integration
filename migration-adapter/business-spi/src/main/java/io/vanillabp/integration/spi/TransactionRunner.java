@@ -116,7 +116,7 @@ public interface TransactionRunner {
 
   /**
    * Runs the given check as LATE as possible: right before the transaction currently
-   * open on this thread commits (story 87).
+   * open on this thread commits.
    * <p>
    * A remote BPMS is asked in phase one whether an operation still makes sense - is the
    * task still there, does the model know this message - and the answer can go stale
@@ -152,7 +152,7 @@ public interface TransactionRunner {
    * exception. Implementations unwrap the causes, because both platforms wrap.
    * <p>
    * The answer decides whether VanillaBP logs its guiding message about a version
-   * conflict (story 59) - nothing else: the exception is propagated unchanged either
+   * conflict - nothing else: the exception is propagated unchanged either
    * way, VanillaBP never retries a conflict itself.
    *
    * @param failure The exception the transactional work or its commit produced

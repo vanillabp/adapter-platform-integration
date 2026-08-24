@@ -36,7 +36,7 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Sizing and observing the election cache on Spring Boot (story 58): the bounds are
+ * Sizing and observing the election cache on Spring Boot: the bounds are
  * bound from <code>vanillabp.workflow-adapter-cache.*</code> and validated at
  * startup, the statistics are published as Micrometer meters where the application
  * brings Micrometer, and an application-provided cache still replaces the default

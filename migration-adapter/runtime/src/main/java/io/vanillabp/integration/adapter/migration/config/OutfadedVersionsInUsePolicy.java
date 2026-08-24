@@ -2,7 +2,7 @@ package io.vanillabp.integration.adapter.migration.config;
 
 /**
  * What happens when workflows still run on a process version the configuration faded
- * out (<code>vanillabp.adapters.&lt;id&gt;.outfaded-versions</code>, story 57).
+ * out (<code>vanillabp.adapters.&lt;id&gt;.outfaded-versions</code>).
  * <p>
  * Those workflows will run into an incident at their next task of an unserved
  * definition, so the finding is FATAL either way. What the operator decides is whether

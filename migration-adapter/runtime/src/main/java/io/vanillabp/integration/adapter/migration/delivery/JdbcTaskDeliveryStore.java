@@ -26,7 +26,7 @@ import lombok.extern.slf4j.Slf4j;
  * loser learns it from the constraint violation ({@link #record(TaskDelivery)} returns
  * <code>false</code> then, exactly like a duplicate outbox entry). The only column which
  * ever changes afterwards is <code>LAST_SEEN_AT</code>, the moment the BPMS last
- * redelivered the task the record answers - what the retention counts from (story 97).
+ * redelivered the task the record answers - what the retention counts from.
  * <p>
  * The DDL is kept portable the same way the Quarkus outbox does it: table existence is
  * checked via JDBC metadata (<code>CREATE TABLE IF NOT EXISTS</code> is not supported
@@ -36,6 +36,8 @@ import lombok.extern.slf4j.Slf4j;
  * core hashes longer keys before they ever reach a store.
  */
 @Slf4j
+// see decision 1 in the repository's README.md
+@SuppressWarnings("LombokGetterMayBeUsed")
 public class JdbcTaskDeliveryStore {
 
   /**
@@ -50,7 +52,7 @@ public class JdbcTaskDeliveryStore {
       WHERE DELIVERY_KEY = ?""";
 
   /**
-   * The adapter ids the OPEN records of one BPMN process belong to (story 120). Asked once
+   * The adapter ids the OPEN records of one BPMN process belong to. Asked once
    * per BPMN process at startup, never at runtime, and answered from the same index the
    * cleanup uses; a record written before ADAPTER_ID existed carries none and is skipped.
    */
@@ -164,7 +166,7 @@ public class JdbcTaskDeliveryStore {
   }
 
   /**
-   * The adapter ids the OPEN records of one BPMN process belong to (story 120): a record
+   * The adapter ids the OPEN records of one BPMN process belong to: a record
    * whose outcome is <code>COMPLETION_PENDING</code> answers redeliveries of a task the
    * application has not completed yet, so its adapter id is one the configuration still
    * has to know.
@@ -275,7 +277,7 @@ public class JdbcTaskDeliveryStore {
   /**
    * Remembers that the record of this delivery is still answering the redeliveries of an
    * open task, so the retention has to count from now rather than from the moment the
-   * handler ran (story 97). Nothing is written here - the key is collected and the next
+   * handler ran. Nothing is written here - the key is collected and the next
    * {@link #deleteExpired(Duration)} writes what accumulated.
    *
    * @param deliveryKey The delivery's identity
@@ -423,7 +425,7 @@ public class JdbcTaskDeliveryStore {
           new AddedColumn(
               "LAST_SEEN_AT", "TIMESTAMP (the type your database uses for the existing column RECORDED_AT), filled with the value of RECORDED_AT and NOT NULL", "the records of the tasks your application leaves open cannot be kept alive - they would expire while the tasks are still being redelivered"),
           new AddedColumn(
-              "ADAPTER_ID", "VARCHAR(255) (nullable: a record written before the column existed has no adapter id)", "VanillaBP cannot tell at startup that an adapter id which open records still belong to is not configured any more, which is what a renamed adapter id looks like (story 120)"));
+              "ADAPTER_ID", "VARCHAR(255) (nullable: a record written before the column existed has no adapter id)", "VanillaBP cannot tell at startup that an adapter id which open records still belong to is not configured any more, which is what a renamed adapter id looks like"));
 
   /**
    * A column a later version of VanillaBP added: its name, the statement which adds it and
@@ -509,13 +511,13 @@ public class JdbcTaskDeliveryStore {
 
   /**
    * Verifies that the table exists AND carries the columns this version writes, for an
-   * application which creates its schema itself (story 75).
+   * application which creates its schema itself.
    * <p>
    * Without this check a missing table surfaces at the first delivery, which is hours after the
    * deployment and looks like a bug of the application. The message names the table, the property
    * which would have created it and the artifact which contains the statements.
    * <p>
-   * The columns are checked for the same reason (story 97): an application which applied an
+   * The columns are checked for the same reason: an application which applied an
    * earlier changelog of VanillaBP has the table but not everything the current version writes
    * into it, and a table which exists would otherwise pass the check and fail at the first
    * delivery.

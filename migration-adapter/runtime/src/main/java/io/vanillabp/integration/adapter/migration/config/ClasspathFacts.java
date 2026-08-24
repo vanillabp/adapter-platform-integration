@@ -6,7 +6,7 @@ import java.util.List;
  * What the platform knows about the application WITHOUT reading any
  * <code>vanillabp.*</code> property: which adapter types the classpath provides
  * and which workflow modules it contains. These facts are the basis of
- * convention-over-configuration (story 34): everything derivable from them is
+ * convention-over-configuration: everything derivable from them is
  * derived by {@link MigrationAdapterProperties#normalize(ClasspathFacts)} BEFORE
  * the validation runs - the validation rules themselves stay unchanged and apply
  * to derived entries exactly like to hand-written ones.

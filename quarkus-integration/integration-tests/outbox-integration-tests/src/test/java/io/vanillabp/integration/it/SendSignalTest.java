@@ -22,7 +22,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * Broadcasting a BPMN signal on Quarkus (story 42) with the dummy adapter forced to
+ * Broadcasting a BPMN signal on Quarkus with the dummy adapter forced to
  * require a two-phase commit: the broadcast of a REMOTE BPMS may only happen after
  * the local transaction was committed, which is what the outbox entry is for. A
  * rolled-back transaction broadcasts nothing at all.

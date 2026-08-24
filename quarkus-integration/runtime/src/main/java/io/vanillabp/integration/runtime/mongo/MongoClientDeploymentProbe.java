@@ -13,10 +13,10 @@ import jakarta.inject.Singleton;
  * Asks the MongoDB deployment of the application whether it is a replica set, by running the
  * <code>hello</code> command against it.
  * <p>
- * The one place naming a MongoDB type on the way to the coverage verdict of story 70. It is
+ * The one place naming a MongoDB type on the way to the coverage verdict. It is
  * registered as a bean only where the <code>quarkus-mongodb-client</code> extension is
  * present, so an application without MongoDB never links it - which is what lets such an
- * application be built as a native image (story 85).
+ * application be built as a native image.
  */
 @Singleton
 public class MongoClientDeploymentProbe implements MongoDeploymentProbe {

@@ -53,7 +53,7 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
    * <code>List&lt;MigratableProcessService&lt;Object&gt;&gt;</code>, flattened into
    * the collected process services. Synthetic beans created from runtime
    * configuration (one process service per configured adapter id,
-   * adapter-config-model story 26d) cannot be registered as individual element
+   * adapter config model) cannot be registered as individual element
    * beans on Quarkus - a single List bean per adapter is the documented shape
    * there. The element type parameter is LITERALLY {@code Object} by convention
    * (CDI's parameterized-type matching of nested wildcards is not reliable across
@@ -104,7 +104,7 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
 
   /**
    * Application-provided attributions of aggregates to transaction runners - the hook of
-   * story 70 for a storage the platform does not manage.
+   * for a storage the platform does not manage.
    */
   @Inject
   @Any
@@ -166,7 +166,7 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
   Instance<io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics> workflowAdapterCacheStatistics;
 
   /**
-   * What deliveries of this process are counted into (story 92); unsatisfied where
+   * What deliveries of this process are counted into; unsatisfied where
    * the application uses no Micrometer extension.
    */
   @Inject
@@ -278,7 +278,7 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
     processServicesByKey.put(
         "%s|%s".formatted(getWorkflowModuleId(), getBpmnProcessId()),
         migrationProcessService);
-    // story 107: an awareness probe is asked about a workflow module AND every BPMN
+    // An awareness probe is asked about a workflow module AND every BPMN
     // process serving this aggregate there, secondary processes of the same
     // @WorkflowService included - they run on the same workflow
     final var processIdsByModule = new java.util.LinkedHashMap<String, java.util.List<String>>();
@@ -343,7 +343,7 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
     }
 
     // every process service of this aggregate answers for the processes of ITS workflow
-    // module (story 107)
+    // module
     moduleOfProcessService
         .forEach((
             processService,
@@ -593,7 +593,7 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
 
   /**
    * Whether nothing is open the aggregate could be persisted in. The question goes to the
-   * runner serving this aggregate (story 70): an application storing its aggregates in a
+   * runner serving this aggregate: an application storing its aggregates in a
    * system JTA does not cover has its own unit of work, and the JTA answer would be wrong
    * for it.
    */

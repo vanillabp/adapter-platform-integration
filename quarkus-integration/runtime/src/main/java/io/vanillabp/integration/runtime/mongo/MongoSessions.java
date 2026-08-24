@@ -7,8 +7,7 @@ import jakarta.transaction.TransactionSynchronizationRegistry;
 
 /**
  * Access to the MongoDB session of the running JTA transaction, which is what makes
- * VanillaBP's own MongoDB stores atomic with a workflow aggregate stored in MongoDB
- * (story 70).
+ * VanillaBP's own MongoDB stores atomic with a workflow aggregate stored in MongoDB.
  * <p>
  * MongoDB Panache enlists itself: writing an entity inside a JTA transaction makes it
  * start a {@link ClientSession}, begin a MongoDB transaction on it, keep the session as a

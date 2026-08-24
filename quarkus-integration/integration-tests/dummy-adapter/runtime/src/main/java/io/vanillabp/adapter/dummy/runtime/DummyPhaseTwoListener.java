@@ -21,7 +21,7 @@ public interface DummyPhaseTwoListener {
 
   /**
    * Adapter-id-aware variant called by the dummy (defaults to the id-less
-   * callback) - multi-adapter tests (migration scenario, story 25) override this
+   * callback) - multi-adapter tests (migration scenario) override this
    * one to assert WHICH dummy instance executed phase two.
    *
    * @param adapterId The dummy adapter's ID

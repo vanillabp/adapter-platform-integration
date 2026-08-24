@@ -2,7 +2,7 @@ package io.vanillabp.integration.spi;
 
 /**
  * A phase-two operation which failed for a reason repeating cannot fix - the adapter
- * said so (story 63).
+ * said so.
  * <p>
  * The outbox repeats a failed dispatch until the entry is blocked, which is what makes
  * an operation losing a concurrency conflict survivable. A failure the BPMS will

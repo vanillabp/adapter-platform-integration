@@ -42,7 +42,7 @@ public class QuarkusTransactionRunner implements TransactionRunner {
 
   /**
    * Registers an interposed JTA {@link Synchronization} whose
-   * {@link Synchronization#beforeCompletion()} runs the check (story 87), so a phase-one
+   * {@link Synchronization#beforeCompletion()} runs the check, so a phase-one
    * check of an adapter runs as late as the platform allows. Without an active transaction
    * the check runs immediately.
    */

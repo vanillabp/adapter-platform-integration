@@ -27,7 +27,7 @@ application which forgot the adapter dependency has no VanillaBP runtime at all 
 autoconfiguration below `runtime` is not on the classpath and cannot report anything. What
 such an application does have is `vanillabp-spring-boot-support`, because every workflow
 module compiles against it. That is why the check reporting a missing adapter
-(`NoBpmsAdapterCheck`, story 81) lives in the support module and not here: it is the only
+(`NoBpmsAdapterCheck`) lives in the support module and not here: it is the only
 VanillaBP code present in the case it was written for. Without it the bean container
 answers instead ("No qualifying bean of type `ProcessService<...>`"), a message mentioning
 neither an adapter nor VanillaBP.
@@ -73,8 +73,8 @@ The adapter-id set is always derived from the core properties
 
 ## The store of processed task deliveries
 
-`io.vanillabp.integration.delivery` implements the core's `TaskDeliveryLog` (story 51,
-the inbound counterpart of the outbox) twice, and `SpringTaskDeliveryLogResolver` picks
+`io.vanillabp.integration.delivery` implements the core's `TaskDeliveryLog` (the
+inbound counterpart of the outbox) twice, and `SpringTaskDeliveryLogResolver` picks
 one per workflow aggregate - the same resolution the phase-two outbox uses, since a
 record has to ride the aggregate's own transaction. The persistence technology behind an
 aggregate is detected once in `SpringPersistenceTechnology`, shared by both resolvers.
@@ -96,11 +96,11 @@ aggregate is detected once in `SpringPersistenceTechnology`, shared by both reso
   `TaskDeliveryRetentionCleanup`). Table and index are created from a
   `SmartInitializingSingleton`, not while the bean is built - the DDL must not
   materialize the data source before the application's configuration is complete.
-- The same run refreshes the records of the tasks which are still open (story 97): the core
+- The same run refreshes the records of the tasks which are still open: the core
   collects the keys the BPMS redelivered, `cleanUpExpiredRecords` writes them before it
   deletes anything, and the JDBC store batches while the MongoDB one bulk-writes.
 
-## What is published where (story 92)
+## What is published where
 
 Both contributions are optional dependencies of this module, so an application which brings
 neither boots unchanged.

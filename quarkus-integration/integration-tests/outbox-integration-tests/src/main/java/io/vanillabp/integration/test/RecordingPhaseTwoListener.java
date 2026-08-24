@@ -26,7 +26,7 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
 
   /**
    * Whether the failures this listener raises are the kind the dummy adapter reports
-   * as permanent (story 63).
+   * as permanent.
    */
   private volatile boolean failPermanently = false;
 
@@ -270,7 +270,7 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
 
   /**
    * Lets the next dispatches fail with a failure the adapter reports as PERMANENT -
-   * the store has to block such an entry right away (story 63).
+   * the store has to block such an entry right away.
    *
    * @param numberOfFailures How many dispatches fail
    */

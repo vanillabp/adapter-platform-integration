@@ -164,7 +164,7 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
   /**
    * @param transactionOutbox The gruelbox transaction outbox
    * @param dataSource The data source holding gruelbox' table, used to count the
-   *          entries waiting for their dispatch (story 92)
+   *          entries waiting for their dispatch
    * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree, naming the
    *          table where the application configured one of its own
    * @return The {@link PhaseTwoOutbox} used by the process services
@@ -274,7 +274,7 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
   /**
    * Verifies that the outbox table exists whenever gruelbox's schema migration is switched
    * off - by <code>vanillabp.outbox.create-schema</code> for an application applying its
-   * schema itself (story 75), or by a custom table name, which switches the migration off
+   * schema itself, or by a custom table name, which switches the migration off
    * as well since it only ever targets {@value #DEFAULT_OUTBOX_TABLE_NAME}.
    * <p>
    * Unlike VanillaBP's own tables this one belongs to gruelbox, so the message points to

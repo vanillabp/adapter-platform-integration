@@ -5,7 +5,7 @@ import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * The workflow service of the process-version acceptance test (story 48): one BPMN
+ * The workflow service of the process-version acceptance test: one BPMN
  * task served by three methods, told apart by the version of the deployed process -
  * two version ranges made of numbers and one naming a version tag.
  */

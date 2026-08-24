@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
  * {@link SuppressOutputExtension}, so a build log carries what a FAILING test printed
  * and nothing else.
  * <p>
- * Story 108 is why this is a check and not a sentence: the rule stood in the testing
+ * This is a check and not a sentence because the rule stood in the testing
  * conventions and in a checklist, and 13 of 373 test classes across two repositories
  * still did not follow it. All 13 were quiet at the time, which is why nobody noticed.
  * A class starts printing the day it gets a mock which warns, and then the noise

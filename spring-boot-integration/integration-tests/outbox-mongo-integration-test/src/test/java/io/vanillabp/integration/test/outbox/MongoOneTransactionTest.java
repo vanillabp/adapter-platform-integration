@@ -31,7 +31,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Acceptance test of story 70 on Spring Boot: an application storing EVERYTHING in MongoDB -
+ * Acceptance test on Spring Boot: an application storing EVERYTHING in MongoDB -
  * the aggregate in a MongoDB repository, the phase-two outbox and the log of processed task
  * deliveries in VanillaBP's MongoDB defaults - with no data source anywhere.
  * <p>

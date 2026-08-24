@@ -32,7 +32,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of workflows the BPMS starts on its own (story 41) on Quarkus,
+ * Acceptance test of workflows the BPMS starts on its own on Quarkus,
  * with the dummy adapter standing in for a BPMS reporting a timer or signal start:
  * the aggregate is built without a line of application code, a repeated
  * notification creates nothing twice, and an optional

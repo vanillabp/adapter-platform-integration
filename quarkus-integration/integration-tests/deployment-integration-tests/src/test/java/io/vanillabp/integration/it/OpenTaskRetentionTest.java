@@ -33,7 +33,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of story 97 on Quarkus, with the default JDBC-based delivery log: the
+ * Acceptance test on Quarkus, with the default JDBC-based delivery log: the
  * record which answers the redeliveries of an OPEN task outlives the retention as long as
  * the BPMS keeps redelivering that task, while the record of a task nobody hands out any
  * more expires as it always did. The age of the open task keeps being measured from the

@@ -26,8 +26,7 @@ import io.vanillabp.integration.spi.TaskDeliveryLog;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * An adapter id which the persisted state still names although the configuration does not
- * (story 120).
+ * An adapter id which the persisted state still names although the configuration does not.
  * <p>
  * VanillaBP persists the adapter id twice: an outbox entry of a START operation names the
  * adapter elected in phase one, and the delivery key of every record is built from the
@@ -355,11 +354,6 @@ public class PersistedAdapterIdTest {
   }
 
   /**
-   * A process service whose stores are already resolved - which is the state the check
-   * runs in: the platform integration calls it after the outbox and the delivery-log
-   * validations.
-   */
-  /**
    * The WARNings the check logged. "Normal" logging is off during tests, so the appender is
    * attached to the class which logs (the same pattern the delivery tests use).
    */
@@ -379,11 +373,16 @@ public class PersistedAdapterIdTest {
     return logWatcher.list
         .stream()
         .filter(event -> event.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.WARN))
-        .map(event -> event.getFormattedMessage())
+        .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
         .toList();
 
   }
 
+  /**
+   * A process service whose stores are already resolved - which is the state the check
+   * runs in: the platform integration calls it after the outbox and the delivery-log
+   * validations.
+   */
   private static MigrationProcessService<Object> serviceWith(
       final MigrationAdapterProperties properties,
       final PhaseTwoOutbox outbox,

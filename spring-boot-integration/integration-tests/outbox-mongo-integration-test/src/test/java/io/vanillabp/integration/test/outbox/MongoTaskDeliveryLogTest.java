@@ -29,7 +29,7 @@ import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The MongoDB store behind the inbound idempotency (story 51): a delivery record has to
+ * The MongoDB store behind the inbound idempotency: a delivery record has to
  * ride the transaction which persists the workflow aggregate, be unique by its delivery
  * key and disappear once its retention period passed. The TestContainers MongoDB runs as
  * a replica set, so record and aggregate really share one MongoDB transaction.
@@ -163,7 +163,7 @@ public class MongoTaskDeliveryLogTest {
   }
 
   @Test
-  @DisplayName("Story 76: an ended workflow releases its records - and only its own")
+  @DisplayName("An ended workflow releases its records - and only its own")
   public void theRecordsOfAnEndedWorkflowAreReleased() {
 
     transactionTemplate.executeWithoutResult(status -> {
@@ -189,7 +189,7 @@ public class MongoTaskDeliveryLogTest {
   }
 
   @Test
-  @DisplayName("Story 76: a record written after the end of the workflow survives the release")
+  @DisplayName("A record written after the end of the workflow survives the release")
   public void aRecordWrittenAfterTheNotificationSurvives() {
 
     // a moment safely before the record is written - see above on the resolution
@@ -238,7 +238,7 @@ public class MongoTaskDeliveryLogTest {
   }
 
   @Test
-  @DisplayName("Story 97: the record of a task which is still redelivered survives the retention")
+  @DisplayName("The record of a task which is still redelivered survives the retention")
   public void theRecordOfAnOpenTaskSurvivesTheRetention() {
 
     // this context runs with a retention of zero, which cannot tell a record kept from one
@@ -275,7 +275,7 @@ public class MongoTaskDeliveryLogTest {
   }
 
   @Test
-  @DisplayName("Story 97: more open tasks than one block are refreshed in blocks")
+  @DisplayName("More open tasks than one block are refreshed in blocks")
   public void moreOpenTasksThanOneBlockAreRefreshed() {
 
     final var anHourOfRetention = new MongoTaskDeliveryLog(

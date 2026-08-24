@@ -11,7 +11,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 /**
  * Steers the dummy adapters' awareness PER ADAPTER ID (multi-adapter election
- * tests, story 25) and records every probe so tests can assert which adapter was
+ * tests) and records every probe so tests can assert which adapter was
  * probed how often (e.g. that a cached election skips the walk).
  */
 @ApplicationScoped

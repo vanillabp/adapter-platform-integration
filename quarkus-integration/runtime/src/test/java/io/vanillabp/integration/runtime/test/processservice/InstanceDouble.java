@@ -13,7 +13,7 @@ import jakarta.enterprise.util.TypeLiteral;
 /**
  * A {@link Instance} over a fixed list - enough for the resolvers of the platform, which only
  * stream over their candidates, ask whether one is resolvable, and read the class a bean was
- * declared as from its {@link Handle} (story 80).
+ * declared as from its {@link Handle}.
  *
  * @param <T> The bean type
  */
@@ -56,7 +56,7 @@ final class InstanceDouble<T> implements Instance<T> {
 
   /**
    * Beans whose declared class differs from their runtime class - what a CDI client proxy
-   * looks like to the resolver (story 80).
+   * looks like to the resolver.
    *
    * @param <T> The bean type
    * @param beans The beans

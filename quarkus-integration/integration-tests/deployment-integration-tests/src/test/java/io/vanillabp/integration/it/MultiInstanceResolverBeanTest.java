@@ -29,7 +29,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Story 71: the resolver named by
+ * The resolver named by
  * <code>&#64;MultiInstanceElement(resolverBean = ...)</code> is a bean nothing injects.
  * Quarkus removes such beans while building the application, so VanillaBP's lookup
  * found nothing and every iteration of the task failed - with a message asking the

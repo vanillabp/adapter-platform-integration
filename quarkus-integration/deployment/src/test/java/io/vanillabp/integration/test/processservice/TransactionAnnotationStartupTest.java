@@ -16,7 +16,7 @@ import io.vanillabp.integration.test.adapter.TestMigratableProcessService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Startup check of story 40b on Quarkus: a <code>&#64;WorkflowTask</code> handler
+ * Startup check on Quarkus: a <code>&#64;WorkflowTask</code> handler
  * covered by a transaction annotation of the application would lose every change made
  * to the workflow aggregate as soon as a {@code TaskException} passes the annotation's
  * interceptor, and the rollback-only mark it sets cannot be cleared. So the boot fails,

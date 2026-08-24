@@ -17,14 +17,13 @@ import io.vanillabp.integration.adapter.migration.processservice.TransactionCove
 import io.vanillabp.integration.runtime.persistence.PanacheMongoActiveRecordAggregatePersistence;
 import io.vanillabp.integration.runtime.processservice.MongoDeploymentProbe;
 import io.vanillabp.integration.runtime.processservice.QuarkusTransactionRunnerResolver;
-import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.spi.TransactionRunnerAware;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.enterprise.inject.Instance;
 
 /**
- * Story 70 on Quarkus: which runner serves an aggregate. The platform's own runner is always
+ * Which runner serves an aggregate on Quarkus. The platform's own runner is always
  * usable here (JTA is a hard dependency of this extension), so what the resolution has to get
  * right is the order and the ambiguity.
  */
@@ -39,7 +38,7 @@ public class QuarkusTransactionRunnerResolverTest {
 
   /**
    * A runner an application wrote, and the client proxy the bean container puts in front
-   * of it (its name is what the message used to carry - story 80).
+   * of it (its name is what the message used to carry).
    */
   private static class UnitOfWork implements TransactionRunner {
 
@@ -138,7 +137,7 @@ public class QuarkusTransactionRunnerResolverTest {
 
     return new QuarkusTransactionRunnerResolver(
         InstanceDouble.of(awares), InstanceDouble.of(runners), InstanceDouble
-            .of(List.<AggregatePersistenceAware<?>>of()), noProbe(), PLATFORM_RUNNER);
+            .of(List.of()), noProbe(), PLATFORM_RUNNER);
 
   }
 
@@ -147,11 +146,11 @@ public class QuarkusTransactionRunnerResolverTest {
   public void plainRunnerBeanIsNamedByItsDeclaredClass() {
 
     final var testee = new QuarkusTransactionRunnerResolver(
-        InstanceDouble.of(List.<TransactionRunnerAware<?>>of()), InstanceDouble
+        InstanceDouble.of(List.of()), InstanceDouble
             .ofDeclaredAs(
-                List.<TransactionRunner>of(new UnitOfWork_ClientProxy()),
+                List.of(new UnitOfWork_ClientProxy()),
                 List.of(UnitOfWork.class)), InstanceDouble
-                    .of(List.<AggregatePersistenceAware<?>>of()), noProbe(), PLATFORM_RUNNER);
+                    .of(List.of()), noProbe(), PLATFORM_RUNNER);
 
     assertEquals(
         "the TransactionRunner bean '%s' of the application".formatted(UnitOfWork.class.getName()),
@@ -166,9 +165,9 @@ public class QuarkusTransactionRunnerResolverTest {
     final var testee = new QuarkusTransactionRunnerResolver(
         InstanceDouble
             .ofDeclaredAs(
-                List.<TransactionRunnerAware<?>>of(new OrderTransactions_ClientProxy()),
-                List.of(OrderTransactions.class)), InstanceDouble.of(List.<TransactionRunner>of()), InstanceDouble
-                    .of(List.<AggregatePersistenceAware<?>>of()), noProbe(), PLATFORM_RUNNER);
+                List.of(new OrderTransactions_ClientProxy()),
+                List.of(OrderTransactions.class)), InstanceDouble.of(List.of()), InstanceDouble
+                    .of(List.of()), noProbe(), PLATFORM_RUNNER);
 
     assertEquals(
         "the TransactionRunnerAware bean '%s' of the application"
@@ -184,12 +183,12 @@ public class QuarkusTransactionRunnerResolverTest {
     final var tiedAwares = new QuarkusTransactionRunnerResolver(
         InstanceDouble
             .ofDeclaredAs(
-                List.<TransactionRunnerAware<?>>of(
+                List.of(
                     new OrderTransactions_ClientProxy(),
                     new OrderTransactions_ClientProxy()),
                 List.of(OrderTransactions.class, OrderTransactions.class)), InstanceDouble
-                    .of(List.<TransactionRunner>of()), InstanceDouble
-                        .of(List.<AggregatePersistenceAware<?>>of()), noProbe(), PLATFORM_RUNNER);
+                    .of(List.of()), InstanceDouble
+                        .of(List.of()), noProbe(), PLATFORM_RUNNER);
     final var awareFailure = assertThrowsExactly(
         IllegalStateException.class,
         () -> tiedAwares.resolveFor(OrderAggregate.class));
@@ -199,11 +198,11 @@ public class QuarkusTransactionRunnerResolverTest {
     assertFalse(awareFailure.getMessage().contains("_ClientProxy"), awareFailure.getMessage());
 
     final var severalRunners = new QuarkusTransactionRunnerResolver(
-        InstanceDouble.of(List.<TransactionRunnerAware<?>>of()), InstanceDouble
+        InstanceDouble.of(List.of()), InstanceDouble
             .ofDeclaredAs(
-                List.<TransactionRunner>of(new UnitOfWork_ClientProxy(), new UnitOfWork_ClientProxy()),
+                List.of(new UnitOfWork_ClientProxy(), new UnitOfWork_ClientProxy()),
                 List.of(UnitOfWork.class, UnitOfWork.class)), InstanceDouble
-                    .of(List.<AggregatePersistenceAware<?>>of()), noProbe(), PLATFORM_RUNNER);
+                    .of(List.of()), noProbe(), PLATFORM_RUNNER);
     final var runnerFailure = assertThrowsExactly(
         IllegalStateException.class,
         () -> severalRunners.resolveFor(OrderAggregate.class));
@@ -219,9 +218,9 @@ public class QuarkusTransactionRunnerResolverTest {
   public void withoutBeanMetadataTheRuntimeClassIsNamed() {
 
     final var testee = new QuarkusTransactionRunnerResolver(
-        InstanceDouble.of(List.<TransactionRunnerAware<?>>of()), InstanceDouble
-            .ofWithoutMetadata(List.<TransactionRunner>of(new UnitOfWork_ClientProxy())), InstanceDouble
-                .of(List.<AggregatePersistenceAware<?>>of()), noProbe(), PLATFORM_RUNNER);
+        InstanceDouble.of(List.of()), InstanceDouble
+            .ofWithoutMetadata(List.of(new UnitOfWork_ClientProxy())), InstanceDouble
+                .of(List.of()), noProbe(), PLATFORM_RUNNER);
 
     assertEquals(
         "the TransactionRunner bean '%s' of the application"
@@ -317,19 +316,19 @@ public class QuarkusTransactionRunnerResolverTest {
 
   /**
    * What an application without the MongoDB client extension has: no probe at all, which is
-   * the whole point of story 85 - nothing on the way to the verdict names a MongoDB type,
+   * the whole point - nothing on the way to the verdict names a MongoDB type,
    * so a native image of such an application links.
    */
   private static Instance<MongoDeploymentProbe> noProbe() {
 
-    return InstanceDouble.of(List.<MongoDeploymentProbe>of());
+    return InstanceDouble.of(List.of());
 
   }
 
   private static Instance<MongoDeploymentProbe> probeAnswering(
       final Boolean replicaSet) {
 
-    return InstanceDouble.of(List.<MongoDeploymentProbe>of(() -> replicaSet));
+    return InstanceDouble.of(List.of(() -> replicaSet));
 
   }
 
@@ -337,11 +336,11 @@ public class QuarkusTransactionRunnerResolverTest {
       final Instance<MongoDeploymentProbe> probes) {
 
     return new QuarkusTransactionRunnerResolver(
-        InstanceDouble.of(List.<TransactionRunnerAware<?>>of()), InstanceDouble
-            .of(List.<TransactionRunner>of()), InstanceDouble
+        InstanceDouble.of(List.of()), InstanceDouble
+            .of(List.of()), InstanceDouble
                 .of(
                     List
-                        .<AggregatePersistenceAware<?>>of(
+                        .of(
                             new PanacheMongoActiveRecordAggregatePersistence<>(ShipmentAggregate.class))), probes, PLATFORM_RUNNER);
 
   }

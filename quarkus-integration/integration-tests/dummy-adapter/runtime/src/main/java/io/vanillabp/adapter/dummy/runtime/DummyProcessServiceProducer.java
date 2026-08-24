@@ -49,7 +49,7 @@ public class DummyProcessServiceProducer {
    * the way an adapter of a remote BPMS does (it builds the variables it sends from
    * the aggregate). Off by default, because most test doubles of
    * {@link io.vanillabp.integration.spi.AggregatePersistenceAware} implement nothing
-   * but save; the tests of the phase-two contract (story 67) switch it on.
+   * but save; the tests of the phase-two contract switch it on.
    */
   public static final String PROPERTY_READ_AGGREGATE_IN_PHASE_TWO = "dummy-adapter.read-aggregate-in-phase-two";
 

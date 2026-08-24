@@ -19,7 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Story 92: a gauge is read on every collection, so what stands behind it must not be a
+ * A gauge is read on every collection, so what stands behind it must not be a
  * query. What is pinned here is the promise the class makes - one measurement per
  * window whoever asks, a failure which does not stay, and a way to switch the holding
  * off for a test which needs to see the real value.

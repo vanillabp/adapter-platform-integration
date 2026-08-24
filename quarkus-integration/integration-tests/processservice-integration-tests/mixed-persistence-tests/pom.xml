@@ -10,7 +10,7 @@
 
   <artifactId>mixed-persistence-tests</artifactId>
   <name>Quarkus integration - Integration tests - Two persistences in one application</name>
-  <description>An application storing one aggregate in a relational database and another one in MongoDB: every store is attributed to the aggregate whose persistence it matches (story 84).</description>
+  <description>An application storing one aggregate in a relational database and another one in MongoDB: every store is attributed to the aggregate whose persistence it matches.</description>
 
   <dependencies>
     <dependency>

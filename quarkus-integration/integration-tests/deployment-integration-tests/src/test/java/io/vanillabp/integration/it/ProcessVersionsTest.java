@@ -26,8 +26,8 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of <code>&#64;WorkflowTask(version = ...)</code> on Quarkus (story
- * 48): the version the adapter reports decides which method serves a delivered task,
+ * Acceptance test of <code>&#64;WorkflowTask(version = ...)</code> on Quarkus: the version
+ * the adapter reports decides which method serves a delivered task,
  * ranges made of numbers are compared without asking the BPMS, and a range naming a
  * version TAG is resolved through the catalog the adapter registered - including the
  * query for a version this application never deployed itself.

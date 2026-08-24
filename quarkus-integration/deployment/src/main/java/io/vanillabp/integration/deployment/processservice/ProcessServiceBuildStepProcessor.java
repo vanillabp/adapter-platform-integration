@@ -175,7 +175,7 @@ public class ProcessServiceBuildStepProcessor {
 
           // ONE ProcessService per aggregate is the SPI's injection contract, so ONE
           // of the classes declares the process startWorkflow starts. Which one used
-          // to be whichever class was found first (story 60). Several classes
+          // to be whichever class was found first. Several classes
           // declaring the SAME process are fine (handlers split across classes),
           // different ones are ambiguous and end the build.
           final var annotation = primaryWorkflowServiceAnnotation(annotations, workflowAggregateType);
@@ -250,7 +250,7 @@ public class ProcessServiceBuildStepProcessor {
             if (defaultPersistence.repositoryClass() != null) {
               // an application whose repository is used by VanillaBP alone injects it
               // nowhere, and Quarkus removes beans nobody injects while building the
-              // application (story 71, the same shape as the multi-instance
+              // application (the same shape as the multi-instance
               // resolvers). Panache and Spring Data keep their repositories
               // themselves today, so this is insurance rather than a fix - VanillaBP
               // looks the bean up by class and should not depend on another
@@ -298,7 +298,7 @@ public class ProcessServiceBuildStepProcessor {
       final Type workflowAggregateType,
       final String workflowModuleId) {
 
-    // the workflow module travels along since story 114, where Spring Boot learned to
+    // the workflow module travels along, the way Spring Boot
     // report the same defect: an application with several modules should not have to
     // guess which one the aggregate belongs to, and the two platforms report the same
     // thing in the same words

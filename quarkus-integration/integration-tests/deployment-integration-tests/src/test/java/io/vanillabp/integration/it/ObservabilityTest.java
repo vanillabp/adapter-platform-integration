@@ -36,7 +36,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of what an operator gets to see on Quarkus (story 92): every task
+ * Acceptance test of what an operator gets to see on Quarkus: every task
  * delivery is counted by outcome and measured, it carries a logging context naming
  * the workflow it belongs to, and the BPMS adapters contribute what they know about
  * their BPMS to the readiness check.
@@ -235,14 +235,14 @@ public class ObservabilityTest {
                   .build());
       final var unreachable = readinessCheck.call();
       assertEquals(HealthCheckResponse.Status.DOWN, unreachable.getStatus());
-      final var data = unreachable
+      final var details = unreachable
           .getData()
           .orElseThrow();
-      assertEquals("Connection refused", data.get(ADAPTER
+      assertEquals("Connection refused", details.get(ADAPTER
           + ".description"));
       assertEquals(
           "http://localhost:26500",
-          data.get(ADAPTER
+          details.get(ADAPTER
               + ".address"),
           "the address is what lets an operator act without reading the configuration");
 

@@ -136,7 +136,7 @@ public interface BpmsInitiatedStartContext {
    * an EMBEDDED BPMS: it notifies inside its own transaction, so the values would
    * have to be read before the aggregate is committed, and it reaches the same values
    * at its next sync point anyway. A remote BPMS answers with its sharing default,
-   * which is {@link AggregateSyncMode#FULL} for every VanillaBP adapter (story 66).
+   * which is {@link AggregateSyncMode#FULL} for every VanillaBP adapter.
    *
    * @return The adapter's sync default
    */

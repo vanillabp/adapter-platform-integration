@@ -26,7 +26,7 @@ import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Broadcasting a BPMN signal (story 42). A signal is not addressed to a workflow, so
+ * Broadcasting a BPMN signal. A signal is not addressed to a workflow, so
  * nothing is probed and no aggregate is touched - what matters is WHO gets it
  * (every BPMS the workflow module is deployed to) and WHEN (inside the transaction
  * for an embedded BPMS, after the commit for a remote one).

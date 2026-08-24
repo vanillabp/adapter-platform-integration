@@ -10,7 +10,7 @@ import io.vanillabp.integration.spi.TransactionRunner;
 /**
  * Runs work the core wraps in a transaction of its OWN (processing a task, building
  * the aggregate of a workflow the BPMS started, reporting the end of a workflow) and
- * says what a version conflict on saving the workflow aggregate means (story 59).
+ * says what a version conflict on saving the workflow aggregate means.
  * <p>
  * As soon as a BPMN process holds more than one token, two branches write the same
  * workflow aggregate: one in the transaction VanillaBP owns, the other in a

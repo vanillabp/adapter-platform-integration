@@ -25,7 +25,7 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Convention over configuration (story 34) on Spring Boot: an application
+ * Convention over configuration on Spring Boot: an application
  * configures only what DEVIATES from the convention.
  * <ul>
  * <li>one adapter dependency + one workflow module &rarr; NO

@@ -19,7 +19,7 @@ import io.vanillabp.integration.deployment.processservice.DefaultAggregatePersis
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Story 69: which of VanillaBP's persistence implementations serves an aggregate is
+ * Which of VanillaBP's persistence implementations serves an aggregate is
  * decided at build time on the Jandex index. A repository for the aggregate wins,
  * then the aggregate being an active record, then a Spring Data repository - and two
  * repositories for one aggregate fail the build instead of being picked by chance.

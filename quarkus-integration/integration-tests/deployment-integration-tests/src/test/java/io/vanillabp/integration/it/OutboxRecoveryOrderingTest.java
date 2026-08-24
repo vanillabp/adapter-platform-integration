@@ -27,7 +27,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * Crash-recovery ordering (story 26b hard requirement): a committed-but-undispatched
+ * Crash-recovery ordering, a hard requirement: a committed-but-undispatched
  * phase-two outbox entry left over by a "crashed" previous instance is dispatched by
  * the JDBC outbox dispatcher's startup poll - but never BEFORE the deployment
  * pipeline deployed the BPMN resources and started workflow processing. The entry is

@@ -86,7 +86,7 @@ public class PhaseTwoAggregateIdConverterTest {
   @DisplayName("An aggregate-ID type not convertible from/to String fails the startup")
   public void unconvertibleAggregateIdTypeFailsAtStartup() {
 
-    // story 26c/26i: the ID crosses the outbox serialized as a String - an
+    // The ID crosses the outbox serialized as a String - an
     // unconvertible ID type fails at bean creation with a guiding message
     when(aggregatePersistenceAware.getAggregateIdType()).thenAnswer(invocation -> java.io.InputStream.class);
 

@@ -28,7 +28,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Story 59 on Quarkus, with a real JPA aggregate carrying <code>@Version</code>: while
+ * Concurrent tokens on Quarkus, with a real JPA aggregate carrying <code>@Version</code>: while
  * the <code>&#64;WorkflowTask</code> handler runs, a second writer changes the same row
  * in a transaction of its own and commits - two branches of one workflow, made
  * sequential so nothing here depends on a race.

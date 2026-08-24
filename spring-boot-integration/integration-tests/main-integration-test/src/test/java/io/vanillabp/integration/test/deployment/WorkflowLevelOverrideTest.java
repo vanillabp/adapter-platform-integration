@@ -27,7 +27,7 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Acceptance test of workflow-level properties (story 27): the workflow module
+ * Acceptance test of workflow-level properties: the workflow module
  * prioritizes adapter id 'test' while ONE workflow ('DummyProcess') overrides to
  * 'test2' - the classic migration scenario of moving a single process to a new BPMS
  * while the rest of the module stays.

@@ -111,7 +111,7 @@ public interface TaskDeliveryLog {
   /**
    * The adapter ids the OPEN records of one workflow's BPMN process belong to - a record
    * whose outcome is <code>COMPLETION_PENDING</code>, i.e. a task VanillaBP still answers
-   * redeliveries for (story 120).
+   * redeliveries for.
    * <p>
    * Asked once at startup, and only for one question: an adapter id which holds open
    * records although it is not configured any more means that the id was RENAMED or was

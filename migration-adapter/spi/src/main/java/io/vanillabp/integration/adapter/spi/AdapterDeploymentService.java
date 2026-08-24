@@ -120,7 +120,7 @@ public interface AdapterDeploymentService<BPMN, PC> extends ExtensionWiringServi
 
   /**
    * Validates that several configured adapter ids of THIS adapter type address
-   * DIFFERENT systems (story 34). Two instances of one BPMS type only make sense
+   * DIFFERENT systems. Two instances of one BPMS type only make sense
    * if they do - and whether two configurations differ is BPMS knowledge, so the
    * decision belongs to the adapter:
    * <ul>

@@ -57,8 +57,8 @@ package io.vanillabp.integration.spi;
  * call and marking the entry DONE re-dispatches the entry on recovery. This residual
  * window is accepted (eventual consistency); adapters keep their operations
  * idempotent (see
- * {@code MigratableProcessService#startWorkflowPhaseTwo}). Since story 25 the
- * window is MINIMIZED (not closed) for START operations: a store passing
+ * {@code MigratableProcessService#startWorkflowPhaseTwo}). The window is MINIMIZED
+ * (not closed) for START operations: a store passing
  * &quot;this entry was dispatched before&quot; to the router's dispatch method
  * triggers a probe of the recorded adapter's
  * {@code MigratableProcessService#awarenessOfWorkflowForRedispatch} - a workflow
@@ -363,7 +363,7 @@ public interface PhaseTwoOutbox {
    * The adapter ids the entries of one workflow's BPMN process are waiting for - every
    * entry which is not DONE yet and names an adapter
    * ({@link PhaseTwoCall#adapterId()}, set for the START operations; the probing
-   * operations carry none and are not part of any answer). Story 120.
+   * operations carry none and are not part of any answer).
    * <p>
    * Asked once at startup, and only for one question: an adapter id which entries are
    * waiting for although it is not configured any more means that the id was RENAMED or
@@ -388,7 +388,7 @@ public interface PhaseTwoOutbox {
   }
 
   /**
-   * How many entries are waiting to be dispatched right now (story 92). It is the
+   * How many entries are waiting to be dispatched right now. It is the
    * number an operator looks at first when a BPMS is unreachable: phase two is where
    * a broken connection piles up, and a rising figure says the application is fine
    * while the BPMS is not.

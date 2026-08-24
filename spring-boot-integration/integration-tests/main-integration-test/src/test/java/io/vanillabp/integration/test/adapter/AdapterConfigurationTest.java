@@ -27,7 +27,7 @@ import io.vanillabp.spi.process.ProcessService;
 public class AdapterConfigurationTest {
 
   /**
-   * What a probe is asked about (story 107). Any scope does here: the adapters of this
+   * What a probe is asked about. Any scope does here: the adapters of this
    * test answer from what the test told them, not from a deployment.
    */
   private static final io.vanillabp.integration.adapter.spi.WorkflowScope SCOPE = io.vanillabp.integration.adapter.spi.WorkflowScope

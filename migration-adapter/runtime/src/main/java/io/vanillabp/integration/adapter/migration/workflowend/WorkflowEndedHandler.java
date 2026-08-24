@@ -12,6 +12,8 @@ import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedContext;
  * One <code>&#64;WorkflowEnded</code> method of a workflow service class, with its
  * parameter binders and the end event it serves.
  */
+// see decision 1 in the repository's README.md
+@SuppressWarnings("LombokGetterMayBeUsed")
 public class WorkflowEndedHandler {
 
   /**
@@ -96,7 +98,7 @@ public class WorkflowEndedHandler {
 
   /**
    * The version specification(s) this method names, for messages about a method
-   * serving no version the BPMS holds (story 57).
+   * serving no version the BPMS holds.
    *
    * @return The specifications, comma separated
    */

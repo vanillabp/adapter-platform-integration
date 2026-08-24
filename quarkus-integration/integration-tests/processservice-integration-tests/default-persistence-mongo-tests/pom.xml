@@ -10,7 +10,7 @@
 
   <artifactId>default-persistence-mongo-tests</artifactId>
   <name>Quarkus integration - Integration tests - Default aggregate persistence (MongoDB)</name>
-  <description>Aggregates persisted by the MongoDB Panache implementations VanillaBP provides (story 69), against a MongoDB started by Quarkus Dev Services.</description>
+  <description>Aggregates persisted by the MongoDB Panache implementations VanillaBP provides, against a MongoDB started by Quarkus Dev Services.</description>
 
   <dependencies>
     <dependency>

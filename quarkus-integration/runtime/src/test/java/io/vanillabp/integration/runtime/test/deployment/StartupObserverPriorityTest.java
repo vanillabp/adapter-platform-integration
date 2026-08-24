@@ -20,7 +20,7 @@ import jakarta.annotation.Priority;
 import jakarta.enterprise.event.Observes;
 
 /**
- * Pins the startup-observer ordering contract (story 26b): the deployment runner
+ * Pins the startup-observer ordering contract: the deployment runner
  * observes the {@link StartupEvent} with a LOWER priority value (= earlier) than
  * both phase-two outbox dispatchers, so a crash-recovered phase-two operation is
  * never dispatched before BPMN resources were deployed and workflow processing

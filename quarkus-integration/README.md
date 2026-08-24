@@ -155,7 +155,7 @@ An application without a BPMS adapter hears where to get one. No Quarkus extensi
 publishing a capability `io.vanillabp.adapter.*` means there is no BPMS to run a workflow
 module, so the build ends with that sentence, a link to the wiki page listing every adapter
 with the name of its Quarkus extension, and the note that adapter versions do not come from
-the VanillaBP BOM (`BpmsAdapters`, story 81). The adapters are not listed in the code on
+the VanillaBP BOM (`BpmsAdapters`). The adapters are not listed in the code on
 purpose: they are released independently, so a list in a JAR ages badly. The Spring Boot
 side says the same in its own words, but from its support module: there an adapter is what
 brings the integration along, so the integration cannot be the one to report its absence.
@@ -164,7 +164,7 @@ Where a message names a bean, it names the class the application wrote, not the 
 class. The runtime class of a normal-scoped CDI bean is the client proxy of the container,
 and a name ending in `_ClientProxy` belongs to no file the developer can open.
 `Instance#handles()` yields a handle per bean, and `Handle#getBean().getBeanClass()` is the
-declared class, which is what `QuarkusTransactionRunnerResolver` reports (story 80). The
+declared class, which is what `QuarkusTransactionRunnerResolver` reports. The
 suffix is never cut off a runtime class name: that guesses at a naming convention of the
 container and breaks the day the container changes it.
 
@@ -172,10 +172,10 @@ container and breaks the day the container changes it.
 
 ### Logging during tests
 
-Three things, and since story 109 each one is there for a reason that was measured:
+Three things, and each one is there for a reason that was measured:
 
 1. `@ExtendWith(SuppressOutputExtension.class)` on every test class buffers what the class
-   prints and writes it out when a test fails. Since story 109 that includes what is logged
+   prints and writes it out when a test fails. That includes what is logged
    through JBoss LogManager, which the swap of `System.out` alone never reached.
 2. `<quarkus.log.level>INFO</quarkus.log.level>`, not `ERROR` as before: a record dropped
    by its level reaches no handler, so it never reaches the capture either, and a failing
@@ -195,8 +195,8 @@ The Quarkus test modules of the adapter repositories need no redirection: their 
 their application in a FORKED JVM, which writes its own log file, and what they print in
 the test JVM is a dozen lines per class from before the first callback.
 
-Which window the third one covers is worth knowing, because it was found the hard way
-(story 109). These modules run under JBoss LogManager, installed by the Surefire
+Which window the third one covers is worth knowing, because it was found the hard way.
+These modules run under JBoss LogManager, installed by the Surefire
 property `java.util.logging.manager`, and a handler of that log manager holds the
 `System.out` which existed when the handler was created. Replacing `System.out`, which
 is all the extension used to do, therefore reached nothing logged through it: the
@@ -216,7 +216,7 @@ redirection makes it fail with the marker printed to the console.
 ## The store of processed task deliveries
 
 `io.vanillabp.integration.runtime.delivery` implements the core's `TaskDeliveryLog`
-(story 51, the inbound counterpart of the outbox) twice, registered by the build step
+(the inbound counterpart of the outbox) twice, registered by the build step
 `buildTaskDeliveryLog` along the capabilities present (`quarkus-agroal`,
 `quarkus-mongodb-client`) and kept by `preserveTaskDeliveryLogBeans` - the beans are
 looked up per aggregate at runtime, never injected by application code.
@@ -238,7 +238,7 @@ manages an aggregate.
   `vanillabp.outbox.create-schema` is disabled) and to start the core's
   `TaskDeliveryRetentionCleanup`, which calls `cleanUpExpiredRecords` per
   `vanillabp.outbox.retention`.
-- The same run refreshes the records of the tasks which are still open (story 97): the core
+- The same run refreshes the records of the tasks which are still open: the core
   collects the keys the BPMS redelivered, `cleanUpExpiredRecords` writes them before it
   deletes anything, and the JDBC store batches while the MongoDB one bulk-writes.
 - `JdbcPhaseTwoOutboxDispatcher` creates its table the same way the core's delivery store does,
@@ -246,7 +246,7 @@ manages an aggregate.
   metadata again through a connection of its own and stays quiet where the table is there now.
   See the migration adapter's README for why this is not a question of SQL states.
 
-## What is published where (story 92)
+## What is published where
 
 Both contributions follow the recipe the election cache's meters established: the runtime
 module declares an optional dependency (`micrometer-core`, `microprofile-health-api`), the

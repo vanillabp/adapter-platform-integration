@@ -44,7 +44,7 @@ import lombok.extern.slf4j.Slf4j;
  * <code>quarkus.mongodb.database</code> and are keyed by the delivery key (the
  * document's <code>_id</code>), so uniqueness comes for free.
  * <p>
- * <strong>One transaction where MongoDB Panache provides a session (story 70):</strong> the
+ * <strong>One transaction where MongoDB Panache provides a session:</strong> the
  * record is written through the <code>ClientSession</code> Panache bound to the running JTA
  * transaction, so it commits with the aggregate and a rollback takes it with it.
  * <p>
@@ -149,7 +149,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
    * Refreshes the records of the open tasks redelivered since the last run and deletes the
    * records nobody has seen for the retention period - run by the background cleanup and
    * usable on demand (e.g. by tests). Refreshing first is what keeps the record of a task
-   * which is still being redelivered (story 97).
+   * which is still being redelivered.
    *
    * @return The number of records deleted
    */
@@ -211,7 +211,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
       final String deliveryKey) {
 
     // read through the session of the running transaction where there is one, so the
-    // answer is consistent with what this transaction wrote (story 70)
+    // answer is consistent with what this transaction wrote
     final var session = io.vanillabp.integration.runtime.mongo.MongoSessions
         .activeSession(txRegistry);
     final var collection = deliveryCollection();
@@ -242,7 +242,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
     final var collection = deliveryCollection();
     // the session of the running transaction where MongoDB Panache provides one: the
     // record then commits with the aggregate instead of being written immediately
-    // (story 70)
+    //
     final var session = io.vanillabp.integration.runtime.mongo.MongoSessions
         .activeSession(txRegistry);
     final var recordedAt = Date.from(delivery.recordedAt() == null
@@ -250,7 +250,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
         : delivery.recordedAt());
     final var record = new Document()
         .append("_id", delivery.deliveryKey())
-        // the delivering adapter as a field of its own (story 120): the delivery key
+        // the delivering adapter as a field of its own: the delivery key
         // carries it too, but hashed once the key grows too long
         .append("adapterId", delivery.adapterId())
         .append("workflowModuleId", delivery.workflowModuleId())
@@ -331,7 +331,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   }
 
   /**
-   * The adapter ids the OPEN records of one BPMN process belong to (story 120): asked once
+   * The adapter ids the OPEN records of one BPMN process belong to: asked once
    * per BPMN process at startup.
    */
   @Override
@@ -364,7 +364,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
     final var collection = deliveryCollection();
     // through the session of the running transaction where MongoDB Panache provides one:
     // the deletion then commits with the end notification instead of being written
-    // immediately (story 70)
+    // immediately
     final var session = io.vanillabp.integration.runtime.mongo.MongoSessions
         .activeSession(txRegistry);
     final var filter = new Document()
