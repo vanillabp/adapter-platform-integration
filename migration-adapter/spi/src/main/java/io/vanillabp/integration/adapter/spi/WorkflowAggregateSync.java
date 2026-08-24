@@ -12,7 +12,7 @@ import java.util.Map;
  * creation, task completion, message correlation, user-task completion), an embedded
  * BPMS included: an engine evaluates its models against its own variables, so a
  * model reading anything else would work on one BPMS and fail on the next. Camunda 7
- * read the aggregate live until story 66 and does not any more.
+ * read the aggregate live once and does not any more.
  * <p>
  * <b>The workflow aggregate's ID is never part of these values</b> - how a BPMS
  * identifies the workflow is the adapter's concern (Camunda 7: the business key;
@@ -63,7 +63,7 @@ public interface WorkflowAggregateSync {
   /**
    * Whether the given name is a readable attribute of the workflow-aggregate class -
    * asked about a name a BPMN model reads, so an adapter can tell "the application
-   * clearly meant its aggregate" from "this is a variable of the model" (story 66).
+   * clearly meant its aggregate" from "this is a variable of the model".
    *
    * @param workflowAggregateClass The workflow-aggregate class (may be
    *          <code>null</code>)
@@ -80,7 +80,7 @@ public interface WorkflowAggregateSync {
 
   /**
    * Whether that attribute is SHARED with the BPMS, which is what decides whether an
-   * expression reading it finds a value or always <code>null</code> (story 66).
+   * expression reading it finds a value or always <code>null</code>.
    *
    * @param workflowAggregateClass The workflow-aggregate class (may be
    *          <code>null</code>)

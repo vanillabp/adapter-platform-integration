@@ -52,8 +52,8 @@ import io.vanillabp.spi.service.WorkflowTask;
 public class WorkflowTaskRegistryTest {
 
   /**
-   * The base class an aggregate inherits attributes from - the shape story 66's
-   * attribute resolution has to cope with, because a V1 application typically has its
+   * The base class an aggregate inherits attributes from - the shape the attribute
+   * resolution has to cope with, because a V1 application typically has its
    * ID and its tenant on a base entity.
    */
   public static class BaseAggregate {
@@ -75,7 +75,7 @@ public class WorkflowTaskRegistryTest {
     int total;
 
     /**
-     * Excluded from what the BPMS sees - which (story 28b) derives opt-out for the
+     * Excluded from what the BPMS sees - which derives opt-out for the
      * whole class: everything else IS shared.
      */
     @io.vanillabp.spi.service.NoSyncWithBPMS
@@ -309,8 +309,8 @@ public class WorkflowTaskRegistryTest {
   }
 
   /**
-   * Two methods serving ONE BPMN element, one of them keeping the task open (story
-   * 50): what an adapter has to treat as "this element cannot complete on return".
+   * Two methods serving ONE BPMN element, one of them keeping the task open: what an
+   * adapter has to treat as "this element cannot complete on return".
    */
   static class MixedAsyncService {
 
@@ -614,7 +614,7 @@ public class WorkflowTaskRegistryTest {
     }
 
     @Test
-    @DisplayName("A rollback-only transaction fails the task with a guiding message (story 40b)")
+    @DisplayName("A rollback-only transaction fails the task with a guiding message")
     public void rollbackOnlyTransactionFailsGuiding() {
 
       // what a transaction annotation of the application does to VanillaBP's
@@ -984,7 +984,7 @@ public class WorkflowTaskRegistryTest {
   }
 
   @Nested
-  @DisplayName("Asynchronous completion (story 50)")
+  @DisplayName("Asynchronous completion")
   class AsynchronousCompletion {
 
     @Test
@@ -1060,7 +1060,7 @@ public class WorkflowTaskRegistryTest {
   }
 
   @Nested
-  @DisplayName("Declared task parameters (story 99)")
+  @DisplayName("Declared task parameters")
   class DeclaredTaskParameters {
 
     @Test
@@ -1140,7 +1140,7 @@ public class WorkflowTaskRegistryTest {
 
         }
 
-        // story 66's fallback, deprecated for removal in 2.1: a test double has to
+        // the migration fallback, deprecated for removal in 2.1: a test double has to
         // implement it as long as the interface declares it
         @SuppressWarnings("removal")
         @Override
@@ -1349,7 +1349,7 @@ public class WorkflowTaskRegistryTest {
 
   /**
    * A second aggregate class - used where a test needs a process working on an aggregate
-   * of its own (story 61).
+   * of its own.
    */
   public static class GetterAggregate {
 
@@ -1358,7 +1358,7 @@ public class WorkflowTaskRegistryTest {
   }
 
   /**
-   * An aggregate whose getters carry the sync model of story 66's check: what a BPMN
+   * An aggregate whose getters carry the sync model the check reads: what a BPMN
    * expression may read is what the aggregate shares.
    */
   @io.vanillabp.spi.service.SyncWithBPMS
@@ -1368,7 +1368,7 @@ public class WorkflowTaskRegistryTest {
 
     /**
      * A field without a getter: VanillaBP 1 resolved it in expressions, the sync model
-     * does not - which the check has to say (story 66, migration).
+     * does not - which the check has to say (migration).
      */
     private String riskClass;
 
@@ -1378,7 +1378,7 @@ public class WorkflowTaskRegistryTest {
 
     /**
      * An isX() method returning something other than boolean: version 1 read it, the
-     * JavaBean rule does not (story 66, migration).
+     * JavaBean rule does not (migration).
      */
     public String isRiskLevel() {
       return "high";
@@ -1392,7 +1392,7 @@ public class WorkflowTaskRegistryTest {
   }
 
   @Test
-  @DisplayName("Story 66: an expression reading an unshared attribute is reported, an unknown name is not")
+  @DisplayName("An expression reading an unshared attribute is reported, an unknown name is not")
   public void unsharedAggregateProperties() {
 
     final var sharingPersistence = new AggregatePersistenceAware<SharingAggregate>() {
@@ -1455,7 +1455,7 @@ public class WorkflowTaskRegistryTest {
             List.of("approvable", "internalNote", "somethingTheModelProvides"),
             io.vanillabp.integration.adapter.spi.AggregateSyncMode.FULL));
 
-    // migration (story 66): what VanillaBP 1 resolved and the sync model cannot share is
+    // migration: what VanillaBP 1 resolved and the sync model cannot share is
     // reported as well - a field without a getter, and an isX() returning non-boolean
     assertEquals(
         List.of("riskClass", "riskLevel"),
@@ -1728,13 +1728,13 @@ public class WorkflowTaskRegistryTest {
   }
 
   /**
-   * Story 28b: the registry is the seam through which an adapter holding no
+   * The registry is the seam through which an adapter holding no
    * aggregate (a task worker of a remote BPMS completing a job) obtains the values
    * shared with the BPMS - and the place where the sync model of every registered
    * workflow-aggregate class is validated at STARTUP.
    */
   @Nested
-  @DisplayName("Processes sharing a workflow aggregate (story 61)")
+  @DisplayName("Processes sharing a workflow aggregate")
   class SharedWorkflowAggregates {
 
     /**
@@ -1811,7 +1811,7 @@ public class WorkflowTaskRegistryTest {
   }
 
   @Nested
-  @DisplayName("Aggregate sync (story 28b)")
+  @DisplayName("Aggregate sync")
   class AggregateSync {
 
     private WorkflowTaskRegistry registryWithSync() {
@@ -1830,7 +1830,7 @@ public class WorkflowTaskRegistryTest {
     }
 
     @Test
-    @DisplayName("Story 66: an embedded engine reads the shared values in the CALLER's transaction")
+    @DisplayName("An embedded engine reads the shared values in the CALLER's transaction")
     public void sharedValuesForAnEmbeddedEngineAreReadInTheCurrentTransaction() {
 
       transactionRunner.requireNewUsed = false;
@@ -1863,7 +1863,7 @@ public class WorkflowTaskRegistryTest {
           io.vanillabp.integration.adapter.spi.AggregateSyncMode.FULL);
 
       // 'parameterValue' is annotated @NoSyncWithBPMS, which derives opt-out for
-      // the whole aggregate class (story 28b)
+      // the whole aggregate class
       assertEquals("4711", values.get("id"));
       assertFalse(values.containsKey("parameterValue"), "@NoSyncWithBPMS excludes an attribute");
       assertTrue(
@@ -1916,7 +1916,7 @@ public class WorkflowTaskRegistryTest {
   }
 
   /**
-   * Story 66's migration fallback for an EMBEDDED BPMS: it resolves BPMN expressions
+   * The migration fallback for an EMBEDDED BPMS: it resolves BPMN expressions
    * against the workflow aggregate while its own transaction runs. Version 1 resolved
    * an attribute without a getter as well, so the order is getter, boolean getter,
    * field - and the field is looked up along the class hierarchy, because a V1
@@ -1924,7 +1924,7 @@ public class WorkflowTaskRegistryTest {
    * for removal, and the Camunda 7 adapter's expression resolver calls them today.
    */
   @Nested
-  @DisplayName("Attribute resolution for an embedded BPMS (story 66)")
+  @DisplayName("Attribute resolution for an embedded BPMS")
   class AttributeResolution {
 
     @Test

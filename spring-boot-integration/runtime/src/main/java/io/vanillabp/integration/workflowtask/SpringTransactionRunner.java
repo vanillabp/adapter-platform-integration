@@ -33,7 +33,7 @@ public class SpringTransactionRunner implements TransactionRunner {
 
   /**
    * A runner bound to ONE transaction manager - the shape a mixed-persistence application
-   * needs (story 70): with a JPA and a MongoDB manager in the same application no manager
+   * needs: with a JPA and a MongoDB manager in the same application no manager
    * is unique, so the application attributes its aggregates to runners built from the
    * matching manager through
    * {@link io.vanillabp.integration.spi.TransactionRunnerAware} beans.
@@ -72,7 +72,7 @@ public class SpringTransactionRunner implements TransactionRunner {
 
   /**
    * Registers a {@link org.springframework.transaction.support.TransactionSynchronization}
-   * whose <code>beforeCommit</code> runs the check (story 87), so a phase-one check of a BPMS
+   * whose <code>beforeCommit</code> runs the check, so a phase-one check of a BPMS
    * adapter runs as late as this platform allows - a throwing check aborts the commit.
    * Without transaction synchronization active the check runs immediately.
    */
@@ -107,8 +107,7 @@ public class SpringTransactionRunner implements TransactionRunner {
    * {@link PlatformTransactionManager} exists. Asked by
    * {@link io.vanillabp.integration.processservice.SpringTransactionRunnerResolver}: a
    * runner which cannot open a transaction must not be handed out as the platform's
-   * default, the startup check reports the situation with every remedy instead (story
-   * 70).
+   * default, the startup check reports the situation with every remedy instead.
    *
    * @return Whether a unique transaction manager is available
    */

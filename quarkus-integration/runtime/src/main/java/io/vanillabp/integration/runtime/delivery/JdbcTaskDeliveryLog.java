@@ -126,7 +126,7 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
     if (getProperties().isCreateSchema()) {
       getStore().createSchemaIfNotExists();
     } else {
-      // the application creates its schema itself (story 75) - then a missing table is a
+      // the application creates its schema itself - then a missing table is a
       // deployment which forgot to apply the migration, and it is said at startup
       getStore().validateSchemaExists();
     }
@@ -139,8 +139,7 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   /**
    * Refreshes the records of the open tasks redelivered since the last run and deletes the
    * records whose retention period passed - run by the background cleanup and usable on
-   * demand (e.g. by tests). Both are the store's business and happen in that order (story
-   * 97).
+   * demand (e.g. by tests). Both are the store's business and happen in that order.
    *
    * @return The number of records deleted
    */
@@ -192,7 +191,7 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   }
 
   /**
-   * The adapter ids the OPEN records of one BPMN process belong to (story 120) - the
+   * The adapter ids the OPEN records of one BPMN process belong to - the
    * shared store answers it with one query over the columns it indexes anyway.
    */
   @Override

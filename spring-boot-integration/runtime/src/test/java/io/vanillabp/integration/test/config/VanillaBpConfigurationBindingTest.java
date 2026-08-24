@@ -222,7 +222,7 @@ public class VanillaBpConfigurationBindingTest {
   @DisplayName("Workflow-level configuration binds and is resolved (formerly rejected)")
   public void workflowLevelConfigurationIsAccepted() {
 
-    // regression for the former "not yet supported" rejection (story 27)
+    // regression for the former "not yet supported" rejection
     contextRunner
         .withPropertyValues(
             "vanillabp.resources-location=classpath*:vanillabp-processes",
@@ -299,7 +299,7 @@ public class VanillaBpConfigurationBindingTest {
   }
 
   @Test
-  @DisplayName("Story 89: the maximum age of an open task binds at all four levels")
+  @DisplayName("The maximum age of an open task binds at all four levels")
   public void maxTaskAgeBindsAtEveryLevel() {
 
     contextRunner

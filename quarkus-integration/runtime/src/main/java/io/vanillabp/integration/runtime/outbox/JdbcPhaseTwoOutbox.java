@@ -109,7 +109,7 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
   }
 
   /**
-   * The adapter ids the OPEN entries of one BPMN process are waiting for (story 120): an
+   * The adapter ids the OPEN entries of one BPMN process are waiting for: an
    * id which is not configured any more means that it was renamed or removed too early,
    * and both leave the workflow of a START entry unstarted.
    */

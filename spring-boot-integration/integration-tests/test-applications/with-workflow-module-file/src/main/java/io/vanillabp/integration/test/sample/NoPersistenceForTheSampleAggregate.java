@@ -11,7 +11,7 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
  * is found, whether a repackaged JAR starts, which properties win - never whether an
  * aggregate can be saved.
  * <p>
- * They still have to say who owns the aggregate. Since story 114 an aggregate without a
+ * They still have to say who owns the aggregate: one without a
  * persistence is reported while the application starts, because the fallback persistence
  * would look for a Spring Data repository, and none of these applications has a reason to
  * have one. This double is that answer, and every method of it fails loudly, so a test

@@ -3,10 +3,10 @@ package io.vanillabp.integration.processservice;
 import io.vanillabp.integration.adapter.spi.PreCommitRegistrar;
 
 /**
- * Spring Boot implementation of the adapter-facing {@link PreCommitRegistrar} (story 87).
+ * Spring Boot implementation of the adapter-facing {@link PreCommitRegistrar}.
  * <p>
  * It resolves the transaction runner of the workflow aggregate first, so a phase-one check
- * hooks into the unit of work VanillaBP actually uses - which since story 70 may be one the
+ * hooks into the unit of work VanillaBP actually uses - which may be one the
  * APPLICATION contributed. Asking the platform's runner instead would register a
  * synchronization on a transaction the aggregate is not stored in.
  */

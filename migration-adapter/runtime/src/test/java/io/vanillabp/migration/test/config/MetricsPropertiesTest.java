@@ -15,7 +15,7 @@ import io.vanillabp.integration.adapter.migration.config.MetricsProperties;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Story 92: how long the measurement of a gauge which has to ask somebody is reused.
+ * How long the measurement of a gauge which has to ask somebody is reused.
  * The default is one collection interval, zero is the way to switch the holding off,
  * and a negative span is a typo the boot names.
  */

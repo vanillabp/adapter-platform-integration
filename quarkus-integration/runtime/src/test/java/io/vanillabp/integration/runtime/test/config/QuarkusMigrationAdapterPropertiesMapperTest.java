@@ -186,7 +186,7 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                             QuarkusMigrationAdapterProperties.MetricsProperties metrics) implements QuarkusMigrationAdapterProperties {
 
     /**
-     * The adapter ids retired deliberately (story 120) - none of these fixtures names any,
+     * The adapter ids retired deliberately - none of these fixtures names any,
      * so the mapper's list is empty and the startup check has nothing to keep quiet about.
      */
     @Override
@@ -324,7 +324,7 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
         "task-level",
         workflow.getTasks().get("assessRisk").getAdapters().get("c8-cloud").getResourcesLocation());
     assertEquals("adapter-level", core.getAdapters().get("c8-cloud").getResourcesLocation());
-    // the switch of story 51 travels the same four levels as every adapter-scoped key
+    // the switch travels the same four levels as every adapter-scoped key
     assertEquals(
         Boolean.FALSE,
         core.getAdapters().get("c8-cloud").getDeduplicateDeliveries());
@@ -334,7 +334,7 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     assertEquals(
         Boolean.FALSE,
         workflow.getTasks().get("assessRisk").getAdapters().get("c8-cloud").getDeduplicateDeliveries());
-    // story 57: the outfaded versions and their policy travel the same levels; an
+    // The outfaded versions and their policy travel the same levels; an
     // empty Optional has to arrive as null, so the next level decides
     assertEquals(
         List.of("<3"),
@@ -382,7 +382,7 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
   }
 
   @Test
-  @DisplayName("Story 92: the interface's @WithDefault gauge-cache equals the core default")
+  @DisplayName("The interface's @WithDefault gauge-cache equals the core default")
   public void metricsDefaultsMatchCoreDefaults() {
 
     final var config = new SmallRyeConfigBuilder()
@@ -400,7 +400,7 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
   }
 
   @Test
-  @DisplayName("Story 92: a configured gauge-cache travels into the core model")
+  @DisplayName("A configured gauge-cache travels into the core model")
   public void configuredGaugeCacheTravels() {
 
     final var properties = new Properties(
@@ -442,7 +442,7 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
   }
 
   @Test
-  @DisplayName("Story 70: the unguarded-writes setting travels globally and per workflow module")
+  @DisplayName("The unguarded-writes setting travels globally and per workflow module")
   public void transactionsSettingTravelsGloballyAndPerModule() {
 
     final var accepted = io.vanillabp.integration.adapter.migration.config.TransactionsProperties.UnguardedAggregateWrites.ACCEPTED;
@@ -471,7 +471,7 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
   }
 
   @Test
-  @DisplayName("Story 76: the release-on-workflow-end setting travels globally and per workflow module")
+  @DisplayName("The release-on-workflow-end setting travels globally and per workflow module")
   public void deliverySettingTravelsGloballyAndPerModule() {
 
     final var properties = new Properties(
@@ -497,7 +497,7 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
   }
 
   @Test
-  @DisplayName("Story 89: the maximum age of an open task travels through all four levels")
+  @DisplayName("The maximum age of an open task travels through all four levels")
   public void maxTaskAgeTravelsThroughEveryLevel() {
 
     final var task = new TaskProperties(

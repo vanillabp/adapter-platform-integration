@@ -14,7 +14,7 @@ import io.vanillabp.integration.utils.SpringDataUtil;
  * loudly. And a catch-all {@link AggregatePersistenceAware} double which stands in for any
  * aggregate no test brought its own double for: it fails just as loudly, but it makes the
  * application say what it is - one WITH a persistence implementation of its own, rather
- * than one whose aggregates have no repository. Since story 114 the platform reports the
+ * than one whose aggregates have no repository. The platform reports the
  * latter while it starts, and these applications were never that.
  * <p>
  * A test needing its aggregate saved or read declares its own double for that aggregate

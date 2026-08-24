@@ -54,8 +54,8 @@ public class AdapterProperties {
   private Boolean deduplicateDeliveries;
 
   /**
-   * The versions of a BPMN process this application does not serve any more (story
-   * 57), each written in the grammar of the <code>version</code> attribute of
+   * The versions of a BPMN process this application does not serve any more, each
+   * written in the grammar of the <code>version</code> attribute of
    * <code>&#64;WorkflowTask</code> and its siblings (<code>&lt;4</code>,
    * <code>1-3</code>, <code>v1.0..v2.0</code>, a version tag). A version covered by
    * ANY of them is ignored by the startup check, so its task definitions need no

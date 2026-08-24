@@ -50,7 +50,7 @@ public class WorkflowTaskRegistryProducer {
 
 
   /**
-   * The core-owned name-clash-avoidance model (story 35): resolves the mode per
+   * The core-owned name-clash-avoidance model: resolves the mode per
    * workflow module/workflow and adapter and composes the identifiers a BPMS sees.
    * <p>
    * The adapters' deployment services are looked up LAZILY (they receive this bean, so
@@ -90,7 +90,7 @@ public class WorkflowTaskRegistryProducer {
   }
 
   /**
-   * The core-owned sync model (story 28): turns a workflow aggregate into the
+   * The core-owned sync model: turns a workflow aggregate into the
    * values shared with the BPMS, honoring
    * {@code @SyncWithBPMS}/{@code @NoSyncWithBPMS} and the adapter's default.
    *

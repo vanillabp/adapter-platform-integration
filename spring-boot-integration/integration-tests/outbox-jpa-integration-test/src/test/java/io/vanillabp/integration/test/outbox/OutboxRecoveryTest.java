@@ -102,7 +102,7 @@ public class OutboxRecoveryTest {
 
     // the restarted context has to answer ACTIVE right away - the dispatch-time
     // election probes again on recovery. WORKFLOW probes answer UNKNOWN on
-    // purpose: they serve the START re-dispatch mitigation (story 25), which
+    // purpose: they serve the START re-dispatch mitigation, which
     // would otherwise consume the recovered START entry instead of dispatching
     // it - that path has its own test (OutboxRedispatchMitigationTest)
     SteerableTaskAwarenessSource.initialAnswer = io.vanillabp.integration.adapter.spi.WorkflowAwareness.ACTIVE;
@@ -111,7 +111,7 @@ public class OutboxRecoveryTest {
 
       // first context: schedule a completion whose dispatch fails - leaving a
       // committed-but-unprocessed COMPLETE_TASK entry (the crash shape); the
-      // outbox STORE is untouched by story 22, so recovery works for the new
+      // outbox STORE is untouched by the task operations, so recovery works for the new
       // operation exactly like for START_WORKFLOW
       try (var context = runApplication("tasks", "PT1H")) {
         final var listener = context.getBean(RecordingPhaseTwoListener.class);

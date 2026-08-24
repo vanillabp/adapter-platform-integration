@@ -22,7 +22,7 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The election matrix of the {@link WorkflowLocator} (stories 22/25): the walk -
+ * The election matrix of the {@link WorkflowLocator}: the walk -
  * ACTIVE stops it, UNKNOWN_TO_BPMS falls through to the next adapter, COMPLETED is
  * reported to the caller, BPMS_UNAVAILABLE never falls back (retry then fail) -
  * plus the optional cache: consulted first, populated on success, repaired on
@@ -32,7 +32,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 public class WorkflowLocatorTest {
 
   /**
-   * What a probe is asked about (story 107). Any scope does here: the adapters of this
+   * What a probe is asked about. Any scope does here: the adapters of this
    * test answer from what the test told them, not from a deployment.
    */
   private static final io.vanillabp.integration.adapter.spi.WorkflowScope SCOPE = io.vanillabp.integration.adapter.spi.WorkflowScope

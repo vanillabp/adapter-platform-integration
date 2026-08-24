@@ -76,13 +76,13 @@ public final class AdapterBeanRegistrarSupport {
         .map(Map.Entry::getKey)
         .forEach(ids::add);
 
-    // convention over configuration (story 34): an id named in 'prioritized-adapters'
+    // convention over configuration: an id named in 'prioritized-adapters'
     // which IS an adapter type needs no section of its own, and the core derives one for
     // it. The registrar has to derive the same ids, and it cannot read that from the
     // sections it sees: a section may consist entirely of keys the CORE model does not
     // know (an adapter's own 'rest-address', 'webapps', 'database-schema-update'), and
-    // the configuration binding then produces no map entry for it at all. Before story
-    // 119 this derivation ran only where NOTHING bound onto the core model, so a
+    // the configuration binding then produces no map entry for it at all. A derivation
+    // running only where NOTHING binds onto the core model is not enough, because a
     // migration setup - the new BPMS configured, the old one merely named in the order -
     // lost the old adapter's beans as soon as any section carried one core key.
     properties

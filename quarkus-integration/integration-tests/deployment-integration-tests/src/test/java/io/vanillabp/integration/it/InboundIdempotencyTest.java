@@ -29,7 +29,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of the inbound idempotency (story 51) on Quarkus, with the default
+ * Acceptance test of the inbound idempotency on Quarkus, with the default
  * JDBC-based delivery log doing the remembering: the dummy adapter delivers a task TWICE
  * under the same delivery identity - as a BPMS which never learned the result does - and
  * the <code>&#64;WorkflowTask</code> method has to run once while both deliveries are
@@ -191,7 +191,7 @@ public class InboundIdempotencyTest {
   }
 
   @Test
-  @DisplayName("Story 76: without the release nobody asks for the end of a workflow")
+  @DisplayName("Without the release nobody asks for the end of a workflow")
   public void noEndListenerWithoutTheRelease() {
 
     assertEquals(

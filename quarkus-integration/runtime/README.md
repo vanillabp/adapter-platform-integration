@@ -14,16 +14,16 @@ adapters hand their checks to the `PreCommitRegistrar` of the adapter SPI and
 `QuarkusPreCommitRegistrar` implements it here.
 
 It resolves the transaction runner of the workflow aggregate first
-(`QuarkusTransactionRunnerResolver`, story 70), then calls `TransactionRunner#beforeCommit`.
+(`QuarkusTransactionRunnerResolver`), then calls `TransactionRunner#beforeCommit`.
 That indirection is the point: since an application may bring its own unit of work, the check
 has to be hooked into the unit of work VanillaBP actually uses, not into the platform's JTA
 transaction. `QuarkusTransactionRunner` implements the hook with an interposed JTA
 `Synchronization` whose `beforeCompletion()` runs the check - throwing there aborts the commit,
 which is what a failing phase-one check has to do. A runner of an application which does not
-implement the hook runs the check immediately, the behaviour of every adapter before story 87.
+implement the hook runs the check immediately, the behaviour of every adapter before the hook existed.
 
 An earlier, wider mechanism (`EventualConsistencyTransactionSupport`: probes before the commit
-plus actions after it, per transaction) was removed with story 87. It existed before the
+plus actions after it, per transaction) was removed with the hook. It existed before the
 phase-two outbox took over the after-commit half, had no caller left, and existed on this
 platform only.
 
@@ -57,7 +57,7 @@ required. The outbox beans are only registered if the Agroal capability is prese
 (see `VanillaBpBuildStepProcessor#buildPhaseTwoOutbox`); applications may define
 their own `PhaseTwoOutbox` beans in addition.
 
-Since story 26i BOTH defaults (JDBC + MongoDB) may coexist and the outbox is
+BOTH defaults (JDBC + MongoDB) may coexist and the outbox is
 selected **per workflow aggregate** (`QuarkusPhaseTwoOutboxResolver`): the most
 specific `PhaseTwoOutboxAware` bean wins; without one, the single active outbox is
 used (deactivated - `vanillabp.outbox.jdbc.enabled`/`vanillabp.outbox.mongo.enabled`
@@ -108,7 +108,7 @@ on `idempotencyKey` yourself).
 module, so every class naming one of their types has to stay unreachable in an application
 which brought neither. On the JVM that takes care of itself, because a class is loaded when
 it is first used. A native image is stricter: GraalVM links the whole reachable graph while
-it builds and stops at the first method it cannot resolve. Story 85 found three such methods,
+it builds and stops at the first method it cannot resolve. Three such methods were found,
 each of them called from a resolver every application runs.
 
 Two rules keep them out of that graph.
@@ -144,7 +144,7 @@ local repository, where a stale copy hides whatever the build step was just chan
 Docker pulls the Mandrel builder image, so no GraalVM has to be installed. The last line
 is there because a binary which cannot start proves nothing: the application's main boots
 it, starts a workflow and reads the aggregate back, and its exit code says whether that
-worked. It found the second half of story 85, the BPMN resources missing from the image. In
+worked. It found the second half of the problem, the BPMN resources missing from the image. In
 CI the job `native-build` runs the same three commands.
 
 ## Noteworthy & Contributors

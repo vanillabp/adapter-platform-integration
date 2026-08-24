@@ -13,7 +13,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Story 81: an application which has a workflow module but no BPMS adapter hears it from
+ * An application which has a workflow module but no BPMS adapter hears it from
  * VanillaBP, and hears which artifacts would give it one.
  * <p>
  * The two facts the rule is made of cannot be varied inside a running JVM (a class either

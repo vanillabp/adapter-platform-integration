@@ -22,7 +22,7 @@ import java.time.Instant;
  * @param adapterId The ID of the adapter which delivered the task. It is part of the
  *          {@link #deliveryKey()} as well, but only as text and hashed once the key grows
  *          too long, so a store cannot answer questions about it - which is why it is a
- *          field of its own since story 120: it lets a store report the adapter ids its
+ *          field of its own: it lets a store report the adapter ids its
  *          open records belong to, and it tells whoever looks into the store which BPMS
  *          delivered. May be <code>null</code> in a record written before that field
  *          existed

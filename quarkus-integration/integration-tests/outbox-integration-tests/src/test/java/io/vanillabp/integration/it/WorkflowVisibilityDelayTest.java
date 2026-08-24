@@ -27,7 +27,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * Story 54 on Quarkus: correlating a message right after the start, on a BPMS whose
+ * The visibility delay on Quarkus: correlating a message right after the start, on a BPMS whose
  * awareness probe reads an eventually consistent model.
  * <p>
  * Phase two of the start records which adapter created the instance, so the
@@ -76,8 +76,8 @@ public class WorkflowVisibilityDelayTest {
   /**
    * Starts a workflow and returns right after the commit, deliberately WITHOUT
    * waiting for phase two: on a remote BPMS the instance is created asynchronously,
-   * and an operation in the next transaction is exactly the case this story is
-   * about. Scheduling the start already records which adapter holds the workflow.
+   * and an operation in the next transaction is exactly the case the visibility delay
+   * is for. Scheduling the start already records which adapter holds the workflow.
    */
   private Aggregate started(
       final String content) throws Exception {

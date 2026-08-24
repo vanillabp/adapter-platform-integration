@@ -55,7 +55,7 @@ public class ProcessVersions {
   private final Map<RegistryKey, List<RegisteredCatalog>> catalogs = new ConcurrentHashMap<>();
 
   /**
-   * The version each adapter deployed during THIS boot (story 57) - the border between
+   * The version each adapter deployed during THIS boot - the border between
    * "the model this application brings" and the older versions the BPMS still holds.
    */
   private final Map<DeploymentKey, String> deployedVersions = new ConcurrentHashMap<>();

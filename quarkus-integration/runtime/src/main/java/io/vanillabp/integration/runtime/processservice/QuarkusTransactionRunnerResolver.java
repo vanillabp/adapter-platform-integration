@@ -15,7 +15,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Instance.Handle;
 
 /**
- * Quarkus implementation of the core's {@link TransactionRunnerResolver} (story 70).
+ * Quarkus implementation of the core's {@link TransactionRunnerResolver}.
  * <p>
  * Resolution mirrors Spring Boot: the most specific {@link TransactionRunnerAware} bean,
  * then a plain {@link TransactionRunner} bean of the application, then the platform's own
@@ -33,7 +33,7 @@ import jakarta.enterprise.inject.Instance.Handle;
  * only exists where the MongoDB client extension does. Nothing reachable from here names a
  * MongoDB type, and that is a rule rather than a detail: a native image resolves every
  * referenced method while it is built, so an application with a relational database and no
- * MongoDB would not build otherwise (story 85).
+ * MongoDB would not build otherwise.
  */
 public class QuarkusTransactionRunnerResolver implements TransactionRunnerResolver {
 
@@ -59,8 +59,7 @@ public class QuarkusTransactionRunnerResolver implements TransactionRunnerResolv
   }
 
   /**
-   * A bean of the application together with the name of the class it was DECLARED as
-   * (story 80).
+   * A bean of the application together with the name of the class it was DECLARED as.
    *
    * @param <T> The bean type
    */
@@ -214,7 +213,7 @@ public class QuarkusTransactionRunnerResolver implements TransactionRunnerResolv
 
   /**
    * The beans of an injection point together with the class each of them was DECLARED
-   * as (story 80): the runtime class of a normal-scoped CDI bean is the client proxy
+   * as: the runtime class of a normal-scoped CDI bean is the client proxy
    * the container puts in front of it, and a name ending in <code>_ClientProxy</code>
    * sends a reader looking for a class which is not in their sources. The bean
    * metadata of the handle knows the declared class, so a message names what the

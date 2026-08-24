@@ -34,7 +34,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of story 70 on Quarkus: an application bringing ALL THREE stores itself -
+ * Acceptance test on Quarkus: an application bringing ALL THREE stores itself -
  * the workflow aggregate, the phase-two outbox and the log of processed task deliveries -
  * with neither a data source nor MongoDB anywhere.
  * <p>
@@ -159,7 +159,7 @@ public class ApplicationOwnedStoresTest {
     assertNotNull(started);
     assertEquals(1, outbox.getScheduled().size(), "the application's outbox got no entry");
     // twice: the start itself, and phase two which the outbox dispatched after the commit -
-    // that one asks for a transaction as well, and gets the application's (story 67)
+    // that one asks for a transaction as well, and gets the application's
     assertEquals(2, runner.getOpened(), "VanillaBP did not use the application's transaction");
     assertEquals(2, runner.getCommitted());
     assertEquals(0, runner.getRolledBack());
@@ -200,7 +200,7 @@ public class ApplicationOwnedStoresTest {
   public void theStartupLineNamesTheApplicationsClasses() {
 
     // the resolver of the platform, wired with the very beans of this application: what it
-    // says about them is what the INFO line of story 70 carries
+    // says about them is what the INFO line carries
     final var resolver = new io.vanillabp.integration.runtime.processservice.QuarkusTransactionRunnerResolver(
         transactionRunnerAwares, transactionRunners, aggregatePersistences, mongoDeploymentProbes, runner);
 

@@ -6,7 +6,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
 /**
- * The workflow aggregate of the version-conflict acceptance test (story 59): a JPA
+ * The workflow aggregate of the version-conflict acceptance test: a JPA
  * entity carrying the version attribute which turns two writers into an exception
  * instead of a silent overwrite. Under JTA that exception arrives wrapped, which is
  * what this test is about.

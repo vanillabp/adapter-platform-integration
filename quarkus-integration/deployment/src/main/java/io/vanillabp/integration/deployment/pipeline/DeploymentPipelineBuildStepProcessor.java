@@ -112,7 +112,7 @@ public class DeploymentPipelineBuildStepProcessor {
    * The indexed files are registered for the native image as well. A native image only
    * carries the resources it was told about, so without that registration the index would
    * name files the running application cannot open, and the deployment pipeline would end
-   * the startup saying exactly that (story 85).
+   * the startup saying exactly that.
    *
    * @param applicationArchives The archives of this Quarkus build
    * @param workflowModulesFound Information about all workflow modules found

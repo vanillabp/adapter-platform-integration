@@ -27,7 +27,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Story 69: an application using Spring Data repositories on Quarkus (extension
+ * An application using Spring Data repositories on Quarkus (extension
  * quarkus-spring-data-jpa) writes no {@code AggregatePersistenceAware} at all -
  * VanillaBP uses the repository, the same API the Spring Boot integration uses. Both directions are exercised: starting a workflow stores the
  * aggregate, and a task delivered by the BPMS loads it, runs the handler and stores

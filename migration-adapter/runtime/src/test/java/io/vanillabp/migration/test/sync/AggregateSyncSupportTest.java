@@ -19,12 +19,12 @@ import io.vanillabp.spi.service.NoSyncWithBPMS;
 import io.vanillabp.spi.service.SyncWithBPMS;
 
 /**
- * The sync model (story 28): which attributes of a workflow aggregate are shared
+ * The sync model: which attributes of a workflow aggregate are shared
  * with the BPMS. The rule under test is the inheritance chain - adapter default,
  * aggregate class, attribute, nested type - where every level only overrides what
  * it explicitly says.
  * <p>
- * Since story 28b the CLASS level is DERIVED where the application annotated only
+ * The CLASS level is DERIVED where the application annotated only
  * attributes: the adapter's default applies as long as an aggregate carries no
  * annotation at all, the first annotation hands control to the application (the
  * class mode is then the opposite of what its attributes state) and mixing both
@@ -112,10 +112,9 @@ public class AggregateSyncSupportTest {
   @DisplayName("One @NoSyncWithBPMS attribute makes the CLASS opt-out - the adapter's default no longer applies")
   public void oneExcludedAttributeDerivesOptOut() {
 
-    // story 28b: the first annotation hands control to the application. Naming
+    // The first annotation hands control to the application. Naming
     // what is NOT shared means everything else IS - even on an adapter defaulting
-    // to NONE (the flip against story 28, where the aggregate would have shared
-    // NOTHING on such an adapter).
+    // to NONE, where the aggregate would otherwise have shared NOTHING.
     final var expected = Map.<String, Object>of("content", "hello");
     assertEquals(expected, full(new OptOutByAttributeAggregate()));
     assertEquals(expected, none(new OptOutByAttributeAggregate()));
@@ -147,8 +146,8 @@ public class AggregateSyncSupportTest {
   @DisplayName("One @SyncWithBPMS attribute makes the CLASS opt-in - nothing else is shared")
   public void oneSharedAttributeDerivesOptIn() {
 
-    // naming what IS shared means the rest is not - the flip against story 28,
-    // where a remote BPMS (default FULL) would have received 'secret', too
+    // naming what IS shared means the rest is not - a remote BPMS (default FULL)
+    // would otherwise have received 'secret', too
     final var expected = Map.<String, Object>of("shippedAsNormalItem", Boolean.TRUE);
     assertEquals(expected, full(new OptInByAttributeAggregate()));
     assertEquals(expected, none(new OptInByAttributeAggregate()));
@@ -319,7 +318,7 @@ public class AggregateSyncSupportTest {
     final var shared = full(new DerivingNestedAggregate());
 
     // the attribute is shared, but the DTO's own (derived) opt-in narrows what it
-    // exposes - under story 28 it would have inherited "share everything"
+    // exposes - without deriving it would have inherited "share everything"
     assertEquals(Map.of("item", Map.of("itemId", 7L)), shared);
 
   }

@@ -23,7 +23,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.workflowtask.SpringTransactionRunner;
 
 /**
- * Story 70 on Spring Boot: which runner serves an aggregate, and what the platform says
+ * Which runner serves an aggregate on Spring Boot, and what the platform says
  * about the transaction covering its store. The persistence technology is handed in, so the
  * verdicts are pinned without a database.
  */

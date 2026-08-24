@@ -29,7 +29,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of the transaction-contract safeguards (story 40b) on Quarkus: a
+ * Acceptance test of the transaction-contract safeguards on Quarkus: a
  * transaction annotation of the application in the call chain of a
  * <code>&#64;WorkflowTask</code> handler marks VanillaBP's JTA transaction
  * rollback-only, after which neither the aggregate changes nor the state of the BPMS can

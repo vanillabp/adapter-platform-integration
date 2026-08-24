@@ -2,7 +2,7 @@ package io.vanillabp.integration.adapter.spi;
 
 /**
  * Lets a BPMS adapter run a phase-one check right before the transaction of the workflow
- * aggregate commits (story 87).
+ * aggregate commits.
  * <p>
  * A phase-one check must not advance the process, but it may ASK - whether the task still
  * exists, whether the model declares a message - and the answer can go stale between the
@@ -12,7 +12,7 @@ package io.vanillabp.integration.adapter.spi;
  * a stale operation where it made the call.
  * <p>
  * The platform integrations implement this by resolving the transaction runner of the
- * workflow aggregate (story 70: that may be a runner the APPLICATION contributed) and
+ * workflow aggregate (which may be a runner the APPLICATION contributed) and
  * asking it, so an application-owned unit of work is hooked into rather than bypassed. A
  * runner which does not implement the hook runs the check immediately - the behaviour of
  * every adapter before this existed.

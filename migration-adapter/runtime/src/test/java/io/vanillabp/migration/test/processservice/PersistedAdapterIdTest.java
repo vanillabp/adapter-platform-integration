@@ -26,8 +26,7 @@ import io.vanillabp.integration.spi.TaskDeliveryLog;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * An adapter id which the persisted state still names although the configuration does not
- * (story 120).
+ * An adapter id which the persisted state still names although the configuration does not.
  * <p>
  * VanillaBP persists the adapter id twice: an outbox entry of a START operation names the
  * adapter elected in phase one, and the delivery key of every record is built from the

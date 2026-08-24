@@ -9,7 +9,7 @@ import io.vanillabp.integration.utils.SpringDataUtil;
  * repository of that aggregate.
  * <p>
  * Which is why a missing repository is a defect rather than a variant, and why it is
- * reported while the application STARTS since story 114. Before that the application
+ * reported while the application STARTS. Without that the application
  * booted and failed at the first task delivery or the first <code>startWorkflow</code>,
  * with Spring Data's own <code>No Spring Data repository defined for ...</code> and
  * nothing about the workflow it belonged to. Quarkus decides the same question while it
@@ -85,15 +85,15 @@ public class SpringDataUtilBasedAggregatePersistenceSupport<A> implements Aggreg
 
     // the one method the core calls while the application starts (see the constructor of
     // MigrationProcessService), which makes it the place where a missing repository has to
-    // be reported - story 114
+    // be reported
     requireRepository();
 
     // Spring Data is authoritative for the ID type (covers property access,
     // non-"id"-named IDs etc.). A repository which cannot say what the ID type is answers
     // null, the contract's "not determinable": that is the layer's own business, an own
     // SpringDataUtil implementation owning the serialized form for instance. What null
-    // must NOT mean is that there is no repository at all, which is the conflation story
-    // 114 took apart
+    // must NOT mean is that there is no repository at all, which is a conflation this
+    // check takes apart
     try {
       return springDataUtil.getIdType(aggregateClass);
     } catch (Exception e) {

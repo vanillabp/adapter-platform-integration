@@ -20,7 +20,7 @@ public class TestApplication {
   }
 
   /**
-   * The tasks of the version-conflict acceptance test (story 59) - the dummy adapter
+   * The tasks of the version-conflict acceptance test - the dummy adapter
    * has no model to read them from.
    *
    * @return The wiring of the BPMN process 'ConflictProcess'

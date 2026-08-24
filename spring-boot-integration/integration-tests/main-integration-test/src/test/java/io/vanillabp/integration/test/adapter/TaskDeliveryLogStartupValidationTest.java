@@ -20,7 +20,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 
 /**
- * Startup report of the inbound idempotency (story 51): an adapter which may hand the
+ * Startup report of the inbound idempotency: an adapter which may hand the
  * same task out again needs a store to remember processed deliveries in. Unlike the
  * outbox a missing store does NOT fail the boot - without it VanillaBP behaves as it did
  * before the feature existed - so what is pinned here is the WARNING naming both ways
@@ -75,7 +75,7 @@ public class TaskDeliveryLogStartupValidationTest {
   }
 
   /**
-   * An application's own store, written before the release of story 76 existed: it
+   * An application's own store, written before the release check existed: it
    * inherits the SPI's default which deletes nothing.
    */
   @org.springframework.context.annotation.Configuration
@@ -203,7 +203,7 @@ public class TaskDeliveryLogStartupValidationTest {
   @Test
   public void aStoreWithoutTheReleaseIsReportedWhereTheReleaseIsSwitchedOn() {
 
-    // story 76: the application asked for records to disappear when a workflow ends, and
+    // The application asked for records to disappear when a workflow ends, and
     // its own store cannot do it - which is a misconfiguration, not a missing feature
     final var messages = loggedByCore(
         () -> bootWith(

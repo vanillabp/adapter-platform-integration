@@ -13,7 +13,7 @@ import io.vanillabp.integration.outbox.mongo.MongoPhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Pins the {@code ApplicationReadyEvent} listener ordering contract (story 26b):
+ * Pins the {@code ApplicationReadyEvent} listener ordering contract:
  * workflow processing starts BEFORE the phase-two outbox dispatchers' pollers run
  * their first (crash-recovery) poll - so a recovered phase-two operation is never
  * dispatched before BPMN resources were deployed and workflow processing started.

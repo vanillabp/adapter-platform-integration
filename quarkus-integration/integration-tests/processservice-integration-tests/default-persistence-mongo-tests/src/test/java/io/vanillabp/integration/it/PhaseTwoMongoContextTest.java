@@ -22,7 +22,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * Story 67 for the second store: the MongoDB outbox dispatcher runs phase two on its
+ * The second store: the MongoDB outbox dispatcher runs phase two on its
  * own thread as well, and the same promise applies there - VanillaBP provides the
  * transaction and the active CDI request context its call back into the application
  * needs. MongoDB itself needs no session, so this test guards the routing rather

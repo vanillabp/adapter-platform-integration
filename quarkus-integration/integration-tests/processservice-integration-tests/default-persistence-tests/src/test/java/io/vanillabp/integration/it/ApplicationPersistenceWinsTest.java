@@ -29,7 +29,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Story 69: the defaults are a fallback, never a takeover. This application has a
+ * The defaults are a fallback, never a takeover. This application has a
  * Panache repository for its aggregate AND an {@code AggregatePersistenceAware} of
  * its own - the latter has to be the one VanillaBP calls, in both directions.
  */

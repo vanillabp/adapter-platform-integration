@@ -14,7 +14,7 @@ import io.vanillabp.integration.adapter.migration.delivery.OpenTaskTouches;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Story 97: how the keys of the open tasks a BPMS redelivered reach their store. The
+ * How the keys of the open tasks a BPMS redelivered reach their store. The
  * bundling itself is what is pinned here - that nothing is written while a delivery is
  * being processed, that the store sees blocks of at most
  * {@link OpenTaskTouches#BLOCK_SIZE} keys however many arrive, and that a failing block

@@ -48,12 +48,12 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Acceptance test of story 70 on Spring Boot: an application which brings ALL THREE stores
+ * Acceptance test on Spring Boot: an application which brings ALL THREE stores
  * itself - the workflow aggregate, the phase-two outbox and the log of processed task
  * deliveries - with no data source and no MongoDB anywhere, and therefore no
  * {@link PlatformTransactionManager} at all.
  * <p>
- * Before this story such an application booted and then refused every workflow: a start
+ * Such an application used to boot and then refuse every workflow: a start
  * failed with "No transaction is active!" and every task delivery with "No (unique)
  * PlatformTransactionManager is available", a message which recommended adding a relational
  * database. Now the application contributes its unit of work through a
@@ -487,7 +487,7 @@ public class ApplicationOwnedStoresTest {
           ApplicationOwnedStoresConfiguration.PHASE_TWO,
           "phase two was not dispatched after the commit of the application's transaction");
       // twice: the start itself, and phase two - which asks for a transaction as well and
-      // gets the application's (story 67)
+      // gets the application's
       assertEquals(2, runner.opened.get());
       assertEquals(2, runner.committed.get());
       assertEquals(0, runner.rolledBack.get());

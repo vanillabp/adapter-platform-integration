@@ -20,7 +20,7 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 
 /**
- * Story 71: an application whose repository is used by VanillaBP alone injects it
+ * An application whose repository is used by VanillaBP alone injects it
  * nowhere. Quarkus removes beans nobody injects while building the application, and
  * although the Panache extension keeps repositories itself today, VanillaBP looks this
  * one up by class and marks it unremovable rather than relying on that. The aggregate

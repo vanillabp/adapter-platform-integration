@@ -6,7 +6,7 @@ applications built on VanillaBP).
 
 ## A renamed adapter id is noticed at startup (2026-08-23)
 
-Story 120. It adds a column to the task-delivery table, a property, and a startup message.
+This adds a column to the task-delivery table, a property, and a startup message.
 
 **Why.** VanillaBP persists the adapter id twice: an outbox entry of a START operation names
 the adapter elected in phase one, and the delivery key of every record is built from the
@@ -42,7 +42,7 @@ application which renamed an adapter id in the past hears about it now, which is
 
 ## Spring Boot: an adapter id named in `prioritized-adapters` gets its beans (2026-08-23)
 
-Story 119, a defect rather than a change: the documented convention was not held, so an
+A defect rather than a change: the documented convention was not held, so an
 application may have worked around it and can now drop the workaround.
 
 `vanillabp.adapters.<id>.type` is only needed for a CUSTOM adapter id; an id which IS an
@@ -82,8 +82,7 @@ two of which fail against the old code.
 
 ## An aggregate without a persistence ends the startup (2026-08-22)
 
-Story 114 changed this, story 106 found that it was never written down here. It concerns
-applications AND adapter repositories.
+This concerns applications AND adapter repositories.
 
 `AggregatePersistenceAware#getAggregateIdType()` used to catch every exception and answer
 `null`, which by contract means "a custom persistence layer owns the serialized form". A
@@ -99,7 +98,7 @@ What that means in practice:
   return `null` explicitly). Being asked out loud is the point;
 - **a test application without any persistence** - which every adapter repository has -
   has to say so as well, with an `AggregatePersistenceAware<Object>` double whose methods
-  throw. The Camunda 8 adapter's smoke application got one in story 106; a `SpringDataUtil`
+  throw. The Camunda 8 adapter's smoke application has one; a `SpringDataUtil`
   stub whose `getRepository` throws is no longer enough, because that throw is exactly what
   the check now reports.
 
@@ -108,10 +107,10 @@ the message names the workflow module now.
 
 ## name-clash-avoidance is `by-adapter` again, on every adapter (2026-08-22)
 
-Story 106, and it concerns every application which never configured
+This concerns every application which never configured
 `vanillabp.adapters.<id>.name-clash-avoidance`.
 
-Story 35 made `by-adapter` the default because that is what VanillaBP 1 deployed: a tenant
+`by-adapter` is the default because that is what VanillaBP 1 deployed: a tenant
 named after the workflow module, on Camunda 7 as well as on Camunda 8 (version 1's
 `use-tenants` was on and the tenant defaulted to the workflow module id). On 2026-08-11 both
 Camunda adapters overrode that default with `none` - Camunda 8 because a cluster from the
@@ -127,8 +126,7 @@ What an adapter does instead is say what its BPMS needs:
   accepts any name and creates nothing.
 - **Camunda 8** needs multi-tenancy enabled and the tenant present. Where the cluster refuses,
   the boot ends with a message naming both ways out, `use-prefix` and `none` (the second one
-  is version 1's `use-tenants: false`). The message names `none` since this story; it used to
-  name prefixing only.
+  is version 1's `use-tenants: false`). The message used to name prefixing only.
 - **Process-Engine-API** has no isolation of its own and refuses `by-adapter` while deploying,
   which is unchanged.
 
@@ -145,12 +143,12 @@ What to do, per application:
 
 ## Platform beans: ProcessServiceBase has no unsupported stubs left (2026-08-22)
 
-Story 106, and it concerns whoever writes a PLATFORM integration. Applications and BPMS
+This concerns whoever writes a PLATFORM integration. Applications and BPMS
 adapters are not affected.
 
 `ProcessServiceBase` carried four overrides (`completeTask`, `cancelTask`,
 `completeUserTask`, `cancelUserTask`) which threw "not yet supported by VanillaBP 2! It
-will be implemented in an upcoming story". Both platform beans have implemented all four
+will be implemented later". Both platform beans have implemented all four
 for a while, so the stubs were unreachable and the message was wrong. They are gone: the
 operations are abstract in the base as they are in `ProcessService`, and a platform bean
 which forgets one no longer compiles.
@@ -161,7 +159,7 @@ point.
 
 ## Adapters: the awareness probes are told which workflow is meant (2026-08-21)
 
-Story 107, and it concerns whoever WRITES an adapter. Applications are not affected;
+This concerns whoever WRITES an adapter. Applications are not affected;
 `spi-for-java` is untouched.
 
 The four awareness probes of `MigratableProcessService` take a `WorkflowScope` as their
@@ -184,8 +182,8 @@ ids are unique per aggregate type and not across an application, so two workflow
 whose aggregates count from one both hold an id `1`, and an adapter serving both answered
 `ACTIVE` for either. That costs nothing while one BPMS is configured and wins the election
 against the right BPMS as soon as a migration runs. Camunda 7 and Camunda 8 both had it
-(stories 103 and 104), which is how the SPI got the contract in story 105 and the
-parameter here.
+on a shared cluster respectively a shared database, which is how the SPI got the contract
+and the parameter here.
 
 For an adapter of your own: translate the scope into what your BPMS knows the processes by
 (a tenant, prefixed identifiers, a table prefix) and filter your query with it. The
@@ -194,7 +192,7 @@ adapter compares the tenant and the scoped process definition id of every search
 
 ## A workflow module's configuration is a default again (2026-08-21)
 
-Story 101, and a regression against Version 1 rather than a new rule.
+A regression against Version 1 rather than a new rule.
 
 A file named after a workflow module (`loan-approval.yaml`, `loan-approval-prod.properties`) carries
 defaults. Everything the application configures wins over it, whichever file the application uses.
@@ -247,7 +245,7 @@ application, and the application takes that back by writing the module-level key
 
 ## Metrics, health and a logging context around every delivery (2026-08-20)
 
-Story 92. Additive and without a single new property: nothing changes for an application
+Additive and without a single new property: nothing changes for an application
 which does nothing.
 
 Where Micrometer is on the classpath, VanillaBP now publishes what it does with your work
@@ -288,7 +286,7 @@ behind the property above; a gauge reading something already in memory needs non
 
 ## A workflow which ended can release its delivery records (2026-08-19)
 
-Story 76. Additive and switched off, so nothing changes for an application which does not
+Additive and switched off, so nothing changes for an application which does not
 configure it.
 
 The records of processed task deliveries were cleaned up by age alone until now
@@ -313,7 +311,7 @@ the startup names the store and the property.
 
 ## A redelivered task no longer runs the handler twice (2026-08-14)
 
-Story 51. This is a behaviour change of the inbound direction, and it is on by default.
+A behaviour change of the inbound direction, and it is on by default.
 
 A remote BPMS delivers a task at least once: it hands the task out again whenever it did
 not learn the result, for instance after a crash between the commit of the local
@@ -349,7 +347,7 @@ that nothing was committed.
 
 ## The election cache can be sized and watched (2026-08-14)
 
-Story 58. Everything here is additive - an application configuring nothing behaves
+Everything here is additive - an application configuring nothing behaves
 exactly as before.
 
 **New properties.** The bounds of the default election cache were fixed constants and
@@ -386,7 +384,7 @@ no-arg constructor still exists and still means "the defaults, uncounted".
 
 ## An operation right after a start waits for the BPMS to catch up (2026-08-13)
 
-Story 54. Two changes, one of them a defect that made Camunda 8 unusable on any cluster
+Two changes, one of them a defect that made Camunda 8 unusable on any cluster
 with secondary storage.
 
 **`awarenessOfWorkflow` takes the aggregate persistence now.** The adapter SPI methods
@@ -431,7 +429,7 @@ on and fails as before.
 
 ## `version` decides which method serves a task (2026-08-13)
 
-Story 48 - the `version` attribute of `@WorkflowTask`, `@WorkflowStartedByBpms` and
+The `version` attribute of `@WorkflowTask`, `@WorkflowStartedByBpms` and
 `@WorkflowEnded` is evaluated now. It exists since VanillaBP 1 and was never implemented
 there, so every method served every version; VanillaBP 2 parsed the ranges but no adapter
 reported a version, which came to the same. Applications not using the attribute are
@@ -480,7 +478,7 @@ the Process-Engine-API can only report the tag of the current task (GAPS 19).
 
 ## Camunda 8: workflows were never found on clusters with secondary storage (2026-08-13)
 
-Story 52 - a defect fix. Nothing to change in your code or configuration.
+A defect fix. Nothing to change in your code or configuration.
 
 The adapter searched process instances by the aggregate-ID variable and passed the ID as
 a plain string. Camunda 8 compares a variable against its stored JSON, so a String value
@@ -502,7 +500,7 @@ whatever type the aggregate's ID attribute has - a unit test pins the two halves
 
 ## Telling the BPMS that the aggregate changed (2026-08-13)
 
-Story 44 - `ProcessService.aggregateChanged` exists now, in two overloads. Additive;
+`ProcessService.aggregateChanged` exists now, in two overloads. Additive;
 nothing existing changes behavior.
 
 - **New in `spi-for-java` 1.2.0:** `aggregateChanged(aggregate)` writes the values
@@ -514,12 +512,12 @@ nothing existing changes behavior.
   alone and vanish with it. The task-scoped overload does not additionally write the
   global scope either: an inner value shadows the global one there anyway, and writing
   both would change what the other iterations see.
-- **What travels is the sync model of story 28** (`@SyncWithBPMS`), the same values a
+- **What travels is the sync model** (`@SyncWithBPMS`), the same values a
   task completion pushes. The method names no variables.
 - **New adapter SPI methods** `MigratableProcessService#aggregateChangedPhaseOne` /
   `#aggregateChangedPhaseTwo`, both `default` and both throwing a guiding
   `UnsupportedOperationException`.
-- **New core operation `AGGREGATE_CHANGED`** in the operation registry (story 45),
+- **New core operation `AGGREGATE_CHANGED`** in the operation registry,
   WITHOUT an idempotency key: the values are read from the aggregate when the entry is
   dispatched, so a redelivered entry writes the then-current state. Deduplicating
   could only drop a push, never save one. The adapter is elected at dispatch time by
@@ -557,7 +555,7 @@ nothing existing changes behavior.
 
 ## Telling the application that a workflow ended (2026-08-13)
 
-Story 43 - `@WorkflowEnded` exists now. Additive; nothing existing changes behavior,
+`@WorkflowEnded` exists now. Additive; nothing existing changes behavior,
 and a model without such a method is deployed exactly as before.
 
 - **New in `spi-for-java` 1.2.0:** the annotation `@WorkflowEnded` and the value
@@ -584,7 +582,7 @@ and a model without such a method is deployed exactly as before.
 
 ## Broadcasting BPMN signals (2026-08-12)
 
-Story 42 - `ProcessService.sendSignal(String)` exists now. Additive; nothing existing
+`ProcessService.sendSignal(String)` exists now. Additive; nothing existing
 changes behavior.
 
 - **New in `spi-for-java` 1.2.0:** `sendSignal(String signalName)` as a default method
@@ -595,7 +593,7 @@ changes behavior.
   `#sendSignalPhaseTwo`, both `default` and both throwing a guiding
   `UnsupportedOperationException` - an adapter whose BPMS has no signals says so
   instead of swallowing a broadcast.
-- **New core operation `SEND_SIGNAL`** in the operation registry (story 45), WITHOUT
+- **New core operation `SEND_SIGNAL`** in the operation registry, WITHOUT
   an idempotency key: a signal has nothing to deduplicate by, so a redelivered outbox
   entry broadcasts again. The broadcasting adapter IS persisted with the entry,
   because a broadcast goes to every BPMS the workflow module was deployed to and each
@@ -617,7 +615,7 @@ changes behavior.
 
 ## Workflows the BPMS starts itself (2026-08-12)
 
-Story 41 - a timer, signal or conditional start event produces a workflow without a
+A timer, signal or conditional start event produces a workflow without a
 workflow aggregate, which VanillaBP now builds. Additive: nothing existing changes
 behavior.
 
@@ -646,7 +644,7 @@ behavior.
 
 ## Phase-two operations become a registry (2026-08-12)
 
-Story 45 - the closed enum `PhaseTwoOperation` becomes an open registry, so
+The closed enum `PhaseTwoOperation` becomes an open registry, so
 extensions can use the outbox for crash-safe after-commit work of their own and new
 core operations no longer edit a shared enum plus a `switch`.
 
@@ -687,7 +685,7 @@ core operations no longer edit a shared enum plus a `switch`.
 
 ## Name-clash avoidance: tenants, prefixes - and a Camunda 8 fix (2026-08-07)
 
-Story 35 - how a workflow module's identifiers are kept apart from those of other
+How a workflow module's identifiers are kept apart from those of other
 modules becomes ONE explicit setting, and Camunda 8 regains the behavior it had in
 VanillaBP 1.
 
@@ -740,15 +738,15 @@ VanillaBP 1.
 
 ## Aggregate sync: derived class mode and the completion push (2026-08-07)
 
-Story 28b completes story 28 (below). Two behavior changes - read them if an
+This completes the aggregate sync of the entry below. Two behavior changes - read them if an
 application already uses `@SyncWithBPMS` / `@NoSyncWithBPMS`.
 
-- **The class mode is DERIVED when only ATTRIBUTES are annotated.** Story 28 let the
-  ADAPTER's default decide for a class carrying no annotation of its own, even when
+- **The class mode is DERIVED when only ATTRIBUTES are annotated.** Before, the
+  ADAPTER's default decided for a class carrying no annotation of its own, even when
   its attributes were annotated. Now the first annotation anywhere hands control to
   the application: attributes marked `@SyncWithBPMS` imply `@NoSyncWithBPMS` on the
   class (opt-in), attributes marked `@NoSyncWithBPMS` imply `@SyncWithBPMS` on the
-  class (opt-out). **What flips for a story-28-era aggregate without a class
+  class (opt-out). **What flips for an aggregate of the previous release without a class
   annotation:**
   - only `@SyncWithBPMS` attributes, remote BPMS (default `FULL`): used to share
     everything, now shares ONLY the annotated attributes;
@@ -779,7 +777,7 @@ application already uses `@SyncWithBPMS` / `@NoSyncWithBPMS`.
 
 ## Aggregate sync with the BPMS (2026-08-06)
 
-Story 28 - `@SyncWithBPMS` / `@NoSyncWithBPMS` are implemented. Both annotations
+`@SyncWithBPMS` / `@NoSyncWithBPMS` are implemented. Both annotations
 are NEW in spi-for-java (they were documented in the wiki but never shipped), so
 nothing existing changes its meaning.
 
@@ -816,7 +814,7 @@ nothing existing changes its meaning.
 
 ## Convention over configuration (2026-08-06)
 
-Story 34 - an application configures only what DEVIATES from the convention.
+An application configures only what DEVIATES from the convention.
 Everything documented before keeps working unchanged: explicit sections are never
 overruled, the validation rules are the same for written and derived entries.
 
@@ -857,7 +855,7 @@ overruled, the validation rules are the same for written and derived entries.
 
 ## Viewer/history API (2026-08-06)
 
-Story 26 - `ProcessService#getProcessDefinitions`, `#getBpmnXml` and
+`ProcessService#getProcessDefinitions`, `#getBpmnXml` and
 `#getWorkflowHistory` are implemented (they were stubs raising
 `UnsupportedOperationException` before).
 
@@ -892,7 +890,7 @@ Story 26 - `ProcessService#getProcessDefinitions`, `#getBpmnXml` and
 
 ## BPMS election: cache + START re-dispatch mitigation (2026-08-04)
 
-Story 25 - the unified election for operations on existing workflows, an optional
+The unified election for operations on existing workflows, an optional
 election cache and the at-least-once mitigation for re-dispatched starts.
 
 - **Applications: nothing to change.** Elections now remember which adapter holds a
@@ -923,7 +921,7 @@ election cache and the at-least-once mitigation for re-dispatched starts.
 
 ## Message correlation + start-by-message (2026-08-04)
 
-Story 23 - `ProcessService#correlateMessage(aggregate, messageName[, correlationId])`
+`ProcessService#correlateMessage(aggregate, messageName[, correlationId])`
 and `#startWorkflowByMessage(aggregate, messageName)` are implemented.
 Application-facing:
 
@@ -959,7 +957,7 @@ Application-facing:
 
 ## User tasks (2026-08-04)
 
-Story 24 - `ProcessService#completeUserTask`/`#cancelUserTask` are implemented and
+`ProcessService#completeUserTask`/`#cancelUserTask` are implemented and
 `@WorkflowTask` methods may be wired to BPMN USER tasks as OPTIONAL notification
 handlers. Application-facing:
 
@@ -975,7 +973,7 @@ handlers. Application-facing:
   processed through forms/task lists); a matching method still counts as wired.
   Notification handlers must NOT throw `TaskException` (there is nothing to
   complete by BPMN error - a guiding error explains this).
-- **`completeUserTask`/`cancelUserTask`** follow story 22's flow: active
+- **`completeUserTask`/`cancelUserTask`** follow the async-task flow: active
   transaction required, adapter elected by probing (`awarenessOfUserTask`),
   embedded BPMS execute in phase one, remote BPMS after the commit via the outbox
   (operations `COMPLETE_USER_TASK`/`CANCEL_USER_TASK` - stores transporting
@@ -995,7 +993,7 @@ handlers. Application-facing:
 
 ## Asynchronous task completion + spi-for-java 1.2.0 (2026-08-04)
 
-Story 22 - `ProcessService#completeTask`/`#cancelTask` are implemented; the platform
+`ProcessService#completeTask`/`#cancelTask` are implemented; the platform
 now builds against **spi-for-java 1.2.0-SNAPSHOT** (the "Harden SPI" release: the
 message-OBJECT overloads of `startWorkflowByMessage`/`correlateMessage` were removed
 and the query methods became `default`). Application-facing:
@@ -1039,7 +1037,7 @@ and the query methods became `default`). Application-facing:
 
 ## Task processing: core-managed transactions + adapter SPI additions (2026-08-01)
 
-Story 21a - `@WorkflowTask` methods are executed by the core (load aggregate -
+`@WorkflowTask` methods are executed by the core (load aggregate -
 invoke - save, within one transaction). Application-facing:
 
 - **Do not annotate `@WorkflowTask` methods (or their services) with your own
@@ -1062,12 +1060,12 @@ invoke - save, within one transaction). Application-facing:
   `MultiInstanceValue`) - adapters validate task wiring during `wireBpmn` and
   dispatch delivered tasks through the invoker; the three outcomes are mapped by
   the adapter to its BPMS (complete / complete-with-BPMN-error / leave open plus
-  exception propagation for BPMS-side retries). Since story 21b the invoker also
-  provides `validateNoUnwiredWorkflowTaskMethods(module)` (per-module reverse
-  wiring check, called at the end of `deployResources` - methods may serve any
-  of their class' declared BPMN processes) and
+  exception propagation for BPMS-side retries). The invoker also provides
+  `validateNoUnwiredWorkflowTaskMethods(module)` (per-module reverse wiring check, called
+  at the end of `deployResources` - methods may serve any of their class' declared BPMN
+  processes) and
   `resolveWorkflowAggregateProperty(...)` (embedded BPMS evaluating BPMN
-  expressions against the workflow aggregate). Since story 21c it also provides
+  expressions against the workflow aggregate). It also provides
   `resolveWorkflowAggregateIdName(module, process)` - remote BPMS store the
   aggregate ID as a variable named after the aggregate's ID property
   (`AggregatePersistenceAware.getAggregateIdName()`), and the adapter needs that
@@ -1075,7 +1073,7 @@ invoke - save, within one transaction). Application-facing:
 
 ## Per-aggregate outbox selection + aggregate-ID type in the persistence SPI (2026-07-31)
 
-Story 26i - two related consolidations, breaking for applications using their own
+Two related consolidations, breaking for applications using their own
 `PhaseTwoOutbox` bean and behavior-changing for mixed-persistence classpaths:
 
 - **Outbox SPI relocated to the business SPI** (breaking for applications
@@ -1133,7 +1131,7 @@ Story 26i - two related consolidations, breaking for applications using their ow
 
 ## Startup configuration validation (2026-07-31)
 
-Story 26c - configuration defects surface at startup, never first at runtime:
+Configuration defects surface at startup, never first at runtime:
 
 - **New core helper `MigrationAdapterProperties.isFirstPriorityAnywhere(adapterId)`**:
   true if the adapter id is FIRST in the prioritized-adapters list globally, of any
@@ -1160,7 +1158,7 @@ warning (fires when the engine producer runs).
 
 ## Adapter config model: per-id beans, canonical location, level resolution (2026-07-30)
 
-Story 26d - three related changes, breaking for adapters and early Camunda 8 users:
+Three related changes, breaking for adapters and early Camunda 8 users:
 
 - **One process service AND one deployment service per configured adapter id**
   (multiple ids of one BPMS type = the migration scenario). Spring: adapters
@@ -1178,14 +1176,14 @@ Story 26d - three related changes, breaking for adapters and early Camunda 8 use
   keys (`mode`, `rest-address`, `grpc-address`, `prefer-rest-over-grpc`,
   `tenant-id`, `cluster-id`, `region`, `client-id`, `client-secret`) now live at
   the canonical per-adapter location `vanillabp.adapters.<id>.*`, contributed via
-  the story-19 overlay pattern on both platforms. The last
+  the overlay pattern on both platforms. The last
   `getPropertyNames()`-based key parsing was deleted with it.
 - **Level resolution in core:** `MigrationAdapterProperties.resolveForAdapter(
   module, process, task, adapterId, extractor)` resolves adapter-scoped
   properties most-specific-wins across task > workflow > workflow-module >
   adapter. The property model gained the workflow-level `adapters` map and the
   task-level slot (`workflows.<w>.tasks.<t>.adapters.<id>.*`) - structural
-  preparation for stories 27/21 (workflow-level config is still rejected at
+  preparation for what came later (workflow-level config is still rejected at
   startup).
 
 ## `vanillabp.outbox.*` consolidated onto the core model (2026-07-30)
@@ -1218,7 +1216,7 @@ core and bound natively per platform. **Zero user-visible config-key changes.**
 - **Core model reshape:** `MigrationAdapterProperties.adapters` is now
   `Map<String, AdapterConfigProperties>` (fields `type`, `deploymentFailure`),
   matching the user-facing keys `vanillabp.adapters.<id>.{type,deployment-failure}`
-  1:1 (prerequisite for direct binding; pulled forward from story 26d). The
+  1:1 (prerequisite for direct binding). The
   separate `deploymentFailures` map is gone; `getDeploymentFailureFor(id)` stays.
   The id→type view is `adapterTypes()` (deliberately NOT a JavaBean getter - the
   binder and the metadata processor must not see it as a property).
@@ -1376,8 +1374,8 @@ command). The methods' own documented idempotency key
 (`workflowModuleId + bpmnProcessId + workflowAggregateId`) was previously
 unconstructible. Both values are forwarded from `MigrationProcessService`, which holds
 them as fields. `awarenessOfTask`/`awarenessOfWorkflow` still take only the aggregate
-id — story 22 EVALUATED adding module/process parameters while implementing the three
-real adapters and decided the signatures STAY: Camunda 7 locates a task by the
+id — adding module/process parameters was evaluated while the three real adapters were
+implemented, and the signatures STAY: Camunda 7 locates a task by the
 globally unique execution ID (verified against the business key - no tenant scoping
 needed), Camunda 8 by the globally unique job key, and the Process-Engine-API by the
 task ID alone. No real implementation needed the additional parameters.
@@ -1562,7 +1560,7 @@ require `spring-boot-data-mongodb-test` — not needed so far.)
 - Spring Boot 4.1.0 manages JUnit Jupiter **6.0.x** and Mockito 5.23; tests kept
   running without changes (root `mockito.version` is upgraded separately).
 
-## Story 57: the older versions a BPMS still holds (2026-08-15)
+## The older versions a BPMS still holds (2026-08-15)
 
 **Adapters** gain two optional questions and one report, all of them additive:
 
@@ -1588,7 +1586,7 @@ method whose version range excludes the version this boot deployed no longer has
 task respectively a start event of the deployed model. It is reported as a warning if it
 matches no version the BPMS holds at all.
 
-## Story 59: two writers on one workflow aggregate (2026-08-15)
+## Two writers on one workflow aggregate (2026-08-15)
 
 **Platform integrations** implement one new method of the core's `TransactionRunner`:
 `isConcurrentModification(Throwable)` answers whether a failure is an optimistic locking

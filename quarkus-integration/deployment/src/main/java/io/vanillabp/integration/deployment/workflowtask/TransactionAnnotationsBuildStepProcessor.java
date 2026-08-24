@@ -13,7 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Decides at build time whether Spring's {@code @Transactional} has an effect on this
  * application, which the core's startup check of <code>&#64;WorkflowTask</code> methods
- * needs to know (story 40b): only the extension {@code quarkus-spring-tx} maps that
+ * needs to know: only the extension {@code quarkus-spring-tx} maps that
  * annotation onto JTA. Without it the annotation is inert, and reporting it as a defect
  * would fail a boot over an annotation that does nothing - a realistic case for an
  * application sharing modules with a Spring code base, which is VanillaBP's migration

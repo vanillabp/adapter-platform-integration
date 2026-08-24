@@ -10,7 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The startup hint about two writers on one workflow aggregate (story 59): a BPMN
+ * The startup hint about two writers on one workflow aggregate: a BPMN
  * process which can hold more than one token at a time has branches writing the same
  * workflow aggregate, and without a version attribute the branch committing second
  * writes back what it read when it started - silently, since an ORM saves the whole

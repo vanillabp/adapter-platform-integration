@@ -29,7 +29,7 @@ import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The name-clash-avoidance model (story 35): resolving the mode, composing the
+ * The name-clash-avoidance model: resolving the mode, composing the
  * identifiers a BPMS sees, reading them back and the validations which make the
  * whole thing safe.
  */

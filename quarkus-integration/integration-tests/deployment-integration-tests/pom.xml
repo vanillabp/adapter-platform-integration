@@ -54,14 +54,14 @@
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-jdbc-h2</artifactId>
     </dependency>
-    <!-- the version-conflict acceptance test (story 59) needs a real ORM: what is
+    <!-- the version-conflict acceptance test needs a real ORM: what is
          proven there is what Hibernate raises when the version of a row moved on,
          and how JTA wraps it on the way out -->
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-hibernate-orm</artifactId>
     </dependency>
-    <!-- story 92: the delivery meters and the readiness check of the adapters are
+    <!-- the delivery meters and the readiness check of the adapters are
          published only where the application brings these extensions -->
     <dependency>
       <groupId>io.quarkus</groupId>

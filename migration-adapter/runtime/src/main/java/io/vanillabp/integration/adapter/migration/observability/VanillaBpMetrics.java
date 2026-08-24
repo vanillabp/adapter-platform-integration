@@ -45,7 +45,7 @@ public interface VanillaBpMetrics {
   String TASK_DELIVERY_DURATION = "vanillabp.task.delivery.duration";
 
   /**
-   * Repeated deliveries answered from the record of story 51 instead of running the
+   * Repeated deliveries answered from the delivery record instead of running the
    * <code>&#64;WorkflowTask</code> method again. A rising rate means the BPMS hands
    * work out a second time, usually because the lock is too short for the handler.
    */

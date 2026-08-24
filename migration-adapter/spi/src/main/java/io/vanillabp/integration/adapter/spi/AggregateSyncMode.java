@@ -6,8 +6,8 @@ package io.vanillabp.integration.adapter.spi;
  * {@code @SyncWithBPMS}/{@code @NoSyncWithBPMS} (an aggregate class annotation
  * overrides it, an attribute annotation overrides that, and so on).
  * <p>
- * <b>The default is about what a MODEL may read, not about how an engine reads it</b>
- * (corrected by story 66). Every BPMS evaluates the expressions of its models itself,
+ * <b>The default is about what a MODEL may read, not about how an engine reads it.</b>
+ * Every BPMS evaluates the expressions of its models itself,
  * against what VanillaBP pushed as variables - an embedded engine included, even though
  * it could reach into the application. So {@link #FULL} is the default of every adapter:
  * an application which annotates nothing gets models which can read every attribute of
@@ -16,9 +16,9 @@ package io.vanillabp.integration.adapter.spi;
  * gets the same behaviour everywhere as well.
  * <p>
  * {@link #NONE} exists for an adapter whose BPMS is fed by a different mechanism
- * entirely. Camunda 7 used it until story 66, where an EL resolver read the aggregate
- * live: that made models which work on Camunda 7 fail on every remote BPMS, so the
- * resolver is gone and the values are pushed like everywhere else.
+ * entirely. Camunda 7 used it while an EL resolver read the aggregate live: that made
+ * models which work on Camunda 7 fail on every remote BPMS, so the resolver is gone and
+ * the values are pushed like everywhere else.
  */
 public enum AggregateSyncMode {
 

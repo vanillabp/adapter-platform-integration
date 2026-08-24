@@ -10,8 +10,8 @@ import io.vanillabp.spi.process.ProcessService;
  * an {@link UnsupportedOperationException} saying so rather than being a silent
  * no-op. There are none left, and the stubs are gone with them: every operation of
  * {@link ProcessService} is now abstract here as well, so a platform bean which
- * forgets one does not compile - which is a better guard than a message promising an
- * upcoming story. What a single BPMS cannot do is answered by its adapter, naming
+ * forgets one does not compile - which is a better guard than a message promising the
+ * operation for later. What a single BPMS cannot do is answered by its adapter, naming
  * that adapter (see {@code MigratableProcessService}).
  *
  * @param <A> The workflow-aggregate-class

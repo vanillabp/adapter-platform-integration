@@ -29,7 +29,7 @@ import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Story 70 in the core: which transaction the work on a workflow aggregate runs in, and
+ * Which transaction the work on a workflow aggregate runs in, and
  * what the startup check makes of what the platform reports about it.
  */
 @ExtendWith(MockitoExtension.class)

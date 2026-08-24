@@ -1,7 +1,7 @@
 package io.vanillabp.integration.test.delivery;
 
 /**
- * The workflow aggregate of the inbound-idempotency test (story 51). It lives in its own
+ * The workflow aggregate of the inbound-idempotency test. It lives in its own
  * package together with its workflow service, so the scanning of the test application
  * picks up exactly these two.
  */

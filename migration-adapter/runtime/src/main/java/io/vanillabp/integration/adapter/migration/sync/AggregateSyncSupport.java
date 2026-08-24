@@ -19,7 +19,7 @@ import io.vanillabp.spi.service.SyncWithBPMS;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * THE sync model (story 28): which attributes of a workflow aggregate are shared
+ * THE sync model: which attributes of a workflow aggregate are shared
  * with the BPMS, and what their values look like. BPMS-neutral by design - the
  * adapters only decide their {@link AggregateSyncMode} default and what to do with
  * the result.
@@ -49,7 +49,7 @@ import lombok.extern.slf4j.Slf4j;
  * exactly like the attribute holding it - it is never "fully shared" on its own
  * account.
  *
- * <h2>Deriving a class' mode from its attributes (story 28b)</h2>
+ * <h2>Deriving a class' mode from its attributes</h2>
  *
  * The moment the FIRST sync annotation appears anywhere on a type, the application
  * has taken control - the adapter's default no longer applies to it. If only
@@ -181,7 +181,7 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
         .anyMatch(property -> property.name().equals(propertyName))) {
       return true;
     }
-    // MIGRATION (story 66, to be removed in 2.1 together with the Camunda 7 EL
+    // MIGRATION (to be removed in 2.1 together with the Camunda 7 EL
     // resolver's fallback): what VanillaBP 1 resolved and the sync model does not is an
     // attribute of the aggregate as well, and it is the case which has to be named
     // loudest - a model relying on such a name breaks silently. Neither of the two can

@@ -8,7 +8,7 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
 import io.vanillabp.integration.adapter.migration.config.OutfadedVersionsInUsePolicy;
 
 /**
- * The versions of a BPMN process an application declares obsolete (story 57):
+ * The versions of a BPMN process an application declares obsolete:
  * <code>vanillabp.adapters.&lt;id&gt;.outfaded-versions</code>, resolvable per workflow
  * module and workflow like every adapter-scoped property.
  * <p>

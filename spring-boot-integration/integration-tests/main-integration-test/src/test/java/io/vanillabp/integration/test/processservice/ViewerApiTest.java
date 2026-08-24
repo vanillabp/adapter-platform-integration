@@ -38,7 +38,7 @@ import io.vanillabp.spi.process.WorkflowHistory;
 import io.vanillabp.spi.process.WorkflowNotFoundException;
 
 /**
- * Acceptance test of the viewer/history API (story 26) on Spring Boot: the
+ * Acceptance test of the viewer/history API on Spring Boot: the
  * application calls {@code ProcessService#getProcessDefinitions/getBpmnXml/
  * getWorkflowHistory}, the BPMS holding the workflow answers, and the process
  * definition ids handed to the application are namespaced per adapter id so

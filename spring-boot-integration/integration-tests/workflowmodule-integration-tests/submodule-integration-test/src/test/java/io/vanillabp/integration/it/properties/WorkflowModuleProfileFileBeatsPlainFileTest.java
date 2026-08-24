@@ -15,7 +15,7 @@ import io.vanillabp.integration.test.TestApplication;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Story 101: the one order inside a workflow module which had to survive moving
+ * The one order inside a workflow module which had to survive moving
  * its files below the application - <i>test-module-testprofile.yaml</i> beats
  * <i>test-module.yaml</i>, and both still lose against the application.
  */

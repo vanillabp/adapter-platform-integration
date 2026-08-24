@@ -8,7 +8,7 @@ import io.vanillabp.spi.service.BpmsStartTrigger;
  * the adapter during <code>wireBpmn</code> through
  * {@link BpmsInitiatedStartInvoker#validateBpmsInitiatedStarts}.
  * <p>
- * The signal name is the PLAIN one as modelled - name-clash avoidance (story 35)
+ * The signal name is the PLAIN one as modelled - name-clash avoidance
  * stays invisible above the BPMS boundary, so an adapter which scopes identifiers
  * reports what the model said, not what it deployed.
  *

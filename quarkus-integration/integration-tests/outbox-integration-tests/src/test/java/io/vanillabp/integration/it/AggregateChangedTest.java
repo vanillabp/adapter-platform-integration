@@ -22,7 +22,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * Pushing a changed workflow-aggregate on Quarkus (story 44) with the dummy adapter
+ * Pushing a changed workflow-aggregate on Quarkus with the dummy adapter
  * forced to require a two-phase commit: a REMOTE BPMS is written to after the local
  * transaction was committed, so the push rides an outbox entry. What this pins: the
  * task id travels in the entry's ARGS, the entry carries no idempotency key (the

@@ -21,7 +21,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * Story 63: the outbox repeats a failed dispatch, which is what makes losing a
+ * The outbox repeats a failed dispatch, which is what makes losing a
  * concurrency conflict survivable. A failure the BPMS answers the same way every time
  * gains nothing from that, so an adapter may say
  * ({@code MigratableProcessService#isPhaseTwoFailureRepeatable}) that repeating cannot

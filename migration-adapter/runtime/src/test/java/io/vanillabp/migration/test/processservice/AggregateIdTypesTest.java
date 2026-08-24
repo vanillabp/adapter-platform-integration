@@ -16,7 +16,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.persistence.Id;
 
 /**
- * Story 69: the ID's name and value are determined by the same walk as its type,
+ * The ID's name and value are determined by the same walk as its type,
  * because the persistence implementations VanillaBP provides on Quarkus answer
  * {@code getAggregateIdName}, {@code getAggregateIdType} and {@code getAggregateId}
  * from it.

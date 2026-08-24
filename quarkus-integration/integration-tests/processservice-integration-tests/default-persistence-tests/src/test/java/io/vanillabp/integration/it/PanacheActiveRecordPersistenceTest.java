@@ -26,7 +26,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Story 69: an aggregate written as a Hibernate ORM Panache active record (no
+ * An aggregate written as a Hibernate ORM Panache active record (no
  * repository anywhere) is persisted by VanillaBP through the entity manager of the
  * aggregate's persistence unit. Both directions are exercised: starting a workflow
  * stores the aggregate, and a task delivered by the BPMS loads it, runs the handler

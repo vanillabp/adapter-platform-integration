@@ -87,7 +87,7 @@ class WorkflowTaskScanner {
       if (subscribedEvents.isEmpty()) {
         subscribedEvents.add(TaskEvent.Event.CREATED);
       }
-      // story 99: the process variables the method reads - the core is the only place
+      // The process variables the method reads - the core is the only place
       // these names exist, and an adapter whose BPMS ships a variable payload with
       // every delivery needs them to keep that payload at what is read
       final var taskParameters = Arrays

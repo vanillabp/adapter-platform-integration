@@ -11,7 +11,7 @@ import io.vanillabp.integration.adapter.migration.observability.DeliveryMdc;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The logging context of a delivery (story 92): the keys are there while the work
+ * The logging context of a delivery: the keys are there while the work
  * runs, they are gone afterwards, and what the application put on the thread survives
  * both.
  */

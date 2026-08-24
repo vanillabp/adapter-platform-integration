@@ -1401,11 +1401,11 @@ public class DeploymentServiceTest {
 
 
   /**
-   * Story 34's rule: several ids of ONE adapter type only make sense if they address
+   * The rule: several ids of ONE adapter type only make sense if they address
    * DIFFERENT systems, and whether two configurations differ is BPMS knowledge, so the
    * adapter decides. The SPI documents WHEN the adapter is asked - once per type, on the
    * first deployment service of that type, with the ids in priority order and before
-   * anything reaches a BPMS. Nothing held that until story 106.
+   * anything reaches a BPMS, and this is what holds it.
    */
   @Nested
   @DisplayName("Several ids of one adapter type Tests")

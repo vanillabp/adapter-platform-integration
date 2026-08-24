@@ -38,7 +38,7 @@ import io.vanillabp.spi.service.WorkflowEnd;
 import io.vanillabp.spi.service.WorkflowEnded;
 
 /**
- * Story 76: a workflow which ended releases the records of its processed task deliveries,
+ * A workflow which ended releases the records of its processed task deliveries,
  * so the deduplication window is closed by the workflow instead of by the clock. What is
  * pinned here is the CORE's part of it:
  * <ul>

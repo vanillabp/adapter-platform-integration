@@ -85,25 +85,24 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
   /**
    * What the BPMS know about the deployed versions of the BPMN processes - needed to
    * place a version TAG named by a <code>version</code> attribute in the deployment
-   * order (story 48). Shared by all three handler kinds, since all three annotations
+   * order. Shared by all three handler kinds, since all three annotations
    * carry that attribute.
    */
   private final ProcessVersions processVersions = new ProcessVersions();
 
   /**
    * The <code>&#64;WorkflowStartedByBpms</code> methods of the same workflow service
-   * classes - what a workflow started by the BPMS itself needs (story 41).
+   * classes - what a workflow started by the BPMS itself needs.
    */
   private final BpmsInitiatedStarts bpmsInitiatedStarts = new BpmsInitiatedStarts(processVersions);
 
   /**
-   * The <code>&#64;WorkflowEnded</code> methods of the same workflow service classes
-   * (story 43).
+   * The <code>&#64;WorkflowEnded</code> methods of the same workflow service classes.
    */
   private final WorkflowEndedHandlers workflowEndedHandlers = new WorkflowEndedHandlers(processVersions);
 
   /**
-   * The transaction annotations of the running platform (story 40b), supplied by the
+   * The transaction annotations of the running platform, supplied by the
    * platform integration: which annotations create a transaction boundary here, and
    * which of them this platform does not honor at all. An EMPTY list switches the
    * startup check off, which is what test doubles registering workflow services
@@ -121,24 +120,24 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
 
   /**
    * The hint about BPMN processes producing concurrent tokens while their workflow
-   * aggregate has no version attribute (story 59).
+   * aggregate has no version attribute.
    */
   private final io.vanillabp.integration.adapter.migration.transaction.ConcurrentTokenCheck concurrentTokenCheck = new io.vanillabp.integration.adapter.migration.transaction.ConcurrentTokenCheck();
 
   /**
    * The bound <code>vanillabp.*</code> tree - needed to answer whether a workflow module
-   * releases the records of its processed task deliveries when a workflow ends (story
-   * 76). May be <code>null</code> (tests): nothing is released then.
+   * releases the records of its processed task deliveries when a workflow ends. May be
+   * <code>null</code> (tests): nothing is released then.
    */
   private final io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties properties;
 
   /**
-   * The process versions this application declares obsolete (story 57).
+   * The process versions this application declares obsolete.
    */
   private final OutfadedProcessVersions outfadedVersions;
 
   /**
-   * Whether the application still serves the OLDER versions the BPMS holds (story 57).
+   * Whether the application still serves the OLDER versions the BPMS holds.
    */
   private final DeployedProcessVersionsCheck deployedVersionsCheck;
 
@@ -212,7 +211,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
       final Function<Class<?>, Object> beanResolver,
       final MigrationProcessService<?> processService) {
 
-    // STARTUP validation of the sync model (story 28b): an aggregate whose
+    // STARTUP validation of the sync model: an aggregate whose
     // attributes are annotated both ways without the class stating its own mode is
     // ambiguous - the developer learns it when the application boots, not when the
     // first workflow reaches a sync point
@@ -250,7 +249,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
           beanResolver,
           transactionAnnotations);
       // one by one, so two methods of the SAME class wired to one task definition are
-      // compared against each other as well (story 48)
+      // compared against each other as well
       handlers
           .forEach(handler -> {
             failOnDuplicateWiring(
@@ -395,7 +394,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
         .filter(handler -> tasks.stream().anyMatch(task -> matches(handler, task)))
         .forEach(WorkflowTaskHandler::markWired);
 
-    // OPTIONAL tasks (user tasks - story 24) never fail the validation: a user
+    // OPTIONAL tasks (user tasks) never fail the validation: a user
     // task without a notification handler is processed through forms/task lists;
     // matching handlers were still marked wired above
     final var unmatchedTasks = tasks
@@ -504,7 +503,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
   }
 
   /**
-   * Whether the method exists for OLDER versions of its process only (story 57) - it
+   * Whether the method exists for OLDER versions of its process only - it
    * then matches no task of the model this boot deployed, and that is the point of it
    * rather than a defect.
    * <p>
@@ -587,7 +586,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
                     context.getTaskDefinition(),
                     context.getProcessVersion(),
                     VersionRange.noVersionReportedHint(context.getProcessVersion()),
-                    // story 57: a delivery from a version the configuration faded out
+                    // A delivery from a version the configuration faded out
                     // looks exactly like a wiring defect otherwise
                     outfadedVersionHint(
                         workflowModuleId, bpmnProcessId, context.getAdapterId(), context.getProcessVersion()),
@@ -629,8 +628,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
               .stream()
               .anyMatch(handler -> !handler.versionTags().isEmpty());
           if (!tagsUsed) {
-            // story 57: the older versions are checked even where no annotation
-            // names a tag, so this is no longer the end of the story
+            // the older versions are checked even where no annotation names a tag
             deployedVersionsCheck.check(workflowModuleId, bpmnProcessId);
             return;
           }
@@ -706,7 +704,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
       return result;
     }
 
-    // the aggregate values shared with a remote BPMS (story 28) - read AFTER the
+    // the aggregate values shared with a remote BPMS - read AFTER the
     // start's transaction committed, which is why an embedded BPMS (joining the
     // caller's transaction, sync mode NONE) never gets here
     final var variables = new java.util.LinkedHashMap<>(result.variables());
@@ -730,7 +728,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
    * <p>
    * Beside an application's <code>&#64;WorkflowEnded</code> method there is a second
    * reason to want it: a workflow module which releases the records of its processed task
-   * deliveries when a workflow ends (story 76) needs the notification to do so. That is
+   * deliveries when a workflow ends needs the notification to do so. That is
    * why no adapter had to be touched for the release.
    */
   @Override
@@ -799,7 +797,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
       return List.of();
     }
     // the UNION over every method serving this element: methods wired to one BPMN
-    // element differ in the process version they serve (story 48), and the delivery
+    // element differ in the process version they serve, and the delivery
     // has to satisfy whichever of them runs. Sorted, because a subscription which
     // names variables is compared to itself across restarts
     return entry.handlers
@@ -856,7 +854,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
   /**
    * Which of the given tasks of ONE deployed version no <code>&#64;WorkflowTask</code>
    * method serves - the version-aware sibling of {@link #validateTaskWiring}, used by
-   * the startup check of story 57.
+   * the startup check for old process versions.
    * <p>
    * Two differences to the wiring validation, and both matter. It asks per VERSION, so
    * a method carrying <code>version = "3"</code> counts for version 3 and for nothing
@@ -872,7 +870,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
    */
   /**
    * The methods of that BPMN process which serve NO version worth serving - the
-   * versions the BPMS holds, minus the ones the configuration faded out (story 57).
+   * versions the BPMS holds, minus the ones the configuration faded out.
    * All three annotations carry a <code>version</code> attribute, so all three are
    * asked.
    * <p>
@@ -997,7 +995,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
   /**
    * The shared values of an aggregate, read either after the caller's transaction
    * committed (a remote BPMS completing a task) or within it (an embedded engine
-   * completing the task in the same transaction, story 66).
+   * completing the task in the same transaction).
    */
   private Map<String, Object> syncedValues(
       final String workflowModuleId,
@@ -1086,7 +1084,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
       final String bpmnProcessId,
       final String propertyName) {
 
-    // the migration fallback of story 66: version 1 resolved attributes without a getter
+    // the migration fallback: version 1 resolved attributes without a getter
     // as well, so the reader looks at getters AND fields
     final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
     if ((entry == null) || (entry.processService == null)) {

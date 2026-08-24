@@ -19,7 +19,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * Guiding validation of workflow-level properties (story 27): a configured workflow
+ * Guiding validation of workflow-level properties: a configured workflow
  * ID (<code>vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;id&gt;</code>)
  * matching no executable BPMN process of that module does NOT prevent the boot (the
  * BPMN may arrive later, e.g. during a BPMS migration) but yields a startup WARN

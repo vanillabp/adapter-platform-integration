@@ -688,7 +688,8 @@ public class WorkflowTaskScannerEdgeCasesTest {
   }
 
   /**
-   * The startup check of story 40b. The annotations are matched by type name, so the
+   * The startup check for a handler starting its own transaction. The annotations are
+   * matched by type name, so the
    * stand-ins in this module's test sources (see
    * {@link org.springframework.transaction.annotation.Transactional}) exercise exactly
    * what the real ones do; the real annotations are used by the acceptance tests of

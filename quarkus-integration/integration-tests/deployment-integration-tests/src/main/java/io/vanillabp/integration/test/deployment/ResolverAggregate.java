@@ -1,7 +1,7 @@
 package io.vanillabp.integration.test.deployment;
 
 /**
- * The aggregate of the multi-instance resolver test (story 71).
+ * The aggregate of the multi-instance resolver test.
  */
 public class ResolverAggregate {
 

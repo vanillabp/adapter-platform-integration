@@ -5,7 +5,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * The second writer of the version-conflict acceptance test (story 59): it changes the
+ * The second writer of the version-conflict acceptance test: it changes the
  * same workflow aggregate in a transaction of ITS OWN and commits, while VanillaBP's
  * transaction is still open. That is the shape of the collision without a race - what
  * a parallel branch of a workflow does in real life, made sequential so the test

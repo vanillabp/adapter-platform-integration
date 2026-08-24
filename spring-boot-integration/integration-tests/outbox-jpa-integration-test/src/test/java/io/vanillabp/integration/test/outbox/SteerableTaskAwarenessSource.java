@@ -17,7 +17,7 @@ public class SteerableTaskAwarenessSource implements DummyTaskAwarenessSource {
 
   /**
    * The answer for WORKFLOW-level probes (message correlation, and the START
-   * re-dispatch mitigation of story 25) if it has to differ from the task-level
+   * re-dispatch mitigation) if it has to differ from the task-level
    * one - <code>null</code> means "same as {@link #initialAnswer}". Needed by the
    * recovery test: it wants the recovered START entry to be dispatched again
    * (workflow unknown) while the recovered COMPLETE_TASK entry elects an adapter
@@ -55,7 +55,7 @@ public class SteerableTaskAwarenessSource implements DummyTaskAwarenessSource {
 
   /**
    * How many WORKFLOW probes still answer UNKNOWN_TO_BPMS before the configured
-   * answer applies - the eventually consistent BPMS of story 54: the workflow
+   * answer applies - an eventually consistent BPMS: the workflow
    * exists, its BPMS just cannot find it yet.
    */
   private final java.util.concurrent.atomic.AtomicInteger invisibleProbes = new java.util.concurrent.atomic.AtomicInteger();

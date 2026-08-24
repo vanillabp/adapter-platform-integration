@@ -22,7 +22,7 @@ import io.vanillabp.spi.process.ProcessService;
 import jakarta.inject.Inject;
 
 /**
- * Workflow-level properties on Quarkus (story 27): the workflow module prioritizes
+ * Workflow-level properties on Quarkus: the workflow module prioritizes
  * adapter id 'demo1' while the workflow 'WorkflowService' overrides to 'demo2' - the
  * classic migration scenario of moving a single process to a new BPMS while the rest
  * of the module stays. The deployment-target union guarantees 'demo2', although named

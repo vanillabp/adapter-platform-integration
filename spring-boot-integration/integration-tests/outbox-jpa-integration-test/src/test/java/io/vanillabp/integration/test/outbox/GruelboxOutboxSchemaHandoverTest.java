@@ -20,7 +20,7 @@ import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfig
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Story 95: on Spring Boot the phase-two outbox is gruelbox, and its table
+ * On Spring Boot the phase-two outbox is gruelbox, and its table
  * <code>TXNO_OUTBOX</code> is the one table a schema handover does NOT get from
  * <code>io.vanillabp:vanillabp-schema</code> - the schema belongs to gruelbox. Switching
  * VanillaBP's table creation off switches gruelbox's migrator off with it, and a custom table

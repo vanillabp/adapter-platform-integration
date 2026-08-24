@@ -13,7 +13,7 @@ import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The Micrometer side of what the core records (story 92): the meters carry the tags
+ * The Micrometer side of what the core records: the meters carry the tags
  * a deployment fixes and nothing which grows with the number of workflows, they
  * survive a registry which arrives late, and recording before any registry exists
  * costs nothing.

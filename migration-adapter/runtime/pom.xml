@@ -29,7 +29,7 @@
   </developers>
 
   <dependencies>
-    <!-- story 75: the DDL and the schema check of JdbcTaskDeliveryStore are tested against a real
+    <!-- the DDL and the schema check of JdbcTaskDeliveryStore are tested against a real
          database engine, and H2 is the one this repository already uses everywhere -->
     <dependency>
       <groupId>com.h2database</groupId>

@@ -22,7 +22,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * Story 67: phase two runs on the outbox dispatcher's own thread and calls back into
+ * Phase two runs on the outbox dispatcher's own thread and calls back into
  * the application - a remote BPMS adapter loads the aggregate to build what it sends
  * to the BPMS. On Quarkus that thread had neither a transaction nor an active CDI
  * request context, so an aggregate stored with an entity manager could not be read:

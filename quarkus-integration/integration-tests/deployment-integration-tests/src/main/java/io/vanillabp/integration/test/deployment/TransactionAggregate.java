@@ -1,7 +1,7 @@
 package io.vanillabp.integration.test.deployment;
 
 /**
- * The aggregate of the transaction-contract acceptance test (story 40b).
+ * The aggregate of the transaction-contract acceptance test.
  */
 public class TransactionAggregate {
 

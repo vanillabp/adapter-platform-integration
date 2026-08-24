@@ -10,8 +10,8 @@ import io.vanillabp.integration.spi.WorkflowAdapterCache;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * An application-provided election cache (the cluster-shared-cache SPI of story
- * 25): replaces VanillaBP's in-memory {@code @DefaultBean} and records every
+ * An application-provided election cache (the cluster-shared-cache SPI): replaces
+ * VanillaBP's in-memory {@code @DefaultBean} and records every
  * access so tests can assert it is the one consulted.
  */
 @ApplicationScoped

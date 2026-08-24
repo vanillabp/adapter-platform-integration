@@ -21,7 +21,7 @@ import jakarta.inject.Inject;
  * any property contributes no name - the id never reaches the runtime and the
  * situation cannot be detected.
  * <p>
- * Since story 34 that limitation no longer hurts the documented setups: with ONE
+ * That limitation does not hurt the documented setups: with ONE
  * adapter type in the classpath the adapter is derived from the classpath anyway,
  * so the application boots exactly as the developer intended. (A CUSTOM bare id
  * still cannot be derived - see {@link BareCustomAdapterIdConfigurationTest}.)

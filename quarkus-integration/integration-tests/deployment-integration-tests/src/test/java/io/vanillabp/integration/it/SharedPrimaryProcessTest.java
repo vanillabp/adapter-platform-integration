@@ -20,7 +20,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 /**
- * Story 60, the case which stays allowed: several classes may declare the same
+ * The case which stays allowed: several classes may declare the same
  * aggregate as long as they name the SAME process - handlers of one process split
  * across classes are not ambiguous, so nothing has to be decided and the application
  * boots.

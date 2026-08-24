@@ -37,7 +37,7 @@ import io.vanillabp.spi.service.BpmsStartTrigger;
 import io.vanillabp.spi.service.WorkflowEnd;
 
 /**
- * Acceptance test of workflows the BPMS starts on its own (story 41), with the dummy
+ * Acceptance test of workflows the BPMS starts on its own, with the dummy
  * adapter standing in for a BPMS reporting a timer, signal or conditional start. It
  * covers what an application gets without writing a line of code (the aggregate is
  * built, the timer's trigger time is its ID, the process variables land in it), that

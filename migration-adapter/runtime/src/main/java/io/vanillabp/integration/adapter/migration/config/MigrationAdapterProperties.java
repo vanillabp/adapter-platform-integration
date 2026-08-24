@@ -105,7 +105,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   /**
    * Adapter ids this application USED to have and deliberately does not configure any
    * more - the last step of a BPMS migration, once nothing runs in the old BPMS any
-   * more (story 120).
+   * more.
    * <p>
    * VanillaBP persists the adapter id of an entry of the phase-two outbox and of every
    * delivery record, so an id which such an entry still waits for and which nobody
@@ -142,7 +142,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * The base location BPMN resources of a workflow module are read from when
    * neither an adapter-specific nor the global <code>resources-location</code> is
    * configured - derived from the classpath facts by
-   * {@link #normalize(ClasspathFacts)} (story 34's convention). Key is the
+   * {@link #normalize(ClasspathFacts)}. Key is the
    * workflow module ID, value the location WITHOUT the adapter ID (which is
    * appended per adapter, see
    * {@link #getAdapterResourcesLocationsFor(String, String)}).
@@ -170,7 +170,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Convention over configuration (story 34): derives everything the platform
+   * Convention over configuration: derives everything the platform
    * already knows from the classpath, so an application only configures what
    * DEVIATES from the convention. Runs BEFORE the validation - a derived entry is
    * validated exactly like a hand-written one.
@@ -279,7 +279,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
                 // the application IS the workflow module - but a module tested inside
                 // its own Maven module is the main artifact as well, and its files sit
                 // where the packaged application needs them: below the module ID. Both
-                // are searched, the module's own location first (story 68; the module's
+                // are searched, the module's own location first (the module's
                 // configuration files are found in both places for the same reason)
                 ? List.of(
                     "classpath*:%s/processes".formatted(module.id()),
@@ -844,7 +844,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   /**
    * Provides the resources location according to the given properties, resolved in
-   * this order (story 34):
+   * this order:
    * <ol>
    * <li>the adapter-specific location
    * <code>vanillabp.workflow-modules.&lt;module&gt;.adapters.&lt;id&gt;.resources-location</code>,</li>
@@ -870,7 +870,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * deployed twice. A configured location is always the only one; the convention
    * names two where the application IS the workflow module, because a module tested
    * inside its own Maven module is the main artifact as well while its files sit
-   * below the module ID (story 68).
+   * below the module ID.
    *
    * @param workflowModuleId The workflow module ID
    * @param adapterId The adapter ID
@@ -1088,8 +1088,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
               .formatted(adaptersNotInClasspath, adaptersLoaded));
     }
 
-    // a workflow module found in the classpath needs NO configuration any more
-    // (story 34): normalize(facts) derived an empty section for it, and its BPMN
+    // a workflow module found in the classpath needs NO configuration any more:
+    // normalize(facts) derived an empty section for it, and its BPMN
     // resources are found by the resources-location convention
 
     // unknown workflow-module properties
@@ -1179,7 +1179,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     if (adapters.size() == 1) {
       final var adapterId = adapters.keySet().iterator().next();
       // only CONFIGURED adapter-specific locations are worth the hint - a location
-      // derived by convention is adapter-specific by construction (story 34)
+      // derived by convention is adapter-specific by construction
       final var specificBpmnResources = workflowModules
           .entrySet()
           .stream()

@@ -20,7 +20,7 @@ import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Story 97: the record of a task which is still open outlives the retention, the record of
+ * The record of a task which is still open outlives the retention, the record of
  * one nobody redelivers any more does not. Both are the JDBC store's business, which is
  * shared by the two platforms, so this is where the SQL is pinned - on H2, with records
  * backdated instead of waited for.

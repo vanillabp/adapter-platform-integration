@@ -31,7 +31,7 @@ import io.vanillabp.spi.service.WorkflowEnd;
 import io.vanillabp.spi.service.WorkflowEnded;
 
 /**
- * Telling the application that a workflow ended (story 43): the aggregate is loaded,
+ * Telling the application that a workflow ended: the aggregate is loaded,
  * the method is called and the aggregate is saved - and everything about it is
  * optional, so a process without such a method reports nothing and an aggregate
  * already deleted is not an error.

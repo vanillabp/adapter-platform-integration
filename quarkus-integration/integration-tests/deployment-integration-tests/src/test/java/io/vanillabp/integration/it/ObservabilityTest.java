@@ -36,7 +36,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of what an operator gets to see on Quarkus (story 92): every task
+ * Acceptance test of what an operator gets to see on Quarkus: every task
  * delivery is counted by outcome and measured, it carries a logging context naming
  * the workflow it belongs to, and the BPMS adapters contribute what they know about
  * their BPMS to the readiness check.

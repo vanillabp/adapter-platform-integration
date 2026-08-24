@@ -40,7 +40,7 @@ import io.vanillabp.integration.test.utils.springboot.SpringBootTestApplication;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 
 /**
- * Acceptance test of <code>&#64;WorkflowTask</code> processing (story 21a) with the
+ * Acceptance test of <code>&#64;WorkflowTask</code> processing with the
  * dummy adapter standing in for a BPMS: the adapter triggers task invocations
  * through the core's {@code WorkflowTaskInvoker}, which loads the aggregate, runs
  * the handler within a transaction, saves the aggregate and maps the three
@@ -391,7 +391,7 @@ public class WorkflowTaskProcessingTest {
   }
 
   /**
-   * An aggregate whose sync model is ambiguous (story 28b): attributes annotated
+   * An aggregate whose sync model is ambiguous: attributes annotated
    * both ways while the class states no mode of its own.
    */
   public static class AmbiguousSyncAggregate {

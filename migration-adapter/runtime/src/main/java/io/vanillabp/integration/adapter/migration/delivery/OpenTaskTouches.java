@@ -10,7 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * The delivery keys of the open tasks a BPMS redelivered since the last refresh, kept
- * until the store writes them in one go (story 97). Shared by every
+ * until the store writes them in one go. Shared by every
  * {@link io.vanillabp.integration.spi.TaskDeliveryLog} implementation of both platforms,
  * because they differ in HOW a record is refreshed, not in when and in which portions.
  * <p>

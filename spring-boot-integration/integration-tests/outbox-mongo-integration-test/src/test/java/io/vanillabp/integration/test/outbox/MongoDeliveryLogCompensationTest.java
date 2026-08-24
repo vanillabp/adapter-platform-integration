@@ -29,8 +29,8 @@ import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Story 70, the compensating delete of the MongoDB delivery log on Spring Boot - the
- * asymmetry to its Quarkus twin this story closed.
+ * The compensating delete of the MongoDB delivery log on Spring Boot - what its Quarkus
+ * twin does as well.
  * <p>
  * The record has to disappear when the transaction it was written in does not commit.
  * Where a MongoDB transaction covers the write (a replica set plus a

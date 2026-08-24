@@ -14,7 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Keeps the resolver beans of
- * <code>&#64;MultiInstanceElement(resolverBean = ...)</code> alive (story 71).
+ * <code>&#64;MultiInstanceElement(resolverBean = ...)</code> alive.
  * <p>
  * Such a resolver is a bean nothing injects: it is named in an annotation and VanillaBP
  * asks the container for it while the task runs. Quarkus removes beans nobody injects

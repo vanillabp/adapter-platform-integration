@@ -27,7 +27,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Story 69: an application storing its aggregate in a Hibernate ORM Panache
+ * An application storing its aggregate in a Hibernate ORM Panache
  * repository writes no {@code AggregatePersistenceAware} at all - VanillaBP uses the
  * repository. Both directions are exercised: starting a workflow stores the
  * aggregate, and a task delivered by the BPMS loads it, runs the handler and stores

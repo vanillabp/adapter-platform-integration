@@ -15,8 +15,8 @@ import lombok.experimental.SuperBuilder;
  * keys, defaults and documentation, used by both platform integrations.
  * <p>
  * The bounds are hard on purpose: entries are hints, so losing one costs an extra
- * probing walk (and, on an eventually consistent BPMS, the visibility window of
- * story 54) but never correctness. An application with more workflows in flight
+ * probing walk (and, on an eventually consistent BPMS, its visibility window) but
+ * never correctness. An application with more workflows in flight
  * than the cache holds raises {@link #maxEntries} - roughly 300 bytes per entry, so
  * 100.000 entries cost about 30 MB. Why the bound is not a soft reference is
  * written down in <code>migration-adapter/README.md</code>.

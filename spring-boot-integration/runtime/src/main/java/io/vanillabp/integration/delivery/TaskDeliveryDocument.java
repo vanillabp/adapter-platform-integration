@@ -29,7 +29,7 @@ public class TaskDeliveryDocument {
   private String id;
 
   /**
-   * The adapter which delivered the task (story 120). Part of the delivery key as well,
+   * The adapter which delivered the task. Part of the delivery key as well,
    * but only as text and hashed once the key grows too long, so a query needs it as a
    * field of its own. Absent in a document written before it existed.
    */
@@ -60,7 +60,7 @@ public class TaskDeliveryDocument {
 
   /**
    * When the BPMS last redelivered the task this record answers, which is what the
-   * retention cleanup deletes by (story 97). Written together with
+   * retention cleanup deletes by. Written together with
    * {@link #recordedAt} and moved forward while an open task keeps being redelivered.
    */
   private Instant lastSeenAt;

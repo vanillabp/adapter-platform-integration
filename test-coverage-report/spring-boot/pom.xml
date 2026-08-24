@@ -33,7 +33,7 @@
       <artifactId>vanillabp-spring-boot-integration</artifactId>
       <version>${project.version}</version>
     </dependency>
-    <!-- story 81: the support module carries the check for an application which has a
+    <!-- the support module carries the check for an application which has a
          workflow module but no BPMS adapter - the only VanillaBP code on the classpath of
          such an application, so its coverage belongs to the numbers of this platform. -->
     <dependency>

@@ -24,7 +24,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.enterprise.inject.Instance;
 
 /**
- * Story 70 on Quarkus: which runner serves an aggregate. The platform's own runner is always
+ * Which runner serves an aggregate on Quarkus. The platform's own runner is always
  * usable here (JTA is a hard dependency of this extension), so what the resolution has to get
  * right is the order and the ambiguity.
  */
@@ -39,7 +39,7 @@ public class QuarkusTransactionRunnerResolverTest {
 
   /**
    * A runner an application wrote, and the client proxy the bean container puts in front
-   * of it (its name is what the message used to carry - story 80).
+   * of it (its name is what the message used to carry).
    */
   private static class UnitOfWork implements TransactionRunner {
 
@@ -317,7 +317,7 @@ public class QuarkusTransactionRunnerResolverTest {
 
   /**
    * What an application without the MongoDB client extension has: no probe at all, which is
-   * the whole point of story 85 - nothing on the way to the verdict names a MongoDB type,
+   * the whole point - nothing on the way to the verdict names a MongoDB type,
    * so a native image of such an application links.
    */
   private static Instance<MongoDeploymentProbe> noProbe() {

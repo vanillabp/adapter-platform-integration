@@ -25,7 +25,7 @@ public class PhaseTwoRouterProducer {
 
   /**
    * @param transactionRegistry Provides the transaction a dispatch runs in
-   * @param metrics What dispatches are counted into (story 92); unsatisfied where the
+   * @param metrics What dispatches are counted into; unsatisfied where the
    *          application uses no Micrometer extension
    * @return The router
    */

@@ -18,7 +18,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * Story 34's headline on Quarkus: an application with ONE adapter extension and ONE
+ * The headline on Quarkus: an application with ONE adapter extension and ONE
  * workflow module needs no <code>vanillabp.*</code> property at all - the archive
  * of this test carries no configuration file whatsoever.
  */
@@ -57,7 +57,7 @@ public class ZeroConfigurationTest {
     // the application IS the workflow module here (the test archive is the root
     // application archive), so its BPMN lives below 'processes/<adapter id>' - and
     // below '<module id>/processes/<adapter id>' when the module is being tested
-    // inside its own Maven module, which is the main artifact as well (story 68)
+    // inside its own Maven module, which is the main artifact as well
     Assertions.assertEquals(
         List.of("classpath*:test-module/processes/dummy", "classpath*:processes/dummy"),
         properties

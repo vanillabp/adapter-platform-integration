@@ -31,7 +31,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of the release of delivery records (story 76) on Quarkus, with the
+ * Acceptance test of the release of delivery records on Quarkus, with the
  * default JDBC-based delivery log: a workflow which ended deletes the records of its
  * processed deliveries instead of leaving them to the retention. The workflow service of
  * this test has NO <code>&#64;WorkflowEnded</code> method on purpose - the end

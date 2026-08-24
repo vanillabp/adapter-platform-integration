@@ -1,7 +1,7 @@
 package io.vanillabp.integration.test.delivery;
 
 /**
- * The aggregate of the inbound-idempotency test (story 51). It counts how often a
+ * The aggregate of the inbound-idempotency test. It counts how often a
  * handler ran on it - the business code a repeated delivery must not run again.
  */
 public class DeliveryAggregate {

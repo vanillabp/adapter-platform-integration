@@ -32,7 +32,7 @@ public class SteerableTaskAwarenessSource implements DummyTaskAwarenessSource {
 
   /**
    * How many WORKFLOW probes still answer UNKNOWN_TO_BPMS before the configured
-   * answer applies - the eventually consistent BPMS of story 54: the workflow
+   * answer applies - an eventually consistent BPMS: the workflow
    * exists, its BPMS just cannot find it yet.
    */
   private final java.util.concurrent.atomic.AtomicInteger invisibleProbes = new java.util.concurrent.atomic.AtomicInteger();

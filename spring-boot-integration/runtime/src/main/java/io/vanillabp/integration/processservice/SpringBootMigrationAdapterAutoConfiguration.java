@@ -104,7 +104,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
     if (adaptersLoaded.isEmpty()) {
       // the neighbouring case - no integration at all, because the adapter which would
       // have brought it is missing - is reported by NoBpmsAdapterCheck of module
-      // 'vanillabp-spring-boot-support' (story 81)
+      // 'vanillabp-spring-boot-support'
       throw new IllegalStateException(
           """
               No VanillaBP BPMS adapter found in classpath! VanillaBP's Spring Boot integration is \
@@ -113,7 +113,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
               .formatted(BpmsAdapters.artifactsToAdd()));
     }
 
-    // convention over configuration (story 34): the classpath facts are what the
+    // convention over configuration: the classpath facts are what the
     // conventions are derived from - which workflow module descriptor comes from
     // the application's MAIN artifact decides the conventional resources location
     final var mainArtifactRootPrefix = mainArtifactRootPrefix(applicationContext);
@@ -135,7 +135,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   }
 
   /**
-   * The core-owned sync model (story 28): turns a workflow aggregate into the
+   * The core-owned sync model: turns a workflow aggregate into the
    * values shared with the BPMS, honoring
    * {@code @SyncWithBPMS}/{@code @NoSyncWithBPMS} and the adapter's default. One
    * instance per application - BPMS adapters receive it and decide what to do with
@@ -344,7 +344,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
     }
 
     /**
-     * What VanillaBP counts about its deliveries and its outbox (story 92). It is a
+     * What VanillaBP counts about its deliveries and its outbox. It is a
      * {@code MeterBinder} as well, so the Actuator hands it the registry the same way
      * it hands it to the election cache's meters - nothing of VanillaBP asks for a
      * registry itself.
@@ -403,7 +403,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
 
   /**
    * Asks every BPMS adapter what it can say about its BPMS - the platform-neutral
-   * half of the health contribution (story 92). The adapters are resolved on every
+   * half of the health contribution. The adapters are resolved on every
    * call, so an adapter which materializes late is asked as well.
    *
    * @param deploymentServices The adapters' deployment services, one per configured
@@ -453,7 +453,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   }
 
   /**
-   * The core-owned name-clash-avoidance model (story 35): resolves the mode per
+   * The core-owned name-clash-avoidance model: resolves the mode per
    * workflow module/workflow and adapter and composes the identifiers a BPMS sees.
    * One instance per application - BPMS adapters receive it and apply it to their
    * model and their commands.
@@ -492,7 +492,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    *
    * @param transactionManager The application's transaction manager, resolved lazily
    * @param aggregateSync The core's sync model - validated per registered
-   *          workflow-aggregate class at startup (story 28b) and used to answer the
+   *          workflow-aggregate class at startup and used to answer the
    *          shared values of an aggregate an adapter does not hold
    * @return The workflow-task registry
    */
@@ -511,7 +511,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
 
   /**
    * The platform's transaction runner, used for every workflow aggregate the application
-   * did not contribute a runner for (story 70). One instance for the whole application,
+   * did not contribute a runner for. One instance for the whole application,
    * because it also answers whether the transaction it is running was marked
    * rollback-only and that answer belongs to the instance which opened it.
    *
@@ -529,7 +529,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   }
 
   /**
-   * Resolves the transaction runner per workflow aggregate (story 70) - injected into the
+   * Resolves the transaction runner per workflow aggregate - injected into the
    * process-service beans and invoked at startup by
    * {@link #vanillaBpProcessServiceStartupValidation}.
    *
@@ -548,11 +548,11 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   }
 
   /**
-   * The adapter-facing pre-commit hook (story 87): a BPMS adapter hands its phase-one check
+   * The adapter-facing pre-commit hook: a BPMS adapter hands its phase-one check
    * here and it runs right before the transaction of the workflow aggregate commits, so the
    * window between the check and the phase-two dispatch stays as small as the platform
    * allows. The runner of the aggregate is resolved first, which is what makes an
-   * application-owned unit of work (story 70) the one being hooked into.
+   * application-owned unit of work the one being hooked into.
    *
    * @param transactionRunnerResolver Resolves the runner of a workflow aggregate
    * @return The pre-commit hook

@@ -22,7 +22,7 @@ import jakarta.inject.Inject;
  * fast on any prioritized adapter without a process service, so resolving the
  * process service proves both are served) and the priorities follow the
  * configuration. (Deployment services are a Spring-only concern until the Quarkus
- * deployment pipeline lands - story 26b.)
+ * deployment pipeline lands.)
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TwoAdapterTypesConfigurationTest {

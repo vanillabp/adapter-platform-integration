@@ -11,7 +11,7 @@ package io.vanillabp.integration.runtime.processservice;
  * which named the MongoDB ones in {@link QuarkusPhaseTwoOutboxResolver} and
  * {@link QuarkusTaskDeliveryLogResolver}. A native image resolves every referenced method
  * while it is built, so those two classes ended the build of an application which never
- * asked for MongoDB (story 85). Asking an interface instead keeps the MongoDB defaults
+ * asked for MongoDB. Asking an interface instead keeps the MongoDB defaults
  * where they belong: reachable only where the extension registering them is.
  */
 public interface PlatformDefaultStore {

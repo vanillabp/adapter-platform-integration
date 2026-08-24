@@ -36,7 +36,7 @@ public interface DummyTaskAwarenessSource {
    */
   /**
    * The awareness the dummy adapter reports for a WORKFLOW - defaults to the
-   * service-task answer (probes for message correlation, story 23).
+   * service-task answer (probes for message correlation).
    *
    * @param adapterId The dummy adapter's ID
    * @param workflowAggregateId The ID of the workflow aggregate
@@ -61,7 +61,7 @@ public interface DummyTaskAwarenessSource {
 
 
   /**
-   * The visibility window the dummy adapter reports (story 54): how long the core
+   * The visibility window the dummy adapter reports: how long the core
    * keeps asking a hinted adapter which answers
    * {@link WorkflowAwareness#UNKNOWN_TO_BPMS}. <code>null</code> means none, which
    * is what an adapter of an immediately consistent BPMS reports.

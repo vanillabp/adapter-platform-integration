@@ -22,7 +22,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * The START re-dispatch mitigation on the Quarkus JDBC outbox (story 25): the
+ * The START re-dispatch mitigation on the Quarkus JDBC outbox: the
  * dispatcher's claim increments the ATTEMPTS column BEFORE dispatching, so a
  * retried entry is recognized (attempts &gt; 0 before the claim) and the recorded
  * adapter's {@code awarenessOfWorkflowForRedispatch} is probed first - a workflow

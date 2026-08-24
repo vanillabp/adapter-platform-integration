@@ -9,7 +9,7 @@ import org.springframework.util.ClassUtils;
 
 /**
  * Ends the boot of an application which has a workflow module but no BPMS adapter, with
- * a message of VanillaBP's own (story 81).
+ * a message of VanillaBP's own.
  * <p>
  * On Spring Boot a BPMS adapter brings VanillaBP's Spring Boot integration with it, so an
  * application which forgot the adapter has no VanillaBP runtime at all - nothing which

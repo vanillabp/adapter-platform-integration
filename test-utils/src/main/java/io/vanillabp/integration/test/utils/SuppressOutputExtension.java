@@ -242,7 +242,7 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
    * {@code java.util.logging.manager}. A handler of that log manager holds the
    * {@code System.out} it found when it was created, so everything logged through it goes
    * to the real console no matter what this extension does afterwards. The augmentation
-   * line of a {@code QuarkusProdModeTest} and the Testcontainers lines of story 109 came
+   * line of a {@code QuarkusProdModeTest} and the Testcontainers lines came
    * from there.
    * <p>
    * Every stream handler reachable from the root logger is given a stream which resolves

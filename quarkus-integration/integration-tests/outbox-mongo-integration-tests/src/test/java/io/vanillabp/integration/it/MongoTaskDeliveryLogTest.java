@@ -24,7 +24,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * The MongoDB store behind the inbound idempotency (story 51) on Quarkus. MongoDB is no
+ * The MongoDB store behind the inbound idempotency on Quarkus. MongoDB is no
  * JTA resource here, so a record is written immediately and removed again when the
  * transaction does not commit - that best-effort compensation is what makes a rolled-back
  * delivery reach its handler again, and it is pinned here together with reading a record
@@ -154,7 +154,7 @@ public class MongoTaskDeliveryLogTest {
   }
 
   @Test
-  @DisplayName("Story 76: an ended workflow releases its records - and only its own")
+  @DisplayName("An ended workflow releases its records - and only its own")
   public void theRecordsOfAnEndedWorkflowAreReleased() throws Exception {
 
     userTransaction.begin();
@@ -182,7 +182,7 @@ public class MongoTaskDeliveryLogTest {
   }
 
   @Test
-  @DisplayName("Story 76: a record written after the end of the workflow survives the release")
+  @DisplayName("A record written after the end of the workflow survives the release")
   public void aRecordWrittenAfterTheNotificationSurvives() throws Exception {
 
     // a moment safely before the record is written - see above on the resolution

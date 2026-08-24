@@ -25,7 +25,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Story 69: an aggregate written as a MongoDB Panache active record (no repository
+ * An aggregate written as a MongoDB Panache active record (no repository
  * anywhere) is persisted by VanillaBP through Panache's operations, not through the
  * static methods Panache generates onto the entity.
  */

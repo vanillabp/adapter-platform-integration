@@ -20,7 +20,7 @@ import jakarta.inject.Inject;
 
 /**
  * Acceptance test of the per-adapter-id bean convention on Quarkus
- * (adapter-config-model story 26d) - the structural foundation of the migration
+ * (the adapter config model) - the structural foundation of the migration
  * scenario: TWO adapter ids of ONE type boot together. Id 'test' is served by an
  * <i>element</i> bean ({@link TestMigratableProcessService}), id 'test2' by a bean of
  * type <code>List&lt;MigratableProcessService&gt;</code>

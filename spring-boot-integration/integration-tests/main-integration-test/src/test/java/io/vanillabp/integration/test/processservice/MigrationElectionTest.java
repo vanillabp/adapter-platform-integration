@@ -33,7 +33,7 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * THE migration scenario (story 25): instances were started while adapter
+ * THE migration scenario: instances were started while adapter
  * 'old-bpms' was first priority; the configuration was then flipped ('new-bpms'
  * promoted, 'old-bpms' demoted). Operations on OLD instances still route to
  * 'old-bpms' (the probing election finds the workflow there), NEW workflows start

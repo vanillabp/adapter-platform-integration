@@ -35,7 +35,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * Story 59: two branches of one workflow write the same workflow aggregate. What is
+ * Two branches of one workflow write the same workflow aggregate. What is
  * pinned here is the CORE's part of it:
  * <ul>
  * <li>a version conflict on the commit VanillaBP owns is recognized by asking the

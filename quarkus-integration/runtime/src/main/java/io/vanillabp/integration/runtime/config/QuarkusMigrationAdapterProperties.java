@@ -41,7 +41,7 @@ public interface QuarkusMigrationAdapterProperties {
 
   /**
    * Adapter ids this application USED to have and deliberately does not configure any
-   * more - the last step of a BPMS migration (story 120). VanillaBP persists the adapter
+   * more - the last step of a BPMS migration. VanillaBP persists the adapter
    * id of an outbox entry and of every delivery record, so an id which such an entry
    * still waits for and which nobody serves is reported at startup: it means the id was
    * RENAMED, which loses workflows, or that it was removed too early. Naming it here says
@@ -90,21 +90,21 @@ public interface QuarkusMigrationAdapterProperties {
 
   /**
    * What VanillaBP does about a workflow aggregate whose store is not covered by the
-   * transaction it opens (story 70).
+   * transaction it opens.
    *
    * @return The transaction configuration
    */
   TransactionsProperties transactions();
 
   /**
-   * What VanillaBP does with the records of processed task deliveries (story 76).
+   * What VanillaBP does with the records of processed task deliveries.
    *
    * @return The delivery configuration
    */
   DeliveryProperties delivery();
 
   /**
-   * What VanillaBP publishes as metrics (story 92).
+   * What VanillaBP publishes as metrics.
    *
    * @return The metrics configuration
    */
@@ -178,8 +178,8 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<Boolean> deduplicateDeliveries();
 
     /**
-     * The versions of a BPMN process this application does not serve any more (story
-     * 57), each written in the grammar of the <code>version</code> attribute of
+     * The versions of a BPMN process this application does not serve any more, each
+     * written in the grammar of the <code>version</code> attribute of
      * <code>&#64;WorkflowTask</code> and its siblings (<code>&lt;4</code>,
      * <code>1-3</code>, <code>v1.0..v2.0</code>, a version tag). Adapter-scoped: the
      * most specific configured level wins (workflow &gt; workflow module &gt; adapter).
@@ -246,8 +246,8 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<Boolean> deduplicateDeliveries();
 
     /**
-     * The versions of a BPMN process this application does not serve any more (story
-     * 57), each written in the grammar of the <code>version</code> attribute of
+     * The versions of a BPMN process this application does not serve any more, each
+     * written in the grammar of the <code>version</code> attribute of
      * <code>&#64;WorkflowTask</code> and its siblings (<code>&lt;4</code>,
      * <code>1-3</code>, <code>v1.0..v2.0</code>, a version tag). Adapter-scoped: the
      * most specific configured level wins (workflow &gt; workflow module &gt; adapter).
@@ -423,7 +423,7 @@ public interface QuarkusMigrationAdapterProperties {
 
   /**
    * What VanillaBP publishes as metrics. There is one setting, and it exists because
-   * reading a metric must not cost anything worth noticing (story 92).
+   * reading a metric must not cost anything worth noticing.
    */
   interface MetricsProperties {
 
@@ -481,8 +481,7 @@ public interface QuarkusMigrationAdapterProperties {
 
   /**
    * What VanillaBP does about a workflow aggregate whose store is demonstrably not covered
-   * by the transaction it opens: refuse to start, or accept it and keep the warning
-   * (story 70).
+   * by the transaction it opens: refuse to start, or accept it and keep the warning.
    */
   interface TransactionsProperties {
 
@@ -498,7 +497,7 @@ public interface QuarkusMigrationAdapterProperties {
 
   /**
    * What VanillaBP does with the records of processed task deliveries: keep them until the
-   * retention passed, or delete them the moment their workflow ends (story 76).
+   * retention passed, or delete them the moment their workflow ends.
    */
   interface DeliveryProperties {
 

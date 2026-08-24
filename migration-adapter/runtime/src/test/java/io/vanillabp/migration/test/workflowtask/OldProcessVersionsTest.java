@@ -30,7 +30,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * The startup check of story 57: does this application still serve the OLDER versions
+ * The startup check for old process versions: does this application still serve the OLDER versions
  * of its processes the BPMS holds, and what does outfading a version do.
  * <p>
  * The BPMS is a stub here, because the question the core answers is version arithmetic,
@@ -386,8 +386,8 @@ public class OldProcessVersionsTest {
   }
 
   /**
-   * The registry needs a process service to register a workflow service; nothing of
-   * this story invokes it.
+   * The registry needs a process service to register a workflow service; nothing here
+   * invokes it.
    */
   @SuppressWarnings("unchecked")
   private static io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService<Aggregate> processService() {
@@ -477,7 +477,7 @@ public class OldProcessVersionsTest {
   }
 
   /**
-   * The transaction runner is irrelevant here - nothing of this story runs a handler.
+   * The transaction runner is irrelevant here - no test in this class runs a handler.
    */
   private static class TransactionRunnerStub implements TransactionRunner {
 

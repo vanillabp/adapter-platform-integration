@@ -35,7 +35,7 @@ import io.vanillabp.integration.workflowmodule.WorkflowModules;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Acceptance test of the startup check of story 40b: an application whose
+ * Acceptance test of the startup check: an application whose
  * <code>&#64;WorkflowTask</code> handler carries a transaction annotation must not boot,
  * and the message has to name the class, the method and both remedies without sending
  * the developer to the documentation.

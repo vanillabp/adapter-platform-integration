@@ -31,7 +31,7 @@ import lombok.extern.slf4j.Slf4j;
  * <code>MongoTransactionManager</code> or a standalone server) the record is written
  * immediately, exactly like an outbox entry is (see
  * {@link io.vanillabp.integration.outbox.mongo.MongoPhaseTwoOutbox}). The record is then
- * deleted again when its transaction does not commit (story 70, the same compensation the
+ * deleted again when its transaction does not commit (the same compensation the
  * Quarkus MongoDB log has), so a redelivery of rolled-back work is not skipped - only a
  * process dying between the two leaves a record behind, and its delivery is reported as
  * done although nothing was persisted.
@@ -145,7 +145,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
   }
 
   /**
-   * The adapter ids the OPEN records of one BPMN process belong to (story 120): asked once
+   * The adapter ids the OPEN records of one BPMN process belong to: asked once
    * per BPMN process at startup, so an adapter id which such a record still belongs to
    * while the configuration does not know it any more can be named.
    */
@@ -199,8 +199,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
   }
 
   /**
-   * Removes the record again where the transaction it was written in did not commit
-   * (story 70). Without a MongoDB transaction covering it - no
+   * Removes the record again where the transaction it was written in did not commit.
+   * Without a MongoDB transaction covering it - no
    * <code>MongoTransactionManager</code>, or a deployment which is no replica set - the
    * document is written immediately, and a record for work which was rolled back is the
    * worse of the two possible mistakes: the redelivery of that work would be skipped and
@@ -260,7 +260,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
    * Refreshes the records of the open tasks redelivered since the last run and deletes the
    * records nobody has seen for the retention period - run by the background cleanup and
    * usable on demand (e.g. by tests). Refreshing first is what keeps the record of a task
-   * which is still being redelivered (story 97).
+   * which is still being redelivered.
    *
    * @return The number of records deleted
    */

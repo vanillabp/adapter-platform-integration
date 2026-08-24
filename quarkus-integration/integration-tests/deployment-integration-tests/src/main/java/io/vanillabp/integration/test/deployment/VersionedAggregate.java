@@ -1,7 +1,7 @@
 package io.vanillabp.integration.test.deployment;
 
 /**
- * The aggregate of the process-version acceptance test (story 48).
+ * The aggregate of the process-version acceptance test.
  */
 public class VersionedAggregate {
 

@@ -22,7 +22,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * Per-aggregate outbox attribution (story 26i): a {@code PhaseTwoOutboxAware} bean
+ * Per-aggregate outbox attribution: a {@code PhaseTwoOutboxAware} bean
  * routes the aggregate's phase-two calls to an application-defined outbox - the JDBC
  * default (also present in the container) stays untouched. With TWO outbox beans in
  * the container this attribution is also what resolves the ambiguity at startup.

@@ -17,7 +17,7 @@ One of those rules is easy to lose sight of while writing code, so it is spelled
 Why it is a rule rather than good advice: three defects in a row were already described, correctly
 and in detail, in a javadoc nobody could act on. A claim is written once, by somebody who knows it is
 true at that moment, and then nothing re-reads it when the code moves and nothing fails when it stops
-being true. Story 106 walked both SPIs, the adapters' decisions and all four wikis once to start from
+being true. Both SPIs, the adapters' decisions and all four wikis were walked once to start from
 a clean state; keeping it clean is the part which cannot be done in one pass.
 
 What this asks for in practice:

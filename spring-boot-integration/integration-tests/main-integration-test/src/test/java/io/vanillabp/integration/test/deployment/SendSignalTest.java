@@ -27,7 +27,7 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Acceptance test of broadcasting a BPMN signal (story 42) with the dummy adapter
+ * Acceptance test of broadcasting a BPMN signal with the dummy adapter
  * standing in for a BPMS. Two adapter ids are configured, one of them named at the
  * WORKFLOW level only - the deployment union. What the test pins: the broadcast
  * reaches BOTH of them, because during a migration the workflows waiting for the

@@ -27,7 +27,7 @@ import io.vanillabp.integration.spi.TaskDeliveryLogAware;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Story 84: an application with two persistences does not attribute its stores itself. Both
+ * An application with two persistences does not attribute its stores itself. Both
  * defaults are registered as soon as a data source and a MongoDB client are configured, and
  * which of them serves an aggregate is read off the persistence VanillaBP resolved for that
  * aggregate.

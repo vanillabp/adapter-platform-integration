@@ -77,7 +77,7 @@ public class TestApplication {
   }
 
   /**
-   * Story 70: with a JPA and a MongoDB transaction manager in one application, no manager is
+   * With a JPA and a MongoDB transaction manager in one application, no manager is
    * THE one - so the application says which aggregate belongs to which. Each bean returns a
    * runner bound to the matching manager, and VanillaBP runs everything it does with that
    * aggregate inside it.

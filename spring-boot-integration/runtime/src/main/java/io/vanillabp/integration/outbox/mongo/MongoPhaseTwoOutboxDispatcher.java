@@ -177,7 +177,7 @@ public class MongoPhaseTwoOutboxDispatcher {
               .set("doneAt", Instant.now()),
           collection);
     } catch (Exception e) {
-      // the adapter said that repeating cannot help (story 63) - blocked right away
+      // the adapter said that repeating cannot help - blocked right away
       // instead of after the configured attempts
       if (io.vanillabp.integration.spi.PhaseTwoPermanentFailure.isPermanent(e)) {
         mongoTemplate.updateFirst(

@@ -55,8 +55,8 @@ public interface ProcessVersionCatalog {
 
   /**
    * The tasks of ONE deployed version of a BPMN process, read from the model the BPMS
-   * still holds - what the startup check of story 57 needs to tell whether the
-   * application still serves an older version. The specs are built exactly like the
+   * still holds - what the startup check for old process versions needs to tell whether
+   * the application still serves one. The specs are built exactly like the
    * ones handed to
    * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker#validateTaskWiring},
    * so both directions of the wiring speak about the same thing.

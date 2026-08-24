@@ -10,7 +10,7 @@
 
   <artifactId>default-persistence-tests</artifactId>
   <name>Quarkus integration - Integration tests - Default aggregate persistence</name>
-  <description>Aggregates persisted by the implementations VanillaBP provides for the persistence idioms of Quarkus (story 69), against an in-memory H2.</description>
+  <description>Aggregates persisted by the implementations VanillaBP provides for the persistence idioms of Quarkus, against an in-memory H2.</description>
 
   <dependencies>
     <dependency>

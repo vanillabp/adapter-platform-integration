@@ -22,7 +22,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * What the phase-two outbox reports about itself (story 92): the entries waiting to
+ * What the phase-two outbox reports about itself: the entries waiting to
  * be dispatched are a gauge, and every dispatch is counted. Those are the numbers an
  * operator looks at when a BPMS is unreachable - the outbox is where a broken
  * connection piles up first.

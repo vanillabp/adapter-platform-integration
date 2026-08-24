@@ -17,7 +17,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 
 /**
- * Startup validation of the phase-two outbox (story 26i): a process whose
+ * Startup validation of the phase-two outbox: a process whose
  * first-priority adapter requires a two-phase commit needs a resolvable outbox AT
  * STARTUP - the boot fails with a guiding message naming the remedies instead of
  * surfacing the gap at the first workflow start. A process whose first-priority

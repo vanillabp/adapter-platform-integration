@@ -271,8 +271,8 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
 
     // ONE ProcessService per aggregate is the SPI's injection contract, so ONE of
     // the classes declares the process startWorkflow starts. Which one used to be
-    // the first the classpath scan returned - an order coming from the file system
-    // (story 60). Several classes declaring the SAME process are fine (handlers
+    // the first the classpath scan returned - an order coming from the file system.
+    // Several classes declaring the SAME process are fine (handlers
     // split across classes); different ones are ambiguous and end the boot.
     final var serviceClass = primaryWorkflowServiceClass(serviceClasses, workflowAggregateType);
     final var bpmnProcessId = primaryBpmnProcessId(serviceClass);
@@ -324,7 +324,7 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                               - add spring-boot-starter-data-mongodb to classpath and configure the MongoDb connection, if you use MongoDb for persistence of aggregates
                               - add your own implementation of io.vanillabp.integration.utils.SpringDataUtil, if you use an alternative persistence""");
                     }
-                    // the workflow module travels along for the message of story 114:
+                    // the workflow module travels along for the message:
                     // an aggregate without a repository is reported while the
                     // application starts, and naming the module is what makes the
                     // report actionable in an application with several of them
@@ -352,7 +352,7 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
 
               // and the same for the transaction the work runs in: an application
               // storing this aggregate in a system Spring does not manage contributes
-              // its own runner (story 70)
+              // its own runner
               final var transactionRunnerResolver = supplierContext
                   .bean(SpringTransactionRunnerResolver.class);
 
@@ -374,7 +374,7 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                       supplierContext.bean(
                           io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics.class));
 
-              // what deliveries of this process are counted into (story 92); absent
+              // what deliveries of this process are counted into; absent
               // where the application brings no metrics backend
               final var metrics = SpringBootMigrationAdapterAutoConfiguration
                   .vanillaBpMetricsOf(
@@ -404,7 +404,7 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
               processServicesByKey.put(
                   "%s|%s".formatted(workflowModuleId, bpmnProcessId),
                   processServiceBean.getMigrationProcessService());
-              // story 107: what an awareness probe is asked about is the workflow module
+              // What an awareness probe is asked about is the workflow module
               // AND every BPMN process serving this aggregate there - a secondary process
               // of the same @WorkflowService runs on the same workflow, so an instance of
               // it is a legitimate answer. Collected while the services are registered,
@@ -447,7 +447,7 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
               }
 
               // every process service of this aggregate answers for the processes of ITS
-              // workflow module (story 107)
+              // workflow module
               moduleOfProcessService
                   .forEach((
                       processService,

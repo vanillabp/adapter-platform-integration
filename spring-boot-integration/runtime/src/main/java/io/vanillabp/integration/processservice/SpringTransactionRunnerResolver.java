@@ -14,7 +14,7 @@ import io.vanillabp.integration.spi.TransactionRunnerAware;
 import io.vanillabp.integration.workflowtask.SpringTransactionRunner;
 
 /**
- * Spring Boot implementation of the core's {@link TransactionRunnerResolver} (story 70):
+ * Spring Boot implementation of the core's {@link TransactionRunnerResolver}:
  * which transaction VanillaBP runs the work on a workflow aggregate in, and what that
  * transaction covers.
  * <p>

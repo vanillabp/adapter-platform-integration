@@ -22,7 +22,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * {@code prioritized-adapters} which IS an adapter type needs no section at all.
  * <p>
  * Both halves of that convention are what an application relies on, and the second one
- * was held by nothing here (story 106's rule, found while a blueprint ran): the helper
+ * was held by nothing here (found while a blueprint ran): the helper
  * bound the properties itself and applied the derivation only where NO adapter section
  * existed at all. A migration setup - one section for the new BPMS, the old one named in
  * {@code prioritized-adapters} - therefore got no beans for the old adapter, while the
@@ -69,7 +69,7 @@ public class AdapterBeanRegistrarSupportTest {
   public void aPrioritizedIdNeedsNoSection() {
 
     // the migration setup: the new BPMS is configured, the old one is named in the order
-    // and derived from the classpath by the core (story 34) - so its beans have to exist
+    // and derived from the classpath by the core - so its beans have to exist
     assertEquals(
         List.of(CAMUNDA7),
         idsOf(

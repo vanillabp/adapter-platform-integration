@@ -205,7 +205,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
     if (properties.isCreateSchema()) {
       createTableIfNotExists();
     } else {
-      // the application creates its schema itself (story 75) - a missing table is then a
+      // the application creates its schema itself - a missing table is then a
       // deployment which forgot to apply the migration, and it is said at startup instead of at
       // the first workflow start
       validateTableExists();
@@ -294,8 +294,8 @@ public class JdbcPhaseTwoOutboxDispatcher {
   }
 
   /**
-   * Verifies that the outbox table exists, for an application creating its schema itself
-   * (story 75). The message names the table, the property which would have created it and the
+   * Verifies that the outbox table exists, for an application creating its schema itself.
+   * The message names the table, the property which would have created it and the
    * artifact carrying the statements.
    *
    * @throws IllegalStateException If the table is missing
@@ -463,7 +463,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
                           .deserializeArgs(entry.serializedArgs())),
               entry.attempts() > 0);
     } catch (Exception e) {
-      // the adapter said that repeating cannot help (story 63) - blocked right away
+      // the adapter said that repeating cannot help - blocked right away
       // instead of after the configured attempts
       if (io.vanillabp.integration.spi.PhaseTwoPermanentFailure.isPermanent(e)) {
         try (var statement = connection.prepareStatement(markEntryBlocked)) {

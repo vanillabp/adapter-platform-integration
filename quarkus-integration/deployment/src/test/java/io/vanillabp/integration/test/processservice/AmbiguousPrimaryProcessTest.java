@@ -16,7 +16,7 @@ import io.vanillabp.spi.service.WorkflowService;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Story 60: one workflow aggregate has one {@code ProcessService}, so one of the
+ * One workflow aggregate has one {@code ProcessService}, so one of the
  * classes declaring the aggregate names the process {@code startWorkflow} starts.
  * That used to be whichever class was found first - an order coming from the file
  * system. Two classes naming DIFFERENT processes now end the build with a message

@@ -21,7 +21,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * Tests the generic most-specific-wins resolution of adapter-scoped properties
  * across the four levels (task &gt; workflow &gt; workflow-module &gt; adapter). The
  * levels are exercised via the builder: workflow-level configuration is still
- * rejected at startup (story 27) and the task level has no consumer yet - the
+ * rejected at startup and the task level has no consumer yet - the
  * resolver is the structural foundation both stories build on.
  */
 @ExtendWith(SuppressOutputExtension.class)

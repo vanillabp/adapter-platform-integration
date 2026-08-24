@@ -87,7 +87,7 @@ public record PhaseTwoCall(
     Objects.requireNonNull(workflowModuleId, "workflowModuleId must not be null");
     Objects.requireNonNull(bpmnProcessId, "bpmnProcessId must not be null");
     // no requireNonNull: an operation which is not about ONE workflow carries no
-    // aggregate ID (a broadcast signal, story 42)
+    // aggregate ID (a broadcast signal)
     args = args == null ? Map.of() : Map.copyOf(args);
     idempotencyKey = idempotencyKey == null ? Optional.empty() : idempotencyKey;
   }

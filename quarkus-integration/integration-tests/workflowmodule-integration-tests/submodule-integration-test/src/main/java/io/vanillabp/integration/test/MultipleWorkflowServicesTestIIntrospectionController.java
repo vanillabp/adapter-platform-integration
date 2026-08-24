@@ -57,28 +57,28 @@ public class MultipleWorkflowServicesTestIIntrospectionController {
   int noModuleUnmodifiedProperty;
 
   /**
-   * Story 101: written as <code>${urls.external-system}</code> in the workflow
+   * Written as <code>${urls.external-system}</code> in the workflow
    * module's own file and resolved against the application's configuration.
    */
   @ConfigProperty(name = "test-module.external-system-url", defaultValue = "-")
   String testModuleExternalSystemUrl;
 
   /**
-   * Story 101: shipped by the workflow module and overridden by the
+   * Shipped by the workflow module and overridden by the
    * application's classpath <code>application.yaml</code>.
    */
   @ConfigProperty(name = "test-module.overridden-from-classpath", defaultValue = "-")
   String testModuleOverriddenFromClasspath;
 
   /**
-   * Story 101: shipped by the workflow module and overridden by a configuration
+   * Shipped by the workflow module and overridden by a configuration
    * file next to the runner.
    */
   @ConfigProperty(name = "test-module.overridden-from-external-file", defaultValue = "-")
   String testModuleOverriddenFromExternalFile;
 
   /**
-   * Story 101: shipped by the workflow module's profile-specific file only.
+   * Shipped by the workflow module's profile-specific file only.
    */
   @ConfigProperty(name = "test-module.profile-only", defaultValue = "-")
   String testModuleProfileOnly;
@@ -117,7 +117,7 @@ public class MultipleWorkflowServicesTestIIntrospectionController {
   }
 
   /**
-   * Story 101: the precedence of a workflow module's files against the
+   * The precedence of a workflow module's files against the
    * application's, read once through an injected {@link ConfigProperty} and
    * once through the {@link org.eclipse.microprofile.config.Config} itself, so
    * that both ways of reading are covered.

@@ -17,7 +17,7 @@ import io.vanillabp.integration.test.deployment.TaskWorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Guiding wiring validation on Quarkus (story 21a): a "BPMN task" (supplied by a
+ * Guiding wiring validation on Quarkus: a "BPMN task" (supplied by a
  * wiring source standing in for the model) without a matching
  * <code>&#64;WorkflowTask</code> method aborts the boot with a message naming the
  * task and the fix (the reverse direction - methods matching no task - is

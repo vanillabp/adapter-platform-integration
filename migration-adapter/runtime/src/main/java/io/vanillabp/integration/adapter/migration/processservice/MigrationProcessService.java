@@ -49,8 +49,8 @@ public class MigrationProcessService<A> {
   private final List<MigratableProcessService<A>> adapterProcessServices;
 
   /**
-   * The process services of every adapter the workflow module is DEPLOYED to (the
-   * union of story 27), which is more than the prioritized adapters of this process
+   * The process services of every adapter the workflow module is DEPLOYED to, which
+   * is more than the prioritized adapters of this process
    * whenever another workflow of the module elects a different BPMS. A broadcast
    * signal goes to all of them: while a migration runs, workflows waiting for the
    * signal legitimately live in more than one BPMS.
@@ -118,7 +118,7 @@ public class MigrationProcessService<A> {
   private final java.util.concurrent.atomic.AtomicBoolean missingDeliveryLogReported = new java.util.concurrent.atomic.AtomicBoolean();
 
   /**
-   * Resolves the transaction VanillaBP runs the work on this aggregate in (story 70).
+   * Resolves the transaction VanillaBP runs the work on this aggregate in.
    * Provided by the platform integration; may be <code>null</code> in tests and for
    * adapters handing their runner in directly - the runner passed by the caller is
    * used then.
@@ -133,7 +133,7 @@ public class MigrationProcessService<A> {
   private volatile TransactionRunner transactionRunner;
 
   /**
-   * What the application counts about its deliveries (story 92). Handed in by the
+   * What the application counts about its deliveries. Handed in by the
    * platform integration after construction, because it exists once per application
    * while process services exist per BPMN process;
    * {@link io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics#NONE}
@@ -193,7 +193,7 @@ public class MigrationProcessService<A> {
   /**
    * Creates a process service without a transaction-runner resolver - kept for tests
    * and for callers handing the runner in directly; the platform integrations always
-   * pass one (story 70).
+   * pass one.
    */
   public MigrationProcessService(
       final String workflowModuleId,
@@ -318,8 +318,8 @@ public class MigrationProcessService<A> {
   /**
    * The transaction runner serving this process service's aggregate: the most specific
    * {@link io.vanillabp.integration.spi.TransactionRunnerAware} bean, a
-   * {@link TransactionRunner} bean of the application, or the platform's own runner
-   * (story 70). Resolved once and cached - a resolution per delivery would ask the
+   * {@link TransactionRunner} bean of the application, or the platform's own runner.
+   * Resolved once and cached - a resolution per delivery would ask the
    * bean container on every task.
    *
    * @param fallback The runner the caller would use, taken where no resolver was
@@ -344,7 +344,7 @@ public class MigrationProcessService<A> {
 
   /**
    * Validates AT STARTUP that the work VanillaBP does on this aggregate has a
-   * transaction to run in, and reports what that transaction covers (story 70).
+   * transaction to run in, and reports what that transaction covers.
    * <p>
    * Three outcomes. No runner at all ends the boot where the first-priority adapter needs
    * a two-phase commit: such an application cannot start a single workflow (the aggregate
@@ -560,7 +560,7 @@ public class MigrationProcessService<A> {
    *          {@link io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry}
    * @param context The invocation context supplied by the adapter
    * @param platformTransactionRunner The platform's transaction runner, used unless the
-   *          application contributed one for this aggregate (story 70)
+   *          application contributed one for this aggregate
    * @param rollbackRuleRemedies How a rollback rule excluding a {@link TaskException} is
    *          written on this platform, named by the failure of the rollback-only check
    * @return The outcome the adapter maps to the BPMS
@@ -571,7 +571,7 @@ public class MigrationProcessService<A> {
       final TransactionRunner platformTransactionRunner,
       final List<String> rollbackRuleRemedies) {
 
-    // story 92: everything the application logs while its handler runs carries the
+    // Everything the application logs while its handler runs carries the
     // workflow it runs for, and the delivery is counted and measured - here, because
     // this is the one place every BPMS passes through
     final var startedAt = System.nanoTime();
@@ -631,7 +631,7 @@ public class MigrationProcessService<A> {
       final List<String> rollbackRuleRemedies) {
 
     // the runner of the application where it contributed one for this aggregate, the
-    // platform's otherwise (story 70) - resolved once and cached by the process service
+    // platform's otherwise - resolved once and cached by the process service
     final var runner = getTransactionRunner(platformTransactionRunner);
 
     // a delivery proves which BPMS holds this workflow - recorded before anything
@@ -891,7 +891,7 @@ public class MigrationProcessService<A> {
 
   /**
    * Reports AT STARTUP an adapter id which the persisted state still names although the
-   * application does not configure it any more (story 120).
+   * application does not configure it any more.
    * <p>
    * VanillaBP persists the adapter id twice: an outbox entry of a START operation names
    * the adapter elected in phase one, and the key of every delivery record is built from
@@ -1145,7 +1145,7 @@ public class MigrationProcessService<A> {
    * an entry costs one repeated WARN, which is why it needs nothing durable.
    * <p>
    * This is also the one place which knows that a record is still in use, whichever BPMS
-   * redelivered: the store is told so (story 97) and keeps the record alive as long as
+   * redelivered: the store is told so and keeps the record alive as long as
    * redeliveries keep coming, while the timestamp this age is measured from stays where
    * it is. The store collects the key rather than writing it here - the redelivery runs
    * in the transaction of the workflow aggregate, and an UPDATE per renewal of every open
@@ -1911,14 +1911,14 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * The BPMN processes this process service serves, the primary one first (story 107).
+   * The BPMN processes this process service serves, the primary one first.
    * <p>
    * A {@code @WorkflowService} declares one primary process and may declare
    * {@code secondaryBpmnProcesses}; all of them run on this aggregate, so an instance of
    * any of them is a legitimate answer to an awareness probe. The platform integration
    * knows the full list when it registers the process service and sets it here. Where it
    * is not set - a test constructing this service directly - the primary process is the
-   * scope, which is what the core knew before this story.
+   * scope, which is the narrowest honest answer.
    */
   private java.util.List<String> servedBpmnProcessIds;
 
@@ -2530,7 +2530,7 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Runs a phase-two operation and lets the adapter classify a failure (story 63):
+   * Runs a phase-two operation and lets the adapter classify a failure:
    * the outbox repeats what may succeed on the next attempt - a concurrency conflict
    * is the case this exists for - while a failure repeating cannot fix blocks the
    * entry right away.

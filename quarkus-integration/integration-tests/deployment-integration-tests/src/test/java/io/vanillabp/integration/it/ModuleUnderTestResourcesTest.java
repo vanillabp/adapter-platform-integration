@@ -16,7 +16,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * Story 68: a workflow module tested inside its own Maven module IS the root
+ * A workflow module tested inside its own Maven module IS the root
  * application archive, so the convention used to drop the module ID and look at
  * 'classpath*:processes/&lt;adapter&gt;' - while the files sit where the packaged
  * application needs them, below the module ID. The module found nothing in its own

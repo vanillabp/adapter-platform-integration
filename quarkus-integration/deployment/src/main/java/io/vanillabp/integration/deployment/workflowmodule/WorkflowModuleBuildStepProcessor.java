@@ -183,7 +183,7 @@ public class WorkflowModuleBuildStepProcessor {
    * <code>application-prod.yaml</code> beats <code>application.yaml</code>, each within its own band.
    * The 15 between 235 and 250 is what keeps the two bands apart.
    *
-   * <p>Until story 101 the two module ordinals were 256 and 251, one tick ABOVE the application's
+   * <p>The two module ordinals used to be 256 and 251, one tick ABOVE the application's
    * classpath files. A workflow module could therefore not be reconfigured from
    * <code>application.yaml</code>, which is the normal place to do it, and Spring Boot answered the
    * same question differently. Both platforms now agree: system properties, environment variables,

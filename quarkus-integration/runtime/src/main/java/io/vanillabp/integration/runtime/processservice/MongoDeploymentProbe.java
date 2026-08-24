@@ -4,7 +4,7 @@ package io.vanillabp.integration.runtime.processservice;
  * Answers whether the MongoDB deployment of the application is a replica set, which is the
  * condition of every MongoDB transaction - and MongoDB Panache starts one whenever it writes
  * inside a JTA transaction, so on a standalone server that write fails with "Transaction
- * numbers are only allowed on a replica set member or mongos" (story 70).
+ * numbers are only allowed on a replica set member or mongos".
  * <p>
  * An interface, because the answer is only available where the MongoDB client extension is:
  * its implementation is registered as a bean by a build step guarded by
@@ -12,7 +12,7 @@ package io.vanillabp.integration.runtime.processservice;
  * processed task deliveries are. Nothing on this side of the interface names a MongoDB type,
  * so {@link QuarkusTransactionRunnerResolver} links in an application which never asked for
  * MongoDB - a native image resolves every referenced method while it is built, and a direct
- * call into the driver used to end that build (story 85).
+ * call into the driver used to end that build.
  */
 public interface MongoDeploymentProbe {
 

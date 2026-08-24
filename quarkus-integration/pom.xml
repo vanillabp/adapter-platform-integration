@@ -53,7 +53,7 @@
                  nothing captures it. Measured on deployment-integration-tests: 311 lines
                  in a GREEN run of 35 tests. Hence the file - and the workflow uploads
                  these reports when a build fails, so the full log of a red run is one
-                 download away instead of the last line Surefire prints (story 109). -->
+                 download away instead of the last line Surefire prints. -->
             <redirectTestOutputToFile>true</redirectTestOutputToFile>
             <reportsDirectory>${project.build.directory}/failsafe-reports</reportsDirectory>
             <systemPropertyVariables>

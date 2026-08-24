@@ -16,7 +16,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Status;
 
 /**
- * The workflow service of the task-processing acceptance test (story 21a): one
+ * The workflow service of the task-processing acceptance test: one
  * <code>&#64;WorkflowTask</code> method per user-visible variation. The happy-path
  * handler additionally proves the platform contract for handler invocations on
  * adapter threads: a JTA transaction is active and the CDI request context was
@@ -59,7 +59,7 @@ public class TaskWorkflowService {
 
   /**
    * What the logging context held while the handler ran - the assertion of the MDC
-   * VanillaBP puts around every delivery (story 92).
+   * VanillaBP puts around every delivery.
    */
   public static final java.util.Map<String, String> MDC_DURING_TASK = new java.util.concurrent.ConcurrentHashMap<>();
 

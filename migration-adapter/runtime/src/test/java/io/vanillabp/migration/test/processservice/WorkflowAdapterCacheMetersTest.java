@@ -18,7 +18,7 @@ import io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapter
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The Micrometer binding of the election cache's statistics (story 58): every number
+ * The Micrometer binding of the election cache's statistics: every number
  * VanillaBP reports arrives in the registry, and the size of a cache which does not
  * report one is NaN instead of a wrong zero.
  */

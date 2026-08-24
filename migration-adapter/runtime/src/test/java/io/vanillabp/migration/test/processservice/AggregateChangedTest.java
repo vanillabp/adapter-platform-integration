@@ -27,7 +27,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.WorkflowNotFoundException;
 
 /**
- * Pushing a changed workflow-aggregate to the BPMS (story 44). The shape is the one
+ * Pushing a changed workflow-aggregate to the BPMS. The shape is the one
  * of message correlation - save, probe, phase one or outbox - so these tests cover
  * what is different: the task id deciding the scope, the missing idempotency key and
  * an ended workflow being a warning instead of a failure.

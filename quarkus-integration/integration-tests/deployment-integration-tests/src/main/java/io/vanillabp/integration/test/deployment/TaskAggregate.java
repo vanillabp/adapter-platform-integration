@@ -3,7 +3,7 @@ package io.vanillabp.integration.test.deployment;
 import io.vanillabp.spi.service.TaskEvent;
 
 /**
- * The aggregate of the task-processing acceptance test (story 21a).
+ * The aggregate of the task-processing acceptance test.
  */
 public class TaskAggregate {
 

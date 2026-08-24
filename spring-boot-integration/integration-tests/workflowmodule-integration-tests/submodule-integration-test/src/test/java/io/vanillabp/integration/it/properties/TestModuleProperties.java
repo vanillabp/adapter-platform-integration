@@ -6,7 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * Bound to the keys of the workflow module <i>test-module</i> to prove that its
  * files reach {@code @ConfigurationProperties} and not only {@code ${...}}
  * placeholders. Version 1 kept them out of the environment, so this is what
- * Version 2 added and what story 101 must not take away again.
+ * Version 2 added and what the profile support must not take away again.
  */
 @ConfigurationProperties(prefix = "test-module")
 public class TestModuleProperties {

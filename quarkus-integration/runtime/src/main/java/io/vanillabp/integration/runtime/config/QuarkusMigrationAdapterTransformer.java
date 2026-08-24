@@ -117,7 +117,7 @@ public class QuarkusMigrationAdapterTransformer {
     // run the core validation - one validation, in core, identical on all
     // platforms (adapter types are the capability suffixes of the VanillaBP
     // adapter extensions loaded)
-    // convention over configuration (story 34): the classpath facts are what the
+    // convention over configuration: the classpath facts are what the
     // conventions are derived from - a GLOBAL workflow module is one declared by
     // the root application archive (the application IS the workflow module),
     // which decides the conventional resources location

@@ -1,7 +1,7 @@
 package io.vanillabp.integration.test.transaction;
 
 /**
- * The workflow aggregate of the application-owned-transaction test (story 70): stored by
+ * The workflow aggregate of the application-owned-transaction test: stored by
  * the application in a system Spring knows nothing about, so nothing here is a JPA entity
  * or a MongoDB document.
  */

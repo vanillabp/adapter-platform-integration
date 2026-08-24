@@ -17,7 +17,7 @@ import io.vanillabp.integration.adapter.spi.NameClashAvoidance;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
 
 /**
- * THE implementation of the name-clash-avoidance model (story 35): resolving the
+ * THE implementation of the name-clash-avoidance model: resolving the
  * mode and composing the identifiers a BPMS sees. BPMS-neutral by design - an
  * adapter decides only WHERE to apply the results (its model, its commands).
  *

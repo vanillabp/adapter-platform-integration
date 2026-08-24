@@ -24,7 +24,7 @@ import jakarta.inject.Inject;
  * when the extension {@code quarkus-spring-tx} is part of the application, which maps it
  * onto the JTA annotation at build time. This module does not depend on that extension, so
  * the annotation is inert here and the application HAS to boot with it on a
- * <code>&#64;WorkflowTask</code> method (story 40b): failing the boot over an annotation
+ * <code>&#64;WorkflowTask</code> method: failing the boot over an annotation
  * that does nothing would hit exactly the applications sharing modules with a Spring code
  * base, i.e. VanillaBP's migration audience. The developer gets a warning instead, whose
  * wording is asserted by the core's unit tests.

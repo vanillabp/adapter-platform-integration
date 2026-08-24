@@ -43,12 +43,12 @@ import io.vanillabp.integration.test.utils.springboot.SpringBootTestApplication;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 
 /**
- * Acceptance test of story 97 on Spring Boot, with the default JDBC-based delivery log: the
+ * Acceptance test on Spring Boot, with the default JDBC-based delivery log: the
  * record which answers the redeliveries of an OPEN task outlives the retention as long as
  * the BPMS keeps redelivering that task, while the record of a task nobody hands out any
  * more expires as it always did.
  * <p>
- * The second half of the story is that nothing of this moves the age of the open task: it
+ * The second half is that nothing of this moves the age of the open task: it
  * keeps being measured from the moment the handler ran, so
  * <code>vanillabp.delivery.max-task-age</code> still fires. Both are asserted on records
  * backdated in the database rather than waited for.

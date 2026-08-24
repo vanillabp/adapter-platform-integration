@@ -29,7 +29,7 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Acceptance test of pushing a changed workflow-aggregate to the BPMS (story 44)
+ * Acceptance test of pushing a changed workflow-aggregate to the BPMS
  * with the dummy adapter standing in for one. What it pins: both overloads reach the
  * adapter, the task id decides the scope and travels unchanged, and a rollback takes
  * the push with it - the dummy is configured without a two-phase commit, so it

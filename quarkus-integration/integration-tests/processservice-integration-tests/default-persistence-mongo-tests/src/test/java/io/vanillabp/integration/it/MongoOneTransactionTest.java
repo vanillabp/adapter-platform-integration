@@ -26,13 +26,13 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of story 70 on Quarkus: an application storing EVERYTHING in MongoDB - the
+ * Acceptance test on Quarkus: an application storing EVERYTHING in MongoDB - the
  * aggregate through Panache, the phase-two outbox and the log of processed task deliveries
  * through VanillaBP's MongoDB defaults - with no data source anywhere.
  * <p>
  * What is pinned here is the atomicity the outbox contract promises. MongoDB Panache enlists
- * itself in the JTA transaction VanillaBP opens and starts a MongoDB transaction, and since
- * this story the outbox writes through that very session. So while the transaction runs, a
+ * itself in the JTA transaction VanillaBP opens and starts a MongoDB transaction, and the
+ * outbox writes through that very session. So while the transaction runs, a
  * reader outside it sees NOTHING - neither the aggregate nor the outbox entry - and after the
  * commit it sees both. Before the outbox joined the session, the entry was written
  * immediately and this test failed on the very first assertion.

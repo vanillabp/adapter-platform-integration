@@ -20,7 +20,7 @@ import jakarta.enterprise.inject.Instance;
  * Which default serves which technology, and whether it is usable at all, is asked through
  * {@link PlatformDefaultStore} rather than by naming the implementations: the MongoDB ones
  * exist only where the MongoDB client extension does, and a native image resolves every
- * referenced method while it is built (story 85).
+ * referenced method while it is built.
  */
 public class QuarkusTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
 

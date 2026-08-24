@@ -147,7 +147,7 @@ public class DeploymentService {
       final Function<String, Map<String, InputStream>> bpmnResourcesLoader) {
 
     // several ids of one adapter type only make sense if they address DIFFERENT
-    // systems - which the ADAPTER decides (story 34)
+    // systems - which the ADAPTER decides
     validateDistinctAdapterInstances();
 
     final var knownBpmnProcessIds = new HashMap<String, Set<String>>();
@@ -215,7 +215,7 @@ public class DeploymentService {
    * warned about its own location, but a module none of them could serve is a
    * different message: nothing of this module runs, and the failure a developer meets
    * later comes from the BPMS ("no processes deployed with key ...") and names neither
-   * VanillaBP nor a location (story 68).
+   * VanillaBP nor a location.
    * <p>
    * The boot continues on purpose: BPMN may arrive with an adapter deployed later
    * (the migration case this platform exists for), and a module without resources
@@ -371,7 +371,7 @@ public class DeploymentService {
 
     // a configured location is the only one; the convention may name two (the
     // application IS the workflow module, and a module tested inside its own Maven
-    // module is that as well while keeping its files below the module ID, story 68).
+    // module is that as well while keeping its files below the module ID).
     // The first location holding files wins - never both, so a process cannot be
     // deployed twice.
     final var candidateLocations = properties.getAdapterResourcesLocationsFor(

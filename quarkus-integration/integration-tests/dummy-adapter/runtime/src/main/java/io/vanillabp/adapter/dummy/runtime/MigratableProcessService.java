@@ -124,13 +124,13 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
   /**
    * A dummy configured as a remote BPMS (two-phase commit) also stands in for its
    * at-least-once task delivery: the outcome is reported after the local commit, so the
-   * same task may arrive again (story 51).
+   * same task may arrive again.
    */
   @Override
   public boolean isPhaseTwoFailureRepeatable(
       final Throwable failure) {
 
-    // story 63: an adapter tells the store which failures are worth repeating. This
+    // An adapter tells the store which failures are worth repeating. This
     // double reports exactly one kind as permanent, so a test can prove that such an
     // entry is blocked immediately instead of after the configured attempts
     var candidate = failure;
@@ -158,7 +158,7 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
    * builds the variables it sends to the BPMS from the aggregate, so it calls the
    * application's persistence from the outbox dispatcher's thread. Switched on by
    * <code>dummy-adapter.read-aggregate-in-phase-two</code> (the tests of the
-   * phase-two contract, story 67); off by default because most test doubles of
+   * phase-two contract); off by default because most test doubles of
    * {@link AggregatePersistenceAware} implement nothing but save.
    *
    * @param aggregatePersistence The application's persistence of this aggregate

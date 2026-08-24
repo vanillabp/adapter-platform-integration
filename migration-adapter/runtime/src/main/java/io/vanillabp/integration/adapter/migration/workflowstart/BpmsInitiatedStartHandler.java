@@ -110,7 +110,7 @@ public class BpmsInitiatedStartHandler {
 
   /**
    * The version specification(s) this method names, for messages about a method
-   * serving no version the BPMS holds (story 57).
+   * serving no version the BPMS holds.
    *
    * @return The specifications, comma separated
    */

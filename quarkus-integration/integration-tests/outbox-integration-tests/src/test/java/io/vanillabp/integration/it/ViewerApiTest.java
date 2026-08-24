@@ -30,7 +30,7 @@ import io.vanillabp.spi.process.WorkflowNotFoundException;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of the viewer/history API (story 26) on Quarkus: the BPMS
+ * Acceptance test of the viewer/history API on Quarkus: the BPMS
  * holding the workflow answers the read - even though it is NOT the
  * first-priority adapter - and the process definition ids handed to the
  * application are namespaced per adapter id so {@code getBpmnXml} stays

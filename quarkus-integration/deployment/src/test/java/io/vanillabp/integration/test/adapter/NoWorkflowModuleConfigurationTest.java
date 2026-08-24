@@ -14,7 +14,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * Convention over configuration (story 34): a workflow module found in the
+ * Convention over configuration: a workflow module found in the
  * classpath needs NO <code>vanillabp.workflow-modules.&lt;id&gt;</code> section at
  * all - the section is derived and its BPMN is read from the conventional
  * location.

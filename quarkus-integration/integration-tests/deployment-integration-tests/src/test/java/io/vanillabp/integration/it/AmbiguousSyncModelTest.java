@@ -20,7 +20,7 @@ import io.vanillabp.spi.service.WorkflowTask;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Story 28b: an aggregate whose attributes are annotated BOTH ways while the class
+ * An aggregate whose attributes are annotated BOTH ways while the class
  * itself states no mode cannot be interpreted - is the rest shared with the BPMS or
  * not? The boot is aborted with a message naming the class, the conflicting
  * attributes and the fix, and it happens at STARTUP (when the workflow aggregate is

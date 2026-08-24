@@ -30,8 +30,8 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of <code>&#64;WorkflowTask</code> processing on Quarkus (story
- * 21a) with the dummy adapter standing in for a BPMS: the adapter triggers task
+ * Acceptance test of <code>&#64;WorkflowTask</code> processing on Quarkus with the dummy
+ * adapter standing in for a BPMS: the adapter triggers task
  * invocations through the core's {@code WorkflowTaskInvoker}, which loads the
  * aggregate, runs the handler within a JTA transaction WITH an activated CDI
  * request context (proven by a {@code @RequestScoped} probe - handlers run on

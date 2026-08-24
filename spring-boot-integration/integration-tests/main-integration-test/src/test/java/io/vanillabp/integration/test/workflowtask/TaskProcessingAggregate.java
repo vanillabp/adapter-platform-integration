@@ -19,7 +19,7 @@ public class TaskProcessingAggregate {
   private String status;
 
   /**
-   * Story 28b: excluded from what the BPMS sees - and by deriving the class' mode
+   * Excluded from what the BPMS sees - and by deriving the class' mode
    * (opt-out) it is the ONLY excluded attribute.
    */
   @io.vanillabp.spi.service.NoSyncWithBPMS

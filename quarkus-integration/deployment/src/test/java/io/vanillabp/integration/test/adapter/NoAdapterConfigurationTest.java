@@ -16,7 +16,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * A CUSTOM adapter id (an id which is not an adapter type) can never be derived:
  * it carries no information about the adapter type it belongs to. Naming it in
  * <code>prioritized-adapters</code> without a section therefore still fails the
- * boot - with a message naming the property to add (story 34).
+ * boot - with a message naming the property to add.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class NoAdapterConfigurationTest {

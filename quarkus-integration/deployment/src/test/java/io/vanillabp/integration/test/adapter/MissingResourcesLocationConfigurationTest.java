@@ -16,7 +16,7 @@ import jakarta.inject.Inject;
 /**
  * Same-config-same-outcome matrix (core validation on all platforms): a workflow
  * module without any resources-location reads its BPMN from the CONVENTIONAL
- * location instead of failing the boot (story 34). The workflow module here is
+ * location instead of failing the boot. The workflow module here is
  * declared by the application itself (the test archive IS the root application
  * archive), so its BPMN lives below 'processes/' without a module-id namespace.
  */
@@ -48,7 +48,7 @@ public class MissingResourcesLocationConfigurationTest {
 
     // the module is searched at its own location first and at the application's root
     // second - a module tested inside its own Maven module is the main artifact as
-    // well while its files sit below the module id (story 68)
+    // well while its files sit below the module id
     Assertions.assertEquals(
         java.util.List.of("classpath*:test-module/processes/test", "classpath*:processes/test"),
         resourcesLocations
