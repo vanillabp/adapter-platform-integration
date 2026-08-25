@@ -355,6 +355,21 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   }
 
   @Override
+  public Boolean hasOpenRecords(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    final var filter = new Document("workflowModuleId", workflowModuleId)
+        .append("bpmnProcessId", bpmnProcessId)
+        .append(
+            "outcome",
+            io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome.Kind.COMPLETION_PENDING
+                .name());
+    return deliveryCollection().countDocuments(filter) > 0;
+
+  }
+
+  @Override
   public int releaseRecordsOf(
       final String workflowModuleId,
       final String bpmnProcessId,

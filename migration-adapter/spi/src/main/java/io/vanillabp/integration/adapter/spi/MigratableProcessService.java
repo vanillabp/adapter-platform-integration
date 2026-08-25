@@ -233,6 +233,43 @@ public interface MigratableProcessService<A> {
   }
 
   /**
+   * How many tasks of one BPMN process this BPMS is holding open right now - asked once
+   * at startup and never at runtime.
+   *
+   * <h2>What it is for</h2>
+   *
+   * VanillaBP answers a repeated delivery from what it wrote down when the handler ran.
+   * A task which was already open before this application ever ran has no such record,
+   * so its next delivery runs the handler a second time - which is what version 1 always
+   * did, and what the documentation of version 2 promises it will not. The window is
+   * real, it closes on its own, and nobody can see it without this number.
+   * <p>
+   * Nothing can be adopted here, which is why only a count is asked for: an activated job
+   * which is still there may be a handler waiting for its completion or a handler which
+   * crashed halfway, no BPMS can tell the two apart, and a record written for the second
+   * case would skip business code which never ran.
+   *
+   * <h2>Who answers</h2>
+   *
+   * A BPMS delivering INSIDE the application's transaction has no delivery identity, so
+   * VanillaBP keeps no records for it and the question is meaningless - it answers
+   * <code>null</code>, which is the default. Everybody else answers what they can count
+   * cheaply, and <code>null</code> where counting needs something the installation does
+   * not have.
+   *
+   * @param workflowModuleId The workflow module to ask about
+   * @param bpmnProcessId The PLAIN BPMN process ID
+   * @return The number of open tasks, or <code>null</code> if this BPMS cannot say
+   */
+  default Long openTaskCount(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return null;
+
+  }
+
+  /**
    * Whether a phase-two operation which failed with the given exception is worth
    * repeating.
    * <p>

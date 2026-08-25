@@ -4,6 +4,43 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## The open tasks an upgrade leaves behind are counted at startup (2026-08-25)
+
+Two SPI questions with defaults, one startup message. No configuration and no schema changes.
+
+**Why.** VanillaBP answers a repeated delivery from the record it wrote when the handler ran, which
+is what the wiki promises. A task which was already open before this application first ran has no
+such record, so its next delivery runs the `@WorkflowTask` method a second time - which is what
+version 1 did for every delivery, and what an upgrade therefore leaves behind for exactly the tasks
+most likely to be in flight. Nothing reported it, because from the core's point of view a delivery
+it has never seen is simply a new one.
+
+**Nothing can be repaired, so nothing is.** A record would have to claim that the handler ran and
+left the task open. An activated job which is still there may equally be a handler which crashed
+halfway, no BPMS can tell the two apart, and the wrong guess skips business code which never ran.
+So the count is the whole feature, together with the sentence that the guards in the handlers carry
+the case until it reaches zero.
+
+**What changed:**
+
+- `TaskDeliveryLog#hasOpenRecords(workflowModuleId, bpmnProcessId)`, `default null`. Unlike
+  `adapterIdsOfOpenTasks` it distinguishes "none" from "cannot say", because here the empty case is
+  the interesting one. The shipped JDBC and MongoDB stores answer; the gruelbox-based outbox is
+  unaffected, this is the delivery log;
+- `MigratableProcessService#openTaskCount(workflowModuleId, bpmnProcessId)`, `default null` - how
+  many tasks the BPMS holds open for one process, asked once at startup and never at runtime.
+  Camunda 8 answers it with one job search where the cluster has secondary storage. Camunda 7
+  answers `null` and correctly so: it delivers inside the engine's transaction, reports no delivery
+  identity, and therefore keeps no records which could be missing.
+
+**When it says something.** Only when both sides answer and both answers are interesting: the store
+holds no open record AND the BPMS holds open tasks. A normal restart is quiet (the log holds
+records), a fresh installation is quiet (nothing is open), a store or BPMS which cannot say is
+quiet.
+
+**What to do.** Nothing, other than keeping the version 1 guards in the handlers until the number
+is zero.
+
 ## The age of a task open since before the upgrade is a lower bound (2026-08-25)
 
 This changes the wording of an existing message and adds one adapter question. No configuration

@@ -172,4 +172,37 @@ public interface TaskDeliveryLog {
 
   }
 
+  /**
+   * Whether this store holds an OPEN record for the given BPMN process at all - a record
+   * whose outcome is <code>COMPLETION_PENDING</code>.
+   *
+   * <h2>Why this is not {@link #adapterIdsOfOpenTasks}</h2>
+   *
+   * That question answers an empty set both for "there are none" and for "I cannot say",
+   * which is right for what it is used for: an adapter id nobody configured is worth
+   * reporting only where a store can name one. Here the EMPTY case is the interesting
+   * one, so the two have to be told apart, and this returns <code>null</code> for "I
+   * cannot say" instead.
+   *
+   * <h2>What the emptiness means</h2>
+   *
+   * VanillaBP writes a record when a handler runs, and the record of a task which stays
+   * open is kept alive by every redelivery it answers. So a store which holds NO open
+   * record while the BPMS holds open tasks of that process is a store which never saw
+   * them - which is what an upgrade from version 1 looks like, and what makes the
+   * handlers of those tasks run a second time when the BPMS delivers them again.
+   *
+   * @param workflowModuleId The workflow module to ask about
+   * @param bpmnProcessId The BPMN process to ask about
+   * @return <code>true</code> or <code>false</code>, or <code>null</code> if this store
+   *         cannot say
+   */
+  default Boolean hasOpenRecords(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return null;
+
+  }
+
 }

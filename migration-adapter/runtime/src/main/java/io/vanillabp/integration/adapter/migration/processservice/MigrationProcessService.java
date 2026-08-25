@@ -941,6 +941,7 @@ public class MigrationProcessService<A> {
    */
   public void validatePersistedAdapterIdsAtStartup() {
 
+    reportOpenTasksNobodyRemembers();
     reportUnconfiguredAdapterIds(
         phaseTwoOutbox == null
             ? java.util.Set.<String>of()
@@ -953,6 +954,78 @@ public class MigrationProcessService<A> {
             : taskDeliveryLog.adapterIdsOfOpenTasks(workflowModuleId, bpmnProcessId),
         "records of tasks which are still open",
         "a redelivery runs the @WorkflowTask method a second time");
+
+  }
+
+
+  /**
+   * Reports AT STARTUP that the BPMS holds tasks open which VanillaBP has no record of,
+   * so their next delivery will run the <code>&#64;WorkflowTask</code> method again.
+   *
+   * <h2>What this catches</h2>
+   *
+   * The wiki promises that a repeated delivery does not run the handler a second time,
+   * and that promise rests on a record written when the handler ran. A task which was
+   * already open before this application first ran has none - which is exactly what an
+   * upgrade from version 1 leaves behind, since version 1 kept no such records at all.
+   * The window is real, it closes as those tasks are delivered once each, and without
+   * this nobody can see it: no message is produced when it happens, because from the
+   * core's point of view a delivery it has never seen is simply a new one.
+   *
+   * <h2>Why counting is all that is done</h2>
+   *
+   * Nothing can be adopted. A record would have to claim that the handler ran and left
+   * the task open; a job which is activated and still there may equally be a handler
+   * which crashed halfway, no BPMS can tell the two apart, and the wrong guess skips
+   * business code which never ran. So the honest answer is the number plus the sentence
+   * that the guards in the handlers still carry the case, which is what version 1 needed
+   * anyway.
+   *
+   * <h2>When it stays silent</h2>
+   *
+   * Silent unless BOTH sides answer and both answers are interesting: a store which
+   * cannot say whether it holds open records, a BPMS which cannot count its open tasks,
+   * a store which DOES hold open records (an application which has been running), and a
+   * BPMS holding nothing open (a fresh installation) each end it. So a normal restart
+   * says nothing, a first start on an empty system says nothing, and the upgrade says
+   * something once per BPMN process.
+   */
+  private void reportOpenTasksNobodyRemembers() {
+
+    final var deliveryLog = taskDeliveryLog;
+    if (deliveryLog == null) {
+      return;
+    }
+    final var hasRecords = deliveryLog.hasOpenRecords(workflowModuleId, bpmnProcessId);
+    if ((hasRecords == null) || hasRecords.booleanValue()) {
+      return;
+    }
+    adapterProcessServices
+        .stream()
+        .filter(MigratableProcessService::deliversTasksAtLeastOnce)
+        .forEach(adapter -> {
+          final var open = adapter.openTaskCount(workflowModuleId, bpmnProcessId);
+          if ((open == null) || (open == 0)) {
+            return;
+          }
+          log
+              .info(
+                  """
+                      Adapter '{}' holds {} open task(s) of BPMN process '{}' (workflow module '{}') \
+                      which VanillaBP has no record of. It remembers a delivery from the moment your \
+                      handler ran, so tasks which were already open before this application first ran \
+                      are not in that memory: the next delivery of each of them runs the \
+                      @WorkflowTask method a SECOND time, which is what happens without the record \
+                      and what VanillaBP 1 did for every delivery. Nothing can be repaired here - a \
+                      record would have to claim your handler ran, and an activated job which is \
+                      still there may just as well be a handler which crashed halfway. So keep the \
+                      guards in your handlers until this number is zero, which it becomes as each of \
+                      those tasks is delivered once.""",
+                  adapter.getAdapterId(),
+                  open,
+                  bpmnProcessId,
+                  workflowModuleId);
+        });
 
   }
 
