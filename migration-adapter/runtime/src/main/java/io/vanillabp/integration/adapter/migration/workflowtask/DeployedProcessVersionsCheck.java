@@ -178,11 +178,16 @@ public class DeployedProcessVersionsCheck {
       return;
     }
     reportDeadHandlers(workflowModuleId, bpmnProcessId, adapterId, known, deployed, resolver);
+    // asking the BPMS how many workflows run on a version is a QUERY, and three of the
+    // reports below want the same answer for the same version. Asked once per version
+    // and per run of this check, and only for a version somebody actually asks about
+    final var instanceCounts = new InstanceCounts(workflowModuleId, bpmnProcessId, catalog);
+    final var olderVersions = olderThan(known, deployed);
     reportWorkflowsOnOlderVersions(
-        workflowModuleId, bpmnProcessId, adapterId, olderThan(known, deployed), catalog);
-    for (final var version : olderThan(known, deployed)) {
+        workflowModuleId, bpmnProcessId, adapterId, olderVersions, instanceCounts, catalog);
+    for (final var version : olderVersions) {
       if (outfadedVersions.isOutfaded(workflowModuleId, bpmnProcessId, adapterId, version, resolver)) {
-        reportOutfadedVersionInUse(workflowModuleId, bpmnProcessId, adapterId, version, catalog);
+        reportOutfadedVersionInUse(workflowModuleId, bpmnProcessId, adapterId, version, instanceCounts);
         continue;
       }
       final var tasks = catalog.tasksOfVersion(workflowModuleId, bpmnProcessId, version);
@@ -194,7 +199,7 @@ public class DeployedProcessVersionsCheck {
       if ((unserved == null) || unserved.isEmpty()) {
         continue;
       }
-      reportUnservedTasks(workflowModuleId, bpmnProcessId, adapterId, version, unserved, catalog);
+      reportUnservedTasks(workflowModuleId, bpmnProcessId, adapterId, version, unserved, instanceCounts);
     }
 
   }
@@ -232,6 +237,7 @@ public class DeployedProcessVersionsCheck {
    * @param bpmnProcessId The plain BPMN process ID
    * @param adapterId The adapter ID
    * @param olderVersions The versions older than the deployed one
+   * @param instanceCounts How many workflows run on a version, asked once per version
    * @param catalog What that BPMS can tell about the process
    */
   private void reportWorkflowsOnOlderVersions(
@@ -239,6 +245,7 @@ public class DeployedProcessVersionsCheck {
       final String bpmnProcessId,
       final String adapterId,
       final List<String> olderVersions,
+      final InstanceCounts instanceCounts,
       final ProcessVersionCatalogAccess catalog) {
 
     if (olderVersions.isEmpty()) {
@@ -247,7 +254,7 @@ public class DeployedProcessVersionsCheck {
     var total = 0L;
     var counted = false;
     for (final var version : olderVersions) {
-      final var running = catalog.activeInstanceCountOf(workflowModuleId, bpmnProcessId, version);
+      final var running = instanceCounts.of(version);
       if (running == null) {
         continue;
       }
@@ -412,7 +419,7 @@ public class DeployedProcessVersionsCheck {
       final String adapterId,
       final String version,
       final Collection<BpmnTaskSpec> unserved,
-      final ProcessVersionCatalogAccess catalog) {
+      final InstanceCounts instanceCounts) {
 
     final var definitions = unserved
         .stream()
@@ -421,7 +428,7 @@ public class DeployedProcessVersionsCheck {
             : task.taskDefinition()))
         .distinct()
         .collect(Collectors.joining(", "));
-    final var running = catalog.activeInstanceCountOf(workflowModuleId, bpmnProcessId, version);
+    final var running = instanceCounts.of(version);
     final var remedy = """
         Add a @WorkflowTask method whose version range covers version '%s', or declare that version \
         obsolete by adding e.g. '%s' to '%s'."""
@@ -464,9 +471,9 @@ public class DeployedProcessVersionsCheck {
       final String bpmnProcessId,
       final String adapterId,
       final String version,
-      final ProcessVersionCatalogAccess catalog) {
+      final InstanceCounts instanceCounts) {
 
-    final var running = catalog.activeInstanceCountOf(workflowModuleId, bpmnProcessId, version);
+    final var running = instanceCounts.of(version);
     if (running == null) {
       reportUnableToTellAboutInstances(workflowModuleId, bpmnProcessId, adapterId);
       return;
@@ -590,6 +597,54 @@ public class DeployedProcessVersionsCheck {
       }
 
     };
+
+  }
+
+  /**
+   * The instance count of a version, asked at most ONCE per version and per run of this
+   * check.
+   * <p>
+   * Three of the reports want the same number for the same version, and every one of
+   * them is a query to the BPMS: a count over the engine's runtime table on Camunda 7, a
+   * search on Camunda 8. Asking twice was waste which grew with the number of versions a
+   * BPMS holds, and that number grows with every deployment which changes a model.
+   * <p>
+   * Lazy on purpose: a version nobody reports about is never asked for. <code>null</code>
+   * is remembered like any other answer, because "this BPMS cannot say" does not become
+   * true on a second attempt either.
+   */
+  private static final class InstanceCounts {
+
+    private final String workflowModuleId;
+
+    private final String bpmnProcessId;
+
+    private final ProcessVersionCatalogAccess catalog;
+
+    private final java.util.Map<String, java.util.Optional<Long>> counts = new java.util.HashMap<>();
+
+    private InstanceCounts(
+        final String workflowModuleId,
+        final String bpmnProcessId,
+        final ProcessVersionCatalogAccess catalog) {
+
+      this.workflowModuleId = workflowModuleId;
+      this.bpmnProcessId = bpmnProcessId;
+      this.catalog = catalog;
+
+    }
+
+    private Long of(
+        final String version) {
+
+      return counts
+          .computeIfAbsent(
+              version,
+              asked -> java.util.Optional
+                  .ofNullable(catalog.activeInstanceCountOf(workflowModuleId, bpmnProcessId, asked)))
+          .orElse(null);
+
+    }
 
   }
 

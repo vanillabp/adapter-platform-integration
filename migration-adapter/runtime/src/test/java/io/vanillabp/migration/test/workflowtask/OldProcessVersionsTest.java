@@ -126,11 +126,20 @@ public class OldProcessVersionsTest {
         final String bpmnProcessId,
         final String version) {
 
+      instanceCountQueries.merge(version, 1, Integer::sum);
       return canCountInstances
           ? instancesPerVersion.getOrDefault(version, 0L)
           : null;
 
     }
+
+    /**
+     * How often the BPMS was asked for the instance count of each version. Asking is a
+     * QUERY, and the number of versions a BPMS holds grows with every deployment which
+     * changes a model, so an extra ask per version is a cost which grows with the age of
+     * the application.
+     */
+    private final Map<String, Integer> instanceCountQueries = new java.util.HashMap<>();
 
     private String whatIsMissed;
 
@@ -201,6 +210,29 @@ public class OldProcessVersionsTest {
         .of(new BpmnTaskSpec("Activity_old", "oldOnly")));
 
     assertEquals(List.of(), check());
+
+  }
+
+  @Test
+  @DisplayName("The instance count of a version is asked ONCE, however many reports want it")
+  public void theInstanceCountIsAskedOncePerVersion() {
+
+    // an older version which is BOTH counted as running and reported as unserved: the
+    // two reports used to ask the same question twice
+    catalog.instancesPerVersion = Map.of("1", 4L);
+
+    check(Level.ERROR);
+
+    assertTrue(
+        catalog.instanceCountQueries
+            .values()
+            .stream()
+            .allMatch(queries -> queries == 1),
+        () -> "one query per version and per run of the check, but was "
+            + catalog.instanceCountQueries);
+    assertTrue(
+        catalog.instanceCountQueries.containsKey("1"),
+        "the version which is both counted as running and reported as unserved was asked about");
 
   }
 
