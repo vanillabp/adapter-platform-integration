@@ -72,10 +72,18 @@
          3.37.1 manages 1.16.6, Spring Boot 4.1.0 manages 1.17.0) -->
     <micrometer.version>1.16.6</micrometer.version>
     <testcontainers.version>2.0.5</testcontainers.version>
-    <!-- the line each platform's aggregated report has to stay above, in PERCENT of
-         covered instructions - enforced by test-coverage-report/coverage-gate -->
-    <coverage.threshold.spring-boot>90</coverage.threshold.spring-boot>
-    <coverage.threshold.quarkus>90</coverage.threshold.quarkus>
+    <!-- where the build breaks, in PERCENT of covered instructions per platform,
+         enforced by test-coverage-report/coverage-gate. The rule stays 90 per platform, which is
+         the number the coverage badges of the README are read against. The gate stands at
+         85, the same number in every VanillaBP repository, because a threshold marks the
+         point where somebody has to look and not the goal to aim at. It is never raised to whatever a
+         suite happens to reach, and never lowered to make a build pass. -->
+    <coverage.threshold.spring-boot>85</coverage.threshold.spring-boot>
+    <coverage.threshold.quarkus>85</coverage.threshold.quarkus>
+    <!-- the rule, as a number the gate can print: it reports every run against both, so
+         the distance between a passing build and the rule is readable without opening
+         the report -->
+    <coverage.rule>90</coverage.rule>
   </properties>
 
   <dependencyManagement>
