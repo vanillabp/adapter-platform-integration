@@ -26,6 +26,9 @@ package io.vanillabp.integration.adapter.spi;
  * and two Camunda 7 ids are two embedded engines, which need a
  * <code>table-prefix</code> or a <code>data-source-name</code> of their own no
  * matter which modes they use. The adapter's documentation says what applies.
+ * <p>
+ * Why the plain identifiers stay in the registries and only the call into the BPMS carries the
+ * scoped ones is decision 9 in the repository's DECISIONS.md.
  */
 public enum NameClashAvoidance {
 

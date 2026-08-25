@@ -10,6 +10,9 @@ import java.util.List;
  * derived by {@link MigrationAdapterProperties#normalize(ClasspathFacts)} BEFORE
  * the validation runs - the validation rules themselves stay unchanged and apply
  * to derived entries exactly like to hand-written ones.
+ * <p>
+ * Why these facts are read before the configuration is validated is decision 8 in the repository's
+ * DECISIONS.md.
  *
  * @param adapterTypes The adapter types found in the classpath (Spring Boot: the
  *          <code>AdapterConfigurationBase</code> beans, Quarkus: the VanillaBP

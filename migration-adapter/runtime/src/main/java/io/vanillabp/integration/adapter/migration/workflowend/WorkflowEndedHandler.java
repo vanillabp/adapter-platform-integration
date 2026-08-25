@@ -12,7 +12,7 @@ import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedContext;
  * One <code>&#64;WorkflowEnded</code> method of a workflow service class, with its
  * parameter binders and the end event it serves.
  */
-// see decision 1 in the repository's README.md
+// see decision 1 in the repository's DECISIONS.md
 @SuppressWarnings("LombokGetterMayBeUsed")
 public class WorkflowEndedHandler {
 

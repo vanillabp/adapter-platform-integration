@@ -5,7 +5,14 @@ The rules a change to this repository follows are in
 belongs, which SPI it may touch, how configuration is validated, what the tests have to prove, and
 how to build. Breaking changes and their reasoning are recorded in [`UPGRADE.md`](./UPGRADE.md).
 
-One of those rules is easy to lose sight of while writing code, so it is spelled out here as well.
+[`DECISIONS.md`](./DECISIONS.md) holds the decisions several places rely on, and it is the only
+thing the code is allowed to cite. Read it before you change behaviour, and where your change would
+make an entry untrue, ask before you write the change: an entry is superseded rather than edited,
+keeps its number, and the successor takes the next free one.
+[`AGENTS.md`](./AGENTS.md) says the same in the form an agent reads.
+
+Two of those rules are easy to lose sight of while writing code, so they are spelled out here as
+well.
 
 ## A promise is part of the behavior
 
@@ -34,3 +41,20 @@ Measurements are not claims: a number is a statement about a measured past, so i
 
 There is deliberately no tooling for this. A lint over words like "never" or "always" produces noise
 and a false sense of safety, and the habit is what does the work.
+
+## A decision is superseded, never edited away
+
+> A numbered entry of `DECISIONS.md` is changed or replaced only after asking. Where a change makes
+> one untrue, the question comes before the change. Once the answer is yes, the same commit leaves
+> the old entry standing, marked as superseded and naming its successor, and gives the new decision
+> the next free number.
+
+Why it is a rule rather than good advice: a citation is written into the code once and read years
+later, sometimes from a release which is no longer built here. Renumbering or rewriting an entry
+turns every one of those pointers into something which resolves to text that no longer says what
+the reader was sent for, and nothing fails when it happens. Superseding costs one paragraph and
+keeps the trail intact.
+
+The mirror image is just as much a finding: an entry which nothing cites, or one whose reasoning
+fits into a comment at the single place which needs it. A decision earns a number when several
+places rely on it and copying the explanation to each of them would rot.

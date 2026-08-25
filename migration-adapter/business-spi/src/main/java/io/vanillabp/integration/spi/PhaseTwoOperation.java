@@ -49,7 +49,9 @@ import java.util.Optional;
  * {@link #extensionOperation(String, IdempotencyKey)}: their name has to be
  * namespaced (<code>my-extension:MY_OPERATION</code>) so an extension can never
  * collide with a core operation or with another extension.
- *
+ * <p>
+ * Why an operation needs a key rule at all is decision 2 in the repository's DECISIONS.md: the
+ * outbox dispatches at-least-once, so everything dispatched from it has to be repeatable.
  * @param name The persisted name of the operation
  * @param idempotencyKey The rule deriving the idempotency key of a call of this
  *        operation

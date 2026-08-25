@@ -34,8 +34,12 @@ import io.vanillabp.integration.spi.TransactionRunner;
  * in the same registry (see {@link #getOperations()}) and receives their calls in
  * its own {@link io.vanillabp.integration.spi.PhaseTwoOperationDispatch} - the
  * process-service routing below applies to core operations only.
+ * <p>
+ * Why anything reaches this router at all instead of running in the caller's transaction is
+ * decision 2 in the repository's DECISIONS.md; why every dispatch is wrapped in the transaction
+ * runner of ITS aggregate is decision 11 in the repository's DECISIONS.md.
  */
-// see decision 1 in the repository's README.md
+// see decision 1 in the repository's DECISIONS.md
 @SuppressWarnings("LombokGetterMayBeUsed")
 public final class PhaseTwoRouter {
 

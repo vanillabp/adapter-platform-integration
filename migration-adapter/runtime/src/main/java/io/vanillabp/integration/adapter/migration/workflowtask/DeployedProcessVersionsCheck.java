@@ -27,6 +27,9 @@ import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
  * How loud a finding is depends on whether workflows still run on that version: a
  * version nobody runs is a warning, a version with running workflows is FATAL and,
  * where the operator asked for it, the end of the boot.
+ * <p>
+ * Why the core drives this check while an adapter only answers two questions is decision 15 in the
+ * repository's DECISIONS.md.
  */
 public class DeployedProcessVersionsCheck {
 

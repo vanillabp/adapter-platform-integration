@@ -12,6 +12,9 @@ package io.vanillabp.integration.spi;
  * <p>
  * Stores recognise it through {@link #isPermanent(Throwable)}, which walks the causes -
  * the transaction a store dispatches in may wrap what was thrown.
+ * <p>
+ * Who decides that a failure will never succeed, and why the classification errs towards
+ * repeatable, is decision 12 in the repository's DECISIONS.md.
  */
 public class PhaseTwoPermanentFailure extends RuntimeException {
 

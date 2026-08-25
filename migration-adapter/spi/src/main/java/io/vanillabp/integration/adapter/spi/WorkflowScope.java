@@ -24,6 +24,10 @@ import java.util.List;
  * The ids are the PLAIN ones, as the application models and configures them. What the BPMS
  * knows them by is the adapter's business (name-clash avoidance).
  *
+ * <p>
+ * Why a probe is told which workflow is meant instead of deciding from a key or an aggregate id is
+ * decision 4 in the repository's DECISIONS.md.
+ *
  * @param workflowModuleId The workflow module of the calling process service
  * @param bpmnProcessIds The plain BPMN process ids it serves, the primary one first
  */

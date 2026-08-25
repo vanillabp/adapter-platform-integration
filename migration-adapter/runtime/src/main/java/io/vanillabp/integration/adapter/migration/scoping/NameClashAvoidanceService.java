@@ -45,6 +45,9 @@ import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
  * {@link NameClashAvoidanceSupport#SEPARATOR}. The separator is therefore a
  * readability choice; what protects correctness is
  * {@link #validateNoCollidingProcessIds}.
+ * <p>
+ * Why this is the one place which resolves the mode and builds the scoped form is decision 9 in the
+ * repository's DECISIONS.md.
  */
 public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
 

@@ -31,6 +31,9 @@ import io.vanillabp.integration.adapter.spi.version.DeployedProcessVersion;
  * BPMS (see {@link ProcessVersionResolver}) - a tag says nothing about its position
  * on its own. Without a resolver, or if the BPMS does not know a tag, such a
  * specification matches nothing.
+ * <p>
+ * Why a delivery without a reported version is served only by a method without a version range is
+ * decision 13 in the repository's DECISIONS.md.
  */
 public class VersionRange {
 

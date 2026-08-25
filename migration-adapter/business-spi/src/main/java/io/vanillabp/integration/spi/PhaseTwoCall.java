@@ -20,6 +20,10 @@ import java.util.Optional;
  * the operation) or {@link #forDispatch} (a store rebuilding a call from a
  * persisted entry).
  *
+ * <p>
+ * Which operations carry an idempotency key and which deliberately carry none is decision 2 in the
+ * repository's DECISIONS.md.
+ *
  * @param operation The NAME of the operation to execute (see
  *        {@link PhaseTwoOperation#name()})
  * @param workflowModuleId The ID of the workflow module the workflow belongs to

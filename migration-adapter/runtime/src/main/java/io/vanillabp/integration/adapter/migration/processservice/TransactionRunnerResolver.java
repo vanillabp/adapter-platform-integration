@@ -22,6 +22,9 @@ import io.vanillabp.integration.spi.TransactionRunnerAware;
  * </ol>
  * The resolution is cached per aggregate class by the caller - it must not happen per
  * delivery.
+ * <p>
+ * Why the runner is resolved per workflow aggregate, and why a tie ends the start, is decision 11
+ * in the repository's DECISIONS.md.
  */
 public interface TransactionRunnerResolver {
 

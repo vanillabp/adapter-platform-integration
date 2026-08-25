@@ -23,6 +23,9 @@ import java.util.Collection;
  * <b>Never build the strings yourself:</b> the separator and the composition are
  * the core's business, and the startup validation of colliding identifiers relies
  * on it.
+ * <p>
+ * Why scoping happens at the BPMS boundary and nowhere else is decision 9 in the repository's
+ * DECISIONS.md.
  */
 public interface NameClashAvoidanceSupport {
 

@@ -19,6 +19,9 @@ package io.vanillabp.integration.adapter.spi;
  * entirely. Camunda 7 used it while an EL resolver read the aggregate live: that made
  * models which work on Camunda 7 fail on every remote BPMS, so the resolver is gone and
  * the values are pushed like everywhere else.
+ * <p>
+ * Why the mode an adapter defaults to is the adapter's answer and not the core's is decision 10 in
+ * the repository's DECISIONS.md.
  */
 public enum AggregateSyncMode {
 

@@ -38,6 +38,9 @@ import java.util.function.Supplier;
  * <li>A time-to-live of zero (or a negative one) switches the holding off, which is
  * what a test wants when it has just changed something and needs to see it.</li>
  * </ul>
+ * <p>
+ * Why every measurement which is not already in memory is held for a window is decision 18 in the
+ * repository's DECISIONS.md.
  */
 public final class CachedGaugeValue {
 

@@ -30,6 +30,9 @@ import lombok.extern.slf4j.Slf4j;
  * Losing the memory to a crash costs one interval of refreshments, because a record only
  * expires when a whole retention passes without a single one. That is also why the memory
  * is bounded at {@value #MAX_REMEMBERED} keys: it is a hint, not a fact to be kept safe.
+ * <p>
+ * Why a redelivery refreshes a record instead of writing one, and why that second timestamp exists
+ * at all, is decision 6 in the repository's DECISIONS.md.
  */
 @Slf4j
 public class OpenTaskTouches {

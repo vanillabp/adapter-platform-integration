@@ -24,6 +24,9 @@ import org.slf4j.LoggerFactory;
  * instead of overwriting, which is what {@link AggregateWrite} reports. So does an
  * adapter which cannot read its models (the Process-Engine-API): it reports nothing,
  * and nothing is guessed from the absence.
+ * <p>
+ * Why a model which can produce a second token is only warned about, and only where the aggregate
+ * has no version attribute, is decision 14 in the repository's DECISIONS.md.
  */
 public class ConcurrentTokenCheck {
 

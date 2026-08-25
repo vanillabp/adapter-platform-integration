@@ -20,6 +20,9 @@ import java.util.Optional;
  * Implementations must be thread-safe. All keys travel in serialized (String)
  * form - the workflow-aggregate ID is the same serialized form used by the
  * {@link PhaseTwoOutbox} (validated to round-trip losslessly at startup).
+ * <p>
+ * Why an entry of this cache is a hint which is probed rather than an answer which is trusted is
+ * decision 5 in the repository's DECISIONS.md.
  */
 public interface WorkflowAdapterCache {
 

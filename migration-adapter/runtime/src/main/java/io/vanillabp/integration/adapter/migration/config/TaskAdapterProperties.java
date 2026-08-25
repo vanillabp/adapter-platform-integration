@@ -18,6 +18,9 @@ import lombok.experimental.SuperBuilder;
  * <p>
  * <b>Attention:</b> This level is structural preparation for task-scoped adapter
  * configuration (e.g. a per-task job timeout) - there is no consumer yet.
+ * <p>
+ * Why an adapter setting can be written at four levels, and which of them wins, is decision 7 in
+ * the repository's DECISIONS.md.
  */
 @Getter
 @Setter

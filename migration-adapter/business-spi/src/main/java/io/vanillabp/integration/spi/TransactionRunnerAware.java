@@ -32,6 +32,10 @@ package io.vanillabp.integration.spi;
  * embedded engine needs a relational database, so its transaction can never cover a
  * storage of a different technology anyway.
  *
+ * <p>
+ * Why an application may own the transaction VanillaBP runs its work in is decision 11 in the
+ * repository's DECISIONS.md.
+ *
  * @param <A> The workflow-aggregate class served, or a superclass respectively
  *          interface of several of them
  */

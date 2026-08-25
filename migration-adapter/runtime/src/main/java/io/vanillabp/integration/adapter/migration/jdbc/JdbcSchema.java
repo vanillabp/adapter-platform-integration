@@ -9,6 +9,9 @@ import java.util.List;
  * or verifies that the application created it (see
  * {@link io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore} and the
  * phase-two outboxes of both platform integrations).
+ * <p>
+ * Why VanillaBP ships one schema artifact for the two tables it owns, and why the startup check
+ * looks at the columns and not only at the table, is decision 16 in the repository's DECISIONS.md.
  */
 public final class JdbcSchema {
 

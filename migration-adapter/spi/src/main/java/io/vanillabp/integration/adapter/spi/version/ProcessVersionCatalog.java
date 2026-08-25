@@ -22,6 +22,9 @@ import java.util.List;
  * not know, and the BPMS delivers a task of it before this node deploys. See
  * {@link CachingProcessVersionCatalog}, which implements exactly that and leaves the
  * BPMS query to the adapter.
+ * <p>
+ * Why an adapter answers two questions here instead of running the check for old process versions
+ * itself is decision 15 in the repository's DECISIONS.md.
  */
 public interface ProcessVersionCatalog {
 
