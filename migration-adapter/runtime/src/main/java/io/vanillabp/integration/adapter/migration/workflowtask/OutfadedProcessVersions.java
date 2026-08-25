@@ -18,6 +18,9 @@ import io.vanillabp.integration.adapter.migration.config.OutfadedVersionsInUsePo
  * as soon as ANY specification of the most specific configured level covers it.
  * Specifications naming a version TAG need the BPMS, which is why the resolver of the
  * process is handed in - the same one the annotations use.
+ * <p>
+ * Why outfading is configured here rather than per adapter is decision 15 in the repository's
+ * DECISIONS.md.
  */
 public class OutfadedProcessVersions {
 

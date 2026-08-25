@@ -21,6 +21,19 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
+/**
+ * Everything below {@code vanillabp} after both platforms have bound it: the adapter sections, the
+ * workflow-module sections, and the settings an adapter may be given per task, per workflow, per
+ * workflow module or for itself.
+ * <p>
+ * Two rules of this class are relied on elsewhere. {@link #normalize(ClasspathFacts)} derives what
+ * a convention can derive before anything is validated, so an application which configures nothing
+ * still boots and is led on by its own log rather than by the documentation (decision 8 in the
+ * repository's DECISIONS.md). {@code resolveForAdapter} is the single implementation of the
+ * four-level lookup, task before workflow before workflow module before adapter, which is why a
+ * new adapter-specific setting costs a key and nothing else
+ * (decision 7 in the repository's DECISIONS.md).
+ */
 @Getter
 @Setter
 @NoArgsConstructor

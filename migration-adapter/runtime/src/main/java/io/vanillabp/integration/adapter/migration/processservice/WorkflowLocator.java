@@ -62,6 +62,11 @@ import lombok.extern.slf4j.Slf4j;
  * Probing runs inside the caller's transaction, so the delays keep that
  * transaction open - another reason to keep them short.</li>
  * </ul>
+ * <p>
+ * The two rules this walk rests on are written down where the adapters can read them too: an
+ * adapter answers only for its own scope and the walk never falls back (decision 4 in the
+ * repository's DECISIONS.md), and a remembered adapter is a hint which is probed rather than
+ * trusted (decision 5 in the repository's DECISIONS.md).
  */
 @Slf4j
 public final class WorkflowLocator {

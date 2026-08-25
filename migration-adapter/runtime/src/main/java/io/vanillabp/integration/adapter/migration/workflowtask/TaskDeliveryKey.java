@@ -26,6 +26,9 @@ import io.vanillabp.integration.spi.TaskDelivery;
  * stores index the key, and unique-index key lengths are limited (MySQL: 3072 bytes,
  * which is 768 characters with utf8mb4). Hashing keeps long identifiers working and
  * costs only the readability of a record nobody can read anyway at that length.
+ * <p>
+ * Why a processed delivery is written down under this key is decision 6 in the repository's
+ * DECISIONS.md.
  */
 public final class TaskDeliveryKey {
 

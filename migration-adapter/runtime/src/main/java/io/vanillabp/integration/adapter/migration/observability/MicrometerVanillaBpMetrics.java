@@ -41,6 +41,9 @@ import io.vanillabp.integration.adapter.spi.observability.CachedGaugeValue;
  * the only gauge here has to ask an outbox store how many entries wait. That query is
  * wrapped in a {@link CachedGaugeValue} before it ever becomes a gauge, so a store
  * cannot forget to do it - see {@link #registerPendingOutboxEntries(String, java.util.function.Supplier)}.
+ * <p>
+ * Why the caching happens here once instead of in every store is decision 18 in the repository's
+ * DECISIONS.md.
  */
 public class MicrometerVanillaBpMetrics implements VanillaBpMetrics, MeterBinder {
 

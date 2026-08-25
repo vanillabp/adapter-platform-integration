@@ -34,9 +34,15 @@ import lombok.extern.slf4j.Slf4j;
  * key is limited to {@value io.vanillabp.integration.adapter.migration.workflowtask.TaskDeliveryKey#MAX_LENGTH}
  * characters so MySQL's key-length limit (3072 bytes with utf8mb4) is respected - the
  * core hashes longer keys before they ever reach a store.
+ * <p>
+ * Why a record is written at all and why it carries two timestamps is decision 6 in the
+ * repository's DECISIONS.md; where the schema comes from and why the startup check reads the
+ * columns is decision 16 in the repository's DECISIONS.md; why the adapter id is a column of its
+ * own is
+ * decision 17 in the repository's DECISIONS.md.
  */
 @Slf4j
-// see decision 1 in the repository's README.md
+// see decision 1 in the repository's DECISIONS.md
 @SuppressWarnings("LombokGetterMayBeUsed")
 public class JdbcTaskDeliveryStore {
 

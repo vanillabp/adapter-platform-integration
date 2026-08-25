@@ -27,6 +27,9 @@ import io.vanillabp.integration.spi.TransactionRunner;
  * ran in the BPMS' own transaction ({@link TransactionRunner#inCurrent(Supplier)},
  * Camunda 7 embedded) the engine owns the commit and VanillaBP never sees the
  * conflict at all.
+ * <p>
+ * Why a version conflict is reported and propagated unchanged instead of being retried is decision
+ * 14 in the repository's DECISIONS.md.
  */
 public final class AggregateWrite {
 

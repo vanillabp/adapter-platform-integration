@@ -100,6 +100,9 @@ import lombok.extern.slf4j.Slf4j;
  * identity; deliberately not {@code toString()}, which recurses on exactly these
  * graphs). Independently of that, nesting is followed at most {@link #MAX_DEPTH}
  * levels deep.
+ * <p>
+ * Why the sync model exists at all, and why the aggregate-id variable is not part of it, is
+ * decision 10 in the repository's DECISIONS.md.
  */
 @Slf4j
 public class AggregateSyncSupport implements WorkflowAggregateSync {

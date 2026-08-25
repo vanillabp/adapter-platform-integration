@@ -15,7 +15,7 @@ import io.vanillabp.spi.service.TaskException;
  * process ID) in the {@link WorkflowTaskRegistry} and invoked by
  * {@link io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService#executeWorkflowTask}.
  */
-// see decision 1 in the repository's README.md
+// see decision 1 in the repository's DECISIONS.md
 @SuppressWarnings("LombokGetterMayBeUsed")
 public class WorkflowTaskHandler {
 

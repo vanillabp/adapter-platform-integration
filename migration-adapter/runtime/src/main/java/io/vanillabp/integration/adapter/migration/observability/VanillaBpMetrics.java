@@ -25,6 +25,10 @@ import lombok.Getter;
  * definitions of those processes. Nothing that grows with the number of workflows -
  * no workflow-aggregate id, no job key, no delivery id - is ever a tag. Those belong
  * to a log line, which is why they are in the MDC instead (see {@link DeliveryMdc}).
+ * <p>
+ * Why a gauge which cannot be read cheaply is held for a window, why the place is a tag, and why a
+ * store which cannot answer leaves a gap instead of reporting zero, is decision 18 in the
+ * repository's DECISIONS.md.
  */
 public interface VanillaBpMetrics {
 

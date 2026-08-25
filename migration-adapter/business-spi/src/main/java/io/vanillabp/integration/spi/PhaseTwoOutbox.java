@@ -70,6 +70,10 @@ package io.vanillabp.integration.spi;
  * operation. Dispatch failures caused by a BPMN process no longer being part of the
  * application, or by an adapter ID no longer being configured (stale entry after a
  * configuration change), yield guiding messages naming that case.
+ * <p>
+ * Why a progressing operation is planned here instead of being executed in the caller's
+ * transaction, and why an operation which nothing can deduplicate carries no idempotency key, is
+ * decision 2 in the repository's DECISIONS.md.
  */
 public interface PhaseTwoOutbox {
 

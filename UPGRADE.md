@@ -1188,7 +1188,7 @@ Three related changes, breaking for adapters and early Camunda 8 users:
 
 ## `vanillabp.outbox.*` consolidated onto the core model (2026-07-30)
 
-Follow-up of the config-binding consolidation (decision 7): the outbox
+Follow-up of the config-binding consolidation of the same day: the outbox
 configuration was modeled per platform (Spring
 `io.vanillabp.integration.outbox.PhaseTwoOutboxProperties`, Quarkus nested
 `@ConfigMapping` interface) with duplicated defaults and javadoc. Now the core

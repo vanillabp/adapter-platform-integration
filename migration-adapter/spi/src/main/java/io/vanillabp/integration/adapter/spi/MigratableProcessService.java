@@ -47,6 +47,12 @@ import io.vanillabp.spi.process.WorkflowHistory;
  * only be as right as the answers it gets, which is what
  * {@code ElectionScopeContractTest} of the migration adapter holds.
  *
+ * <p>
+ * Two rules of this interface are written down where several places rely on them: an adapter
+ * answers the election only for its own scope (decision 4 in the repository's DECISIONS.md), and
+ * phase one asks while phase two acts
+ * (decision 3 in the repository's DECISIONS.md).
+ *
  * @param <A> The aggregate type
  */
 public interface MigratableProcessService<A> {

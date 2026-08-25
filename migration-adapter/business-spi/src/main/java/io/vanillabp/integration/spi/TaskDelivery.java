@@ -14,6 +14,11 @@ import java.time.Instant;
  * workflow, and it is what a store may index by. Stores persist the values as they
  * are and never interpret them - the meaning of an outcome is the core's business.
  *
+ * <p>
+ * Why the record keeps a moment the handler ran and a moment the task was last seen open is
+ * decision 6 in the repository's DECISIONS.md; why the adapter id is a field of its own is
+ * decision 17 in the repository's DECISIONS.md.
+ *
  * @param deliveryKey The identity of the delivery, unique within the store: built by
  *          the core from the delivering adapter, the workflow module, the BPMN
  *          process, the event and the delivery ID the adapter reported. A

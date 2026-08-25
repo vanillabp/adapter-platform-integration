@@ -22,8 +22,28 @@ import io.vanillabp.spi.service.TaskException;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * What every {@code ProcessService} call of an application ends up in, one instance per workflow
+ * module and BPMN process: it saves the workflow aggregate, elects the adapter which holds the
+ * workflow, runs the part of the operation which may run before the caller commits, and hands the
+ * rest to the phase-two outbox.
+ * <p>
+ * The order the methods below share is the order of the guarantees. The aggregate is saved in the
+ * caller's transaction, so an operation which the application rolls back leaves no trace anywhere.
+ * What follows only ASKS the BPMS, which is what keeps a guiding error synchronous, thrown where
+ * the application made the call (decision 3 in the repository's DECISIONS.md). What changes the
+ * BPMS is planned as an outbox entry and executed after the commit
+ * (decision 2 in the repository's DECISIONS.md), which is why
+ * every one of those steps has to survive being executed twice.
+ * <p>
+ * Two more rules of this class are written down because other places rely on them: a failure of
+ * phase two is classified by the adapter and judged here
+ * (decision 12 in the repository's DECISIONS.md), and the transaction the work runs in is the one
+ * resolved for THIS aggregate rather than the platform's
+ * (decision 11 in the repository's DECISIONS.md).
+ */
 @Slf4j
-// see decision 1 in the repository's README.md
+// see decision 1 in the repository's DECISIONS.md
 @SuppressWarnings("LombokGetterMayBeUsed")
 public class MigrationProcessService<A> {
 

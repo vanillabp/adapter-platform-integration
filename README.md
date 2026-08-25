@@ -126,7 +126,7 @@ These are the conventions the current implementation follows. Keeping to them is
 platforms at once — the details and their reasoning are in each module's `README.md` and in
 [`UPGRADE.md`](./UPGRADE.md), which records every breaking change and why it was made.
 They are not the citation targets of the code: what a comment points at is an entry of the
-[decision log](#decision-log) further down.
+[decision log](./DECISIONS.md).
 
 1. **Features are implemented in `migration-adapter`** (plain Java). A platform integration only does what only it
    can do: read configuration, scan/analyze business code, create beans, run transactions. If a feature needs
@@ -169,19 +169,10 @@ populated by `mvn install`.
 
 ## Decision log
 
-Decisions this repository's code points at. A number is handed out once and never reused or
-renumbered, so a citation stays resolvable; a decision which gets overturned keeps its entry,
-marked as superseded and naming the entry which replaced it.
-
-### 1. A class opens its fields one by one, not as a whole
-
-The process service, the delivery store and the handlers of the core hold dozens of fields,
-most of them collaborators nobody outside the class needs. Which of them a caller may read
-belongs to the surface of the class, so an accessor is declared per field, and `@Getter` on the
-class is refused even where an IDE offers it: it would publish the current field list and then
-keep publishing whatever field a later change adds.
-`@SuppressWarnings("LombokGetterMayBeUsed")` on such a class is what keeps that offer from
-coming back.
+Decisions several places in this repository rely on live in [`DECISIONS.md`](./DECISIONS.md), the
+one thing the code is allowed to cite. A citation reads `see decision 7 in the repository's
+DECISIONS.md`, numbers are never reused, and an overturned entry stays and names its successor, so
+a citation written today still resolves in a year.
 
 ## Noteworthy & Contributors
 

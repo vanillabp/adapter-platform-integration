@@ -26,6 +26,9 @@ import io.vanillabp.integration.spi.WorkflowAdapterCache;
  * The cache reports its size and its evictions to the application's
  * {@link WorkflowAdapterCacheStatistics}, including whether an evicted entry had
  * ever been read - that is what the eviction-pressure warning is made of.
+ * <p>
+ * Why a stale entry repairs itself instead of being prevented is decision 5 in the repository's
+ * DECISIONS.md.
  */
 public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
 

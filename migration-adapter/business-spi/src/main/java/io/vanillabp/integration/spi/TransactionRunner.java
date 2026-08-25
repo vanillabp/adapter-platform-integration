@@ -27,6 +27,10 @@ import java.util.function.Supplier;
  * back and propagates to the caller; a normal return commits. Implementations must
  * be thread-safe: handlers are invoked on the threads of the BPMS adapters and phase
  * two runs on the outbox dispatcher's thread.
+ * <p>
+ * Why VanillaBP opens a transaction of its own before it calls the application, and why the runner
+ * is resolved per workflow aggregate rather than taken from the platform, is decision 11 in the
+ * repository's DECISIONS.md.
  */
 public interface TransactionRunner {
 

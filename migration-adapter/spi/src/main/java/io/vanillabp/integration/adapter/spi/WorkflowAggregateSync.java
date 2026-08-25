@@ -23,6 +23,9 @@ import java.util.Map;
  * halves are held, the first by {@code WorkflowTaskRegistryTest} of the migration
  * adapter, the second by {@code PeaSharedValuesTest} respectively
  * {@code Camunda8SharedValuesTest} of the adapters storing the ID in a variable.
+ * <p>
+ * What decides which values of an aggregate leave for the BPMS, and why the variable named after
+ * the id attribute travels regardless, is decision 10 in the repository's DECISIONS.md.
  */
 public interface WorkflowAggregateSync {
 

@@ -25,6 +25,9 @@ import io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog;
  * While a BPMS migration is running, two adapters may serve the same BPMN process. Each
  * BPMS counts its own versions, so the catalogs are asked in registration order and the
  * first one knowing the version or tag answers.
+ * <p>
+ * What a version is, and why overlapping ranges end the start, is decision 13 in the repository's
+ * DECISIONS.md.
  */
 public class ProcessVersions {
 

@@ -47,6 +47,10 @@ import java.util.Optional;
  * by the application itself, since the platform-neutral core must not depend on any
  * particular persistence technology. Which log serves a workflow aggregate is decided
  * per aggregate - see {@link TaskDeliveryLogAware}.
+ * <p>
+ * Why a delivery is written down at all, and why the record carries two timestamps rather than one,
+ * is decision 6 in the repository's DECISIONS.md. Why the adapter id has to travel with it is
+ * decision 17 in the repository's DECISIONS.md.
  */
 public interface TaskDeliveryLog {
 
