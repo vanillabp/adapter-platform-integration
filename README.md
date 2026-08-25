@@ -83,6 +83,8 @@ Top-level modules (by directory name) are:
    Its `coverage-gate` module is built last and breaks the build below the line
    (`coverage.threshold.spring-boot` and `coverage.threshold.quarkus` in the root POM, in percent of covered
    instructions - the same number the badge shows) or when a module produces coverage data no aggregated report reads.
+   Both properties hold 85, the number every VanillaBP repository gates on. The rule is 90 per platform,
+   so a report between the two passes the build and still names a gap somebody owes a test for.
 6. **test-utils:**<br>
    A small module providing utilities used by tests across all platforms.
 
