@@ -87,6 +87,14 @@ public class DeployedProcessVersionsCheck {
         String bpmnProcessId,
         String version);
 
+    default String whatOlderVersionsMiss(
+        final String workflowModuleId,
+        final String bpmnProcessId) {
+
+      return null;
+
+    }
+
   }
 
   private final ProcessVersions processVersions;
@@ -170,6 +178,8 @@ public class DeployedProcessVersionsCheck {
       return;
     }
     reportDeadHandlers(workflowModuleId, bpmnProcessId, adapterId, known, deployed, resolver);
+    reportWorkflowsOnOlderVersions(
+        workflowModuleId, bpmnProcessId, adapterId, olderThan(known, deployed), catalog);
     for (final var version : olderThan(known, deployed)) {
       if (outfadedVersions.isOutfaded(workflowModuleId, bpmnProcessId, adapterId, version, resolver)) {
         reportOutfadedVersionInUse(workflowModuleId, bpmnProcessId, adapterId, version, catalog);
@@ -186,6 +196,93 @@ public class DeployedProcessVersionsCheck {
       }
       reportUnservedTasks(workflowModuleId, bpmnProcessId, adapterId, version, unserved, catalog);
     }
+
+  }
+
+  /**
+   * Says how many workflows still run on a version older than the one this boot
+   * deployed, and what those workflows will not get.
+   *
+   * <h2>Why this is worth a line even when everything is served</h2>
+   *
+   * The rest of this check reports a DEFECT: a task definition nobody serves, a version
+   * faded out while workflows are on it. This reports the normal case right after an
+   * application was upgraded, where every task IS served and the workflows are simply
+   * older than the model. Nothing is wrong, and something is still worth knowing: a
+   * feature which an adapter attaches to the MODEL it deploys cannot reach a workflow
+   * which was started before, for the rest of that workflow's life. The number falls to
+   * zero on its own as those workflows end, which is exactly what makes it useful to an
+   * operator on the day of an upgrade.
+   *
+   * <h2>Why the number is trustworthy</h2>
+   *
+   * An older version exists only where the deployed model DIFFERS from what was deployed
+   * before, and an adapter rewrites a model only to add something. So the same rewrite
+   * which produced the new version is what the older workflows lack, and where nothing
+   * was rewritten there is no older version and nothing is missing. The two questions
+   * have one answer, which is why counting the versions answers both.
+   *
+   * <p>
+   * What the older workflows lack is BPMS-specific, so it is not spelled out here: the
+   * adapter reports it through {@link ProcessVersionCatalogAccess}, and an adapter which
+   * attaches its behaviour while parsing rather than while deploying answers nothing,
+   * because for it nothing is missing.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @param adapterId The adapter ID
+   * @param olderVersions The versions older than the deployed one
+   * @param catalog What that BPMS can tell about the process
+   */
+  private void reportWorkflowsOnOlderVersions(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String adapterId,
+      final List<String> olderVersions,
+      final ProcessVersionCatalogAccess catalog) {
+
+    if (olderVersions.isEmpty()) {
+      return;
+    }
+    var total = 0L;
+    var counted = false;
+    for (final var version : olderVersions) {
+      final var running = catalog.activeInstanceCountOf(workflowModuleId, bpmnProcessId, version);
+      if (running == null) {
+        continue;
+      }
+      counted = true;
+      total += running;
+    }
+    if (!counted || (total == 0)) {
+      // a BPMS which cannot count says so elsewhere already, and a version nobody
+      // runs on is not news
+      return;
+    }
+    if (!reportedAsUnableToTell.add(adapterId
+        + "|older|"
+        + workflowModuleId
+        + "|"
+        + bpmnProcessId)) {
+      return;
+    }
+    final var missing = catalog.whatOlderVersionsMiss(workflowModuleId, bpmnProcessId);
+    log.info(
+        """
+            {} workflow(s) of BPMN process '{}' (workflow module '{}') still run on {} version(s) \
+            older than the one adapter '{}' deployed during this boot: {}. They keep being served - \
+            this is not a defect - but whatever this version added TO THE MODEL reaches the version \
+            it deployed and no earlier one, so those workflows never get it{}. The number falls to \
+            zero as they end, and it is what tells you when the difference is gone.""",
+        total,
+        bpmnProcessId,
+        workflowModuleId,
+        olderVersions.size(),
+        adapterId,
+        String.join(", ", olderVersions),
+        (missing == null) || missing.isBlank()
+            ? ""
+            : ": ".concat(missing));
 
   }
 
@@ -480,6 +577,15 @@ public class DeployedProcessVersionsCheck {
           final String version) {
 
         return catalog.activeInstanceCountOf(workflowModuleId, bpmnProcessId, version);
+
+      }
+
+      @Override
+      public String whatOlderVersionsMiss(
+          final String workflowModuleId,
+          final String bpmnProcessId) {
+
+        return catalog.whatOlderVersionsMiss(workflowModuleId, bpmnProcessId);
 
       }
 

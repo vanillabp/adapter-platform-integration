@@ -107,4 +107,32 @@ public interface ProcessVersionCatalog {
 
   }
 
+  /**
+   * What a workflow running on an OLDER version of this process does not get, in words
+   * an operator can act on - named by the adapter, because only it knows what it
+   * attaches and how.
+   * <p>
+   * The question exists because the two ways an adapter can bring VanillaBP's behaviour
+   * to a workflow differ exactly here. An adapter which attaches while the engine PARSES
+   * a process definition reaches every version its BPMS holds, so nothing is missing and
+   * it answers <code>null</code>. An adapter which writes into the MODEL it deploys
+   * reaches the version it deployed and no earlier one, so it names what those workflows
+   * will never get.
+   * <p>
+   * Asked once per BPMN process at startup and only where workflows really do run on an
+   * older version. The default answers <code>null</code>, which keeps the report to the
+   * bare count.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The PLAIN BPMN process ID
+   * @return A sentence naming what is missing, or <code>null</code> where nothing is
+   */
+  default String whatOlderVersionsMiss(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return null;
+
+  }
+
 }
