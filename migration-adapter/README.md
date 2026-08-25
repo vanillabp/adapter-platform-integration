@@ -1091,7 +1091,9 @@ A workflow aggregate has one workflow, which reads like one writer - until the p
 a second token. Then one branch writes in the transaction VanillaBP owns for its task and the
 other in the transaction the application opens around its API call, and since a persistence
 layer writes the whole record, the branch committing second puts back what it read at its
-start. `blueprints/GAPS.md` G3 is where that was found.
+start. It was found while building blueprints, three times over: two branches of a boundary
+event, two branches of an escalation, and two branches writing entities of their own which the
+aggregate points at.
 
 The core answers the part it owns, and only that part:
 
