@@ -179,4 +179,51 @@ public interface TaskInvocationContext {
 
   }
 
+  /**
+   * Whether this delivery belongs to a workflow which was already running before the
+   * version this boot deployed, so anything measured from the moment VanillaBP first
+   * saw the task is a LOWER BOUND rather than the truth.
+   *
+   * <h2>What it is for</h2>
+   *
+   * The core writes down a task delivery when the handler runs, and the age of a task
+   * left open by a {@code @TaskId} handler is measured from that moment
+   * (<code>vanillabp.delivery.max-task-age</code>). For a task which was already open
+   * when the application was stopped for an upgrade there is no such record: the first
+   * redelivery afterwards writes one, and from then on the task reports an age counted
+   * from the upgrade. The tasks with the largest real age are exactly the ones whose age
+   * would be under-reported, which is the opposite of useful.
+   *
+   * <h2>Why the adapter answers it and not the core</h2>
+   *
+   * Only the adapter knows both halves without asking anybody: the version the
+   * delivery's workflow runs on, and the version it deployed itself. The core would have
+   * to be told what "older" means for this BPMS, which is exactly the knowledge an
+   * adapter exists to hold.
+   * <p>
+   * The answer costs nothing. It is a comparison of two values the adapter already has,
+   * never a question to the BPMS - a query per delivery to sharpen a diagnostic would be
+   * the wrong trade, and a lower bound is worth more than an exact number nobody pays
+   * for.
+   *
+   * <h2>What a wrong answer costs</h2>
+   *
+   * Nothing but precision, in one direction. Answering <code>false</code> for a workflow
+   * which IS older leaves today's behaviour; answering <code>true</code> makes a message
+   * say "at least" where it could have been exact. So the default is <code>false</code>,
+   * which is what an adapter says when it cannot tell, and an adapter whose BPMS counts
+   * no versions never has to think about this.
+   * <p>
+   * Note that a BPMS which does not produce a new version on an upgrade answers
+   * <code>false</code> for a genuinely older workflow, and correctly so: where the
+   * deployed model is the one those workflows run on, there is no boundary to report.
+   *
+   * @return <code>true</code> where this workflow predates the deployed version
+   */
+  default boolean predatesDeployedVersion() {
+
+    return false;
+
+  }
+
 }

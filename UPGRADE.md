@@ -4,6 +4,33 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## The age of a task open since before the upgrade is a lower bound (2026-08-25)
+
+This changes the wording of an existing message and adds one adapter question. No configuration
+changes and no schema changes.
+
+**Why.** The age of a task left open by a `@TaskId` handler is measured from the delivery record,
+which is written when the handler runs. A task which was already open when the application was
+stopped for an upgrade has no record: the first redelivery afterwards writes one, so from then on
+the task reported an age counted from the upgrade. The tasks with the largest real age were
+precisely the ones whose age was under-reported, and the report of
+`vanillabp.delivery.max-task-age` stayed silent for exactly them.
+
+**What changed.** `TaskInvocationContext` gains `predatesDeployedVersion()`, default `false`. An
+adapter answers it by comparing the version a delivery's workflow runs on with the version it
+deployed itself, which costs nothing - both values are already at hand, and no BPMS is asked
+anything. Where the answer is `true`, the message says "at least" and explains that the workflow
+was already running before the version deployed now, so the real age is larger. The threshold is
+unaffected in the useful direction: a lower bound past the maximum is still a reason to report.
+
+**Who is affected.** Camunda 8 only, and only where the upgrade produced a new process version.
+Camunda 7 reports no delivery identity - it delivers inside the engine's own transaction, so a
+redelivery proves nothing was committed - which means it keeps no delivery records and has no
+open-task age to report in the first place. The Process-Engine-API had no version 1 release.
+
+**What to do.** Nothing. An adapter which does not answer changes nothing, and an application which
+never upgraded sees the message it has always seen.
+
 ## What an application upgrading from version 1 does not bring with it (2026-08-25)
 
 No code changed. This entry records what was CHECKED while answering the question "what does

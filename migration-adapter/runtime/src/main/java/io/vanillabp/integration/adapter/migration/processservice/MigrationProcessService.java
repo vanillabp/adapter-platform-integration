@@ -1195,23 +1195,35 @@ public class MigrationProcessService<A> {
         ? io.vanillabp.integration.adapter.migration.config.DeliveryProperties.DEFAULT_MAX_TASK_AGE
         : properties.maxTaskAge(workflowModuleId, bpmnProcessId, context.getTaskDefinition());
     final var exceeded = !maxTaskAge.isZero() && (openFor.compareTo(maxTaskAge) > 0);
+    // a workflow which was already running before this version was deployed was open
+    // before VanillaBP ever wrote a record for it, so the record's timestamp is the
+    // moment the task was first SEEN and not the moment it was created
+    final var lowerBound = context.predatesDeployedVersion();
     if (exceeded && reportTaskAgeOnce(delivery.deliveryKey())) {
       log.warn(
           """
               Task '{}' of BPMN process '{}' of workflow module '{}' has been waiting for its \
-              asynchronous completion for {}, which is longer than the {} configured by '{}' for it. \
+              asynchronous completion for {}{}, which is longer than the {} configured by '{}' for it. \
               Workflow aggregate: '{}'. Either the application still owes this task a \
               'ProcessService#completeTask' respectively 'cancelTask', or nobody will ever send it \
               and the workflow waits forever. Raise the maximum age where such a wait is legitimate \
               (it may be set per workflow module, workflow and task), or set it to '0' to switch \
-              this report off.""",
+              this report off.{}""",
           context.getTaskDefinition(),
           bpmnProcessId,
           workflowModuleId,
+          lowerBound
+              ? "at least "
+              : "",
           openFor,
           maxTaskAge,
           MigrationAdapterProperties.maxTaskAgeProperty(),
-          context.getWorkflowAggregateId());
+          context.getWorkflowAggregateId(),
+          lowerBound
+              ? " This workflow was already running before the version deployed now, so it was open"
+                  + " before VanillaBP could write anything down about it: the age above counts from"
+                  + " the first delivery this application saw, and the real one is larger."
+              : "");
     }
     return WorkflowTaskOutcome.completionPending(openFor, exceeded);
 

@@ -313,7 +313,22 @@ public class OpenTaskAgeTest {
       final String aggregateId,
       final String deliveryId) {
 
+    return delivery(aggregateId, deliveryId, false);
+
+  }
+
+  private TaskInvocationContext delivery(
+      final String aggregateId,
+      final String deliveryId,
+      final boolean predatesDeployedVersion) {
+
     return new TaskInvocationContext() {
+
+      @Override
+      public boolean predatesDeployedVersion() {
+        return predatesDeployedVersion;
+      }
+
 
       @Override
       public String getAdapterId() {
@@ -397,6 +412,88 @@ public class OpenTaskAgeTest {
         () -> testee.invokeWorkflowTask(MODULE, PROCESS, delivery("4712", "job-1")));
     assertTrue(third.maxAgeExceeded(), "the task is still overdue");
     assertTrue(repeated.isEmpty(), "and it is not reported a second time");
+
+  }
+
+  @Test
+  @DisplayName("A workflow older than the deployed version reports its age as a LOWER BOUND")
+  public void anOlderWorkflowReportsALowerBound() {
+
+    final var testee = registry(properties(Duration.ofHours(1), null, null, null));
+    storeAggregate("4713");
+
+    testee.invokeWorkflowTask(MODULE, PROCESS, delivery("4713", "job-1", true));
+    deliveryLog.backdateBy(Duration.ofHours(3));
+
+    final var messages = new ArrayList<String>();
+    loggedBy(messages, () -> testee.invokeWorkflowTask(MODULE, PROCESS, delivery("4713", "job-1", true)));
+
+    assertEquals(1, messages.size(), "exactly one message");
+    final var message = messages.getFirst();
+    assertTrue(message.contains("at least PT3H"), () -> message);
+    assertTrue(message.contains("already running before the version deployed now"), () -> message);
+    assertTrue(message.contains("the real one is larger"), () -> message);
+
+  }
+
+  @Test
+  @DisplayName("A workflow on the deployed version reports the age as it always did")
+  public void aCurrentWorkflowReportsTheAgeItself() {
+
+    final var testee = registry(properties(Duration.ofHours(1), null, null, null));
+    storeAggregate("4714");
+
+    testee.invokeWorkflowTask(MODULE, PROCESS, delivery("4714", "job-1"));
+    deliveryLog.backdateBy(Duration.ofHours(3));
+
+    final var messages = new ArrayList<String>();
+    loggedBy(messages, () -> testee.invokeWorkflowTask(MODULE, PROCESS, delivery("4714", "job-1")));
+
+    assertEquals(1, messages.size(), "exactly one message");
+    final var message = messages.getFirst();
+    assertTrue(message.contains("waiting for its asynchronous completion for PT3H"), () -> message);
+    assertTrue(!message.contains("at least"), () -> message);
+    assertTrue(!message.contains("the real one is larger"), () -> message);
+
+  }
+
+  @Test
+  @DisplayName("A lower bound past the maximum age is still reported - the truth is only larger")
+  public void aLowerBoundStillTripsTheThreshold() {
+
+    final var testee = registry(properties(Duration.ofHours(2), null, null, null));
+    storeAggregate("4715");
+
+    testee.invokeWorkflowTask(MODULE, PROCESS, delivery("4715", "job-1", true));
+    deliveryLog.backdateBy(Duration.ofHours(3));
+
+    final var messages = new ArrayList<String>();
+    final var second = loggedBy(
+        messages,
+        () -> testee.invokeWorkflowTask(MODULE, PROCESS, delivery("4715", "job-1", true)));
+
+    assertTrue(second.maxAgeExceeded(), "the outcome still says overdue");
+    assertEquals(1, messages.size(), messages::toString);
+
+  }
+
+  @Test
+  @DisplayName("A maximum age of zero switches the report off for an older workflow as well")
+  public void zeroSwitchesTheReportOffForAnOlderWorkflowToo() {
+
+    final var testee = registry(properties(Duration.ZERO, null, null, null));
+    storeAggregate("4716");
+
+    testee.invokeWorkflowTask(MODULE, PROCESS, delivery("4716", "job-1", true));
+    deliveryLog.backdateBy(Duration.ofDays(400));
+
+    final var messages = new ArrayList<String>();
+    final var second = loggedBy(
+        messages,
+        () -> testee.invokeWorkflowTask(MODULE, PROCESS, delivery("4716", "job-1", true)));
+
+    assertFalse(second.maxAgeExceeded());
+    assertTrue(messages.isEmpty(), messages::toString);
 
   }
 
