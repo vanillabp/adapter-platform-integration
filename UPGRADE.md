@@ -4,6 +4,133 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## The open tasks an upgrade leaves behind are counted at startup (2026-08-25)
+
+Two SPI questions with defaults, one startup message. No configuration and no schema changes.
+
+**Why.** VanillaBP answers a repeated delivery from the record it wrote when the handler ran, which
+is what the wiki promises. A task which was already open before this application first ran has no
+such record, so its next delivery runs the `@WorkflowTask` method a second time - which is what
+version 1 did for every delivery, and what an upgrade therefore leaves behind for exactly the tasks
+most likely to be in flight. Nothing reported it, because from the core's point of view a delivery
+it has never seen is simply a new one.
+
+**Nothing can be repaired, so nothing is.** A record would have to claim that the handler ran and
+left the task open. An activated job which is still there may equally be a handler which crashed
+halfway, no BPMS can tell the two apart, and the wrong guess skips business code which never ran.
+So the count is the whole feature, together with the sentence that the guards in the handlers carry
+the case until it reaches zero.
+
+**What changed:**
+
+- `TaskDeliveryLog#hasOpenRecords(workflowModuleId, bpmnProcessId)`, `default null`. Unlike
+  `adapterIdsOfOpenTasks` it distinguishes "none" from "cannot say", because here the empty case is
+  the interesting one. The shipped JDBC and MongoDB stores answer; the gruelbox-based outbox is
+  unaffected, this is the delivery log;
+- `MigratableProcessService#openTaskCount(workflowModuleId, bpmnProcessId)`, `default null` - how
+  many tasks the BPMS holds open for one process, asked once at startup and never at runtime.
+  Camunda 8 answers it with one job search where the cluster has secondary storage. Camunda 7
+  answers `null` and correctly so: it delivers inside the engine's transaction, reports no delivery
+  identity, and therefore keeps no records which could be missing.
+
+**When it says something.** Only when both sides answer and both answers are interesting: the store
+holds no open record AND the BPMS holds open tasks. A normal restart is quiet (the log holds
+records), a fresh installation is quiet (nothing is open), a store or BPMS which cannot say is
+quiet.
+
+**What to do.** Nothing, other than keeping the version 1 guards in the handlers until the number
+is zero.
+
+## The age of a task open since before the upgrade is a lower bound (2026-08-25)
+
+This changes the wording of an existing message and adds one adapter question. No configuration
+changes and no schema changes.
+
+**Why.** The age of a task left open by a `@TaskId` handler is measured from the delivery record,
+which is written when the handler runs. A task which was already open when the application was
+stopped for an upgrade has no record: the first redelivery afterwards writes one, so from then on
+the task reported an age counted from the upgrade. The tasks with the largest real age were
+precisely the ones whose age was under-reported, and the report of
+`vanillabp.delivery.max-task-age` stayed silent for exactly them.
+
+**What changed.** `TaskInvocationContext` gains `predatesDeployedVersion()`, default `false`. An
+adapter answers it by comparing the version a delivery's workflow runs on with the version it
+deployed itself, which costs nothing - both values are already at hand, and no BPMS is asked
+anything. Where the answer is `true`, the message says "at least" and explains that the workflow
+was already running before the version deployed now, so the real age is larger. The threshold is
+unaffected in the useful direction: a lower bound past the maximum is still a reason to report.
+
+**Who is affected.** Camunda 8 only, and only where the upgrade produced a new process version.
+Camunda 7 reports no delivery identity - it delivers inside the engine's own transaction, so a
+redelivery proves nothing was committed - which means it keeps no delivery records and has no
+open-task age to report in the first place. The Process-Engine-API had no version 1 release.
+
+**What to do.** Nothing. An adapter which does not answer changes nothing, and an application which
+never upgraded sees the message it has always seen.
+
+## What an application upgrading from version 1 does not bring with it (2026-08-25)
+
+No code changed. This entry records what was CHECKED while answering the question "what does
+VanillaBP owe the workflows an upgraded application brings with it, which were started under
+version 1", so that none of it is checked twice. The findings which need work became their own
+stories; what is written here is what turned out to be fine.
+
+**The two Camunda adapters are not two cases of one problem.** Camunda 7 attaches everything
+version 2 added while the engine PARSES a process definition
+(`Camunda7AsyncBpmnParseListener`), so it reaches every version the engine holds, the ones
+version 1 deployed included: the transaction boundaries, the user-task lifecycle listeners, the
+task cancellation listener, the `@WorkflowEnded` end listener and the listeners on start events.
+Camunda 8 writes its listeners INTO the model it deploys, and a running instance stays on the
+version it was started on, so a workflow which was already running never gets them. Whenever a
+feature of version 2 rests on something injected, that is the line along which it holds or does
+not.
+
+**The startup check for old process versions already covers the upgrade.**
+`DeployedProcessVersionsCheck` (see below, 2026-08-15) reads the models of the versions the BPMS
+still holds, asks whether this application serves their task definitions, and counts the
+workflows running on them. Where an upgrade produces a new process version at all, the workflows
+brought along sit on the one before it, which is exactly what the check reads. Nothing had to be
+added for `@WorkflowTask(version = ...)`.
+
+Whether it produces one is the Camunda 8 adapter's decision 5, and it is worth reading before
+reasoning about any of this: that adapter deliberately deploys a version 1 model BYTE-IDENTICALLY
+wherever it can, so no new version appears and the workflows brought along run on the very
+version this boot deployed. A new version appears exactly where the adapter has to rewrite the
+model - multi-instance input mappings, an `end` execution listener because the application now
+has a `@WorkflowEnded` method, a listener on a start event the cluster fires itself, a message
+subscription which modelled no correlation key, or the identifiers of `use-prefix`. Those are the
+same rewrites the older instances then lack, so the two questions have one answer: where nothing
+was rewritten, nothing is missing.
+
+**The check for a renamed adapter id is silent after an upgrade, and correctly so.** It asks the
+outbox and the delivery log which adapter ids they still name, and right after an upgrade both
+stores are empty, which reads like a clean result. It is one: the check asks about a PERSISTED
+adapter id, and version 1 persisted none - it had one adapter and its id was its type.
+
+**The schema is created for you.** `vanillabp.outbox.create-schema` defaults to `true`, so an
+upgrading application which configures nothing gets `VANILLABP_PHASE_TWO_OUTBOX` and
+`VANILLABP_TASK_DELIVERY` on its first boot. Where the application applies its own schema, both
+missing-table messages name the artifact, the changelog and the property.
+
+**The outbox needs no adoption.** Entries are written per operation, so a workflow started under
+version 1 needs none, and the absence of a store is reported at startup rather than at the first
+workflow.
+
+**The election cache is empty after an upgrade**, as it is after any restart. Its entries are
+hints by contract, so the first operation on each workflow pays one probing walk and nothing
+else.
+
+**Two things an upgrading application should know, which are its own code rather than ours.** On
+Camunda 8, version 1 handed the whole workflow aggregate to every command, so instances started
+back then carry a variable for everything its JSON serialization could read. An
+`@JsonProperty` renaming the aggregate's ID attribute breaks every probe for such an instance,
+because version 1 wrote the JSON name and version 2 reads the name the persistence layer
+reports. And an attribute version 1 serialized as a field keeps its last version 1 value for
+good, since version 2 reads getters only. Both are in the migration guide now.
+
+Full reasoning, per item and with the version 1 sources it was measured against, is in the
+report which came out of story 126.
+
 ## A renamed adapter id is noticed at startup (2026-08-23)
 
 This adds a column to the task-delivery table, a property, and a startup message.

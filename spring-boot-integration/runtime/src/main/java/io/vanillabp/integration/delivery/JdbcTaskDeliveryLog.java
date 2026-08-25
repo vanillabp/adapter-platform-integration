@@ -137,6 +137,15 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   }
 
   @Override
+  public Boolean hasOpenRecords(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return store.hasOpenRecords(workflowModuleId, bpmnProcessId);
+
+  }
+
+  @Override
   public int releaseRecordsOf(
       final String workflowModuleId,
       final String bpmnProcessId,

@@ -173,6 +173,28 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
   }
 
   @Override
+  public Boolean hasOpenRecords(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return mongoTemplate
+        .exists(
+            org.springframework.data.mongodb.core.query.Query
+                .query(
+                    org.springframework.data.mongodb.core.query.Criteria
+                        .where("workflowModuleId")
+                        .is(workflowModuleId)
+                        .and("bpmnProcessId")
+                        .is(bpmnProcessId)
+                        .and("outcome")
+                        .is(
+                            io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome.Kind.COMPLETION_PENDING
+                                .name())),
+            collection);
+
+  }
+
+  @Override
   public int releaseRecordsOf(
       final String workflowModuleId,
       final String bpmnProcessId,

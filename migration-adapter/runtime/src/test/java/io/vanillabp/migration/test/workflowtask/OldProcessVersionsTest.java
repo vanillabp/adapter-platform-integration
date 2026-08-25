@@ -126,9 +126,29 @@ public class OldProcessVersionsTest {
         final String bpmnProcessId,
         final String version) {
 
+      instanceCountQueries.merge(version, 1, Integer::sum);
       return canCountInstances
           ? instancesPerVersion.getOrDefault(version, 0L)
           : null;
+
+    }
+
+    /**
+     * How often the BPMS was asked for the instance count of each version. Asking is a
+     * QUERY, and the number of versions a BPMS holds grows with every deployment which
+     * changes a model, so an extra ask per version is a cost which grows with the age of
+     * the application.
+     */
+    private final Map<String, Integer> instanceCountQueries = new java.util.HashMap<>();
+
+    private String whatIsMissed;
+
+    @Override
+    public String whatOlderVersionsMiss(
+        final String workflowModuleId,
+        final String bpmnProcessId) {
+
+      return whatIsMissed;
 
     }
 
@@ -190,6 +210,97 @@ public class OldProcessVersionsTest {
         .of(new BpmnTaskSpec("Activity_old", "oldOnly")));
 
     assertEquals(List.of(), check());
+
+  }
+
+  @Test
+  @DisplayName("The instance count of a version is asked ONCE, however many reports want it")
+  public void theInstanceCountIsAskedOncePerVersion() {
+
+    // an older version which is BOTH counted as running and reported as unserved: the
+    // two reports used to ask the same question twice
+    catalog.instancesPerVersion = Map.of("1", 4L);
+
+    check(Level.ERROR);
+
+    assertTrue(
+        catalog.instanceCountQueries
+            .values()
+            .stream()
+            .allMatch(queries -> queries == 1),
+        () -> "one query per version and per run of the check, but was "
+            + catalog.instanceCountQueries);
+    assertTrue(
+        catalog.instanceCountQueries.containsKey("1"),
+        "the version which is both counted as running and reported as unserved was asked about");
+
+  }
+
+  @Test
+  @DisplayName("Workflows on an older version are counted even where every task is served")
+  public void workflowsOnAnOlderVersionAreCounted() {
+
+    catalog.tasksPerVersion = Map.of("1", List.of(new BpmnTaskSpec("Activity_still", "stillThere")), "2", List
+        .of(new BpmnTaskSpec("Activity_old", "oldOnly")));
+    catalog.instancesPerVersion = Map.of("1", 3L);
+
+    final var infos = check(Level.INFO);
+    assertEquals(1, infos.size(), infos.toString());
+    assertTrue(infos.get(0).contains("3 workflow(s)"), infos.get(0));
+    assertTrue(infos.get(0).contains("older than the one adapter 'c7' deployed"), infos.get(0));
+    assertTrue(infos.get(0).contains("falls to zero"), infos.get(0));
+
+  }
+
+  @Test
+  @DisplayName("The adapter says what those workflows miss, and the count carries it")
+  public void whatOlderWorkflowsMissIsNamed() {
+
+    catalog.tasksPerVersion = Map.of("1", List.of(new BpmnTaskSpec("Activity_still", "stillThere")), "2", List
+        .of(new BpmnTaskSpec("Activity_old", "oldOnly")));
+    catalog.instancesPerVersion = Map.of("1", 3L);
+    catalog.whatIsMissed = "the end of a workflow is not reported";
+
+    final var infos = check(Level.INFO);
+
+    assertEquals(1, infos.size(), infos.toString());
+    assertTrue(infos.get(0).contains("the end of a workflow is not reported"), infos.get(0));
+
+  }
+
+  @Test
+  @DisplayName("Workflows on an older version are no warning - nothing is wrong with them")
+  public void workflowsOnAnOlderVersionAreNoWarning() {
+
+    catalog.tasksPerVersion = Map.of("1", List.of(new BpmnTaskSpec("Activity_still", "stillThere")), "2", List
+        .of(new BpmnTaskSpec("Activity_old", "oldOnly")));
+    catalog.instancesPerVersion = Map.of("1", 3L);
+
+    assertEquals(List.of(), check());
+
+  }
+
+  @Test
+  @DisplayName("An older version nobody runs on is not worth a line")
+  public void anOlderVersionWithoutWorkflowsIsQuiet() {
+
+    catalog.tasksPerVersion = Map.of("1", List.of(new BpmnTaskSpec("Activity_still", "stillThere")), "2", List
+        .of(new BpmnTaskSpec("Activity_old", "oldOnly")));
+
+    assertEquals(List.of(), check(Level.INFO));
+
+  }
+
+  @Test
+  @DisplayName("A BPMS which cannot count says nothing here, rather than reporting a zero")
+  public void aBpmsWhichCannotCountIsQuietHere() {
+
+    catalog.tasksPerVersion = Map.of("1", List.of(new BpmnTaskSpec("Activity_still", "stillThere")), "2", List
+        .of(new BpmnTaskSpec("Activity_old", "oldOnly")));
+    catalog.instancesPerVersion = Map.of("1", 3L);
+    catalog.canCountInstances = false;
+
+    assertEquals(List.of(), check(Level.INFO));
 
   }
 

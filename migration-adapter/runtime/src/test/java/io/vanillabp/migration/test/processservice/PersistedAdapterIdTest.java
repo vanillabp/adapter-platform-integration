@@ -65,7 +65,27 @@ public class PersistedAdapterIdTest {
    */
   private static MigratableProcessService<Object> adapter() {
 
+    return adapter(null);
+
+  }
+
+  /**
+   * An adapter which reports the given number of open tasks - <code>null</code> being the
+   * BPMS which cannot say.
+   */
+  private static MigratableProcessService<Object> adapter(
+      final Long openTasks) {
+
     return new MigratableProcessService<>() {
+
+      @Override
+      public Long openTaskCount(
+          final String workflowModuleId,
+          final String bpmnProcessId) {
+
+        return openTasks;
+
+      }
 
       @Override
       public String getAdapterId() {
@@ -322,7 +342,28 @@ public class PersistedAdapterIdTest {
   private static TaskDeliveryLog logWithOpenTasksOf(
       final Set<String> adapterIds) {
 
+    return logWithOpenTasksOf(adapterIds, null);
+
+  }
+
+  /**
+   * A log which additionally answers whether it holds open records at all -
+   * <code>null</code> being the store which cannot say.
+   */
+  private static TaskDeliveryLog logWithOpenTasksOf(
+      final Set<String> adapterIds,
+      final Boolean hasOpenRecords) {
+
     return new TaskDeliveryLog() {
+
+      @Override
+      public Boolean hasOpenRecords(
+          final String workflowModuleId,
+          final String bpmnProcessId) {
+
+        return hasOpenRecords;
+
+      }
 
       @Override
       public Optional<TaskDelivery> recordedDelivery(
@@ -357,8 +398,27 @@ public class PersistedAdapterIdTest {
    * The WARNings the check logged. "Normal" logging is off during tests, so the appender is
    * attached to the class which logs (the same pattern the delivery tests use).
    */
+  private static List<String> infoLoggedBy(
+      final Runnable work) {
+
+    return loggedBy(work, ch.qos.logback.classic.Level.INFO);
+
+  }
+
   private static List<String> loggedBy(
       final Runnable work) {
+
+    return loggedBy(work, ch.qos.logback.classic.Level.WARN);
+
+  }
+
+  private static List<String> loggedBy(
+      final Runnable work,
+      final ch.qos.logback.classic.Level level) {
+
+    // INFO is asked for on its own: the check under test logs there, and a WARN of a
+    // neighbouring check would otherwise count as its output
+    final var onlyThatLevel = level == ch.qos.logback.classic.Level.INFO;
 
     final var logWatcher = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
     logWatcher.start();
@@ -372,7 +432,9 @@ public class PersistedAdapterIdTest {
     }
     return logWatcher.list
         .stream()
-        .filter(event -> event.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.WARN))
+        .filter(event -> onlyThatLevel
+            ? (event.getLevel() == level)
+            : event.getLevel().isGreaterOrEqual(level))
         .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
         .toList();
 
@@ -388,9 +450,19 @@ public class PersistedAdapterIdTest {
       final PhaseTwoOutbox outbox,
       final TaskDeliveryLog deliveryLog) {
 
+    return serviceWith(properties, outbox, deliveryLog, adapter());
+
+  }
+
+  private static MigrationProcessService<Object> serviceWith(
+      final MigrationAdapterProperties properties,
+      final PhaseTwoOutbox outbox,
+      final TaskDeliveryLog deliveryLog,
+      final MigratableProcessService<Object> adapter) {
+
     final var service = new MigrationProcessService<Object>(
         MODULE, PROCESS, Object.class, properties, persistence(), List
-            .of(adapter()), new PhaseTwoOutboxResolver() {
+            .of(adapter), new PhaseTwoOutboxResolver() {
 
               @Override
               public PhaseTwoOutbox resolveFor(
@@ -429,6 +501,82 @@ public class PersistedAdapterIdTest {
     service.validatePhaseTwoOutboxAtStartup();
     service.validateTaskDeliveryLogAtStartup();
     return service;
+
+  }
+
+
+  @Test
+  @DisplayName("Open tasks the BPMS holds and the log has no record of are counted")
+  public void openTasksNobodyRemembersAreCounted() {
+
+    final var service = serviceWith(
+        properties(List.of()),
+        outboxWaitingFor(Set.of()),
+        logWithOpenTasksOf(Set.of(), Boolean.FALSE),
+        adapter(12L));
+
+    final var output = String.join("\n", infoLoggedBy(service::validatePersistedAdapterIdsAtStartup));
+
+    assertTrue(output.contains("12 open task(s)"), output);
+    assertTrue(output.contains("no record of"), output);
+    assertTrue(output.contains("a SECOND time"), output);
+    assertTrue(output.contains("keep the guards"), output);
+    assertTrue(output.contains(MODULE), output);
+    assertTrue(output.contains(PROCESS), output);
+
+  }
+
+  @Test
+  @DisplayName("An application which has been running says nothing - its log holds open records")
+  public void aRunningApplicationIsQuiet() {
+
+    final var service = serviceWith(
+        properties(List.of()),
+        outboxWaitingFor(Set.of()),
+        logWithOpenTasksOf(Set.of(), Boolean.TRUE),
+        adapter(12L));
+
+    assertTrue(
+        infoLoggedBy(service::validatePersistedAdapterIdsAtStartup).isEmpty(),
+        "a log which remembers open tasks is not the upgrade case");
+
+  }
+
+  @Test
+  @DisplayName("A fresh installation says nothing - the BPMS holds nothing open")
+  public void aFreshInstallationIsQuiet() {
+
+    final var service = serviceWith(
+        properties(List.of()),
+        outboxWaitingFor(Set.of()),
+        logWithOpenTasksOf(Set.of(), Boolean.FALSE),
+        adapter(0L));
+
+    assertTrue(infoLoggedBy(service::validatePersistedAdapterIdsAtStartup).isEmpty());
+
+  }
+
+  @Test
+  @DisplayName("Neither side is guessed: a store or a BPMS which cannot say ends the check")
+  public void anUnanswerableSideIsQuiet() {
+
+    final var storeCannotSay = serviceWith(
+        properties(List.of()),
+        outboxWaitingFor(Set.of()),
+        logWithOpenTasksOf(Set.of(), null),
+        adapter(12L));
+    assertTrue(
+        infoLoggedBy(storeCannotSay::validatePersistedAdapterIdsAtStartup).isEmpty(),
+        "a store which cannot say whether it holds records");
+
+    final var bpmsCannotCount = serviceWith(
+        properties(List.of()),
+        outboxWaitingFor(Set.of()),
+        logWithOpenTasksOf(Set.of(), Boolean.FALSE),
+        adapter(null));
+    assertTrue(
+        infoLoggedBy(bpmsCannotCount::validatePersistedAdapterIdsAtStartup).isEmpty(),
+        "a BPMS which cannot count what it holds open");
 
   }
 

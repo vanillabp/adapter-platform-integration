@@ -67,6 +67,11 @@ public class JdbcTaskDeliveryStore {
       FROM %s \
       WHERE WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND OUTCOME = ? AND ADAPTER_ID IS NOT NULL""";
 
+  private static final String SELECT_ANY_OPEN_RECORD = """
+      SELECT DELIVERY_KEY \
+      FROM %s \
+      WHERE WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND OUTCOME = ?""";
+
   private static final String INSERT_DELIVERY = """
       INSERT INTO %s \
       (DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, TASK_DEFINITION, \
@@ -105,6 +110,8 @@ public class JdbcTaskDeliveryStore {
 
   private final String selectAdapterIdsOfOpenTasks;
 
+  private final String selectAnyOpenRecord;
+
   private final OpenTaskTouches touches;
 
   public JdbcTaskDeliveryStore(
@@ -119,6 +126,7 @@ public class JdbcTaskDeliveryStore {
     this.deleteExpiredDeliveries = DELETE_EXPIRED_DELIVERIES.formatted(tableName);
     this.deleteDeliveriesOfWorkflow = DELETE_DELIVERIES_OF_WORKFLOW.formatted(tableName);
     this.selectAdapterIdsOfOpenTasks = SELECT_ADAPTER_IDS_OF_OPEN_TASKS.formatted(tableName);
+    this.selectAnyOpenRecord = SELECT_ANY_OPEN_RECORD.formatted(tableName);
     this.touches = new OpenTaskTouches(tableName, this::refreshLastSeen);
 
   }
@@ -660,6 +668,52 @@ public class JdbcTaskDeliveryStore {
         RECORDED_AT %s NOT NULL, \
         LAST_SEEN_AT %s NOT NULL)"""
         .formatted(tableName, timestampType, timestampType);
+
+  }
+
+  /**
+   * Whether an OPEN record of that BPMN process exists at all - see
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLog#hasOpenRecords(String, String)}.
+   * Unlike the adapter ids this distinguishes "none" from "cannot say", so a failing
+   * query answers <code>null</code> rather than <code>false</code>.
+   *
+   * @param workflowModuleId The workflow module to ask about
+   * @param bpmnProcessId The BPMN process to ask about
+   * @return Whether an open record exists, <code>null</code> where the table could not be
+   *         read
+   */
+  public Boolean hasOpenRecords(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    Connection connection = null;
+    try {
+      connection = connectionAccess.acquire();
+      try (var statement = connection.prepareStatement(selectAnyOpenRecord)) {
+        statement.setString(1, workflowModuleId);
+        statement.setString(2, bpmnProcessId);
+        statement
+            .setString(
+                3,
+                io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome.Kind.COMPLETION_PENDING
+                    .name());
+        try (var resultSet = statement.executeQuery()) {
+          return resultSet.next();
+        }
+      }
+    } catch (final SQLException e) {
+      log
+          .debug(
+              "Could not read whether open task-delivery records of BPMN process '{}' (workflow "
+                  + "module '{}') exist in table '{}'",
+              bpmnProcessId,
+              workflowModuleId,
+              tableName,
+              e);
+      return null;
+    } finally {
+      release(connection);
+    }
 
   }
 
