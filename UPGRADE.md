@@ -4,6 +4,69 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## What an application upgrading from version 1 does not bring with it (2026-08-25)
+
+No code changed. This entry records what was CHECKED while answering the question "what does
+VanillaBP owe the workflows an upgraded application brings with it, which were started under
+version 1", so that none of it is checked twice. The findings which need work became their own
+stories; what is written here is what turned out to be fine.
+
+**The two Camunda adapters are not two cases of one problem.** Camunda 7 attaches everything
+version 2 added while the engine PARSES a process definition
+(`Camunda7AsyncBpmnParseListener`), so it reaches every version the engine holds, the ones
+version 1 deployed included: the transaction boundaries, the user-task lifecycle listeners, the
+task cancellation listener, the `@WorkflowEnded` end listener and the listeners on start events.
+Camunda 8 writes its listeners INTO the model it deploys, and a running instance stays on the
+version it was started on, so a workflow which was already running never gets them. Whenever a
+feature of version 2 rests on something injected, that is the line along which it holds or does
+not.
+
+**The startup check for old process versions already covers the upgrade.**
+`DeployedProcessVersionsCheck` (see below, 2026-08-15) reads the models of the versions the BPMS
+still holds, asks whether this application serves their task definitions, and counts the
+workflows running on them. Where an upgrade produces a new process version at all, the workflows
+brought along sit on the one before it, which is exactly what the check reads. Nothing had to be
+added for `@WorkflowTask(version = ...)`.
+
+Whether it produces one is the Camunda 8 adapter's decision 5, and it is worth reading before
+reasoning about any of this: that adapter deliberately deploys a version 1 model BYTE-IDENTICALLY
+wherever it can, so no new version appears and the workflows brought along run on the very
+version this boot deployed. A new version appears exactly where the adapter has to rewrite the
+model - multi-instance input mappings, an `end` execution listener because the application now
+has a `@WorkflowEnded` method, a listener on a start event the cluster fires itself, a message
+subscription which modelled no correlation key, or the identifiers of `use-prefix`. Those are the
+same rewrites the older instances then lack, so the two questions have one answer: where nothing
+was rewritten, nothing is missing.
+
+**The check for a renamed adapter id is silent after an upgrade, and correctly so.** It asks the
+outbox and the delivery log which adapter ids they still name, and right after an upgrade both
+stores are empty, which reads like a clean result. It is one: the check asks about a PERSISTED
+adapter id, and version 1 persisted none - it had one adapter and its id was its type.
+
+**The schema is created for you.** `vanillabp.outbox.create-schema` defaults to `true`, so an
+upgrading application which configures nothing gets `VANILLABP_PHASE_TWO_OUTBOX` and
+`VANILLABP_TASK_DELIVERY` on its first boot. Where the application applies its own schema, both
+missing-table messages name the artifact, the changelog and the property.
+
+**The outbox needs no adoption.** Entries are written per operation, so a workflow started under
+version 1 needs none, and the absence of a store is reported at startup rather than at the first
+workflow.
+
+**The election cache is empty after an upgrade**, as it is after any restart. Its entries are
+hints by contract, so the first operation on each workflow pays one probing walk and nothing
+else.
+
+**Two things an upgrading application should know, which are its own code rather than ours.** On
+Camunda 8, version 1 handed the whole workflow aggregate to every command, so instances started
+back then carry a variable for everything its JSON serialization could read. An
+`@JsonProperty` renaming the aggregate's ID attribute breaks every probe for such an instance,
+because version 1 wrote the JSON name and version 2 reads the name the persistence layer
+reports. And an attribute version 1 serialized as a field keeps its last version 1 value for
+good, since version 2 reads getters only. Both are in the migration guide now.
+
+Full reasoning, per item and with the version 1 sources it was measured against, is in the
+report which came out of story 126.
+
 ## A renamed adapter id is noticed at startup (2026-08-23)
 
 This adds a column to the task-delivery table, a property, and a startup message.
