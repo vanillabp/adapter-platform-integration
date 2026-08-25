@@ -85,6 +85,8 @@ Top-level modules (by directory name) are:
    instructions - the same number the badge shows) or when a module produces coverage data no aggregated report reads.
    Both properties hold 85, the number every VanillaBP repository gates on. The rule is 90 per platform,
    so a report between the two passes the build and still names a gap somebody owes a test for.
+   It reports what it measured on every run, green ones included, and is the one test class in VanillaBP
+   which prints while it passes (`@PrintsWhenPassing`).
 6. **test-utils:**<br>
    A small module providing utilities used by tests across all platforms.
 

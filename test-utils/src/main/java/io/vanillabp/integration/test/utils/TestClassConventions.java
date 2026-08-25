@@ -13,7 +13,8 @@ import java.util.stream.Collectors;
 /**
  * The convention a build can check by itself: every test class registers
  * {@link SuppressOutputExtension}, so a build log carries what a FAILING test printed
- * and nothing else.
+ * and nothing else. A class which is meant to print on a green build carries
+ * {@link PrintsWhenPassing} with the reason and is left alone.
  * <p>
  * This is a check and not a sentence because the rule stood in the testing
  * conventions and in a checklist, and 13 of 373 test classes across two repositories
@@ -37,6 +38,18 @@ public final class TestClassConventions {
           Pattern.MULTILINE);
 
   private static final String SUPPRESSION = SuppressOutputExtension.class.getSimpleName();
+
+  private static final String EXEMPTION = PrintsWhenPassing.class.getSimpleName();
+
+  /**
+   * The one way out of the rule, matched at the start of a line for the same reason the
+   * others are: a class which prints on purpose says so, with a reason, and everything
+   * else is an omission.
+   */
+  private static final Pattern EXEMPTION_ANNOTATION = Pattern
+      .compile("^@"
+          + EXEMPTION
+          + "\\b", Pattern.MULTILINE);
 
   /**
    * Annotations are matched at the start of a line, never anywhere in the file: a Javadoc
@@ -93,7 +106,8 @@ public final class TestClassConventions {
         %s
         Add '@ExtendWith(%s.class)' to each of them. A class whose output arrives after the \
         class has finished (Testcontainers, a database driver) adds \
-        '@%s.SuppressBackgroundOutput' as well."""
+        '@%s.SuppressBackgroundOutput' as well. A class whose printed line IS its result \
+        carries '@%s' with the reason instead - VanillaBP has one, the coverage gate."""
         .formatted(
             offenders.size(),
             SUPPRESSION,
@@ -103,7 +117,8 @@ public final class TestClassConventions {
                     + offender)
                 .collect(Collectors.joining("\n")),
             SUPPRESSION,
-            SUPPRESSION);
+            SUPPRESSION,
+            EXEMPTION);
 
   }
 
@@ -207,6 +222,10 @@ public final class TestClassConventions {
   private static boolean lacksSuppression(
       final String source) {
 
+    if (EXEMPTION_ANNOTATION.matcher(source).find()) {
+      // it prints while it passes and has said why, see PrintsWhenPassing
+      return false;
+    }
     return !source.contains(SUPPRESSION);
 
   }
