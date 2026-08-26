@@ -104,6 +104,7 @@ public class OldProcessVersionsTest {
         final String workflowModuleId,
         final String bpmnProcessId) {
 
+      questions.merge("deployedVersionsOf", 1, Integer::sum);
       return versions;
 
     }
@@ -114,11 +115,21 @@ public class OldProcessVersionsTest {
         final String bpmnProcessId,
         final String version) {
 
+      questions.merge("tasksOfVersion(%s)".formatted(version), 1, Integer::sum);
       return canReadModels
           ? tasksPerVersion.getOrDefault(version, List.of())
           : null;
 
     }
+
+    /**
+     * Every question this BPMS was asked, by name. What a start asks may depend on the
+     * versions a BPMS holds; it must not depend on how many workflows ran through them,
+     * which is decision 19 in the repository's DECISIONS.md and what
+     * {@link OldProcessVersionsTest#theQuestionsDoNotDependOnHowManyWorkflowsRun()}
+     * holds.
+     */
+    private final Map<String, Integer> questions = new java.util.HashMap<>();
 
     @Override
     public Long activeInstanceCountOf(
@@ -127,6 +138,7 @@ public class OldProcessVersionsTest {
         final String version) {
 
       instanceCountQueries.merge(version, 1, Integer::sum);
+      questions.merge("activeInstanceCountOf(%s)".formatted(version), 1, Integer::sum);
       return canCountInstances
           ? instancesPerVersion.getOrDefault(version, 0L)
           : null;
@@ -148,6 +160,7 @@ public class OldProcessVersionsTest {
         final String workflowModuleId,
         final String bpmnProcessId) {
 
+      questions.merge("whatOlderVersionsMiss", 1, Integer::sum);
       return whatIsMissed;
 
     }
@@ -233,6 +246,27 @@ public class OldProcessVersionsTest {
     assertTrue(
         catalog.instanceCountQueries.containsKey("1"),
         "the version which is both counted as running and reported as unserved was asked about");
+
+  }
+
+  @Test
+  @DisplayName("A start asks the same questions whether two workflows ran or two million")
+  public void theQuestionsDoNotDependOnHowManyWorkflowsRun() {
+
+    catalog.instancesPerVersion = Map.of("1", 2L, "2", 1L);
+    check(Level.ERROR);
+    final var askedByAYoungApplication = Map.copyOf(catalog.questions);
+
+    // the same application two years later: same models, same versions, and everything
+    // which happened in between reflected in the numbers alone
+    setUp();
+    catalog.instancesPerVersion = Map.of("1", 2_400_000L, "2", 910_000L);
+    check(Level.ERROR);
+
+    assertEquals(
+        askedByAYoungApplication,
+        catalog.questions,
+        "the number of questions a start asks belongs to the versions, never to the workflows");
 
   }
 

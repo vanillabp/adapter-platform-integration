@@ -256,6 +256,11 @@ public interface MigratableProcessService<A> {
    * <code>null</code>, which is the default. Everybody else answers what they can count
    * cheaply, and <code>null</code> where counting needs something the installation does
    * not have.
+   * <p>
+   * "Cheaply" means the BPMS counts and the adapter reads the number. An adapter which
+   * fetches the open tasks to count them transfers a page which grows with every year the
+   * application runs, and the boot grows with it - decision 19 in the repository's
+   * DECISIONS.md.
    *
    * @param workflowModuleId The workflow module to ask about
    * @param bpmnProcessId The PLAIN BPMN process ID

@@ -246,3 +246,33 @@ A store which cannot answer at all leaves a gap rather than reporting zero, beca
 calls is a statement somebody will act on. The same reasoning fixes the naming: the prefix is
 `vanillabp.`, the place is a TAG and never part of the name, and nothing which is unique per
 workflow ever becomes a tag, or every workflow would get its own time series.
+
+### 19. A start asks for numbers, and asks as many questions on the last day as on the first
+
+Booting an application puts questions to the BPMS and to the two tables VanillaBP owns: which
+versions the BPMS holds, how many workflows still run on an older one, how many tasks it is
+holding open, which adapter ids the persisted state still names. Every one of them is answered
+from data which keeps growing for as long as the application is in production, so every one of
+them can turn a ten-second start into a two-minute one after two years, and nobody sees it coming.
+
+The first half of the rule is that a start asks for a number, or for the existence of one row, and
+never for the rows themselves. `COUNT(*)`, `DISTINCT`, a search which reads its `totalItems`, a
+statement carrying a row limit: the reducing is the database's work or the cluster's. Reading the
+first row of an unlimited result set is not that, however much it looks like it in the code, because
+a JDBC driver decides for itself how much it transfers before `next()` answers and PostgreSQL's
+reads everything.
+
+The second half is that how many questions get asked belongs to the shape of the application rather
+than to its history. Once per workflow module, per BPMN process, per adapter and per version a BPMS
+holds is fine, since those numbers change when somebody deploys, and `outfaded-versions` is what an
+operator bounds the last of them with. Once per running workflow, per open task or per record is
+not, because nobody deploys to make that number grow.
+
+Where a question cannot be asked that way it is switched off or made conditional on something an
+operator understands, never on a time limit. A check which sometimes runs is worse than no check,
+because its silence stops meaning anything.
+
+The guard counts the questions instead of measuring the duration, which would only flicker on a
+build runner. `StartupQuestionCostTest`, `OldProcessVersionsTest` and `PersistedAdapterIdTest` ask
+the same start twice, once against a fresh installation and once against years of history, and
+compare what was asked.

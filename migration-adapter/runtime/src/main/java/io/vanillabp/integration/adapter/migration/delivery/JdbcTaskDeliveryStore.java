@@ -67,10 +67,34 @@ public class JdbcTaskDeliveryStore {
       FROM %s \
       WHERE WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND OUTCOME = ? AND ADAPTER_ID IS NOT NULL""";
 
+  /**
+   * Whether ANY open record of one BPMN process exists. The question is about existence,
+   * so exactly one row is wanted no matter how many there are - see
+   * {@link #ROWS_OF_AN_EXISTENCE_QUESTION} for why the row limit is set on the statement
+   * rather than written into this text.
+   */
   private static final String SELECT_ANY_OPEN_RECORD = """
       SELECT DELIVERY_KEY \
       FROM %s \
       WHERE WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND OUTCOME = ?""";
+
+  /**
+   * How many rows a question about EXISTENCE fetches.
+   * <p>
+   * Reading the first row of a result set is not the same as asking for one row. A driver
+   * decides for itself how much it fetches before <code>next()</code> answers, and the
+   * PostgreSQL driver reads the WHOLE result set into memory unless the statement says
+   * otherwise. An application with a hundred thousand open task deliveries would therefore
+   * transfer a hundred thousand keys while booting, to learn whether there is at least
+   * one - the growth with the age of the application which decision 19 in the repository's
+   * DECISIONS.md forbids of a startup check.
+   * <p>
+   * {@link java.sql.Statement#setMaxRows(int)} rather than a <code>LIMIT</code> clause: the
+   * syntax for it differs per database while the JDBC call does not, and it reaches the
+   * server, because the extended query protocol carries the row count in the message which
+   * executes the statement.
+   */
+  private static final int ROWS_OF_AN_EXISTENCE_QUESTION = 1;
 
   private static final String INSERT_DELIVERY = """
       INSERT INTO %s \
@@ -690,6 +714,7 @@ public class JdbcTaskDeliveryStore {
     try {
       connection = connectionAccess.acquire();
       try (var statement = connection.prepareStatement(selectAnyOpenRecord)) {
+        statement.setMaxRows(ROWS_OF_AN_EXISTENCE_QUESTION);
         statement.setString(1, workflowModuleId);
         statement.setString(2, bpmnProcessId);
         statement
