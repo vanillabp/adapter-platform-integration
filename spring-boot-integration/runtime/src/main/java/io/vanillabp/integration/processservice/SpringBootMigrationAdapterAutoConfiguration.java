@@ -14,7 +14,6 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesBindin
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.core.env.AbstractEnvironment;
@@ -38,15 +37,33 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Autoconfiguration of VanillaBP adapters. The
  * {@link io.vanillabp.spi.process.ProcessService} beans are registered by the
- * imported {@link ProcessServiceBeanRegistrar}.
+ * {@link ProcessServiceBeanRegistrar}, once {@link WorkflowServiceDiscovery} knows
+ * which workflow services this application brings.
  */
 @Slf4j
 @AutoConfiguration(after = WorkflowModuleAutoConfiguration.class)
 @EnableConfigurationProperties(VanillaBpConfigurationProperties.class)
-@Import(ProcessServiceBeanRegistrar.class)
 public class SpringBootMigrationAdapterAutoConfiguration {
 
   static final String BEANNAME_MIGRATIONADAPERPROPERTIES = "VanillaBpMigrationAdapterProperties";
+
+  /**
+   * Finds the workflow services among the bean definitions of the application and
+   * registers a {@link io.vanillabp.spi.process.ProcessService} bean per workflow
+   * aggregate.
+   * <p>
+   * Declared static, because a bean-factory post-processor pulled from an instance
+   * method would drag this configuration class - and everything it depends on - into
+   * being created before the other post-processors ran.
+   *
+   * @return The discovery
+   */
+  @Bean
+  public static WorkflowServiceDiscovery vanillaBpWorkflowServiceDiscovery() {
+
+    return new WorkflowServiceDiscovery();
+
+  }
 
   /**
    * Converts the values of <code>vanillabp.adapters.&lt;id&gt;.deployment-failure</code>

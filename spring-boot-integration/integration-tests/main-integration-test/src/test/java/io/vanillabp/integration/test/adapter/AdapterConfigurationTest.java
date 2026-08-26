@@ -19,6 +19,7 @@ import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoCon
 import io.vanillabp.integration.test.TestPersistenceConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.sample.Aggregate;
+import io.vanillabp.integration.test.sample.SampleWorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.process.ProcessService;
@@ -45,7 +46,8 @@ public class AdapterConfigurationTest {
     this.contextRunner
         .withPropertyValues("spring.config.location=classpath:application.yaml")
         .withInitializer(new ConfigDataApplicationContextInitializer())
-        .withUserConfiguration(WorkflowModuleConfiguration.class, TestPersistenceConfiguration.class)
+        .withUserConfiguration(
+            WorkflowModuleConfiguration.class, TestPersistenceConfiguration.class, SampleWorkflowService.class)
         .withConfiguration(
             AutoConfigurations.of(
                 DummyAdapterConfiguration.class, DummyAdapterProcessServiceConfiguration.class,

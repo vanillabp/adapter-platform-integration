@@ -4,6 +4,34 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Spring Boot: a workflow service is found because it is a bean (2026-08-26)
+
+VanillaBP no longer scans the classpath for classes annotated by `@WorkflowService`. It walks the
+bean definitions of the application instead and keeps the ones whose class carries the annotation.
+An application starts noticeably faster for it: in the demo this was measured on, the scan read
+42 816 class resources to find one workflow service and cost 15.9 seconds of a 24.4 second start
+under `mvn spring-boot:run`, 4.3 of 9.0 seconds from the packaged JAR.
+
+**Who has to look.** An application whose workflow service is no Spring bean. It used to get a
+`ProcessService` registered and now does not, and since the class could never have served a task
+anyway (the handler object is resolved through the bean factory), what such an application meets
+is the wiring validation ending the boot:
+
+```
+Task wiring of BPMN process 'loan_approval' of workflow module 'loan-approval' is incomplete!
+BPMN tasks having no matching @WorkflowTask method:
+  - task 'Activity_RetrieveCreditRating' (task definition 'retrieveCreditRating'): ...
+```
+
+The fix is the one the message asks for: make the class a bean, with `@Service` or with a `@Bean`
+method. Everything else stays as it was, `@Service` on a workflow service being what applications
+write anyway.
+
+Two details worth knowing. A `@Bean` method has to declare the workflow service class as its
+return type, because the discovery reads the type of the definition and never the instance behind
+it. And a workflow service which only ONE profile registers is found only while that profile is
+active, which is the point: the class list is now the one of this run.
+
 ## `@BpmnProcess(version = ...)` has an effect now (2026-08-26)
 
 The `version` attribute of `@BpmnProcess` exists since VanillaBP 1 and nothing ever read it, in

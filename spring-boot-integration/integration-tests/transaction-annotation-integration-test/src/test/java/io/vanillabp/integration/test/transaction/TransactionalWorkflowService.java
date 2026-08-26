@@ -1,5 +1,6 @@
 package io.vanillabp.integration.test.transaction;
 
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.vanillabp.spi.service.BpmnProcess;
@@ -12,6 +13,7 @@ import io.vanillabp.spi.service.WorkflowTask;
  * transaction VanillaBP runs the handler in, so a {@code TaskException} would discard
  * every change made to the workflow aggregate. The application must not boot with it.
  */
+@Service
 @WorkflowService(
     workflowAggregateClass = TransactionalAggregate.class,
     bpmnProcess = @BpmnProcess(bpmnProcessId = "TransactionalProcess"))

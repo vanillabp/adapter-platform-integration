@@ -13,6 +13,7 @@ import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoCon
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.test.TestPersistenceConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
+import io.vanillabp.integration.test.sample.SampleWorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 
@@ -38,7 +39,8 @@ public class OutboxStartupValidationTest {
             "spring.config.location=classpath:application.yaml",
             "dummy-adapter.two-phase-commit=true")
         .withInitializer(new ConfigDataApplicationContextInitializer())
-        .withUserConfiguration(WorkflowModuleConfiguration.class, TestPersistenceConfiguration.class)
+        .withUserConfiguration(
+            WorkflowModuleConfiguration.class, TestPersistenceConfiguration.class, SampleWorkflowService.class)
         .withConfiguration(
             AutoConfigurations.of(
                 DummyAdapterConfiguration.class, DummyAdapterProcessServiceConfiguration.class,
@@ -57,10 +59,8 @@ public class OutboxStartupValidationTest {
               message.contains("requires a two-phase commit"),
               "expected the guiding message but got: "
                   + message);
-          // the message names an aggregate of this test application and ALL remedies.
-          // WHICH aggregate it is depends on the order the classpath scan finds the
-          // workflow services in: the application has several, and the first process
-          // service failing the validation throws
+          // the message names the aggregate of the workflow service this application
+          // brought and ALL remedies
           Assertions.assertTrue(
               message.contains("is available for aggregate 'io.vanillabp.integration.test."),
               "the message has to name an aggregate of the test application: "
@@ -82,7 +82,8 @@ public class OutboxStartupValidationTest {
             "spring.config.location=classpath:application.yaml",
             "dummy-adapter.two-phase-commit=false")
         .withInitializer(new ConfigDataApplicationContextInitializer())
-        .withUserConfiguration(WorkflowModuleConfiguration.class, TestPersistenceConfiguration.class)
+        .withUserConfiguration(
+            WorkflowModuleConfiguration.class, TestPersistenceConfiguration.class, SampleWorkflowService.class)
         .withConfiguration(
             AutoConfigurations.of(
                 DummyAdapterConfiguration.class, DummyAdapterProcessServiceConfiguration.class,
