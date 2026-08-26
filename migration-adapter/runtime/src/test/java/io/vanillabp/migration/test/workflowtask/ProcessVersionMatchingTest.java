@@ -36,8 +36,10 @@ import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.BpmsStartTrigger;
 import io.vanillabp.spi.service.WorkflowEnded;
+import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowStartedByBpms;
 import io.vanillabp.spi.service.WorkflowTask;
 import lombok.Getter;
@@ -50,6 +52,10 @@ import lombok.Getter;
  * (numbers straight away, version tags through the catalog the adapter registered,
  * including the BPMS query for a version deployed by ANOTHER cluster node), and two
  * methods wired to one BPMN element are ambiguous exactly when their ranges overlap.
+ * <p>
+ * {@link ClassLevelRanges} adds the third source of a range: the
+ * <code>&#64;BpmnProcess</code> a method's process was declared with, which the methods
+ * naming none of their own serve.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ProcessVersionMatchingTest {
@@ -57,6 +63,12 @@ public class ProcessVersionMatchingTest {
   private static final String MODULE = "test-module";
 
   private static final String PROCESS = "TestProcess";
+
+  /**
+   * A second BPMN process of the same workflow aggregate - what
+   * <code>secondaryBpmnProcesses</code> declares, each entry with a version of its own.
+   */
+  private static final String SECONDARY_PROCESS = "CalledProcess";
 
   private static final String ADAPTER = "test-adapter";
 
@@ -164,6 +176,13 @@ public class ProcessVersionMatchingTest {
 
   private MigrationProcessService<Aggregate> processService() {
 
+    return processService(PROCESS);
+
+  }
+
+  private MigrationProcessService<Aggregate> processService(
+      final String bpmnProcessId) {
+
     final var properties = MigrationAdapterProperties
         .builder()
         .adapters(Map.of(ADAPTER, AdapterConfigProperties.ofType("dummy")))
@@ -176,7 +195,7 @@ public class ProcessVersionMatchingTest {
     lenient().when(adapter.getAdapterId()).thenReturn(ADAPTER);
 
     return new MigrationProcessService<>(
-        MODULE, PROCESS, Aggregate.class, properties, persistence, List.of(adapter), null);
+        MODULE, bpmnProcessId, Aggregate.class, properties, persistence, List.of(adapter), null);
 
   }
 
@@ -187,6 +206,24 @@ public class ProcessVersionMatchingTest {
     final var registry = new WorkflowTaskRegistry(new TransactionRunnerStub());
     registry
         .registerWorkflowService(MODULE, PROCESS, workflowServiceClass, bean, type -> null, processService());
+    return registry;
+
+  }
+
+  /**
+   * Two workflow service classes of ONE BPMN process - the shape a class-level version
+   * range exists for.
+   */
+  private WorkflowTaskRegistry registryOf(
+      final Class<?> oneClass,
+      final Supplier<Object> oneBean,
+      final Class<?> otherClass,
+      final Supplier<Object> otherBean) {
+
+    final var registry = new WorkflowTaskRegistry(new TransactionRunnerStub());
+    final var processService = processService();
+    registry.registerWorkflowService(MODULE, PROCESS, oneClass, oneBean, type -> null, processService);
+    registry.registerWorkflowService(MODULE, PROCESS, otherClass, otherBean, type -> null, processService);
     return registry;
 
   }
@@ -876,6 +913,286 @@ public class ProcessVersionMatchingTest {
     assertTrue(VersionRange.parse(">v1.0", "test").matches("b7f2", resolver));
     assertFalse(VersionRange.parse(">v2.0", "test").matches("b7f2", resolver));
     assertTrue(VersionRange.parse("v1.0..v2.0", "test").matches("a4c1", resolver));
+
+  }
+
+  /**
+   * <code>&#64;BpmnProcess(version = ...)</code> as the fallback of the three method
+   * annotations: one workflow service class per generation of a model, with no method
+   * repeating the range.
+   */
+  @Nested
+  @DisplayName("A range declared by @BpmnProcess")
+  class ClassLevelRanges {
+
+    @WorkflowService(
+        workflowAggregateClass = Aggregate.class,
+        bpmnProcess = @BpmnProcess(bpmnProcessId = PROCESS, version = "1-2"))
+    class UpToTwoService {
+
+      @WorkflowTask(taskDefinition = "task")
+      public void served(
+          final Aggregate aggregate) {
+
+        aggregate.servedBy = "upToTwo";
+
+      }
+
+    }
+
+    @WorkflowService(
+        workflowAggregateClass = Aggregate.class,
+        bpmnProcess = @BpmnProcess(bpmnProcessId = PROCESS, version = ">2"))
+    class AfterTwoService {
+
+      @WorkflowTask(taskDefinition = "task")
+      public void served(
+          final Aggregate aggregate) {
+
+        aggregate.servedBy = "afterTwo";
+
+      }
+
+    }
+
+    @WorkflowService(
+        workflowAggregateClass = Aggregate.class,
+        bpmnProcess = @BpmnProcess(bpmnProcessId = PROCESS, version = "1-3"))
+    class OneToThreeService {
+
+      @WorkflowTask(taskDefinition = "task")
+      public void served(
+          final Aggregate aggregate) {
+      }
+
+    }
+
+    @WorkflowService(
+        workflowAggregateClass = Aggregate.class,
+        bpmnProcess = @BpmnProcess(bpmnProcessId = PROCESS, version = "2-4"))
+    class TwoToFourService {
+
+      @WorkflowTask(taskDefinition = "task")
+      public void served(
+          final Aggregate aggregate) {
+      }
+
+    }
+
+    @WorkflowService(
+        workflowAggregateClass = Aggregate.class,
+        bpmnProcess = @BpmnProcess(bpmnProcessId = PROCESS, version = "<10"))
+    class MethodWinsService {
+
+      @WorkflowTask(taskDefinition = "task", version = "12")
+      public void ownRange(
+          final Aggregate aggregate) {
+
+        aggregate.servedBy = "ownRange";
+
+      }
+
+    }
+
+    @WorkflowService(
+        workflowAggregateClass = Aggregate.class,
+        bpmnProcess = @BpmnProcess(bpmnProcessId = PROCESS))
+    class EveryVersionService {
+
+      @WorkflowTask(taskDefinition = "task")
+      public void served(
+          final Aggregate aggregate) {
+
+        aggregate.servedBy = "everyVersion";
+
+      }
+
+    }
+
+    @WorkflowService(
+        workflowAggregateClass = Aggregate.class,
+        bpmnProcess = @BpmnProcess(bpmnProcessId = PROCESS, version = "1-2"),
+        secondaryBpmnProcesses = @BpmnProcess(bpmnProcessId = SECONDARY_PROCESS, version = ">2"))
+    class TwoProcessesService {
+
+      @WorkflowTask(taskDefinition = "task")
+      public void served(
+          final Aggregate aggregate) {
+
+        aggregate.servedBy = "served";
+
+      }
+
+    }
+
+    @WorkflowService(
+        workflowAggregateClass = Aggregate.class,
+        bpmnProcess = @BpmnProcess(bpmnProcessId = PROCESS, version = "1-2"))
+    class StartedAndEndedService {
+
+      @WorkflowStartedByBpms
+      public void started(
+          final Aggregate aggregate) {
+
+        aggregate.servedBy = "started";
+
+      }
+
+      @WorkflowEnded
+      public void ended(
+          final Aggregate aggregate) {
+
+        aggregate.servedBy = "ended";
+
+      }
+
+    }
+
+    @Test
+    @DisplayName("Two classes with disjoint ranges both register, and the version picks the class")
+    public void oneClassPerGenerationOfTheModel() {
+
+      final var testee = registryOf(
+          UpToTwoService.class, UpToTwoService::new, AfterTwoService.class, AfterTwoService::new);
+      storeAggregate("4711");
+
+      testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", "2"));
+      assertEquals("upToTwo", persistence.aggregates.get("4711").servedBy);
+
+      testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", "3"));
+      assertEquals("afterTwo", persistence.aggregates.get("4711").servedBy);
+
+    }
+
+    @Test
+    @DisplayName("A method which inherits a range is restricted, so a delivery without a version finds none")
+    public void anInheritedRangeRestrictsTheMethod() {
+
+      final var testee = registryOf(
+          UpToTwoService.class, UpToTwoService::new, AfterTwoService.class, AfterTwoService::new);
+      storeAggregate("4711");
+
+      final var unreported = assertThrows(
+          IllegalStateException.class,
+          () -> testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", null)));
+
+      assertTrue(unreported.getMessage().contains("reports no process version"), unreported.getMessage());
+      // neither method carries an attribute, so the message has to say where the
+      // range it complains about comes from
+      assertTrue(
+          unreported.getMessage().contains("inherits its range from the @BpmnProcess"),
+          unreported.getMessage());
+      assertNull(persistence.aggregates.get("4711").servedBy, "no method ran");
+
+    }
+
+    @Test
+    @DisplayName("A method naming its own range keeps it word by word - the class does not narrow it")
+    public void theMethodsOwnRangeWins() {
+
+      final var testee = registry(MethodWinsService.class, MethodWinsService::new);
+      storeAggregate("4711");
+
+      // '12' lies outside the class' '<10' and is served nevertheless: an intersection
+      // would make the attribute in front of the method mean something else
+      testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", "12"));
+      assertEquals("ownRange", persistence.aggregates.get("4711").servedBy);
+
+      final var covered = assertThrows(
+          IllegalStateException.class,
+          () -> testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", "5")));
+      assertTrue(covered.getMessage().contains("process version '5'"), covered.getMessage());
+
+    }
+
+    @Test
+    @DisplayName("Overlapping class ranges end the start, and the message names both origins")
+    public void overlappingClassRangesAreRejected() {
+
+      final var exception = assertThrows(
+          IllegalStateException.class,
+          () -> registryOf(
+              OneToThreeService.class,
+              OneToThreeService::new,
+              TwoToFourService.class,
+              TwoToFourService::new));
+
+      assertTrue(exception.getMessage().contains("OneToThreeService"), exception.getMessage());
+      assertTrue(exception.getMessage().contains("TwoToFourService"), exception.getMessage());
+      assertTrue(exception.getMessage().contains("'1-3', inherited from"), exception.getMessage());
+      assertTrue(exception.getMessage().contains("'2-4', inherited from"), exception.getMessage());
+      assertTrue(
+          exception.getMessage().contains("@BpmnProcess(version = ...)"),
+          "the message offers the class attribute as the way to distinguish them");
+
+    }
+
+    @Test
+    @DisplayName("A class naming no version leaves its methods serving every version")
+    public void withoutAClassRangeNothingChanges() {
+
+      final var testee = registry(EveryVersionService.class, EveryVersionService::new);
+      storeAggregate("4711");
+
+      testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", null));
+      assertEquals("everyVersion", persistence.aggregates.get("4711").servedBy);
+
+      testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", "7"));
+      assertEquals("everyVersion", persistence.aggregates.get("4711").servedBy);
+
+    }
+
+    @Test
+    @DisplayName("Each declared process contributes its own range, secondary processes included")
+    public void aSecondaryProcessCarriesItsOwnRange() {
+
+      final var testee = new WorkflowTaskRegistry(new TransactionRunnerStub());
+      testee
+          .registerWorkflowService(
+              MODULE, PROCESS, TwoProcessesService.class, TwoProcessesService::new, type -> null, processService());
+      testee
+          .registerWorkflowService(
+              MODULE,
+              SECONDARY_PROCESS,
+              TwoProcessesService.class,
+              TwoProcessesService::new,
+              type -> null,
+              processService(SECONDARY_PROCESS));
+      storeAggregate("4711");
+
+      testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", "2"));
+      assertEquals("served", persistence.aggregates.get("4711").servedBy);
+
+      testee.invokeWorkflowTask(MODULE, SECONDARY_PROCESS, taskContext("4711", "3"));
+      assertEquals("served", persistence.aggregates.get("4711").servedBy);
+
+      // the same method, restricted differently per process: version 3 of the primary
+      // process lies outside the range that process was declared with
+      final var outside = assertThrows(
+          IllegalStateException.class,
+          () -> testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", "3")));
+      assertTrue(outside.getMessage().contains("process version '3'"), outside.getMessage());
+
+    }
+
+    @Test
+    @DisplayName("@WorkflowStartedByBpms and @WorkflowEnded inherit the same range")
+    public void theOtherTwoAnnotationsInheritToo() {
+
+      final var testee = registry(StartedAndEndedService.class, StartedAndEndedService::new);
+
+      testee.startWorkflowByBpms(MODULE, PROCESS, startContext("4711", "2"));
+      assertEquals("started", persistence.aggregates.get("4711").servedBy);
+
+      testee.workflowEnded(MODULE, PROCESS, endedContext("2"));
+      assertEquals("ended", persistence.aggregates.get("4711").servedBy);
+
+      // version 3 lies outside the class' range: the start builds the aggregate
+      // without initialization and the end reaches nobody
+      testee.startWorkflowByBpms(MODULE, PROCESS, startContext("4712", "3"));
+      assertNull(persistence.aggregates.get("4712").servedBy, "no method initialized the aggregate");
+
+    }
 
   }
 

@@ -53,6 +53,14 @@ public class WorkflowTaskHandler {
   private final List<VersionRange> versions;
 
   /**
+   * Where the version range came from if the method named none itself: the
+   * <code>&#64;BpmnProcess</code> declaration the handlers of this class were
+   * registered for. <code>null</code> where the method names its own range, whose
+   * messages need no origin - the attribute is in front of whoever reads them.
+   */
+  private final String versionsInheritedFrom;
+
+  /**
    * Whether the method declares a <code>&#64;TaskId</code> parameter: the task is
    * completed asynchronously later and MUST NOT be completed when the method
    * returns.
@@ -90,7 +98,7 @@ public class WorkflowTaskHandler {
       final List<ParameterBinder> parameterBinders,
       final String taskDefinition,
       final String activityId,
-      final List<VersionRange> versions,
+      final InheritedVersions.EffectiveVersions versions,
       final boolean asynchronousTask,
       final java.util.Set<io.vanillabp.spi.service.TaskEvent.Event> subscribedEvents,
       final List<String> taskParameters) {
@@ -101,7 +109,8 @@ public class WorkflowTaskHandler {
     this.parameterBinders = parameterBinders;
     this.taskDefinition = taskDefinition;
     this.activityId = activityId;
-    this.versions = versions;
+    this.versions = versions.versions();
+    this.versionsInheritedFrom = versions.inheritedFrom();
     this.asynchronousTask = asynchronousTask;
     this.subscribedEvents = subscribedEvents;
     this.taskParameters = taskParameters;
@@ -196,6 +205,46 @@ public class WorkflowTaskHandler {
         .map(VersionRange::toString)
         .map("'%s'"::formatted)
         .collect(java.util.stream.Collectors.joining(", "));
+
+  }
+
+  /**
+   * The version specification(s) plus, where the method named none itself, the
+   * declaration they came from. Every message about an ambiguity or a method serving
+   * nothing uses this: a complaint about a range the reader cannot see in front of the
+   * method reads like a defect of VanillaBP.
+   *
+   * @return The specifications and their origin
+   */
+  String describeVersionsWithOrigin() {
+
+    return versionsInheritedFrom == null
+        ? describeVersions()
+        : "%s, inherited from %s".formatted(describeVersions(), versionsInheritedFrom);
+
+  }
+
+  /**
+   * @return Whether this handler serves the range of its class rather than one of its
+   *         own
+   */
+  boolean inheritsVersions() {
+
+    return versionsInheritedFrom != null;
+
+  }
+
+  /**
+   * Where the range came from, ready to be appended to a description of the method -
+   * empty where the method names its range itself.
+   *
+   * @return The clause to append, or an empty string
+   */
+  String describeVersionOrigin() {
+
+    return versionsInheritedFrom == null
+        ? ""
+        : ", which inherits the range of %s".formatted(versionsInheritedFrom);
 
   }
 

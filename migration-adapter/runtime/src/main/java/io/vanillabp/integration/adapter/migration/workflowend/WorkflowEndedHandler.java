@@ -5,6 +5,7 @@ import java.lang.reflect.Method;
 import java.util.List;
 import java.util.function.Supplier;
 
+import io.vanillabp.integration.adapter.migration.workflowtask.InheritedVersions;
 import io.vanillabp.integration.adapter.migration.workflowtask.VersionRange;
 import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedContext;
 
@@ -45,20 +46,29 @@ public class WorkflowEndedHandler {
 
   private final List<VersionRange> versions;
 
+  /**
+   * Where the version range came from if the method named none itself: the
+   * <code>&#64;BpmnProcess</code> declaration the handlers of this class were
+   * registered for. <code>null</code> where the method names its own range, whose
+   * messages need no origin - the attribute is in front of whoever reads them.
+   */
+  private final String versionsInheritedFrom;
+
   WorkflowEndedHandler(
       final Class<?> workflowServiceClass,
       final Method method,
       final Supplier<Object> workflowServiceBean,
       final List<ParameterBinder> binders,
       final String endEventId,
-      final List<VersionRange> versions) {
+      final InheritedVersions.EffectiveVersions versions) {
 
     this.workflowServiceClass = workflowServiceClass;
     this.method = method;
     this.workflowServiceBean = workflowServiceBean;
     this.binders = binders;
     this.endEventId = endEventId;
-    this.versions = versions;
+    this.versions = versions.versions();
+    this.versionsInheritedFrom = versions.inheritedFrom();
 
   }
 
@@ -109,6 +119,46 @@ public class WorkflowEndedHandler {
         .map(VersionRange::toString)
         .map("'%s'"::formatted)
         .collect(java.util.stream.Collectors.joining(", "));
+
+  }
+
+  /**
+   * The version specification(s) plus, where the method named none itself, the
+   * declaration they came from. Every message about an ambiguity or a method serving
+   * nothing uses this: a complaint about a range the reader cannot see in front of the
+   * method reads like a defect of VanillaBP.
+   *
+   * @return The specifications and their origin
+   */
+  String describeVersionsWithOrigin() {
+
+    return versionsInheritedFrom == null
+        ? describeVersions()
+        : "%s, inherited from %s".formatted(describeVersions(), versionsInheritedFrom);
+
+  }
+
+  /**
+   * @return Whether this handler serves the range of its class rather than one of its
+   *         own
+   */
+  boolean inheritsVersions() {
+
+    return versionsInheritedFrom != null;
+
+  }
+
+  /**
+   * Where the range came from, ready to be appended to a description of the method -
+   * empty where the method names its range itself.
+   *
+   * @return The clause to append, or an empty string
+   */
+  String describeVersionOrigin() {
+
+    return versionsInheritedFrom == null
+        ? ""
+        : ", which inherits the range of %s".formatted(versionsInheritedFrom);
 
   }
 

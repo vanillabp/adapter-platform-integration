@@ -9,6 +9,7 @@ import java.util.function.Supplier;
 
 import io.vanillabp.integration.adapter.migration.values.ValueConversion;
 import io.vanillabp.integration.adapter.migration.workflowstart.BpmsInitiatedStartHandler.ParameterBinder;
+import io.vanillabp.integration.adapter.migration.workflowtask.InheritedVersions;
 import io.vanillabp.integration.adapter.migration.workflowtask.VersionRange;
 import io.vanillabp.spi.service.BpmsStartTrigger;
 import io.vanillabp.spi.service.TaskParam;
@@ -35,12 +36,16 @@ public final class BpmsInitiatedStartScanner {
    * @param workflowServiceClass The <code>&#64;WorkflowService</code> class
    * @param workflowAggregateClass The workflow-aggregate class of that service
    * @param workflowServiceBean Supplies the bean instance of the class
+   * @param inherited What a method naming no <code>version</code> serves: the
+   *          range of the <code>&#64;BpmnProcess</code> these handlers are registered
+   *          for
    * @return The handlers, possibly empty
    */
   public static List<BpmsInitiatedStartHandler> scan(
       final Class<?> workflowServiceClass,
       final Class<?> workflowAggregateClass,
-      final Supplier<Object> workflowServiceBean) {
+      final Supplier<Object> workflowServiceBean,
+      final InheritedVersions inherited) {
 
     final var handlers = new LinkedList<BpmsInitiatedStartHandler>();
     for (final var method : workflowServiceClass.getMethods()) {
@@ -55,7 +60,8 @@ public final class BpmsInitiatedStartScanner {
                   method,
                   workflowAggregateClass,
                   workflowServiceBean,
-                  annotation));
+                  annotation,
+                  inherited));
     }
     return handlers;
 
@@ -66,7 +72,8 @@ public final class BpmsInitiatedStartScanner {
       final Method method,
       final Class<?> workflowAggregateClass,
       final Supplier<Object> workflowServiceBean,
-      final WorkflowStartedByBpms annotation) {
+      final WorkflowStartedByBpms annotation,
+      final InheritedVersions inherited) {
 
     final var location = "%s#%s".formatted(workflowServiceClass.getName(), method.getName());
     // a public method of a package-private bean class is not accessible through
@@ -96,10 +103,11 @@ public final class BpmsInitiatedStartScanner {
               .formatted(location, workflowAggregateClass.getName()));
     }
 
-    final var versions = Arrays
-        .stream(annotation.version())
-        .map(version -> VersionRange.parse(version, location))
-        .toList();
+    final var versions = inherited
+        .effectiveFor(Arrays
+            .stream(annotation.version())
+            .map(version -> VersionRange.parse(version, location))
+            .toList());
     final var startEventId = annotation.id().equals(WorkflowStartedByBpms.ANY_START_EVENT)
         ? null
         : annotation.id();
