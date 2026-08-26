@@ -938,6 +938,11 @@ public class MigrationProcessService<A> {
    * delivery-log validations, so an application which needs neither is not made to
    * materialize one for a question about it. A store which cannot answer (the SPI default,
    * an empty set) is not asked twice and nothing is invented.
+   * <p>
+   * Three questions per BPMN process, whatever the stores hold: each of them is a number or
+   * a set of adapter ids the database reduced to, never the entries themselves. Decision 19
+   * in the repository's DECISIONS.md says why a start may not be allowed to grow with what
+   * an application has been through.
    */
   public void validatePersistedAdapterIdsAtStartup() {
 

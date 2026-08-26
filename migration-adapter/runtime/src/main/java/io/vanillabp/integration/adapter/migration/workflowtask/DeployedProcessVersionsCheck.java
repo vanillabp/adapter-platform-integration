@@ -30,6 +30,14 @@ import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
  * <p>
  * Why the core drives this check while an adapter only answers two questions is decision 15 in the
  * repository's DECISIONS.md.
+ *
+ * <h2>What one run of it costs</h2>
+ *
+ * One question for the versions the BPMS holds, and then two per version OLDER than the one this
+ * boot deployed: the model of that version, and how many workflows still run on it. So the cost
+ * follows the number of versions, which grows when somebody deploys a changed model and which
+ * <code>outfaded-versions</code> is the operator's way to bound. It does not follow the number of
+ * workflows, and it must not start to - decision 19.
  */
 public class DeployedProcessVersionsCheck {
 

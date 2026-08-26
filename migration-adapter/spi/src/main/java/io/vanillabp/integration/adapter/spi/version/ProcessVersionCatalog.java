@@ -91,6 +91,12 @@ public interface ProcessVersionCatalog {
    * A BPMS which cannot be asked returns <code>null</code>, and the core says so once
    * with a guiding message rather than turning an unanswerable question into a boot
    * failure.
+   * <p>
+   * The BPMS does the counting: a <code>count()</code> on an engine, the total of a search
+   * on a cluster. Fetching the workflows and counting what came back answers the same
+   * question and makes the boot slower every year the application runs, which is what
+   * decision 19 in the repository's DECISIONS.md forbids. The core asks once per version
+   * and per boot, so an adapter needs no cache of its own.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The PLAIN BPMN process ID

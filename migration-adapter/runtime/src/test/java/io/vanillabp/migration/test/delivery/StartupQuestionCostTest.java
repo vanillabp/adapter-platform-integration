@@ -1,0 +1,232 @@
+package io.vanillabp.migration.test.delivery;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Proxy;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+
+import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
+import io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore;
+import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
+import io.vanillabp.integration.spi.TaskDelivery;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+
+/**
+ * What a start asks the delivery log, and what that costs - decision 19 in the
+ * repository's DECISIONS.md.
+ * <p>
+ * The two questions the startup checks put to the store are answered from the whole
+ * table, so both of them could grow with everything the application ever recorded. What
+ * keeps them from doing so is not visible in the answer: the question about EXISTENCE
+ * looks identical whether it transfers one row or a hundred thousand, because the code
+ * reads the first row either way and the rest happens inside the driver. So this test
+ * watches the statements instead of the answers, and it does so against a table which
+ * holds more than one open record - the case where a missing row limit costs something.
+ */
+@ExtendWith(SuppressOutputExtension.class)
+public class StartupQuestionCostTest {
+
+  private static final String MODULE = "test-module";
+
+  private static final String PROCESS = "TestProcess";
+
+  private static final int OPEN_RECORDS = 25;
+
+  /**
+   * Every statement the store prepared, with the row limit it was given.
+   */
+  private final List<PreparedStatementUse> statements = new ArrayList<>();
+
+  private static class PreparedStatementUse {
+
+    private final String sql;
+
+    /**
+     * What {@link PreparedStatement#setMaxRows(int)} was given, zero for "no limit"
+     * which is the JDBC default.
+     */
+    private int maxRows;
+
+    private PreparedStatementUse(
+        final String sql) {
+
+      this.sql = sql;
+
+    }
+
+    private String sql() {
+
+      return sql;
+
+    }
+
+    private int maxRows() {
+
+      return maxRows;
+
+    }
+
+    @Override
+    public String toString() {
+
+      return "%s (max rows: %d)".formatted(sql, maxRows);
+
+    }
+
+  }
+
+  /**
+   * A connection which reports what the store does with it. Everything is passed on to
+   * H2, so the answers are the answers of a real database; only the row limit of each
+   * prepared statement is noted on the way through.
+   */
+  private JdbcConnectionAccess watched(
+      final String database) {
+
+    return () -> {
+      final var connection = DriverManager
+          .getConnection("jdbc:h2:mem:%s;DB_CLOSE_DELAY=-1".formatted(database), "sa", "");
+      return (Connection) Proxy
+          .newProxyInstance(
+              getClass().getClassLoader(),
+              new Class<?>[]{
+                  Connection.class
+      },
+              connectionHandler(connection));
+    };
+
+  }
+
+  private InvocationHandler connectionHandler(
+      final Connection connection) {
+
+    return (
+        proxy,
+        method,
+        args) -> {
+      final var answer = method.invoke(connection, args);
+      if (!"prepareStatement".equals(method.getName())) {
+        return answer;
+      }
+      final var use = new PreparedStatementUse((String) args[0]);
+      statements.add(use);
+      return Proxy
+          .newProxyInstance(
+              getClass().getClassLoader(),
+              new Class<?>[]{
+                  PreparedStatement.class
+      },
+              (
+                  statementProxy,
+                  statementMethod,
+                  statementArgs) -> {
+                if ("setMaxRows".equals(statementMethod.getName())) {
+                  use.maxRows = (Integer) statementArgs[0];
+                }
+                return statementMethod.invoke(answer, statementArgs);
+              });
+    };
+
+  }
+
+  private JdbcTaskDeliveryStore storeHolding(
+      final String database,
+      final int openRecords) {
+
+    final var store = new JdbcTaskDeliveryStore(
+        watched(database), JdbcTaskDeliveryStore.DEFAULT_TABLE_NAME);
+    store.createSchemaIfNotExists();
+    for (var record = 0; record < openRecords; record++) {
+      store
+          .record(
+              new TaskDelivery(
+                  "delivery-%d".formatted(record), "c7", MODULE, PROCESS, "aggregate-%d".formatted(
+                      record), "aTask", WorkflowTaskOutcome.Kind.COMPLETION_PENDING.name(), null, null, Instant.now()));
+    }
+    statements.clear();
+    return store;
+
+  }
+
+  private PreparedStatementUse theOnly(
+      final String containedInSql) {
+
+    final var matching = statements
+        .stream()
+        .filter(statement -> statement.sql().contains(containedInSql))
+        .toList();
+    assertEquals(
+        1,
+        matching.size(),
+        () -> "one statement containing '%s', but was %s".formatted(containedInSql, statements));
+    return matching.getFirst();
+
+  }
+
+  @Test
+  @DisplayName("Asking whether an open record exists fetches ONE row, however many the table holds")
+  public void theExistenceQuestionFetchesOneRow() {
+
+    final var store = storeHolding("startup-cost-existence", OPEN_RECORDS);
+
+    assertEquals(Boolean.TRUE, store.hasOpenRecords(MODULE, PROCESS));
+
+    // without the limit a driver is free to read the whole result set before the first
+    // row is looked at, and the PostgreSQL one does exactly that
+    assertEquals(
+        1,
+        theOnly("SELECT DELIVERY_KEY").maxRows(),
+        "the question is whether ANY record is open, so one row is all it may transfer");
+
+  }
+
+  @Test
+  @DisplayName("Asking which adapter ids are open lets the database do the reducing")
+  public void theAdapterIdQuestionIsAnswered() {
+
+    final var store = storeHolding("startup-cost-adapter-ids", OPEN_RECORDS);
+
+    assertEquals(java.util.Set.of("c7"), store.adapterIdsOfOpenTasks(MODULE, PROCESS));
+
+    // DISTINCT is what bounds this one: the answer has as many rows as the application
+    // has adapter ids, which is a handful, and never as many as it has records
+    assertTrue(
+        theOnly("SELECT DISTINCT ADAPTER_ID").sql().contains("DISTINCT"),
+        "the database reduces the records to the ids, not the application");
+
+  }
+
+  @Test
+  @DisplayName("Both questions cost the same number of statements whatever the table holds")
+  public void theNumberOfStatementsDoesNotDependOnTheData() {
+
+    final var almostEmpty = storeHolding("startup-cost-small", 1);
+    almostEmpty.hasOpenRecords(MODULE, PROCESS);
+    almostEmpty.adapterIdsOfOpenTasks(MODULE, PROCESS);
+    final var onASmallTable = statements.size();
+
+    statements.clear();
+    final var wellUsed = storeHolding("startup-cost-large", 500);
+    wellUsed.hasOpenRecords(MODULE, PROCESS);
+    wellUsed.adapterIdsOfOpenTasks(MODULE, PROCESS);
+
+    assertEquals(
+        onASmallTable,
+        statements.size(),
+        () -> "a start asks the same questions however long the application has been running, but was "
+            + statements);
+
+  }
+
+}

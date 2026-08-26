@@ -1085,6 +1085,26 @@ new model dropped. What used to be caught by those checks is caught by the dead-
 warning instead, which reports rather than fails: a version which does not exist YET is
 normal during a rolling deployment.
 
+### What the check costs, and what it may cost in two years
+
+One question for the versions the BPMS holds, then two per version older than the one this boot
+deployed. Every one of them is a query, so the check is where a start would most easily start
+growing, and decision 19 of `DECISIONS.md` is the rule it has to keep: a start asks for numbers,
+never for the rows themselves, and how many questions it asks belongs to the shape of the
+application rather than to its history.
+
+Two places make that true, both of them easy to undo by accident. `InstanceCounts` inside the
+check asks the BPMS for the workflows of a version once and answers all three reports which want
+that number from the memo; before it existed the same query went out three times per version. And
+on the adapter side, the handle of an older version comes out of the list of versions which was
+just read rather than out of a query of its own, which is what both adapters do in their
+`ProcessVersionCatalog` implementations.
+
+What is allowed to grow is the number of versions, one per deployment which changed a model, and
+`outfaded-versions` is the operator's way to cut it off. The guards count questions rather than
+measure time: `OldProcessVersionsTest#theQuestionsDoNotDependOnHowManyWorkflowsRun` here,
+`Camunda7StartupQuestionCostTest` and `Camunda8StartupQuestionCostTest` in the adapters.
+
 ## Two writers on one workflow aggregate
 
 A workflow aggregate has one workflow, which reads like one writer - until the process holds

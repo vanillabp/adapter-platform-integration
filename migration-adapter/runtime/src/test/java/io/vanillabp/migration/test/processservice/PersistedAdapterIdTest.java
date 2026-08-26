@@ -76,6 +76,18 @@ public class PersistedAdapterIdTest {
   private static MigratableProcessService<Object> adapter(
       final Long openTasks) {
 
+    return adapter(openTasks, new java.util.HashMap<>());
+
+  }
+
+  /**
+   * The same adapter, noting every question the start puts to it - see
+   * {@link #theQuestionsDoNotDependOnWhatThePastLeftBehind()}.
+   */
+  private static MigratableProcessService<Object> adapter(
+      final Long openTasks,
+      final Map<String, Integer> questions) {
+
     return new MigratableProcessService<>() {
 
       @Override
@@ -83,6 +95,7 @@ public class PersistedAdapterIdTest {
           final String workflowModuleId,
           final String bpmnProcessId) {
 
+        questions.merge("openTaskCount", 1, Integer::sum);
         return openTasks;
 
       }
@@ -679,6 +692,111 @@ public class PersistedAdapterIdTest {
     final var output = String.join("\n", loggedBy(service::validatePersistedAdapterIdsAtStartup));
 
     assertFalse(output.contains("RENAMED"), output);
+
+  }
+
+  /**
+   * What a start asks the two stores and the BPMS, by name.
+   * <p>
+   * The three questions of this check are answered from tables and from a BPMS which grow
+   * with everything the application ever did, so all three could get slower the longer it
+   * runs. The number of them must not - see decision 19 in the repository's DECISIONS.md.
+   *
+   * @param openTasks What the BPMS reports as open
+   * @param pendingIds The adapter ids the outbox is waiting for
+   * @param openIds The adapter ids the delivery log holds open records for
+   * @return The questions asked, by name
+   */
+  private static Map<String, Integer> questionsOfAStart(
+      final Long openTasks,
+      final Set<String> pendingIds,
+      final Set<String> openIds,
+      final Boolean hasOpenRecords) {
+
+    final var questions = new java.util.TreeMap<String, Integer>();
+    final var outbox = new PhaseTwoOutbox() {
+
+      @Override
+      public boolean schedule(
+          final PhaseTwoCall call) {
+
+        return true;
+
+      }
+
+      @Override
+      public Set<String> adapterIdsOfPendingCalls(
+          final String workflowModuleId,
+          final String bpmnProcessId) {
+
+        questions.merge("adapterIdsOfPendingCalls", 1, Integer::sum);
+        return pendingIds;
+
+      }
+
+    };
+    final var deliveryLog = new TaskDeliveryLog() {
+
+      @Override
+      public Boolean hasOpenRecords(
+          final String workflowModuleId,
+          final String bpmnProcessId) {
+
+        questions.merge("hasOpenRecords", 1, Integer::sum);
+        return hasOpenRecords;
+
+      }
+
+      @Override
+      public Set<String> adapterIdsOfOpenTasks(
+          final String workflowModuleId,
+          final String bpmnProcessId) {
+
+        questions.merge("adapterIdsOfOpenTasks", 1, Integer::sum);
+        return openIds;
+
+      }
+
+      @Override
+      public Optional<TaskDelivery> recordedDelivery(
+          final String deliveryKey) {
+
+        return Optional.empty();
+
+      }
+
+      @Override
+      public boolean record(
+          final TaskDelivery delivery) {
+
+        return true;
+
+      }
+
+    };
+    serviceWith(properties(List.of()), outbox, deliveryLog, adapter(openTasks, questions))
+        .validatePersistedAdapterIdsAtStartup();
+    return questions;
+
+  }
+
+  @Test
+  @DisplayName("A start asks the same questions whether the past left nothing or a great deal behind")
+  public void theQuestionsDoNotDependOnWhatThePastLeftBehind() {
+
+    // both of them are an application which was upgraded from version 1, so neither log
+    // remembers an open task yet - what differs is how much the past left behind
+    final var onTheDayAfterTheUpgrade = questionsOfAStart(0L, Set.of(), Set.of(), Boolean.FALSE);
+    final var twoYearsOfIt = questionsOfAStart(
+        84_000L,
+        Set.of("new-bpms"),
+        Set.of("new-bpms"),
+        Boolean.FALSE);
+
+    assertEquals(
+        onTheDayAfterTheUpgrade,
+        twoYearsOfIt,
+        "what a start asks belongs to the application's shape, never to its history");
 
   }
 
