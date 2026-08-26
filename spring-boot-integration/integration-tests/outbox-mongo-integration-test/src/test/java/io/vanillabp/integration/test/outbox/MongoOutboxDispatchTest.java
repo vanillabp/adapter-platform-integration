@@ -135,26 +135,47 @@ public class MongoOutboxDispatchTest {
   }
 
   @Test
-  @DisplayName("A duplicate schedule for the same aggregate is a no-op (unique idempotency key)")
-  public void duplicateScheduleIsNoOp() throws Exception {
+  @DisplayName("A duplicate schedule while the first one is still pending is a no-op")
+  public void duplicateScheduleAgainstAPendingEntryIsNoOp() throws Exception {
+
+    // both starts ride ONE transaction, so the second one meets an entry which is
+    // still waiting for its dispatch: the unique index over the dedup key makes it a
+    // no-op
+    final var attachedAggregate = transactionTemplate.execute(status -> {
+      final var aggregate = new Aggregate();
+      aggregate.setContent("dedup-pending");
+      final var started = processService.startWorkflow(aggregate);
+      return processService.startWorkflow(started);
+    });
+    assertNotNull(attachedAggregate);
+    listener.awaitInvocations(1, 10000);
+
+    Thread.sleep(1500);
+    assertEquals(1, listener.getInvocations().size(), "only one of the two starts was planned");
+    assertEquals(1, countOutboxEntries());
+
+  }
+
+  @Test
+  @DisplayName("A repetition after the dispatch is a new operation - the key does not block it")
+  public void aRepetitionAfterTheDispatchIsPlanned() throws Exception {
 
     final var attachedAggregate = transactionTemplate.execute(status -> {
       final var aggregate = new Aggregate();
-      aggregate.setContent("dedup-test");
+      aggregate.setContent("dedup-dispatched");
       return processService.startWorkflow(aggregate);
     });
     assertNotNull(attachedAggregate);
     listener.awaitInvocations(1, 10000);
 
-    // starting the workflow again for the same aggregate schedules the same
-    // idempotency key: the unique index makes it a no-op - no second entry, no
-    // second dispatch (the DONE entry keeps the deduplication window open)
+    // the dispatched entry took its own id as dedup key, so the same operation can be
+    // planned again (see decision 22 in the repository's DECISIONS.md)
     transactionTemplate.execute(status -> processService.startWorkflow(attachedAggregate));
 
-    // wait longer than the poll interval: no second dispatch may happen
+    listener.awaitInvocations(2, 10000);
     Thread.sleep(1500);
-    assertEquals(1, listener.getInvocations().size());
-    assertEquals(1, countOutboxEntries());
+    assertEquals(2, listener.getInvocations().size(), "the repetition reached the BPMS");
+    assertEquals(2, countOutboxEntries());
 
   }
 
@@ -215,7 +236,8 @@ public class MongoOutboxDispatchTest {
         .append("operation", "START_WORKFLOW")
         .append("aggregateId", "left-over-aggregate")
         .append("adapterId", "test")
-        .append("idempotencyKey", "test-module|SampleWorkflowService|left-over-aggregate")
+        .append("idempotencyKey", "START_WORKFLOW|test-module|SampleWorkflowService|left-over-aggregate")
+        .append("dedupKey", "START_WORKFLOW|test-module|SampleWorkflowService|left-over-aggregate")
         .append("status", "OPEN")
         .append("createdAt", Date.from(now))
         .append("attempts", 0)

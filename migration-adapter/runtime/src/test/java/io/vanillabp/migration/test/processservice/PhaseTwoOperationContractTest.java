@@ -61,13 +61,13 @@ public class PhaseTwoOperationContractTest {
   public void startWorkflowKeyIsPinned() {
 
     assertEquals(
-        "test-module|TestProcess|42",
+        "START_WORKFLOW|test-module|TestProcess|42",
         call(PhaseTwoOperation.START_WORKFLOW, Map.of()).idempotencyKey().orElseThrow());
 
-    // by message: same key - a workflow is started at most once per aggregate,
-    // regardless of the triggering message
+    // by message: same key, the plain start's name included - a workflow is started at
+    // most once per aggregate, regardless of the triggering message
     assertEquals(
-        "test-module|TestProcess|42",
+        "START_WORKFLOW|test-module|TestProcess|42",
         call(
             PhaseTwoOperation.START_WORKFLOW_BY_MESSAGE,
             Map.of(PhaseTwoCall.ARG_MESSAGE_NAME, "OrderReceived")).idempotencyKey().orElseThrow());
@@ -78,20 +78,19 @@ public class PhaseTwoOperationContractTest {
   @DisplayName("Task operations deduplicate per task, not per error code")
   public void taskKeysArePinned() {
 
-    final var expected = "test-module|TestProcess|42|task-1";
-
     assertEquals(
-        expected,
+        "COMPLETE_TASK|test-module|TestProcess|42|task-1",
         call(
             PhaseTwoOperation.COMPLETE_TASK,
             Map.of(PhaseTwoCall.ARG_TASK_ID, "task-1")).idempotencyKey().orElseThrow());
     assertEquals(
-        expected,
+        "COMPLETE_USER_TASK|test-module|TestProcess|42|task-1",
         call(
             PhaseTwoOperation.COMPLETE_USER_TASK,
             Map.of(PhaseTwoCall.ARG_TASK_ID, "task-1")).idempotencyKey().orElseThrow());
+    // the BPMN error code is NOT part of the key: one task is cancelled once
     assertEquals(
-        expected,
+        "CANCEL_TASK|test-module|TestProcess|42|task-1",
         call(
             PhaseTwoOperation.CANCEL_TASK,
             Map
@@ -100,7 +99,7 @@ public class PhaseTwoOperationContractTest {
                     PhaseTwoCall.ARG_BPMN_ERROR_CODE, "Rejected"))
             .idempotencyKey().orElseThrow());
     assertEquals(
-        expected,
+        "CANCEL_USER_TASK|test-module|TestProcess|42|task-1",
         call(
             PhaseTwoOperation.CANCEL_USER_TASK,
             Map
@@ -112,11 +111,31 @@ public class PhaseTwoOperationContractTest {
   }
 
   @Test
+  @DisplayName("Completing and cancelling one task no longer share a key")
+  public void everyOperationOnOneTaskHasItsOwnKey() {
+
+    final var keys = java.util.stream.Stream
+        .of(
+            PhaseTwoOperation.COMPLETE_TASK,
+            PhaseTwoOperation.CANCEL_TASK,
+            PhaseTwoOperation.COMPLETE_USER_TASK,
+            PhaseTwoOperation.CANCEL_USER_TASK)
+        .map(operation -> call(operation, Map.of(PhaseTwoCall.ARG_TASK_ID, "task-1"))
+            .idempotencyKey()
+            .orElseThrow())
+        .collect(java.util.stream.Collectors.toSet());
+
+    assertEquals(4, keys.size(), "one task id, four operations, four keys: "
+        + keys);
+
+  }
+
+  @Test
   @DisplayName("Message correlation deduplicates only with a correlation id")
   public void correlateMessageKeyIsPinned() {
 
     assertEquals(
-        "test-module|TestProcess|42|OrderReceived|correlation-1",
+        "CORRELATE_MESSAGE|test-module|TestProcess|42|OrderReceived|correlation-1",
         call(
             PhaseTwoOperation.CORRELATE_MESSAGE,
             Map
@@ -159,6 +178,70 @@ public class PhaseTwoOperationContractTest {
         call(PhaseTwoOperation.AGGREGATE_CHANGED, Map.of(PhaseTwoCall.ARG_TASK_ID, "task-1"))
             .idempotencyKey()
             .isEmpty());
+
+  }
+
+  @Test
+  @DisplayName("A key too long for the stores is hashed, and the hash is pinned")
+  public void anOversizedKeyIsHashed() {
+
+    // 300 characters of aggregate id push the derived key past the 250 characters
+    // gruelbox accepts as a unique request id
+    final var aggregateId = "a".repeat(300);
+    final var key = PhaseTwoCall
+        .of(
+            PhaseTwoOperation.CORRELATE_MESSAGE, "test-module", "TestProcess", aggregateId, null, Map
+                .of(
+                    PhaseTwoCall.ARG_MESSAGE_NAME, "OrderReceived",
+                    PhaseTwoCall.ARG_CORRELATION_ID, "correlation-1"))
+        .idempotencyKey()
+        .orElseThrow();
+
+    // pinned as a literal: entries of a running installation are looked up by this
+    // string, so a changed digest, prefix or boundary would stop matching silently
+    assertEquals(
+        "sha256:bfd70402b37726c004502c1e170fa5d6e38b74c63acf3923a555410fd24df939",
+        key);
+    assertTrue(
+        key.length() <= PhaseTwoCall.MAX_IDEMPOTENCY_KEY_LENGTH,
+        "the hash fits what every store can hold");
+
+  }
+
+  @Test
+  @DisplayName("An aggregate id no store can hold is refused where the call is built")
+  public void anUnstorableAggregateIdIsRefused() {
+
+    final var aggregateId = "a".repeat(PhaseTwoCall.MAX_AGGREGATE_ID_LENGTH + 1);
+
+    final var exception = org.junit.jupiter.api.Assertions
+        .assertThrows(
+            IllegalArgumentException.class,
+            () -> PhaseTwoCall
+                .of(PhaseTwoOperation.START_WORKFLOW, "test-module", "TestProcess", aggregateId, "test-adapter", Map
+                    .of()));
+
+    // the message has to name the column and the length, because it replaces a
+    // driver-level truncation error in the middle of the caller's transaction
+    assertTrue(exception.getMessage().contains("AGGREGATE_ID"), exception.getMessage());
+    assertTrue(exception.getMessage().contains("1025"), exception.getMessage());
+    assertTrue(exception.getMessage().contains("1024"), exception.getMessage());
+    assertTrue(exception.getMessage().contains("START_WORKFLOW"), exception.getMessage());
+
+  }
+
+  @Test
+  @DisplayName("An aggregate id up to the column's width is accepted")
+  public void theLongestStorableAggregateIdIsAccepted() {
+
+    assertTrue(
+        PhaseTwoCall
+            .of(
+                PhaseTwoOperation.START_WORKFLOW, "test-module", "TestProcess", "a"
+                    .repeat(PhaseTwoCall.MAX_AGGREGATE_ID_LENGTH),
+                "test-adapter", Map.of())
+            .idempotencyKey()
+            .isPresent());
 
   }
 

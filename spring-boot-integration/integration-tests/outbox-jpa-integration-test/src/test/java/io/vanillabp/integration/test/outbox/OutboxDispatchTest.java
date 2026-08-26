@@ -113,32 +113,98 @@ public class OutboxDispatchTest {
   }
 
   @Test
-  @DisplayName("A duplicate schedule for the same aggregate is a no-op and the DONE entry stays visible")
-  public void duplicateScheduleIsNoOpAndDoneEntryRetained() throws Exception {
+  @DisplayName("A duplicate schedule while the first one is still pending is a no-op")
+  public void duplicateScheduleAgainstAPendingEntryIsNoOp() {
+
+    // the dispatcher must not empty the outbox while both are scheduled, so both
+    // starts ride ONE transaction
+    final var attachedAggregate = transactionTemplate.execute(status -> {
+      final var aggregate = new Aggregate();
+      aggregate.setContent("dedup-pending");
+      final var started = processService.startWorkflow(aggregate);
+      // the same idempotency key while nothing was dispatched: gruelbox' unique
+      // request ID makes it a no-op
+      return processService.startWorkflow(started);
+    });
+    assertNotNull(attachedAggregate);
+
+    final var invocationsOfThisAggregate = countStartsOf(attachedAggregate.getId(), 1);
+    assertEquals(1, invocationsOfThisAggregate, "only one of the two starts was planned");
+
+  }
+
+  @Test
+  @DisplayName("A repetition after the dispatch is a new operation - the key does not block it")
+  public void aRepetitionAfterTheDispatchIsPlanned() throws Exception {
 
     final var attachedAggregate = transactionTemplate.execute(status -> {
       final var aggregate = new Aggregate();
-      aggregate.setContent("dedup-test");
+      aggregate.setContent("dedup-dispatched");
       return processService.startWorkflow(aggregate);
     });
     assertNotNull(attachedAggregate);
     listener.awaitInvocations(1, 10000);
 
     // DONE instead of delete: gruelbox retains the processed entry (unique request
-    // ID + retention threshold), keeping the deduplication window open
+    // ID + retention threshold), which used to keep the deduplication window open
     final var deadline = System.currentTimeMillis() + 10000;
     while (jdbcTemplate.queryForObject(COUNT_PROCESSED_OUTBOX_ENTRIES, Long.class) == 0) {
       assertTrue(System.currentTimeMillis() < deadline, "processed outbox entry was not retained");
       Thread.sleep(50);
     }
 
-    // starting the workflow again for the same aggregate schedules the same
-    // idempotency key: the unique constraint makes it a no-op - no second dispatch
+    // the key deduplicates what is PLANNED, so the retained entry is released and the
+    // second start is carried out (see decision 22 in the repository's DECISIONS.md)
     transactionTemplate.execute(status -> processService.startWorkflow(attachedAggregate));
 
-    // wait longer than the poll interval: no second dispatch may happen
-    Thread.sleep(1500);
-    assertEquals(1, listener.getInvocations().size());
+    assertEquals(
+        2,
+        countStartsOf(attachedAggregate.getId(), 2),
+        "the repetition after the dispatch reached the BPMS: "
+            + listener.getInvocations());
+
+  }
+
+  /**
+   * How often phase two of a start ran for the given aggregate, waiting until at least
+   * the expected number arrived and then a poll interval longer, so a third dispatch
+   * would still show up.
+   */
+  private long countStartsOf(
+      final Object aggregateId,
+      final int expected) {
+
+    final var deadline = System.currentTimeMillis() + 10000;
+    while (startsOf(aggregateId) < expected) {
+      assertTrue(
+          System.currentTimeMillis() < deadline,
+          "expected %d start(s) of aggregate '%s' but got %s".formatted(expected, aggregateId, listener
+              .getInvocations()));
+      try {
+        Thread.sleep(50);
+      } catch (final InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new IllegalStateException(e);
+      }
+    }
+    try {
+      Thread.sleep(1500);
+    } catch (final InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException(e);
+    }
+    return startsOf(aggregateId);
+
+  }
+
+  private long startsOf(
+      final Object aggregateId) {
+
+    return listener
+        .getInvocations()
+        .stream()
+        .filter(aggregateId::equals)
+        .count();
 
   }
 

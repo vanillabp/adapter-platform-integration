@@ -1499,11 +1499,16 @@ public class MigrationProcessService<A> {
         throw new IllegalStateException(
             buildNoOutboxMessage(adapter.getAdapterId()));
       }
-      outbox.scheduleStartWorkflow(
+      final var scheduled = outbox.scheduleStartWorkflow(
           workflowModuleId,
           bpmnProcessId,
           aggregateId,
           adapter.getAdapterId());
+      if (!scheduled) {
+        reportDiscardedSchedule(
+            "starting the workflow of aggregate '%s' (BPMN process '%s' of workflow module '%s')"
+                .formatted(aggregateId, bpmnProcessId, workflowModuleId));
+      }
     }
 
     // the workflow belongs to this adapter from now on, which the next operation on
@@ -1905,7 +1910,14 @@ public class MigrationProcessService<A> {
         throw new IllegalStateException(
             buildNoOutboxMessage(adapter.getAdapterId()));
       }
-      outbox.scheduleCorrelateMessage(workflowModuleId, bpmnProcessId, aggregateId, messageName, correlationId);
+      final var scheduled = outbox
+          .scheduleCorrelateMessage(workflowModuleId, bpmnProcessId, aggregateId, messageName, correlationId);
+      if (!scheduled) {
+        reportDiscardedSchedule(
+            "correlating message '%s' (correlation id '%s') with the workflow of aggregate '%s' "
+                .formatted(messageName, correlationId, aggregateId) + "(BPMN process '%s' of workflow module '%s')"
+                    .formatted(bpmnProcessId, workflowModuleId));
+      }
     }
 
     return attachedAggregate;
@@ -1977,6 +1989,8 @@ public class MigrationProcessService<A> {
         throw new IllegalStateException(
             buildNoOutboxMessage(adapter.getAdapterId()));
       }
+      // no idempotency key, so nothing can discard it (decision 2 in the repository's
+      // DECISIONS.md: the values are read at dispatch time) - the answer is always true
       outbox.scheduleAggregateChanged(workflowModuleId, bpmnProcessId, aggregateId, taskId);
     }
 
@@ -2101,6 +2115,8 @@ public class MigrationProcessService<A> {
             throw new IllegalStateException(
                 buildNoOutboxMessage(adapter.getAdapterId()));
           }
+          // a broadcast signal has no idempotency key, so nothing can discard it - the
+          // answer is always true
           outbox.scheduleSendSignal(workflowModuleId, bpmnProcessId, signalName, adapter.getAdapterId());
         }
       } catch (final RuntimeException e) {
@@ -2233,8 +2249,13 @@ public class MigrationProcessService<A> {
         throw new IllegalStateException(
             buildNoOutboxMessage(adapter.getAdapterId()));
       }
-      outbox.scheduleStartWorkflowByMessage(
+      final var scheduled = outbox.scheduleStartWorkflowByMessage(
           workflowModuleId, bpmnProcessId, aggregateId, messageName, adapter.getAdapterId());
+      if (!scheduled) {
+        reportDiscardedSchedule(
+            "starting the workflow of aggregate '%s' by message '%s' (BPMN process '%s' of workflow "
+                .formatted(aggregateId, messageName, bpmnProcessId) + "module '%s')".formatted(workflowModuleId));
+      }
     }
 
     rememberWorkflowAdapter(aggregateId, adapter.getAdapterId());
@@ -2526,6 +2547,37 @@ public class MigrationProcessService<A> {
 
   }
 
+  /**
+   * Says that an operation the application asked for will not happen: the store found
+   * an identical one still waiting for its dispatch and discarded this one.
+   * <p>
+   * The message names both causes because nothing can tell them apart here. A
+   * redelivered dispatch of a call which was recorded already loses nothing; a second,
+   * legitimate operation of the same key loses everything, and the workflow waits for
+   * something which will never arrive. Multi-instance siblings of one aggregate are the
+   * case which cannot be avoided by the caller alone - a called process is a secondary
+   * workflow of the SAME aggregate, so three elements of a multi-instance call activity
+   * share module, process and aggregate id, and only the correlation id is left to tell
+   * them apart.
+   *
+   * @param subject What was dropped, named the way the caller would recognise it
+   */
+  private void reportDiscardedSchedule(
+      final String subject) {
+
+    log.warn(
+        """
+            An operation of the same idempotency key is still waiting for its dispatch, so {} was \
+            NOT planned! Either this is a redelivery of a call VanillaBP recorded before - then \
+            nothing is lost - or it is a second, legitimate operation which lost against the first \
+            one, and the BPMS will never see it. Nothing here can tell the two apart. A repeating \
+            scope - a loop, a multi-instance activity, a multi-instance call activity over one \
+            aggregate - has to vary the correlation id per round or element, and a caller which \
+            repeats itself has to keep an idempotency of its own.""",
+        subject);
+
+  }
+
   private A executeTaskOperation(
       final A workflowAggregate,
       final String taskId,
@@ -2581,7 +2633,11 @@ public class MigrationProcessService<A> {
         throw new IllegalStateException(
             buildNoOutboxMessage(adapter.getAdapterId()));
       }
-      outboxAction.schedule(outbox, aggregateId);
+      if (!outboxAction.schedule(outbox, aggregateId)) {
+        reportDiscardedSchedule(operationDescription
+            + " "
+            + subject);
+      }
     }
 
     return attachedAggregate;

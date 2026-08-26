@@ -94,7 +94,7 @@ public class ChangelogAppliesTest {
           java.util.List
               .of(
                   "ID", "WORKFLOW_MODULE_ID", "BPMN_PROCESS_ID", "OPERATION", "AGGREGATE_ID",
-                  "ADAPTER_ID", "ARGS", "IDEMPOTENCY_KEY", "STATUS", "CREATED_AT", "ATTEMPTS",
+                  "ADAPTER_ID", "ARGS", "IDEMPOTENCY_KEY", "DEDUP_KEY", "STATUS", "CREATED_AT", "ATTEMPTS",
                   "NEXT_ATTEMPT_AT", "DONE_AT"),
           java.util.List.copyOf(outbox.keySet()));
 
@@ -112,8 +112,8 @@ public class ChangelogAppliesTest {
   }
 
   @Test
-  @DisplayName("A duplicate idempotency key is refused - that is what makes a duplicate schedule a no-op")
-  public void theIdempotencyKeyIsUnique() throws Exception {
+  @DisplayName("A duplicate dedup key is refused - that is what makes a duplicate schedule a no-op")
+  public void theDedupKeyIsUnique() throws Exception {
 
     try (var connection = applyTo("unique", Map.of())) {
       try (var statement = connection.createStatement()) {
@@ -121,9 +121,10 @@ public class ChangelogAppliesTest {
             .executeUpdate(
                 """
                     INSERT INTO VANILLABP_PHASE_TWO_OUTBOX \
-                    (ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, IDEMPOTENCY_KEY, STATUS, \
-                    CREATED_AT, ATTEMPTS, NEXT_ATTEMPT_AT) VALUES \
-                    ('1', 'module', 'Process', 'START', 'key-1', 'OPEN', CURRENT_TIMESTAMP, 0, CURRENT_TIMESTAMP)""");
+                    (ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, IDEMPOTENCY_KEY, DEDUP_KEY, \
+                    STATUS, CREATED_AT, ATTEMPTS, NEXT_ATTEMPT_AT) VALUES \
+                    ('1', 'module', 'Process', 'START', 'key-1', 'key-1', 'OPEN', CURRENT_TIMESTAMP, 0, \
+                    CURRENT_TIMESTAMP)""");
       }
 
       final var duplicate = org.junit.jupiter.api.Assertions
@@ -135,9 +136,10 @@ public class ChangelogAppliesTest {
                       .executeUpdate(
                           """
                               INSERT INTO VANILLABP_PHASE_TWO_OUTBOX \
-                              (ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, IDEMPOTENCY_KEY, STATUS, \
-                              CREATED_AT, ATTEMPTS, NEXT_ATTEMPT_AT) VALUES \
-                              ('2', 'module', 'Process', 'START', 'key-1', 'OPEN', CURRENT_TIMESTAMP, 0, CURRENT_TIMESTAMP)""");
+                              (ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, IDEMPOTENCY_KEY, \
+                              DEDUP_KEY, STATUS, CREATED_AT, ATTEMPTS, NEXT_ATTEMPT_AT) VALUES \
+                              ('2', 'module', 'Process', 'START', 'key-1', 'key-1', 'OPEN', \
+                              CURRENT_TIMESTAMP, 0, CURRENT_TIMESTAMP)""");
                 }
               });
       assertTrue(duplicate.getMessage().toLowerCase().contains("unique"), duplicate.getMessage());
@@ -152,7 +154,7 @@ public class ChangelogAppliesTest {
     try (var connection = applyTo(
         "renamed",
         Map.of("vanillabp.outbox.table", "MY_OUTBOX", "vanillabp.delivery.table", "MY_DELIVERIES"))) {
-      assertTrue(columnsOf(connection, "MY_OUTBOX").containsKey("IDEMPOTENCY_KEY"));
+      assertTrue(columnsOf(connection, "MY_OUTBOX").containsKey("DEDUP_KEY"));
       assertTrue(columnsOf(connection, "MY_DELIVERIES").containsKey("DELIVERY_KEY"));
       assertTrue(columnsOf(connection, "VANILLABP_PHASE_TWO_OUTBOX").isEmpty());
     }

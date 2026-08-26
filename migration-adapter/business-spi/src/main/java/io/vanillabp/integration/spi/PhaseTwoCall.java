@@ -37,9 +37,11 @@ import java.util.Optional;
  * @param args Additional operation-specific arguments (empty for
  *        {@link PhaseTwoOperation#START_WORKFLOW})
  * @param idempotencyKey The key deduplicating this call, derived by the operation
- *        when the call was built - {@link Optional#empty()} for operations which
- *        must not be deduplicated and for calls rebuilt by a store at dispatch
- *        time (where the key was persisted and is no longer needed)
+ *        when the call was built and bounded to
+ *        {@link #MAX_IDEMPOTENCY_KEY_LENGTH} characters - {@link Optional#empty()}
+ *        for operations which must not be deduplicated and for calls rebuilt by a
+ *        store at dispatch time (where the key was persisted and is no longer
+ *        needed)
  */
 public record PhaseTwoCall(
                            String operation,
@@ -49,6 +51,25 @@ public record PhaseTwoCall(
                            String adapterId,
                            Map<String, String> args,
                            Optional<String> idempotencyKey) {
+
+  /**
+   * The number of characters an idempotency key may have before it is replaced by a
+   * hash of itself ({@link StoredKey}). It is the smallest limit of the stores
+   * VanillaBP ships: gruelbox refuses a unique request ID longer than this before any
+   * database sees it, while the <code>IDEMPOTENCY_KEY</code> column of the own stores
+   * holds 512 characters. Bounding at the smallest one keeps a call schedulable
+   * whichever store the application runs.
+   */
+  public static final int MAX_IDEMPOTENCY_KEY_LENGTH = 250;
+
+  /**
+   * The number of characters the <code>AGGREGATE_ID</code> column of the outbox stores
+   * holds. An id longer than this cannot be persisted at all - not as a hash either,
+   * because the column is what somebody reads during support - so such a call is
+   * refused where it is built, with a message naming the column instead of letting a
+   * driver report a truncation in the middle of the application's transaction.
+   */
+  public static final int MAX_AGGREGATE_ID_LENGTH = 1024;
 
   /**
    * The {@link #args()} key carrying the task ID of
@@ -108,6 +129,8 @@ public record PhaseTwoCall(
    * @param args Additional operation-specific arguments (may be
    *        <code>null</code>)
    * @return The call, ready to be handed to {@link PhaseTwoOutbox#schedule}
+   * @throws IllegalArgumentException If the aggregate ID is longer than
+   *         {@link #MAX_AGGREGATE_ID_LENGTH} characters (guiding message)
    */
   public static PhaseTwoCall of(
       final PhaseTwoOperation operation,
@@ -117,14 +140,53 @@ public record PhaseTwoCall(
       final String adapterId,
       final Map<String, String> args) {
 
+    validateAggregateIdLength(operation, workflowModuleId, bpmnProcessId, workflowAggregateId);
     // the key is derived from the call itself, so the call is built twice: once
     // to derive from, once carrying the result
     final var withoutKey = new PhaseTwoCall(
         operation.name(), workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, args, Optional.empty());
+    // bounded HERE and not in the derivation rules, so no operation added later can
+    // forget it - a key too long for the store fails the application's own
+    // transaction, at the moment it starts a workflow or correlates a message
+    final var boundedKey = operation
+        .idempotencyKey()
+        .derive(withoutKey)
+        .map(key -> StoredKey.of(key, MAX_IDEMPOTENCY_KEY_LENGTH));
     return new PhaseTwoCall(
         withoutKey.operation(), withoutKey.workflowModuleId(), withoutKey.bpmnProcessId(), withoutKey
             .workflowAggregateId(), withoutKey
-                .adapterId(), withoutKey.args(), operation.idempotencyKey().derive(withoutKey));
+                .adapterId(), withoutKey.args(), boundedKey);
+
+  }
+
+  /**
+   * Refuses an aggregate ID no store can hold. The check sits here because this is
+   * where the ID is still at hand and where the stack trace still points at the
+   * business code which owns it.
+   */
+  private static void validateAggregateIdLength(
+      final PhaseTwoOperation operation,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId) {
+
+    if ((workflowAggregateId == null) || (workflowAggregateId.length() <= MAX_AGGREGATE_ID_LENGTH)) {
+      return;
+    }
+    throw new IllegalArgumentException(
+        """
+            The ID of the workflow aggregate of BPMN process '%s' of workflow module '%s' is %d \
+            characters long, which the phase-two outbox cannot store: its AGGREGATE_ID column holds \
+            %d characters. The operation '%s' can therefore not be planned. Shorten the aggregate's \
+            ID - it identifies the workflow in the BPMS as well - or widen the column in a migration \
+            of your own and keep it wide in every later one. The ID begins with '%s'."""
+            .formatted(
+                bpmnProcessId,
+                workflowModuleId,
+                workflowAggregateId.length(),
+                MAX_AGGREGATE_ID_LENGTH,
+                operation.name(),
+                workflowAggregateId.substring(0, 64)));
 
   }
 

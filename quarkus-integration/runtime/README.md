@@ -45,8 +45,9 @@ duplicate schedules are a no-op. `JdbcPhaseTwoOutboxDispatcher` claims due OPEN
 entries atomically (optimistic update with attempts/backoff) and dispatches them
 through the core-owned `PhaseTwoRouter` — right after the commit and by a
 fixed-delay poller (crash recovery and retries). Successful dispatches mark the
-entry DONE (deleted asynchronously once `vanillabp.outbox.retention` passed —
-keeping the deduplication window open); repeatedly failing entries are marked
+entry DONE (deleted asynchronously once `vanillabp.outbox.retention` passed — the
+entry stays readable for support, while its `DEDUP_KEY` is replaced by its own ID so
+a repetition of the same operation can be planned again); repeatedly failing entries are marked
 BLOCKED. The generated process-service beans register themselves with the router
 (produced by `PhaseTwoRouterProducer`) at bean creation, including a converter
 turning the serialized aggregate ID back into the aggregate's ID type (determined
@@ -79,8 +80,8 @@ outbox) of the database configured by `quarkus.mongodb.database`, and
 (atomic `findOneAndUpdate` claims, cluster-safe without a lock). Since MongoDB is
 no JTA resource, the outbox operates **best-effort**: the entry is written before
 the commit; on rollback it is deleted best-effort (a crash in between leaves an
-orphan which ends up BLOCKED with a monitorable ERROR). The idempotency key is
-enforced by a partial unique index, created automatically unless
+orphan which ends up BLOCKED with a monitorable ERROR). Deduplication is
+enforced by a unique index over `dedupKey`, created automatically unless
 `vanillabp.outbox.create-schema` is disabled. If both Agroal and the MongoDB client
 are present, the JDBC outbox wins deterministically (consistent with Spring Boot
 where the JPA outbox is ordered first).
@@ -89,7 +90,7 @@ where the JPA outbox is ordered first).
 |------------------|------------------------------------------|-------------------------------------------------------|
 | Enlisting        | JTA transaction (entry = part of TX)     | best-effort (write before commit, delete on rollback) |
 | Store            | table `VANILLABP_PHASE_TWO_OUTBOX`       | collection `vanillabp-phase-two-outbox`               |
-| Dedup            | unique constraint `IDEMPOTENCY_KEY`      | partial unique index `idempotencyKey`                 |
+| Dedup            | unique constraint `DEDUP_KEY`            | unique index `dedupKey`                               |
 | Claim            | optimistic `UPDATE ... WHERE ATTEMPTS=?` | `findOneAndUpdate`                                    |
 | DONE + retention | yes                                      | yes                                                   |
 | Selected when    | Agroal capability present                | no Agroal, MongoDB client present                     |
@@ -99,8 +100,10 @@ Configuration (`QuarkusMigrationAdapterProperties`): `vanillabp.outbox.poll-inte
 `vanillabp.outbox.retention` and
 `vanillabp.outbox.create-schema` (disable the `CREATE TABLE IF NOT EXISTS` DDL /
 index creation to manage the schema manually, e.g. by Flyway or Liquibase — then
-also create the unique constraint on `IDEMPOTENCY_KEY` / the partial unique index
-on `idempotencyKey` yourself).
+also create the unique constraint on `DEDUP_KEY` / the unique index on `dedupKey`
+yourself — that column respectively field carries the idempotency key while the entry
+waits for its dispatch and the entry's own ID afterwards, which is what keeps the
+deduplication window to the operations still planned).
 
 ## Optional extensions and the native image
 

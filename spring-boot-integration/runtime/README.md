@@ -188,7 +188,13 @@ disable an unwanted default via its `enabled` flag:
    capabilities: the idempotency key becomes the `uniqueRequestId` (unique
    constraint of `TXNO_OUTBOX`; duplicates are a no-op), "DONE instead of delete"
    is gruelbox's retention of processed entries (`vanillabp.outbox.retention` maps
-   to the retention threshold). Recovery, retries and retention cleanup are done by
+   to the retention threshold). Since deduplication has to span the entries still
+   waiting for their dispatch only (decision 22) and gruelbox' table has no column
+   for a released key, the store reads the row of that `uniqueRequestId` before it
+   schedules: a row gruelbox marked `processed` is deleted in the caller's
+   transaction so the operation can be planned again, a row which is not processed
+   yet makes the schedule a no-op. That is also why the derived key is bounded to
+   250 characters — gruelbox refuses a longer one before any database sees it. Recovery, retries and retention cleanup are done by
    a fixed-delay poller calling `TransactionOutbox.flush()` on a **private
    single-thread executor** — no `TaskScheduler` bean is registered or used, so an
    application's `@EnableScheduling` setup stays unaffected. The outbox table
@@ -213,8 +219,11 @@ disable an unwanted default via its `enabled` flag:
 2. **MongoDB (own implementation, gruelbox is JDBC-only):** `MongoPhaseTwoOutbox`
    writes entries into the collection `vanillabp-phase-two-outbox` via
    `MongoTemplate` within the current transaction, persisting all `PhaseTwoCall`
-   fields plus the idempotency key (sparse unique index, created automatically
-   unless `create-schema` is disabled — then create it manually).
+   fields plus the idempotency key, deduplicating over `dedupKey` (unique index,
+   created automatically unless `create-schema` is disabled — then create it
+   manually; the sparse index earlier versions created over `idempotencyKey` is
+   dropped where it is still there). That field carries the key while the entry waits
+   and the entry's own id once it was dispatched.
    `MongoPhaseTwoOutboxDispatcher` claims due OPEN entries atomically
    (find-and-modify with attempts/backoff), marks them DONE after successful
    dispatch and deletes DONE entries once the retention passed; repeatedly failing

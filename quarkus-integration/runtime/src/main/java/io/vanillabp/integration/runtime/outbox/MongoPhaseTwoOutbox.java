@@ -24,9 +24,16 @@ import lombok.extern.slf4j.Slf4j;
  * The default {@link PhaseTwoOutbox} implementation for Quarkus applications using
  * MongoDB (extension <code>quarkus-mongodb-client</code>) for aggregate persistence.
  * The entry persists the fields of the {@link PhaseTwoCall} including the operation
- * discriminator and the elected adapter ID; deduplication is enforced by a partial
- * unique index on the entry's idempotency key (a duplicate schedule is the
- * contract's no-op). The collection name matches the Spring Boot MongoDB outbox
+ * discriminator and the elected adapter ID; deduplication is enforced by a unique
+ * index on the entry's <code>dedupKey</code> and therefore spans the entries still
+ * waiting for their dispatch, as the contract of {@link PhaseTwoOutbox} demands: the
+ * field carries the idempotency key while the entry waits and the entry's own id once
+ * the dispatcher marked it DONE, while <code>idempotencyKey</code> keeps the key
+ * readable for support. An entry without a key carries its id there right away, so the
+ * field is never absent and the index needs no partial filter. What carries the
+ * at-least-once guarantee is <code>status</code> and <code>attempts</code> of the
+ * entry, never the key - a redispatch reads the same document.
+ * The collection name matches the Spring Boot MongoDB outbox
  * (<code>vanillabp.outbox.mongo.collection</code>, default
  * <code>vanillabp-phase-two-outbox</code>) so both platforms share the same store
  * layout.
@@ -151,11 +158,12 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
 
     final var collection = dispatcher.outboxCollection();
 
-    // pre-check for an existing entry (fast no-op for the common duplicate case);
-    // the partial unique index remains the backstop for concurrent duplicates
+    // pre-check for an operation still waiting for its dispatch (fast no-op for the
+    // common duplicate case); the unique index remains the backstop for concurrent
+    // duplicates
     final var idempotencyKey = call.idempotencyKey().orElse(null);
-    if ((idempotencyKey != null) && (collection.find(new Document("idempotencyKey", idempotencyKey)).first() != null)) {
-      logDuplicate(call);
+    if ((idempotencyKey != null) && (collection.find(new Document("dedupKey", idempotencyKey)).first() != null)) {
+      logDiscardedSchedule(call);
       return false;
     }
 
@@ -170,6 +178,9 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
         .append("adapterId", call.adapterId())
         .append("args", new Document(new java.util.LinkedHashMap<String, Object>(call.args())))
         .append("idempotencyKey", idempotencyKey)
+        // an operation which must not be deduplicated dedupes against itself, so the
+        // field is present on every entry and the index needs no partial filter
+        .append("dedupKey", idempotencyKey == null ? entryId : idempotencyKey)
         .append("status", STATUS_OPEN)
         .append("createdAt", java.util.Date.from(now))
         .append("attempts", 0)
@@ -183,9 +194,9 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
     // transaction (the aggregate included), so the common duplicate is detected by a
     // read - the unique index stays the backstop for two nodes scheduling at once
     if ((session != null) && (idempotencyKey != null) && (collection
-        .find(session, new Document("idempotencyKey", idempotencyKey))
+        .find(session, new Document("dedupKey", idempotencyKey))
         .first() != null)) {
-      logDuplicate(call);
+      logDiscardedSchedule(call);
       return false;
     }
     try {
@@ -197,7 +208,7 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
     } catch (final MongoWriteException e) {
       // 11000 = duplicate key: the idempotency key is already present
       if (e.getError().getCode() == 11000) {
-        logDuplicate(call);
+        logDiscardedSchedule(call);
         return false;
       }
       throw e;
@@ -241,12 +252,17 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
 
   }
 
-  private static void logDuplicate(
+  /**
+   * The technical half of a discarded schedule. Which of the two causes it was - a
+   * redelivered dispatch or an operation lost against one still waiting - the store
+   * cannot tell, so the core reports it to the caller and this line stays at DEBUG.
+   */
+  private static void logDiscardedSchedule(
       final PhaseTwoCall call) {
 
     log.debug(
-        "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
-            + "was already scheduled - skipping",
+        "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' is still "
+            + "waiting for its dispatch - the schedule of an identical operation was discarded",
         call.operation(),
         call.bpmnProcessId(),
         call.workflowModuleId(),

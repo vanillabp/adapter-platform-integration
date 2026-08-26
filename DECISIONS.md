@@ -41,6 +41,10 @@ dispatch time) the entry carries none and the residual duplicate is documented r
 A test which called VanillaBP has to wait for the BPMS to catch up instead of reading its state in
 the next line.
 
+What such a key answers is decided by entry 22, which supersedes this paragraph in that one
+respect: a key deduplicates an operation which is still planned, not one which already reached the
+BPMS. Everything else here stands.
+
 ### 3. Phase one asks, phase two acts
 
 The part of an operation which runs in the caller's transaction only ASKS: does the parked task
@@ -346,3 +350,53 @@ told apart from a class another profile brings, and the application which really
 is told so further down, by the wiring validation, which compares the model the BPMS deployed
 against the handlers of this run and ends the boot naming the BPMN tasks nobody serves. That check
 knows what a class list never can.
+
+### 22. An idempotency key says an operation is planned once, not that it ever happened
+
+The key of a phase-two operation deduplicates against the entries which have not been dispatched
+yet. What it protects is the window entry 2 opened: between the application's commit and the BPMS
+command, where a crash has to leave the operation repeatable and a redelivery must not run it
+twice. It stops answering a question nobody asked it, whether this operation ever happened before.
+
+Before this, a dispatched entry kept blocking its key until the retention deleted it, seven days
+by default. A second, entirely legitimate operation of the same key inside that window was
+dropped: an offer round asking partner 42 again in the second round correlates the same message
+name with the same correlation id for the same aggregate, and the workflow then waits for a message
+which was never sent. The retention was never the screw to turn - shortening it makes the
+collision rarer, not impossible - so the window ends where the reason for it ends, at the dispatch.
+
+The stores carry that in the column or field the unique constraint spans: it holds the idempotency
+key while the entry waits and the entry's own ID once the entry was dispatched, so the constraint
+covers exactly the operations which are still planned and the derived key stays readable next to
+it for whoever reads the table during support. It is never null, because not every database treats
+two nulls as different values. gruelbox owns its table and has no such column, so that store
+releases a dispatched entry when it meets one: the row has done its work and is deleted, in the
+caller's transaction, which costs its trail and is the price of not owning the table.
+
+The at-least-once guarantee moves nowhere: a redispatch reads the very entry which is not done
+yet, so it is the store's own bookkeeping which carries it - gruelbox' attempt count, the
+`STATUS`/`ATTEMPTS` columns of the stores VanillaBP wrote itself - and never the key. Which is why
+the key is bounded to the smallest limit of the four stores, 250 characters, and hashed beyond it:
+gruelbox refuses a longer unique request ID before any database sees it, and an aggregate ID a
+domain model legitimately uses reaches that length.
+
+A key names the operation it deduplicates, because completing a task and cancelling it are two
+pieces of work on one task ID. The one deliberate exception is a workflow start by message, which
+carries the plain start's key: a workflow is started at most once per aggregate, whichever of the
+two started it.
+
+What this does not fix is two operations planned in the same batch of work. Multi-instance
+siblings of one aggregate share workflow module, BPMN process and aggregate ID - a called process
+is a secondary workflow of the SAME aggregate - so three elements of a multi-instance call
+activity are told apart by their correlation id alone, and business data does not have to differ.
+All three are pending at the same moment, the first one wins, and the others are discarded. Telling
+a sibling from a redelivery needs to know which activation asked, which nothing on the outbound
+side reports today. So the discard is made audible instead of silent: the store logs the technical
+half at DEBUG, and the core turns the outbox' answer into a WARN naming what was dropped and both
+causes it cannot tell apart. The remedy the message asks for is the one which exists: vary the
+correlation id per round or element.
+
+On Camunda 8 the cluster deduplicates as well, by the `messageId` the adapter derives from the same
+values, for as long as the message time-to-live lasts. That net is the cluster's, it is longer than
+this one, and no VanillaBP setting shortens it - which is why the adapter's message says so instead
+of calling the refusal a redelivery.

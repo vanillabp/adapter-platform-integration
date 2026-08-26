@@ -19,31 +19,37 @@ import java.util.Optional;
  * correctly after an upgrade.
  * <p>
  * <strong>Idempotency-key derivation rules of the core operations</strong> (parts
- * joined by <code>|</code>):
+ * joined by <code>|</code>). Every key starts with the name of the operation it
+ * deduplicates, because two operations of one task are two different pieces of work:
  * <ul>
  * <li>{@link #START_WORKFLOW}:
- * <code>workflowModuleId|bpmnProcessId|workflowAggregateId</code> - a workflow is
- * started at most once per aggregate.</li>
+ * <code>START_WORKFLOW|workflowModuleId|bpmnProcessId|workflowAggregateId</code> - a
+ * workflow is started at most once per aggregate.</li>
  * <li>{@link #COMPLETE_TASK} / {@link #CANCEL_TASK}:
- * <code>workflowModuleId|bpmnProcessId|workflowAggregateId|taskId</code> - the same
- * task is completed (or canceled) at most once, but multiple tasks of the same
- * workflow may be completed. The BPMN error code of a cancellation is NOT part of
+ * <code>&lt;operation&gt;|workflowModuleId|bpmnProcessId|workflowAggregateId|taskId</code>
+ * - the same task is completed (or canceled) at most once, but multiple tasks of the
+ * same workflow may be completed. The BPMN error code of a cancellation is NOT part of
  * the key (it is carried in {@link PhaseTwoCall#args()}).</li>
  * <li>{@link #COMPLETE_USER_TASK} / {@link #CANCEL_USER_TASK}: like their
- * asynchronous-task counterparts.</li>
+ * asynchronous-task counterparts, and distinct from them by the operation name.</li>
  * <li>{@link #CORRELATE_MESSAGE}: WITH a correlation id the key is
- * <code>workflowModuleId|bpmnProcessId|workflowAggregateId|messageName|correlationId</code>;
+ * <code>CORRELATE_MESSAGE|workflowModuleId|bpmnProcessId|workflowAggregateId|messageName|correlationId</code>;
  * WITHOUT one it is {@link Optional#empty()} - no deduplication is possible
  * because the same message may legitimately be correlated multiple times over an
  * instance's lifetime (an at-least-once dispatch may then double-correlate; see
  * the adapters' documentation).</li>
  * <li>{@link #SEND_SIGNAL}: {@link Optional#empty()} - a broadcast signal has no
  * key to deduplicate by.</li>
- * <li>{@link #START_WORKFLOW_BY_MESSAGE}: like {@link #START_WORKFLOW}
- * (<code>workflowModuleId|bpmnProcessId|workflowAggregateId</code>) - a workflow
- * is started at most once per aggregate, regardless of the triggering
- * message.</li>
+ * <li>{@link #START_WORKFLOW_BY_MESSAGE}: exactly {@link #START_WORKFLOW}'s key,
+ * <code>START_WORKFLOW|...</code> and not the operation's own name - a workflow is
+ * started at most once per aggregate, regardless of which of the two started it. This
+ * is the one place where two operations deliberately share a key.</li>
  * </ul>
+ * <p>
+ * A key deduplicates a PLANNED operation, not one which already reached the BPMS: what
+ * a store looks it up against is the entries still waiting for their dispatch. See
+ * decision 22 in the repository's DECISIONS.md, and
+ * {@link PhaseTwoOutbox#schedule(PhaseTwoCall)} for what a caller sees.
  * <p>
  * <strong>Operations of extensions</strong> are built by
  * {@link #extensionOperation(String, IdempotencyKey)}: their name has to be
@@ -91,7 +97,10 @@ public record PhaseTwoOperation(
   public static final PhaseTwoOperation START_WORKFLOW = new PhaseTwoOperation(
       "START_WORKFLOW", call -> Optional
           .of(
-              "%s|%s|%s".formatted(
+              // the operation is named as a literal rather than read from the call, so
+              // START_WORKFLOW_BY_MESSAGE deriving this key shares it instead of
+              // getting one of its own
+              "START_WORKFLOW|%s|%s|%s".formatted(
                   call.workflowModuleId(),
                   call.bpmnProcessId(),
                   call.workflowAggregateId())));
@@ -151,7 +160,8 @@ public record PhaseTwoOperation(
         }
         return Optional
             .of(
-                "%s|%s|%s|%s|%s".formatted(
+                "%s|%s|%s|%s|%s|%s".formatted(
+                    call.operation(),
                     call.workflowModuleId(),
                     call.bpmnProcessId(),
                     call.workflowAggregateId(),
@@ -229,7 +239,9 @@ public record PhaseTwoOperation(
    *        a contract
    * @param idempotencyKey The rule deriving the idempotency key of a call, or
    *        <code>call -&gt; Optional.empty()</code> for operations which must not
-   *        be deduplicated
+   *        be deduplicated. Name the operation in the key (the core operations start
+   *        their keys with it) unless two of your operations are meant to deduplicate
+   *        against each other
    * @return The operation, to be registered together with its dispatch
    * @throws IllegalArgumentException If the name is not namespaced (guiding
    *         message)
@@ -293,12 +305,19 @@ public record PhaseTwoOperation(
 
   }
 
+  /**
+   * The key of an operation on ONE task. The operation is part of it because
+   * completing and canceling one task are two operations, and so are the
+   * asynchronous and the user-task flavour of each - one task id used to yield one
+   * key for all four of them.
+   */
   private static Optional<String> taskKey(
       final PhaseTwoCall call) {
 
     return Optional
         .of(
-            "%s|%s|%s|%s".formatted(
+            "%s|%s|%s|%s|%s".formatted(
+                call.operation(),
                 call.workflowModuleId(),
                 call.bpmnProcessId(),
                 call.workflowAggregateId(),

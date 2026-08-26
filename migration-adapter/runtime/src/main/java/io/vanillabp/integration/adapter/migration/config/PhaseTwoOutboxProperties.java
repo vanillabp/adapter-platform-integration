@@ -52,9 +52,16 @@ public class PhaseTwoOutboxProperties {
 
   /**
    * How long successfully dispatched entries (marked as DONE) are retained before
-   * they are deleted asynchronously. Retained entries keep the deduplication window
-   * of the idempotency contract open beyond dispatch (see
+   * they are deleted asynchronously - what a retained entry buys is a dispatched
+   * operation somebody can still look at during support, not a longer deduplication
+   * window: that one ends with the dispatch (see
    * {@link io.vanillabp.integration.spi.PhaseTwoOutbox}).
+   * <p>
+   * The very same number decides something else on the INBOUND side, where it is a
+   * correctness setting: a task delivery arriving later than the retention finds no
+   * record and runs the business code a second time (see
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). Shortening it to keep the
+   * outbox small therefore costs something there.
    */
   @Builder.Default
   private Duration retention = Duration.ofDays(7);

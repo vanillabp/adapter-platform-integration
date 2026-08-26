@@ -83,19 +83,29 @@ public class ExtensionOperationDispatchTest {
   }
 
   @Test
-  @DisplayName("The extension's own idempotency key deduplicates its entries")
+  @DisplayName("The extension's own idempotency key deduplicates its planned entries")
   public void extensionOperationIsDeduplicatedByItsOwnKey() throws Exception {
 
-    final var aggregate = startWorkflowAndSchedule("extension-dedup", "created");
+    // same aggregate, same event, and the first entry still waiting for its dispatch:
+    // the key repeats, so scheduling is a no-op
+    final var scheduledTwice = new java.util.concurrent.atomic.AtomicBoolean(true);
+    final var aggregate = transactionTemplate.execute(status -> {
+      final var newAggregate = new Aggregate();
+      newAggregate.setContent("extension-dedup");
+      final var attached = processService.startWorkflow(newAggregate);
+      outbox
+          .schedule(
+              SampleExtension.call("test-module", "dummy", attached.getId().toString(), "created"));
+      scheduledTwice
+          .set(outbox
+              .schedule(
+                  SampleExtension.call("test-module", "dummy", attached.getId().toString(), "created")));
+      return attached;
+    });
     assertNotNull(aggregate);
-    extension.awaitDispatched(1, 10000);
+    assertFalse(scheduledTwice.get());
 
-    // same aggregate, same event: the key repeats, so scheduling is a no-op
-    final var scheduledAgain = transactionTemplate.execute(status -> outbox
-        .schedule(
-            SampleExtension
-                .call("test-module", "dummy", aggregate.getId().toString(), "created")));
-    assertFalse(scheduledAgain);
+    extension.awaitDispatched(1, 10000);
 
     // a DIFFERENT event of the same workflow is a different key and is dispatched
     transactionTemplate.execute(status -> outbox
@@ -106,6 +116,16 @@ public class ExtensionOperationDispatchTest {
     final var dispatched = extension.awaitDispatched(2, 10000);
     assertEquals("created", dispatched.get(0).args().get(SampleExtension.ARG_EVENT));
     assertEquals("completed", dispatched.get(1).args().get(SampleExtension.ARG_EVENT));
+
+    // and the very same event again, now that the first one reached the extension: a
+    // new operation, because the key deduplicates what is planned
+    final var scheduledAfterDispatch = transactionTemplate
+        .execute(status -> outbox
+            .schedule(
+                SampleExtension
+                    .call("test-module", "dummy", aggregate.getId().toString(), "created")));
+    assertTrue(Boolean.TRUE.equals(scheduledAfterDispatch));
+    extension.awaitDispatched(3, 10000);
 
   }
 

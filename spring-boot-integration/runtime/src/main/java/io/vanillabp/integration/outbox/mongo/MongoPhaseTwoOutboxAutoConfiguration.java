@@ -17,6 +17,7 @@ import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfiguration;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Auto-configuration of the default {@link PhaseTwoOutbox} for MongoDB-based aggregate
@@ -48,6 +49,7 @@ import io.vanillabp.integration.spi.PhaseTwoOutbox;
 })
 @ConditionalOnBooleanProperty(name = "vanillabp.outbox.mongo.enabled", matchIfMissing = true)
 @EnableConfigurationProperties(VanillaBpConfigurationProperties.class)
+@Slf4j
 public class MongoPhaseTwoOutboxAutoConfiguration {
 
   /**
@@ -99,14 +101,38 @@ public class MongoPhaseTwoOutboxAutoConfiguration {
         .getMongo()
         .getCollection();
     if (vanillaBpProperties.getOutbox().isCreateSchema()) {
+      // 'dedupKey' and not 'idempotencyKey': the key deduplicates the operations still
+      // waiting for their dispatch, and the field holds the entry's own id once it was
+      // dispatched (see MongoPhaseTwoOutbox). Present on every entry, so the index
+      // needs neither sparse nor a partial filter
       mongoTemplate
           .indexOps(collection)
           .createIndex(new Index()
-              .on("idempotencyKey", Sort.Direction.ASC)
-              .unique()
-              .sparse());
+              .on("dedupKey", Sort.Direction.ASC)
+              .unique());
+      dropLegacyIdempotencyKeyIndex(mongoTemplate, collection);
     }
     return new MongoPhaseTwoOutbox(mongoTemplate, dispatcher, collection);
+
+  }
+
+  /**
+   * Removes the sparse unique index over <code>idempotencyKey</code> which earlier
+   * versions created. It deduplicated dispatched entries as well, which is what this
+   * store stopped doing; an index which is not there any more is not an error.
+   */
+  private static void dropLegacyIdempotencyKeyIndex(
+      final MongoTemplate mongoTemplate,
+      final String collection) {
+
+    try {
+      mongoTemplate
+          .indexOps(collection)
+          .dropIndex("idempotencyKey");
+    } catch (final RuntimeException e) {
+      // not there is the normal case
+      log.debug("No legacy unique index over 'idempotencyKey' to drop", e);
+    }
 
   }
 

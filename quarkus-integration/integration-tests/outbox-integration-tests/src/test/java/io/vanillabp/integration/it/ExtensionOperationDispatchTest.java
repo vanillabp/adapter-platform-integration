@@ -127,19 +127,23 @@ public class ExtensionOperationDispatchTest {
   }
 
   @Test
-  @DisplayName("The extension's own idempotency key deduplicates its entries")
+  @DisplayName("The extension's own idempotency key deduplicates its planned entries")
   public void extensionOperationIsDeduplicatedByItsOwnKey() throws Exception {
 
-    final var aggregate = startWorkflowAndSchedule("extension-dedup", "created");
-    extension.awaitDispatched(1, 10000);
-
-    // same aggregate, same event: the key repeats, so scheduling is a no-op
+    // same aggregate, same event, and the first entry still waiting for its dispatch:
+    // the key repeats, so scheduling is a no-op
     userTransaction.begin();
+    final var aggregate = workflowService.startWorkflow("extension-dedup");
+    outbox
+        .schedule(
+            SampleExtension.call("test-module", "dummy", aggregate.getId().toString(), "created"));
     final var scheduledAgain = outbox
         .schedule(
             SampleExtension.call("test-module", "dummy", aggregate.getId().toString(), "created"));
     userTransaction.commit();
     assertFalse(scheduledAgain);
+
+    extension.awaitDispatched(1, 10000);
 
     // a DIFFERENT event of the same workflow is a different key and is dispatched
     userTransaction.begin();
@@ -151,6 +155,16 @@ public class ExtensionOperationDispatchTest {
     final var dispatched = extension.awaitDispatched(2, 10000);
     assertEquals("created", dispatched.get(0).args().get(SampleExtension.ARG_EVENT));
     assertEquals("completed", dispatched.get(1).args().get(SampleExtension.ARG_EVENT));
+
+    // and the very same event again, now that the first one reached the extension: a
+    // new operation, because the key deduplicates what is planned
+    userTransaction.begin();
+    final var scheduledAfterDispatch = outbox
+        .schedule(
+            SampleExtension.call("test-module", "dummy", aggregate.getId().toString(), "created"));
+    userTransaction.commit();
+    assertTrue(scheduledAfterDispatch);
+    extension.awaitDispatched(3, 10000);
 
   }
 

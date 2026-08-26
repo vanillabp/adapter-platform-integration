@@ -38,7 +38,9 @@ import lombok.extern.slf4j.Slf4j;
  * The table ({@link JdbcTaskDeliveryStore#DEFAULT_TABLE_NAME}) is created at startup
  * unless <code>vanillabp.outbox.create-schema</code> is disabled, and records are
  * deleted once <code>vanillabp.outbox.retention</code> passed - the delivery log shares
- * the outbox' store settings, because both keep a deduplication window open.
+ * the outbox' store settings, although the number means something different here: for a
+ * record it decides whether a late redelivery runs the business code again, while for a
+ * dispatched outbox entry it only decides how long support can read it.
  */
 @ApplicationScoped
 @Slf4j

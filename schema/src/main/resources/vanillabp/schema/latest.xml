@@ -18,8 +18,14 @@
   <changeSet author="VanillaBP" id="vanillabp-phase-two-outbox-2.0.0" labels="2.0.0">
     <comment>
       The phase-two outbox of a remote BPMS: one entry per operation which may only reach the BPMS
-      after the caller's transaction committed. IDEMPOTENCY_KEY is unique, which is what makes a
-      duplicate schedule a no-op; its 512 characters stay below MySQL's index key-length limit.
+      after the caller's transaction committed. DEDUP_KEY is what makes a duplicate schedule a
+      no-op: it holds the entry's idempotency key while the entry waits for its dispatch and the
+      entry's own ID once it was dispatched, so the unique constraint spans exactly the operations
+      which are still planned - a repetition after the dispatch is a new operation (see decision 22
+      of the repository). It is never null, which is what keeps a database treating two nulls as
+      equal out of the picture. IDEMPOTENCY_KEY carries the derived key for whoever reads the table
+      during support and stays readable after the dispatch; its 512 characters stay below MySQL's
+      index key-length limit.
     </comment>
     <createTable tableName="${vanillabp.outbox.table}">
       <column name="ID" type="VARCHAR(36)">
@@ -37,8 +43,9 @@
       <column name="AGGREGATE_ID" type="VARCHAR(1024)" />
       <column name="ADAPTER_ID" type="VARCHAR(255)" />
       <column name="ARGS" type="VARCHAR(2048)" />
-      <column name="IDEMPOTENCY_KEY" type="VARCHAR(512)">
-        <constraints unique="true" />
+      <column name="IDEMPOTENCY_KEY" type="VARCHAR(512)" />
+      <column name="DEDUP_KEY" type="VARCHAR(512)">
+        <constraints nullable="false" unique="true" />
       </column>
       <column name="STATUS" type="VARCHAR(16)">
         <constraints nullable="false" />
