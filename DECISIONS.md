@@ -310,3 +310,39 @@ disjoint; overlapping ones end the start naming both classes. The ranges compare
 ones. Untouched by all of this: one `ProcessService` per workflow aggregate. Which process
 `startWorkflow` starts is decided by the primary declaration, and different primary processes for
 one aggregate remain ambiguous.
+
+### 21. A workflow service is found because it is a bean
+
+Spring Boot discovers the classes annotated by `@WorkflowService` among the bean definitions of
+the application, not by scanning the classpath for them. The scan it replaces read every class
+resource of every JAR, 42 816 of them in the demo it was measured on, to find a single workflow
+service, and it cost 15.9 seconds of a 24.4 second start under `spring-boot:run` and 4.3 of 9.0
+from the packaged JAR.
+
+Being a bean is what a workflow service has to be anyway: the handler object of a task delivery is
+resolved through the bean factory, so a class without a bean cannot serve a task no matter how it
+was found. So the discovery asks nothing of an application it did not already have to bring, and
+where the class sits stops mattering, which is the whole reason the scan existed.
+
+The bean definitions are also the only place where the question has a correct answer. Whether a
+service belongs to THIS run is decided by the active profile and by every other condition Spring
+evaluates while it refreshes, so a class list read from the classpath, or written into an index
+while the application was built, answers a different question: what could be a bean in some run.
+An index the way the Quarkus integration uses Jandex cannot close that gap either, because Quarkus
+decides its bean set while the application is built and Spring has no such closed world.
+
+Scoping the scan instead of dropping it was measured and rejected. Both candidates, the packages
+of `AutoConfigurationPackages` and the classpath roots carrying a `META-INF/workflow-module`
+marker, lose the workflow services of a common library, which live in a root with neither, and
+which the global workflow module picks up today.
+
+The discovery runs as a `BeanDefinitionRegistryPostProcessor` ordered last rather than as an
+imported `BeanRegistrar`, because a registrar runs while the configuration classes are being read
+and would see only the definitions registered up to that point. A library's auto-configuration
+contributes later, and that is the case this exists for.
+
+A class carrying the annotation without being a bean is passed over without a word. It cannot be
+told apart from a class another profile brings, and the application which really lost its handlers
+is told so further down, by the wiring validation, which compares the model the BPMS deployed
+against the handlers of this run and ends the boot naming the BPMN tasks nobody serves. That check
+knows what a class list never can.

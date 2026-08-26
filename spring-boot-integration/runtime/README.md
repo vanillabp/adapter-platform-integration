@@ -19,8 +19,8 @@ Spring Boot auto-configuration (`META-INF/spring/...AutoConfiguration.imports`):
    `MongoDbSpringDataUtilConfiguration` explicitly.
 4. `SpringBootMigrationAdapterAutoConfiguration` — transforms Spring properties into
    the core `MigrationAdapterProperties`, collects adapters and registers one
-   `ProcessService<A>` bean per workflow aggregate (via the imported
-   `ProcessServiceBeanRegistrar`).
+   `ProcessService<A>` bean per workflow aggregate (via `WorkflowServiceDiscovery`
+   and the `ProcessServiceBeanRegistrar` it feeds).
 5. `DeploymentAutoConfiguration` — deploys BPMN resources on `SmartLifecycle` start
    and starts workflow processing on `ApplicationReadyEvent`.
 
@@ -43,12 +43,42 @@ fat JARs (`jar:nested:`, used by the Boot loader since 3.2). Services not matchi
 any marker file belong to the *global* module (the whole application acting as a
 single workflow module) — only one global marker is allowed.
 
+### Finding the workflow services
+
+A workflow service is found because it is a Spring bean, whatever JAR its class came
+in and whoever registered the bean: the application's component scan, a `@Bean`
+method, an `@Import` of a library configuration or the auto-configuration of a common
+library are all equally visible. `WorkflowServiceDiscovery` walks the bean
+definitions, asks each one for its class and keeps the classes carrying
+`@WorkflowService` (found by reflection, so an annotation inherited from a superclass
+counts). It runs as a `BeanDefinitionRegistryPostProcessor` ordered last, because an
+imported `BeanRegistrar` would run while the configuration classes are still being
+read and would miss whatever a later one - an auto-configuration, typically -
+contributes.
+
+Being a bean is not an extra requirement this discovery invents. Task delivery
+resolves the handler object through the bean factory, so a class annotated
+`@WorkflowService` without a bean could not serve a task even if it was found. And
+the bean definitions are the only place where the question can be answered
+correctly: whether a service is part of THIS run is decided by the active profile and
+by every other condition, which a classpath - or an index written while the
+application was built - knows nothing about.
+
+Which is also why a class carrying the annotation without being a bean is passed over
+in silence, rather than reported: it looks exactly like a class another profile
+brings. What such an application really misses is answered further down, against the
+model the BPMS actually deployed - the task wiring validation ends the boot naming the
+BPMN tasks left without a handler.
+
+One consequence for a `@Bean` method: it has to declare the workflow service class as
+its return type. A method declared to return an interface tells Spring nothing about
+the class behind it, and the discovery reads the type, never the instance.
+
 ### ProcessService beans
 
 `ProcessService<A>` beans are registered by `ProcessServiceBeanRegistrar`, a Spring
-Framework `BeanRegistrar` imported by `SpringBootMigrationAdapterAutoConfiguration`.
-At registration time only the classpath is scanned for `@WorkflowService` classes —
-no beans are touched. Each bean is registered
+Framework `BeanRegistrar` the discovery hands the workflow service classes to. At
+registration time no bean is touched. Each bean is registered
 
 - with a generics-aware target type (`ProcessService<Ride>` via
   `ParameterizedTypeReference`/`ResolvableType`), so generic autowiring works, and

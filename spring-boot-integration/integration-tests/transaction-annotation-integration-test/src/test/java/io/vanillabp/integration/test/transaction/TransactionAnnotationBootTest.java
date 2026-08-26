@@ -152,6 +152,7 @@ public class TransactionAnnotationBootTest {
                   DummyAdapterProcessServiceConfiguration.class,
                   WorkflowModuleAutoConfiguration.class,
                   SpringBootMigrationAdapterAutoConfiguration.class,
+                  TransactionalWorkflowService.class,
                   TestConfiguration.class)
               .run()
               .close());

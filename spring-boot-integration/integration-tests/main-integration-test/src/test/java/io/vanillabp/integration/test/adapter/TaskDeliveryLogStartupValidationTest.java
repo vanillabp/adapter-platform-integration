@@ -16,6 +16,7 @@ import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoCon
 import io.vanillabp.integration.test.TestPersistenceConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.sample.Aggregate;
+import io.vanillabp.integration.test.sample.SampleWorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 
@@ -151,7 +152,8 @@ public class TaskDeliveryLogStartupValidationTest {
         List.of(
             WorkflowModuleConfiguration.class,
             TestPersistenceConfiguration.class,
-            OwnOutboxConfiguration.class));
+            OwnOutboxConfiguration.class,
+            SampleWorkflowService.class));
     configurations.addAll(List.of(userConfigurations));
     this.contextRunner
         .withPropertyValues(propertyValues.toArray(String[]::new))

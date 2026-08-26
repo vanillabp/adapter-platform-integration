@@ -23,7 +23,6 @@ import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
-import io.vanillabp.integration.utils.ClasspathScanner;
 import io.vanillabp.integration.utils.SpringDataUtil;
 import io.vanillabp.integration.utils.impl.SpringDataUtilBasedAggregatePersistenceSupport;
 import io.vanillabp.integration.workflowmodule.WorkflowModule;
@@ -35,15 +34,15 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * A Spring Framework {@link BeanRegistrar} building
- * {@link io.vanillabp.spi.process.ProcessService} beans for each aggregate type of
- * workflow services found in classpath. It is imported by
- * {@link SpringBootMigrationAdapterAutoConfiguration}.
+ * {@link io.vanillabp.spi.process.ProcessService} beans for each aggregate type of the
+ * workflow services handed to it. Who those are is answered by
+ * {@link WorkflowServiceDiscovery}, which runs while the bean definitions of the
+ * application are complete and hands the classes in.
  * <p>
- * At registration time only the classpath is scanned — no beans are touched. Each
- * bean is registered with a generics-aware target type
- * ({@code ProcessService<WorkflowAggregate>}), so generic autowiring works, and with
- * a lazy supplier: all dependencies (properties, persistence support, adapter
- * process services) are resolved through the
+ * At registration time no bean is touched. Each bean is registered with a
+ * generics-aware target type ({@code ProcessService<WorkflowAggregate>}), so generic
+ * autowiring works, and with a lazy supplier: all dependencies (properties,
+ * persistence support, adapter process services) are resolved through the
  * {@link BeanRegistry.SupplierContext} at bean-creation time. This way neither
  * Hibernate/DataSource nor adapter beans are materialized during the bean-factory
  * post-processing phase, keeping AOP proxying and
@@ -52,6 +51,19 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ProcessServiceBeanRegistrar implements BeanRegistrar {
 
+  /**
+   * The classes annotated by {@link WorkflowService} the application registered a bean
+   * of, in the order the discovery walked the bean definitions.
+   */
+  private final List<Class<?>> workflowServiceClasses;
+
+  public ProcessServiceBeanRegistrar(
+      final List<Class<?>> workflowServiceClasses) {
+
+    this.workflowServiceClasses = workflowServiceClasses;
+
+  }
+
   @Override
   public void register(
       final BeanRegistry registry,
@@ -59,37 +71,9 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
 
     try {
 
-      // find all workflow service classes in classpath: @WorkflowService is
-      // @Inherited, so the superclass chain has to be examined, too (a subclass of
-      // an annotated class is itself a workflow service)
-      final var metadataReaderFactory = new org.springframework.core.type.classreading.SimpleMetadataReaderFactory();
-      final var workflowServiceClasses = new ClasspathScanner()
-          .allClasses(
-              "",
-              metadataReader -> {
-                try {
-                  var metadata = metadataReader.getAnnotationMetadata();
-                  while (true) {
-                    if (metadata.hasAnnotation(WorkflowService.class.getName())) {
-                      return true;
-                    }
-                    final var superClassName = metadata.getSuperClassName();
-                    if ((superClassName == null) || superClassName.startsWith("java.")) {
-                      return false;
-                    }
-                    metadata = metadataReaderFactory
-                        .getMetadataReader(superClassName)
-                        .getAnnotationMetadata();
-                  }
-                } catch (Exception e) {
-                  return false;
-                }
-              }
-          );
-
       // build ProcessService<A> bean definitions: ONE injectable bean per
       // aggregate type (the SPI's injection contract), whose primary BPMN process
-      // is the first class found declaring the aggregate. ALL classes declaring
+      // is picked among the classes declaring the aggregate. ALL classes declaring
       // the aggregate and ALL their declared BPMN process IDs (bpmnProcess +
       // secondaryBpmnProcesses) are additionally registered for phase-two routing
       // and @WorkflowTask processing.
@@ -157,8 +141,7 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
 
   /**
    * The rule itself, with the process of a class handed in - the tests use it that
-   * way, because a fixture carrying {@code @WorkflowService} would be found by the
-   * classpath scan of every other test in this module.
+   * way, so a fixture standing in for a workflow service needs no annotation at all.
    *
    * @param serviceClasses All classes declaring this aggregate
    * @param workflowAggregateType The aggregate
@@ -171,7 +154,7 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
       final Function<Class<?>, String> primaryProcessOf) {
 
     // reproducible: with several classes on one process the choice must not depend on
-    // the order the classpath scan happened to return
+    // the order the bean definitions happened to be registered in
     final var sorted = serviceClasses
         .stream()
         .sorted(Comparator.comparing(Class::getName))
@@ -270,10 +253,10 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
       final Class<A> workflowAggregateType) {
 
     // ONE ProcessService per aggregate is the SPI's injection contract, so ONE of
-    // the classes declares the process startWorkflow starts. Which one used to be
-    // the first the classpath scan returned - an order coming from the file system.
-    // Several classes declaring the SAME process are fine (handlers
-    // split across classes); different ones are ambiguous and end the boot.
+    // the classes declares the process startWorkflow starts, and it is picked by a
+    // rule instead of by the order the classes were found in. Several classes
+    // declaring the SAME process are fine (handlers split across classes);
+    // different ones are ambiguous and end the boot.
     final var serviceClass = primaryWorkflowServiceClass(serviceClasses, workflowAggregateType);
     final var bpmnProcessId = primaryBpmnProcessId(serviceClass);
 
