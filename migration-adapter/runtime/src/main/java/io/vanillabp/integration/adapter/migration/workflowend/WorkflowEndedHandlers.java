@@ -73,7 +73,7 @@ public class WorkflowEndedHandlers {
             .stream()
             .noneMatch(version -> handler.matchesVersion(version, resolver)))
         .map(handler -> "@WorkflowEnded method '%s' (version %s)"
-            .formatted(handler.describe(), handler.describeVersions()))
+            .formatted(handler.describe(), handler.describeVersionsWithOrigin()))
         .toList();
 
   }
@@ -88,16 +88,19 @@ public class WorkflowEndedHandlers {
    * @param workflowServiceClass The <code>&#64;WorkflowService</code> class
    * @param workflowAggregateClass The workflow-aggregate class
    * @param workflowServiceBean Supplies the bean instance of that class
+   * @param inherited The range the <code>&#64;BpmnProcess</code> of this
+   *          process declares, which a method naming none serves
    */
   public void registerWorkflowService(
       final String workflowModuleId,
       final String bpmnProcessId,
       final Class<?> workflowServiceClass,
       final Class<?> workflowAggregateClass,
-      final Supplier<Object> workflowServiceBean) {
+      final Supplier<Object> workflowServiceBean,
+      final io.vanillabp.integration.adapter.migration.workflowtask.InheritedVersions inherited) {
 
     final var scanned = WorkflowEndedScanner
-        .scan(workflowServiceClass, workflowAggregateClass, workflowServiceBean);
+        .scan(workflowServiceClass, workflowAggregateClass, workflowServiceBean, inherited);
     if (scanned.isEmpty()) {
       return;
     }
@@ -148,7 +151,8 @@ public class WorkflowEndedHandlers {
                         workflowModuleId,
                         bpmnProcessId,
                         tag,
-                        handler.describe())));
+                        "method '%s'%s"
+                            .formatted(handler.describe(), handler.describeVersionOrigin()))));
             registered
                 .forEach(handler -> failOnDuplicateWiring(
                     workflowModuleId,
@@ -179,12 +183,16 @@ public class WorkflowEndedHandlers {
     if (duplicate.isPresent()) {
       throw new IllegalStateException(
           """
-              The @WorkflowEnded methods '%s' and '%s' both serve %s of BPMN process '%s' of workflow \
-              module '%s'! Remove one of them, name the end events they serve by \
-              @WorkflowEnded(id = ...) or distinguish them by version."""
+              The @WorkflowEnded methods '%s' (version %s) and '%s' (version %s) both serve %s of \
+              BPMN process '%s' of workflow module '%s'! Remove one of them, name the end events they \
+              serve by @WorkflowEnded(id = ...) or distinguish them by version - on the method by \
+              @WorkflowEnded(version = ...), or, where a whole class serves one generation of the \
+              model, on the class by @BpmnProcess(version = ...)."""
               .formatted(
                   duplicate.get().describe(),
+                  duplicate.get().describeVersionsWithOrigin(),
                   handler.describe(),
+                  handler.describeVersionsWithOrigin(),
                   handler.describeWiring(),
                   bpmnProcessId,
                   workflowModuleId));
@@ -341,7 +349,9 @@ public class WorkflowEndedHandlers {
         + "serves end event '{}' of process version '{}' - the end of workflow '{}' is not "
         + "reported.{}";
     final var hint = io.vanillabp.integration.adapter.migration.workflowtask.VersionRange
-        .noVersionReportedHint(context.getProcessVersion());
+        .noVersionReportedHint(
+            context.getProcessVersion(),
+            wired.stream().anyMatch(WorkflowEndedHandler::inheritsVersions));
     if (wired.isEmpty()) {
       log
           .debug(

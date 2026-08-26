@@ -176,6 +176,8 @@ calls permanent and why.
 
 ### 13. A delivery whose version the BPMS did not report is served only by an unrestricted method
 
+*Superseded by decision 20: a range may now reach a method from the `@BpmnProcess` of its class, and this entry names the method annotations only.*
+
 `@WorkflowTask(version = ...)` and its two siblings match against the version of the DEPLOYED
 process definition as the BPMS counts it, or against a version tag of the model. When a delivery
 arrives without a version, only a method without a version range serves it, and if every method of
@@ -276,3 +278,35 @@ The guard counts the questions instead of measuring the duration, which would on
 build runner. `StartupQuestionCostTest`, `OldProcessVersionsTest` and `PersistedAdapterIdTest` ask
 the same start twice, once against a fresh installation and once against years of history, and
 compare what was asked.
+
+### 20. A version range belongs to a method or to a whole workflow service class
+
+`@BpmnProcess(version = ...)` is the fallback of `@WorkflowTask`, `@WorkflowStartedByBpms` and
+`@WorkflowEnded`. A method naming no range serves the range of the `@BpmnProcess` its process was
+declared with; a method naming one keeps it word by word. This replaces decision 13, which promised
+the same thing about the method annotations alone.
+
+An application which brings two generations of a model had to repeat the range on every single
+method, which is one statement written many times, and a method added later without the attribute
+silently served every version. What a team wants there is one handler class per generation, and the
+attribute which says that has sat on `@BpmnProcess` since version 1 with nothing reading it.
+
+The method wins and the two ranges are not intersected. With an intersection, `version = "5-7"`
+would mean different things depending on a declaration elsewhere in the file, and a range which
+cannot be read off the annotation in front of you is worse than one repeated. Which declaration
+applies is decided by the PROCESS a delivery came from, not by the class: a class declares one
+`bpmnProcess` plus any number of `secondaryBpmnProcesses`, each with a version of its own, and one
+method may serve elements of both. So the range is resolved per (class, BPMN process), which is how
+handler methods are registered anyway.
+
+A method which inherits a range is restricted, so it does not serve a delivery whose version the
+BPMS did not report, exactly like a method naming a range itself. That is the consistent reading and
+also the surprising one, since the method carries no attribute at all, which is why every message
+about such a range names the declaration it came from. A complaint about something the reader cannot
+see next to the method reads as a defect of VanillaBP.
+
+Two classes for one process are the point of the feature and boot as long as their ranges are
+disjoint; overlapping ones end the start naming both classes. The ranges compared are the EFFECTIVE
+ones. Untouched by all of this: one `ProcessService` per workflow aggregate. Which process
+`startWorkflow` starts is decided by the primary declaration, and different primary processes for
+one aggregate remain ambiguous.

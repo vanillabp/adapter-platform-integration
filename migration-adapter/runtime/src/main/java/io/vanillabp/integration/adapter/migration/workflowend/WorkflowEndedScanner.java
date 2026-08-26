@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.function.Supplier;
 
 import io.vanillabp.integration.adapter.migration.workflowend.WorkflowEndedHandler.ParameterBinder;
+import io.vanillabp.integration.adapter.migration.workflowtask.InheritedVersions;
 import io.vanillabp.integration.adapter.migration.workflowtask.VersionRange;
 import io.vanillabp.spi.service.WorkflowEnd;
 import io.vanillabp.spi.service.WorkflowEnded;
@@ -31,12 +32,16 @@ public final class WorkflowEndedScanner {
    * @param workflowServiceClass The <code>&#64;WorkflowService</code> class
    * @param workflowAggregateClass The workflow-aggregate class of that service
    * @param workflowServiceBean Supplies the bean instance of the class
+   * @param inherited What a method naming no <code>version</code> serves: the
+   *          range of the <code>&#64;BpmnProcess</code> these handlers are registered
+   *          for
    * @return The handlers, possibly empty
    */
   public static List<WorkflowEndedHandler> scan(
       final Class<?> workflowServiceClass,
       final Class<?> workflowAggregateClass,
-      final Supplier<Object> workflowServiceBean) {
+      final Supplier<Object> workflowServiceBean,
+      final InheritedVersions inherited) {
 
     final var handlers = new LinkedList<WorkflowEndedHandler>();
     for (final var method : workflowServiceClass.getMethods()) {
@@ -51,7 +56,8 @@ public final class WorkflowEndedScanner {
                   method,
                   workflowAggregateClass,
                   workflowServiceBean,
-                  annotation));
+                  annotation,
+                  inherited));
     }
     return handlers;
 
@@ -62,7 +68,8 @@ public final class WorkflowEndedScanner {
       final Method method,
       final Class<?> workflowAggregateClass,
       final Supplier<Object> workflowServiceBean,
-      final WorkflowEnded annotation) {
+      final WorkflowEnded annotation,
+      final InheritedVersions inherited) {
 
     final var location = "%s#%s".formatted(workflowServiceClass.getName(), method.getName());
     // a public method of a package-private bean class is not accessible through
@@ -85,10 +92,11 @@ public final class WorkflowEndedScanner {
             "parameter '%s' of @WorkflowEnded method '%s'".formatted(parameter.getName(), location)))
         .toList();
 
-    final var versions = Arrays
-        .stream(annotation.version())
-        .map(version -> VersionRange.parse(version, location))
-        .toList();
+    final var versions = inherited
+        .effectiveFor(Arrays
+            .stream(annotation.version())
+            .map(version -> VersionRange.parse(version, location))
+            .toList());
     final var endEventId = annotation.id().equals(WorkflowEnded.ANY_END_EVENT)
         ? null
         : annotation.id();

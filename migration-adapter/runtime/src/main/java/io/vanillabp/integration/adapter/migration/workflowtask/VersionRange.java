@@ -33,7 +33,7 @@ import io.vanillabp.integration.adapter.spi.version.DeployedProcessVersion;
  * specification matches nothing.
  * <p>
  * Why a delivery without a reported version is served only by a method without a version range is
- * decision 13 in the repository's DECISIONS.md.
+ * decision 20 in the repository's DECISIONS.md.
  */
 public class VersionRange {
 
@@ -258,21 +258,45 @@ public class VersionRange {
   }
 
   /**
+   * @return Whether this specification covers every version - what a
+   *         <code>version</code> attribute nobody wrote parses to, and what makes a
+   *         handler method inherit the range of its class
+   */
+  public boolean everyVersion() {
+
+    return kind == Kind.ALL;
+
+  }
+
+  /**
    * The reason a delivery of a BPMS which reports no version found no method, ready to
    * be appended to a message - empty for a reported version, where the version itself
    * is the reason.
    *
    * @param processVersion The version the BPMS reported
+   * @param someRangeIsInherited Whether one of the methods which were passed over
+   *          serves a range coming from the <code>&#64;BpmnProcess</code> of its class
+   *          rather than from its own attribute
    * @return The sentence to append, or an empty string
    */
   public static String noVersionReportedHint(
-      final String processVersion) {
+      final String processVersion,
+      final boolean someRangeIsInherited) {
 
-    return processVersion == null
-        ? " This BPMS reports no process version, so only a method whose version is '*' (the "
-            + "default) can serve the delivery - whether a version lies within a range nobody "
-            + "reported is not something VanillaBP guesses."
-        : "";
+    if (processVersion != null) {
+      return "";
+    }
+    final var hint = " This BPMS reports no process version, so only a method whose version is '*' "
+        + "(the default) can serve the delivery - whether a version lies within a range nobody "
+        + "reported is not something VanillaBP guesses.";
+    // the surprise this exists for: the method carries no attribute, so its author
+    // reads a complaint about a range which is nowhere near it
+    return someRangeIsInherited
+        ? hint
+            + " A method which inherits its range from the @BpmnProcess of its class is as "
+            + "restricted as one naming it, so a delivery like this needs a method whose class "
+            + "names no version either."
+        : hint;
 
   }
 

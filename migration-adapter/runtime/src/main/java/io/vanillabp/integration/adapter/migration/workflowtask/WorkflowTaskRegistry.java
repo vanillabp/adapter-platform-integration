@@ -219,6 +219,10 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
       aggregateSync.validateSyncModel(processService.getWorkflowAggregateClass());
     }
 
+    // which generation of the model this class serves for THIS process - the methods
+    // naming no version of their own serve it, which is how one class per generation
+    // works without repeating the range on every method
+    final var inherited = InheritedVersions.declaredFor(workflowServiceClass, bpmnProcessId);
     final var entry = entries.computeIfAbsent(
         new RegistryKey(workflowModuleId, bpmnProcessId),
         key -> new RegistryEntry());
@@ -247,7 +251,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
           processService.getWorkflowAggregateClass(),
           workflowServiceBean,
           beanResolver,
-          transactionAnnotations);
+          transactionAnnotations,
+          inherited);
       // one by one, so two methods of the SAME class wired to one task definition are
       // compared against each other as well
       handlers
@@ -270,7 +275,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
             bpmnProcessId,
             workflowServiceClass,
             processService.getWorkflowAggregateClass(),
-            workflowServiceBean);
+            workflowServiceBean,
+            inherited);
 
     workflowEndedHandlers
         .registerWorkflowService(
@@ -278,7 +284,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
             bpmnProcessId,
             workflowServiceClass,
             processService.getWorkflowAggregateClass(),
-            workflowServiceBean);
+            workflowServiceBean,
+            inherited);
 
   }
 
@@ -330,12 +337,15 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
     if (duplicate.isPresent()) {
       throw new IllegalStateException(
           """
-              The @WorkflowTask methods '%s' and '%s' are both wired to %s of BPMN process '%s' \
-              of workflow module '%s'! Remove one of them or distinguish them by \
-              @WorkflowTask(version = ...)."""
+              The @WorkflowTask methods '%s' (version %s) and '%s' (version %s) are both wired to \
+              %s of BPMN process '%s' of workflow module '%s'! Remove one of them or distinguish \
+              them by version - on the method by @WorkflowTask(version = ...), or, where a whole \
+              class serves one generation of the model, on the class by @BpmnProcess(version = ...)."""
               .formatted(
                   duplicate.get().describe(),
+                  duplicate.get().describeVersionsWithOrigin(),
                   handler.describe(),
+                  handler.describeVersionsWithOrigin(),
                   handler.describeWiring(),
                   bpmnProcessId,
                   workflowModuleId));
@@ -585,7 +595,11 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
                     workflowModuleId,
                     context.getTaskDefinition(),
                     context.getProcessVersion(),
-                    VersionRange.noVersionReportedHint(context.getProcessVersion()),
+                    VersionRange.noVersionReportedHint(
+                        context.getProcessVersion(),
+                        entry.handlers
+                            .stream()
+                            .anyMatch(WorkflowTaskHandler::inheritsVersions)),
                     // A delivery from a version the configuration faded out
                     // looks exactly like a wiring defect otherwise
                     outfadedVersionHint(
@@ -645,7 +659,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
                         workflowModuleId,
                         bpmnProcessId,
                         tag,
-                        handler.describe())));
+                        "method '%s'%s"
+                            .formatted(handler.describe(), handler.describeVersionOrigin()))));
             // ranges naming a tag could not be placed while registering - now they can
             registryEntry.handlers
                 .forEach(handler -> failOnDuplicateWiring(
@@ -884,7 +899,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedS
                 .stream()
                 .noneMatch(version -> handler.matchesVersion(version, resolver)))
             .map(handler -> "@WorkflowTask method '%s' (version %s)"
-                .formatted(handler.describe(), handler.describeVersions()))
+                .formatted(handler.describe(), handler.describeVersionsWithOrigin()))
             .toList();
     return java.util.stream.Stream
         .of(

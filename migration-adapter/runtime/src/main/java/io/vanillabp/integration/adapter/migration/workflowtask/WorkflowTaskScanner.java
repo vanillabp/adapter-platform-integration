@@ -30,8 +30,12 @@ import io.vanillabp.spi.service.WorkflowTask;
  * <code>&#64;WorkflowTask</code> annotated methods and builds
  * {@link WorkflowTaskHandler}s including the parameter binders (workflow aggregate,
  * <code>&#64;TaskId</code>, <code>&#64;TaskEvent</code>, <code>&#64;TaskParam</code>,
- * multi-instance annotations). Runs once at startup per workflow service class -
- * defects yield guiding exceptions naming the method and the fix.
+ * multi-instance annotations). Runs once at startup per workflow service class and
+ * BPMN process - defects yield guiding exceptions naming the method and the fix.
+ * <p>
+ * A method naming no <code>version</code> serves the range of the
+ * <code>&#64;BpmnProcess</code> its handlers are registered for (see
+ * {@link InheritedVersions}).
  */
 class WorkflowTaskScanner {
 
@@ -45,7 +49,8 @@ class WorkflowTaskScanner {
       final Class<?> workflowAggregateClass,
       final Supplier<Object> workflowServiceBean,
       final Function<Class<?>, Object> beanResolver,
-      final List<TransactionAnnotationSpec> transactionAnnotations) {
+      final List<TransactionAnnotationSpec> transactionAnnotations,
+      final InheritedVersions inherited) {
 
     final var handlers = new LinkedList<WorkflowTaskHandler>();
     // transaction annotations of the application covering a handler break the
@@ -107,7 +112,8 @@ class WorkflowTaskScanner {
             annotation,
             asynchronousTask,
             subscribedEvents,
-            taskParameters));
+            taskParameters,
+            inherited));
       }
     }
     if (!transactionDefects.isEmpty()) {
@@ -161,7 +167,8 @@ class WorkflowTaskScanner {
       final WorkflowTask annotation,
       final boolean asynchronousTask,
       final java.util.Set<TaskEvent.Event> subscribedEvents,
-      final List<String> taskParameters) {
+      final List<String> taskParameters,
+      final InheritedVersions inherited) {
 
     final var location = "%s#%s".formatted(workflowServiceClass.getName(), method.getName());
     // a public method of a package-private bean class is not accessible through
@@ -184,10 +191,11 @@ class WorkflowTaskScanner {
           ? annotation.id()
           : null;
     }
-    final var versions = Arrays
-        .stream(annotation.version())
-        .map(version -> VersionRange.parse(version, location))
-        .toList();
+    final var versions = inherited
+        .effectiveFor(Arrays
+            .stream(annotation.version())
+            .map(version -> VersionRange.parse(version, location))
+            .toList());
     return new WorkflowTaskHandler(
         workflowServiceClass, method, workflowServiceBean, binders, taskDefinition, activityId, versions, asynchronousTask, subscribedEvents, taskParameters);
 

@@ -73,16 +73,19 @@ public class BpmsInitiatedStarts {
    * @param workflowServiceClass The <code>&#64;WorkflowService</code> class
    * @param workflowAggregateClass The workflow-aggregate class
    * @param workflowServiceBean Supplies the bean instance of that class
+   * @param inherited The range the <code>&#64;BpmnProcess</code> of this
+   *          process declares, which a method naming none serves
    */
   public void registerWorkflowService(
       final String workflowModuleId,
       final String bpmnProcessId,
       final Class<?> workflowServiceClass,
       final Class<?> workflowAggregateClass,
-      final Supplier<Object> workflowServiceBean) {
+      final Supplier<Object> workflowServiceBean,
+      final io.vanillabp.integration.adapter.migration.workflowtask.InheritedVersions inherited) {
 
     final var handlers = BpmsInitiatedStartScanner
-        .scan(workflowServiceClass, workflowAggregateClass, workflowServiceBean);
+        .scan(workflowServiceClass, workflowAggregateClass, workflowServiceBean, inherited);
     if (handlers.isEmpty()) {
       return;
     }
@@ -135,7 +138,8 @@ public class BpmsInitiatedStarts {
                         workflowModuleId,
                         bpmnProcessId,
                         tag,
-                        handler.describe())));
+                        "method '%s'%s"
+                            .formatted(handler.describe(), handler.describeVersionOrigin()))));
             registryEntry.handlers
                 .forEach(handler -> failOnDuplicateWiring(
                     workflowModuleId,
@@ -166,12 +170,16 @@ public class BpmsInitiatedStarts {
     if (duplicate.isPresent()) {
       throw new IllegalStateException(
           """
-              The @WorkflowStartedByBpms methods '%s' and '%s' both serve %s of BPMN process '%s' of \
-              workflow module '%s'! Remove one of them, name the start events they serve by \
-              @WorkflowStartedByBpms(id = ...) or distinguish them by version."""
+              The @WorkflowStartedByBpms methods '%s' (version %s) and '%s' (version %s) both serve \
+              %s of BPMN process '%s' of workflow module '%s'! Remove one of them, name the start \
+              events they serve by @WorkflowStartedByBpms(id = ...) or distinguish them by version - \
+              on the method by @WorkflowStartedByBpms(version = ...), or, where a whole class serves \
+              one generation of the model, on the class by @BpmnProcess(version = ...)."""
               .formatted(
                   duplicate.get().describe(),
+                  duplicate.get().describeVersionsWithOrigin(),
                   handler.describe(),
+                  handler.describeVersionsWithOrigin(),
                   handler.describeWiring(),
                   bpmnProcessId,
                   workflowModuleId));
@@ -206,7 +214,7 @@ public class BpmsInitiatedStarts {
             .stream()
             .noneMatch(version -> handler.matchesVersion(version, resolver)))
         .map(handler -> "@WorkflowStartedByBpms method '%s' (version %s)"
-            .formatted(handler.describe(), handler.describeVersions()))
+            .formatted(handler.describe(), handler.describeVersionsWithOrigin()))
         .toList();
 
   }
@@ -355,7 +363,9 @@ public class BpmsInitiatedStarts {
               context.getProcessVersion(),
               describeHandlers(wired),
               io.vanillabp.integration.adapter.migration.workflowtask.VersionRange
-                  .noVersionReportedHint(context.getProcessVersion()));
+                  .noVersionReportedHint(
+                      context.getProcessVersion(),
+                      wired.stream().anyMatch(BpmsInitiatedStartHandler::inheritsVersions)));
     }
 
     final var result = BpmsInitiatedStartExecution.run(processService, handler, context, transactionRunner);

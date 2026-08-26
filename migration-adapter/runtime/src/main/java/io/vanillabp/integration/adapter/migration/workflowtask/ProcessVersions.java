@@ -26,7 +26,7 @@ import io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog;
  * BPMS counts its own versions, so the catalogs are asked in registration order and the
  * first one knowing the version or tag answers.
  * <p>
- * What a version is, and why overlapping ranges end the start, is decision 13 in the repository's
+ * What a version is, and why overlapping ranges end the start, is decision 20 in the repository's
  * DECISIONS.md.
  */
 public class ProcessVersions {
@@ -248,26 +248,27 @@ public class ProcessVersions {
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
    * @param versionTag The version tag named by an annotation
-   * @param describedMethod The method naming it
+   * @param describedLocation The method serving that specification, plus the
+   *          declaration it came from where the method names none itself
    */
   public void reportUnknownVersionTag(
       final String workflowModuleId,
       final String bpmnProcessId,
       final String versionTag,
-      final String describedMethod) {
+      final String describedLocation) {
 
     if (lookup(workflowModuleId, bpmnProcessId, versionTag) != null) {
       return;
     }
     log.warn(
         """
-            The version specification '{}' of method '{}' names a version tag no BPMS knows for \
-            BPMN process '{}' of workflow module '{}'! Until a version tagged that way is \
-            deployed, that method serves no workflow. Check the tag against the BPMN model \
-            (Camunda 7: 'camunda:versionTag', Camunda 8: 'zeebe:versionTag') - a version \
-            specification made of numbers (e.g. '>2') needs no tag at all.""",
+            The version specification '{}' of {} names a version tag no BPMS knows for BPMN \
+            process '{}' of workflow module '{}'! Until a version tagged that way is deployed, \
+            that method serves no workflow. Check the tag against the BPMN model (Camunda 7: \
+            'camunda:versionTag', Camunda 8: 'zeebe:versionTag') - a version specification made \
+            of numbers (e.g. '>2') needs no tag at all.""",
         versionTag,
-        describedMethod,
+        describedLocation,
         bpmnProcessId,
         workflowModuleId);
 

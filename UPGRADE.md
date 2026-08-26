@@ -4,6 +4,46 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## `@BpmnProcess(version = ...)` has an effect now (2026-08-26)
+
+The `version` attribute of `@BpmnProcess` exists since VanillaBP 1 and nothing ever read it, in
+version 1 nor in version 2 up to here. From now on it is the fallback of `@WorkflowTask`,
+`@WorkflowStartedByBpms` and `@WorkflowEnded`: a method naming no `version` of its own serves the
+range of the `@BpmnProcess` its process was declared with, and a method naming one keeps it word by
+word, without the class range narrowing it.
+
+```java
+@WorkflowService(
+        workflowAggregateClass = LoanApproval.class,
+        bpmnProcess = @BpmnProcess(bpmnProcessId = "loan_approval", version = "<10"))
+public class LoanApprovalUpToTen {
+
+  @WorkflowTask                   // serves versions below 10
+  public void retrieveCreditRating(final LoanApproval loanApproval) { ... }
+
+}
+```
+
+**Who has to look.** An application which wrote the attribute in version 1, believing it worked. It
+had no effect, so its methods served every version; now they serve what the class says, and the ones
+outside that range stop being called. That is a silent behaviour change for exactly the applications
+which meant it, which is why it gets an entry of its own. Check every `@BpmnProcess` your
+application declares: where the range does not describe what the class should serve today, remove it
+or correct it. An application which never wrote the attribute is unaffected - the default `*` leaves
+every method serving every version, as before.
+
+**A method which inherits a range is restricted.** So a delivery whose version the BPMS did not
+report (the Process-Engine-API, and any BPMS which cannot tell) reaches it no more than it reaches a
+method naming a range itself. Serving such a delivery needs a method whose CLASS names no version
+either. The failure message says where the range came from, because the method it complains about
+carries no attribute at all.
+
+**Two classes for one process** are what the feature is for: one per generation of the model. They
+boot as long as their ranges are disjoint, and overlapping ranges end the start naming both classes
+and both declarations. What has not changed is that exactly one `ProcessService` exists per workflow
+aggregate: several classes may declare the same `bpmnProcess`, different primary processes for one
+aggregate are still ambiguous.
+
 ## The open tasks an upgrade leaves behind are counted at startup (2026-08-25)
 
 Two SPI questions with defaults, one startup message. No configuration and no schema changes.
