@@ -779,13 +779,22 @@ The core does not implement (or depend on) any outbox itself — it only defines
   and two of the three were discarded. `RunningActivation` is the thread-bound scope the
   core opens around a task delivery and around a workflow the BPMS started, filled from
   `TaskInvocationContext#getActivationId()` respectively
-  `BpmsInitiatedStartContext#getNativeInstanceId()`; `PhaseTwoOperation.CORRELATE_MESSAGE`
-  reads it while it derives. Outside any invocation there is none and the key is what it
-  always was, which is the fallback a REST endpoint and a thread the handler started
-  themselves get. `START_WORKFLOW` and the task operations must NOT carry it: they
-  deduplicate across activations on purpose. Two nets are involved on Camunda 8, and the
-  cluster's own one does not know about activations — see the wiki page on message
-  correlation.
+  `BpmsInitiatedStartContext#getNativeInstanceId()`.
+  `PhaseTwoOutbox#scheduleCorrelateMessage` reads it into `ARG_ACTIVATION_ID` - the one
+  path a correlation is planned on, and the one which runs on the handler's thread - and
+  `PhaseTwoOperation.CORRELATE_MESSAGE` derives from that argument, which keeps the
+  derivation a pure function of what a store persists. Outside any invocation there is
+  none and the key is what it always was, which is the fallback a REST endpoint and a
+  thread the handler started themselves get. `START_WORKFLOW` and the task operations must
+  NOT carry it: they deduplicate across activations on purpose.
+- **The same argument reaches the adapter at dispatch time**, through the seven-argument
+  `MigratableProcessService#correlateMessagePhaseTwo` whose `default` forwards to the
+  six-argument one every adapter implements. Phase two runs on the dispatcher's thread,
+  long after the thread which knew the activation has moved on, so the value travels with
+  the entry rather than being read again. A BPMS which deduplicates messages in a net of
+  its own needs the same distinction there: Camunda 8 derives a message id from the same
+  values, and without the activation three multi-instance siblings reach the outbox as
+  three operations and that cluster as one message.
 - **Recovery:** every committed-but-unprocessed entry has to be dispatched through
   the `PhaseTwoRouter` right after the commit *and* after an application restart
   (crash recovery), retrying failed dispatches with a backoff.

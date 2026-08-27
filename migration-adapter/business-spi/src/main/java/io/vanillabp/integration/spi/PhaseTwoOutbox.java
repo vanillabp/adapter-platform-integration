@@ -276,8 +276,8 @@ public interface PhaseTwoOutbox {
    * @param messageName The BPMN message name
    * @param correlationId The correlation id or <code>null</code>
    * @return <code>true</code> if scheduled, <code>false</code> if a correlation of
-   *         this message name and correlation id is still waiting for its dispatch
-   *         (no-op; only possible WITH a correlation id)
+   *         this message name, correlation id and activation is still waiting for its
+   *         dispatch (no-op; only possible WITH a correlation id)
    */
   default boolean scheduleCorrelateMessage(
       final String workflowModuleId,
@@ -290,6 +290,13 @@ public interface PhaseTwoOutbox {
     args.put(PhaseTwoCall.ARG_MESSAGE_NAME, messageName);
     if (correlationId != null) {
       args.put(PhaseTwoCall.ARG_CORRELATION_ID, correlationId);
+    }
+    // read HERE and not while the key is derived: this is the one path a correlation is
+    // planned on, it runs on the thread the handler runs on, and the value has to reach
+    // the adapter at dispatch time as well - by then nothing remembers that thread
+    final var activationId = RunningActivation.current();
+    if (activationId != null) {
+      args.put(PhaseTwoCall.ARG_ACTIVATION_ID, activationId);
     }
     return schedule(
         PhaseTwoCall

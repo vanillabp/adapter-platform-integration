@@ -4,6 +4,33 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## The activation of a correlation travels to phase two (2026-08-27)
+
+The activation which planned a message correlation is carried with the outbox entry and
+handed to the adapter when the entry is dispatched. Story 141 put it into VanillaBP's own
+idempotency key; this is what a BPMS needs which deduplicates messages in a net of its
+own.
+
+**Adapters gain an optional method.** `MigratableProcessService#correlateMessagePhaseTwo`
+has a seven-argument overload with a `default` forwarding to the six-argument one, which
+stays the method an adapter implements. An adapter written before this keeps compiling and
+simply ignores the value. An adapter whose BPMS derives a message id of its own - Camunda 8
+does - should put the activation into that derivation, or three elements of a multi-instance
+call activity reach the outbox as three operations and that BPMS as one message.
+
+**The entries carry one more argument.** `activationId` joins the args of a
+`CORRELATE_MESSAGE` entry, absent where the correlation was planned outside any activation.
+Args are stored form-encoded in a column which already holds them, so nothing about the
+schema changes and no entry has to be migrated.
+
+**Where the key reads it from changed, not what it is.** The derivation used to read the
+running activation off the thread; it reads the argument now. The key is byte-identical
+either way - `PhaseTwoOperationContractTest` pins both shapes - and the derivation is a pure
+function of what a store persists again. An application-owned store building calls through
+`PhaseTwoCall.of` itself rather than through `PhaseTwoOutbox#scheduleCorrelateMessage` now
+has to put the argument in itself if it wants the activation in the key; the shipped stores
+all go through the default method.
+
 ## The records of delivered tasks have a retention of their own (2026-08-27)
 
 `vanillabp.delivery.retention` decides how long the record of a processed task delivery is kept. It

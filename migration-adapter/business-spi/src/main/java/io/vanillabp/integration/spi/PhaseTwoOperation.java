@@ -37,10 +37,11 @@ import java.util.Optional;
  * <li>{@link #CORRELATE_MESSAGE}: WITH a correlation id the key is
  * <code>CORRELATE_MESSAGE|workflowModuleId|bpmnProcessId|workflowAggregateId|messageName|correlationId</code>,
  * followed by <code>|activationId</code> where the correlation was planned inside
- * something the BPMS activated and the delivering adapter names that activation
- * ({@link RunningActivation}). It is the ONLY key carrying one, because it is the only
- * one which has to deduplicate PER activation - the others deduplicate across
- * activations on purpose. WITHOUT a correlation id the key is {@link Optional#empty()} -
+ * something the BPMS activated and the delivering adapter names that activation (see
+ * {@link RunningActivation}, which is what {@link PhaseTwoOutbox#scheduleCorrelateMessage}
+ * reads into {@link PhaseTwoCall#ARG_ACTIVATION_ID}). It is the ONLY key carrying one,
+ * because it is the only one which has to deduplicate PER activation - the others
+ * deduplicate across activations on purpose. WITHOUT a correlation id the key is {@link Optional#empty()} -
  * no deduplication is possible because the same message may legitimately be correlated
  * multiple times over an instance's lifetime (an at-least-once dispatch may then
  * double-correlate; see the adapters' documentation).</li>
@@ -175,9 +176,12 @@ public record PhaseTwoOperation(
             correlationId);
         // Multi-instance siblings of one aggregate agree in every part above - a called
         // process is a secondary workflow of the SAME aggregate - so the activation
-        // which planned the correlation is what tells them apart. Outside an invocation
-        // there is none, and the key is then exactly the one it always was
-        final var activation = RunningActivation.current();
+        // which planned the correlation is what tells them apart. It is read from the
+        // call rather than from the thread, which keeps this derivation a pure function
+        // of what a store persists and lets the same value reach the adapter at dispatch
+        // time. Outside an invocation there is none, and the key is then exactly the one
+        // it always was
+        final var activation = call.args().get(PhaseTwoCall.ARG_ACTIVATION_ID);
         return Optional
             .of(
                 activation == null

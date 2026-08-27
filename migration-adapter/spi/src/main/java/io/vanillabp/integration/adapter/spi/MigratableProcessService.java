@@ -611,6 +611,53 @@ public interface MigratableProcessService<A> {
       String correlationId);
 
   /**
+   * Correlate a message - phase two, additionally told which ACTIVATION of a BPMN element
+   * planned it. This is the method the core calls; the six-argument one above stays the
+   * contract an adapter has to implement, and the default here forwards to it, so an
+   * adapter written before this keeps working and simply ignores the value.
+   *
+   * <h2>What it is for</h2>
+   *
+   * A BPMS which deduplicates messages in a net of its own - Camunda 8 does, by the
+   * message id the adapter derives - needs the same distinction VanillaBP makes on its
+   * own side: three elements of a multi-instance call activity are three operations for
+   * the outbox and would be ONE message for such a cluster, because a called process is a
+   * secondary workflow of the same aggregate and everything else about the three
+   * correlations is equal. An adapter with such a net puts this value into whatever it
+   * derives its own key from; an adapter without one ignores it.
+   *
+   * <h2>Why it arrives here rather than being read</h2>
+   *
+   * The activation is known on the thread the handler ran on, and phase two happens after
+   * that transaction committed, on the outbox dispatcher's thread. So it travels with the
+   * entry ({@link io.vanillabp.integration.spi.PhaseTwoCall#ARG_ACTIVATION_ID}) and is
+   * handed over here.
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param aggregatePersistence The persistence of the workflow-aggregate
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param messageName The BPMN message name
+   * @param correlationId The correlation id or <code>null</code>
+   * @param activationId What the BPMS called the element instance the correlation was
+   *          planned in, or <code>null</code> where it was planned outside any (a REST
+   *          endpoint) respectively by an adapter which does not name its activations
+   */
+  default void correlateMessagePhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String messageName,
+      final String correlationId,
+      final String activationId) {
+
+    correlateMessagePhaseTwo(
+        workflowModuleId, bpmnProcessId, aggregatePersistence, workflowAggregateId, messageName, correlationId);
+
+  }
+
+  /**
    * Start a new workflow by a message start event - phase one; start semantics
    * apply ({@link #startWorkflowPhaseOne}: embedded BPMS start entirely here,
    * remote BPMS validate only).

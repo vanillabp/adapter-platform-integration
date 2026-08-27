@@ -355,7 +355,8 @@ public final class PhaseTwoRouter {
                             .correlateMessagePhaseTwo(
                                 workflowAggregateId,
                                 call.args().get(PhaseTwoCall.ARG_MESSAGE_NAME),
-                                call.args().get(PhaseTwoCall.ARG_CORRELATION_ID))));
+                                call.args().get(PhaseTwoCall.ARG_CORRELATION_ID),
+                                call.args().get(PhaseTwoCall.ARG_ACTIVATION_ID))));
 
     operations
         .registerCoreOperation(

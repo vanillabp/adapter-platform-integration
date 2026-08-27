@@ -2184,11 +2184,15 @@ public class MigrationProcessService<A> {
    * @param workflowAggregateId The ID of the workflow aggregate (original type)
    * @param messageName The BPMN message name
    * @param correlationId The correlation id or <code>null</code>
+   * @param activationId What the BPMS called the element instance this correlation was
+   *          planned in, or <code>null</code> - carried through to the adapter, whose
+   *          BPMS may deduplicate messages in a net of its own
    */
   public void correlateMessagePhaseTwo(
       final Object workflowAggregateId,
       final String messageName,
-      final String correlationId) {
+      final String correlationId,
+      final String activationId) {
 
     final var subject = "workflow of aggregate '%s' (BPMN process '%s' of workflow module '%s')"
         .formatted(workflowAggregateId, bpmnProcessId, workflowModuleId);
@@ -2212,7 +2216,7 @@ public class MigrationProcessService<A> {
               .adapter()
               .correlateMessagePhaseTwo(
                   workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, messageName,
-                  correlationId));
+                  correlationId, activationId));
     }
 
   }

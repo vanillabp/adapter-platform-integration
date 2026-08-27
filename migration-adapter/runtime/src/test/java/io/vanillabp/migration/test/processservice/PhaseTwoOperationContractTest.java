@@ -156,45 +156,82 @@ public class PhaseTwoOperationContractTest {
   }
 
   @Test
-  @DisplayName("Inside an activation the correlation key names it, and only that key does")
-  public void correlateMessageKeyCarriesTheRunningActivation() {
+  @DisplayName("An activation in the args names the correlation key, and only that key")
+  public void correlateMessageKeyCarriesTheActivationFromTheArgs() {
 
-    final var args = Map
+    // the value is read from the CALL, not from the thread: the derivation stays a pure
+    // function of what a store persists, and the same args carry the activation to the
+    // adapter at dispatch time. Which is why opening a scope alone changes nothing here
+    final var withActivation = Map
+        .of(
+            PhaseTwoCall.ARG_MESSAGE_NAME, "OrderReceived",
+            PhaseTwoCall.ARG_CORRELATION_ID, "correlation-1",
+            PhaseTwoCall.ARG_ACTIVATION_ID, "element-instance-99");
+    assertEquals(
+        "CORRELATE_MESSAGE|test-module|TestProcess|42|OrderReceived|correlation-1|element-instance-99",
+        call(PhaseTwoOperation.CORRELATE_MESSAGE, withActivation).idempotencyKey().orElseThrow());
+
+    // an entry written before this existed carries no such arg and keeps its key, which
+    // is what lets it dispatch across the upgrade
+    final var withoutActivation = Map
         .of(
             PhaseTwoCall.ARG_MESSAGE_NAME, "OrderReceived",
             PhaseTwoCall.ARG_CORRELATION_ID, "correlation-1");
+    assertEquals(
+        "CORRELATE_MESSAGE|test-module|TestProcess|42|OrderReceived|correlation-1",
+        call(PhaseTwoOperation.CORRELATE_MESSAGE, withoutActivation).idempotencyKey().orElseThrow());
 
     try (var activation = RunningActivation.of("element-instance-99")) {
       assertEquals(
-          "CORRELATE_MESSAGE|test-module|TestProcess|42|OrderReceived|correlation-1|element-instance-99",
-          call(PhaseTwoOperation.CORRELATE_MESSAGE, args).idempotencyKey().orElseThrow());
-
-      // a workflow is started at most once per aggregate, whichever activation asks
-      assertEquals(
-          "START_WORKFLOW|test-module|TestProcess|42",
-          call(PhaseTwoOperation.START_WORKFLOW, Map.of()).idempotencyKey().orElseThrow());
-      // a task id already names one activation of one element
-      assertEquals(
-          "COMPLETE_TASK|test-module|TestProcess|42|task-1",
-          call(PhaseTwoOperation.COMPLETE_TASK, Map.of(PhaseTwoCall.ARG_TASK_ID, "task-1"))
-              .idempotencyKey()
-              .orElseThrow());
-      // keyless stays keyless: an activation must not start deduplicating what is
-      // deliberately not deduplicated
-      assertTrue(
-          call(
-              PhaseTwoOperation.CORRELATE_MESSAGE,
-              Map.of(PhaseTwoCall.ARG_MESSAGE_NAME, "OrderReceived")).idempotencyKey().isEmpty());
-      assertTrue(
-          call(PhaseTwoOperation.SEND_SIGNAL, Map.of(PhaseTwoCall.ARG_SIGNAL_NAME, "Recalled"))
-              .idempotencyKey()
-              .isEmpty());
+          "CORRELATE_MESSAGE|test-module|TestProcess|42|OrderReceived|correlation-1",
+          call(PhaseTwoOperation.CORRELATE_MESSAGE, withoutActivation).idempotencyKey().orElseThrow(),
+          "the scope is read where a correlation is PLANNED, not where its key is derived");
     }
 
-    // outside any activation the key is the one every earlier version wrote
+  }
+
+  @Test
+  @DisplayName("No other operation is told about an activation")
+  public void noOtherKeyCarriesAnActivation() {
+
+    // these deduplicate ACROSS activations on purpose: a workflow is started at most once
+    // per aggregate whichever activation asks, and a task id already names one activation
+    // of one element
     assertEquals(
-        "CORRELATE_MESSAGE|test-module|TestProcess|42|OrderReceived|correlation-1",
-        call(PhaseTwoOperation.CORRELATE_MESSAGE, args).idempotencyKey().orElseThrow());
+        "START_WORKFLOW|test-module|TestProcess|42",
+        call(PhaseTwoOperation.START_WORKFLOW, Map.of(PhaseTwoCall.ARG_ACTIVATION_ID, "element-instance-99"))
+            .idempotencyKey()
+            .orElseThrow());
+    assertEquals(
+        "COMPLETE_TASK|test-module|TestProcess|42|task-1",
+        call(
+            PhaseTwoOperation.COMPLETE_TASK,
+            Map
+                .of(
+                    PhaseTwoCall.ARG_TASK_ID, "task-1",
+                    PhaseTwoCall.ARG_ACTIVATION_ID, "element-instance-99"))
+            .idempotencyKey()
+            .orElseThrow());
+    // and keyless stays keyless: an activation must not start deduplicating what is
+    // deliberately not deduplicated
+    assertTrue(
+        call(
+            PhaseTwoOperation.CORRELATE_MESSAGE,
+            Map
+                .of(
+                    PhaseTwoCall.ARG_MESSAGE_NAME, "OrderReceived",
+                    PhaseTwoCall.ARG_ACTIVATION_ID, "element-instance-99"))
+            .idempotencyKey()
+            .isEmpty());
+    assertTrue(
+        call(
+            PhaseTwoOperation.SEND_SIGNAL,
+            Map
+                .of(
+                    PhaseTwoCall.ARG_SIGNAL_NAME, "Recalled",
+                    PhaseTwoCall.ARG_ACTIVATION_ID, "element-instance-99"))
+            .idempotencyKey()
+            .isEmpty());
 
   }
 
