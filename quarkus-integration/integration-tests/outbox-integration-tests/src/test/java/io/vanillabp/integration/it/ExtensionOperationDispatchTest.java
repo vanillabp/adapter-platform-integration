@@ -52,6 +52,15 @@ public class ExtensionOperationDispatchTest {
   private static final String COUNT_ENTRIES_OF_OPERATION = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX "
       + "WHERE OPERATION = '%s'".formatted(SampleExtension.OPERATION_NAME);
 
+  /**
+   * An entry deduplicates as long as it is not DONE, and the dispatcher marks it DONE
+   * one UPDATE after the extension's handler returned.
+   */
+  private static final String COUNT_ENTRIES_STILL_DEDUPLICATING = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX "
+      + "WHERE OPERATION = '"
+      + SampleExtension.OPERATION_NAME
+      + "' AND AGGREGATE_ID = '%s' AND STATUS <> 'DONE'";
+
   @Inject
   WorkflowService workflowService;
 
@@ -81,6 +90,27 @@ public class ExtensionOperationDispatchTest {
         .createStatement(); var resultSet = statement.executeQuery(query)) {
       resultSet.next();
       return resultSet.getLong(1);
+    }
+
+  }
+
+  /**
+   * Waits until no entry of the extension's operation deduplicates any more.
+   * <p>
+   * {@link SampleExtension#awaitDispatched} reports that the handler was called, and
+   * the handler is called INSIDE the dispatch - the entry still carries its key until
+   * the dispatcher marks it DONE. Scheduling the same key in that window is discarded,
+   * so a test which asserts that a repetition IS planned has to wait for the entry.
+   */
+  private void awaitDeduplicationWindowClosed(
+      final Aggregate aggregate) throws Exception {
+
+    final var deadline = System.currentTimeMillis() + 10000;
+    while (count(COUNT_ENTRIES_STILL_DEDUPLICATING.formatted(aggregate.getId())) > 0) {
+      assertTrue(
+          System.currentTimeMillis() < deadline,
+          "an entry of the extension's operation was never marked DONE");
+      Thread.sleep(50);
     }
 
   }
@@ -131,7 +161,8 @@ public class ExtensionOperationDispatchTest {
   public void extensionOperationIsDeduplicatedByItsOwnKey() throws Exception {
 
     // same aggregate, same event, and the first entry still waiting for its dispatch:
-    // the key repeats, so scheduling is a no-op
+    // the key repeats, so scheduling is a no-op. Both ride ONE transaction on purpose -
+    // this half of the test plans AGAINST a pending entry
     userTransaction.begin();
     final var aggregate = workflowService.startWorkflow("extension-dedup");
     outbox
@@ -156,8 +187,10 @@ public class ExtensionOperationDispatchTest {
     assertEquals("created", dispatched.get(0).args().get(SampleExtension.ARG_EVENT));
     assertEquals("completed", dispatched.get(1).args().get(SampleExtension.ARG_EVENT));
 
-    // and the very same event again, now that the first one reached the extension: a
-    // new operation, because the key deduplicates what is planned
+    // and the very same event again, now that the first one reached the extension AND
+    // its entry was marked DONE: a new operation, because the key deduplicates what is
+    // planned
+    awaitDeduplicationWindowClosed(aggregate);
     userTransaction.begin();
     final var scheduledAfterDispatch = outbox
         .schedule(

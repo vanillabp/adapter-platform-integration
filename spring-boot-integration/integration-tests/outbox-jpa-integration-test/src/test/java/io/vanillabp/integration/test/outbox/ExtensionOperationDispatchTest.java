@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
@@ -29,6 +30,13 @@ import io.vanillabp.spi.process.ProcessService;
 @SuppressOutputExtension.SuppressBackgroundOutput
 public class ExtensionOperationDispatchTest {
 
+  /**
+   * One entry, addressed by the key gruelbox stores it under, and only once gruelbox
+   * marked it processed - the state in which that key stops deduplicating.
+   */
+  private static final String COUNT_PROCESSED_ENTRY_OF_KEY = "select count(*) from TXNO_OUTBOX "
+      + "where processed = true and uniqueRequestId = ?";
+
   @Autowired
   private ProcessService<Aggregate> processService;
 
@@ -41,10 +49,40 @@ public class ExtensionOperationDispatchTest {
   @Autowired
   private SampleExtension extension;
 
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
+
   @BeforeEach
   public void resetExtension() {
 
     extension.reset();
+
+  }
+
+  /**
+   * Waits until the entry of the given call stopped deduplicating.
+   * <p>
+   * {@link SampleExtension#awaitDispatched} reports that the handler was called, and
+   * the handler runs INSIDE the dispatch - the entry is marked processed only after it
+   * returned. Scheduling the same key in that window is discarded, so a test which
+   * asserts that a repetition IS planned has to wait for the entry.
+   */
+  private void awaitDeduplicationWindowClosed(
+      final Aggregate aggregate,
+      final String event) throws Exception {
+
+    final var key = SampleExtension
+        .call("test-module", "dummy", aggregate.getId().toString(), event)
+        .idempotencyKey()
+        .orElseThrow();
+
+    final var deadline = System.currentTimeMillis() + 10000;
+    while (jdbcTemplate.queryForObject(COUNT_PROCESSED_ENTRY_OF_KEY, Long.class, key) == 0) {
+      assertTrue(
+          System.currentTimeMillis() < deadline,
+          "the entry of '%s' was never marked processed".formatted(key));
+      Thread.sleep(50);
+    }
 
   }
 
@@ -87,7 +125,8 @@ public class ExtensionOperationDispatchTest {
   public void extensionOperationIsDeduplicatedByItsOwnKey() throws Exception {
 
     // same aggregate, same event, and the first entry still waiting for its dispatch:
-    // the key repeats, so scheduling is a no-op
+    // the key repeats, so scheduling is a no-op. Both ride ONE transaction on purpose -
+    // this half of the test plans AGAINST a pending entry
     final var scheduledTwice = new java.util.concurrent.atomic.AtomicBoolean(true);
     final var aggregate = transactionTemplate.execute(status -> {
       final var newAggregate = new Aggregate();
@@ -117,8 +156,10 @@ public class ExtensionOperationDispatchTest {
     assertEquals("created", dispatched.get(0).args().get(SampleExtension.ARG_EVENT));
     assertEquals("completed", dispatched.get(1).args().get(SampleExtension.ARG_EVENT));
 
-    // and the very same event again, now that the first one reached the extension: a
-    // new operation, because the key deduplicates what is planned
+    // and the very same event again, now that the first one reached the extension AND
+    // its entry was marked processed: a new operation, because the key deduplicates
+    // what is planned
+    awaitDeduplicationWindowClosed(aggregate, "created");
     final var scheduledAfterDispatch = transactionTemplate
         .execute(status -> outbox
             .schedule(

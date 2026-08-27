@@ -116,6 +116,10 @@ public class SampleExtension {
 
   /**
    * Waits until the given number of calls was dispatched.
+   * <p>
+   * The handler runs inside the dispatch, so on return the entry of the last call may
+   * still be waiting to be marked DONE and its key still deduplicates. A test which
+   * schedules that key again has to wait for the ENTRY, in the store.
    *
    * @param count The number of calls awaited
    * @param timeoutMillis The maximum time to wait
