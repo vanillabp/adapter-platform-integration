@@ -29,7 +29,7 @@
   </developers>
 
   <properties>
-    <liquibase.version>4.29.2</liquibase.version>
+    <liquibase.version>4.33.0</liquibase.version>
     <!-- The VanillaBP version whose changesets are generated into a Flyway file. A release which
          changes the schema adds changesets labelled with ITS version plus one execution per
          database below, so a Flyway file always holds one release's statements only. -->
