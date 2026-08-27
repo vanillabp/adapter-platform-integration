@@ -79,6 +79,25 @@ public class MongoOutboxDispatchTest {
 
   }
 
+  /**
+   * Waits until no entry deduplicates any more.
+   * <p>
+   * The listener runs INSIDE the dispatch, one update before the dispatcher sets the
+   * status to DONE and frees the dedup key. A repetition planned in that window meets
+   * an entry which is still waiting and is discarded - correct behaviour, and the
+   * reason a test may not take the listener as the signal that the first operation is
+   * over.
+   */
+  private void awaitDeduplicationWindowClosed() throws Exception {
+
+    final var deadline = System.currentTimeMillis() + 10000;
+    while (outbox().countDocuments(new Document("status", new Document("$ne", "DONE"))) > 0) {
+      assertTrue(System.currentTimeMillis() < deadline, "an outbox entry was never marked DONE");
+      Thread.sleep(50);
+    }
+
+  }
+
   @BeforeEach
   public void reset() {
 
@@ -145,7 +164,8 @@ public class MongoOutboxDispatchTest {
 
     // both starts ride ONE transaction, so nothing is dispatched in between and the
     // second one meets an entry which is still waiting: the unique index over the
-    // dedup key makes it a no-op
+    // dedup key makes it a no-op. Planning against a pending entry is what this test
+    // WANTS, so it must not wait for the window to close
     userTransaction.begin();
     final var attachedAggregate = workflowService.startWorkflow("dedup-pending");
     workflowService.startWorkflowAgain(attachedAggregate);
@@ -167,6 +187,7 @@ public class MongoOutboxDispatchTest {
     userTransaction.commit();
 
     listener.awaitInvocations(1, 10000);
+    awaitDeduplicationWindowClosed();
 
     // the dispatched entry took its own id as dedup key, so the same operation can be
     // planned again (see decision 22 in the repository's DECISIONS.md)

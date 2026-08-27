@@ -51,6 +51,13 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
 
   /**
    * Waits until at least the given number of phase-two invocations were recorded.
+   * <p>
+   * This says that the ADAPTER was called, not that the operation is over: the listener
+   * runs inside the dispatch, and the dispatcher marks the outbox entry DONE - which is
+   * what frees its idempotency key - only after the dispatch returned. On return the
+   * entry may still be waiting to be marked, so a repetition of the same operation
+   * planned right here can be discarded as a duplicate. A test which needs the key to
+   * be free has to wait for the ENTRY, in the store.
    *
    * @param numberOfInvocations The number of invocations to wait for
    * @param timeoutMillis How long to wait at most

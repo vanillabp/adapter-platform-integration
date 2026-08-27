@@ -109,6 +109,25 @@ public class MongoOutboxDispatchTest {
 
   }
 
+  /**
+   * Waits until no entry deduplicates any more.
+   * <p>
+   * The listener runs INSIDE the dispatch, one update before the dispatcher sets the
+   * status to DONE and frees the dedup key. A repetition planned in that window meets
+   * an entry which is still waiting and is discarded - correct behaviour, and the
+   * reason a test may not take the listener as the signal that the first operation is
+   * over.
+   */
+  private void awaitDeduplicationWindowClosed() throws Exception {
+
+    final var deadline = System.currentTimeMillis() + 10000;
+    while (countOutboxEntries() > countDoneOutboxEntries()) {
+      assertTrue(System.currentTimeMillis() < deadline, "an outbox entry was never marked DONE");
+      Thread.sleep(50);
+    }
+
+  }
+
   @Test
   @DisplayName("Phase two is dispatched after commit and the entry is marked DONE")
   public void phaseTwoDispatchedAfterCommit() throws Exception {
@@ -140,7 +159,8 @@ public class MongoOutboxDispatchTest {
 
     // both starts ride ONE transaction, so the second one meets an entry which is
     // still waiting for its dispatch: the unique index over the dedup key makes it a
-    // no-op
+    // no-op. Planning against a pending entry is what this test WANTS, so it must not
+    // wait for the window to close
     final var attachedAggregate = transactionTemplate.execute(status -> {
       final var aggregate = new Aggregate();
       aggregate.setContent("dedup-pending");
@@ -167,6 +187,7 @@ public class MongoOutboxDispatchTest {
     });
     assertNotNull(attachedAggregate);
     listener.awaitInvocations(1, 10000);
+    awaitDeduplicationWindowClosed();
 
     // the dispatched entry took its own id as dedup key, so the same operation can be
     // planned again (see decision 22 in the repository's DECISIONS.md)

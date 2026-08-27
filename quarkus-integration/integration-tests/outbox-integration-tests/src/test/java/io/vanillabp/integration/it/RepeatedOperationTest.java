@@ -3,6 +3,8 @@ package io.vanillabp.integration.it;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import javax.sql.DataSource;
+
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,6 +51,13 @@ public class RepeatedOperationTest {
       .overrideRuntimeConfigKey("quarkus.datasource.jdbc.url",
           "jdbc:h2:mem:repeated-operation-it;DB_CLOSE_DELAY=-1");
 
+  /**
+   * An entry deduplicates as long as it is not DONE - that is the state these tests
+   * plan against, and the dispatcher reaches it one UPDATE after the listener ran.
+   */
+  private static final String COUNT_ENTRIES_STILL_DEDUPLICATING = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX "
+      + "WHERE AGGREGATE_ID = '%s' AND STATUS <> 'DONE'";
+
   @Inject
   WorkflowService workflowService;
 
@@ -60,6 +69,9 @@ public class RepeatedOperationTest {
 
   @Inject
   UserTransaction userTransaction;
+
+  @Inject
+  DataSource dataSource;
 
   @BeforeEach
   public void reset() {
@@ -80,6 +92,39 @@ public class RepeatedOperationTest {
     } catch (final Exception e) {
       userTransaction.rollback();
       throw e;
+    }
+
+  }
+
+  private long count(
+      final String query) throws Exception {
+
+    try (var connection = dataSource.getConnection(); var statement = connection
+        .createStatement(); var resultSet = statement.executeQuery(query)) {
+      resultSet.next();
+      return resultSet.getLong(1);
+    }
+
+  }
+
+  /**
+   * Waits until no entry of this aggregate deduplicates any more.
+   * <p>
+   * The listener runs INSIDE the dispatch, one UPDATE before the dispatcher sets
+   * <code>STATUS = 'DONE'</code> and <code>DEDUP_KEY = ID</code>. A repetition planned
+   * in that window meets an entry which is still waiting and is discarded - correct
+   * behaviour, and the reason a test may not take the listener as the signal that the
+   * first operation is over.
+   */
+  private void awaitDeduplicationWindowClosed(
+      final Aggregate aggregate) throws Exception {
+
+    final var deadline = System.currentTimeMillis() + 30_000;
+    while (count(COUNT_ENTRIES_STILL_DEDUPLICATING.formatted(aggregate.getId())) > 0) {
+      assertTrue(
+          System.currentTimeMillis() < deadline,
+          "an entry of aggregate '%s' was never marked DONE".formatted(aggregate.getId()));
+      Thread.sleep(50);
     }
 
   }
@@ -108,6 +153,7 @@ public class RepeatedOperationTest {
     // first round: partner 42 is asked
     inTransaction(() -> workflowService.correlateMessage(aggregate, "OfferRequested", "partner-42"));
     awaitCorrelations(1);
+    awaitDeduplicationWindowClosed(aggregate);
 
     // second round: the same partner is asked again, with the same correlation id,
     // which used to be swallowed for the whole retention period
@@ -136,7 +182,9 @@ public class RepeatedOperationTest {
     awareness.answerWith(WorkflowAwareness.ACTIVE);
 
     // both are planned in ONE transaction, so nothing was dispatched in between: the
-    // second one is discarded, and VanillaBP warns about it
+    // second one is discarded, and VanillaBP warns about it. This test WANTS to plan
+    // against a pending entry, so it must NOT wait for the window to close - the
+    // opposite of what its siblings do, and the two look alike from here
     inTransaction(() -> {
       workflowService.correlateMessage(aggregate, "ItemShipped", "item-1");
       return workflowService.correlateMessage(aggregate, "ItemShipped", "item-1");
@@ -186,6 +234,7 @@ public class RepeatedOperationTest {
 
     final var aggregate = inTransaction(() -> workflowService.startWorkflow("second-start"));
     listener.awaitInvocations(1, 30_000);
+    awaitDeduplicationWindowClosed(aggregate);
 
     // an aggregate outliving its workflow and starting a second one of the same
     // process: while the first start was still pending this was a no-op, and it stays

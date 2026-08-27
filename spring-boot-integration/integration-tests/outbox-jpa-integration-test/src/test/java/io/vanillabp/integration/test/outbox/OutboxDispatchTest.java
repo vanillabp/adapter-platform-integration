@@ -36,7 +36,15 @@ public class OutboxDispatchTest {
 
   private static final String COUNT_OUTBOX_ENTRIES = "select count(*) from TXNO_OUTBOX";
 
-  private static final String COUNT_PROCESSED_OUTBOX_ENTRIES = "select count(*) from TXNO_OUTBOX where processed = true";
+  /**
+   * The entry of ONE aggregate, and only once gruelbox marked it processed - the state
+   * in which its key stops deduplicating. A count over the whole table would already be
+   * satisfied by a sibling test's entry, which is the same mistake in a hiding place.
+   * The key of a start ends in the aggregate's ID (see
+   * {@code PhaseTwoOperation#START_WORKFLOW}).
+   */
+  private static final String COUNT_PROCESSED_START_OF_AGGREGATE = "select count(*) from TXNO_OUTBOX "
+      + "where processed = true and uniqueRequestId like '%%|%s'";
 
   @Autowired
   private ProcessService<Aggregate> processService;
@@ -146,9 +154,15 @@ public class OutboxDispatchTest {
     listener.awaitInvocations(1, 10000);
 
     // DONE instead of delete: gruelbox retains the processed entry (unique request
-    // ID + retention threshold), which used to keep the deduplication window open
+    // ID + retention threshold), which used to keep the deduplication window open.
+    // Waiting for the ENTRY and not for the listener is what makes the next schedule
+    // meet the state this test is about - the listener runs inside the dispatch, before
+    // the entry is processed
     final var deadline = System.currentTimeMillis() + 10000;
-    while (jdbcTemplate.queryForObject(COUNT_PROCESSED_OUTBOX_ENTRIES, Long.class) == 0) {
+    while (jdbcTemplate
+        .queryForObject(
+            COUNT_PROCESSED_START_OF_AGGREGATE.formatted(attachedAggregate.getId()),
+            Long.class) == 0) {
       assertTrue(System.currentTimeMillis() < deadline, "processed outbox entry was not retained");
       Thread.sleep(50);
     }
