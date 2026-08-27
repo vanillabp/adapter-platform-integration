@@ -28,13 +28,15 @@ import java.util.Optional;
  * respectively is ignored.
  * <p>
  * <strong>Retention:</strong> records are deleted asynchronously once
- * <code>vanillabp.outbox.retention</code> passed (default 7 days) - the same property
- * the outbox uses, and one number with two meanings. HERE it decides correctness: a
- * BPMS redelivering a task later than that finds no record and runs the business code a
- * second time. On the OUTBOX side the deduplication window ends with the dispatch (see
- * decision 22 in the repository's DECISIONS.md), so there the retention only decides how
- * long a dispatched entry stays readable for support. Shortening it to keep the outbox
- * small therefore costs something on this side. The period counts
+ * <code>vanillabp.delivery.retention</code> passed, which defaults to
+ * <code>vanillabp.outbox.retention</code> (7 days) and is a property of its own since the
+ * two stopped being one kind of thing (see decision 24 in the repository's DECISIONS.md).
+ * HERE the number decides correctness: a BPMS
+ * redelivering a task later than that finds no record and runs the business code a second
+ * time. On the OUTBOX side the deduplication window ends with the dispatch (see decision
+ * 22 in the repository's DECISIONS.md), so there the retention only decides how long a
+ * dispatched entry stays readable for support - which is why an installation keeping its
+ * outbox table small no longer shortens this window with the same hand. The period counts
  * from the last redelivery the record answered ({@link #stillOpen(String)}), so a task
  * which stays open keeps the record answering it and the clock starts once nobody hands
  * that task out any more.

@@ -74,6 +74,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
 
   private volatile PhaseTwoOutboxProperties properties;
 
+  private volatile java.time.Duration deliveryRetention;
+
   private volatile TaskDeliveryRetentionCleanup retentionCleanup;
 
   private final OpenTaskTouches touches = new OpenTaskTouches(
@@ -119,6 +121,35 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   }
 
   /**
+   * How long a record is kept: <code>vanillabp.delivery.retention</code> where the
+   * application sets it, and <code>vanillabp.outbox.retention</code> otherwise, which is
+   * where the number lived before the two windows were told apart. Loaded lazily like the
+   * outbox configuration next to it.
+   *
+   * Public because it answers the first question a support case about a handler running
+   * twice asks, and because it is what the tests of this wiring assert.
+   *
+   * @return The retention of delivery records
+   */
+  public java.time.Duration getDeliveryRetention() {
+
+    if (deliveryRetention == null) {
+      deliveryRetention = io.vanillabp.integration.adapter.migration.config.DeliveryProperties
+          .resolveRetention(
+              QuarkusMigrationAdapterPropertiesMapper.INSTANCE
+                  .toCore(
+                      ConfigProvider
+                          .getConfig()
+                          .unwrap(SmallRyeConfig.class)
+                          .getConfigMapping(QuarkusMigrationAdapterProperties.class)
+                          .delivery()),
+              getProperties().getRetention());
+    }
+    return deliveryRetention;
+
+  }
+
+  /**
    * Creates the index the cleanup reads (unless disabled) and starts the cleanup.
    *
    * @param event The startup event observed
@@ -140,7 +171,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
       deliveryCollection().createIndex(Indexes.ascending("lastSeenAt"));
     }
     retentionCleanup = new TaskDeliveryRetentionCleanup(
-        DEFAULT_COLLECTION_NAME, getProperties().getRetention(), this::cleanUpExpiredRecords);
+        DEFAULT_COLLECTION_NAME, getDeliveryRetention(), this::cleanUpExpiredRecords);
     retentionCleanup.start();
 
   }
@@ -161,7 +192,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
         .deleteMany(
             new Document(
                 "lastSeenAt", new Document("$lt", Date
-                    .from(java.time.Instant.now().minus(getProperties().getRetention())))))
+                    .from(java.time.Instant.now().minus(getDeliveryRetention())))))
         .getDeletedCount();
 
   }

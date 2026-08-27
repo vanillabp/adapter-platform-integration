@@ -9,7 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Deletes the records of processed task deliveries once
- * <code>vanillabp.outbox.retention</code> passed - shared by every
+ * <code>vanillabp.delivery.retention</code> passed - shared by every
  * {@link io.vanillabp.integration.spi.TaskDeliveryLog} implementation of both platforms,
  * since a store differs in HOW it deletes, not in WHEN.
  * <p>
@@ -60,7 +60,14 @@ public class TaskDeliveryRetentionCleanup {
     if (executor != null) {
       return;
     }
-    log.debug("Cleaning up task-delivery records of '{}' older than {}", name, retention);
+    // said once and at INFO, because which of the two retentions this store runs with is
+    // the first question a support case about a handler running twice asks
+    log
+        .info(
+            "Records of processed task deliveries in '{}' are kept for {} "
+                + "('vanillabp.delivery.retention')",
+            name,
+            retention);
     executor = Executors.newSingleThreadScheduledExecutor(runnable -> {
       final var thread = new Thread(runnable, "vanillabp-task-deliveries");
       thread.setDaemon(true);

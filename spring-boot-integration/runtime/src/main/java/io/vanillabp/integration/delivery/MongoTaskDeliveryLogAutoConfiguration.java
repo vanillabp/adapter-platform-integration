@@ -27,7 +27,8 @@ import io.vanillabp.integration.spi.TaskDeliveryLog;
  * key, so uniqueness comes from the document ID and no unique index is needed. Unless
  * <code>vanillabp.outbox.create-schema</code> is disabled, an index on the record's
  * timestamp is created for the retention cleanup
- * (<code>vanillabp.outbox.retention</code>).
+ * (<code>vanillabp.delivery.retention</code>, falling back to
+ * <code>vanillabp.outbox.retention</code>).
  */
 @AutoConfiguration(
     after = JdbcTaskDeliveryLogAutoConfiguration.class,
@@ -48,8 +49,9 @@ public class MongoTaskDeliveryLogAutoConfiguration {
 
   /**
    * @param mongoTemplate The template writing the records within the current transaction
-   * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree carrying the
-   *          <code>vanillabp.outbox</code> section
+   * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree, asked for the
+   *          retention of delivery records (<code>vanillabp.delivery.retention</code>,
+   *          falling back to <code>vanillabp.outbox.retention</code>)
    * @return The {@link TaskDeliveryLog} used for MongoDB-persisted aggregates
    */
   @Bean(name = DEFAULT_DELIVERY_LOG_BEAN_NAME, destroyMethod = "stop")
@@ -59,8 +61,7 @@ public class MongoTaskDeliveryLogAutoConfiguration {
 
     return new MongoTaskDeliveryLog(
         mongoTemplate, MongoTaskDeliveryLog.DEFAULT_COLLECTION_NAME, vanillaBpProperties
-            .getOutbox()
-            .getRetention());
+            .resolvedDeliveryRetention());
 
   }
 

@@ -514,17 +514,47 @@ waiting legitimately.
 - Deliberately no callback into the application. An application which knows its task is
   obsolete has `ProcessService#cancelTask`; one which lost track of it could not answer a
   liveness question truthfully anyway.
-- The record itself used to expire with `vanillabp.outbox.retention` while its task was
+- The record itself used to expire with the retention while its task was
   still open, which is the exposure the retention shrank from the old fourteen-day horizon
   without removing it. A second timestamp on the record closed it (see the next section);
   the age measured here keeps counting from the first one,
   which is why refreshing that one was never an option.
 
+#### The retention of a record is its own property
+
+`vanillabp.delivery.retention` decides how long a record is kept, and it defaults to
+`vanillabp.outbox.retention`, which is where the number lived while one property governed
+both windows. They stopped being one kind of thing when the outbound deduplication window
+ended with the dispatch (decision 22): on the outbox side the retention only decides how
+long a dispatched entry stays readable during support, on this side it decides whether a
+late redelivery runs the business code again. An installation shortening the one to keep
+its table small was shortening the other with the same hand. That two questions of
+different kinds get two properties is decision 24.
+
+- The resolution is `DeliveryProperties.resolveRetention`, called by
+  `MigrationAdapterProperties.resolvedDeliveryRetention` on Spring Boot and by the lazy
+  `getDeliveryRetention` of the two Quarkus logs, which cannot ask a bound properties
+  object at the moment they need the number.
+- It is read GLOBALLY, unlike `release-on-workflow-end` and `max-task-age` next to it. One
+  `TaskDeliveryRetentionCleanup` per store deletes by age across the whole table
+  respectively collection, so a value per workflow module would have to be honored by a
+  different deletion in each of the four stores to mean anything.
+- Where exactly one of the two numbers is moved away from the default, the startup says
+  which window applies to what (`MigrationAdapterProperties.reportRetentionSplit`). The
+  trigger is "differs from the default" rather than "was written down", because a bound
+  property cannot tell those apart.
+- No startup check compares the retention against what an adapter can redeliver within,
+  which was the alternative to splitting and is refused by decision 24. What an adapter
+  knows is the INTERVAL at which it hands unacknowledged work out again - the Camunda 8
+  `async-task-lock-renewal` - and the horizon is set by how long the application is stopped
+  and by whoever resolves an incident. A check against the interval would pass in exactly
+  the installations about to run business code twice.
+
 #### The record of a task which is still open
 
-The record which answers the redeliveries of an open task was deleted once
-`vanillabp.outbox.retention` passed, seven days by default. A task open for longer lost the
-record, and the next redelivery reached the `@WorkflowTask` method a second time.
+The record which answers the redeliveries of an open task was deleted once the retention
+passed, seven days by default. A task open for longer lost the record, and the next
+redelivery reached the `@WorkflowTask` method a second time.
 
 The record therefore carries a second timestamp. `RECORDED_AT` keeps meaning the moment the
 handler ran, which is what the age of an open task is measured from, and `LAST_SEEN_AT`

@@ -57,14 +57,24 @@ public class PhaseTwoOutboxProperties {
    * window: that one ends with the dispatch (see
    * {@link io.vanillabp.integration.spi.PhaseTwoOutbox}).
    * <p>
-   * The very same number decides something else on the INBOUND side, where it is a
-   * correctness setting: a task delivery arriving later than the retention finds no
-   * record and runs the business code a second time (see
-   * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). Shortening it to keep the
-   * outbox small therefore costs something there.
+   * This is the OUTBOX half only. The records of processed task deliveries have a
+   * retention of their own (<code>vanillabp.delivery.retention</code>), which defaults to
+   * this number and is a correctness setting rather than an operational one: a delivery
+   * arriving later than it finds no record and runs the business code a second time (see
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). The two were one property until
+   * they were told apart (decision 24 in the repository's DECISIONS.md), which is why
+   * shortening this one to keep the outbox table small used to shorten a correctness window
+   * with the same hand.
    */
   @Builder.Default
-  private Duration retention = Duration.ofDays(7);
+  private Duration retention = DEFAULT_RETENTION;
+
+  /**
+   * The default of {@link #retention}, and therefore the default of
+   * <code>vanillabp.delivery.retention</code>, which follows it where it is not set
+   * itself. Seven days.
+   */
+  public static final Duration DEFAULT_RETENTION = Duration.ofDays(7);
 
   /**
    * Configuration of the JDBC-based default outbox (Spring Boot: gruelbox over the

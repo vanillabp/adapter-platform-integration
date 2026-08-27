@@ -14,11 +14,19 @@ import lombok.experimental.SuperBuilder;
  * records of every BPMS live in the store of the workflow aggregate, so the question is
  * one of the application's data, not one of a BPMS.
  * <p>
- * Two settings live here: whether a workflow which ended releases its records
- * ({@link #releaseOnWorkflowEnd}), and how long a task may stay open before VanillaBP
- * says so ({@link #maxTaskAge}). Both are overridable per workflow module, and the age
- * additionally per workflow and per task, since how long a task may legitimately wait
- * is a property of that task rather than of the application.
+ * Three settings live here: whether a workflow which ended releases its records
+ * ({@link #releaseOnWorkflowEnd}), how long a task may stay open before VanillaBP says so
+ * ({@link #maxTaskAge}), and how long a record is kept ({@link #retention}). The first
+ * two are overridable per workflow module, and the age additionally per workflow and per
+ * task, since how long a task may legitimately wait is a property of that task rather
+ * than of the application.
+ * <p>
+ * The retention is the exception and is read globally only, which is decision 24 in the
+ * repository's DECISIONS.md: what deletes the records is one cleanup per store,
+ * constructed with one period and deleting by age across the whole table respectively
+ * collection, so a value per workflow module would have to be honored by a different
+ * deletion in each of the four stores VanillaBP ships to mean anything at all. A property
+ * which is bound per module and silently ignored there is worse than not having one.
  */
 @Getter
 @Setter
@@ -28,7 +36,7 @@ public class DeliveryProperties {
 
   /**
    * Whether the records of a workflow are deleted the moment it ends, instead of waiting
-   * for <code>vanillabp.outbox.retention</code> to pass (see
+   * for {@link #retention} to pass (see
    * {@link io.vanillabp.integration.spi.TaskDeliveryLog#releaseRecordsOf}). The end of an
    * instance is the one statement after which nothing of it can be redelivered, so the
    * deletion is safe - and it is bound to the moment of the notification, which keeps the
@@ -61,6 +69,48 @@ public class DeliveryProperties {
    * tasks have no upper bound says so deliberately.
    */
   private Duration maxTaskAge;
+
+  /**
+   * How long the record of a processed task delivery is kept, counted from the last
+   * redelivery it answered (see
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLog#stillOpen}). This is a
+   * CORRECTNESS setting: a delivery arriving later than this finds no record and runs the
+   * <code>&#64;WorkflowTask</code> method a second time, so the period has to cover the
+   * longest gap between a handler running and the last redelivery of that work - which
+   * includes however long the application is stopped, because a stopped application
+   * refreshes nothing and the first cleanup run after it starts deletes what expired
+   * meanwhile.
+   * <p>
+   * Nothing here can bound that gap for you, and no adapter can either. What an adapter
+   * knows is the interval at which it hands unacknowledged work out again - the Camunda 8
+   * <code>async-task-lock-renewal</code>, an hour by default - and that interval is not
+   * the horizon: a check against it would pass in exactly the installations which are
+   * about to run business code twice.
+   * <p>
+   * <code>null</code> means "whatever <code>vanillabp.outbox.retention</code> says", which
+   * is where this number lived until it was split off. Why the two are two properties, and
+   * why the new one follows the old one where it is not set, is decision 24 in the
+   * repository's DECISIONS.md.
+   */
+  private Duration retention;
+
+  /**
+   * Resolves the retention of delivery records: what this section says, or the outbox
+   * retention it was split off from.
+   *
+   * @param delivery The <code>vanillabp.delivery</code> section or <code>null</code>
+   * @param outboxRetention What <code>vanillabp.outbox.retention</code> resolves to
+   * @return The period delivery records are kept for
+   */
+  public static Duration resolveRetention(
+      final DeliveryProperties delivery,
+      final Duration outboxRetention) {
+
+    return (delivery != null) && (delivery.getRetention() != null)
+        ? delivery.getRetention()
+        : outboxRetention;
+
+  }
 
   /**
    * The default of {@link #maxTaskAge} in ISO-8601 notation, for javadoc and messages.

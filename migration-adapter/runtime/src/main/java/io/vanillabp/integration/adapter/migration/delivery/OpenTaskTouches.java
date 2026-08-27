@@ -85,7 +85,7 @@ public class OpenTaskTouches {
             """
                 More than {} open tasks of '{}' were redelivered since the last refresh of their \
                 delivery records - the keys beyond that are dropped, and a record which is not \
-                refreshed for a whole 'vanillabp.outbox.retention' is deleted although its task is \
+                refreshed for a whole 'vanillabp.delivery.retention' is deleted although its task is \
                 still open, so its next redelivery reaches the @WorkflowTask method again. Either \
                 that many tasks are open at once and the retention should be raised, or tasks are \
                 waiting which nobody will ever complete - 'vanillabp.delivery.max-task-age' reports \

@@ -4,6 +4,42 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## The records of delivered tasks have a retention of their own (2026-08-27)
+
+`vanillabp.delivery.retention` decides how long the record of a processed task delivery is kept. It
+used to be `vanillabp.outbox.retention`, and one number governed two windows whose requirements
+point in different directions.
+
+**Nothing changes unless you say so.** Where the new property is not set it follows
+`vanillabp.outbox.retention`, so an installation which never touched either number keeps seven days
+on both halves and an installation which lowered the old one keeps the behaviour it had. Where
+exactly one of the two is moved away from the default, the startup says which window applies to
+what.
+
+**Who should look.** An installation which lowered `vanillabp.outbox.retention` to keep its outbox
+table small. That was shortening a correctness window with the same hand: on the OUTBOX side the
+deduplication window ends with the dispatch (see the entry of 2026-08-26 below), so the retention
+there only decides how long a dispatched entry stays readable during support, while on the DELIVERY
+side it decides whether a redelivery arriving later than that runs your `@WorkflowTask` method a
+second time. Those installations can now keep the small table and give the records the period they
+need.
+
+**How long is long enough.** Long enough to cover the largest gap between a handler running and the
+last redelivery of that work. The part nobody can compute for you is how long the application is
+stopped: a stopped application refreshes no record, and the first cleanup run after it starts
+deletes what expired meanwhile. No adapter can bound it either - what an adapter knows is how often
+it hands unacknowledged work out again, which is minutes to hours and says nothing about the
+horizon, so there is deliberately no startup check comparing the two.
+
+**Read globally, unlike its neighbours.** `vanillabp.delivery.release-on-workflow-end` and
+`vanillabp.delivery.max-task-age` are overridable per workflow module; the retention is not, because
+one cleanup per store deletes by age across the whole table respectively collection.
+
+**The Camunda 8 startup check moved with it.** `async-task-lock-renewal` has to sit clearly below
+the retention which keeps the record answering the redelivery that renews the lock, and that is the
+delivery retention from now on. An application which lowered `vanillabp.outbox.retention` below its
+renewal window and was refused the boot will now boot.
+
 ## The key of a message correlation names the activation which planned it (2026-08-27)
 
 Multi-instance siblings of one workflow aggregate stop sharing an idempotency key. A called process
