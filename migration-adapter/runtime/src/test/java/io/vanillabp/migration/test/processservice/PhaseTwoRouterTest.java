@@ -197,6 +197,61 @@ public class PhaseTwoRouterTest {
   }
 
   @Test
+  @DisplayName("The activation of a correlation reaches phase two, where the thread which knew it is long gone")
+  public void dispatchCarriesTheActivationOfACorrelation() {
+
+    when(processService.convertAggregateId("42")).thenReturn(42L);
+
+    registerProcessService();
+
+    testee
+        .dispatch(
+            PhaseTwoCall
+                .forDispatch(
+                    PhaseTwoOperation.CORRELATE_MESSAGE.name(),
+                    "test-module",
+                    "TestProcess",
+                    "42",
+                    null,
+                    Map
+                        .of(
+                            PhaseTwoCall.ARG_MESSAGE_NAME, "OfferRequested",
+                            PhaseTwoCall.ARG_CORRELATION_ID, "partner-42",
+                            PhaseTwoCall.ARG_ACTIVATION_ID, "element-instance-99")));
+
+    // a BPMS with a message deduplication of its own needs the same distinction there,
+    // and phase two runs on the dispatcher's thread
+    verify(processService).correlateMessagePhaseTwo(42L, "OfferRequested", "partner-42", "element-instance-99");
+
+  }
+
+  @Test
+  @DisplayName("An entry written before the activation existed dispatches without one")
+  public void dispatchOfAnOlderEntryPassesNoActivation() {
+
+    when(processService.convertAggregateId("42")).thenReturn(42L);
+
+    registerProcessService();
+
+    testee
+        .dispatch(
+            PhaseTwoCall
+                .forDispatch(
+                    PhaseTwoOperation.CORRELATE_MESSAGE.name(),
+                    "test-module",
+                    "TestProcess",
+                    "42",
+                    null,
+                    Map
+                        .of(
+                            PhaseTwoCall.ARG_MESSAGE_NAME, "OfferRequested",
+                            PhaseTwoCall.ARG_CORRELATION_ID, "partner-42")));
+
+    verify(processService).correlateMessagePhaseTwo(42L, "OfferRequested", "partner-42", null);
+
+  }
+
+  @Test
   @DisplayName("Dispatch for an unknown BPMN process fails with a guiding message")
   public void dispatchFailsOnUnknownProcess() {
 

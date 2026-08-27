@@ -107,6 +107,20 @@ public record PhaseTwoCall(
    */
   public static final String ARG_SIGNAL_NAME = "signalName";
 
+  /**
+   * The {@link #args()} key carrying the activation a
+   * {@link PhaseTwoOperation#CORRELATE_MESSAGE} was planned in, absent where it was
+   * planned outside any ({@link RunningActivation}). Part of the persisted contract -
+   * never change the literal.
+   * <p>
+   * It travels for two reasons. The idempotency key is derived from it, which is what
+   * keeps multi-instance siblings of one workflow aggregate from sharing a key (see
+   * decision 23 in the repository's DECISIONS.md); and the adapter is handed it at
+   * DISPATCH time, long after the thread which knew it has moved on, because a BPMS
+   * deduplicating messages in a net of its own needs the same distinction there.
+   */
+  public static final String ARG_ACTIVATION_ID = "activationId";
+
   public PhaseTwoCall {
     Objects.requireNonNull(operation, "operation must not be null");
     Objects.requireNonNull(workflowModuleId, "workflowModuleId must not be null");
