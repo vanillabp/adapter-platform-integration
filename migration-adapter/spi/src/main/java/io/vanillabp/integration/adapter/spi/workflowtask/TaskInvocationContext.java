@@ -170,10 +170,51 @@ public interface TaskInvocationContext {
    * A value does NOT have to be unique beyond this BPMS: the core prefixes it with
    * the adapter ID, the workflow module, the BPMN process and the event, so the ID
    * only has to be unique within the delivering BPMS.
+   * <p>
+   * <strong>Not to be confused with {@link #getActivationId()}</strong>, which the next
+   * reader will otherwise take for the same value under a second name. This one is the
+   * identity of a DELIVERY and stays equal while the BPMS repeats itself; that one is
+   * the identity of an ACTIVATION and differs between two activations of one element.
+   * An adapter which cannot answer this one can still answer that one, and Camunda 7 is
+   * exactly that case.
    *
    * @return The delivery's identity or <code>null</code>
    */
   default String getDeliveryId() {
+
+    return null;
+
+  }
+
+  /**
+   * What identifies the ACTIVATION of the BPMN element this delivery belongs to: the
+   * Camunda 8 element instance key, the activity instance ID of an embedded engine,
+   * whatever the BPMS calls the instance of the element which is running. Two
+   * activations of one element - the next loop iteration, the second element of a
+   * multi-instance activity - have to yield DIFFERENT values, and the value has to stay
+   * the same for as long as one activation lasts.
+   * <p>
+   * It is explicitly NOT required to differ between redeliveries of ONE activation.
+   * That is what tells it apart from {@link #getDeliveryId()}, whose contract is the
+   * opposite: equal across redeliveries. A BPMS naming its deliveries after the element
+   * instance answers one value for both, which is why the two were not told apart
+   * before; a BPMS which delivers inside its own transaction reports no delivery id and
+   * still knows its activity instance.
+   * <p>
+   * The core reads it while the handler runs
+   * ({@link io.vanillabp.integration.spi.RunningActivation}) and puts it into the
+   * idempotency key of a message correlation, so that multi-instance siblings of one
+   * workflow aggregate stop sharing a key (see decision 23 in the repository's
+   * DECISIONS.md). Nothing else uses it, and in particular the delivery log does not:
+   * feeding this value to the log would make every redelivery look like new work.
+   * <p>
+   * The default is <code>null</code>, which means "this adapter cannot tell". Keys are
+   * then derived the way they were before this existed, so an adapter written earlier
+   * keeps working and its multi-instance siblings keep colliding.
+   *
+   * @return The activation's identity or <code>null</code>
+   */
+  default String getActivationId() {
 
     return null;
 

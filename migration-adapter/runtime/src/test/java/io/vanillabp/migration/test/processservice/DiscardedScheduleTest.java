@@ -31,6 +31,7 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.RunningActivation;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
@@ -41,10 +42,13 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * it belongs and both causes nothing here can tell apart (see decision 22 in the
  * repository's DECISIONS.md).
  * <p>
- * Until the identity of an activation reaches the outbound side, that warning is the
- * only signal an application gets when two multi-instance siblings of one aggregate
- * correlate the same message with the same correlation id. Asserting a log level looks
- * petty; this line is the feature.
+ * It also pins which operations reach that answer at all. Multi-instance siblings of one
+ * aggregate used to: three elements of a multi-instance call activity share workflow
+ * module, BPMN process and aggregate id, so their correlations shared a key and two of
+ * the three were dropped. Since the activation which planned an operation is part of the
+ * key, they do not (see decision 23 in the repository's DECISIONS.md), and what is left
+ * is a caller repeating itself within ONE activation or outside any. Both are here,
+ * because the difference between them is the feature.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class DiscardedScheduleTest {
@@ -236,33 +240,154 @@ public class DiscardedScheduleTest {
 
 
   @Test
-  @DisplayName("Multi-instance siblings of one aggregate lose their correlation, audibly")
-  public void siblingsOfOneAggregateAreDiscardedAndSaidSo() {
+  @DisplayName("Multi-instance siblings of one aggregate each keep their correlation")
+  public void siblingsOfOneAggregateAreToldApartByTheirActivation() {
 
     // three elements of a multi-instance call activity: the called process is a
-    // secondary workflow of the SAME aggregate, so the three correlations share
-    // workflow module, BPMN process and aggregate id, and a correlation id read from
-    // business data does not have to differ. All three are planned in one batch of
-    // work, so the narrowed window does not reach them - the first one wins and the
-    // other two are lost. That is pinned here as it BEHAVES: telling a sibling from a
-    // redelivery needs the identity of the activation, which the outbound side does not
-    // report yet, and until it does the warning is all an application gets
+    // secondary workflow of the SAME aggregate, so the three correlations share workflow
+    // module, BPMN process and aggregate id, and a correlation id read from business data
+    // does not have to differ. What differs is the activation each of them was planned
+    // in, which is exactly what the BPMS names and what story 141 put into the key
+    final var outbox = new PendingKeyOutbox();
+    final var testee = serviceWithDiscardingOutbox(outbox);
+
+    for (final var element : List.of("element-1", "element-2", "element-3")) {
+      try (var activation = RunningActivation.of(element)) {
+        testee.correlateMessage(new Object(), "OfferRequested", "partner-42");
+      }
+    }
+
+    assertEquals(3, outbox.planned.size(), "all three siblings were planned");
+    assertEquals(
+        3,
+        outbox.pending.size(),
+        "three keys, one per activation: "
+            + outbox.pending);
+    assertTrue(
+        logWatcher.list
+            .stream()
+            .noneMatch(event -> event.getLevel() == Level.WARN),
+        "nothing was lost, so nothing is warned about: "
+            + logWatcher.list);
+
+  }
+
+  @Test
+  @DisplayName("A repeated delivery of ONE activation still correlates once")
+  public void aRepeatedDeliveryOfOneActivationCorrelatesOnce() {
+
+    // the guarantee the activation identity must not cost: the BPMS handing the same
+    // element instance out twice is not a second element, and its correlation is the
+    // one which is already waiting
+    final var outbox = new PendingKeyOutbox();
+    final var testee = serviceWithDiscardingOutbox(outbox);
+
+    try (var first = RunningActivation.of("element-1")) {
+      testee.correlateMessage(new Object(), "OfferRequested", "partner-42");
+    }
+    try (var redelivery = RunningActivation.of("element-1")) {
+      testee.correlateMessage(new Object(), "OfferRequested", "partner-42");
+    }
+
+    assertEquals(1, outbox.planned.size(), "the redelivery found its own entry waiting");
+
+  }
+
+  @Test
+  @DisplayName("Inside an activation the warning says what a sibling is not")
+  public void aDiscardInsideAnActivationNamesTheActivation() {
+
+    final var outbox = new PendingKeyOutbox();
+    final var testee = serviceWithDiscardingOutbox(outbox);
+
+    try (var activation = RunningActivation.of("element-1")) {
+      testee.correlateMessage(new Object(), "OfferRequested", "partner-42");
+      testee.correlateMessage(new Object(), "OfferRequested", "partner-42");
+    }
+
+    final var warning = theWarning();
+    assertTrue(warning.contains("element-1"), warning);
+    // the remedy of the other branch would send the reader looking for a sibling which
+    // this cannot be
+    assertTrue(warning.contains("one activation asking twice"), warning);
+
+  }
+
+  @Test
+  @DisplayName("Outside any activation a repetition is still discarded, audibly")
+  public void aRepetitionOutsideAnyActivationIsDiscardedAndSaidSo() {
+
+    // a REST endpoint correlating the same message twice for one aggregate is
+    // indistinguishable from a repeat of itself, and it stays that way - this story
+    // fixed the siblings, not this
     final var outbox = new PendingKeyOutbox();
     final var testee = serviceWithDiscardingOutbox(outbox);
 
     testee.correlateMessage(new Object(), "OfferRequested", "partner-42");
     testee.correlateMessage(new Object(), "OfferRequested", "partner-42");
-    testee.correlateMessage(new Object(), "OfferRequested", "partner-42");
 
-    assertEquals(1, outbox.planned.size(), "one of the three siblings was planned");
-    assertEquals(
-        2,
-        logWatcher.list
-            .stream()
-            .filter(event -> event.getLevel() == Level.WARN)
-            .count(),
-        "the two lost correlations are named: "
-            + logWatcher.list);
+    assertEquals(1, outbox.planned.size(), "the second one lost against the first");
+    final var warning = theWarning();
+    assertTrue(warning.contains("outside any activation"), warning);
+    assertTrue(warning.contains("vary the correlation id"), warning);
+
+  }
+
+  @Test
+  @DisplayName("A handler spawning its own thread loses the activation and the key with it")
+  public void anActivationDoesNotReachAThreadTheHandlerStarted() throws Exception {
+
+    // the decision of story 141: absent rather than failing. A plain ThreadLocal, never
+    // an inheritable one, so a pooled thread cannot carry an activation into work which
+    // does not belong to it - the price is that a handler correlating from a thread of
+    // its own gets the key every VanillaBP application had before
+    final var outbox = new PendingKeyOutbox();
+    final var testee = serviceWithDiscardingOutbox(outbox);
+
+    try (var activation = RunningActivation.of("element-1")) {
+      testee.correlateMessage(new Object(), "OfferRequested", "partner-42");
+      final var spawned = new Thread(
+          () -> testee.correlateMessage(new Object(), "OfferRequested", "partner-42"));
+      spawned.start();
+      spawned.join();
+    }
+
+    assertEquals(2, outbox.planned.size(), "the spawned thread planned a key of its own");
+    assertTrue(
+        outbox.pending.stream().anyMatch(key -> key.endsWith("partner-42")),
+        "the key without an activation is the one this story does not change: "
+            + outbox.pending);
+
+  }
+
+  @Test
+  @DisplayName("A scope restores the activation it found instead of clearing it")
+  public void aNestedScopeRestoresTheOuterActivation() {
+
+    // an embedded engine can invoke a second handler within the first one's execution,
+    // and the outer activation has to survive that
+    try (var outer = RunningActivation.of("element-1")) {
+      try (var inner = RunningActivation.of("element-2")) {
+        assertEquals("element-2", RunningActivation.current());
+      }
+      assertEquals("element-1", RunningActivation.current());
+    }
+    assertEquals(null, RunningActivation.current(), "nothing leaks out of the outermost scope");
+
+  }
+
+  @Test
+  @DisplayName("A scope of an adapter reporting nothing hides the one around it")
+  public void aScopeWithoutAnActivationHidesTheOuterOne() {
+
+    // an adapter which cannot name its activations must not inherit the name of whatever
+    // ran on this thread before
+    try (var outer = RunningActivation.of("element-1")) {
+      try (var silent = RunningActivation.of(null)) {
+        assertEquals(null, RunningActivation.current());
+      }
+      assertEquals("element-1", RunningActivation.current());
+    }
 
   }
 
