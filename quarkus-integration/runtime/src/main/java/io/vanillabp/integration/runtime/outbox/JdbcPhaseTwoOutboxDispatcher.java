@@ -47,8 +47,8 @@ import lombok.extern.slf4j.Slf4j;
  * next attempt according to <code>vanillabp.outbox.attempt-frequency</code>), so a
  * failed dispatch is automatically retried with a backoff and multiple instances do
  * not dispatch the same entry concurrently. On successful dispatch the entry is
- * marked {@link #STATUS_DONE} - it stays in the table (keeping the deduplication
- * window open) and is deleted asynchronously once
+ * marked {@link #STATUS_DONE} - it stays in the table for support to read and is
+ * deleted asynchronously once
  * <code>vanillabp.outbox.retention</code> passed. After
  * <code>vanillabp.outbox.block-after-attempts</code> failed attempts an entry is
  * marked {@link #STATUS_BLOCKED} and has to be cleaned up manually.
@@ -63,8 +63,9 @@ import lombok.extern.slf4j.Slf4j;
  * The outbox table is created on startup unless
  * <code>vanillabp.outbox.create-schema</code> is disabled for manually managed
  * schemas - in that case also create the unique constraint on
- * <code>IDEMPOTENCY_KEY</code> yourself (the storage-level deduplication of the
- * outbox contract). The DDL is kept portable: table existence is checked via JDBC
+ * <code>DEDUP_KEY</code> yourself (the storage-level deduplication of the
+ * outbox contract, spanning the entries still waiting for their dispatch; see
+ * {@link JdbcPhaseTwoOutbox}). The DDL is kept portable: table existence is checked via JDBC
  * metadata (<code>CREATE TABLE IF NOT EXISTS</code> is not supported by Oracle and
  * SQL Server), the timestamp type is chosen per database (SQL Server's
  * <code>TIMESTAMP</code> is a row version, MySQL's has auto-initialization quirks
@@ -91,9 +92,14 @@ public class JdbcPhaseTwoOutboxDispatcher {
       SET ATTEMPTS = ATTEMPTS + 1, NEXT_ATTEMPT_AT = ? \
       WHERE ID = ? AND ATTEMPTS = ?""";
 
+  /**
+   * Marking an entry DONE closes its deduplication window: DEDUP_KEY takes the entry's
+   * own ID, so a repetition of the same operation can be planned again, while
+   * IDEMPOTENCY_KEY keeps the key readable for whoever reads the table during support.
+   */
   private static final String MARK_ENTRY_DONE = """
       UPDATE %s \
-      SET STATUS = '%s', DONE_AT = ? \
+      SET STATUS = '%s', DONE_AT = ?, DEDUP_KEY = ID \
       WHERE ID = ?""";
 
   private static final String MARK_ENTRY_BLOCKED = """
@@ -360,7 +366,8 @@ public class JdbcPhaseTwoOutboxDispatcher {
         AGGREGATE_ID VARCHAR(1024), \
         ADAPTER_ID VARCHAR(255), \
         ARGS VARCHAR(2048), \
-        IDEMPOTENCY_KEY VARCHAR(512) UNIQUE, \
+        IDEMPOTENCY_KEY VARCHAR(512), \
+        DEDUP_KEY VARCHAR(512) NOT NULL UNIQUE, \
         STATUS VARCHAR(16) NOT NULL, \
         CREATED_AT %s NOT NULL, \
         ATTEMPTS INT NOT NULL, \

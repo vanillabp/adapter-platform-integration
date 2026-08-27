@@ -51,15 +51,19 @@ import lombok.extern.slf4j.Slf4j;
  * with a backoff and multiple application instances (pods) may poll concurrently
  * without any distributed lock - exactly one instance wins each claim. On
  * successful dispatch the entry is marked {@link MongoPhaseTwoOutbox#STATUS_DONE}
- * (kept until <code>vanillabp.outbox.retention</code> passed - the deduplication
- * window of the idempotency contract); after
+ * (kept until <code>vanillabp.outbox.retention</code> passed, for support to read);
+ * after
  * <code>vanillabp.outbox.block-after-attempts</code> failed attempts it is marked
  * {@link MongoPhaseTwoOutbox#STATUS_BLOCKED} and has to be cleaned up manually.
  * <p>
- * Unless <code>vanillabp.outbox.create-schema</code> is disabled, a partial unique
- * index on the entries' idempotency key is created on startup (partial: entries
- * without a key - operations which must not be deduplicated - are not indexed). If
- * the schema is managed manually, create that index yourself.
+ * Unless <code>vanillabp.outbox.create-schema</code> is disabled, a unique index on
+ * the entries' <code>dedupKey</code> is created on startup. That field carries the
+ * idempotency key only while the entry waits for its dispatch, so the index
+ * deduplicates the planned operations and not the ones which already reached the BPMS
+ * (see {@link MongoPhaseTwoOutbox}); marking an entry DONE writes its id there. If the
+ * schema is managed manually, create that index yourself. The sparse unique index
+ * earlier versions created over <code>idempotencyKey</code> is dropped where it is
+ * still there - it would deduplicate dispatched entries as well.
  * <p>
  * The database is taken from <code>quarkus.mongodb.database</code> - the same
  * database the application's aggregates live in.
@@ -126,10 +130,9 @@ public class MongoPhaseTwoOutboxDispatcher {
 
     if (properties.isCreateSchema()) {
       outboxCollection().createIndex(
-          Indexes.ascending("idempotencyKey"),
-          new IndexOptions()
-              .unique(true)
-              .partialFilterExpression(Filters.exists("idempotencyKey", true)));
+          Indexes.ascending("dedupKey"),
+          new IndexOptions().unique(true));
+      dropLegacyIdempotencyKeyIndex();
     }
 
     executor = Executors.newSingleThreadScheduledExecutor(runnable -> {
@@ -151,6 +154,25 @@ public class MongoPhaseTwoOutboxDispatcher {
     if (executor != null) {
       executor.shutdownNow();
       executor = null;
+    }
+
+  }
+
+  /**
+   * Removes the sparse unique index over <code>idempotencyKey</code> which earlier
+   * versions created. It deduplicated dispatched entries as well, which is what this
+   * store stopped doing; an index which is not there any more is not an error.
+   */
+  private void dropLegacyIdempotencyKeyIndex() {
+
+    try {
+      outboxCollection().dropIndex(Indexes.ascending("idempotencyKey"));
+      log.info(
+          "Dropped the outbox' unique index over 'idempotencyKey': deduplication now spans the "
+              + "entries still waiting for their dispatch and uses 'dedupKey'");
+    } catch (final RuntimeException e) {
+      // 27 = IndexNotFound, which is the normal case
+      log.debug("No legacy unique index over 'idempotencyKey' to drop", e);
     }
 
   }
@@ -266,7 +288,10 @@ public class MongoPhaseTwoOutboxDispatcher {
           Filters.eq("_id", entryId),
           Updates.combine(
               Updates.set("status", MongoPhaseTwoOutbox.STATUS_DONE),
-              Updates.set("doneAt", Date.from(Instant.now()))));
+              Updates.set("doneAt", Date.from(Instant.now())),
+              // the deduplication window ends with the dispatch: the entry's own id
+              // takes the place of the key, which stays readable in idempotencyKey
+              Updates.set("dedupKey", entryId)));
     } catch (final RuntimeException e) {
       // the adapter said that repeating cannot help - blocked right away
       // instead of after the configured attempts

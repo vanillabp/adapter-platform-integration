@@ -31,10 +31,25 @@ import lombok.extern.slf4j.Slf4j;
  * The entry persists the fields of the {@link PhaseTwoCall} including the operation
  * discriminator and the elected adapter ID; the workflow-aggregate ID is stored in
  * its serialized (String) form only - conversion back to the aggregate's ID type
- * happens in the core's router at dispatch time. Deduplication is enforced by a
- * unique constraint on the entry's idempotency key - a duplicate schedule raises a
- * constraint violation which is turned into the contract's no-op
- * (<code>false</code>).
+ * happens in the core's router at dispatch time.
+ * <p>
+ * <strong>Deduplication spans the entries still waiting for their dispatch</strong>, as
+ * the contract of {@link PhaseTwoOutbox} demands. It is the column <code>DEDUP_KEY</code>
+ * which is unique, and it carries the idempotency key only while the entry waits: the
+ * dispatcher writes the entry's own ID into it when it marks the entry DONE
+ * (see {@link JdbcPhaseTwoOutboxDispatcher}), so the key is free from that moment on
+ * while <code>IDEMPOTENCY_KEY</code> keeps it readable for support. An entry without a
+ * key gets its ID there right away, which is why the column is never null - a
+ * database treating two nulls as equal (SQL Server does) would otherwise refuse the
+ * second keyless entry. The at-least-once guarantee is unaffected, because a
+ * redispatch reads the same entry: it is <code>STATUS</code>, <code>ATTEMPTS</code>
+ * and <code>NEXT_ATTEMPT_AT</code> of this table which carry it, never the key.
+ * <p>
+ * A duplicate is detected by a read before the insert rather than by the constraint
+ * violation: on PostgreSQL a failed statement leaves the whole transaction aborted, so
+ * the aggregate the caller just persisted would go down with it. The constraint stays
+ * the authority for two nodes scheduling at the same moment - there the losing
+ * transaction fails, which is acceptable for an operation that was a duplicate anyway.
  * <p>
  * The {@link PhaseTwoCall#args()} map is persisted GENERICALLY in its serialized
  * form ({@link PhaseTwoCall#serializeArgs(java.util.Map)}, column
@@ -56,8 +71,11 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
   private static final String INSERT_ENTRY = """
       INSERT INTO %s \
       (ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, AGGREGATE_ID, ADAPTER_ID, ARGS, \
-      IDEMPOTENCY_KEY, STATUS, CREATED_AT, ATTEMPTS, NEXT_ATTEMPT_AT) \
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, '%s', ?, 0, ?)""";
+      IDEMPOTENCY_KEY, DEDUP_KEY, STATUS, CREATED_AT, ATTEMPTS, NEXT_ATTEMPT_AT) \
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '%s', ?, 0, ?)""";
+
+  private static final String SELECT_PENDING_ENTRY = """
+      SELECT ID FROM %s WHERE DEDUP_KEY = ?""";
 
   /**
    * Resolves the configured table name (<code>vanillabp.outbox.jdbc.table</code>,
@@ -201,33 +219,39 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
     }
 
     final var now = Instant.now();
+    final var tableName = tableName(dispatcher.getProperties());
+    final var entryId = UUID.randomUUID().toString();
+    final var idempotencyKey = call.idempotencyKey().orElse(null);
     final var insertEntry = INSERT_ENTRY
         .formatted(
-            tableName(dispatcher.getProperties()),
+            tableName,
             JdbcPhaseTwoOutboxDispatcher.STATUS_OPEN);
-    try (var connection = dataSource.get().getConnection(); var statement = connection.prepareStatement(insertEntry)) {
-      statement.setString(1, UUID.randomUUID().toString());
-      statement.setString(2, call.workflowModuleId());
-      statement.setString(3, call.bpmnProcessId());
-      statement.setString(4, call.operation());
-      statement.setString(5, call.workflowAggregateId());
-      statement.setString(6, call.adapterId());
-      statement.setString(7, PhaseTwoCall.serializeArgs(call.args()));
-      statement.setString(8, call.idempotencyKey().orElse(null));
-      statement.setTimestamp(9, Timestamp.from(now));
-      statement.setTimestamp(10, Timestamp.from(now));
-      statement.executeUpdate();
+    try (var connection = dataSource.get().getConnection()) {
+      if ((idempotencyKey != null) && pendingEntryExists(connection, tableName, idempotencyKey)) {
+        logDiscardedSchedule(call);
+        return false;
+      }
+      try (var statement = connection.prepareStatement(insertEntry)) {
+        statement.setString(1, entryId);
+        statement.setString(2, call.workflowModuleId());
+        statement.setString(3, call.bpmnProcessId());
+        statement.setString(4, call.operation());
+        statement.setString(5, call.workflowAggregateId());
+        statement.setString(6, call.adapterId());
+        statement.setString(7, PhaseTwoCall.serializeArgs(call.args()));
+        statement.setString(8, idempotencyKey);
+        // an operation which must not be deduplicated occupies its own ID instead of a
+        // null, because not every database treats two nulls as different values
+        statement.setString(9, idempotencyKey == null ? entryId : idempotencyKey);
+        statement.setTimestamp(10, Timestamp.from(now));
+        statement.setTimestamp(11, Timestamp.from(now));
+        statement.executeUpdate();
+      }
     } catch (SQLException e) {
-      // the idempotency key is already present, so the call was scheduled before -
-      // the contract's no-op
+      // two nodes scheduling the same operation at the same moment: the read above
+      // found nothing on both, and the constraint decided
       if (isDuplicateKey(e)) {
-        log.debug(
-            "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
-                + "was already scheduled - skipping",
-            call.operation(),
-            call.bpmnProcessId(),
-            call.workflowModuleId(),
-            call.workflowAggregateId());
+        logDiscardedSchedule(call);
         return false;
       }
       throw new RuntimeException(
@@ -258,8 +282,45 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
 
 
   /**
-   * Whether the given exception signals a violated unique constraint (= the
-   * idempotency key already exists).
+   * Whether an operation of this key is still waiting for its dispatch. Nothing else
+   * can carry the key: the dispatcher replaces it by the entry's ID when the entry is
+   * marked DONE.
+   */
+  private static boolean pendingEntryExists(
+      final java.sql.Connection connection,
+      final String tableName,
+      final String idempotencyKey) throws SQLException {
+
+    try (var statement = connection.prepareStatement(SELECT_PENDING_ENTRY.formatted(tableName))) {
+      statement.setString(1, idempotencyKey);
+      try (var resultSet = statement.executeQuery()) {
+        return resultSet.next();
+      }
+    }
+
+  }
+
+  /**
+   * The technical half of a discarded schedule. Which of the two causes it was - a
+   * redelivered dispatch or an operation lost against one still waiting - the store
+   * cannot tell, so the core reports it to the caller and this line stays at DEBUG.
+   */
+  private static void logDiscardedSchedule(
+      final PhaseTwoCall call) {
+
+    log.debug(
+        "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' is still "
+            + "waiting for its dispatch - the schedule of an identical operation was discarded",
+        call.operation(),
+        call.bpmnProcessId(),
+        call.workflowModuleId(),
+        call.workflowAggregateId());
+
+  }
+
+  /**
+   * Whether the given exception signals a violated unique constraint (= an operation
+   * of this key is already planned).
    *
    * @param e The exception raised by the insert
    * @return Whether the insert failed due to a duplicate key

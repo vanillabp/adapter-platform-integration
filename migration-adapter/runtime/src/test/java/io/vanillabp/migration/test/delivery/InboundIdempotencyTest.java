@@ -50,7 +50,11 @@ import lombok.Getter;
  * <li>nothing is remembered where the adapter reports no delivery identity, or where the
  * feature is switched off for the adapter, the workflow or the single task;</li>
  * <li>an adapter which may repeat deliveries without a log to remember them is reported
- * at startup, naming the property to silence it.</li>
+ * at startup, naming the property to silence it;</li>
+ * <li>the elements of a multi-instance activity are told apart although they share task,
+ * workflow and aggregate - the delivery id an adapter reports per activation is what
+ * carries it, at any nesting depth, and a called process brings its own BPMN process id
+ * on top.</li>
  * </ul>
  * The stores themselves (JDBC, MongoDB) are covered by the platform integrations' tests -
  * per platform, as the coverage rules require.
@@ -267,6 +271,20 @@ public class InboundIdempotencyTest {
       final MigrationAdapterProperties properties,
       final TaskDeliveryLog log) {
 
+    return processService(properties, log, PROCESS);
+
+  }
+
+  /**
+   * A process service of another BPMN process of the same workflow module - what a
+   * called process is: a secondary workflow of the SAME aggregate, delivering its tasks
+   * under its own BPMN process id.
+   */
+  private MigrationProcessService<Aggregate> processService(
+      final MigrationAdapterProperties properties,
+      final TaskDeliveryLog log,
+      final String bpmnProcessId) {
+
     @SuppressWarnings("unchecked")
     final MigratableProcessService<Aggregate> adapter = mock(MigratableProcessService.class);
     lenient().when(adapter.getAdapterId()).thenReturn(ADAPTER);
@@ -288,7 +306,7 @@ public class InboundIdempotencyTest {
     };
 
     return new MigrationProcessService<>(
-        MODULE, PROCESS, Aggregate.class, properties, persistence, List.of(adapter), null, null, resolver);
+        MODULE, bpmnProcessId, Aggregate.class, properties, persistence, List.of(adapter), null, null, resolver);
 
   }
 
@@ -310,6 +328,21 @@ public class InboundIdempotencyTest {
         type -> null,
         processService);
     return registry;
+
+  }
+
+  private void register(
+      final WorkflowTaskRegistry registry,
+      final String bpmnProcessId,
+      final MigrationProcessService<Aggregate> processService) {
+
+    registry.registerWorkflowService(
+        MODULE,
+        bpmnProcessId,
+        TestWorkflowService.class,
+        TestWorkflowService::new,
+        type -> null,
+        processService);
 
   }
 
@@ -542,6 +575,54 @@ public class InboundIdempotencyTest {
         .filter(event -> event.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.WARN))
         .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
         .toList();
+
+  }
+
+
+  @Test
+  @DisplayName("Every element of a multi-instance activity runs its own handler")
+  public void multiInstanceElementsAreToldApart() {
+
+    final var testee = registry(processService(properties(null, null, null), deliveryLog));
+    storeAggregate("4718");
+
+    // one task of one workflow, three activations: the adapter reports a delivery id per
+    // activation (Camunda 8 the job key, the Process-Engine-API the task id), which is
+    // the whole reason no multi-instance index has to enter the key. Sequential and
+    // parallel multi-instance look exactly the same from here
+    testee.invokeWorkflowTask(MODULE, PROCESS, delivery(TASK, "4718", "job-1"));
+    testee.invokeWorkflowTask(MODULE, PROCESS, delivery(TASK, "4718", "job-2"));
+    testee.invokeWorkflowTask(MODULE, PROCESS, delivery(TASK, "4718", "job-3"));
+
+    assertEquals(3, persistence.aggregates.get("4718").invocations, "every element ran its handler");
+    assertEquals(3, deliveryLog.records.size(), "every element got its own record");
+
+    // and a redelivery of ONE element is still answered from that element's record
+    final var redelivered = testee.invokeWorkflowTask(MODULE, PROCESS, delivery(TASK, "4718", "job-2"));
+
+    assertEquals(WorkflowTaskOutcome.Kind.COMPLETED, redelivered.kind());
+    assertEquals(3, persistence.aggregates.get("4718").invocations, "the redelivery ran no handler");
+
+  }
+
+  @Test
+  @DisplayName("A called process is told apart even where the BPMS repeats a delivery id")
+  public void aCalledProcessBringsItsOwnBpmnProcessId() {
+
+    final var properties = properties(null, null, null);
+    final var testee = registry(processService(properties, deliveryLog));
+    // the called process of a multi-instance call activity: a secondary workflow of the
+    // same aggregate, so nothing but the BPMN process id and the delivery id tells its
+    // tasks apart from the caller's. The argument counts no levels, which is why any
+    // nesting depth is covered by this one
+    register(testee, "CalledProcess", processService(properties, deliveryLog, "CalledProcess"));
+    storeAggregate("4719");
+
+    testee.invokeWorkflowTask(MODULE, PROCESS, delivery(TASK, "4719", "job-1"));
+    testee.invokeWorkflowTask(MODULE, "CalledProcess", delivery(TASK, "4719", "job-1"));
+
+    assertEquals(2, persistence.aggregates.get("4719").invocations, "both handlers ran");
+    assertEquals(2, deliveryLog.records.size(), "the two deliveries are two records");
 
   }
 

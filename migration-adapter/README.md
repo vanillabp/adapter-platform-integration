@@ -727,17 +727,31 @@ The core does not implement (or depend on) any outbox itself — it only defines
 - **Idempotency key:** implementations MUST enforce uniqueness of
   `PhaseTwoCall.idempotencyKey()` (where present) via the store's unique-constraint
   mechanism; a duplicate `schedule` is a no-op returning `false`. For
-  `START_WORKFLOW` the key is `workflowModuleId|bpmnProcessId|workflowAggregateId`
-  — the storage-level enforcement of "a workflow is started at most once per
-  aggregate". The derivation rules per operation are documented on
-  `PhaseTwoOperation` and are a persisted contract.
+  `START_WORKFLOW` the key is
+  `START_WORKFLOW|workflowModuleId|bpmnProcessId|workflowAggregateId` — the
+  storage-level enforcement of "a workflow is started at most once per aggregate".
+  Every key names its operation, so completing and cancelling one task no longer
+  share one; `START_WORKFLOW_BY_MESSAGE` deliberately derives the plain start's key.
+  What a key deduplicates is the entries STILL WAITING for their dispatch, which is
+  decision 22 of this repository: a repetition after the dispatch is a new operation.
+  A store which discards a schedule returns `false`, and
+  `MigrationProcessService#reportDiscardedSchedule` turns that into a WARN naming
+  what was dropped, because a discard against a pending entry is as likely to be a
+  lost operation as a redelivery. The key is bounded to 250 characters and hashed
+  beyond that (`StoredKey`, shared with the inbound delivery key) — gruelbox refuses a
+  longer unique request ID, and an aggregate ID longer than the 1024 characters of the
+  `AGGREGATE_ID` column is refused where the call is built, with a message naming the
+  column. The derivation rules per operation are documented on `PhaseTwoOperation` and
+  are a persisted contract.
 - **Recovery:** every committed-but-unprocessed entry has to be dispatched through
   the `PhaseTwoRouter` right after the commit *and* after an application restart
   (crash recovery), retrying failed dispatches with a backoff.
 - **DONE instead of delete:** a successful dispatch marks the entry DONE; physical
   deletion happens asynchronously after a configurable retention
-  (`vanillabp.outbox.retention`, default 7 days) — keeping the deduplication window
-  open beyond dispatch. Entries failing repeatedly are blocked (ERROR log naming
+  (`vanillabp.outbox.retention`, default 7 days) — which keeps a dispatched entry
+  readable for support and does NOT extend the deduplication window: the store takes
+  the key out of what enforces uniqueness when it marks the entry DONE. Entries
+  failing repeatedly are blocked (ERROR log naming
   module/process/aggregate/operation) and left as a monitorable trail.
 - **At-least-once residual window:** a crash between the remote BPMS call and
   marking the entry DONE re-dispatches the entry on recovery. This is accepted

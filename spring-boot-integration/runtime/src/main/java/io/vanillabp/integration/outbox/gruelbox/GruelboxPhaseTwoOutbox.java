@@ -4,6 +4,8 @@ import java.util.OptionalLong;
 
 import javax.sql.DataSource;
 
+import org.springframework.jdbc.datasource.DataSourceUtils;
+
 import com.gruelbox.transactionoutbox.AlreadyScheduledException;
 import com.gruelbox.transactionoutbox.TransactionOutbox;
 
@@ -24,6 +26,27 @@ import lombok.extern.slf4j.Slf4j;
  * into the contract's no-op (<code>false</code>). Successfully dispatched entries with
  * a unique request ID are retained by gruelbox until the configured retention
  * threshold passes (the contract's "DONE instead of delete").
+ * <p>
+ * <strong>Deduplication has to span the entries still waiting for their dispatch
+ * only</strong>, and gruelbox' unique constraint spans its retained entries as well.
+ * Its table has no column this store could move a dispatched key into, so the release
+ * happens when it is needed: before scheduling, the store reads the row of that unique
+ * request ID and looks at gruelbox' <code>processed</code> flag. A processed row is
+ * DELETED - it has done its work, and its trail ends there, which is the price of
+ * gruelbox owning the table - and the new operation is then scheduled. A row which is
+ * not processed yet means an identical operation is still planned, and the schedule is
+ * discarded. Both happen in the caller's transaction, on the connection
+ * {@code DataSourceUtils} binds to it, so a rollback takes the release with it.
+ * <p>
+ * The at-least-once guarantee is not weakened by that: a redispatch reads the very row
+ * which is not processed yet, so gruelbox' own attempt bookkeeping carries it - never
+ * the unique request ID. Which is also why the key VanillaBP derives is bounded to
+ * {@link PhaseTwoCall#MAX_IDEMPOTENCY_KEY_LENGTH} characters: gruelbox refuses a longer
+ * unique request ID before any database sees it.
+ * <p>
+ * A store built with the constructor which takes no data source cannot read that flag.
+ * It falls back to gruelbox' own answer, which deduplicates against retained entries as
+ * well - kept for tests, and named here so nobody mistakes it for the contract.
  */
 @Slf4j
 public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
@@ -105,12 +128,17 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
   public boolean schedule(
       final PhaseTwoCall call) {
 
+    final var idempotencyKey = call
+        .idempotencyKey()
+        .orElse(null);
+    if ((idempotencyKey != null) && !releaseDispatchedEntry(call, idempotencyKey)) {
+      logDiscardedSchedule(call);
+      return false;
+    }
     try {
       transactionOutbox
           .with()
-          .uniqueRequestId(call
-              .idempotencyKey()
-              .orElse(null))
+          .uniqueRequestId(idempotencyKey)
           .schedule(GruelboxPhaseTwoDispatch.class)
           .dispatch(
               call.operation(),
@@ -121,15 +149,89 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
               PhaseTwoCall.serializeArgs(call.args()));
       return true;
     } catch (AlreadyScheduledException e) {
+      // two nodes scheduling the same operation at the same moment, or a store which
+      // cannot read gruelbox' table (see the class javadoc)
+      logDiscardedSchedule(call);
+      return false;
+    }
+
+  }
+
+  /**
+   * Frees the unique request ID of an entry which was dispatched already, so the
+   * operation can be planned again.
+   *
+   * @return Whether the key is free now - <code>false</code> if an entry of that key is
+   *         still waiting for its dispatch
+   */
+  private boolean releaseDispatchedEntry(
+      final PhaseTwoCall call,
+      final String idempotencyKey) {
+
+    if ((dataSource == null) || (tableName == null)) {
+      // no way to look at gruelbox' processed flag: gruelbox answers instead, which
+      // deduplicates the retained entries as well
+      return true;
+    }
+    final var selectEntry = "SELECT id, processed FROM %s WHERE uniqueRequestId = ?".formatted(tableName);
+    final var connection = DataSourceUtils.getConnection(dataSource);
+    try {
+      final String entryId;
+      try (var statement = connection.prepareStatement(selectEntry)) {
+        statement.setString(1, idempotencyKey);
+        try (var resultSet = statement.executeQuery()) {
+          if (!resultSet.next()) {
+            return true;
+          }
+          if (!resultSet.getBoolean(2)) {
+            return false;
+          }
+          entryId = resultSet.getString(1);
+        }
+      }
+      final var deleteEntry = "DELETE FROM %s WHERE id = ? AND processed = ?".formatted(tableName);
+      try (var statement = connection.prepareStatement(deleteEntry)) {
+        statement.setString(1, entryId);
+        statement.setBoolean(2, true);
+        // 0 rows: the dispatcher's retention cleanup got there first, which frees the
+        // key just as well
+        statement.executeUpdate();
+      }
       log.debug(
-          "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
-              + "was already scheduled - skipping",
+          "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' was "
+              + "dispatched before - released the entry so this operation can be planned again",
           call.operation(),
           call.bpmnProcessId(),
           call.workflowModuleId(),
           call.workflowAggregateId());
-      return false;
+      return true;
+    } catch (final java.sql.SQLException e) {
+      throw new IllegalStateException(
+          """
+              Could not look up the phase-two outbox entry of BPMN process '%s' of workflow module \
+              '%s' in gruelbox' table '%s'!"""
+              .formatted(call.bpmnProcessId(), call.workflowModuleId(), tableName), e);
+    } finally {
+      DataSourceUtils.releaseConnection(connection, dataSource);
     }
+
+  }
+
+  /**
+   * The technical half of a discarded schedule. Which of the two causes it was - a
+   * redelivered dispatch or an operation lost against one still waiting - the store
+   * cannot tell, so the core reports it to the caller and this line stays at DEBUG.
+   */
+  private static void logDiscardedSchedule(
+      final PhaseTwoCall call) {
+
+    log.debug(
+        "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' is still "
+            + "waiting for its dispatch - the schedule of an identical operation was discarded",
+        call.operation(),
+        call.bpmnProcessId(),
+        call.workflowModuleId(),
+        call.workflowAggregateId());
 
   }
 

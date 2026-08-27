@@ -17,9 +17,12 @@ import lombok.Setter;
  * aggregate's ID in its serialized (String) form; conversion back to the aggregate's
  * ID type happens in the core's router at dispatch time.
  * <p>
- * The {@link #idempotencyKey} carries the call's idempotency key (if present) and is
- * enforced unique by a sparse unique index on the collection - the storage-level
- * deduplication of the outbox contract. The {@link #status} lifecycle is
+ * The {@link #idempotencyKey} carries the call's idempotency key (if present) and stays
+ * readable for whoever looks at the collection during support. What deduplicates is
+ * {@link #dedupKey}, enforced unique by an index on the collection: it holds that same
+ * key while the entry waits for its dispatch and the entry's own id from the moment it
+ * was dispatched, so the uniqueness spans the operations which are still planned - the
+ * storage-level deduplication of the outbox contract. The {@link #status} lifecycle is
  * {@link #STATUS_OPEN} → {@link #STATUS_DONE} (successful dispatch; deleted
  * asynchronously after the configured retention) or {@link #STATUS_BLOCKED} (too many
  * failed attempts; manual cleanup required).
@@ -61,9 +64,17 @@ public class PhaseTwoOutboxEntry {
 
   /**
    * The call's idempotency key; <code>null</code> if the operation must not be
-   * deduplicated.
+   * deduplicated. Descriptive only - it is never used to look an entry up.
    */
   private String idempotencyKey;
+
+  /**
+   * What the unique index spans: the idempotency key while the entry waits for its
+   * dispatch, the entry's own {@link #id} once it was dispatched or where the operation
+   * must not be deduplicated at all. Never <code>null</code>, so a database treating
+   * two nulls as equal cannot refuse the second keyless entry.
+   */
+  private String dedupKey;
 
   private String status;
 

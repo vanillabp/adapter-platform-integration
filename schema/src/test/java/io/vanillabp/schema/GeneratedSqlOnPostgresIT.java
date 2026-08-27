@@ -105,9 +105,9 @@ public class GeneratedSqlOnPostgresIT {
             .executeUpdate(
                 """
                     INSERT INTO VANILLABP_PHASE_TWO_OUTBOX \
-                    (ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, IDEMPOTENCY_KEY, STATUS, \
-                    CREATED_AT, ATTEMPTS, NEXT_ATTEMPT_AT) VALUES \
-                    ('1', 'module', 'Process', 'START', 'key-1', 'OPEN', now(), 0, now())""");
+                    (ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, IDEMPOTENCY_KEY, DEDUP_KEY, \
+                    STATUS, CREATED_AT, ATTEMPTS, NEXT_ATTEMPT_AT) VALUES \
+                    ('1', 'module', 'Process', 'START', 'key-1', 'key-1', 'OPEN', now(), 0, now())""");
       }
       final var duplicate = org.junit.jupiter.api.Assertions
           .assertThrows(
@@ -118,9 +118,9 @@ public class GeneratedSqlOnPostgresIT {
                       .executeUpdate(
                           """
                               INSERT INTO VANILLABP_PHASE_TWO_OUTBOX \
-                              (ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, IDEMPOTENCY_KEY, STATUS, \
-                              CREATED_AT, ATTEMPTS, NEXT_ATTEMPT_AT) VALUES \
-                              ('2', 'module', 'Process', 'START', 'key-1', 'OPEN', now(), 0, now())""");
+                              (ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, IDEMPOTENCY_KEY, \
+                              DEDUP_KEY, STATUS, CREATED_AT, ATTEMPTS, NEXT_ATTEMPT_AT) VALUES \
+                              ('2', 'module', 'Process', 'START', 'key-1', 'key-1', 'OPEN', now(), 0, now())""");
                 }
               });
       assertEquals("23505", duplicate.getSQLState(), duplicate.getMessage());

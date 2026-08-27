@@ -41,6 +41,10 @@ public class AppTxOutbox implements PhaseTwoOutbox {
   public boolean schedule(
       final PhaseTwoCall call) {
 
+    // deliberately simpler than a real store: nothing here is ever marked done, so a
+    // key deduplicates for as long as this application lives, while a real store
+    // deduplicates the entries still waiting for their dispatch (see PhaseTwoOutbox).
+    // What these tests are about is which store an aggregate is served by
     final var idempotencyKey = call
         .idempotencyKey()
         .orElse(null);

@@ -23,7 +23,10 @@ import io.vanillabp.integration.spi.TaskDeliveryLog;
  * delivery record always rides the aggregate's own transaction even in mixed-persistence
  * applications.
  * <p>
- * The store settings are the outbox' ones, since both keep a deduplication window open:
+ * The store settings are the outbox' ones, although the retention means something
+ * different here - for a record it decides whether a late redelivery runs the business
+ * code again, while for a dispatched outbox entry it only decides how long support can
+ * read it:
  * <code>vanillabp.outbox.create-schema</code> decides whether VanillaBP creates the
  * table {@value io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore#DEFAULT_TABLE_NAME},
  * <code>vanillabp.outbox.retention</code> how long a record is kept, and

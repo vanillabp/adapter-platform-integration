@@ -31,12 +31,22 @@ package io.vanillabp.integration.spi;
  * ghost workflows in the BPMS as well as aggregates without workflows.
  * <p>
  * <strong>Idempotency contract:</strong> Implementations MUST enforce uniqueness of
- * {@link PhaseTwoCall#idempotencyKey()} (where present) using the store's
- * unique-constraint mechanism (unique index/constraint on the persisted key). A
- * duplicate {@link #schedule(PhaseTwoCall)} is a no-op and returns
- * <code>false</code>. This is the storage-level enforcement of the documented
- * idempotency of two-phase operations (e.g. a workflow is started at most once per
- * aggregate).
+ * {@link PhaseTwoCall#idempotencyKey()} (where present) AMONG THE ENTRIES STILL
+ * WAITING FOR THEIR DISPATCH, using the store's unique-constraint mechanism (unique
+ * index/constraint on the persisted key). A key says "this operation is planned once",
+ * not "this operation ever happened": scheduling a call whose key matches an entry
+ * which has not been dispatched yet is a no-op returning <code>false</code>, while the
+ * same call after that entry reached the BPMS is a NEW operation and is scheduled. That
+ * is what makes a second round of a loop, or a second element of a multi-instance
+ * activity, correlate the same message again instead of waiting forever for a message
+ * VanillaBP silently dropped - see decision 22 in the repository's DECISIONS.md and
+ * {@link #schedule(PhaseTwoCall)} for what a store logs about a discard.
+ * <p>
+ * What the narrowed window does NOT protect against is two entries planned in the same
+ * batch of work: multi-instance siblings of one aggregate share module, process and
+ * aggregate ID, and only their correlation id is left to tell them apart. Where it is
+ * the same, one of them is discarded and the store says so - the caller has to vary
+ * the correlation id per element.
  * <p>
  * <strong>Recovery contract:</strong> Implementations must dispatch every
  * committed-but-unprocessed entry
@@ -50,11 +60,17 @@ package io.vanillabp.integration.spi;
  * <strong>DONE instead of delete:</strong> A successful dispatch marks the entry as
  * DONE - it is NOT deleted immediately. Physical deletion happens asynchronously
  * after a configurable retention period (<code>vanillabp.outbox.*</code>, default 7
- * days). This keeps the deduplication window of the idempotency contract open beyond
- * dispatch.
+ * days). What that retention buys is a dispatched entry somebody can still look at
+ * during support; it does NOT extend the deduplication window, which ends with the
+ * dispatch. A store therefore has to take the key of a dispatched entry out of
+ * whatever enforces uniqueness, and say in its own javadoc how it does that.
  * <p>
  * <strong>At-least-once residual window:</strong> A crash between the remote BPMS
- * call and marking the entry DONE re-dispatches the entry on recovery. This residual
+ * call and marking the entry DONE re-dispatches the entry on recovery. Narrowing the
+ * deduplication window does not widen this one: a redispatch reads the very entry
+ * which is still not DONE, so it is the store's own attempt bookkeeping - gruelbox' or
+ * the STATUS/ATTEMPTS columns of the stores VanillaBP wrote itself - which carries the
+ * guarantee, never the idempotency key. This residual
  * window is accepted (eventual consistency); adapters keep their operations
  * idempotent (see
  * {@code MigratableProcessService#startWorkflowPhaseTwo}). The window is MINIMIZED
@@ -83,9 +99,16 @@ public interface PhaseTwoOutbox {
    * transaction (entry becomes visible if and only if the transaction commits).
    *
    * @param call The phase-two call to schedule
+   * The return value is not decoration: a <code>false</code> means an operation the
+   * application asked for will not happen. The store logs it, naming both causes it
+   * cannot tell apart - a redelivered at-least-once dispatch, or a genuinely second
+   * operation which lost against one still waiting - and the core reports it to
+   * whoever called.
+   *
+   * @param call The phase-two call to schedule
    * @return <code>true</code> if the call was scheduled, <code>false</code> if an
-   *         entry with the same {@link PhaseTwoCall#idempotencyKey()} was already
-   *         scheduled (no-op)
+   *         entry with the same {@link PhaseTwoCall#idempotencyKey()} is still
+   *         waiting for its dispatch (no-op)
    */
   boolean schedule(
       PhaseTwoCall call);
@@ -102,8 +125,8 @@ public interface PhaseTwoOutbox {
    * @param workflowAggregateId The ID of the workflow aggregate persisted in the
    *        local transaction
    * @param adapterId The ID of the BPMS adapter elected in phase one
-   * @return <code>true</code> if scheduled, <code>false</code> if already scheduled
-   *         for this aggregate (no-op)
+   * @return <code>true</code> if scheduled, <code>false</code> if a start for this
+   *         aggregate is still waiting for its dispatch (no-op)
    */
   default boolean scheduleStartWorkflow(
       final String workflowModuleId,
@@ -131,8 +154,8 @@ public interface PhaseTwoOutbox {
    * @param workflowAggregateId The ID of the workflow aggregate
    * @param taskId The ID of the task to complete (as reported to the
    *        <code>&#64;TaskId</code> parameter)
-   * @return <code>true</code> if scheduled, <code>false</code> if already scheduled
-   *         for this task (no-op)
+   * @return <code>true</code> if scheduled, <code>false</code> if the same operation
+   *         on this task is still waiting for its dispatch (no-op)
    */
   default boolean scheduleCompleteTask(
       final String workflowModuleId,
@@ -158,8 +181,8 @@ public interface PhaseTwoOutbox {
    * @param workflowAggregateId The ID of the workflow aggregate
    * @param taskId The ID of the task to cancel
    * @param bpmnErrorCode The error code to be caught by BPMN error boundary events
-   * @return <code>true</code> if scheduled, <code>false</code> if already scheduled
-   *         for this task (no-op)
+   * @return <code>true</code> if scheduled, <code>false</code> if the same operation
+   *         on this task is still waiting for its dispatch (no-op)
    */
   default boolean scheduleCancelTask(
       final String workflowModuleId,
@@ -188,8 +211,8 @@ public interface PhaseTwoOutbox {
    * @param bpmnProcessId The BPMN process ID of the workflow
    * @param workflowAggregateId The ID of the workflow aggregate
    * @param taskId The ID of the user task to complete
-   * @return <code>true</code> if scheduled, <code>false</code> if already scheduled
-   *         for this task (no-op)
+   * @return <code>true</code> if scheduled, <code>false</code> if the same operation
+   *         on this task is still waiting for its dispatch (no-op)
    */
   default boolean scheduleCompleteUserTask(
       final String workflowModuleId,
@@ -215,8 +238,8 @@ public interface PhaseTwoOutbox {
    * @param workflowAggregateId The ID of the workflow aggregate
    * @param taskId The ID of the user task to cancel
    * @param bpmnErrorCode The error code to be caught by BPMN error boundary events
-   * @return <code>true</code> if scheduled, <code>false</code> if already scheduled
-   *         for this task (no-op)
+   * @return <code>true</code> if scheduled, <code>false</code> if the same operation
+   *         on this task is still waiting for its dispatch (no-op)
    */
   default boolean scheduleCancelUserTask(
       final String workflowModuleId,
@@ -242,16 +265,19 @@ public interface PhaseTwoOutbox {
    * executing adapter is elected at dispatch time by probing (the BPMS holding
    * the workflow instance answers). WITHOUT a correlation id the entry carries NO
    * idempotency key - the same message may legitimately be correlated multiple
-   * times (an at-least-once dispatch may then double-correlate).
+   * times (an at-least-once dispatch may then double-correlate). WITH one, the key
+   * deduplicates against the correlations still waiting for their dispatch only - a
+   * repeating scope correlating the same message again after the first one reached the
+   * BPMS is a new operation.
    *
    * @param workflowModuleId The ID of the workflow module the workflow belongs to
    * @param bpmnProcessId The BPMN process ID of the workflow
    * @param workflowAggregateId The ID of the workflow aggregate
    * @param messageName The BPMN message name
    * @param correlationId The correlation id or <code>null</code>
-   * @return <code>true</code> if scheduled, <code>false</code> if an entry with
-   *         the same idempotency key was already scheduled (no-op; only possible
-   *         WITH a correlation id)
+   * @return <code>true</code> if scheduled, <code>false</code> if a correlation of
+   *         this message name and correlation id is still waiting for its dispatch
+   *         (no-op; only possible WITH a correlation id)
    */
   default boolean scheduleCorrelateMessage(
       final String workflowModuleId,
@@ -343,8 +369,8 @@ public interface PhaseTwoOutbox {
    * @param workflowAggregateId The ID of the workflow aggregate
    * @param messageName The BPMN message name of the message start event
    * @param adapterId The ID of the BPMS adapter elected in phase one
-   * @return <code>true</code> if scheduled, <code>false</code> if already
-   *         scheduled for this aggregate (no-op)
+   * @return <code>true</code> if scheduled, <code>false</code> if a start for this
+   *         aggregate is still waiting for its dispatch (no-op)
    */
   default boolean scheduleStartWorkflowByMessage(
       final String workflowModuleId,

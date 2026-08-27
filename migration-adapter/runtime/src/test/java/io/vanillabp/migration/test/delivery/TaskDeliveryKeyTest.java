@@ -98,6 +98,25 @@ public class TaskDeliveryKeyTest {
   }
 
   @Test
+  @DisplayName("The key format is pinned - records of a running installation are matched by it")
+  public void theKeyFormatIsPinned() {
+
+    assertEquals(
+        "c8|test-module|TestProcess|CREATED|job-1",
+        TaskDeliveryKey.of(MODULE, PROCESS, context("c8", TaskEvent.Event.CREATED, "job-1")));
+
+    // past the boundary, pinned as a literal: the cap-and-hash is shared with the
+    // outbound idempotency key now, and sharing it must not move this string by a
+    // single character
+    assertEquals(
+        "sha256:4a4b5afafe8bbe0b1ef41a04bd55b156b580d888d653c970ab67c5bfc455fdc6",
+        TaskDeliveryKey
+            .of(MODULE, PROCESS, context("c8", TaskEvent.Event.CREATED, "j"
+                .repeat(TaskDeliveryKey.MAX_LENGTH + 1))));
+
+  }
+
+  @Test
   @DisplayName("A key longer than the indexable length is hashed, and stays stable")
   public void anOversizedKeyIsHashed() {
 

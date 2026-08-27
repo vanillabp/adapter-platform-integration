@@ -4,6 +4,59 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## An idempotency key deduplicates what is planned, not what happened (2026-08-26)
+
+The phase-two outbox used to refuse a scheduled operation whose idempotency key matched ANY entry
+it still held, and it holds a dispatched entry until `vanillabp.outbox.retention` passes, seven days
+by default. A second, entirely legitimate operation of the same key inside that window was dropped
+without a word. From now on the key deduplicates the entries which have not been dispatched yet: a
+repetition after the dispatch is a new operation and reaches the BPMS.
+
+**Who has to look.** An application which correlates the same message name with the same correlation
+id for one aggregate more than once: a loop asking the same partner again in the next round, or a
+multi-instance activity whose correlation id comes from business data. Such a correlation used to
+vanish and the workflow waited forever; now it is carried out. That is the good direction, and it is
+still a behaviour change: a BPMN model which relied on the second correlation being swallowed sees
+it arrive. The same applies to a second `startWorkflow` for one aggregate after the first start was
+dispatched.
+
+**What is logged now.** Where a schedule IS discarded, VanillaBP writes a warning naming what was
+not planned and both causes it cannot tell apart: a repeated dispatch of an operation which happened
+already, or a second legitimate operation lost against one which is still waiting. Two operations
+planned in the same unit of work still collide, and multi-instance siblings of one aggregate are the
+case a caller cannot avoid on its own, so the warning is the signal to vary the correlation id per
+round or element.
+
+**A long aggregate ID no longer fails the schedule.** The derived key is bounded to 250 characters
+and hashed beyond that, the same way the task-delivery key has always been bounded (both share
+`StoredKey` now). Before this, a composite business key or a URN as aggregate ID produced a key
+gruelbox refused outright, and a persistence error surfaced where the application expected a
+workflow. An aggregate ID longer than the 1024 characters of the `AGGREGATE_ID` column is still
+refused, but now by a message naming the column, the length and the beginning of the ID instead of
+a driver-level truncation error.
+
+**The key names its operation now.** `COMPLETE_TASK` and `CANCEL_TASK` of one task ID used to derive
+the same key, as did their user-task counterparts. They are distinct by construction from now on.
+`START_WORKFLOW_BY_MESSAGE` keeps deriving the plain start's key on purpose: a workflow is started
+at most once per aggregate, whichever of the two started it.
+
+**Store schemas changed** (entries of the previous format are not migrated — 2.0.0 is not released):
+the outbox table gained a `DEDUP_KEY` column, `NOT NULL` and unique, and `IDEMPOTENCY_KEY` lost its
+unique constraint and keeps the derived key for support to read. The column holds the key while the
+entry waits and the entry's own ID once it was dispatched, which is what narrows the window; it is
+never null because not every database treats two nulls as different values. The MongoDB stores gained
+the same field `dedupKey` with a unique index, and the sparse index over `idempotencyKey` is dropped
+where it is still there. Applications creating the schema themselves have to apply the changed
+changeset of `io.vanillabp:vanillabp-schema`; a database of a SNAPSHOT build has to be recreated.
+gruelbox' table is untouched, since its schema belongs to gruelbox: there the store deletes a
+dispatched entry when a new operation of the same key arrives, which costs that entry's trail.
+
+**On Camunda 8 the cluster deduplicates too, and longer.** The adapter passes a message id derived
+from the same values, so the cluster refuses a second publication for as long as the message
+time-to-live lasts, one hour unless the application sets `message-time-to-live`. That net is the
+cluster's, no VanillaBP setting shortens it, and the adapter's log message says so instead of
+calling every refusal a redelivery.
+
 ## Spring Boot: a workflow service is found because it is a bean (2026-08-26)
 
 VanillaBP no longer scans the classpath for classes annotated by `@WorkflowService`. It walks the

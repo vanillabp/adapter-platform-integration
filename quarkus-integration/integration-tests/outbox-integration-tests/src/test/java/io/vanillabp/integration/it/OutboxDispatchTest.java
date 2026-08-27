@@ -131,25 +131,23 @@ public class OutboxDispatchTest {
   }
 
   @Test
-  @DisplayName("A duplicate schedule for the same aggregate is a no-op (unique idempotency key)")
-  public void duplicateScheduleIsNoOp() throws Exception {
+  @DisplayName("A duplicate schedule while the first one is still pending is a no-op")
+  public void duplicateScheduleAgainstAPendingEntryIsNoOp() throws Exception {
 
+    // both starts ride ONE transaction, so nothing is dispatched in between and the
+    // second one meets an entry which is still waiting: the unique constraint over
+    // DEDUP_KEY makes it a no-op. What happens after the dispatch is
+    // RepeatedOperationTest's subject
     userTransaction.begin();
-    final var attachedAggregate = workflowService.startWorkflow("dedup-test");
+    final var attachedAggregate = workflowService.startWorkflow("dedup-pending");
+    workflowService.startWorkflowAgain(attachedAggregate);
     userTransaction.commit();
 
     listener.awaitInvocations(1, 30_000);
 
-    // starting the workflow again for the same aggregate schedules the same
-    // idempotency key: the unique constraint makes it a no-op - no second entry,
-    // no second dispatch (the DONE entry keeps the deduplication window open)
-    userTransaction.begin();
-    workflowService.startWorkflowAgain(attachedAggregate);
-    userTransaction.commit();
-
     // wait longer than the poll interval: no second dispatch may happen
     Thread.sleep(1500);
-    assertEquals(1, listener.getInvocations().size());
+    assertEquals(1, listener.getInvocations().size(), "only one of the two starts was planned");
     assertEquals(1, count(COUNT_ENTRIES_OF_AGGREGATE.formatted(attachedAggregate.getId())));
 
   }

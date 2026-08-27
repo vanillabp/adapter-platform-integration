@@ -291,6 +291,9 @@ public class ApplicationOwnedStoresTest {
         final PhaseTwoRouter router) {
 
       return call -> {
+        // deliberately simpler than a real store: nothing here is ever marked done, so
+        // a key deduplicates for as long as this context lives, while a real store
+        // deduplicates the entries still waiting for their dispatch
         final var idempotencyKey = call
             .idempotencyKey()
             .orElse(null);

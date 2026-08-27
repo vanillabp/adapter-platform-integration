@@ -35,8 +35,9 @@ import lombok.extern.slf4j.Slf4j;
  * according to <code>vanillabp.outbox.attempt-frequency</code>), so a failed dispatch
  * is automatically retried with a backoff and multiple instances do not dispatch the
  * same entry concurrently. On successful dispatch the entry is marked
- * {@link PhaseTwoOutboxEntry#STATUS_DONE} - it stays in the collection (keeping the
- * deduplication window open) and is deleted asynchronously once
+ * {@link PhaseTwoOutboxEntry#STATUS_DONE} - it stays in the collection for support to
+ * read, its <code>dedupKey</code> is replaced by its own id so a repetition of the same
+ * operation can be planned again, and it is deleted asynchronously once
  * <code>vanillabp.outbox.retention</code> passed. After
  * <code>vanillabp.outbox.block-after-attempts</code> failed attempts an entry is
  * marked {@link PhaseTwoOutboxEntry#STATUS_BLOCKED} and has to be cleaned up
@@ -174,7 +175,10 @@ public class MongoPhaseTwoOutboxDispatcher {
           Query.query(Criteria.where("_id").is(entry.getId())),
           new Update()
               .set("status", PhaseTwoOutboxEntry.STATUS_DONE)
-              .set("doneAt", Instant.now()),
+              .set("doneAt", Instant.now())
+              // the deduplication window ends with the dispatch: the entry's own id
+              // takes the place of the key, which stays readable in idempotencyKey
+              .set("dedupKey", entry.getId()),
           collection);
     } catch (Exception e) {
       // the adapter said that repeating cannot help - blocked right away

@@ -21,8 +21,14 @@ import lombok.extern.slf4j.Slf4j;
  * written via {@link MongoTemplate} which participates in the currently running
  * Spring-managed MongoDB transaction. The entry persists all fields of the
  * {@link PhaseTwoCall} including the operation discriminator and the elected adapter
- * ID; deduplication is enforced by a sparse unique index on the entry's idempotency
- * key. A duplicate schedule is detected by a pre-check read and turned into the
+ * ID; deduplication is enforced by a unique index on the entry's <code>dedupKey</code>
+ * and therefore spans the entries still waiting for their dispatch, as the contract of
+ * {@link PhaseTwoOutbox} demands: that field carries the idempotency key while the
+ * entry waits and the entry's own id once the dispatcher marked it DONE, while
+ * <code>idempotencyKey</code> keeps the key readable for support. The at-least-once
+ * guarantee is unaffected, because a redispatch reads the same document - it is the
+ * entry's status and attempt count which carry it, never the key.
+ * A duplicate schedule is detected by a pre-check read and turned into the
  * contract's no-op (<code>false</code>) - within a MongoDB transaction a
  * {@link DuplicateKeyException} would abort the whole transaction, so the unique
  * index only remains the backstop for concurrent duplicates.
@@ -100,42 +106,33 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
   public boolean schedule(
       final PhaseTwoCall call) {
 
-    // pre-check for an existing entry: within a MongoDB transaction a duplicate-key
-    // error would abort the whole transaction (including the aggregate), so the
-    // common duplicate case is detected by a read; the unique index remains the
-    // backstop for concurrent duplicates (there the losing transaction aborts -
-    // acceptable, since the operation was a duplicate anyway)
+    // pre-check for an operation still waiting for its dispatch: within a MongoDB
+    // transaction a duplicate-key error would abort the whole transaction (including
+    // the aggregate), so the common duplicate case is detected by a read; the unique
+    // index remains the backstop for concurrent duplicates (there the losing
+    // transaction aborts - acceptable, since the operation was a duplicate anyway)
     final var idempotencyKey = call.idempotencyKey().orElse(null);
     if ((idempotencyKey != null) && mongoTemplate.exists(
-        Query.query(Criteria.where("idempotencyKey").is(idempotencyKey)),
+        Query.query(Criteria.where("dedupKey").is(idempotencyKey)),
         collection)) {
-      log.debug(
-          "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
-              + "was already scheduled - skipping",
-          call.operation(),
-          call.bpmnProcessId(),
-          call.workflowModuleId(),
-          call.workflowAggregateId());
+      logDiscardedSchedule(call);
       return false;
     }
 
     final var now = Instant.now();
+    final var entryId = UUID.randomUUID().toString();
     final var entry = new PhaseTwoOutboxEntry(
-        UUID.randomUUID()
-            .toString(), call.workflowModuleId(), call.bpmnProcessId(), call.operation(), call
-                .workflowAggregateId(), call.adapterId(), call
-                    .args(), idempotencyKey, PhaseTwoOutboxEntry.STATUS_OPEN, now, 0, now, null);
+        entryId, call.workflowModuleId(), call.bpmnProcessId(), call.operation(), call
+            .workflowAggregateId(), call.adapterId(), call
+                .args(), idempotencyKey,
+        // an operation which must not be deduplicated dedupes against itself, which
+        // keeps the field free of nulls a database might treat as equal
+        idempotencyKey == null ? entryId : idempotencyKey, PhaseTwoOutboxEntry.STATUS_OPEN, now, 0, now, null);
 
     try {
       mongoTemplate.insert(entry, collection);
     } catch (DuplicateKeyException e) {
-      log.debug(
-          "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
-              + "was already scheduled - skipping",
-          call.operation(),
-          call.bpmnProcessId(),
-          call.workflowModuleId(),
-          call.workflowAggregateId());
+      logDiscardedSchedule(call);
       return false;
     }
 
@@ -153,6 +150,24 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
     }
 
     return true;
+
+  }
+
+  /**
+   * The technical half of a discarded schedule. Which of the two causes it was - a
+   * redelivered dispatch or an operation lost against one still waiting - the store
+   * cannot tell, so the core reports it to the caller and this line stays at DEBUG.
+   */
+  private static void logDiscardedSchedule(
+      final PhaseTwoCall call) {
+
+    log.debug(
+        "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' is still "
+            + "waiting for its dispatch - the schedule of an identical operation was discarded",
+        call.operation(),
+        call.bpmnProcessId(),
+        call.workflowModuleId(),
+        call.workflowAggregateId());
 
   }
 

@@ -1,11 +1,7 @@
 package io.vanillabp.integration.adapter.migration.workflowtask;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
-
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
+import io.vanillabp.integration.spi.StoredKey;
 import io.vanillabp.integration.spi.TaskDelivery;
 
 /**
@@ -25,7 +21,9 @@ import io.vanillabp.integration.spi.TaskDelivery;
  * A key longer than {@link #MAX_LENGTH} characters is replaced by a hash of itself:
  * stores index the key, and unique-index key lengths are limited (MySQL: 3072 bytes,
  * which is 768 characters with utf8mb4). Hashing keeps long identifiers working and
- * costs only the readability of a record nobody can read anyway at that length.
+ * costs only the readability of a record nobody can read anyway at that length. It is
+ * {@link StoredKey} which does it, shared with the outbound idempotency key so both
+ * hashed keys mean the same thing.
  * <p>
  * Why a processed delivery is written down under this key is decision 6 in the repository's
  * DECISIONS.md.
@@ -36,8 +34,6 @@ public final class TaskDeliveryKey {
    * Up to this length a key is stored as it reads; a longer one is hashed.
    */
   public static final int MAX_LENGTH = 512;
-
-  private static final String HASH_PREFIX = "sha256:";
 
   private TaskDeliveryKey() {
 
@@ -69,28 +65,7 @@ public final class TaskDeliveryKey {
             bpmnProcessId,
             context.getTaskEvent(),
             deliveryId);
-    return key.length() <= MAX_LENGTH
-        ? key
-        : hashed(key);
-
-  }
-
-  /**
-   * Hashes a key exceeding {@link #MAX_LENGTH}. SHA-256 is available on every JVM;
-   * the unreachable exception is wrapped rather than declared - a caller could not do
-   * anything about it either.
-   */
-  private static String hashed(
-      final String key) {
-
-    try {
-      final var digest = MessageDigest
-          .getInstance("SHA-256")
-          .digest(key.getBytes(StandardCharsets.UTF_8));
-      return HASH_PREFIX + HexFormat.of().formatHex(digest);
-    } catch (final NoSuchAlgorithmException e) {
-      throw new IllegalStateException("SHA-256 is not available to hash a task delivery key!", e);
-    }
+    return StoredKey.of(key, MAX_LENGTH);
 
   }
 

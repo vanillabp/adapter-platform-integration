@@ -55,7 +55,8 @@ public class OutboxRecoveryOrderingTest {
       AGGREGATE_ID VARCHAR(1024), \
       ADAPTER_ID VARCHAR(255), \
       ARGS VARCHAR(2048), \
-      IDEMPOTENCY_KEY VARCHAR(512) UNIQUE, \
+      IDEMPOTENCY_KEY VARCHAR(512), \
+      DEDUP_KEY VARCHAR(512) NOT NULL UNIQUE, \
       STATUS VARCHAR(16) NOT NULL, \
       CREATED_AT TIMESTAMP NOT NULL, \
       ATTEMPTS INT NOT NULL, \
@@ -65,9 +66,10 @@ public class OutboxRecoveryOrderingTest {
   private static final String INSERT_ENTRY = """
       INSERT INTO VANILLABP_PHASE_TWO_OUTBOX \
       (ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, AGGREGATE_ID, ADAPTER_ID, IDEMPOTENCY_KEY, \
-      STATUS, CREATED_AT, ATTEMPTS, NEXT_ATTEMPT_AT) \
+      DEDUP_KEY, STATUS, CREATED_AT, ATTEMPTS, NEXT_ATTEMPT_AT) \
       VALUES (?, 'test-module', 'WorkflowService', 'START_WORKFLOW', '42', 'demo', \
-      'test-module|WorkflowService|42', 'OPEN', ?, 0, ?)""";
+      'START_WORKFLOW|test-module|WorkflowService|42', 'START_WORKFLOW|test-module|WorkflowService|42', \
+      'OPEN', ?, 0, ?)""";
 
   private static void seedCrashedOutboxEntry() {
 
