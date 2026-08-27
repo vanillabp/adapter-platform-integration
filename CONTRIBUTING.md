@@ -34,7 +34,12 @@ What this asks for in practice:
   or one case added to a test which already boots what is needed;
 - say "assumption" where it is one, together with what would disprove it, rather than promising
   something nothing checks;
-- delete the sentence where it decorates and promises nothing.
+- delete the sentence where it decorates and promises nothing;
+- answer the line `wiki pages re-read:` of the
+  [pull request template](./.github/pull_request_template.md), with `none` where the change touched
+  nothing a wiki page states. The wikis lag by up to two weeks whenever nobody is asked the
+  question, which is how a user came to read the transaction model of Camunda 7 from before it
+  changed; a review round which answered `none` at least answered it.
 
 Measurements are not claims: a number is a statement about a measured past, so it needs its context
 (version, setup, date) rather than a test.
