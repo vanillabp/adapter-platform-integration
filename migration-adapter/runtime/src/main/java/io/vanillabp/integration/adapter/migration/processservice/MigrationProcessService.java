@@ -594,8 +594,9 @@ public class MigrationProcessService<A> {
       final List<String> rollbackRuleRemedies) {
 
     // Everything the application logs while its handler runs carries the
-    // workflow it runs for, and the delivery is counted and measured - here, because
-    // this is the one place every BPMS passes through
+    // workflow it runs for, the delivery is counted and measured, and the running
+    // activation is readable - here, because this is the one place every BPMS passes
+    // through
     final var startedAt = System.nanoTime();
     WorkflowTaskOutcome outcome = null;
     try (var ignored = io.vanillabp.integration.adapter.migration.observability.DeliveryMdc
@@ -605,7 +606,11 @@ public class MigrationProcessService<A> {
             bpmnProcessId,
             context.getWorkflowAggregateId(),
             context.getTaskDefinition(),
-            context.getDeliveryId())) {
+            context.getDeliveryId());
+         // what the application plans from inside this handler is planned by THIS
+         // activation, which is what tells multi-instance siblings apart
+         var activation = io.vanillabp.integration.spi.RunningActivation
+             .of(context.getActivationId())) {
       outcome = deliverWorkflowTask(handler, context, platformTransactionRunner, rollbackRuleRemedies);
       return outcome;
     } finally {
@@ -2554,27 +2559,46 @@ public class MigrationProcessService<A> {
    * The message names both causes because nothing can tell them apart here. A
    * redelivered dispatch of a call which was recorded already loses nothing; a second,
    * legitimate operation of the same key loses everything, and the workflow waits for
-   * something which will never arrive. Multi-instance siblings of one aggregate are the
-   * case which cannot be avoided by the caller alone - a called process is a secondary
-   * workflow of the SAME aggregate, so three elements of a multi-instance call activity
-   * share module, process and aggregate id, and only the correlation id is left to tell
-   * them apart.
+   * something which will never arrive.
+   * <p>
+   * What the message asks for depends on what the running activation is, because that
+   * decides which repetitions are already told apart. Inside an invocation of an adapter
+   * which names its activations, multi-instance siblings carry different keys and only a
+   * caller repeating itself WITHIN one activation can collide (see decision 23 in the
+   * repository's DECISIONS.md). Outside one - a REST endpoint, an adapter reporting no
+   * activation - the correlation id is still the only thing left to vary.
    *
    * @param subject What was dropped, named the way the caller would recognise it
    */
   private void reportDiscardedSchedule(
       final String subject) {
 
+    final var activation = io.vanillabp.integration.spi.RunningActivation.current();
+    if (activation == null) {
+      log.warn(
+          """
+              An operation of the same idempotency key is still waiting for its dispatch, so {} was \
+              NOT planned! Either this is a redelivery of a call VanillaBP recorded before - then \
+              nothing is lost - or it is a second, legitimate operation which lost against the first \
+              one, and the BPMS will never see it. Nothing here can tell the two apart. This \
+              operation was planned outside any activation of the BPMS - from a REST endpoint, or \
+              through an adapter which does not name its activations - so a repeating scope has to \
+              vary the correlation id per round or element, and a caller which repeats itself has to \
+              keep an idempotency of its own.""",
+          subject);
+      return;
+    }
     log.warn(
         """
             An operation of the same idempotency key is still waiting for its dispatch, so {} was \
             NOT planned! Either this is a redelivery of a call VanillaBP recorded before - then \
             nothing is lost - or it is a second, legitimate operation which lost against the first \
-            one, and the BPMS will never see it. Nothing here can tell the two apart. A repeating \
-            scope - a loop, a multi-instance activity, a multi-instance call activity over one \
-            aggregate - has to vary the correlation id per round or element, and a caller which \
-            repeats itself has to keep an idempotency of its own.""",
-        subject);
+            one, and the BPMS will never see it. Nothing here can tell the two apart. The key names \
+            activation '{}', so this is NOT a multi-instance sibling of another one: siblings carry \
+            different activations. What collides here is one activation asking twice, which needs an \
+            idempotency of its own or a correlation id which varies per round.""",
+        subject,
+        activation);
 
   }
 

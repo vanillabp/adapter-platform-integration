@@ -396,7 +396,48 @@ half at DEBUG, and the core turns the outbox' answer into a WARN naming what was
 causes it cannot tell apart. The remedy the message asks for is the one which exists: vary the
 correlation id per round or element.
 
+Which activation planned a key is decided by entry 23, which supersedes this paragraph in that one
+respect: siblings are told apart now, and the remedy above is what remains for a caller repeating
+itself within one activation or outside any. Everything else here stands.
+
 On Camunda 8 the cluster deduplicates as well, by the `messageId` the adapter derives from the same
 values, for as long as the message time-to-live lasts. That net is the cluster's, it is longer than
 this one, and no VanillaBP setting shortens it - which is why the adapter's message says so instead
 of calling the refusal a redelivery.
+
+### 23. A key names the activation which planned it
+
+The idempotency key of a message correlation carries the activation of the BPMN element the
+correlation was planned in, where there is one. It is the only key which does, and the reason is
+that it is the only one which has to deduplicate PER activation.
+
+What entry 22 left open was two operations planned in the same batch of work. A called process is a
+secondary workflow of the SAME aggregate, so three elements of a multi-instance call activity agree
+in workflow module, BPMN process and aggregate id, and a correlation id read from business data does
+not have to differ either. All three were pending at the same moment, the first one won, and the
+other two were dropped. Telling a sibling from a redelivery needs to know which activation asked,
+and the BPMS knows: it is running one element instance per element.
+
+So the adapter reports it, as the identity of the ACTIVATION rather than of the delivery. The two
+contracts are opposite and were confused because one BPMS answers one value for both: a delivery
+identity has to stay EQUAL while the BPMS repeats itself, so a redelivery can be answered from its
+record, while an activation identity has to DIFFER between two activations of one element and says
+nothing about redeliveries. Camunda 7 is the proof that they are two questions - it reports no
+delivery id at all, because it delivers inside its own transaction, and still knows which activity
+instance is executing.
+
+The core reads it from the thread it invoked the handler on, so the application passes nothing and
+its own signatures stay as they are. A task delivery opens that scope and so does a workflow the
+BPMS started; the end of a workflow does not, because a workflow ends once. A handler which hands
+work to a thread of its own sees no activation and gets the key every VanillaBP application had
+before - absent rather than failing, so nothing which works today breaks on the upgrade.
+
+The other keys deliberately do NOT carry it. A workflow is started at most once per aggregate,
+whichever activation asks; a task is completed at most once, and its task id already names one
+activation of one element; a broadcast signal and a correlation without a correlation id carry no
+key at all, and giving them one would start deduplicating what is deliberately not deduplicated.
+
+What this does not fix is a correlation planned outside any activation. A REST endpoint correlating
+the same message name with the same correlation id twice for one aggregate is indistinguishable
+from a repeat of itself, and the narrowed window of entry 22 stays the only answer there. The
+warning says which of the two cases it is looking at, because the remedy differs.

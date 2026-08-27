@@ -47,15 +47,21 @@ public final class BpmsInitiatedStartExecution {
         handler,
         context);
 
-    return io.vanillabp.integration.adapter.migration.transaction.AggregateWrite
-        .inTransaction(
-            transactionRunner,
-            context.runInCurrentTransaction(),
-            processService.getWorkflowModuleId(),
-            processService.getBpmnProcessId(),
-            context.getNaturalIdentity(),
-            "the BPMS-initiated start at start event '%s'".formatted(context.getStartEventId()),
-            transactionalWork);
+    // the started instance is the activation the application's handler runs in, so
+    // what it plans is told apart from what a second firing of the same start event
+    // plans (see io.vanillabp.integration.spi.RunningActivation)
+    try (var activation = io.vanillabp.integration.spi.RunningActivation
+        .of(context.getNativeInstanceId())) {
+      return io.vanillabp.integration.adapter.migration.transaction.AggregateWrite
+          .inTransaction(
+              transactionRunner,
+              context.runInCurrentTransaction(),
+              processService.getWorkflowModuleId(),
+              processService.getBpmnProcessId(),
+              context.getNaturalIdentity(),
+              "the BPMS-initiated start at start event '%s'".formatted(context.getStartEventId()),
+              transactionalWork);
+    }
 
   }
 

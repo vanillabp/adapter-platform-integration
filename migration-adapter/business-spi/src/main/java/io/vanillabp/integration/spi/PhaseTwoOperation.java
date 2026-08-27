@@ -24,20 +24,26 @@ import java.util.Optional;
  * <ul>
  * <li>{@link #START_WORKFLOW}:
  * <code>START_WORKFLOW|workflowModuleId|bpmnProcessId|workflowAggregateId</code> - a
- * workflow is started at most once per aggregate.</li>
+ * workflow is started at most once per aggregate, and no activation is appended: two
+ * activations asking for the same workflow ask for the same one.</li>
  * <li>{@link #COMPLETE_TASK} / {@link #CANCEL_TASK}:
  * <code>&lt;operation&gt;|workflowModuleId|bpmnProcessId|workflowAggregateId|taskId</code>
  * - the same task is completed (or canceled) at most once, but multiple tasks of the
- * same workflow may be completed. The BPMN error code of a cancellation is NOT part of
+ * same workflow may be completed, and no activation is appended: a task ID already names
+ * one activation of one element. The BPMN error code of a cancellation is NOT part of
  * the key (it is carried in {@link PhaseTwoCall#args()}).</li>
  * <li>{@link #COMPLETE_USER_TASK} / {@link #CANCEL_USER_TASK}: like their
  * asynchronous-task counterparts, and distinct from them by the operation name.</li>
  * <li>{@link #CORRELATE_MESSAGE}: WITH a correlation id the key is
- * <code>CORRELATE_MESSAGE|workflowModuleId|bpmnProcessId|workflowAggregateId|messageName|correlationId</code>;
- * WITHOUT one it is {@link Optional#empty()} - no deduplication is possible
- * because the same message may legitimately be correlated multiple times over an
- * instance's lifetime (an at-least-once dispatch may then double-correlate; see
- * the adapters' documentation).</li>
+ * <code>CORRELATE_MESSAGE|workflowModuleId|bpmnProcessId|workflowAggregateId|messageName|correlationId</code>,
+ * followed by <code>|activationId</code> where the correlation was planned inside
+ * something the BPMS activated and the delivering adapter names that activation
+ * ({@link RunningActivation}). It is the ONLY key carrying one, because it is the only
+ * one which has to deduplicate PER activation - the others deduplicate across
+ * activations on purpose. WITHOUT a correlation id the key is {@link Optional#empty()} -
+ * no deduplication is possible because the same message may legitimately be correlated
+ * multiple times over an instance's lifetime (an at-least-once dispatch may then
+ * double-correlate; see the adapters' documentation).</li>
  * <li>{@link #SEND_SIGNAL}: {@link Optional#empty()} - a broadcast signal has no
  * key to deduplicate by.</li>
  * <li>{@link #START_WORKFLOW_BY_MESSAGE}: exactly {@link #START_WORKFLOW}'s key,
@@ -155,18 +161,28 @@ public record PhaseTwoOperation(
         final var correlationId = call.args().get(PhaseTwoCall.ARG_CORRELATION_ID);
         if (correlationId == null) {
           // the same message may legitimately be correlated multiple times - no
-          // deduplication possible (documented at-least-once residual)
+          // deduplication possible (documented at-least-once residual). An activation
+          // would not help here: it would start deduplicating what is deliberately not
+          // deduplicated
           return Optional.empty();
         }
+        final var key = "%s|%s|%s|%s|%s|%s".formatted(
+            call.operation(),
+            call.workflowModuleId(),
+            call.bpmnProcessId(),
+            call.workflowAggregateId(),
+            call.args().get(PhaseTwoCall.ARG_MESSAGE_NAME),
+            correlationId);
+        // Multi-instance siblings of one aggregate agree in every part above - a called
+        // process is a secondary workflow of the SAME aggregate - so the activation
+        // which planned the correlation is what tells them apart. Outside an invocation
+        // there is none, and the key is then exactly the one it always was
+        final var activation = RunningActivation.current();
         return Optional
             .of(
-                "%s|%s|%s|%s|%s|%s".formatted(
-                    call.operation(),
-                    call.workflowModuleId(),
-                    call.bpmnProcessId(),
-                    call.workflowAggregateId(),
-                    call.args().get(PhaseTwoCall.ARG_MESSAGE_NAME),
-                    correlationId));
+                activation == null
+                    ? key
+                    : "%s|%s".formatted(key, activation));
       });
 
   /**

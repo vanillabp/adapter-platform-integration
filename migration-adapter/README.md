@@ -743,6 +743,19 @@ The core does not implement (or depend on) any outbox itself — it only defines
   `AGGREGATE_ID` column is refused where the call is built, with a message naming the
   column. The derivation rules per operation are documented on `PhaseTwoOperation` and
   are a persisted contract.
+- **The activation which planned a correlation is part of its key**, and of no other key
+  (decision 23 of this repository). A called process is a secondary workflow of the SAME
+  aggregate, so three elements of a multi-instance call activity used to derive one key
+  and two of the three were discarded. `RunningActivation` is the thread-bound scope the
+  core opens around a task delivery and around a workflow the BPMS started, filled from
+  `TaskInvocationContext#getActivationId()` respectively
+  `BpmsInitiatedStartContext#getNativeInstanceId()`; `PhaseTwoOperation.CORRELATE_MESSAGE`
+  reads it while it derives. Outside any invocation there is none and the key is what it
+  always was, which is the fallback a REST endpoint and a thread the handler started
+  themselves get. `START_WORKFLOW` and the task operations must NOT carry it: they
+  deduplicate across activations on purpose. Two nets are involved on Camunda 8, and the
+  cluster's own one does not know about activations — see the wiki page on message
+  correlation.
 - **Recovery:** every committed-but-unprocessed entry has to be dispatched through
   the `PhaseTwoRouter` right after the commit *and* after an application restart
   (crash recovery), retrying failed dispatches with a backoff.

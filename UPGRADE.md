@@ -4,6 +4,46 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## The key of a message correlation names the activation which planned it (2026-08-27)
+
+Multi-instance siblings of one workflow aggregate stop sharing an idempotency key. A called process
+is a secondary workflow of the SAME aggregate, so three elements of a multi-instance call activity
+agreed in workflow module, BPMN process and aggregate id, and where the correlation id came from
+business data the three correlations were one key: the first one was planned and the other two were
+discarded. The key of a `CORRELATE_MESSAGE` now carries what the BPMS calls the running element
+instance, so the three are three operations and all three reach the BPMS.
+
+**The key format changed, and only this one.** Where the correlation was planned inside something
+the BPMS activated, the key is
+`CORRELATE_MESSAGE|<module>|<process>|<aggregate>|<message>|<correlationId>|<activation>`. Planned
+anywhere else - a REST endpoint, a scheduler, a thread the handler started itself - it is exactly
+the key it was before. No other operation's key changed: a workflow is started at most once per
+aggregate whichever activation asks, a task is completed at most once and its task id already names
+one activation, and a broadcast signal still carries no key.
+
+**What a pending entry does across the upgrade.** Nothing has to be migrated. An entry written
+before the upgrade keeps its key and dispatches under it; an entry written after it carries the
+longer key. The only effect of the change is on the entries still waiting at the moment the
+application restarts: a correlation of an old shape and one of the new shape no longer deduplicate
+against each other, so a correlation which was planned before the restart and repeated inside an
+activation afterwards can reach the BPMS twice. The window is the seconds between the restart and
+the outbox dispatching what it held.
+
+**Adapters have to answer one more question.** `TaskInvocationContext#getActivationId()` reports the
+element instance the BPMS is running - the Camunda 8 element instance key, the Camunda 7 activity
+instance id, the task id of the Process-Engine-API. It defaults to `null`, so an adapter written
+before this keeps compiling and working, and its multi-instance siblings keep colliding. It is NOT
+the delivery id: that one has to stay equal while the BPMS repeats itself, this one has to differ
+between two activations of one element. An adapter which reports no delivery id can still report
+this, and Camunda 7 is exactly that case.
+
+**A handler which correlates from a thread of its own gets the old key.** The running activation is
+bound to the thread the core invoked the handler on, never inherited by threads that handler
+creates. Absent rather than failing, deliberately: an application which works today keeps working.
+
+**The warning about a discarded schedule says which case it is.** Inside an activation it names it
+and says that this cannot be a sibling; outside any it asks for a varying correlation id as before.
+
 ## An idempotency key deduplicates what is planned, not what happened (2026-08-26)
 
 The phase-two outbox used to refuse a scheduled operation whose idempotency key matched ANY entry
@@ -23,9 +63,10 @@ dispatched.
 **What is logged now.** Where a schedule IS discarded, VanillaBP writes a warning naming what was
 not planned and both causes it cannot tell apart: a repeated dispatch of an operation which happened
 already, or a second legitimate operation lost against one which is still waiting. Two operations
-planned in the same unit of work still collide, and multi-instance siblings of one aggregate are the
-case a caller cannot avoid on its own, so the warning is the signal to vary the correlation id per
-round or element.
+planned in the same unit of work still collide, and multi-instance siblings of one aggregate were
+the case a caller could not avoid on its own - the entry of 2026-08-27 above is what fixed that
+half, and outside an activation the warning is still the signal to vary the correlation id per round
+or element.
 
 **A long aggregate ID no longer fails the schedule.** The derived key is bounded to 250 characters
 and hashed beyond that, the same way the task-delivery key has always been bounded (both share

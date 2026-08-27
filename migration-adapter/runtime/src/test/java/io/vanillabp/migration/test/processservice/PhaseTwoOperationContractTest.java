@@ -12,6 +12,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOperation;
+import io.vanillabp.integration.spi.RunningActivation;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
@@ -151,6 +152,49 @@ public class PhaseTwoOperationContractTest {
         call(
             PhaseTwoOperation.CORRELATE_MESSAGE,
             Map.of(PhaseTwoCall.ARG_MESSAGE_NAME, "OrderReceived")).idempotencyKey().isEmpty());
+
+  }
+
+  @Test
+  @DisplayName("Inside an activation the correlation key names it, and only that key does")
+  public void correlateMessageKeyCarriesTheRunningActivation() {
+
+    final var args = Map
+        .of(
+            PhaseTwoCall.ARG_MESSAGE_NAME, "OrderReceived",
+            PhaseTwoCall.ARG_CORRELATION_ID, "correlation-1");
+
+    try (var activation = RunningActivation.of("element-instance-99")) {
+      assertEquals(
+          "CORRELATE_MESSAGE|test-module|TestProcess|42|OrderReceived|correlation-1|element-instance-99",
+          call(PhaseTwoOperation.CORRELATE_MESSAGE, args).idempotencyKey().orElseThrow());
+
+      // a workflow is started at most once per aggregate, whichever activation asks
+      assertEquals(
+          "START_WORKFLOW|test-module|TestProcess|42",
+          call(PhaseTwoOperation.START_WORKFLOW, Map.of()).idempotencyKey().orElseThrow());
+      // a task id already names one activation of one element
+      assertEquals(
+          "COMPLETE_TASK|test-module|TestProcess|42|task-1",
+          call(PhaseTwoOperation.COMPLETE_TASK, Map.of(PhaseTwoCall.ARG_TASK_ID, "task-1"))
+              .idempotencyKey()
+              .orElseThrow());
+      // keyless stays keyless: an activation must not start deduplicating what is
+      // deliberately not deduplicated
+      assertTrue(
+          call(
+              PhaseTwoOperation.CORRELATE_MESSAGE,
+              Map.of(PhaseTwoCall.ARG_MESSAGE_NAME, "OrderReceived")).idempotencyKey().isEmpty());
+      assertTrue(
+          call(PhaseTwoOperation.SEND_SIGNAL, Map.of(PhaseTwoCall.ARG_SIGNAL_NAME, "Recalled"))
+              .idempotencyKey()
+              .isEmpty());
+    }
+
+    // outside any activation the key is the one every earlier version wrote
+    assertEquals(
+        "CORRELATE_MESSAGE|test-module|TestProcess|42|OrderReceived|correlation-1",
+        call(PhaseTwoOperation.CORRELATE_MESSAGE, args).idempotencyKey().orElseThrow());
 
   }
 
