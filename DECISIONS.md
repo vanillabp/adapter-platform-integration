@@ -482,3 +482,33 @@ minutes, guarding a risk measured in days, would be green in exactly the install
 business code twice, and a green message which means nothing teaches its reader to ignore the next
 one.
 
+### 25. A workflow is located by asking, not by a registry
+
+> DRAFT, awaiting confirmation. It writes down a stance the code has followed since
+> 2026-07-28 and which lives in a prompt header today, which `AGENTS.md` forbids citing.
+> Nothing about the code changes with this entry.
+
+Every operation on an existing workflow asks the configured adapters which of them holds it,
+and the answer is not written down anywhere persistent. A registry mapping workflow module,
+BPMN process and aggregate id to an adapter id was considered and rejected: it would be a
+second source of truth about something the BPMS already knows, it would need a schema, a
+cleanup and a repair path of its own, and it would be wrong exactly when it matters, after a
+crash or a migration.
+
+What that costs is one question per operation, which is a query against a remote BPMS and
+nothing at all against an embedded one, plus the walk over the adapters until one answers.
+The only accelerator is `WorkflowAdapterCache`, whose entries are hints and never answers
+(entry 5), so a lost hint costs a walk and never a wrong route.
+
+The workload this is sized for is the one VanillaBP is built for: business processes whose
+steps are minutes and days apart, not a stream of thousands of operations per second. An
+application in that other shape would feel the probe per operation, and the answer for it is
+not a registry bolted on here but a different design of its own.
+
+Two consequences the code carries visibly. The re-dispatch of a workflow start probes
+`awarenessOfWorkflowForRedispatch` instead of consulting a record, which is why that probe
+must never answer optimistically, and the residual duplicate window after a crash is
+documented per adapter rather than closed. And an adapter which cannot be asked at all
+answers optimistically, which is safe while it is the only BPMS configured and is the reason
+a migration setup containing such an adapter routes by list order (see the wiki page
+"BPMS migration").

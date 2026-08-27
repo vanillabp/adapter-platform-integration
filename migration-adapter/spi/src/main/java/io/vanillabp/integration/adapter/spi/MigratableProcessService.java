@@ -36,10 +36,19 @@ import io.vanillabp.spi.process.WorkflowHistory;
  * IDs are unique per aggregate type, not across an application, so two modules whose
  * aggregates count from one collide.</li>
  * </ul>
- * <b>A probe changes nothing.</b> It is a question asked before an operation is
- * routed, and it is asked of adapters which do not hold the subject at all. A probe
- * implemented with a command which extends a lock, writes a variable or advances a
- * token modifies a workflow belonging to somebody else.
+ * <b>A probe must not ADVANCE the workflow.</b> It is a question asked before an
+ * operation is routed, and it is asked of adapters which do not hold the subject at
+ * all, so a probe which completes a task, correlates a message or writes a variable
+ * moves a workflow belonging to somebody else.
+ * <p>
+ * A non-advancing command IS allowed where that is the only way to ask, and it has to
+ * be scoped before it is sent. The Camunda 8 adapter is the example: its
+ * {@code awarenessOfTask} updates the job's timeout and its
+ * {@code awarenessOfUserTask} sends an empty user-task update, both of which renew a
+ * lock and advance nothing, and both ask the scope question first because a cluster
+ * key does not say which adapter id it belongs to (see decision 3 of that adapter's
+ * {@code DECISIONS.md}). The visible effect is a renewed lock on a job the caller is
+ * about to complete or cancel.
  * <p>
  * The core cannot check any of this: which adapters may be asked is its business (the
  * prioritized list), which workflows an adapter owns is only the adapter's.

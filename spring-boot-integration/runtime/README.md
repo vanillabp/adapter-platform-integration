@@ -56,6 +56,9 @@ imported `BeanRegistrar` would run while the configuration classes are still bei
 read and would miss whatever a later one - an auto-configuration, typically -
 contributes.
 
+`WorkflowServiceDiscoveryTest` of the main integration test holds this, including the
+library-auto-configuration case which the ordering exists for.
+
 Being a bean is not an extra requirement this discovery invents. Task delivery
 resolves the handler object through the bean factory, so a class annotated
 `@WorkflowService` without a bean could not serve a task even if it was found. And
@@ -207,8 +210,14 @@ disable an unwanted default via its `enabled` flag:
    off, the auto-configuration verifies AT STARTUP that the table exists
    (`validateOutboxTableExists`) and ends the boot naming table and property. This
    table is the one piece of a schema handover `io.vanillabp:vanillabp-schema` does
-   not cover, because the schema belongs to gruelbox (decided against
-   shipping foreign DDL and against replacing gruelbox for now); VanillaBP's own two
+   not cover, because the schema belongs to gruelbox, and shipping foreign DDL was
+   decided against. Gruelbox itself is on its way out of the default position: the
+   roadmap replaces it with the JDBC store the Quarkus integration already uses, one
+   store per persistence for both platforms, and keeps gruelbox as an optional module
+   an application opts into. What that costs today is in
+   `migration-adapter/README.md` and on the wiki, a dispatched entry deleted to free
+   its key and a re-dispatch after a hard crash which carries no attempt count.
+   VanillaBP's own two
    tables are checked by `JdbcTaskDeliveryStore#validateSchemaExists` respectively the
    Quarkus dispatcher, all three through
    `io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema#tableExists`. The default's beans

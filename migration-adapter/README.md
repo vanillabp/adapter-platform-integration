@@ -283,10 +283,13 @@ adapter as a platform bean).
 
 Without any configuration the ADAPTER's default applies
 (`AdapterDeploymentService#defaultNameClashAvoidance`, `BY_ADAPTER` unless
-overridden). Both Camunda adapters override it with `NONE`: a Camunda 8 cluster
-started from the stock image has multi-tenancy switched off and rejects a deploy
-command carrying a tenant id, and Camunda 7 offers more than one mechanism (a tenant,
-prefixes, an engine per module), so neither presumes one. The platform integrations
+overridden). No shipped adapter overrides it: all three answer `BY_ADAPTER` since
+2026-08-22 (`UPGRADE.md`, "name-clash-avoidance is `by-adapter` again"), because that
+is what VanillaBP 1 deployed and an upgraded application has to find its workflows in
+their tenants. Both Camunda adapters answered `NONE` for eleven days, which is what a
+Camunda 8 cluster from the stock image needs - it has multi-tenancy switched off and
+rejects a deploy command carrying a tenant id - and that case is answered by a guiding
+boot failure naming `use-prefix` and `none` rather than by a different default. The platform integrations
 hand the adapters' deployment services to the service as a lazily resolved supplier
 (adapters receive the service themselves, so they cannot be injected).
 
@@ -642,9 +645,14 @@ an aggregate ("ghost workflow") or vice versa. Since remote BPMS cannot take par
 the local transaction, starting is split into two phases
 (`MigratableProcessService`):
 
-- **Phase one** runs inside the local transaction. Embedded BPMS start the workflow
-  right here (same transaction, phase two is a no-op); remote/eventually-consistent
-  BPMS only lock/validate.
+- **Phase one** runs inside the local transaction and only ASKS - is the task still
+  parked, is a subscription waiting, is such a message declared. It never advances
+  anything, on any adapter: all three adapters answer `true` to
+  `needsTwoPhaseCommitForStartingWorkflows()`, the embedded Camunda 7 included
+  (see decision 2 of that adapter's `DECISIONS.md`: an engine command which loses a
+  concurrency conflict cannot be repeated inside the caller's transaction). An adapter
+  which acted in phase one would find the core skipping the outbox for five
+  operations, so do not build that variant.
 - **Phase two** runs after the local commit. For adapters reporting
   `needsTwoPhaseCommitForStartingWorkflows()`, the phase-two call is scheduled via
   the *transaction outbox* SPI `PhaseTwoOutbox`. The outbox is resolved PER
@@ -691,10 +699,12 @@ String is passed through). For `START_WORKFLOW` the adapter elected in phase one
 **is persisted with the outbox entry** and used in phase two — no re-election from
 the then-current priorities. If the adapter was removed from the configuration
 while the entry was still open (stale entry), dispatching fails with a guiding
-message naming that case. Future `ProcessService` operations (message correlation,
-completing tasks, ...) will instead probe the prioritized adapters at dispatch time
-(their calls carry no adapter ID); each such operation gets its own typed
-`schedule*` default method in `PhaseTwoOutbox` building the `PhaseTwoCall`.
+message naming that case. The other operations (message correlation, completing or cancelling a task, the
+user-task pair, pushing a changed aggregate) probe the prioritized adapters at
+dispatch time instead, so their calls carry no adapter ID; the exception is
+`SEND_SIGNAL`, which names the broadcasting adapter because a broadcast reaches every
+adapter of the module. Each operation gets its own typed `schedule*` default method in
+`PhaseTwoOutbox` building the `PhaseTwoCall`.
 
 #### Which operations exist: the operation registry
 
@@ -712,8 +722,9 @@ VanillaBP's own operations (`START_WORKFLOW`, `COMPLETE_TASK`, `CANCEL_TASK`,
 `COMPLETE_USER_TASK`, `CANCEL_USER_TASK`, `CORRELATE_MESSAGE`,
 `START_WORKFLOW_BY_MESSAGE`, `SEND_SIGNAL`, `AGGREGATE_CHANGED`) are constants of `PhaseTwoOperation`, registered by the
 `PhaseTwoRouter` while it is built. Their dispatch is the process-service routing
-described above. Their names and key rules are pinned by a test, because since they
-stopped being enum constants nothing else guarantees them.
+described above. Their names and key rules are pinned by
+`PhaseTwoOperationContractTest`, because since they stopped being enum constants nothing
+else guarantees them.
 
 An **extension** contributes operations of its own, which is why the registry exists.
 It builds them with `PhaseTwoOperation.extensionOperation(name, key)`, which enforces
@@ -994,7 +1005,11 @@ it regardless of running on Spring Boot or Quarkus.
 VanillaBP wraps everything it does around one workflow aggregate in ONE transaction: the
 lookup of a processed delivery, loading the aggregate, invoking the `@WorkflowTask` method,
 saving the aggregate, writing the delivery record and scheduling a phase-two outbox entry
-either all commit or none of them do. The core's abstraction for it is
+either all commit or none of them do. Which runner is chosen for an aggregate is held by
+`TransactionRunnerResolutionTest`, plus `SpringTransactionRunnerResolverTest` and
+`QuarkusTransactionRunnerResolverTest` per platform; that the six steps really share one
+transaction is proved per platform by the outbox and delivery integration tests rather than
+by a unit test. The core's abstraction for it is
 `io.vanillabp.integration.spi.TransactionRunner` (module `business-spi`, with `requireNew`,
 `inCurrent` and `requireTransaction`), and every platform provides an implementation of it.
 
