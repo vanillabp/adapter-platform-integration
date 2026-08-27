@@ -37,10 +37,10 @@ import lombok.extern.slf4j.Slf4j;
  * <p>
  * The table ({@link JdbcTaskDeliveryStore#DEFAULT_TABLE_NAME}) is created at startup
  * unless <code>vanillabp.outbox.create-schema</code> is disabled, and records are
- * deleted once <code>vanillabp.outbox.retention</code> passed - the delivery log shares
- * the outbox' store settings, although the number means something different here: for a
- * record it decides whether a late redelivery runs the business code again, while for a
- * dispatched outbox entry it only decides how long support can read it.
+ * deleted once <code>vanillabp.delivery.retention</code> passed - the delivery log shares
+ * the outbox' STORE settings and not its retention, because the two numbers mean different
+ * things: for a record the retention decides whether a late redelivery runs the business
+ * code again, for a dispatched outbox entry only how long support can read it.
  */
 @ApplicationScoped
 @Slf4j
@@ -53,6 +53,8 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   TransactionSynchronizationRegistry txRegistry;
 
   private volatile PhaseTwoOutboxProperties properties;
+
+  private volatile java.time.Duration deliveryRetention;
 
   private volatile JdbcTaskDeliveryStore store;
 
@@ -100,6 +102,35 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
 
   }
 
+  /**
+   * How long a record is kept: <code>vanillabp.delivery.retention</code> where the
+   * application sets it, and <code>vanillabp.outbox.retention</code> otherwise, which is
+   * where the number lived before the two windows were told apart. Loaded lazily like the
+   * outbox configuration next to it.
+   *
+   * Public because it answers the first question a support case about a handler running
+   * twice asks, and because it is what the tests of this wiring assert.
+   *
+   * @return The retention of delivery records
+   */
+  public java.time.Duration getDeliveryRetention() {
+
+    if (deliveryRetention == null) {
+      deliveryRetention = io.vanillabp.integration.adapter.migration.config.DeliveryProperties
+          .resolveRetention(
+              QuarkusMigrationAdapterPropertiesMapper.INSTANCE
+                  .toCore(
+                      ConfigProvider
+                          .getConfig()
+                          .unwrap(SmallRyeConfig.class)
+                          .getConfigMapping(QuarkusMigrationAdapterProperties.class)
+                          .delivery()),
+              getProperties().getRetention());
+    }
+    return deliveryRetention;
+
+  }
+
   private JdbcTaskDeliveryStore getStore() {
 
     if (store == null) {
@@ -133,7 +164,7 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
       getStore().validateSchemaExists();
     }
     retentionCleanup = new TaskDeliveryRetentionCleanup(
-        getStore().getTableName(), getProperties().getRetention(), this::cleanUpExpiredRecords);
+        getStore().getTableName(), getDeliveryRetention(), this::cleanUpExpiredRecords);
     retentionCleanup.start();
 
   }
@@ -147,7 +178,7 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
    */
   public int cleanUpExpiredRecords() {
 
-    return getStore().deleteExpired(getProperties().getRetention());
+    return getStore().deleteExpired(getDeliveryRetention());
 
   }
 

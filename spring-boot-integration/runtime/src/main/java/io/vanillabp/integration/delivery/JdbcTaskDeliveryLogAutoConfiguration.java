@@ -23,15 +23,15 @@ import io.vanillabp.integration.spi.TaskDeliveryLog;
  * delivery record always rides the aggregate's own transaction even in mixed-persistence
  * applications.
  * <p>
- * The store settings are the outbox' ones, although the retention means something
- * different here - for a record it decides whether a late redelivery runs the business
- * code again, while for a dispatched outbox entry it only decides how long support can
- * read it:
+ * The store settings are the outbox' ones and the retention is not, because the two mean
+ * different things: for a record it decides whether a late redelivery runs the business
+ * code again, for a dispatched outbox entry only how long support can read it.
  * <code>vanillabp.outbox.create-schema</code> decides whether VanillaBP creates the
  * table {@value io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore#DEFAULT_TABLE_NAME},
- * <code>vanillabp.outbox.retention</code> how long a record is kept, and
- * <code>vanillabp.outbox.jdbc.enabled</code> switches the default off for an application
- * bringing its own {@link TaskDeliveryLog} bean.
+ * <code>vanillabp.delivery.retention</code> how long a record is kept (falling back to
+ * <code>vanillabp.outbox.retention</code>, where it lived before the two were told
+ * apart), and <code>vanillabp.outbox.jdbc.enabled</code> switches the default off for an
+ * application bringing its own {@link TaskDeliveryLog} bean.
  */
 @AutoConfiguration(
     afterName = {
@@ -52,8 +52,9 @@ public class JdbcTaskDeliveryLogAutoConfiguration {
 
   /**
    * @param dataSource The data source holding the records
-   * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree carrying the
-   *          <code>vanillabp.outbox</code> section
+   * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree, asked for the
+   *          retention of delivery records (<code>vanillabp.delivery.retention</code>,
+   *          falling back to <code>vanillabp.outbox.retention</code>)
    * @return The {@link TaskDeliveryLog} used for JPA/JDBC-persisted aggregates
    */
   @Bean(name = DEFAULT_DELIVERY_LOG_BEAN_NAME, destroyMethod = "stop")
@@ -63,8 +64,7 @@ public class JdbcTaskDeliveryLogAutoConfiguration {
 
     return new JdbcTaskDeliveryLog(
         dataSource, JdbcTaskDeliveryStore.DEFAULT_TABLE_NAME, vanillaBpProperties
-            .getOutbox()
-            .getRetention());
+            .resolvedDeliveryRetention());
 
   }
 

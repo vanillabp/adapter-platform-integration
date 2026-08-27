@@ -130,7 +130,8 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
 
   private record DeliveryProperties(
                                     Optional<Boolean> releaseOnWorkflowEnd,
-                                    Optional<Duration> maxTaskAge) implements QuarkusMigrationAdapterProperties.DeliveryProperties {
+                                    Optional<Duration> maxTaskAge,
+                                    Optional<Duration> retention) implements QuarkusMigrationAdapterProperties.DeliveryProperties {
 
     /**
      * Only the release setting, which is what the fixtures written before the maximum
@@ -139,7 +140,19 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     private DeliveryProperties(
         final Optional<Boolean> releaseOnWorkflowEnd) {
 
-      this(releaseOnWorkflowEnd, Optional.empty());
+      this(releaseOnWorkflowEnd, Optional.empty(), Optional.empty());
+
+    }
+
+    /**
+     * The release setting and the maximum age, which is what the fixtures written before
+     * the retention was split off the outbox' one need.
+     */
+    private DeliveryProperties(
+        final Optional<Boolean> releaseOnWorkflowEnd,
+        final Optional<Duration> maxTaskAge) {
+
+      this(releaseOnWorkflowEnd, maxTaskAge, Optional.empty());
 
     }
 
@@ -438,6 +451,27 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     assertEquals(coreDefaults.getJdbc().getTable(), mappedDefaults.getJdbc().getTable());
     assertEquals(coreDefaults.getMongo().isEnabled(), mappedDefaults.getMongo().isEnabled());
     assertEquals(coreDefaults.getMongo().getCollection(), mappedDefaults.getMongo().getCollection());
+
+  }
+
+  @Test
+  @DisplayName("The delivery retention travels, and is absent where it is not configured")
+  public void theDeliveryRetentionTravels() {
+
+    // the delivery log resolves this against the outbox retention, so "not configured"
+    // has to arrive as null rather than as a zero or a default of its own
+    final var configured = QuarkusMigrationAdapterPropertiesMapper.INSTANCE
+        .toCore(new DeliveryProperties(Optional.empty(), Optional.empty(), Optional.of(Duration.ofDays(30))));
+    assertEquals(Duration.ofDays(30), configured.getRetention());
+
+    final var unconfigured = QuarkusMigrationAdapterPropertiesMapper.INSTANCE
+        .toCore(new DeliveryProperties(Optional.empty(), Optional.empty(), Optional.empty()));
+    assertEquals(null, unconfigured.getRetention());
+    assertEquals(
+        Duration.ofDays(7),
+        io.vanillabp.integration.adapter.migration.config.DeliveryProperties
+            .resolveRetention(unconfigured, Duration.ofDays(7)),
+        "and the resolution then answers the outbox number");
 
   }
 

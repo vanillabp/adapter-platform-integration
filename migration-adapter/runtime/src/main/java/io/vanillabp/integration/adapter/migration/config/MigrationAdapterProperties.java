@@ -102,7 +102,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   /**
    * What VanillaBP does with the records of processed task deliveries (properties
-   * section <code>vanillabp.delivery</code>, overridable per workflow module).
+   * section <code>vanillabp.delivery</code>, overridable per workflow module - except the
+   * retention, see {@link DeliveryProperties#getRetention()}).
    */
   @Builder.Default
   private DeliveryProperties delivery = new DeliveryProperties();
@@ -308,6 +309,83 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * has to be invoked explicitly if properties objects are built without running
    * validation (e.g. in tests).
    */
+  /**
+   * How long the records of processed task deliveries are kept:
+   * <code>vanillabp.delivery.retention</code> where it is set, and
+   * <code>vanillabp.outbox.retention</code> otherwise, which is where the number lived
+   * before the two were told apart.
+   *
+   * @return The period, never <code>null</code>
+   */
+  public java.time.Duration resolvedDeliveryRetention() {
+
+    return DeliveryProperties.resolveRetention(delivery, resolvedOutboxRetention());
+
+  }
+
+  private java.time.Duration resolvedOutboxRetention() {
+
+    return outbox == null
+        ? PhaseTwoOutboxProperties.DEFAULT_RETENTION
+        : outbox.getRetention();
+
+  }
+
+  /**
+   * Says which of the two retentions apply, where the application moved exactly one of
+   * them away from the default. Both halves used to be one property and mean different
+   * things now, so an installation which lowered the old number to keep its outbox table
+   * small has to learn that the correctness half followed along.
+   * <p>
+   * The trigger is "differs from the default" rather than "was written down", because a
+   * bound property cannot tell the two apart and because the interesting case is exactly
+   * the one where a number was moved. An application setting both, or setting one of them
+   * to the default it already had, learns nothing and is told nothing.
+   */
+  private void reportRetentionSplit() {
+
+    final var deliveryRetention = delivery == null
+        ? null
+        : delivery.getRetention();
+    final var outboxRetention = resolvedOutboxRetention();
+    final var outboxMoved = !PhaseTwoOutboxProperties.DEFAULT_RETENTION.equals(outboxRetention);
+    if ((deliveryRetention != null) == outboxMoved) {
+      return;
+    }
+    if (deliveryRetention == null) {
+      logger.info(
+          RETENTION_FOLLOWS_THE_OUTBOX,
+          PREFIX,
+          outboxRetention,
+          PREFIX,
+          outboxRetention,
+          PREFIX);
+      return;
+    }
+    logger.info(RETENTION_STANDS_ON_ITS_OWN, PREFIX, deliveryRetention, PREFIX, outboxRetention);
+
+  }
+
+  /**
+   * What an installation which moved the outbox retention and nothing else is told - the
+   * upgrade case, since this number used to govern both windows.
+   */
+  private static final String RETENTION_FOLLOWS_THE_OUTBOX = """
+      '{}.outbox.retention' is set to {} while '{}.delivery.retention' is not, so the records of \
+      processed task deliveries are kept for {} as well. Those two numbers used to be one and are no \
+      longer the same kind of setting: the outbox one decides how long a dispatched entry stays \
+      readable during support, the delivery one decides whether a late redelivery runs your \
+      @WorkflowTask method a second time. Set '{}.delivery.retention' explicitly where the second \
+      one has to outlive the first.""";
+
+  /**
+   * What an installation which set only the new property is told, so nobody assumes the
+   * outbox followed the other way round.
+   */
+  private static final String RETENTION_STANDS_ON_ITS_OWN = """
+      '{}.delivery.retention' is set to {}, so the records of processed task deliveries are kept for \
+      that long, while dispatched outbox entries keep '{}.outbox.retention' ({}).""";
+
   public void validateAndLink() {
 
     workflowModules.forEach((
@@ -1043,6 +1121,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     }
     metrics.validate();
     validateMaxTaskAge();
+    reportRetentionSplit();
 
     if (knownWorkflowModuleIds.isEmpty()) {
       throw new IllegalStateException("No workflow-modules where given!");

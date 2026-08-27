@@ -76,6 +76,7 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
 
   @Mapping(target = "releaseOnWorkflowEnd", qualifiedByName = "unwrapBoolean")
   @Mapping(target = "maxTaskAge", qualifiedByName = "unwrapDuration")
+  @Mapping(target = "retention", qualifiedByName = "unwrapDuration")
   DeliveryProperties toCore(
       QuarkusMigrationAdapterProperties.DeliveryProperties deliveryProperties);
 

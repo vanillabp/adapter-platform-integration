@@ -875,7 +875,7 @@ public class MigrationProcessService<A> {
         """
             The TaskDeliveryLog '{}' does not implement 'releaseRecordsOf', but '{}' is switched on \
             for BPMN process '{}' of workflow module '{}' - the records of an ended workflow are \
-            NOT deleted when it ends but once 'vanillabp.outbox.retention' passed. To solve this \
+            NOT deleted when it ends but once 'vanillabp.delivery.retention' passed. To solve this \
             either
             - implement io.vanillabp.integration.spi.TaskDeliveryLog#releaseRecordsOf in '{}', or
             - set '{}' to 'false' to state that the retention is what cleans up the records.""",
