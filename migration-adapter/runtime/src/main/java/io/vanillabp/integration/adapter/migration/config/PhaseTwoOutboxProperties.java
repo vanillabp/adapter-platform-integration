@@ -62,8 +62,9 @@ public class PhaseTwoOutboxProperties {
    * this number and is a correctness setting rather than an operational one: a delivery
    * arriving later than it finds no record and runs the business code a second time (see
    * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). The two were one property until
-   * they were told apart, which is why shortening this one to keep the outbox table small
-   * used to shorten a correctness window with the same hand.
+   * they were told apart (decision 24 in the repository's DECISIONS.md), which is why
+   * shortening this one to keep the outbox table small used to shorten a correctness window
+   * with the same hand.
    */
   @Builder.Default
   private Duration retention = DEFAULT_RETENTION;

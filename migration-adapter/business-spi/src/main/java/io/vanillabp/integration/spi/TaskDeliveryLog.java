@@ -30,7 +30,8 @@ import java.util.Optional;
  * <strong>Retention:</strong> records are deleted asynchronously once
  * <code>vanillabp.delivery.retention</code> passed, which defaults to
  * <code>vanillabp.outbox.retention</code> (7 days) and is a property of its own since the
- * two stopped being one kind of thing. HERE the number decides correctness: a BPMS
+ * two stopped being one kind of thing (see decision 24 in the repository's DECISIONS.md).
+ * HERE the number decides correctness: a BPMS
  * redelivering a task later than that finds no record and runs the business code a second
  * time. On the OUTBOX side the deduplication window ends with the dispatch (see decision
  * 22 in the repository's DECISIONS.md), so there the retention only decides how long a

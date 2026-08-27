@@ -21,12 +21,12 @@ import lombok.experimental.SuperBuilder;
  * task, since how long a task may legitimately wait is a property of that task rather
  * than of the application.
  * <p>
- * The retention is the exception and is read globally only. What deletes the records is
- * one cleanup per store, constructed with one period and deleting by age across the whole
- * table respectively collection, so a value per workflow module would have to be honored
- * by a different deletion in each of the four stores VanillaBP ships to mean anything at
- * all. Nobody has asked for it, and a property which is bound per module and silently
- * ignored there would be worse than not having one.
+ * The retention is the exception and is read globally only, which is decision 24 in the
+ * repository's DECISIONS.md: what deletes the records is one cleanup per store,
+ * constructed with one period and deleting by age across the whole table respectively
+ * collection, so a value per workflow module would have to be honored by a different
+ * deletion in each of the four stores VanillaBP ships to mean anything at all. A property
+ * which is bound per module and silently ignored there is worse than not having one.
  */
 @Getter
 @Setter
@@ -88,12 +88,9 @@ public class DeliveryProperties {
    * about to run business code twice.
    * <p>
    * <code>null</code> means "whatever <code>vanillabp.outbox.retention</code> says", which
-   * is where this number lived until it was split off. The two used to be one property
-   * and are no longer one kind of thing: on the OUTBOX side the deduplication window ends
-   * with the dispatch (decision 22 in the repository's DECISIONS.md), so there the number
-   * only decides how long a dispatched entry stays readable during support. An
-   * installation which shortened it to keep its outbox table small was shortening this
-   * correctness window with the same hand.
+   * is where this number lived until it was split off. Why the two are two properties, and
+   * why the new one follows the old one where it is not set, is decision 24 in the
+   * repository's DECISIONS.md.
    */
   private Duration retention;
 

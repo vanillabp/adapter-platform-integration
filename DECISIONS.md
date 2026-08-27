@@ -441,3 +441,44 @@ What this does not fix is a correlation planned outside any activation. A REST e
 the same message name with the same correlation id twice for one aggregate is indistinguishable
 from a repeat of itself, and the narrowed window of entry 22 stays the only answer there. The
 warning says which of the two cases it is looking at, because the remedy differs.
+
+### 24. What a number decides is what decides whether it gets a property of its own
+
+The retention of a dispatched outbox entry and the retention of a task-delivery record are two
+properties, `vanillabp.outbox.retention` and `vanillabp.delivery.retention`, because they answer two
+different kinds of question. One is operational: how long can support still read what was
+dispatched. The other is correctness: does a redelivery arriving later than this run the
+`@WorkflowTask` method a second time. Nobody weighing disk space against a support trail should be
+weighing a business method running twice at the same time.
+
+They were one property, and rightly so, for as long as both governed a deduplication window. Entry
+22 ended that: the outbound window ends with the dispatch, so on that side the number stopped
+deciding anything a workflow depends on, while on the inbound side it went on being the only thing
+between a late redelivery and business code running again. An installation shortening the number to
+keep its outbox table small was shortening a correctness window with the same hand, and had no way
+of seeing it.
+
+The new property FOLLOWS the old one where it is not set. That keeps every installation on the
+behaviour it had, including the ones which lowered the old number deliberately, and it means an
+application which never cared about either notices nothing. Where exactly one of the two is moved
+away from the default, the startup says which window applies to what - the trigger is "differs from
+the default" rather than "was written down", because a bound property cannot tell those apart and
+the case worth a message is the one where somebody moved a number.
+
+It is read GLOBALLY, unlike the settings next to it in the same section. What deletes the records is
+one cleanup per store, constructed with one period and deleting by age across the whole table
+respectively collection, so a value per workflow module would have to be honored by a different
+deletion in each of the four stores VanillaBP ships. A property which is bound per module and
+silently ignored there is worse than not having one.
+
+**And there is deliberately no check comparing it against what a BPMS can redeliver within.** That
+was the alternative to splitting, and it fails on what an adapter can truthfully answer: it knows
+the INTERVAL at which it hands unacknowledged work out again - the Camunda 8
+`async-task-lock-renewal`, an hour by default - and not the horizon within which the last such
+handout falls. The horizon is set by how long the application is stopped, because a stopped
+application refreshes no record and the first cleanup run after it starts deletes what expired
+meanwhile, and by whoever gets around to resolving an incident. A check against an interval of
+minutes, guarding a risk measured in days, would be green in exactly the installations about to run
+business code twice, and a green message which means nothing teaches its reader to ignore the next
+one.
+

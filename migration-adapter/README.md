@@ -528,7 +528,8 @@ both windows. They stopped being one kind of thing when the outbound deduplicati
 ended with the dispatch (decision 22): on the outbox side the retention only decides how
 long a dispatched entry stays readable during support, on this side it decides whether a
 late redelivery runs the business code again. An installation shortening the one to keep
-its table small was shortening the other with the same hand.
+its table small was shortening the other with the same hand. That two questions of
+different kinds get two properties is decision 24.
 
 - The resolution is `DeliveryProperties.resolveRetention`, called by
   `MigrationAdapterProperties.resolvedDeliveryRetention` on Spring Boot and by the lazy
@@ -542,11 +543,12 @@ its table small was shortening the other with the same hand.
   which window applies to what (`MigrationAdapterProperties.reportRetentionSplit`). The
   trigger is "differs from the default" rather than "was written down", because a bound
   property cannot tell those apart.
-- No startup check compares the retention against what an adapter can redeliver within.
-  What an adapter knows is the INTERVAL at which it hands unacknowledged work out again -
-  the Camunda 8 `async-task-lock-renewal` - and the horizon is set by how long the
-  application is stopped and by whoever resolves an incident. A check against the interval
-  would pass in exactly the installations about to run business code twice.
+- No startup check compares the retention against what an adapter can redeliver within,
+  which was the alternative to splitting and is refused by decision 24. What an adapter
+  knows is the INTERVAL at which it hands unacknowledged work out again - the Camunda 8
+  `async-task-lock-renewal` - and the horizon is set by how long the application is stopped
+  and by whoever resolves an incident. A check against the interval would pass in exactly
+  the installations about to run business code twice.
 
 #### The record of a task which is still open
 
