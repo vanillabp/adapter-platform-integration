@@ -1100,7 +1100,9 @@ public class WorkflowTaskRegistryTest {
     @DisplayName("An adapter not implementing the SPI method sees the previous behaviour")
     public void theDefaultAnswersNothing() {
 
-      final var untouched = new io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker() {
+      // the wiring interface, which is where the parameter names live since the SPI was
+      // split into wiring-time and runtime duties
+      final var untouched = new io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring() {
 
         @Override
         public void validateTaskWiring(
@@ -1115,67 +1117,11 @@ public class WorkflowTaskRegistryTest {
         }
 
         @Override
-        public WorkflowTaskOutcome invokeWorkflowTask(
-            final String workflowModuleId,
-            final String bpmnProcessId,
-            final TaskInvocationContext context) {
-
-          return null;
-
-        }
-
-        // the migration fallback, deprecated for removal in 2.1: a test double has to
-        // implement it as long as the interface declares it
-        @SuppressWarnings("removal")
-        @Override
-        public boolean workflowAggregateHasProperty(
-            final String workflowModuleId,
-            final String bpmnProcessId,
-            final String propertyName) {
-
-          return false;
-
-        }
-
-        @SuppressWarnings("removal")
-        @Override
-        public Object resolveWorkflowAggregateProperty(
-            final String workflowModuleId,
-            final String bpmnProcessId,
-            final String workflowAggregateId,
-            final String propertyName) {
-
-          return null;
-
-        }
-
-        @Override
-        public boolean workflowTaskHandlerExists(
-            final String workflowModuleId,
-            final String bpmnProcessId,
-            final String taskDefinitionOrActivityId) {
-
-          return false;
-
-        }
-
-        @Override
-        public Map<String, Object> syncedWorkflowAggregateValues(
-            final String workflowModuleId,
-            final String bpmnProcessId,
-            final String workflowAggregateId,
-            final io.vanillabp.integration.adapter.spi.AggregateSyncMode adapterDefault) {
-
-          return Map.of();
-
-        }
-
-        @Override
         public String resolveWorkflowAggregateIdName(
             final String workflowModuleId,
             final String bpmnProcessId) {
 
-          return "id";
+          return null;
 
         }
 

@@ -1,90 +1,24 @@
 package io.vanillabp.integration.adapter.spi.workflowtask;
 
-import java.util.Collection;
-
 /**
- * The BPMS adapter's entry point into VanillaBP's task processing, implemented by
- * the core (the migration adapter) and provided to adapters by the platform
- * integration. Adapters use it twice:
- * <ol>
- * <li>During <code>wireBpmn</code>:
- * {@link #validateTaskWiring(String, String, Collection)} with the executable BPMN
- * process' tasks - validates that every BPMN task has a
- * <code>&#64;WorkflowTask</code> method (the reverse direction runs per module via
- * {@link #validateNoUnwiredWorkflowTaskMethods}) and fails with guiding messages. Throwing from <code>wireBpmn</code> automatically honors
- * the <code>deployment-failure</code> policy for non-first-priority adapters.</li>
- * <li>At runtime: {@link #invokeWorkflowTask(String, String, TaskInvocationContext)}
- * whenever the BPMS delivers a task - the core resolves the handler, runs it in a
- * transaction (loading and saving the workflow aggregate) and maps the outcome (see
- * {@link WorkflowTaskOutcome}). Any exception other than
- * {@link io.vanillabp.spi.service.TaskException} rolls back the transaction and
- * propagates - the adapter applies the BPMS' retry semantics and MUST NOT complete
- * the task.</li>
- * </ol>
+ * The BPMS adapter's entry point into VanillaBP's task processing AT RUNTIME,
+ * implemented by the core (the migration adapter) and provided to adapters by the
+ * platform integration. This is what an adapter's worker threads hold; what it calls
+ * while it DEPLOYS is {@link WorkflowTaskWiring}.
+ * <p>
+ * The one call which matters is
+ * {@link #invokeWorkflowTask(String, String, TaskInvocationContext)}, whenever the BPMS
+ * delivers a task: the core resolves the handler, runs it in a transaction (loading and
+ * saving the workflow aggregate) and maps the outcome (see {@link WorkflowTaskOutcome}).
+ * Any exception other than {@link io.vanillabp.spi.service.TaskException} rolls back the
+ * transaction and propagates - the adapter applies the BPMS' retry semantics and MUST NOT
+ * complete the task.
+ * <p>
+ * The rest answers questions a delivery raises: which variable carries the aggregate's id,
+ * which values the aggregate shares, and whether an OPTIONAL notification (a user-task
+ * lifecycle event) has a handler at all.
  */
 public interface WorkflowTaskInvoker {
-
-  /**
-   * Validates that every given BPMN task is served by a
-   * <code>&#64;WorkflowTask</code> method of the process' workflow service(s). All
-   * unmatched tasks are collected and reported in ONE exception with guiding
-   * messages. Additionally every matched method is marked as wired - the input for
-   * {@link #validateNoUnwiredWorkflowTaskMethods(String)}.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The BPMN process ID
-   * @param tasks The tasks of the executable BPMN process to be wired
-   * @throws IllegalStateException If a BPMN task has no matching method
-   */
-  void validateTaskWiring(
-      String workflowModuleId,
-      String bpmnProcessId,
-      Collection<BpmnTaskSpec> tasks);
-
-  /**
-   * Reports the elements of a BPMN process which can put a SECOND token into a
-   * running workflow - a non-interrupting boundary event, a parallel or inclusive
-   * gateway forking into several flows, a parallel multi-instance activity, a
-   * non-interrupting event subprocess. Called during <code>wireBpmn</code>, since
-   * only the adapter can read its BPMN dialect.
-   * <p>
-   * What it means is the core's decision: concurrent tokens mean two
-   * branches writing the same workflow aggregate, and an aggregate without a version
-   * attribute loses the writes of whichever branch commits first, without any error.
-   * The core knows the aggregate class, so it warns once per BPMN process - naming
-   * the elements reported here, which is why this method takes IDs rather than a
-   * boolean.
-   * <p>
-   * An adapter whose BPMS cannot be asked about its models reports nothing; the check
-   * stays silent then instead of guessing.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The PLAIN BPMN process ID
-   * @param elementIds The IDs of the elements producing a second token
-   */
-  default void reportConcurrentTokenElements(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final Collection<String> elementIds) {
-
-  }
-
-  /**
-   * Validates - after ALL BPMN processes of a workflow module were wired - that
-   * every <code>&#64;WorkflowTask</code> method matched a task of at least ONE of
-   * the module's BPMN processes (a workflow service class may declare several
-   * processes via {@code secondaryBpmnProcesses}, so a method unmatched in one
-   * process may legitimately serve another - this check closes the second
-   * direction the per-process {@link #validateTaskWiring} cannot decide). Called
-   * by the adapter at the END of <code>deployResources</code>; throwing there
-   * honors the <code>deployment-failure</code> policy.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @throws IllegalStateException Naming every method matching no task of any
-   *           wired BPMN process, with the fix
-   */
-  void validateNoUnwiredWorkflowTaskMethods(
-      String workflowModuleId);
 
   /**
    * Processes a BPMN task delivered by the BPMS: resolves the
@@ -190,35 +124,6 @@ public interface WorkflowTaskInvoker {
       String propertyName);
 
   /**
-   * Which of the given names are attributes of the workflow aggregate that are NOT
-   * shared with the BPMS - the question behind the startup check for such expressions.
-   * <p>
-   * An embedded engine can read the BPMN model, and only the core knows what an
-   * aggregate shares. So the adapter collects the identifiers its models read (a
-   * condition, a timer, a multi-instance collection) and asks here which of them would
-   * always be <code>null</code> in the engine although the application clearly meant an
-   * attribute of its aggregate. A name which is no attribute at all is none of this
-   * check's business: it may well be a variable the model itself provides.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The BPMN process ID
-   * @param names The identifiers read by the model
-   * @param adapterDefault What this adapter shares unless the application says
-   *          otherwise
-   * @return The names which are attributes of the aggregate but not shared, in the
-   *         order given; empty if the BPMN process is unknown
-   */
-  default java.util.Collection<String> unsharedWorkflowAggregateProperties(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final java.util.Collection<String> names,
-      final io.vanillabp.integration.adapter.spi.AggregateSyncMode adapterDefault) {
-
-    return java.util.List.of();
-
-  }
-
-  /**
    * Whether a <code>&#64;WorkflowTask</code> method is registered for the given
    * task definition (or BPMN activity ID) - used for OPTIONAL notifications
    * (user-task lifecycle events): the adapter checks before invoking so
@@ -234,108 +139,6 @@ public interface WorkflowTaskInvoker {
       String workflowModuleId,
       String bpmnProcessId,
       String taskDefinitionOrActivityId);
-
-  /**
-   * The process variables the <code>&#64;WorkflowTask</code> method(s) serving the
-   * given task definition (or BPMN activity ID) read with
-   * <code>&#64;TaskParam</code> - the names as the annotation spells them.
-   * <p>
-   * A <code>&#64;TaskParam</code> is how the application reads what the BPMS
-   * GENERATED on this path: a value an input or output mapping produced, the result
-   * of a script or a decision, something the model computed rather than the
-   * workflow aggregate holds. A BPMS which hands its worker a variable payload has
-   * to know these names to keep that payload down to what is actually read, and the
-   * core is the only place they exist - the adapter sees a
-   * {@link TaskInvocationContext#getTaskParameter(String)} call one name at a time,
-   * and only once the delivery is already there.
-   * <p>
-   * Several methods may serve one element (different process versions), so
-   * the answer is the UNION of their parameters: the delivery has to satisfy
-   * whichever of them runs. The names are sorted and duplicate-free, which is what a
-   * subscription comparing itself across restarts needs (a Camunda 8 job stream is
-   * equivalent to another one only if the fetched variables match).
-   * <p>
-   * The default answers nothing, which switches the derivation off rather than
-   * making an adapter fetch an incomplete list.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The BPMN process ID
-   * @param taskDefinitionOrActivityId The task definition or BPMN activity ID
-   * @return The declared parameter names, sorted; empty if no method is registered
-   *         or none of them declares a <code>&#64;TaskParam</code>
-   */
-  default Collection<String> taskParameterNames(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final String taskDefinitionOrActivityId) {
-
-    return java.util.List.of();
-
-  }
-
-  /**
-   * Whether two BPMN processes of one workflow module work on the SAME workflow
-   * aggregate - which is what the declaration says: one class declares the process
-   * to be started as its {@code bpmnProcess} and the others as
-   * {@code secondaryBpmnProcesses}.
-   * <p>
-   * Adapters ask this about a call activity: a process called on the same aggregate
-   * continues the same business case and has to reach the same aggregate, whereas a
-   * process with an aggregate of its own must not be handed the caller's identity.
-   * Camunda 7 needs the answer because it does not pass its business key - which
-   * carries the aggregate's ID - to a called process on its own.
-   * <p>
-   * The default is <code>false</code>: the core answers this, and a test double of
-   * this SPI should not invent an answer which makes an adapter change a model.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The BPMN process ID
-   * @param otherBpmnProcessId The BPMN process ID to compare with
-   * @return Whether both processes serve the same workflow aggregate;
-   *         <code>false</code> if either of them is unknown
-   */
-  default boolean workflowsShareTheWorkflowAggregate(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final String otherBpmnProcessId) {
-
-    return false;
-
-  }
-
-  /**
-   * Whether the <code>&#64;WorkflowTask</code> method serving the given task
-   * definition (or BPMN activity ID) completes its task ASYNCHRONOUSLY, which a
-   * method says by declaring a <code>&#64;TaskId</code> parameter: the task stays
-   * open until the application completes it.
-   * <p>
-   * Adapters ask this while wiring, because a BPMN element which cannot stay open
-   * is a modelling defect the developer should learn about while the application
-   * starts rather than as an incident on a live workflow. Camunda 7's
-   * <code>camunda:expression</code> is such an element - it completes the task as
-   * soon as the expression returns.
-   * <p>
-   * ONE such method is enough for the answer to be <code>true</code>: several
-   * methods may serve one element (different process versions), and an
-   * element which cannot stay open is wired wrongly as soon as any of them wants to
-   * keep it open.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The BPMN process ID
-   * @param taskDefinitionOrActivityId The task definition or BPMN activity ID
-   * @return Whether a matching method completes its task asynchronously;
-   *         <code>false</code> if no method is registered at all
-   */
-  default boolean workflowTaskCompletesAsynchronously(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final String taskDefinitionOrActivityId) {
-
-    // the core answers this; the default keeps test doubles of this SPI compiling
-    // and switches such a check off rather than inventing an answer
-    return false;
-
-  }
 
   /**
    * The values of a workflow aggregate SHARED WITH THE BPMS
@@ -384,66 +187,4 @@ public interface WorkflowTaskInvoker {
   String resolveWorkflowAggregateIdName(
       String workflowModuleId,
       String bpmnProcessId);
-
-  /**
-   * Hands over what the BPMS knows about the deployed versions of a BPMN process,
-   * called during <code>wireBpmn</code> by an adapter whose BPMS can tell. It serves
-   * the <code>version</code> attribute of ALL annotations carrying one
-   * (<code>&#64;WorkflowTask</code>, <code>&#64;WorkflowStartedByBpms</code>,
-   * <code>&#64;WorkflowEnded</code>) and is needed only for specifications naming a
-   * version TAG - specifications made of numbers are compared to the version the
-   * adapter reports in its invocation contexts, without asking anybody.
-   *
-   * @param adapterId The adapter ID (the catalog answers for THIS BPMS)
-   * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The PLAIN BPMN process ID
-   * @param catalog The versions of that process
-   */
-  default void registerProcessVersions(
-      final String adapterId,
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog catalog) {
-
-  }
-
-  /**
-   * Resolves the version tags the annotations of the given workflow module name, using
-   * the catalogs registered by {@link #registerProcessVersions}. Called by an adapter
-   * at the END of <code>deployResources</code>, so the version deployed by this very
-   * boot is part of the answer, and version specifications naming a tag are ambiguous
-   * or unknown at STARTUP instead of at the first task delivery.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @throws IllegalStateException If two methods turn out to serve the same BPMN
-   *           element in overlapping version ranges (guiding message)
-   */
-  default void resolveProcessVersions(
-      final String workflowModuleId) {
-
-  }
-
-  /**
-   * The version the BPMS assigned to the model THIS boot deployed, reported by the
-   * adapter right after its deployment. It tells the core two things it
-   * cannot know otherwise: which versions of that process are OLDER, so the startup
-   * check knows what to look at, and which version must never be covered by
-   * <code>outfaded-versions</code> - fading out the version the application just
-   * deployed is a configuration error, and the boot says so.
-   * <p>
-   * An adapter whose BPMS counts no versions reports nothing, which switches both off.
-   *
-   * @param adapterId The adapter ID
-   * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The PLAIN BPMN process ID
-   * @param version The version identifier the BPMS assigned, or <code>null</code>
-   */
-  default void registerDeployedVersion(
-      final String adapterId,
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final String version) {
-
-  }
-
 }

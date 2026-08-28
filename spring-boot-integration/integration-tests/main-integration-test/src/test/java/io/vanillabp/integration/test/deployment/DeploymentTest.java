@@ -43,10 +43,13 @@ public class DeploymentTest {
         final MigrationAdapterProperties properties,
         final List<AdapterDeploymentService<?, ?>> deploymentServices,
         final List<ExtensionWiringService<?, ?>> wiringServices,
-        final ObjectProvider<ProcessService<?>> processServices) {
+        final ObjectProvider<ProcessService<?>> processServices,
+        final io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry workflowTaskWiring) {
 
+      // the wiring interface goes in, like the platform's own auto-configuration does:
+      // the two module-level checks are the core's duty since the SPI was split
       final var deploymentService = new DeploymentService(
-          properties, deploymentServices, wiringServices);
+          properties, deploymentServices, wiringServices, workflowTaskWiring);
 
       return new SpringBootDeploymentService(
           deploymentService, allWorkflowModules, processServices);

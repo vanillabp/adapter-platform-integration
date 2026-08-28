@@ -15,8 +15,8 @@ import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartCont
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartResult;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
-import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
+import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring;
 import jakarta.enterprise.inject.Instance;
 
 /**
@@ -39,7 +39,13 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
   /**
    * The core's task-processing entry point, provided by the platform integration.
    */
-  private final WorkflowTaskInvoker workflowTaskInvoker;
+  private final WorkflowTaskWiring workflowTaskWiring;
+
+  /**
+   * The runtime half of the split SPI. A real adapter holds it in its worker threads;
+   * this double is asked by the integration tests to deliver a task, so it holds both.
+   */
+  private final io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker workflowTaskInvoker;
 
   /**
    * Test hook standing in for the BPMN model (see {@link DummyTaskWiringSource}).
@@ -152,7 +158,8 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
   public DummyDeploymentService(
       final String adapterId,
       final Instance<DummyDeploymentListener> listeners,
-      final WorkflowTaskInvoker workflowTaskInvoker,
+      final WorkflowTaskWiring workflowTaskWiring,
+      final io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker workflowTaskInvoker,
       final Instance<DummyTaskWiringSource> taskWiringSource,
       final BpmsInitiatedStartInvoker bpmsInitiatedStartInvoker,
       final Instance<DummyBpmsInitiatedStartSource> bpmsInitiatedStartSource,
@@ -162,6 +169,7 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
 
     this.adapterId = adapterId;
     this.listeners = listeners;
+    this.workflowTaskWiring = workflowTaskWiring;
     this.workflowTaskInvoker = workflowTaskInvoker;
     this.taskWiringSource = taskWiringSource;
     this.bpmsInitiatedStartInvoker = bpmsInitiatedStartInvoker;
@@ -309,7 +317,7 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
     // @WorkflowTask method and vice versa; throwing here honors the
     // deployment-failure policy automatically
     if ((taskWiringSource != null) && taskWiringSource.isResolvable()) {
-      workflowTaskInvoker.validateTaskWiring(
+      workflowTaskWiring.validateTaskWiring(
           workflowModuleId,
           bpmnProcessId,
           taskWiringSource
@@ -331,7 +339,7 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
     // like a real adapter which can be asked about its deployed versions: hand the
     // catalog over, so version specifications naming a version tag can be resolved
     if ((processVersionSource != null) && processVersionSource.isResolvable()) {
-      workflowTaskInvoker
+      workflowTaskWiring
           .registerProcessVersions(adapterId, workflowModuleId, bpmnProcessId, processVersions);
     }
 
@@ -356,15 +364,9 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
     log.info("Dummy-Adapter[{}]: Deploying resources for {}", adapterId, workflowModuleId);
     notifyListeners("deployResources", workflowModuleId, null);
 
-    // like a real adapter: after ALL processes of the module were wired, methods
-    // matching no task of any process are a defect (per-module check)
-    if ((taskWiringSource != null) && taskWiringSource.isResolvable()) {
-      workflowTaskInvoker.validateNoUnwiredWorkflowTaskMethods(workflowModuleId);
-    }
-
-    // like a real adapter: the deployment is done, so the version tags named by the
-    // application's annotations can be resolved against what the BPMS has now
-    workflowTaskInvoker.resolveProcessVersions(workflowModuleId);
+    // like a real adapter: nothing module-level is called here. The reverse wiring
+    // check and the version resolution are the core's own duty since the SPI was split
+    // (see WorkflowTaskWiring), which is what keeps an adapter from forgetting them
 
   }
 

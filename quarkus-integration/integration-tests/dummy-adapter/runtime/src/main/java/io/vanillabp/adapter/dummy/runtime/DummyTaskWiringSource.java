@@ -10,7 +10,7 @@ import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
  * type stands in for what a real adapter reads from the BPMN during
  * <code>wireBpmn</code>. If a bean is present, the dummy adapter validates the task
  * wiring against the supplied tasks (via the core's
- * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker});
+ * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring});
  * without a bean no wiring validation happens.
  */
 @FunctionalInterface

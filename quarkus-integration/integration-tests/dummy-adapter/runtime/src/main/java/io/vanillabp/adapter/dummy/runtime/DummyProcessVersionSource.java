@@ -9,7 +9,7 @@ import io.vanillabp.integration.adapter.spi.version.DeployedProcessVersion;
  * versions of a BPMN process: the dummy adapter has no BPMS to ask, so a bean of this
  * type stands in for what a real adapter queries from its BPMS. If a bean is present,
  * the dummy adapter registers a version catalog with the core
- * ({@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker#registerProcessVersions}),
+ * ({@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#registerProcessVersions}),
  * which is what makes <code>version = "release-2024"</code> work; without a bean the
  * dummy adapter reports no versions at all, like a BPMS which cannot tell.
  */

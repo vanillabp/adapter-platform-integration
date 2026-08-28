@@ -384,12 +384,28 @@ property change — hence a differing mode makes two adapter ids of one type dis
 platform integration registers every `@WorkflowService` class under all BPMN
 process IDs it declares (`bpmnProcess` + `secondaryBpmnProcesses`) with the
 `WorkflowTaskRegistry` (scanning methods and building parameter binders once at
-startup). Adapters interact through the adapter SPI `WorkflowTaskInvoker`:
+startup). Adapters interact through two adapter SPIs which the registry implements
+together - `WorkflowTaskWiring` while an adapter deploys, `WorkflowTaskInvoker` in its
+worker threads. They were one interface of thirty methods until it became clear that a
+mandatory call an adapter can forget will be forgotten: Camunda 7 forgot the reverse
+wiring check for a year, and a typo in a task definition stayed silent until a workflow
+reached the task.
 
-1. During `wireBpmn`: `validateTaskWiring(module, process, tasks)` - both
-   directions (every BPMN task has a `@WorkflowTask` method, every method matches
-   a task), all defects in ONE guiding exception; throwing from `wireBpmn` honors
-   the deployment-failure policy.
+1. During `wireBpmn`, through `WorkflowTaskWiring`: `validateTaskWiring(module, process,
+   tasks)` reports every BPMN task without a `@WorkflowTask` method, all defects in ONE
+   guiding exception; throwing from `wireBpmn` honors the deployment-failure policy. The
+   other wiring calls answer what the adapter needs about the model: which parameters a
+   delivery has to carry, whether a task may stay open, which processes share an
+   aggregate, which elements can put a second token into a workflow.
+
+   **What the core does on its own**, once the last adapter of a workflow module finished
+   deploying: `validateNoUnwiredWorkflowTaskMethods(module)` - the other direction, every
+   method matches a task somewhere in the module - and `resolveProcessVersions(module)`.
+   Both are module-level and need nothing an adapter knows, so the core picks the moment
+   instead of asking every adapter author to remember it.
+   `registerDeployedVersion` stays with the adapter: only it knows which version its BPMS
+   ended up with.
+
 2. At runtime: `invokeWorkflowTask(module, process, TaskInvocationContext)` - the
    core resolves the handler (task definition or activity ID, `version` ranges),
    loads the aggregate by its serialized ID, invokes the method with bound

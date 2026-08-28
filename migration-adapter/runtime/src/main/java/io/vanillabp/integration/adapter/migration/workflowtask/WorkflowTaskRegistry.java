@@ -25,12 +25,14 @@ import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
+import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring;
 import io.vanillabp.integration.spi.TransactionRunner;
 
 /**
  * The core-owned registry of the annotated handler methods of the application per
  * (workflow module, BPMN process ID), and the implementation of the adapter-facing
- * {@link WorkflowTaskInvoker} and {@link BpmsInitiatedStartInvoker}. The platform
+ * {@link WorkflowTaskWiring}, {@link WorkflowTaskInvoker} and
+ * {@link BpmsInitiatedStartInvoker}. The platform
  * integration registers every workflow service class under all BPMN process IDs it
  * declares ({@code @WorkflowService.bpmnProcess} and {@code secondaryBpmnProcesses});
  * adapters validate the wiring during <code>wireBpmn</code> and dispatch task
@@ -44,7 +46,7 @@ import io.vanillabp.integration.spi.TransactionRunner;
  * them into ONE pluggable handler contract is the subject of the extension-enablement
  * story.
  */
-public class WorkflowTaskRegistry implements WorkflowTaskInvoker, BpmsInitiatedStartInvoker, WorkflowEndedInvoker {
+public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInvoker, BpmsInitiatedStartInvoker, WorkflowEndedInvoker {
 
   private static final Logger log = LoggerFactory.getLogger(WorkflowTaskRegistry.class);
 
