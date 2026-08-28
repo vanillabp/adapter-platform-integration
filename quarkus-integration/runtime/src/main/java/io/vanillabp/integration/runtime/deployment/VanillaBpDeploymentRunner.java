@@ -163,6 +163,17 @@ public class VanillaBpDeploymentRunner {
         workflowModuleIds,
         bpmnResourceIndex::loadBpmnResources);
 
+    // the election capability of the prioritized adapters is checked once the adapters
+    // deployed - only then does an adapter know what its BPMS can do - and before
+    // anything touches a workflow
+    processServices
+        .stream()
+        .filter(ProcessServiceBaseCdiBean.class::isInstance)
+        .map(processService -> (ProcessServiceBaseCdiBean<?>) processService)
+        .forEach(processService -> processService
+            .getMigrationProcessService()
+            .validateElectionCapabilityAfterDeployment());
+
     deploymentService.startWorkflowProcessing(workflowModuleIds);
 
     running = true;

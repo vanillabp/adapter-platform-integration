@@ -101,6 +101,14 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   private TransactionsProperties transactions = new TransactionsProperties();
 
   /**
+   * What VanillaBP does about a prioritized adapter which cannot locate workflows
+   * (properties section <code>vanillabp.election</code>, overridable per workflow
+   * module).
+   */
+  @Builder.Default
+  private ElectionProperties election = new ElectionProperties();
+
+  /**
    * What VanillaBP does with the records of processed task deliveries (properties
    * section <code>vanillabp.delivery</code>, overridable per workflow module - except the
    * retention, see {@link DeliveryProperties#getRetention()}).
@@ -769,6 +777,50 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       final String workflowModuleId) {
 
     return "%s.workflow-modules.%s.transactions.unguarded-aggregate-writes"
+        .formatted(PREFIX, workflowModuleId);
+
+  }
+
+  /**
+   * Whether the given workflow module accepts a prioritized adapter which cannot
+   * locate workflows next to other adapters
+   * (<code>vanillabp.election.guessing-adapters</code>, overridable as
+   * <code>vanillabp.workflow-modules.&lt;id&gt;.election.guessing-adapters</code>).
+   * The module's setting wins where it is defined, the global one applies otherwise,
+   * and the default is to reject.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @return Whether an adapter which has to guess is accepted for this module
+   */
+  public boolean acceptsGuessingAdapters(
+      final String workflowModuleId) {
+
+    final var module = workflowModules.get(workflowModuleId);
+    final var moduleSetting = (module != null) && (module.getElection() != null)
+        ? module
+            .getElection()
+            .getGuessingAdapters()
+        : null;
+    final var effective = moduleSetting != null
+        ? moduleSetting
+        : election != null
+            ? election.getGuessingAdapters()
+            : null;
+    return effective == ElectionProperties.GuessingAdapters.ACCEPTED;
+
+  }
+
+  /**
+   * The property naming the decision of {@link #acceptsGuessingAdapters(String)}, for
+   * the guiding message which has to tell how to accept what it refuses.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @return The property key of the module-scoped override
+   */
+  public static String guessingAdaptersProperty(
+      final String workflowModuleId) {
+
+    return "%s.workflow-modules.%s.election.guessing-adapters"
         .formatted(PREFIX, workflowModuleId);
 
   }

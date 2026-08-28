@@ -196,6 +196,36 @@ public interface MigratableProcessService<A> {
   }
 
   /**
+   * Whether this adapter can answer
+   * {@link #awarenessOfWorkflow(WorkflowScope, AggregatePersistenceAware, Object)} by
+   * ASKING its BPMS, rather than by assuming.
+   * <p>
+   * The election walks the prioritized adapters and stops at the first
+   * {@link WorkflowAwareness#ACTIVE}, so it is exactly as right as the answers it gets.
+   * An adapter which cannot ask - a Camunda 8 cluster without secondary storage, the
+   * Process-Engine-API, whose commands carry no query at all - has to answer something,
+   * and answering {@link WorkflowAwareness#ACTIVE} optimistically is the only answer
+   * which keeps a single-BPMS application working. Next to a second adapter that very
+   * answer routes operations by list order instead of by evidence, and the workflows of
+   * the other BPMS are the ones it takes.
+   * <p>
+   * Saying <code>false</code> here is what lets the core refuse that combination while
+   * it boots, instead of leaving it to be found in production. The default is
+   * <code>true</code>: an adapter which asks its BPMS needs to say nothing.
+   * <p>
+   * The answer is fetched AFTER this adapter deployed, so an adapter which only learns
+   * what its BPMS can do while deploying (Camunda 8 learns about the query API from the
+   * first query which fails) may answer from what it found out by then.
+   *
+   * @return Whether the workflow probe of this adapter asks rather than guesses
+   */
+  default boolean canLocateWorkflows() {
+
+    return true;
+
+  }
+
+  /**
    * How long this BPMS may need until a workflow it holds becomes findable by
    * {@link #awarenessOfWorkflow(WorkflowScope, AggregatePersistenceAware, Object)}, and how often
    * to ask meanwhile.

@@ -12,6 +12,7 @@ import org.mapstruct.factory.Mappers;
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.DeliveryProperties;
+import io.vanillabp.integration.adapter.migration.config.ElectionProperties;
 import io.vanillabp.integration.adapter.migration.config.MetricsProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
@@ -74,6 +75,10 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
   TransactionsProperties toCore(
       QuarkusMigrationAdapterProperties.TransactionsProperties transactionsProperties);
 
+  @Mapping(target = "guessingAdapters", qualifiedByName = "unwrapGuessingAdapters")
+  ElectionProperties toCore(
+      QuarkusMigrationAdapterProperties.ElectionProperties electionProperties);
+
   @Mapping(target = "releaseOnWorkflowEnd", qualifiedByName = "unwrapBoolean")
   @Mapping(target = "maxTaskAge", qualifiedByName = "unwrapDuration")
   @Mapping(target = "retention", qualifiedByName = "unwrapDuration")
@@ -131,6 +136,22 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
   @Named("unwrapUnguardedAggregateWrites")
   default TransactionsProperties.UnguardedAggregateWrites unwrapUnguardedAggregateWrites(
       final Optional<TransactionsProperties.UnguardedAggregateWrites> value) {
+
+    return value.orElse(null);
+
+  }
+
+  /**
+   * Unwraps the optional decision about adapters which cannot locate workflows
+   * ({@code Optional.empty()} becomes {@code null}: a workflow module which says nothing
+   * inherits what the application configured globally).
+   *
+   * @param value The optional setting
+   * @return The setting or {@code null}
+   */
+  @Named("unwrapGuessingAdapters")
+  default ElectionProperties.GuessingAdapters unwrapGuessingAdapters(
+      final Optional<ElectionProperties.GuessingAdapters> value) {
 
     return value.orElse(null);
 

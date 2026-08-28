@@ -97,6 +97,17 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                           QuarkusMigrationAdapterProperties.DeliveryProperties delivery) implements QuarkusMigrationAdapterProperties.WorkflowModuleProperties {
 
     /**
+     * None of these fixtures configures the election, so the module inherits whatever
+     * applies globally.
+     */
+    @Override
+    public QuarkusMigrationAdapterProperties.ElectionProperties election() {
+
+      return null;
+
+    }
+
+    /**
      * Without a transaction and without a delivery section, which is what most of these
      * fixtures need.
      */
@@ -197,6 +208,17 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                             QuarkusMigrationAdapterProperties.TransactionsProperties transactions,
                             QuarkusMigrationAdapterProperties.DeliveryProperties delivery,
                             QuarkusMigrationAdapterProperties.MetricsProperties metrics) implements QuarkusMigrationAdapterProperties {
+
+    /**
+     * None of these fixtures configures the election - the mapper's job here is the rest
+     * of the tree.
+     */
+    @Override
+    public QuarkusMigrationAdapterProperties.ElectionProperties election() {
+
+      return null;
+
+    }
 
     /**
      * The adapter ids retired deliberately - none of these fixtures names any,

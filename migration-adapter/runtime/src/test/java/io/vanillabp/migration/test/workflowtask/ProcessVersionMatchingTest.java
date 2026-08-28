@@ -680,7 +680,7 @@ public class ProcessVersionMatchingTest {
       }
 
       @Override
-      public Instant getTriggerTime() {
+      public Instant getStartInstant() {
         return Instant.parse("2026-08-13T09:15:00Z");
       }
 

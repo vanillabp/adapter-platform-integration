@@ -88,6 +88,17 @@ application transaction is open, so an unreachable BPMS is worth two more questi
 (500&nbsp;ms apart, fixed — "optimize late") and a read model which has not caught up is
 worth its window. Decision 27 says why the split is drawn there.
 
+An adapter which cannot ask its BPMS at all says so (`canLocateWorkflows()`, `default true`)
+and the core refuses to boot a workflow module which prioritizes it next to another
+adapter: such an adapter answers optimistically, the walk stops at the first `ACTIVE`, and
+the operations of every adapter behind it in the list would end up in the wrong BPMS. The
+check runs once the adapters deployed - Camunda 8 learns from its first failed query
+whether the cluster has secondary storage - and before anything touches a workflow. An
+application which wants that routing anyway sets
+`vanillabp.election.guessing-adapters: ACCEPTED` (per module:
+`vanillabp.workflow-modules.<id>.election.guessing-adapters`) and keeps the message as a
+WARN.
+
 What the walk cannot do is check the answers, and the SPI is where that duty is
 written down: an adapter answers ONLY for the workflows and tasks of the scope it is
 asked about, everything else is `UNKNOWN_TO_BPMS`. Every probe is handed that scope as a

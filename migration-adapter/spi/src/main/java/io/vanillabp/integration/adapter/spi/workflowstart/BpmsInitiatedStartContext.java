@@ -30,15 +30,19 @@ public interface BpmsInitiatedStartContext {
   BpmsStartTrigger.Kind getKind();
 
   /**
-   * When the start event fired. For a timer this is the time the engine scheduled
-   * it for, which is what makes it a stable identity: a cyclic timer firing the
-   * same instant twice addresses the same workflow aggregate, so a redelivered
-   * notification creates nothing twice. Adapters which cannot report the scheduled
-   * time report the time of the notification.
+   * The instant this start is identified by.
+   * <p>
+   * The value an adapter reports IDEALLY is the time the engine scheduled the start
+   * for, because that is stable: a cyclic timer firing the same instant twice
+   * addresses the same workflow aggregate, so a redelivered notification creates
+   * nothing twice. Where the BPMS does not hand that time to the adapter - Camunda 7
+   * does not give it to a listener - the moment of the notification is reported
+   * instead, which is why this is not called a trigger time: an adapter would have to
+   * contradict the name.
    *
-   * @return The trigger's time, never <code>null</code>
+   * @return The instant, never <code>null</code>
    */
-  Instant getTriggerTime();
+  Instant getStartInstant();
 
   /**
    * A value identifying THIS start in the BPMS, stable across repeated

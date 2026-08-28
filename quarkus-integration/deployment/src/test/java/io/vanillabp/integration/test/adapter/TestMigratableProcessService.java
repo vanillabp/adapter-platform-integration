@@ -21,6 +21,21 @@ public class TestMigratableProcessService implements MigratableProcessService<Ob
 
   }
 
+  /**
+   * Whether this double can ask its BPMS whether it holds a workflow. Steered by
+   * <code>test-adapter.can-locate-workflows</code>, so a test can play a BPMS which
+   * cannot - a Camunda 8 cluster without secondary storage, or the Process-Engine-API.
+   */
+  @Override
+  public boolean canLocateWorkflows() {
+
+    return org.eclipse.microprofile.config.ConfigProvider
+        .getConfig()
+        .getOptionalValue("test-adapter.can-locate-workflows", Boolean.class)
+        .orElse(Boolean.TRUE);
+
+  }
+
   @Override
   public WorkflowAwareness awarenessOfTask(
       final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
