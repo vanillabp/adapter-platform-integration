@@ -3,6 +3,7 @@ package io.vanillabp.integration.it;
 import static io.vanillabp.integration.test.utils.TestCoverageUtils.testCoverageJavaAgent;
 import static io.vanillabp.integration.test.utils.TestJvmArgs.quarkusProdModeTestDefaults;
 
+import java.nio.file.Path;
 import java.util.Map;
 
 import org.junit.jupiter.api.Assertions;
@@ -29,7 +30,7 @@ public class MultipleWorkflowServicesTest {
       .setRuntimeProperties(Map.of(
           "quarkus.http.port", Integer.toString(FreePortUtil.getFreePort()),
           "quarkus.log.file.enable", "true",
-          "quarkus.log.file.path", "/tmp/claude-1000/mws-app.log"));
+          "quarkus.log.file.path", Path.of("target", "mws-app.log").toAbsolutePath().toString()));
 
   @Test
   public void testProcessServicesBelongToTheRightWorkflowModule() {

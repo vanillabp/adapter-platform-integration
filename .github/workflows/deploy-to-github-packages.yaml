@@ -70,6 +70,7 @@ jobs:
           path: |
             **/target/surefire-reports/**
             **/target/failsafe-reports/**
+            **/target/*.log
           retention-days: 7
           if-no-files-found: ignore
       - name: Merge coverage reports
