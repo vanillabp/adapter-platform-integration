@@ -48,6 +48,9 @@ public class TaskOperationsDispatchTest {
   @Autowired
   private SteerableTaskAwarenessSource awareness;
 
+  @Autowired
+  private AggregateRepository repository;
+
   @BeforeEach
   public void reset() {
 
@@ -225,10 +228,18 @@ public class TaskOperationsDispatchTest {
   }
 
   @Test
-  @DisplayName("Correlating with an unknown workflow raises the guiding WorkflowNotFoundException")
+  @DisplayName("Correlating with a workflow nobody started raises the guiding WorkflowNotFoundException")
   public void unknownWorkflowRaisesGuidingException() {
 
-    final var aggregate = startedAggregate("correlate-unknown");
+    // an aggregate which never went through startWorkflow: nothing ever recorded an
+    // adapter for it, so "unknown" is the final answer rather than a read model
+    // which is a moment behind
+    final var aggregate = transactionTemplate.execute(status -> {
+      final var created = new Aggregate();
+      created.setContent("correlate-unknown");
+      return repository.save(created);
+    });
+    assertNotNull(aggregate);
     // awareness stays UNKNOWN_TO_BPMS
 
     final var exception = assertThrowsExactly(
@@ -240,6 +251,36 @@ public class TaskOperationsDispatchTest {
         exception.getMessage().contains("startWorkflowByMessage"),
         "expected the start-by-message hint but got: "
             + exception.getMessage());
+
+  }
+
+  @Test
+  @DisplayName("A workflow this node started is planned rather than refused while the BPMS catches up")
+  public void aWorkflowStartedHereIsPlannedWhileTheBpmsCatchesUp() throws Exception {
+
+    final var aggregate = startedAggregate("correlate-not-visible-yet");
+    // the start recorded which adapter holds the workflow, and that adapter does not
+    // report it yet - the everyday state of an exporter-fed read model
+    awareness.answerWith(WorkflowAwareness.ACTIVE);
+    awareness.becomeVisibleAfter(2, java.time.Duration.ofSeconds(5));
+
+    transactionTemplate.executeWithoutResult(status -> processService
+        .correlateMessage(aggregate, "PaymentReceived"));
+
+    final var deadline = System.currentTimeMillis() + 10000;
+    while (listener.getCorrelatedMessages().isEmpty()) {
+      assertTrue(
+          System.currentTimeMillis() < deadline,
+          "the correlation was not dispatched in time");
+      Thread.sleep(50);
+    }
+    assertTrue(listener
+        .getCorrelatedMessages()
+        .contains(aggregate.getId()
+            + ":PaymentReceived:null"));
+    // the window is state of a bean this module's test classes share - leaving it
+    // behind would make every workflow probe of the next class wait for nothing
+    awareness.alwaysVisible();
 
   }
 

@@ -1,6 +1,5 @@
 package io.vanillabp.integration.test.outbox;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -26,10 +25,12 @@ import io.vanillabp.spi.process.WorkflowNotFoundException;
  * awareness probe reads an eventually consistent model.
  * <p>
  * The everyday sequence is "start a workflow, then correlate the message which lets
- * it continue". Phase two of the start records which adapter created the instance,
- * so the correlation's election probes that adapter first and keeps asking for as
- * long as the adapter says its BPMS may need. A workflow nobody ever started has no
- * such record and still fails immediately.
+ * it continue". Phase two of the start records which adapter created the instance, so
+ * the correlation's election probes that adapter first - and where that adapter does
+ * not report the workflow yet, the correlation is PLANNED rather than waited for: the
+ * caller's transaction is not the place to sit out a read model. The dispatch asks
+ * again and takes the time. A workflow nobody ever started has no such record and
+ * still fails immediately, inside the call.
  */
 @SpringBootTest(classes = TestApplication.class)
 @ExtendWith(SuppressOutputExtension.class)
@@ -94,19 +95,28 @@ public class WorkflowVisibilityDelayTest {
   }
 
   @Test
-  @DisplayName("Correlating right after the start succeeds although the BPMS reports the workflow late")
-  public void correlationWaitsForTheWorkflowToBecomeVisible() throws Exception {
+  @DisplayName("Correlating right after the start returns at once and is dispatched once the BPMS caught up")
+  public void correlationIsPlannedAndDispatchedWhenTheWorkflowShowsUp() throws Exception {
 
     final var aggregate = started("visibility-delay");
     // the BPMS holds the workflow but reports it as unknown for the next three
     // probes - what an exporter-fed read model does right after a start
     awareness.becomeVisibleAfter(3, Duration.ofSeconds(5));
 
+    final var startedAt = System.nanoTime();
     transactionTemplate.executeWithoutResult(
         status -> processService.correlateMessage(aggregate, "PaymentReceived"));
+    final var elapsed = Duration.ofNanos(System.nanoTime() - startedAt);
 
-    assertEquals(
-        0, awareness.remainingInvisibleProbes(), "the core has to keep asking until the workflow shows up");
+    // the point of the story: the caller's transaction holds a database connection
+    // and the locks on the aggregate, so nothing sleeps in it
+    assertTrue(
+        elapsed.toMillis() < 1000,
+        "the caller must not wait for the BPMS to catch up, but took "
+            + elapsed);
+    assertTrue(
+        awareness.remainingInvisibleProbes() > 0,
+        "phase one asks once and leaves the waiting to the dispatch");
 
     final var deadline = System.currentTimeMillis() + 10000;
     while (listener.getCorrelatedMessages().isEmpty()) {

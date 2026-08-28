@@ -55,13 +55,19 @@ import lombok.extern.slf4j.Slf4j;
  * <li>{@link WorkflowAwareness#COMPLETED} - the subject is known but already done:
  * the operation becomes a no-op (reported to the caller);</li>
  * <li>{@link WorkflowAwareness#BPMS_UNAVAILABLE} - NEVER falls back to the next
- * adapter (the unavailable BPMS might hold the subject): the probe is retried with
- * a short fixed policy ({@value #UNAVAILABLE_RETRIES} retries,
- * {@value #UNAVAILABLE_RETRY_DELAY_MILLIS}ms apart - deliberately no configuration
- * knob, "optimize late"), then the walk fails naming the unavailable adapter.
- * Probing runs inside the caller's transaction, so the delays keep that
- * transaction open - another reason to keep them short.</li>
+ * adapter (the unavailable BPMS might hold the subject): the walk fails naming the
+ * unavailable adapter, immediately where nothing may sleep.</li>
  * </ul>
+ * <p>
+ * <b>Who may sleep, and where.</b> Every caller says how patient the walk may be
+ * ({@link Patience}), because the same walk runs in two places whose cost is not
+ * comparable. In phase one it runs INSIDE the caller's database transaction, holding
+ * its connection and the locks on the workflow aggregate: a walk which sleeps there
+ * drains the connection pool of every caller at once, which is why phase one asks
+ * once and never sleeps. At dispatch time no application transaction is open, the
+ * work belongs to the outbox anyway and a repetition costs an entry another attempt -
+ * so that is where a BPMS gets a second chance and where a read model gets the
+ * moment it needs (decision 27 in the repository's DECISIONS.md).
  * <p>
  * The two rules this walk rests on are written down where the adapters can read them too: an
  * adapter answers only for its own scope and the walk never falls back (decision 4 in the
@@ -72,8 +78,35 @@ import lombok.extern.slf4j.Slf4j;
 public final class WorkflowLocator {
 
   /**
+   * How patient a walk may be - see the type javadoc for why this is the caller's
+   * decision rather than the locator's.
+   */
+  public enum Patience {
+
+    /**
+     * Ask every adapter once and never sleep: the answer is needed while the
+     * caller's transaction is open.
+     */
+    NONE,
+
+    /**
+     * Repeat an unavailable BPMS a few times, but never wait for a read model to
+     * catch up. What a task probe answers is exact - a task the BPMS does not know
+     * stays unknown however long anybody waits.
+     */
+    RETRY_UNAVAILABLE,
+
+    /**
+     * Additionally wait out the {@code workflowVisibilityDelay} of an adapter a hint
+     * points at: the workflow exists, its BPMS just has not made it findable yet.
+     */
+    WAIT_FOR_VISIBILITY
+
+  }
+
+  /**
    * How often a {@link WorkflowAwareness#BPMS_UNAVAILABLE} probe is retried before
-   * the walk fails.
+   * the walk fails, where the caller allows retrying at all.
    */
   public static final int UNAVAILABLE_RETRIES = 2;
 
@@ -134,15 +167,37 @@ public final class WorkflowLocator {
    * {@link WorkflowAwareness#COMPLETED} (the operation is a no-op) or every
    * adapter answered {@link WorkflowAwareness#UNKNOWN_TO_BPMS} (the subject is
    * unknown - the caller raises the guiding error).
+   * <p>
+   * An unknown answer means two different things, and {@link #hintedAdapterId()} is
+   * what tells them apart. WITH a hint somebody has seen this workflow on that
+   * adapter - VanillaBP started it there or was handed a delivery for it - so
+   * "unknown" is a read model which has not caught up, and the operation is planned
+   * rather than refused. WITHOUT a hint nobody ever saw the workflow, and that is the
+   * wrong id the caller has to hear about at once.
    *
    * @param <A> The aggregate type
    * @param awareness ACTIVE, COMPLETED or UNKNOWN_TO_BPMS (the aggregated verdict)
    * @param adapter The adapter which answered ACTIVE or COMPLETED,
    *        <code>null</code> for UNKNOWN_TO_BPMS
+   * @param hintedAdapterId The adapter a cache hint pointed at, or <code>null</code>
+   *        if there was none (also <code>null</code> where the hint proved right -
+   *        the adapter is then the answer itself)
    */
   public record Location<A>(
                             WorkflowAwareness awareness,
-                            MigratableProcessService<A> adapter) {
+                            MigratableProcessService<A> adapter,
+                            String hintedAdapterId) {
+
+    /**
+     * @return Whether a hint claims this workflow exists although no adapter reports
+     *         it (yet)
+     */
+    public boolean isUnknownButExpected() {
+
+      return (awareness == WorkflowAwareness.UNKNOWN_TO_BPMS) && (hintedAdapterId != null);
+
+    }
+
   }
 
   /**
@@ -158,49 +213,56 @@ public final class WorkflowLocator {
    * @param subject A short description of the probed subject (e.g.
    *        <code>"task 'x' of workflow aggregate '42'"</code>) used in log and
    *        error messages
+   * @param patience How long this caller may take for an answer
    * @return The location - never <code>null</code>
-   * @throws IllegalStateException If an adapter stays
-   *         {@link WorkflowAwareness#BPMS_UNAVAILABLE} after the retries
+   * @throws IllegalStateException If an adapter reports itself
+   *         {@link WorkflowAwareness#BPMS_UNAVAILABLE}
    */
   public <A> Location<A> locate(
       final List<MigratableProcessService<A>> prioritizedAdapters,
       final Function<MigratableProcessService<A>, WorkflowAwareness> probe,
       final Object workflowAggregateId,
-      final String subject) {
+      final String subject,
+      final Patience patience) {
 
     final var serializedAggregateId = workflowAggregateId == null
         ? null
         : workflowAggregateId.toString();
 
-    if ((cache != null) && (serializedAggregateId != null)) {
-      final var location = locateViaCache(
-          prioritizedAdapters, probe, serializedAggregateId, subject);
+    final var hintedAdapterId = (cache == null) || (serializedAggregateId == null)
+        ? null
+        : cache
+            .get(workflowModuleId, bpmnProcessId, serializedAggregateId)
+            .orElse(null);
+
+    if (hintedAdapterId != null) {
+      final var location = locateViaHint(
+          prioritizedAdapters, probe, serializedAggregateId, hintedAdapterId, subject, patience);
       if (location != null) {
         return location;
       }
     }
 
-    return walk(prioritizedAdapters, probe, serializedAggregateId, subject);
+    return walk(prioritizedAdapters, probe, serializedAggregateId, hintedAdapterId, subject, patience);
 
   }
 
   /**
-   * Consults the cache: probes the cached adapter first. Returns
-   * <code>null</code> if there is no usable hint or the hint turned out stale -
-   * the caller falls through to the full walk (which repairs the entry).
+   * Probes the adapter a hint points at, before everybody else. Returns
+   * <code>null</code> where the hint led nowhere - the caller falls through to the
+   * full walk, which re-elects and repairs the entry.
+   * <p>
+   * The hint is NOT dropped when its adapter answers "unknown": that is the answer of
+   * a read model which has not caught up, and dropping the hint would take the very
+   * knowledge with it which lets the dispatch wait for that adapter later.
    */
-  private <A> Location<A> locateViaCache(
+  private <A> Location<A> locateViaHint(
       final List<MigratableProcessService<A>> prioritizedAdapters,
       final Function<MigratableProcessService<A>, WorkflowAwareness> probe,
       final String serializedAggregateId,
-      final String subject) {
-
-    final var cachedAdapterId = cache
-        .get(workflowModuleId, bpmnProcessId, serializedAggregateId)
-        .orElse(null);
-    if (cachedAdapterId == null) {
-      return null;
-    }
+      final String cachedAdapterId,
+      final String subject,
+      final Patience patience) {
 
     final var cachedAdapter = prioritizedAdapters
         .stream()
@@ -218,28 +280,28 @@ public final class WorkflowLocator {
       return null;
     }
 
-    final var awareness = probeWithVisibilityDelay(cachedAdapter, probe, subject);
+    final var awareness = patience == Patience.WAIT_FOR_VISIBILITY
+        ? probeUntilVisible(cachedAdapter, probe, subject)
+        : probeWithRetry(cachedAdapter, probe, subject, patience);
     switch (awareness) {
       case ACTIVE -> {
-        return new Location<>(awareness, cachedAdapter);
+        return new Location<>(awareness, cachedAdapter, null);
       }
       case COMPLETED -> {
         // the workflow ended - the hint won't be needed again
         cache.invalidate(workflowModuleId, bpmnProcessId, serializedAggregateId);
-        return new Location<>(awareness, cachedAdapter);
+        return new Location<>(awareness, cachedAdapter, null);
       }
       case UNKNOWN_TO_BPMS -> {
-        // stale hint (hints are not truth): repair by falling through to the
-        // full walk which re-elects and re-populates the cache
+        // hints are not truth: ask everybody else before believing the workflow is
+        // nowhere. The hint travels with the answer (see Location)
         log.debug(
-            "Cached adapter '{}' does not know {} - the hint is stale, probing all "
-                + "prioritized adapters",
+            "Adapter '{}' does not report {} - probing the other prioritized adapters",
             cachedAdapterId,
             subject);
-        cache.invalidate(workflowModuleId, bpmnProcessId, serializedAggregateId);
         return null;
       }
-      case BPMS_UNAVAILABLE -> throw unavailable(cachedAdapter, subject);
+      case BPMS_UNAVAILABLE -> throw unavailable(cachedAdapter, subject, patience);
     }
     return null;
 
@@ -249,42 +311,54 @@ public final class WorkflowLocator {
       final List<MigratableProcessService<A>> prioritizedAdapters,
       final Function<MigratableProcessService<A>, WorkflowAwareness> probe,
       final String serializedAggregateId,
-      final String subject) {
+      final String hintedAdapterId,
+      final String subject,
+      final Patience patience) {
 
     for (final var adapter : prioritizedAdapters) {
-      final var awareness = probeWithRetry(adapter, probe, subject);
+      if (adapter.getAdapterId().equals(hintedAdapterId)) {
+        // asked already, as the hint
+        continue;
+      }
+      final var awareness = probeWithRetry(adapter, probe, subject, patience);
       switch (awareness) {
         case ACTIVE -> {
           if ((cache != null) && (serializedAggregateId != null)) {
             cache.put(workflowModuleId, bpmnProcessId, serializedAggregateId, adapter.getAdapterId());
           }
-          return new Location<>(awareness, adapter);
+          return new Location<>(awareness, adapter, null);
         }
         case COMPLETED -> {
-          return new Location<>(awareness, adapter);
+          return new Location<>(awareness, adapter, null);
         }
         case UNKNOWN_TO_BPMS -> log.debug(
             "Adapter '{}' does not know {} - asking the next prioritized adapter",
             adapter.getAdapterId(),
             subject);
-        case BPMS_UNAVAILABLE -> throw unavailable(adapter, subject);
+        case BPMS_UNAVAILABLE -> throw unavailable(adapter, subject, patience);
       }
     }
-    return new Location<>(WorkflowAwareness.UNKNOWN_TO_BPMS, null);
+    return new Location<>(WorkflowAwareness.UNKNOWN_TO_BPMS, null, hintedAdapterId);
 
   }
 
   private <A> IllegalStateException unavailable(
       final MigratableProcessService<A> adapter,
-      final String subject) {
+      final String subject,
+      final Patience patience) {
 
     return new IllegalStateException(
         """
             The BPMS of adapter '%s' is unavailable while locating %s! Falling back to another \
-            adapter is not allowed (the unavailable BPMS might hold it) - the operation was \
-            aborted after %d retries. Retry the business operation once the BPMS is reachable \
-            again."""
-            .formatted(adapter.getAdapterId(), subject, UNAVAILABLE_RETRIES));
+            adapter is not allowed (the unavailable BPMS might hold it), so the operation is \
+            refused%s. Retry the business operation once the BPMS is reachable again."""
+            .formatted(
+                adapter.getAdapterId(),
+                subject,
+                patience == Patience.NONE
+                    ? " at once - repeating the question inside your transaction would hold its "
+                        + "database connection for an answer which rarely changes that quickly"
+                    : " after %d retries".formatted(UNAVAILABLE_RETRIES)));
 
   }
 
@@ -294,17 +368,18 @@ public final class WorkflowLocator {
    * the adapter's {@code workflowVisibilityDelay} window is used up.
    * <p>
    * That window is what an eventually consistent BPMS needs before a workflow it
-   * just created shows up in the read model its probe searches - the ordinary
-   * "start a workflow, then correlate the message which lets it continue" runs into
-   * it. Waiting only happens HERE, on a hinted adapter: an unknown workflow without
-   * a hint stays a fast failure, which is what a wrong ID has to be.
+   * just created shows up in the read model its probe searches - the ordinary "start a
+   * workflow, then correlate the message which lets it continue" runs into it. Two
+   * things have to hold before anybody waits: a hint has to claim the workflow exists,
+   * and the caller has to be one which may take the time
+   * ({@link Patience#WAIT_FOR_VISIBILITY} - the dispatch, never phase one).
    */
-  private static <A> WorkflowAwareness probeWithVisibilityDelay(
+  private static <A> WorkflowAwareness probeUntilVisible(
       final MigratableProcessService<A> adapter,
       final Function<MigratableProcessService<A>, WorkflowAwareness> probe,
       final String subject) {
 
-    var awareness = probeWithRetry(adapter, probe, subject);
+    var awareness = probeWithRetry(adapter, probe, subject, Patience.WAIT_FOR_VISIBILITY);
     if (awareness != WorkflowAwareness.UNKNOWN_TO_BPMS) {
       return awareness;
     }
@@ -328,7 +403,7 @@ public final class WorkflowLocator {
         Thread.currentThread().interrupt();
         return awareness;
       }
-      awareness = probeWithRetry(adapter, probe, subject);
+      awareness = probeWithRetry(adapter, probe, subject, Patience.WAIT_FOR_VISIBILITY);
       if (awareness != WorkflowAwareness.UNKNOWN_TO_BPMS) {
         log.debug(
             "Adapter '{}' reports {} as {} after waiting for its BPMS to catch up",
@@ -350,14 +425,17 @@ public final class WorkflowLocator {
   private static <A> WorkflowAwareness probeWithRetry(
       final MigratableProcessService<A> adapter,
       final Function<MigratableProcessService<A>, WorkflowAwareness> probe,
-      final String subject) {
+      final String subject,
+      final Patience patience) {
 
     var awareness = probe.apply(adapter);
-    var retries = UNAVAILABLE_RETRIES;
+    var retries = patience == Patience.NONE
+        ? 0
+        : UNAVAILABLE_RETRIES;
     while ((awareness == WorkflowAwareness.BPMS_UNAVAILABLE) && (retries > 0)) {
       log.warn(
           "The BPMS of adapter '{}' is unavailable while locating {} - retrying in {}ms ({} "
-              + "retries left; the caller's transaction stays open meanwhile)",
+              + "retries left; no application transaction is open here)",
           adapter.getAdapterId(),
           subject,
           UNAVAILABLE_RETRY_DELAY_MILLIS,
