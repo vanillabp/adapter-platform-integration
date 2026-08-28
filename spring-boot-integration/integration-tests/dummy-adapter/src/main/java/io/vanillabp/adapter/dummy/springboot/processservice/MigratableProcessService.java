@@ -103,6 +103,23 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
   }
 
 
+  /**
+   * Whether this dummy stands in for a BPMS which can be asked whether it holds a
+   * workflow - a test steers it through {@link DummyTaskAwarenessSource}, which is how
+   * the core's refusal to combine a guessing adapter with a second one is exercised.
+   */
+  @Override
+  public boolean canLocateWorkflows() {
+
+    if (taskAwarenessSources == null) {
+      return true;
+    }
+    return taskAwarenessSources
+        .stream()
+        .allMatch(source -> source.canLocateWorkflows(adapterId));
+
+  }
+
   @Override
   public io.vanillabp.integration.adapter.spi.WorkflowVisibilityDelay workflowVisibilityDelay() {
 

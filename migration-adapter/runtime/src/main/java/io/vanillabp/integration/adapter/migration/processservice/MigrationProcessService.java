@@ -323,6 +323,70 @@ public class MigrationProcessService<A> {
   }
 
   /**
+   * Validates AFTER THE DEPLOYMENT that every prioritized adapter of this BPMN process
+   * can locate workflows, and refuses a combination in which one of them cannot.
+   * <p>
+   * An adapter which cannot ask its BPMS answers the election optimistically, which is
+   * right while it is the only BPMS configured and a guess as soon as it is not: the
+   * walk stops at the first <code>ACTIVE</code>, so the guessing adapter takes the
+   * operations of every adapter behind it in the list. That is a migration which
+   * silently routes half of its workflows to the wrong BPMS.
+   * <p>
+   * This runs after the deployment rather than with the other startup validations,
+   * because an adapter may only learn what its BPMS can do while it deploys - Camunda 8
+   * finds out about the query API from the first query which fails. It still runs before
+   * workflow processing starts, so nothing has touched a workflow when the message
+   * arrives.
+   *
+   * @throws IllegalStateException If an adapter has to guess and the module does not
+   *           accept it
+   */
+  public void validateElectionCapabilityAfterDeployment() {
+
+    if (adapterProcessServices.size() < 2) {
+      // nothing to guess between: whatever the single adapter answers, it is the only
+      // BPMS which could hold the workflow
+      return;
+    }
+
+    final var guessing = adapterProcessServices
+        .stream()
+        .filter(adapter -> !adapter.canLocateWorkflows())
+        .map(MigratableProcessService::getAdapterId)
+        .toList();
+    if (guessing.isEmpty()) {
+      return;
+    }
+
+    final var message = """
+        The adapter(s) %s cannot ask their BPMS whether it holds a workflow, and BPMN process '%s' \
+        of workflow module '%s' is served by %s adapters (%s)! Such an adapter answers the BPMS \
+        election optimistically, the election stops at the first adapter saying yes, and the \
+        operations of every adapter behind it in the list end up in the wrong BPMS - a migration \
+        which loses half of its workflows without saying so. To solve this either
+        - give that BPMS what it needs to answer (Camunda 8: configure secondary storage / the \
+        query API; the Process-Engine-API has no query API at all, so it cannot be part of a \
+        migration setup), or
+        - prioritize exactly one adapter for this workflow module, or
+        - accept the routing by list order with '%s: ACCEPTED' (or globally, \
+        'vanillabp.election.guessing-adapters: ACCEPTED') - the message stays as a WARN."""
+        .formatted(
+            guessing,
+            bpmnProcessId,
+            workflowModuleId,
+            adapterProcessServices.size(),
+            prioritizedAdapters,
+            MigrationAdapterProperties.guessingAdaptersProperty(workflowModuleId));
+
+    if (properties.acceptsGuessingAdapters(workflowModuleId)) {
+      log.warn("{}", message);
+      return;
+    }
+    throw new IllegalStateException(message);
+
+  }
+
+  /**
    * The transaction runner serving this process service's aggregate: the most specific
    * {@link io.vanillabp.integration.spi.TransactionRunnerAware} bean, a
    * {@link TransactionRunner} bean of the application, or the platform's own runner.

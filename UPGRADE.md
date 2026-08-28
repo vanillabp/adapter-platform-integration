@@ -4,6 +4,33 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## An adapter says whether it can locate workflows, and the start instant is named honestly (2026-08-28)
+
+Two small corrections of the adapter SPI, made before another team implements against it.
+
+**`canLocateWorkflows()` is new, with a `default` answering `true`.** An adapter which cannot ask
+its BPMS whether it holds a workflow - a Camunda 8 cluster without secondary storage, the
+Process-Engine-API, which has no query API at all - answers the election optimistically. That is
+right while it is the only BPMS configured, and a guess as soon as it is not: the walk stops at the
+first `ACTIVE`, so the guessing adapter takes the operations of every adapter behind it in the
+list. Such an adapter answers `false` here, and the core refuses to boot a workflow module which
+prioritizes it next to another adapter. An adapter which asks its BPMS needs to change nothing.
+
+The answer is fetched after the adapters deployed and before workflow processing starts, because
+an adapter may only learn what its BPMS can do while deploying.
+
+**The refusal can be accepted.** `vanillabp.election.guessing-adapters: ACCEPTED` (or
+`vanillabp.workflow-modules.<id>.election.guessing-adapters`) turns the boot failure into a WARN.
+The default is to refuse.
+
+**`BpmsInitiatedStartContext.getTriggerTime()` is now `getStartInstant()`.** The old name promised
+what only some BPMS deliver: the time the engine SCHEDULED the start for. Camunda 7 does not hand
+that to a listener, so its adapter reported the moment of the notification - an adapter
+contradicting the method it implements. The javadoc now names the scheduled time as the ideal and
+the notification's moment as the documented fallback. Adapters rename the method they implement;
+nothing else changes, and `BpmsStartTrigger.time()`, which the application sees, was never called
+a trigger time.
+
 ## The two-phase switch of the adapter SPI is gone (2026-08-28)
 
 `MigratableProcessService#needsTwoPhaseCommitForStartingWorkflows()` no longer exists.

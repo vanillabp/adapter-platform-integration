@@ -146,7 +146,7 @@ public final class BpmsInitiatedStartScanner {
       return (
           aggregate,
           context) -> new BpmsStartTrigger(
-              context.getKind(), context.getTriggerTime(), context.getSignalName(), context.getStartEventId());
+              context.getKind(), context.getStartInstant(), context.getSignalName(), context.getStartEventId());
     }
 
     final var taskParam = parameter.getAnnotation(TaskParam.class);

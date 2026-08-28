@@ -2045,7 +2045,7 @@ public class WorkflowTaskRegistryTest {
                 }
 
                 @Override
-                public java.time.Instant getTriggerTime() {
+                public java.time.Instant getStartInstant() {
                   return java.time.Instant.EPOCH;
                 }
 

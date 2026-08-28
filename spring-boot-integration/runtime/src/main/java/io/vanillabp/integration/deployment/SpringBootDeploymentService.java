@@ -126,10 +126,22 @@ public class SpringBootDeploymentService implements SmartLifecycle {
    * Start processing of workflows one the application started. Ordered BEFORE the
    * phase-two outbox dispatchers' listeners (see
    * {@link #START_PROCESSING_LISTENER_ORDER}).
+   * <p>
+   * The election capability of the prioritized adapters is checked right before that:
+   * an adapter only knows what its BPMS can do once it deployed, and nothing has
+   * touched a workflow yet at this point.
    */
   @Order(START_PROCESSING_LISTENER_ORDER)
   @EventListener(ApplicationReadyEvent.class)
   public void startProcessingOfWorkflows() {
+
+    processServices
+        .stream()
+        .filter(ProcessServiceSpringBean.class::isInstance)
+        .map(processService -> (ProcessServiceSpringBean<?>) processService)
+        .forEach(processService -> processService
+            .getMigrationProcessService()
+            .validateElectionCapabilityAfterDeployment());
 
     deploymentService.startWorkflowProcessing(
         getWorkflowModuleIds());

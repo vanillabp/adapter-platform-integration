@@ -537,7 +537,7 @@ public class BpmsInitiatedStartTest {
       }
 
       @Override
-      public Instant getTriggerTime() {
+      public Instant getStartInstant() {
         return TRIGGER_TIME;
       }
 

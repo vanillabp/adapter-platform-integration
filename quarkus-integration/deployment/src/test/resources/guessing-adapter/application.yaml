@@ -1,0 +1,18 @@
+test-adapter:
+  can-locate-workflows: false
+vanillabp:
+  prioritized-adapters:
+    - test
+    - test2
+  adapters:
+    test:
+      type: dummy
+    test2:
+      type: dummy
+  workflow-modules:
+    test-module:
+      adapters:
+        test:
+          resources-location: classpath:test-module/processes/dummy
+        test2:
+          resources-location: classpath:test-module/processes/dummy

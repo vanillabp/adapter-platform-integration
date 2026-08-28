@@ -36,6 +36,12 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
   private TransactionsProperties transactions;
 
   /**
+   * Overrides <code>vanillabp.election</code> for this workflow module. A setting
+   * left out here means "whatever is configured globally".
+   */
+  private ElectionProperties election;
+
+  /**
    * Overrides <code>vanillabp.delivery</code> for this workflow module. A setting left
    * undefined here means the global one applies, so one module can release the records of
    * its ended workflows while another keeps them for support.

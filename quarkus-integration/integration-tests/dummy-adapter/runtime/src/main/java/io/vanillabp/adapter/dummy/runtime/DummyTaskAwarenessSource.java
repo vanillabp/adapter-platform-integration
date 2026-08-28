@@ -50,6 +50,22 @@ public interface DummyTaskAwarenessSource {
    * @param taskId The user task's ID
    * @return The awareness or <code>null</code> to let another source answer
    */
+
+  /**
+   * Whether the dummy adapter of the given ID can ask its BPMS whether it holds a
+   * workflow - the capability the core refuses to combine with a second adapter
+   * (a Camunda 8 cluster without secondary storage answers <code>false</code> here).
+   *
+   * @param adapterId The dummy adapter's ID
+   * @return Whether the workflow probe of that adapter asks rather than guesses
+   */
+  default boolean canLocateWorkflows(
+      final String adapterId) {
+
+    return true;
+
+  }
+
   default WorkflowAwareness awarenessOfUserTask(
       final String adapterId,
       final Object workflowAggregateId,

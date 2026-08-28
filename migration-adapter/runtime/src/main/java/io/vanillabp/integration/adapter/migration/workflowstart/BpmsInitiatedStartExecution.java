@@ -74,7 +74,7 @@ public final class BpmsInitiatedStartExecution {
     final var derivedId = BpmsInitiatedStartId
         .derive(
             context.getKind(),
-            context.getTriggerTime(),
+            context.getStartInstant(),
             context.getNaturalIdentity(),
             processService.getAggregateIdType(),
             aggregateClass);

@@ -97,6 +97,13 @@ public interface QuarkusMigrationAdapterProperties {
   TransactionsProperties transactions();
 
   /**
+   * What VanillaBP does about a prioritized adapter which cannot locate workflows.
+   *
+   * @return The election configuration
+   */
+  ElectionProperties election();
+
+  /**
    * What VanillaBP does with the records of processed task deliveries.
    *
    * @return The delivery configuration
@@ -471,6 +478,13 @@ public interface QuarkusMigrationAdapterProperties {
     TransactionsProperties transactions();
 
     /**
+     * Overrides <code>vanillabp.election</code> for this workflow module.
+     *
+     * @return The election configuration of this workflow module
+     */
+    ElectionProperties election();
+
+    /**
      * Overrides <code>vanillabp.delivery</code> for this workflow module.
      *
      * @return The delivery configuration of this workflow module
@@ -492,6 +506,22 @@ public interface QuarkusMigrationAdapterProperties {
      * @return The setting, an empty Optional meaning "whatever applies globally"
      */
     Optional<io.vanillabp.integration.adapter.migration.config.TransactionsProperties.UnguardedAggregateWrites> unguardedAggregateWrites();
+
+  }
+
+  /**
+   * What VanillaBP does about a prioritized adapter which cannot ask its BPMS whether it
+   * holds a workflow: refuse to start, or accept the routing by list order.
+   */
+  interface ElectionProperties {
+
+    /**
+     * Whether an adapter which has to guess is accepted next to other adapters. The
+     * default is to reject it, which ends the startup with a message naming the fix.
+     *
+     * @return The setting, an empty Optional meaning "whatever applies globally"
+     */
+    Optional<io.vanillabp.integration.adapter.migration.config.ElectionProperties.GuessingAdapters> guessingAdapters();
 
   }
 
