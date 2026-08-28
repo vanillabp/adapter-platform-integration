@@ -47,7 +47,8 @@ public class DeploymentAutoConfiguration {
       final MigrationAdapterProperties properties,
       final ObjectProvider<AdapterDeploymentService<?, ?>> deploymentServiceProvider,
       final ObjectProvider<ExtensionWiringService<?, ?>> wiringServiceProvider,
-      final ObjectProvider<ProcessService<?>> processServices) {
+      final ObjectProvider<ProcessService<?>> processServices,
+      final io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring workflowTaskWiring) {
 
     final List<AdapterDeploymentService<?, ?>> deploymentServices = deploymentServiceProvider
         .stream()
@@ -56,8 +57,10 @@ public class DeploymentAutoConfiguration {
         .stream()
         .toList();
 
+    // the wiring interface goes in as well: the two module-level checks nobody has to
+    // remember are the core's own duty since story 158
     final var deploymentService = new DeploymentService(
-        properties, deploymentServices, wiringServices);
+        properties, deploymentServices, wiringServices, workflowTaskWiring);
 
     return new SpringBootDeploymentService(
         deploymentService, allWorkflowModules, processServices);

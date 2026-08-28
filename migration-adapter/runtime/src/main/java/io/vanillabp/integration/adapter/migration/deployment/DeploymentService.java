@@ -76,11 +76,29 @@ public class DeploymentService {
    * @param properties Attributes for configuration of the deployment process.
    * @param deploymentServices All adapters deployment services.
    */
+  /**
+   * The core's own wiring interface, used for the two checks no adapter has to remember
+   * (see {@link #runModuleLevelChecks(String)}). May be <code>null</code> in tests which
+   * only exercise the pipeline itself.
+   */
+  private final io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring workflowTaskWiring;
+
   public DeploymentService(
       final MigrationAdapterProperties properties,
       final List<AdapterDeploymentService<?, ?>> deploymentServices,
       final List<ExtensionWiringService<?, ?>> wiringServices) {
 
+    this(properties, deploymentServices, wiringServices, null);
+
+  }
+
+  public DeploymentService(
+      final MigrationAdapterProperties properties,
+      final List<AdapterDeploymentService<?, ?>> deploymentServices,
+      final List<ExtensionWiringService<?, ?>> wiringServices,
+      final io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring workflowTaskWiring) {
+
+    this.workflowTaskWiring = workflowTaskWiring;
     this.properties = properties;
     this.deploymentServices = deploymentServices;
     this.wiringServices = new LinkedList<>(wiringServices
@@ -207,6 +225,38 @@ public class DeploymentService {
     reportWorkflowModulesWithoutResources(workflowModuleIds);
 
     warnAboutConfiguredWorkflowsUnknownToBpmnResources(workflowModuleIds, knownBpmnProcessIds);
+
+    workflowModuleIds.forEach(this::runModuleLevelChecks);
+
+  }
+
+  /**
+   * The two checks which belong to a workflow module as a whole, run once every adapter
+   * of the module deployed.
+   * <p>
+   * They used to be the adapter's duty, written in the javadoc of the SPI and nowhere
+   * else, and Camunda 7 forgot one of them for a year: a typo in a
+   * <code>&#64;WorkflowTask(taskDefinition = ...)</code> stayed silent until a workflow
+   * reached the task. Neither check needs anything an adapter knows - the module is
+   * deployed, and that is the moment - so the core takes the duty instead of asking
+   * every adapter author to remember it.
+   * <p>
+   * What stays with the adapter is
+   * {@code WorkflowTaskWiring#registerDeployedVersion}: only the adapter knows which
+   * version its BPMS ended up with.
+   *
+   * @param workflowModuleId The workflow module which finished deploying
+   */
+  private void runModuleLevelChecks(
+      final String workflowModuleId) {
+
+    if (workflowTaskWiring == null) {
+      return;
+    }
+    // first the reverse wiring check, because a method serving no task at all is the
+    // more basic defect, then the version resolution, which only warns
+    workflowTaskWiring.validateNoUnwiredWorkflowTaskMethods(workflowModuleId);
+    workflowTaskWiring.resolveProcessVersions(workflowModuleId);
 
   }
 

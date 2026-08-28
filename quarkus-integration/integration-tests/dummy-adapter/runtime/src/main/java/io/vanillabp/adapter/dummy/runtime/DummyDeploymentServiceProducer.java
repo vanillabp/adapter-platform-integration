@@ -59,7 +59,7 @@ public class DummyDeploymentServiceProducer {
         .sorted()
         .<AdapterDeploymentService<Object, Object>>map(
             adapterId -> new DummyDeploymentService(
-                adapterId, deploymentListeners, workflowTaskRegistry, taskWiringSource, workflowTaskRegistry, bpmsInitiatedStartSource, workflowTaskRegistry, processVersionSource, healthSource))
+                adapterId, deploymentListeners, workflowTaskRegistry, workflowTaskRegistry, taskWiringSource, workflowTaskRegistry, bpmsInitiatedStartSource, workflowTaskRegistry, processVersionSource, healthSource))
         .toList();
 
   }

@@ -117,6 +117,13 @@ public class VanillaBpDeploymentRunner {
   @Any
   Instance<ProcessService<?>> processServices;
 
+  /**
+   * The core's wiring interface - handed to the {@link DeploymentService} for the two
+   * module-level checks the core runs itself (story 158).
+   */
+  @Inject
+  io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry workflowTaskWiring;
+
   private DeploymentService deploymentService;
 
   private List<String> workflowModuleIds;
@@ -156,7 +163,7 @@ public class VanillaBpDeploymentRunner {
         .toList();
 
     deploymentService = new DeploymentService(
-        properties, deploymentServices, wiringServices);
+        properties, deploymentServices, wiringServices, workflowTaskWiring);
 
     log.info("Deploying BPMN resources of workflow modules: {}", workflowModuleIds);
     deploymentService.deployResources(
