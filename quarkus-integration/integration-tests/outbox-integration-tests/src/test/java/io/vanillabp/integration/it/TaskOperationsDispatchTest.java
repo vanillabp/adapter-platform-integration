@@ -213,11 +213,14 @@ public class TaskOperationsDispatchTest {
   }
 
   @Test
-  @DisplayName("Correlating with an unknown workflow raises the guiding WorkflowNotFoundException")
+  @DisplayName("Correlating with a workflow nobody started raises the guiding WorkflowNotFoundException")
   public void unknownWorkflowRaisesGuidingException() throws Exception {
 
-    final var aggregate = startedAggregate("correlate-unknown");
-    listener.awaitInvocations(1, 30_000);
+    // never handed to startWorkflow, so nothing ever recorded an adapter for it:
+    // "unknown" is the final answer here, not a read model which is a moment behind
+    final var aggregate = new io.vanillabp.integration.test.Aggregate();
+    aggregate.setId(-815L);
+    aggregate.setContent("correlate-unknown");
     // awareness stays UNKNOWN_TO_BPMS
 
     userTransaction.begin();
@@ -233,6 +236,43 @@ public class TaskOperationsDispatchTest {
     } finally {
       userTransaction.rollback();
     }
+
+  }
+
+  @Test
+  @DisplayName("A workflow this node started is planned rather than refused while the BPMS catches up")
+  public void aWorkflowStartedHereIsPlannedWhileTheBpmsCatchesUp() throws Exception {
+
+    final var aggregate = startedAggregate("correlate-not-visible-yet");
+    listener.awaitInvocations(1, 30_000);
+    listener.reset();
+    // the start recorded which adapter holds the workflow, and that adapter does not
+    // report it yet - the everyday state of an exporter-fed read model
+    awareness.answerWith(WorkflowAwareness.ACTIVE);
+    awareness.becomeVisibleAfter(2, java.time.Duration.ofSeconds(5));
+
+    userTransaction.begin();
+    try {
+      workflowService.correlateMessage(aggregate, "PaymentReceived");
+      userTransaction.commit();
+    } catch (final Exception e) {
+      userTransaction.rollback();
+      throw e;
+    }
+
+    final var deadline = System.currentTimeMillis() + 30_000;
+    while (listener.getCorrelatedMessages().isEmpty()) {
+      assertTrue(
+          System.currentTimeMillis() < deadline,
+          "the correlation was not dispatched in time");
+      Thread.sleep(50);
+    }
+    assertTrue(listener
+        .getCorrelatedMessages()
+        .contains(aggregate.getId()
+            + ":PaymentReceived:null"));
+    // the window is state of a bean the test classes of this module share
+    awareness.alwaysVisible();
 
   }
 

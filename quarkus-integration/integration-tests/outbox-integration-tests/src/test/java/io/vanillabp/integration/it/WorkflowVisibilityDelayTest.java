@@ -1,6 +1,5 @@
 package io.vanillabp.integration.it;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -31,9 +30,11 @@ import jakarta.transaction.UserTransaction;
  * awareness probe reads an eventually consistent model.
  * <p>
  * Phase two of the start records which adapter created the instance, so the
- * correlation's election probes that adapter first and keeps asking for as long as
- * the adapter says its BPMS may need. A workflow nobody ever started has no such
- * record and fails immediately.
+ * correlation's election probes that adapter first - and where that adapter does not
+ * report the workflow yet, the correlation is PLANNED rather than waited for: the
+ * caller's transaction is not the place to sit out a read model. The dispatch asks
+ * again and takes the time. A workflow nobody ever started has no such record and
+ * fails immediately, inside the call.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowVisibilityDelayTest {
@@ -95,14 +96,15 @@ public class WorkflowVisibilityDelayTest {
   }
 
   @Test
-  @DisplayName("Correlating right after the start succeeds although the BPMS reports the workflow late")
-  public void correlationWaitsForTheWorkflowToBecomeVisible() throws Exception {
+  @DisplayName("Correlating right after the start returns at once and is dispatched once the BPMS caught up")
+  public void correlationIsPlannedAndDispatchedWhenTheWorkflowShowsUp() throws Exception {
 
     final var aggregate = started("visibility-delay");
     // the BPMS holds the workflow but reports it as unknown for the next three
     // probes - what an exporter-fed read model does right after a start
     awareness.becomeVisibleAfter(3, Duration.ofSeconds(5));
 
+    final var startedAt = System.nanoTime();
     userTransaction.begin();
     try {
       workflowService.correlateMessage(aggregate, "PaymentReceived");
@@ -111,9 +113,17 @@ public class WorkflowVisibilityDelayTest {
       userTransaction.rollback();
       throw e;
     }
+    final var elapsed = Duration.ofNanos(System.nanoTime() - startedAt);
 
-    assertEquals(
-        0, awareness.remainingInvisibleProbes(), "the core has to keep asking until the workflow shows up");
+    // the point of the story: the caller's transaction holds a database connection
+    // and the locks on the aggregate, so nothing sleeps in it
+    assertTrue(
+        elapsed.toMillis() < 1000,
+        "the caller must not wait for the BPMS to catch up, but took "
+            + elapsed);
+    assertTrue(
+        awareness.remainingInvisibleProbes() > 0,
+        "phase one asks once and leaves the waiting to the dispatch");
 
     final var deadline = System.currentTimeMillis() + 30_000;
     while (listener.getCorrelatedMessages().isEmpty()) {

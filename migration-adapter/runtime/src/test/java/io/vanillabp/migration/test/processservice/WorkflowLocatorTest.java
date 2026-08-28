@@ -1,6 +1,7 @@
 package io.vanillabp.migration.test.processservice;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -259,8 +260,21 @@ public class WorkflowLocatorTest {
 
   }
 
+  /**
+   * A walk which may take its time - the shape of the dispatch, which is where every
+   * waiting this class does belongs.
+   */
   private static WorkflowLocator.Location<Object> locate(
       final io.vanillabp.integration.spi.WorkflowAdapterCache cache,
+      final ProbeAdapter... adapters) {
+
+    return locate(cache, WorkflowLocator.Patience.WAIT_FOR_VISIBILITY, adapters);
+
+  }
+
+  private static WorkflowLocator.Location<Object> locate(
+      final io.vanillabp.integration.spi.WorkflowAdapterCache cache,
+      final WorkflowLocator.Patience patience,
       final ProbeAdapter... adapters) {
 
     return new WorkflowLocator(MODULE, PROCESS, cache)
@@ -268,7 +282,8 @@ public class WorkflowLocatorTest {
             List.of(adapters),
             adapter -> adapter.awarenessOfTask(SCOPE, "42", "task-1"),
             "42",
-            "task 'task-1' of workflow aggregate '42'");
+            "task 'task-1' of workflow aggregate '42'",
+            patience);
 
   }
 
@@ -377,7 +392,8 @@ public class WorkflowLocatorTest {
             List.of(adapter),
             candidate -> candidate.awarenessOfWorkflow(SCOPE, null, Map.of()),
             "42",
-            "workflow of aggregate '42'");
+            "workflow of aggregate '42'",
+            WorkflowLocator.Patience.NONE);
 
     assertEquals(WorkflowAwareness.ACTIVE, location.awareness());
 
@@ -565,6 +581,90 @@ public class WorkflowLocatorTest {
     // the fixed unavailable-policy applies (1 probe + 2 retries), and nothing waits
     // for a workflow to become visible: an unreachable BPMS answers nothing at all
     assertEquals(3, remote.probes.get());
+
+  }
+
+  @Test
+  @DisplayName("Phase one refuses an unavailable BPMS at once - no retry keeps the transaction open")
+  public void withoutPatienceAnUnavailableBpmsFailsAtOnce() {
+
+    final var down = new ProbeAdapter("down-adapter", WorkflowAwareness.BPMS_UNAVAILABLE);
+
+    final var startedAt = System.nanoTime();
+    final var failure = assertThrows(
+        IllegalStateException.class,
+        () -> locate(null, WorkflowLocator.Patience.NONE, down));
+    final var elapsed = java.time.Duration.ofNanos(System.nanoTime() - startedAt);
+
+    assertEquals(1, down.probes.get(), "the adapter is asked exactly once");
+    assertTrue(
+        elapsed.toMillis() < WorkflowLocator.UNAVAILABLE_RETRY_DELAY_MILLIS,
+        "nothing may sleep here, but the walk took "
+            + elapsed);
+    assertTrue(failure.getMessage().contains("down-adapter"), failure.getMessage());
+
+  }
+
+  @Test
+  @DisplayName("Phase one does not wait for a read model - the hint travels with the unknown answer")
+  public void withoutPatienceAHintedAdapterIsAskedOnce() {
+
+    final var cache = new InMemoryWorkflowAdapterCache();
+    cache.put(MODULE, PROCESS, "42", "remote");
+    final var remote = new ProbeAdapter("remote", WorkflowAwareness.UNKNOWN_TO_BPMS)
+        .waitingFor(java.time.Duration.ofSeconds(30));
+
+    final var startedAt = System.nanoTime();
+    final var location = locate(cache, WorkflowLocator.Patience.NONE, remote);
+    final var elapsed = java.time.Duration.ofNanos(System.nanoTime() - startedAt);
+
+    assertEquals(WorkflowAwareness.UNKNOWN_TO_BPMS, location.awareness());
+    assertEquals(1, remote.probes.get(), "the adapter is asked exactly once");
+    assertTrue(
+        elapsed.toSeconds() < 5,
+        "the caller's transaction must not wait for the window, but the walk took "
+            + elapsed);
+    // what the caller needs to tell "not visible yet" from "nobody knows it"
+    assertTrue(location.isUnknownButExpected());
+    assertEquals("remote", location.hintedAdapterId());
+    assertEquals(
+        "remote",
+        cache.get(MODULE, PROCESS, "42").orElseThrow(),
+        "the hint stays - it is what lets the dispatch wait for that very adapter");
+
+  }
+
+  @Test
+  @DisplayName("An unknown workflow nobody hinted at is unknown, not 'not visible yet'")
+  public void withoutAHintAnUnknownWorkflowIsNotExpected() {
+
+    final var remote = new ProbeAdapter("remote", WorkflowAwareness.UNKNOWN_TO_BPMS);
+
+    final var location = locate(new InMemoryWorkflowAdapterCache(), WorkflowLocator.Patience.NONE, remote);
+
+    assertEquals(WorkflowAwareness.UNKNOWN_TO_BPMS, location.awareness());
+    assertFalse(location.isUnknownButExpected());
+    assertEquals(null, location.hintedAdapterId());
+
+  }
+
+  @Test
+  @DisplayName("A task operation of the dispatch retries an unavailable BPMS but waits for no read model")
+  public void retryingPatienceDoesNotWaitForVisibility() {
+
+    final var cache = new InMemoryWorkflowAdapterCache();
+    cache.put(MODULE, PROCESS, "42", "remote");
+    final var remote = new ProbeAdapter("remote", WorkflowAwareness.UNKNOWN_TO_BPMS)
+        .waitingFor(java.time.Duration.ofSeconds(30));
+
+    final var startedAt = System.nanoTime();
+    final var location = locate(cache, WorkflowLocator.Patience.RETRY_UNAVAILABLE, remote);
+    final var elapsed = java.time.Duration.ofNanos(System.nanoTime() - startedAt);
+
+    assertEquals(WorkflowAwareness.UNKNOWN_TO_BPMS, location.awareness());
+    assertEquals(1, remote.probes.get(), "a task the BPMS does not know stays unknown");
+    assertTrue(elapsed.toSeconds() < 5, "nothing waits for a read model here, but it took "
+        + elapsed);
 
   }
 

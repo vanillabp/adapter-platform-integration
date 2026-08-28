@@ -76,10 +76,17 @@ every operation on an EXISTING workflow (complete/cancel task, user task, messag
 correlation — in phase one and again at phase-two dispatch) walks the prioritized
 adapters with an operation-specific probe (`awarenessOfTask`,
 `awarenessOfUserTask`, `awarenessOfWorkflow`). `ACTIVE` executes there, `UNKNOWN_TO_BPMS`
-falls through to the next adapter, `COMPLETED` is a warned no-op,
-`BPMS_UNAVAILABLE` retries twice (500&nbsp;ms apart, fixed — "optimize late") and
-then fails naming the adapter — it NEVER falls back. New workflows always start in
-the first-priority adapter (no probing).
+falls through to the next adapter, `COMPLETED` is a warned no-op, and
+`BPMS_UNAVAILABLE` fails naming the adapter — it NEVER falls back. New workflows always
+start in the first-priority adapter (no probing).
+
+How long the walk may take is the CALLER's decision (`WorkflowLocator.Patience`), because
+the same walk runs in two places whose cost is not comparable. In **phase one** it runs
+inside the application's transaction, holding a database connection and the locks on the
+workflow aggregate: it asks every adapter once and never sleeps. At **dispatch** time no
+application transaction is open, so an unreachable BPMS is worth two more questions
+(500&nbsp;ms apart, fixed — "optimize late") and a read model which has not caught up is
+worth its window. Decision 27 says why the split is drawn there.
 
 What the walk cannot do is check the answers, and the SPI is where that duty is
 written down: an adapter answers ONLY for the workflows and tasks of the scope it is
@@ -174,7 +181,7 @@ workflow started moments ago. Turning that into `WorkflowNotFoundException` name
 which are all wrong, and it hits the most ordinary sequence there is: start a workflow,
 then correlate the message which lets it continue.
 
-Three pieces solve it, and the split matters:
+Four pieces solve it, and the split matters:
 
 1. **The adapter contributes the window, the core does the waiting.**
    `MigratableProcessService.workflowVisibilityDelay()` (a `default` returning
@@ -184,11 +191,10 @@ Three pieces solve it, and the split matters:
    reports `vanillabp.adapters.<id>.workflow-visibility-timeout` (default 10 seconds,
    zero switches it off). Eventual consistency is the core's business, the timing is the
    adapter's.
-2. **The waiting is bounded by a hint, never blanket.** `WorkflowLocator` waits only
-   while probing an adapter the `WorkflowAdapterCache` names for that workflow. A
-   workflow nobody ever heard of has no hint and fails as fast as before - which a wrong
-   ID has to, since waiting the full window on every typo would turn a programming error
-   into a timeout.
+2. **The waiting is bounded by a hint, never blanket.** VanillaBP waits only for an
+   adapter the `WorkflowAdapterCache` names for that workflow. A workflow nobody ever
+   heard of has no hint and fails immediately - which a wrong ID has to, since waiting
+   the full window on every typo would turn a programming error into a timeout.
 3. **The cache is filled where VanillaBP knows the answer without asking**
    (`MigrationProcessService.rememberWorkflowAdapter`): when a start is SCHEDULED (the
    elected adapter is decided then), again after its phase two, and on every inbound
@@ -200,9 +206,21 @@ Three pieces solve it, and the split matters:
    Recording at SCHEDULING time is what makes the sequence work at all: on a remote BPMS
    the instance is created after the commit, so a correlation in the very next
    transaction runs its election before phase two ever ran. Without the early hint it
-   would find nothing to wait for. The price is the usual one of a hint: a rolled-back
-   start leaves an entry behind, and the next operation on that aggregate ID waits out
-   the window before failing.
+   would find nothing to expect. The price is the usual one of a hint: a rolled-back start
+   leaves an entry behind, and the next operation on that aggregate ID is planned and
+   dispatched until the outbox blocks it, instead of failing at the call.
+
+4. **The waiting happens at the dispatch, never in the caller's transaction.** Phase one
+   asks once. Where the answer is "unknown" although a hint says the workflow exists, the
+   operation is PLANNED - the aggregate is saved, the outbox entry is written, the caller
+   returns - and the dispatch asks again, waits out the window and repeats the entry while
+   the BPMS still says nothing. In everyday operation (Camunda 8 lags one to three
+   seconds) that costs an attempt and nobody an error; while an exporter is broken it
+   costs attempts until the entry is blocked, which is where it becomes visible. Where the
+   work hangs on a JOB - a `@WorkflowTask`, an asynchronous task whose completion does not
+   arrive - the cluster runs out of job retries and Camunda raises an incident of its own;
+   where no job is behind it (a correlation from a REST endpoint), the blocked entry and
+   its counter are that place. Decision 27 carries this, including what it costs.
 
 **What was deliberately NOT built: an outbox query.** A `START_WORKFLOW` entry still
 `OPEN` would prove "too early rather than unknown", and one `DONE` a moment ago would
@@ -222,8 +240,15 @@ prove "exactly the window we are waiting for". It was left out:
 
 The residual is therefore honest and documented: on a cluster WITHOUT a shared cache, an
 operation reaching a node which neither started the workflow nor received a delivery for
-it can still fail while the BPMS catches up. Retrying the business operation works, and
-so does a shared cache.
+it has no hint, so it fails at the call while the BPMS catches up. Retrying the business
+operation works, and so does a shared cache - which is what the
+`WorkflowNotFoundException` says when an eventually consistent adapter is configured.
+
+The other residual is the mirror image: an operation with a hint whose workflow really is
+gone (ended long ago and cleaned out of the read model) is planned instead of refused. Its
+entry is repeated and finally blocked, and the counter of blocked entries is where it
+shows. That is the price of never refusing an operation on a workflow which merely is not
+searchable yet.
 
 ### Deployment pipeline
 

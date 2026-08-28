@@ -1418,6 +1418,73 @@ public class MigrationProcessService<A> {
 
   }
 
+  /**
+   * The adapter id an operation is about: the elected one, or - where nothing reported
+   * the workflow yet - the one the hint names.
+   */
+  private String adapterIdOf(
+      final WorkflowLocator.Location<A> location) {
+
+    return location.adapter() != null
+        ? location.adapter().getAdapterId()
+        : location.hintedAdapterId();
+
+  }
+
+  /**
+   * Says that an operation is planned although no BPMS reports the workflow yet.
+   * <p>
+   * This is the ordinary case on an eventually consistent BPMS: VanillaBP started the
+   * workflow (or was handed a delivery for it) seconds ago, so it exists, and the read
+   * model the probe searches is a moment behind. Phase one refuses to wait for that
+   * inside the caller's transaction, so the operation is planned and the dispatch asks
+   * again - it may take the time (decision 27 in the repository's DECISIONS.md).
+   *
+   * @param hintedAdapterId The adapter which should hold the workflow
+   * @param subject The workflow the operation is about
+   * @param operationDescription What is being planned
+   */
+  private void reportNotVisibleYet(
+      final String hintedAdapterId,
+      final String subject,
+      final String operationDescription) {
+
+    log.info(
+        "Adapter '{}' should hold the {} but does not report it yet - {} is planned and dispatched "
+            + "once its BPMS caught up",
+        hintedAdapterId,
+        subject,
+        operationDescription);
+
+  }
+
+  /**
+   * What phase two throws while the workflow is still not findable: the entry is worth
+   * repeating, because the hint says the workflow exists. The outbox backs off and
+   * blocks the entry when its attempts are used up, which is where an exporter nobody
+   * noticed becomes visible.
+   *
+   * @param hintedAdapterId The adapter which should hold the workflow
+   * @param subject The workflow the operation is about
+   * @param operationDescription What could not be dispatched
+   * @return The failure to throw
+   */
+  private IllegalStateException stillNotVisible(
+      final String hintedAdapterId,
+      final String subject,
+      final String operationDescription) {
+
+    return new IllegalStateException(
+        """
+            Phase two of %s cannot run yet: adapter '%s' should hold the %s - VanillaBP started it \
+            there or was handed a delivery for it - but its BPMS still does not report the \
+            workflow. The entry is repeated. A workflow which really is gone ends up as a blocked \
+            entry; a read model which stopped catching up (a Camunda 8 exporter, for instance) is \
+            what to look at first."""
+            .formatted(operationDescription, hintedAdapterId, subject));
+
+  }
+
   private String buildNoOutboxMessage(
       final String adapterId) {
 
@@ -1850,7 +1917,8 @@ public class MigrationProcessService<A> {
         adapterProcessServices,
         adapter -> adapter.awarenessOfWorkflow(workflowScope(), aggregatePersistenceSupport, aggregateId),
         aggregateId,
-        subject);
+        subject,
+        WorkflowLocator.Patience.NONE);
 
     switch (location.awareness()) {
       case COMPLETED -> {
@@ -1863,25 +1931,35 @@ public class MigrationProcessService<A> {
             location.adapter().getAdapterId());
         return attachedAggregate;
       }
-      case UNKNOWN_TO_BPMS -> throw new io.vanillabp.spi.process.WorkflowNotFoundException(
-          ("No configured BPMS knows the %s - message '%s' cannot be correlated (probed adapters, "
-              + "in prioritized order: %s)! Likely causes: %s To START a workflow by a message "
-              + "use startWorkflowByMessage instead.")
-              .formatted(subject, messageName, prioritizedAdapters, likelyCausesOfUnknownWorkflow()));
+      case UNKNOWN_TO_BPMS -> {
+        if (!location.isUnknownButExpected()) {
+          throw new io.vanillabp.spi.process.WorkflowNotFoundException(
+              ("No configured BPMS knows the %s - message '%s' cannot be correlated (probed "
+                  + "adapters, in prioritized order: %s)! Likely causes: %s To START a workflow by "
+                  + "a message use startWorkflowByMessage instead.")
+                  .formatted(subject, messageName, prioritizedAdapters, likelyCausesOfUnknownWorkflow()));
+        }
+        // the workflow exists - adapter '...' holds it - but its read model has not
+        // caught up. Plan the correlation and let the dispatch ask again, where
+        // waiting costs an attempt instead of the caller's database connection
+        reportNotVisibleYet(location.hintedAdapterId(), subject, "correlating message '%s'".formatted(messageName));
+      }
       default -> {
         // ACTIVE - fall through
       }
     }
 
     final var adapter = location.adapter();
-    adapter.correlateMessagePhaseOne(
-        workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, attachedAggregate, messageName,
-        correlationId);
+    if (adapter != null) {
+      adapter.correlateMessagePhaseOne(
+          workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, attachedAggregate, messageName,
+          correlationId);
+    }
 
     final var outbox = resolvePhaseTwoOutbox();
     if (outbox == null) {
       throw new IllegalStateException(
-          buildNoOutboxMessage(adapter.getAdapterId()));
+          buildNoOutboxMessage(adapterIdOf(location)));
     }
     final var scheduled = outbox
         .scheduleCorrelateMessage(workflowModuleId, bpmnProcessId, aggregateId, messageName, correlationId);
@@ -1927,7 +2005,8 @@ public class MigrationProcessService<A> {
         adapterProcessServices,
         adapter -> adapter.awarenessOfWorkflow(workflowScope(), aggregatePersistenceSupport, aggregateId),
         aggregateId,
-        subject);
+        subject,
+        WorkflowLocator.Patience.NONE);
 
     switch (location.awareness()) {
       case COMPLETED -> {
@@ -1940,24 +2019,31 @@ public class MigrationProcessService<A> {
             location.adapter().getAdapterId());
         return attachedAggregate;
       }
-      case UNKNOWN_TO_BPMS -> throw new io.vanillabp.spi.process.WorkflowNotFoundException(
-          ("No configured BPMS knows the %s - the changed aggregate cannot be pushed (probed "
-              + "adapters, in prioritized order: %s)! The aggregate itself was saved. Likely "
-              + "causes: %s")
-              .formatted(subject, prioritizedAdapters, likelyCausesOfUnknownWorkflow()));
+      case UNKNOWN_TO_BPMS -> {
+        if (!location.isUnknownButExpected()) {
+          throw new io.vanillabp.spi.process.WorkflowNotFoundException(
+              ("No configured BPMS knows the %s - the changed aggregate cannot be pushed (probed "
+                  + "adapters, in prioritized order: %s)! The aggregate itself was saved. Likely "
+                  + "causes: %s")
+                  .formatted(subject, prioritizedAdapters, likelyCausesOfUnknownWorkflow()));
+        }
+        reportNotVisibleYet(location.hintedAdapterId(), subject, "pushing the changed aggregate");
+      }
       default -> {
         // ACTIVE - fall through
       }
     }
 
     final var adapter = location.adapter();
-    adapter.aggregateChangedPhaseOne(
-        workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, attachedAggregate, taskId);
+    if (adapter != null) {
+      adapter.aggregateChangedPhaseOne(
+          workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, attachedAggregate, taskId);
+    }
 
     final var outbox = resolvePhaseTwoOutbox();
     if (outbox == null) {
       throw new IllegalStateException(
-          buildNoOutboxMessage(adapter.getAdapterId()));
+          buildNoOutboxMessage(adapterIdOf(location)));
     }
     // no idempotency key, so nothing can discard it (decision 2 in the repository's
     // DECISIONS.md: the values are read at dispatch time) - the answer is always true
@@ -1987,12 +2073,22 @@ public class MigrationProcessService<A> {
         adapterProcessServices,
         adapter -> adapter.awarenessOfWorkflow(workflowScope(), aggregatePersistenceSupport, workflowAggregateId),
         workflowAggregateId,
-        subject);
+        subject,
+        WorkflowLocator.Patience.WAIT_FOR_VISIBILITY);
 
     switch (location.awareness()) {
-      case UNKNOWN_TO_BPMS, COMPLETED -> log.warn(
-          "Skipped phase two of pushing the changed aggregate of {}: the workflow is gone (stale "
-              + "outbox entry); the entry is consumed",
+      case UNKNOWN_TO_BPMS -> {
+        if (location.isUnknownButExpected()) {
+          throw stillNotVisible(location.hintedAdapterId(), subject, "pushing the changed aggregate");
+        }
+        log.warn(
+            "Skipped phase two of pushing the changed aggregate of {}: the workflow is gone (stale "
+                + "outbox entry); the entry is consumed",
+            subject);
+      }
+      case COMPLETED -> log.warn(
+          "Skipped phase two of pushing the changed aggregate of {}: the workflow has ended; the "
+              + "entry is consumed",
           subject);
       default -> runPhaseTwo(
           location.adapter(),
@@ -2163,12 +2259,24 @@ public class MigrationProcessService<A> {
         adapterProcessServices,
         adapter -> adapter.awarenessOfWorkflow(workflowScope(), aggregatePersistenceSupport, workflowAggregateId),
         workflowAggregateId,
-        subject);
+        subject,
+        WorkflowLocator.Patience.WAIT_FOR_VISIBILITY);
 
     switch (location.awareness()) {
-      case UNKNOWN_TO_BPMS, COMPLETED -> log.warn(
-          "Skipped phase two of correlating message '{}' with {}: the workflow is gone (stale "
-              + "outbox entry); the entry is consumed",
+      case UNKNOWN_TO_BPMS -> {
+        if (location.isUnknownButExpected()) {
+          throw stillNotVisible(
+              location.hintedAdapterId(), subject, "correlating message '%s'".formatted(messageName));
+        }
+        log.warn(
+            "Skipped phase two of correlating message '{}' with {}: the workflow is gone (stale "
+                + "outbox entry); the entry is consumed",
+            messageName,
+            subject);
+      }
+      case COMPLETED -> log.warn(
+          "Skipped phase two of correlating message '{}' with {}: the workflow has ended; the "
+              + "entry is consumed",
           messageName,
           subject);
       default -> runPhaseTwo(
@@ -2439,11 +2547,14 @@ public class MigrationProcessService<A> {
     final var subject = "workflow of aggregate '%s' (BPMN process '%s' of workflow module '%s')"
         .formatted(aggregateId, bpmnProcessId, workflowModuleId);
 
+    // a read answers as fast as it can: the caller waits for it, and a workflow which
+    // is not findable yet is not made findable by holding the line
     final var location = workflowLocator.locate(
         adapterProcessServices,
         adapter -> adapter.awarenessOfWorkflow(workflowScope(), aggregatePersistenceSupport, aggregateId),
         aggregateId,
-        subject);
+        subject,
+        WorkflowLocator.Patience.NONE);
 
     if (location.awareness() == WorkflowAwareness.UNKNOWN_TO_BPMS) {
       throw new io.vanillabp.spi.process.WorkflowNotFoundException(
@@ -2460,11 +2571,16 @@ public class MigrationProcessService<A> {
 
   /**
    * The tail of a "no BPMS knows this workflow" message: the causes which really
-   * apply. A remote BPMS answering from an eventually consistent read model gets one
-   * more, because "not visible yet" is a state a workflow can be in without anything
-   * being wrong - VanillaBP already waited out the window that BPMS asked for (see
-   * {@code WorkflowVisibilityDelay}) where it had a reason to expect the workflow
-   * there.
+   * apply.
+   * <p>
+   * A BPMS answering from an eventually consistent read model gets two more, and both
+   * are about the same window. VanillaBP does not wait that window out here - phase one
+   * asks once and never sleeps (decision 27 in the repository's DECISIONS.md) - and it
+   * only knows that the workflow is worth waiting for where something told it so: it
+   * started the workflow itself, or a delivery for it arrived. On a cluster that
+   * knowledge sits on the node it happened on, unless the application shares its
+   * {@code WorkflowAdapterCache}, which is the difference between "retry in a second"
+   * and "this fails on two nodes out of three".
    *
    * @return The cause list, ending in a full stop
    */
@@ -2478,7 +2594,10 @@ public class MigrationProcessService<A> {
         });
     return eventuallyConsistent
         ? "the workflow was never started, was started through another system, already ended long "
-            + "ago, or was started so recently that the BPMS has not made it searchable yet."
+            + "ago, or was started so recently that the BPMS has not made it searchable yet - and "
+            + "if another node of this application started it, only a WorkflowAdapterCache shared "
+            + "between the nodes tells this node to expect it. Retrying the business operation is "
+            + "what the last two causes need."
         : "the workflow was never started, was started through another system, or already ended "
             + "long ago.";
 
@@ -2588,7 +2707,8 @@ public class MigrationProcessService<A> {
         adapterProcessServices,
         adapter -> awarenessProbe.probe(adapter, aggregateId),
         aggregateId,
-        subject);
+        subject,
+        WorkflowLocator.Patience.NONE);
 
     switch (location.awareness()) {
       case COMPLETED -> {
@@ -2728,11 +2848,15 @@ public class MigrationProcessService<A> {
     final var subject = "task '%s' of workflow aggregate '%s' (BPMN process '%s' of workflow module '%s')"
         .formatted(taskId, workflowAggregateId, bpmnProcessId, workflowModuleId);
 
+    // a task probe is a command against the engine rather than a search, so its answer
+    // is exact and waiting for a read model would buy nothing - an unreachable BPMS is
+    // still worth a second question here, where no application transaction is open
     final var location = workflowLocator.locate(
         adapterProcessServices,
         adapter -> awarenessProbe.probe(adapter, workflowAggregateId),
         workflowAggregateId,
-        subject);
+        subject,
+        WorkflowLocator.Patience.RETRY_UNAVAILABLE);
 
     switch (location.awareness()) {
       // stale outbox entry: the task disappeared between phase one and this

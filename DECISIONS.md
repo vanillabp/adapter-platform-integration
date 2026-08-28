@@ -548,3 +548,70 @@ with no code behind it.
 What the removal does NOT touch is the inbound direction. A BPMS which delivers a task inside
 its own transaction still does, and `TaskInvocationContext.runInCurrentTransaction()` is where
 an adapter says so.
+
+### 27. Phase one asks once, and the waiting happens where no transaction is open
+
+Locating the BPMS which holds a workflow is a question per operation (entry 25), and until now
+that question was allowed to take its time wherever it was asked: an unreachable BPMS was retried
+twice half a second apart, and an adapter which a hint said should hold the workflow was asked
+again until its `workflowVisibilityDelay` was used up, ten seconds on Camunda 8. In phase one that
+runs inside the transaction the application called from, which holds a database connection and
+the locks on the workflow aggregate. One lagging exporter is then enough to park every caller in
+the connection pool, and an application whose BPMS is slow stops being able to do anything at all,
+including the work which has nothing to do with that BPMS.
+
+So the walk asks how patient it may be. Phase one asks every adapter once and never sleeps. The
+dispatch of a phase-two entry may do both, because no application transaction is open there and a
+repetition costs an entry another attempt rather than a connection.
+
+Three goals decide what happens to the answers, and they are Stephan's, written down here because
+they are the reason the table below looks like it does:
+
+1. a workflow NO BPMS knows has to raise `WorkflowNotFoundException` out of the `ProcessService`
+   method the application called;
+2. the one to three seconds Camunda 8's secondary storage lags behind in normal operation must not
+   produce an error anywhere, while an exporter which stopped (a full Elasticsearch, say) should
+   end up in a Camunda incident;
+3. a BPMS which is not available right now produces an exception - and asking it is the only
+   honest way to find out.
+
+|                  The probe answers                  |                phase one does                |              the dispatch does               |
+|-----------------------------------------------------|----------------------------------------------|----------------------------------------------|
+| `ACTIVE`                                            | the operation runs                           | the operation runs                           |
+| `COMPLETED`                                         | warned no-op                                 | the entry is consumed                        |
+| `UNKNOWN_TO_BPMS`, task operation                   | `TaskNotFoundException` at once              | the entry is consumed (the task is gone)     |
+| `UNKNOWN_TO_BPMS`, workflow operation, hint present | the operation is planned, the caller returns | waits out the window, then repeats the entry |
+| `UNKNOWN_TO_BPMS`, no hint                          | `WorkflowNotFoundException` at once          | the entry is consumed (stale)                |
+| `BPMS_UNAVAILABLE`                                  | exception naming the adapter, at once        | retried twice, then the entry is repeated    |
+
+What makes the hint the dividing line: a hint exists only where VanillaBP knew the answer without
+asking anybody - it started the workflow itself, or a delivery for that workflow arrived from that
+BPMS. It is therefore evidence that the workflow exists, which turns "unknown" from a wrong id
+into a read model running behind. Without a hint and with a unanimous "unknown", nobody has ever
+seen this workflow.
+
+A task probe is not a search, which is why it keeps the fast answer. On Camunda 8 `awarenessOfTask`
+updates the job's timeout and `awarenessOfUserTask` sends an empty user-task update; both are
+engine commands which answer exactly and never touch the exporter. Only `awarenessOfWorkflow` -
+message correlation, the aggregate push, the viewer, the re-dispatch probe - searches the
+secondary storage, and only that branch needed a new answer.
+
+Where an exporter outage becomes visible depends on what the work hangs on, and that boundary is
+part of this decision rather than something to discover later. Work behind a JOB - a
+`@WorkflowTask`, an asynchronous task whose completion never arrives - runs out of the job's
+retries in the cluster and Camunda raises an incident, which is what goal 2 asks for. Work with no
+job behind it, a correlation from a REST endpoint for instance, has nothing which could become an
+incident: there the blocked outbox entry and the counter of blocked entries are the place it shows.
+
+Goal 3 cannot be answered without asking. What is available without a question is the adapter's
+last known health, and that is stale by construction - "was reachable n seconds ago" is either a
+false alarm or a false calm. The probe itself is where unreachability surfaces, and it is one
+question per operation, the price entry 25 accepts. Health may enrich the MESSAGE ("this adapter
+has been reporting itself unreachable since 12:04"); it does not replace the question.
+
+The residual this leaves is the mirror image of the old one and is named rather than closed: a
+workflow operation carrying a stale hint - the workflow ended long ago and is out of the read
+model - is planned instead of refused at the call. Its entry is repeated and finally blocked. It
+used to be an exception after ten seconds of waiting; it is a blocked entry now, and the more
+common case of an ended workflow which the BPMS still knows keeps answering `COMPLETED` and stays
+a warned no-op.

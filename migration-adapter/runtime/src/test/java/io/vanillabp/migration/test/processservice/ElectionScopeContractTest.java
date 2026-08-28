@@ -229,7 +229,8 @@ public class ElectionScopeContractTest {
             List.of(adapters),
             probe.probe(),
             AGGREGATE_OF_THE_SECOND,
-            "the %s of workflow aggregate '%s'".formatted(probe.name(), AGGREGATE_OF_THE_SECOND));
+            "the %s of workflow aggregate '%s'".formatted(probe.name(), AGGREGATE_OF_THE_SECOND),
+            WorkflowLocator.Patience.WAIT_FOR_VISIBILITY);
 
   }
 
