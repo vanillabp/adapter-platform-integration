@@ -31,6 +31,7 @@ import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 import io.vanillabp.integration.delivery.JdbcTaskDeliveryLogAutoConfiguration;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.test.TestPersistenceConfiguration;
+import io.vanillabp.integration.test.TestPhaseTwoOutboxConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.sample.SampleWorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
@@ -112,7 +113,7 @@ public class DeliveryRetentionWiringTest {
         .withPropertyValues(properties)
         .withInitializer(new ConfigDataApplicationContextInitializer())
         .withUserConfiguration(
-            TestPersistenceConfiguration.class,
+            TestPersistenceConfiguration.class, TestPhaseTwoOutboxConfiguration.class,
             SampleWorkflowService.class,
             WorkflowModuleConfiguration.class,
             DataSourceConfiguration.class)

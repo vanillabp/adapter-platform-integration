@@ -12,10 +12,10 @@ import lombok.extern.slf4j.Slf4j;
  * adapter id of the dummy type - the adapter id is a CONSTRUCTOR parameter (see
  * {@link io.vanillabp.adapter.dummy.springboot.DummyAdapterBeanRegistrar}).
  * <p>
- * For testing the two-phase workflow start, the property
- * <code>dummy-adapter.two-phase-commit</code> forces
- * {@link #needsTwoPhaseCommitForStartingWorkflows()} to return <code>true</code>, and
- * optional {@link DummyAdapterPhaseTwoListener} beans are notified on phase two.
+ * Optional {@link DummyAdapterPhaseTwoListener} beans are notified on phase two. The
+ * property <code>dummy-adapter.at-least-once-delivery</code> makes this dummy report
+ * the delivery behaviour of a BPMS which repeats a task it did not learn the outcome
+ * of ({@link #deliversTasksAtLeastOnce()}).
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -23,7 +23,7 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
 
   private final String adapterId;
 
-  private final boolean needsTwoPhaseCommitForStartingWorkflows;
+  private final boolean deliversTasksAtLeastOnce;
 
   private final ObjectProvider<DummyAdapterPhaseTwoListener> phaseTwoListeners;
 
@@ -118,22 +118,14 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
 
   }
 
-  @Override
-  public boolean needsTwoPhaseCommitForStartingWorkflows() {
-
-    return needsTwoPhaseCommitForStartingWorkflows;
-
-  }
-
   /**
-   * A dummy configured as a remote BPMS (two-phase commit) also stands in for its
-   * at-least-once task delivery: the outcome is reported after the local commit, so the
-   * same task may arrive again.
+   * Whether this dummy stands in for a BPMS repeating a task it did not learn the
+   * outcome of - switched on by <code>dummy-adapter.at-least-once-delivery</code>.
    */
   @Override
   public boolean deliversTasksAtLeastOnce() {
 
-    return needsTwoPhaseCommitForStartingWorkflows;
+    return deliversTasksAtLeastOnce;
 
   }
 
@@ -364,11 +356,6 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
         signalName,
         workflowModuleId);
 
-    // like an embedded BPMS: without a two-phase commit the broadcast happens here
-    if (!needsTwoPhaseCommitForStartingWorkflows && (phaseTwoListeners != null)) {
-      phaseTwoListeners.forEach(listener -> listener.broadcastSignal(signalName, false));
-    }
-
   }
 
   @Override
@@ -404,12 +391,6 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
         taskId,
         bpmnProcessId,
         workflowModuleId);
-
-    // like an embedded BPMS: without a two-phase commit the push happens here
-    if (!needsTwoPhaseCommitForStartingWorkflows && (phaseTwoListeners != null)) {
-      final var aggregateId = aggregatePersistence.getAggregateId(workflowAggregate);
-      phaseTwoListeners.forEach(listener -> listener.aggregateChanged(aggregateId, taskId, false));
-    }
 
   }
 

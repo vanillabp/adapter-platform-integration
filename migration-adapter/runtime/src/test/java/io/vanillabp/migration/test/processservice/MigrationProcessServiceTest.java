@@ -161,7 +161,7 @@ public class MigrationProcessServiceTest {
     final var aggregate = new Object();
     when(aggregatePersistence.save(aggregate)).thenReturn(aggregate);
     when(aggregatePersistence.getAggregateId(aggregate)).thenReturn(42L);
-    when(processService.needsTwoPhaseCommitForStartingWorkflows()).thenReturn(false);
+    when(phaseTwoOutboxResolver.resolveFor(Object.class)).thenReturn(phaseTwoOutbox);
 
     testee.startWorkflow(aggregate);
 
@@ -208,11 +208,11 @@ public class MigrationProcessServiceTest {
   public void startWorkflowPassesAttachedAggregateToPhaseOne() {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
-    when(processService.needsTwoPhaseCommitForStartingWorkflows()).thenReturn(false);
+    when(phaseTwoOutboxResolver.resolveFor(Object.class)).thenReturn(phaseTwoOutbox);
 
     final var testee = new MigrationProcessService<>(
         "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), null);
+            .of(processService), phaseTwoOutboxResolver);
 
     // with JPA and generated IDs the attached aggregate returned by save may
     // be another object than the detached one passed to startWorkflow
@@ -231,11 +231,10 @@ public class MigrationProcessServiceTest {
   }
 
   @Test
-  @DisplayName("startWorkflow schedules phase two via the outbox if the adapter requires a two-phase commit")
-  public void startWorkflowSchedulesPhaseTwoIfTwoPhaseCommitIsRequired() {
+  @DisplayName("startWorkflow schedules phase two via the outbox")
+  public void startWorkflowSchedulesPhaseTwo() {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
-    when(processService.needsTwoPhaseCommitForStartingWorkflows()).thenReturn(true);
     when(phaseTwoOutboxResolver.resolveFor(Object.class)).thenReturn(phaseTwoOutbox);
 
     final var testee = new MigrationProcessService<>(
@@ -390,32 +389,10 @@ public class MigrationProcessServiceTest {
   }
 
   @Test
-  @DisplayName("startWorkflow does not schedule phase two if the adapter does not require a two-phase commit")
-  public void startWorkflowDoesNotSchedulePhaseTwoIfNoTwoPhaseCommitIsRequired() {
+  @DisplayName("startWorkflow fails if no outbox is available")
+  public void startWorkflowFailsIfOutboxIsMissing() {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
-    when(processService.needsTwoPhaseCommitForStartingWorkflows()).thenReturn(false);
-
-    final var testee = new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), phaseTwoOutboxResolver);
-
-    final var aggregate = new Object();
-    when(aggregatePersistence.save(aggregate)).thenReturn(aggregate);
-    when(aggregatePersistence.getAggregateId(aggregate)).thenReturn(42L);
-
-    testee.startWorkflow(aggregate);
-
-    verify(phaseTwoOutbox, never()).scheduleStartWorkflow(any(), any(), any(), any());
-
-  }
-
-  @Test
-  @DisplayName("startWorkflow fails if a two-phase commit is required but no outbox is available")
-  public void startWorkflowFailsIfTwoPhaseCommitIsRequiredButOutboxIsMissing() {
-
-    when(processService.getAdapterId()).thenReturn("test-adapter");
-    when(processService.needsTwoPhaseCommitForStartingWorkflows()).thenReturn(true);
 
     final var testee = new MigrationProcessService<>(
         "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
@@ -439,11 +416,10 @@ public class MigrationProcessServiceTest {
   }
 
   @Test
-  @DisplayName("Startup validation fails with remedies if a two-phase commit is required but no outbox resolves")
-  public void startupValidationFailsIfOutboxRequiredButNotResolvable() {
+  @DisplayName("Startup validation fails with remedies if no outbox resolves")
+  public void startupValidationFailsIfOutboxNotResolvable() {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
-    when(processService.needsTwoPhaseCommitForStartingWorkflows()).thenReturn(true);
     when(phaseTwoOutboxResolver.resolveFor(Object.class)).thenReturn(null);
     when(phaseTwoOutboxResolver.remediesDescription()).thenReturn("- add the platform's outbox starter, or");
 
@@ -469,30 +445,10 @@ public class MigrationProcessServiceTest {
   }
 
   @Test
-  @DisplayName("Startup validation resolves nothing if no two-phase commit is required")
-  public void startupValidationResolvesNothingWithoutTwoPhaseCommit() {
-
-    when(processService.getAdapterId()).thenReturn("test-adapter");
-    when(processService.needsTwoPhaseCommitForStartingWorkflows()).thenReturn(false);
-
-    final var testee = new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), phaseTwoOutboxResolver);
-
-    testee.validatePhaseTwoOutboxAtStartup();
-
-    // nothing materializes - an application using only embedded BPMS must not be
-    // forced to have an outbox store
-    verify(phaseTwoOutboxResolver, never()).resolveFor(any());
-
-  }
-
-  @Test
   @DisplayName("The outbox resolved at startup is reused when starting workflows")
   public void outboxResolvedAtStartupIsReused() {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
-    when(processService.needsTwoPhaseCommitForStartingWorkflows()).thenReturn(true);
     when(phaseTwoOutboxResolver.resolveFor(Object.class)).thenReturn(phaseTwoOutbox);
 
     final var testee = new MigrationProcessService<>(
@@ -556,22 +512,6 @@ public class MigrationProcessServiceTest {
             .of(processService), phaseTwoOutboxResolver);
 
     assertEquals("custom-id-4711", testee.convertAggregateId("custom-id-4711"));
-
-  }
-
-  @Test
-  @DisplayName("needsTwoPhaseCommitForStartingWorkflows delegates to the first prioritized adapter")
-  public void needsTwoPhaseCommitForStartingWorkflowsDelegates() {
-
-    when(processService.getAdapterId()).thenReturn("test-adapter");
-    when(processService.needsTwoPhaseCommitForStartingWorkflows()).thenReturn(true, false);
-
-    final var testee = new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), null);
-
-    assertTrue(testee.needsTwoPhaseCommitForStartingWorkflows());
-    assertFalse(testee.needsTwoPhaseCommitForStartingWorkflows());
 
   }
 

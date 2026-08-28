@@ -1,7 +1,6 @@
 package io.vanillabp.integration.test.processservice;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.lenient;
@@ -85,10 +84,8 @@ public class ProcessServiceSpringBeanTest {
   }
 
   @Test
-  @DisplayName("startWorkflow fails if a transaction is needed but none is active")
-  public void startWorkflowFailsWithoutRequiredTransaction() {
-
-    when(migratableProcessService.needsTwoPhaseCommitForStartingWorkflows()).thenReturn(true);
+  @DisplayName("startWorkflow fails if no transaction is active")
+  public void startWorkflowFailsWithoutTransaction() {
 
     final var exception = assertThrowsExactly(
         IllegalStateException.class,
@@ -125,23 +122,6 @@ public class ProcessServiceSpringBeanTest {
         io.vanillabp.spi.process.ProcessDefinitionNotFoundException.class,
         () -> testee.getBpmnXml("definition-1"));
     assertTrue(definitionException.getMessage().contains("definition-1"));
-
-  }
-
-  @Test
-  @DisplayName("startWorkflow succeeds if no transaction is needed")
-  public void startWorkflowSucceedsIfNoTransactionIsNeeded() {
-
-    when(migratableProcessService.needsTwoPhaseCommitForStartingWorkflows()).thenReturn(false);
-
-    final var workflowAggregate = new Object();
-    final var attachedAggregate = new Object();
-    when(aggregatePersistenceAware.save(workflowAggregate)).thenReturn(attachedAggregate);
-    when(aggregatePersistenceAware.getAggregateId(attachedAggregate)).thenReturn(42L);
-
-    final var result = testee.startWorkflow(workflowAggregate);
-
-    assertSame(attachedAggregate, result);
 
   }
 

@@ -33,7 +33,7 @@ import io.vanillabp.spi.process.ProcessService;
 
 /**
  * Integration test of the MongoDB phase-two outbox using the dummy adapter forced to
- * require a two-phase commit (<code>dummy-adapter.two-phase-commit: true</code>). The
+ * require a two-phase commit (<code>dummy-adapter.at-least-once-delivery: true</code>). The
  * TestContainers MongoDB runs as a replica set, so aggregate and outbox entry are
  * written in one MongoDB transaction:
  * <ul>

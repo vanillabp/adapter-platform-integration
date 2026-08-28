@@ -15,6 +15,8 @@ import io.vanillabp.adapter.dummy.springboot.processservice.DummyAdapterProcessS
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.test.TestPersistenceConfiguration;
+import io.vanillabp.integration.test.TestPhaseTwoOutboxConfiguration;
+import io.vanillabp.integration.test.TestTransactionRunnerConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.sample.Aggregate;
 import io.vanillabp.integration.test.sample.SampleWorkflowService;
@@ -138,7 +140,8 @@ public class WorkflowLevelOverrideTest {
         DummyAdapterProcessServiceConfiguration.class,
         WorkflowModuleAutoConfiguration.class,
         SpringBootMigrationAdapterAutoConfiguration.class,
-        TestPersistenceConfiguration.class,
+        TestPersistenceConfiguration.class, TestPhaseTwoOutboxConfiguration.class,
+        TestTransactionRunnerConfiguration.class,
         SampleWorkflowService.class,
         OverriddenWorkflowService.class,
         WorkflowModuleConfiguration.class,

@@ -24,6 +24,8 @@ import io.vanillabp.adapter.dummy.springboot.processservice.DummyAdapterProcessS
 import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.test.TestPersistenceConfiguration;
+import io.vanillabp.integration.test.TestPhaseTwoOutboxConfiguration;
+import io.vanillabp.integration.test.TestTransactionRunnerConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.deployment.DeploymentTest;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
@@ -58,7 +60,8 @@ public class WorkflowServiceDiscoveryTest {
       DummyAdapterProcessServiceConfiguration.class,
       WorkflowModuleAutoConfiguration.class,
       SpringBootMigrationAdapterAutoConfiguration.class,
-      TestPersistenceConfiguration.class,
+      TestPersistenceConfiguration.class, TestPhaseTwoOutboxConfiguration.class,
+      TestTransactionRunnerConfiguration.class,
       WorkflowModuleConfiguration.class,
       DeploymentTest.TestConfig.class);
 

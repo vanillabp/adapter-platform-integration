@@ -22,6 +22,8 @@ import io.vanillabp.integration.deployment.DeploymentAutoConfiguration;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.test.TestPersistenceConfiguration;
+import io.vanillabp.integration.test.TestPhaseTwoOutboxConfiguration;
+import io.vanillabp.integration.test.TestTransactionRunnerConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.sample.SampleWorkflowService;
 import io.vanillabp.integration.test.utils.CapturedOutput;
@@ -176,11 +178,6 @@ public class TwoAdapterTypesDeploymentTest {
         final io.vanillabp.integration.spi.AggregatePersistenceAware<Object> aggregatePersistence,
         final Object workflowAggregateId) {
       return WorkflowAwareness.UNKNOWN_TO_BPMS;
-    }
-
-    @Override
-    public boolean needsTwoPhaseCommitForStartingWorkflows() {
-      return false;
     }
 
     @Override
@@ -362,7 +359,8 @@ public class TwoAdapterTypesDeploymentTest {
             WorkflowModuleAutoConfiguration.class,
             SpringBootMigrationAdapterAutoConfiguration.class,
             DeploymentAutoConfiguration.class,
-            TestPersistenceConfiguration.class,
+            TestPersistenceConfiguration.class, TestPhaseTwoOutboxConfiguration.class,
+            TestTransactionRunnerConfiguration.class,
             SampleWorkflowService.class,
             WorkflowModuleConfiguration.class)
             .run()) {

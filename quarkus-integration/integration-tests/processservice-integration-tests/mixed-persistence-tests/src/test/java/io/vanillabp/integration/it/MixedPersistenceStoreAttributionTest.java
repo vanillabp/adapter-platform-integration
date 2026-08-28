@@ -57,7 +57,7 @@ public class MixedPersistenceStoreAttributionTest {
           .addAsResource(new StringAsset("not parsed by the dummy adapter"), "processes/dummy/JpaProcess.bpmn")
           .addAsResource(new StringAsset("not parsed by the dummy adapter"), "processes/dummy/MongoProcess.bpmn")
           .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
-      .overrideConfigKey("dummy-adapter.two-phase-commit", "true")
+      .overrideConfigKey("dummy-adapter.at-least-once-delivery", "true")
       .overrideConfigKey("quarkus.mongodb.database", MONGO_DATABASE)
       .overrideConfigKey("vanillabp.outbox.poll-interval", "PT0.5S")
       .overrideConfigKey("vanillabp.outbox.attempt-frequency", "PT0.5S");

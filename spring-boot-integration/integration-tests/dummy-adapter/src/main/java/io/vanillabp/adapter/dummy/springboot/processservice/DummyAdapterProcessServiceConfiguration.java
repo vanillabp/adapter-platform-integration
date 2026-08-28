@@ -24,10 +24,10 @@ import io.vanillabp.adapter.dummy.springboot.DummyAdapterOverlayProperties;
 public class DummyAdapterProcessServiceConfiguration {
 
   /**
-   * The property forcing the dummy adapter to require a two-phase commit for starting
-   * workflows. Used by integration tests of
-   * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} implementations.
+   * The property making the dummy adapter report the task delivery of a BPMS which
+   * repeats a task it did not learn the outcome of. Used by the tests of the delivery
+   * record and of {@link io.vanillabp.integration.spi.PhaseTwoOutbox} implementations.
    */
-  public static final String PROPERTY_TWO_PHASE_COMMIT = "dummy-adapter.two-phase-commit";
+  public static final String PROPERTY_AT_LEAST_ONCE_DELIVERY = "dummy-adapter.at-least-once-delivery";
 
 }

@@ -36,7 +36,8 @@ public class WorkflowLevelConfigurationTest {
           // module prioritizes 'test', workflow 'SampleWorkflowService' overrides to 'test2'
           .addAsResource("workflow-level-configuration/application.yaml", "application.yaml")
           .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
-          .addClass(DummyAdapters.class)                              // necessary due to anonymous class in DummyAdapters
+          .addClass(DummyAdapters.class)
+          .addClass(io.vanillabp.integration.test.adapter.TestPhaseTwoOutbox.class)                              // necessary due to anonymous class in DummyAdapters
           .addClass(TestAdapterDeploymentService.class) // deployment service required per prioritized adapter
           .addClass(TestAdapterDeploymentServiceProducer.class)
           .addClass(TestMigratableProcessService.class)             // element bean serving id 'test'

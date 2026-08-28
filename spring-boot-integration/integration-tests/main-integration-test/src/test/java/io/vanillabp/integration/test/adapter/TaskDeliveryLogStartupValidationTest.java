@@ -32,8 +32,8 @@ public class TaskDeliveryLogStartupValidationTest {
 
   /**
    * The stores and the transaction of the application's own, so the boot gets past the
-   * outbox and transaction validations: the dummy adapter needs a two-phase commit here,
-   * and this context has no data source a platform default could use. Nothing is
+   * outbox and transaction validations: this context has no data source a platform
+   * default could use. Nothing is
    * dispatched in these tests, and the runner is a pass-through - what is pinned here is a
    * log message, not a transaction.
    */
@@ -176,14 +176,13 @@ public class TaskDeliveryLogStartupValidationTest {
   @Test
   public void anAdapterRepeatingDeliveriesWithoutAStoreIsReported() {
 
-    // the dummy adapter stands in for a remote BPMS: it needs a two-phase commit for
-    // starting workflows AND may deliver a task more than once. There is no data source
-    // in this context, so no delivery log can be resolved
+    // the dummy adapter stands in for a remote BPMS: it may deliver a task more than
+    // once. There is no data source in this context, so no delivery log can be resolved
     final var messages = loggedByCore(
         () -> bootWith(
             () -> {
             },
-            "dummy-adapter.two-phase-commit=true"));
+            "dummy-adapter.at-least-once-delivery=true"));
 
     // one warning per BPMN process, each naming its own aggregate - the test application
     // has several, so the one of this assertion is picked by the aggregate it names
@@ -214,7 +213,7 @@ public class TaskDeliveryLogStartupValidationTest {
             new Class<?>[]{
                 LegacyDeliveryLogConfiguration.class
             },
-            "dummy-adapter.two-phase-commit=true",
+            "dummy-adapter.at-least-once-delivery=true",
             "vanillabp.delivery.release-on-workflow-end=true"));
 
     final var message = messages
@@ -242,7 +241,7 @@ public class TaskDeliveryLogStartupValidationTest {
             new Class<?>[]{
                 LegacyDeliveryLogConfiguration.class
             },
-            "dummy-adapter.two-phase-commit=true"));
+            "dummy-adapter.at-least-once-delivery=true"));
 
     Assertions.assertTrue(
         messages.stream().noneMatch(message -> message.contains("releaseRecordsOf")),
@@ -258,7 +257,7 @@ public class TaskDeliveryLogStartupValidationTest {
         () -> bootWith(
             () -> {
             },
-            "dummy-adapter.two-phase-commit=true",
+            "dummy-adapter.at-least-once-delivery=true",
             "vanillabp.adapters.test.deduplicate-deliveries=false"));
 
     Assertions.assertTrue(

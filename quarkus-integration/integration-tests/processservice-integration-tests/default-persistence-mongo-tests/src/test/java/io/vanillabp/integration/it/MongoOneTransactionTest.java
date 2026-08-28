@@ -58,7 +58,7 @@ public class MongoOneTransactionTest {
           .addClass(SingleTaskWiringSource.class)
           .addAsResource(new StringAsset("not parsed by the dummy adapter"), "processes/dummy/TestProcess.bpmn")
           .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
-      .overrideConfigKey("dummy-adapter.two-phase-commit", "true")
+      .overrideConfigKey("dummy-adapter.at-least-once-delivery", "true")
       .overrideConfigKey("quarkus.mongodb.database", DATABASE)
       .overrideConfigKey("vanillabp.outbox.poll-interval", "PT0.5S")
       .overrideConfigKey("vanillabp.outbox.attempt-frequency", "PT0.5S");

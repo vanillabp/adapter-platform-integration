@@ -16,6 +16,9 @@ public class MongoActiveRecordWorkflowService {
   @Inject
   ProcessService<MongoActiveRecordAggregate> processService;
 
+  // the aggregate and the outbox entry planning phase two are written in ONE
+  // transaction, so the caller opens one
+  @jakarta.transaction.Transactional
   public MongoActiveRecordAggregate startWorkflow(
       final String id) {
 

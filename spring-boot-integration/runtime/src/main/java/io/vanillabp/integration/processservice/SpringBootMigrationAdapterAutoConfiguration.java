@@ -618,11 +618,10 @@ public class SpringBootMigrationAdapterAutoConfiguration {
 
   /**
    * Startup validation of the process services, run once all singletons exist (so
-   * no persistence infrastructure is materialized mid-bean-construction): for every
-   * process service whose first-priority adapter requires a two-phase commit the
-   * phase-two outbox is resolved (per aggregate - mixed persistence, dedicated
-   * outboxes) - a missing outbox fails the startup with a guiding message instead
-   * of surfacing at the first workflow start. The log of processed task deliveries is
+   * no persistence infrastructure is materialized mid-bean-construction): the
+   * phase-two outbox of every process service is resolved (per aggregate - mixed
+   * persistence, dedicated outboxes) - a missing outbox fails the startup with a
+   * guiding message instead of surfacing at the first workflow start. The log of processed task deliveries is
    * resolved in the same pass: a BPMS repeating deliveries without a log to remember
    * them is reported at startup, not at the first redelivery.
    *
@@ -642,8 +641,8 @@ public class SpringBootMigrationAdapterAutoConfiguration {
           processService
               .getMigrationProcessService()
               .validatePhaseTwoOutboxAtStartup();
-          // after the outbox: an application which configured a remote BPMS without a
-          // store hears about the store first, which is the more specific gap
+          // after the outbox: an application without a store hears about the store
+          // first, which is the more specific gap
           processService
               .getMigrationProcessService()
               .validateTransactionRunnerAtStartup();

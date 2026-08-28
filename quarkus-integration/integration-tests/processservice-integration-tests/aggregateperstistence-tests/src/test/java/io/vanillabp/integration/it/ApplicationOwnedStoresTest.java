@@ -63,7 +63,7 @@ public class ApplicationOwnedStoresTest {
           .addAsResource(new StringAsset("not parsed by the dummy adapter"), "processes/dummy/TestProcess.bpmn")
           .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
       // a remote BPMS, so a start needs the phase-two outbox of the application
-      .overrideConfigKey("dummy-adapter.two-phase-commit", "true");
+      .overrideConfigKey("dummy-adapter.at-least-once-delivery", "true");
 
   @Inject
   AppTxWorkflowService workflowService;

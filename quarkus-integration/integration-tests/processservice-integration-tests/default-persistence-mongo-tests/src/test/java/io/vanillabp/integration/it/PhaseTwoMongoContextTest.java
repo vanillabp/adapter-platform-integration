@@ -43,7 +43,7 @@ public class PhaseTwoMongoContextTest {
           .addClass(SingleTaskWiringSource.class)
           .addAsResource(new StringAsset("not parsed by the dummy adapter"), "processes/dummy/TestProcess.bpmn")
           .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
-      .overrideConfigKey("dummy-adapter.two-phase-commit", "true")
+      .overrideConfigKey("dummy-adapter.at-least-once-delivery", "true")
       // the dummy adapter then reads the aggregate in phase two, like a remote BPMS
       .overrideConfigKey("dummy-adapter.read-aggregate-in-phase-two", "true")
       .overrideConfigKey("quarkus.mongodb.database", "phase-two-context-it")

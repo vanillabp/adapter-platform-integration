@@ -29,7 +29,7 @@ import jakarta.transaction.UserTransaction;
 /**
  * Integration test of the MongoDB-based phase-two outbox on Quarkus using the dummy
  * adapter forced to require a two-phase commit
- * (<code>dummy-adapter.two-phase-commit: true</code>) against a STANDALONE
+ * (<code>dummy-adapter.at-least-once-delivery: true</code>) against a STANDALONE
  * MongoDB started by Quarkus Dev Services (best-effort mode - the only mode of this outbox, see
  * {@code MongoPhaseTwoOutbox}):
  * <ul>

@@ -15,8 +15,7 @@ import io.vanillabp.integration.spi.PhaseTwoOutboxAware;
  * several exist - the platform-default outbox matching the persistence technology
  * managing the aggregate,</li>
  * <li><code>null</code> if no outbox is available at all - the core then fails the
- * startup (if the first-priority adapter needs a two-phase commit) with a guiding
- * message including {@link #remediesDescription()}.</li>
+ * startup with a guiding message including {@link #remediesDescription()}.</li>
  * </ol>
  */
 public interface PhaseTwoOutboxResolver {

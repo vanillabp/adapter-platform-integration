@@ -33,6 +33,7 @@ import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.health.VanillaBpHealthIndicator;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.test.TestPersistenceConfiguration;
+import io.vanillabp.integration.test.TestPhaseTwoOutboxConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.deployment.DeploymentTest;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
@@ -102,7 +103,7 @@ public class ObservabilityTest {
             DummyAdapterProcessServiceConfiguration.class,
             WorkflowModuleAutoConfiguration.class,
             SpringBootMigrationAdapterAutoConfiguration.class,
-            TestPersistenceConfiguration.class,
+            TestPersistenceConfiguration.class, TestPhaseTwoOutboxConfiguration.class,
             TaskProcessingWorkflowService.class,
             WorkflowModuleConfiguration.class,
             WorkflowTaskProcessingTest.TaskProcessingConfiguration.class,
@@ -447,7 +448,8 @@ public class ObservabilityTest {
     return new ApplicationContextRunner()
         .withPropertyValues("spring.config.location=classpath:application.yaml")
         .withInitializer(new ConfigDataApplicationContextInitializer())
-        .withUserConfiguration(WorkflowModuleConfiguration.class, TestPersistenceConfiguration.class)
+        .withUserConfiguration(WorkflowModuleConfiguration.class, TestPersistenceConfiguration.class,
+            TestPhaseTwoOutboxConfiguration.class)
         .withConfiguration(
             AutoConfigurations
                 .of(

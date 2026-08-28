@@ -145,11 +145,11 @@ bean is the extension point for any other persistence technology.
 
 ### Phase-two outbox
 
-Adapters of remote BPMS report `needsTwoPhaseCommitForStartingWorkflows()` and
-require a transaction outbox (`PhaseTwoOutbox` SPI of the
-[migration adapter](../../migration-adapter)) which schedules phase two of starting a
-workflow within the local transaction and dispatches it reliably after the commit
-(also after a crash/restart, retrying with a backoff). Dispatched calls are routed
+Everything an application sends to its BPMS leaves after the caller's transaction
+committed, so every application needs a transaction outbox (`PhaseTwoOutbox` SPI of the
+[migration adapter](../../migration-adapter)): it schedules phase two within the local
+transaction and dispatches it reliably after the commit (also after a crash/restart,
+retrying with a backoff). Dispatched calls are routed
 through the core-owned `PhaseTwoRouter` (see the
 [migration adapter's README](../../migration-adapter/README.md) for the chain and
 the outbox contract — idempotency key, DONE instead of delete, retention). Each
@@ -166,9 +166,8 @@ persistence technology managing the aggregate is used (detected from the
 aggregate's Spring Data repository type - `SpringPhaseTwoOutboxResolver`). Both
 defaults may be active in the SAME application (mixed persistence), each entry
 riding its aggregate's own transaction. Resolution happens AT STARTUP
-(`SmartInitializingSingleton` in the auto-configuration) for every process service
-whose first-priority adapter needs a two-phase commit - a missing outbox fails the
-boot naming the remedies. Every outbox instance needs its OWN store: two
+(`SmartInitializingSingleton` in the auto-configuration) for every process service -
+a missing outbox fails the boot naming the remedies. Every outbox instance needs its OWN store: two
 dispatchers polling the same store would compete and double-dispatch (dedicated
 stores are configured via `vanillabp.outbox.jdbc.table` /
 `vanillabp.outbox.mongo.collection`, or set up as additional user-defined beans -

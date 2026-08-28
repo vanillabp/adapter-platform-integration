@@ -28,7 +28,7 @@ import io.vanillabp.spi.process.WorkflowNotFoundException;
 
 /**
  * Pushing a changed workflow-aggregate to the BPMS. The shape is the one
- * of message correlation - save, probe, phase one or outbox - so these tests cover
+ * of message correlation - save, probe, outbox - so these tests cover
  * what is different: the task id deciding the scope, the missing idempotency key and
  * an ended workflow being a warning instead of a failure.
  */
@@ -54,9 +54,8 @@ public class AggregateChangedTest {
     WorkflowAwareness awareness = WorkflowAwareness.ACTIVE;
 
     RecordingAdapter(
-        final String adapterId,
-        final boolean twoPhase) {
-      super(adapterId, twoPhase);
+        final String adapterId) {
+      super(adapterId);
     }
 
     @Override
@@ -172,13 +171,14 @@ public class AggregateChangedTest {
   }
 
   @Test
-  @DisplayName("An embedded BPMS is given the saved aggregate inside the transaction")
-  public void embeddedBpmsIsPushedInPhaseOne() {
+  @DisplayName("Phase one sees the saved aggregate inside the transaction")
+  public void phaseOneSeesTheSavedAggregate() {
 
-    final var adapter = new RecordingAdapter("first-adapter", false);
+    final var adapter = new RecordingAdapter("first-adapter");
     final var aggregate = new Object();
 
-    final var attached = processService(List.of(adapter), null).aggregateChanged(aggregate, null);
+    final var attached = processService(List.of(adapter), new RecordingOutbox())
+        .aggregateChanged(aggregate, null);
 
     assertSame(aggregate, attached);
     // the aggregate is saved BEFORE the BPMS is told - the caller changed it, and
@@ -195,7 +195,7 @@ public class AggregateChangedTest {
   @DisplayName("The task id travels to the adapter and into the outbox entry")
   public void theTaskIdDecidesTheScope() {
 
-    final var adapter = new RecordingAdapter("first-adapter", true);
+    final var adapter = new RecordingAdapter("first-adapter");
     final var outbox = new RecordingOutbox();
 
     processService(List.of(adapter), outbox).aggregateChanged(new Object(), "task-1");
@@ -222,7 +222,7 @@ public class AggregateChangedTest {
 
     final var outbox = new RecordingOutbox();
 
-    processService(List.of(new RecordingAdapter("first-adapter", true)), outbox)
+    processService(List.of(new RecordingAdapter("first-adapter")), outbox)
         .aggregateChanged(new Object(), null);
 
     assertTrue(outbox.scheduled.getFirst().args().isEmpty());
@@ -233,7 +233,7 @@ public class AggregateChangedTest {
   @DisplayName("An ended workflow is a warning, and the aggregate is saved either way")
   public void aCompletedWorkflowIsNoFailure() {
 
-    final var adapter = new RecordingAdapter("first-adapter", false);
+    final var adapter = new RecordingAdapter("first-adapter");
     adapter.awareness = WorkflowAwareness.COMPLETED;
     final var aggregate = new Object();
 
@@ -249,7 +249,7 @@ public class AggregateChangedTest {
   @DisplayName("A workflow no BPMS knows fails guiding - naming that the aggregate was saved")
   public void anUnknownWorkflowFailsGuiding() {
 
-    final var adapter = new RecordingAdapter("first-adapter", false);
+    final var adapter = new RecordingAdapter("first-adapter");
     adapter.awareness = WorkflowAwareness.UNKNOWN_TO_BPMS;
 
     final var exception = assertThrows(
@@ -265,7 +265,7 @@ public class AggregateChangedTest {
   @DisplayName("Phase two pushes through the BPMS holding the workflow")
   public void phaseTwoElectsByProbing() {
 
-    final var adapter = new RecordingAdapter("first-adapter", true);
+    final var adapter = new RecordingAdapter("first-adapter");
 
     processService(List.of(adapter), new RecordingOutbox()).aggregateChangedPhaseTwo("42", "task-1");
 
@@ -279,7 +279,7 @@ public class AggregateChangedTest {
   @DisplayName("A workflow gone by dispatch time consumes the entry instead of failing")
   public void phaseTwoTolerAtesAStaleEntry() {
 
-    final var adapter = new RecordingAdapter("first-adapter", true);
+    final var adapter = new RecordingAdapter("first-adapter");
     adapter.awareness = WorkflowAwareness.COMPLETED;
 
     processService(List.of(adapter), new RecordingOutbox()).aggregateChangedPhaseTwo("42", null);
@@ -292,7 +292,7 @@ public class AggregateChangedTest {
   @DisplayName("An adapter whose BPMS cannot update a running instance says so")
   public void anAdapterWithoutSupportFailsGuiding() {
 
-    final var adapter = new SendSignalTest.RecordingAdapter("first-adapter", false) {
+    final var adapter = new SendSignalTest.RecordingAdapter("first-adapter") {
 
       @Override
       public WorkflowAwareness awarenessOfWorkflow(

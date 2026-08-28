@@ -20,6 +20,7 @@ import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.test.TestPersistenceConfiguration;
+import io.vanillabp.integration.test.TestPhaseTwoOutboxConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.sample.Aggregate;
 import io.vanillabp.integration.test.sample.SampleWorkflowService;
@@ -169,7 +170,7 @@ public class AggregateChangedTest {
             DummyAdapterProcessServiceConfiguration.class,
             WorkflowModuleAutoConfiguration.class,
             SpringBootMigrationAdapterAutoConfiguration.class,
-            TestPersistenceConfiguration.class,
+            TestPersistenceConfiguration.class, TestPhaseTwoOutboxConfiguration.class,
             SampleWorkflowService.class,
             WorkflowModuleConfiguration.class,
             PushConfiguration.class)
@@ -197,6 +198,7 @@ public class AggregateChangedTest {
 
       final var aggregate = new Aggregate();
 
+      TestPhaseTwoOutboxConfiguration.clear();
       context
           .getBean(org.springframework.transaction.support.TransactionTemplate.class)
           .executeWithoutResult(status -> {
@@ -206,8 +208,11 @@ public class AggregateChangedTest {
 
       Assertions
           .assertEquals(
-              List.of("42/null/phase-one", "42/task-1/phase-one"),
-              context.getBean(RecordingPushes.class).pushed,
+              java.util.Arrays.asList(null, "task-1"),
+              TestPhaseTwoOutboxConfiguration.PLANNED
+                  .stream()
+                  .map(call -> call.args().get(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID))
+                  .toList(),
               "both overloads have to reach the BPMS, and the task id has to travel unchanged");
 
     }
@@ -244,13 +249,14 @@ public class AggregateChangedTest {
                     throw new IllegalStateException("the caller changed their mind");
                   }));
 
-      // an embedded BPMS pushed inside the caller's transaction, so the rollback
-      // undid the write in the engine as well - nothing was scheduled for later
+      // nothing reached the BPMS: the push is planned in the caller's transaction and
+      // written by the store into it, so a rollback takes the entry with it (this
+      // store keeps what it was given, which is why the entry is still visible here)
       Assertions
           .assertEquals(
-              List.of("42/null/phase-one"),
+              List.of(),
               context.getBean(RecordingPushes.class).pushed,
-              "the push happened in phase one; the rollback is the BPMS' business, not the outbox'");
+              "a push must not reach the BPMS before the caller's transaction committed");
 
     }
 

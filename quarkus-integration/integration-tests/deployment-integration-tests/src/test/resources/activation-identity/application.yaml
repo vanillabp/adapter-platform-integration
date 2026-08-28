@@ -1,5 +1,5 @@
 dummy-adapter:
-  two-phase-commit: true
+  at-least-once-delivery: true
 quarkus:
   datasource:
     db-kind: h2

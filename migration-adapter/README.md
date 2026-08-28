@@ -642,26 +642,29 @@ the boot naming both methods.
 Starting a workflow must be atomic with the local database transaction that persists
 the workflow aggregate — otherwise a crash could produce a workflow in the BPMS without
 an aggregate ("ghost workflow") or vice versa. Since remote BPMS cannot take part in
-the local transaction, starting is split into two phases
+the local transaction, every operation which reaches a BPMS is split into two phases
 (`MigratableProcessService`):
 
 - **Phase one** runs inside the local transaction and only ASKS - is the task still
   parked, is a subscription waiting, is such a message declared. It never advances
-  anything, on any adapter: all three adapters answer `true` to
-  `needsTwoPhaseCommitForStartingWorkflows()`, the embedded Camunda 7 included
-  (see decision 2 of that adapter's `DECISIONS.md`: an engine command which loses a
-  concurrency conflict cannot be repeated inside the caller's transaction). An adapter
-  which acted in phase one would find the core skipping the outbox for five
-  operations, so do not build that variant.
-- **Phase two** runs after the local commit. For adapters reporting
-  `needsTwoPhaseCommitForStartingWorkflows()`, the phase-two call is scheduled via
-  the *transaction outbox* SPI `PhaseTwoOutbox`. The outbox is resolved PER
-  AGGREGATE via the platform's `PhaseTwoOutboxResolver` (user-defined
-  `PhaseTwoOutboxAware` beans first, then the platform's default selection) - AT
-  STARTUP, by `MigrationProcessService.validatePhaseTwoOutboxAtStartup()`: if the
-  first-priority adapter needs a two-phase commit and no outbox resolves, the boot
-  fails with a guiding message naming the remedies (the same message remains as a
-  runtime backstop).
+  anything, and there is no switch which would let it: the split is the same for every
+  adapter and every operation, the embedded Camunda 7 included (see decision 2 of that
+  adapter's `DECISIONS.md`: an engine command which loses a concurrency conflict cannot
+  be repeated inside the caller's transaction, because the conflict leaves that
+  transaction rollback-only). An adapter which starts a workflow, completes a task or
+  broadcasts a signal in phase one does it twice: the core schedules phase two either
+  way.
+- **Phase two** runs after the local commit, scheduled via the *transaction outbox* SPI
+  `PhaseTwoOutbox`. The outbox is resolved PER AGGREGATE via the platform's
+  `PhaseTwoOutboxResolver` (user-defined `PhaseTwoOutboxAware` beans first, then the
+  platform's default selection) - AT STARTUP, by
+  `MigrationProcessService.validatePhaseTwoOutboxAtStartup()`: an application without a
+  resolvable outbox cannot send anything to its BPMS, so the boot fails with a guiding
+  message naming the remedies (the same message remains as a runtime backstop).
+
+What stays untouched by this is the INBOUND direction: a BPMS which delivers a task
+inside its own transaction still does, which `TaskInvocationContext.runInCurrentTransaction()`
+reports. Inbound work may share the caller's transaction, outbound work never does.
 
 **What phase two may expect:** the dispatch calls back into the
 application - a remote BPMS adapter loads the workflow aggregate to build what it
@@ -891,9 +894,8 @@ place where neither election nor aggregate applies:
 ### Pushing a changed aggregate (`aggregateChanged`)
 
 `MigrationProcessService.aggregateChanged(aggregate, taskId)` is `correlateMessage` with
-another verb: save the aggregate, locate the BPMS by probing `awarenessOfWorkflow`, write
-in phase one for an embedded BPMS and schedule an `AGGREGATE_CHANGED` outbox entry for a
-remote one. A completed workflow is a warned no-op, an unknown one a
+another verb: save the aggregate, locate the BPMS by probing `awarenessOfWorkflow` and
+schedule an `AGGREGATE_CHANGED` outbox entry. A completed workflow is a warned no-op, an unknown one a
 `WorkflowNotFoundException` naming that the aggregate WAS saved.
 
 Two decisions are worth knowing:
@@ -1024,9 +1026,9 @@ steps:
    covers,
 3. the platform's own runner, if it can work at all - on Spring Boot that means a unique
    `PlatformTransactionManager` exists,
-4. nothing, which ends the boot with a guiding message where the first-priority adapter needs
-   a two-phase commit (such an application cannot start a single workflow). Where every
-   prioritized adapter is embedded, the engine owns the transaction and nothing is demanded.
+4. nothing, which ends the boot with a guiding message: the aggregate and the outbox entry
+   have to be written in one transaction, so such an application cannot start a single
+   workflow.
 
 The resolver also reports what the transaction COVERS (`TransactionCoverage`): a store the
 platform can tell is not covered gets a WARN, a combination it can name a fix for ends the

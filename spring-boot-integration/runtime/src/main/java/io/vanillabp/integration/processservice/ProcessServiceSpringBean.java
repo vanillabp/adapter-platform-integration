@@ -100,7 +100,7 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
   public A startWorkflow(
       final A workflowAggregate) {
 
-    if (migrationProcessService.needsTwoPhaseCommitForStartingWorkflows() && noTransactionIsActive()) {
+    if (noTransactionIsActive()) {
       throw newMissingTransactionException();
     }
 

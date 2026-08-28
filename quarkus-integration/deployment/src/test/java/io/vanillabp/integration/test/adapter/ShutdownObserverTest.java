@@ -35,7 +35,8 @@ public class ShutdownObserverTest {
           .addAsResource("application.yaml")                   // load sample application properties
           .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
           .addAsResource("test-bpmn/test.bpmn", "test-module/processes/dummy/test.bpmn") // makes the pipeline deploy + start the module
-          .addClass(DummyAdapters.class)                           // necessary due to anonymous class in DummyAdapters
+          .addClass(DummyAdapters.class)
+          .addClass(io.vanillabp.integration.test.adapter.TestPhaseTwoOutbox.class)                           // necessary due to anonymous class in DummyAdapters
           .addClass(TestMigratableProcessService.class)             // process service of the mocked adapter
           .addClass(TestAdapterDeploymentService.class) // records the shutdown pass
           .addClass(TestAdapterDeploymentServiceProducer.class))

@@ -32,6 +32,7 @@ import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.test.TestPersistenceConfiguration;
+import io.vanillabp.integration.test.TestPhaseTwoOutboxConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.deployment.DeploymentTest;
 import io.vanillabp.integration.test.utils.CapturedOutput;
@@ -204,7 +205,7 @@ public class WorkflowTaskProcessingTest {
         DummyAdapterProcessServiceConfiguration.class,
         WorkflowModuleAutoConfiguration.class,
         SpringBootMigrationAdapterAutoConfiguration.class,
-        TestPersistenceConfiguration.class,
+        TestPersistenceConfiguration.class, TestPhaseTwoOutboxConfiguration.class,
         TaskProcessingWorkflowService.class,
         WorkflowModuleConfiguration.class,
         TaskProcessingConfiguration.class,
@@ -478,7 +479,7 @@ public class WorkflowTaskProcessingTest {
                 DummyAdapterProcessServiceConfiguration.class,
                 WorkflowModuleAutoConfiguration.class,
                 SpringBootMigrationAdapterAutoConfiguration.class,
-                TestPersistenceConfiguration.class,
+                TestPersistenceConfiguration.class, TestPhaseTwoOutboxConfiguration.class,
                 TaskProcessingWorkflowService.class,
                 WorkflowModuleConfiguration.class,
                 BrokenWiringConfiguration.class,

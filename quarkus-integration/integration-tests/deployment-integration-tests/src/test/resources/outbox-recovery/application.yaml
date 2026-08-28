@@ -4,7 +4,7 @@ quarkus:
     jdbc:
       url: jdbc:h2:file:./target/outbox-recovery-test/outbox;DB_CLOSE_DELAY=-1
 dummy-adapter:
-  two-phase-commit: true
+  at-least-once-delivery: true
 vanillabp:
   adapters:
     demo:

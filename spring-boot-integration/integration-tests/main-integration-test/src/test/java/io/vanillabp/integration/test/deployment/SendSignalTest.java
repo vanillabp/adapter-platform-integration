@@ -18,6 +18,7 @@ import io.vanillabp.adapter.dummy.springboot.processservice.DummyAdapterProcessS
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.test.TestPersistenceConfiguration;
+import io.vanillabp.integration.test.TestPhaseTwoOutboxConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.sample.Aggregate;
 import io.vanillabp.integration.test.sample.SampleWorkflowService;
@@ -31,7 +32,8 @@ import io.vanillabp.spi.process.ProcessService;
  * standing in for a BPMS. Two adapter ids are configured, one of them named at the
  * WORKFLOW level only - the deployment union. What the test pins: the broadcast
  * reaches BOTH of them, because during a migration the workflows waiting for the
- * signal are spread across the BPMS.
+ * signal are spread across the BPMS, and each of them gets an outbox entry of its
+ * own.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class SendSignalTest {
@@ -158,7 +160,7 @@ public class SendSignalTest {
             DummyAdapterProcessServiceConfiguration.class,
             WorkflowModuleAutoConfiguration.class,
             SpringBootMigrationAdapterAutoConfiguration.class,
-            TestPersistenceConfiguration.class,
+            TestPersistenceConfiguration.class, TestPhaseTwoOutboxConfiguration.class,
             SampleWorkflowService.class,
             WorkflowModuleConfiguration.class,
             SignalConfiguration.class)
@@ -184,18 +186,22 @@ public class SendSignalTest {
               ResolvableType.forClassWithGenerics(ProcessService.class, Aggregate.class))
           .getObject();
 
+      TestPhaseTwoOutboxConfiguration.clear();
       context
           .getBean(org.springframework.transaction.support.TransactionTemplate.class)
           .executeWithoutResult(status -> processService.sendSignal("OrderReceived"));
 
-      final var broadcast = context.getBean(RecordingSignals.class).broadcast;
-      // both adapter ids of the module are asked - the dummy adapter is configured
-      // without a two-phase commit, so both broadcast inside the transaction
+      // both adapter ids of the module are asked, and each of them gets an entry of
+      // its own: the broadcast leaves after the commit, never inside the transaction
       Assertions
           .assertEquals(
-              List.of("OrderReceived/phase-one", "OrderReceived/phase-one"),
-              broadcast,
+              List.of("test", "test2"),
+              TestPhaseTwoOutboxConfiguration.PLANNED
+                  .stream()
+                  .map(io.vanillabp.integration.spi.PhaseTwoCall::adapterId)
+                  .toList(),
               "the signal has to reach every BPMS the workflow module is deployed to");
+      Assertions.assertTrue(context.getBean(RecordingSignals.class).broadcast.isEmpty());
 
     }
 
