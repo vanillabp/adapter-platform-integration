@@ -36,6 +36,7 @@ import io.vanillabp.integration.delivery.JdbcTaskDeliveryLogAutoConfiguration;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.test.TestPersistenceConfiguration;
+import io.vanillabp.integration.test.TestPhaseTwoOutboxConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.deployment.DeploymentTest;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
@@ -177,7 +178,7 @@ public class OpenTaskRetentionTest {
             DummyAdapterProcessServiceConfiguration.class,
             WorkflowModuleAutoConfiguration.class,
             SpringBootMigrationAdapterAutoConfiguration.class,
-            TestPersistenceConfiguration.class,
+            TestPersistenceConfiguration.class, TestPhaseTwoOutboxConfiguration.class,
             DeliveryWorkflowService.class,
             WorkflowModuleConfiguration.class,
             OpenTaskConfiguration.class,

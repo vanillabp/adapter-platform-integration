@@ -29,11 +29,11 @@ platform only.
 
 ## Phase-two outbox
 
-Adapters of remote BPMS report `needsTwoPhaseCommitForStartingWorkflows()` and
-require a transaction outbox (`PhaseTwoOutbox` SPI of the
-[migration adapter](../../migration-adapter)) which schedules phase two of starting a
-workflow within the local transaction and dispatches it reliably after the commit
-(also after a crash/restart, retrying with a backoff).
+Everything an application sends to its BPMS leaves after the caller's transaction
+committed, so every application needs a transaction outbox (`PhaseTwoOutbox` SPI of the
+[migration adapter](../../migration-adapter)): it schedules phase two within the local
+transaction and dispatches it reliably after the commit (also after a crash/restart,
+retrying with a backoff).
 
 This module provides an own JDBC/JTA-based default implementation (gruelbox does not
 support JTA): `JdbcPhaseTwoOutbox` writes entries into the table
@@ -65,9 +65,8 @@ used (deactivated - `vanillabp.outbox.jdbc.enabled`/`vanillabp.outbox.mongo.enab
 - or unusable defaults are not considered), and with several active outboxes the
 startup fails guiding towards `PhaseTwoOutboxAware` (Quarkus has no platform-side
 knowledge of which persistence manages an aggregate). Resolution happens AT STARTUP
-via an inherited `StartupEvent` observer on `ProcessServiceBaseCdiBean` whenever
-the first-priority adapter needs a two-phase commit - a missing outbox fails the
-boot naming the remedies. Store names are configurable
+via an inherited `StartupEvent` observer on `ProcessServiceBaseCdiBean` - a missing
+outbox fails the boot naming the remedies. Store names are configurable
 (`vanillabp.outbox.jdbc.table`, `vanillabp.outbox.mongo.collection`); every outbox
 instance needs its OWN store (two dispatchers polling the same store would compete
 and double-dispatch).

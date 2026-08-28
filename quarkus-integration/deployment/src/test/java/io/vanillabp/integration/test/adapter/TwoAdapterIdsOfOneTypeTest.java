@@ -40,7 +40,8 @@ public class TwoAdapterIdsOfOneTypeTest {
           // two adapter ids of the type 'dummy'; the module prioritizes 'test2'
           .addAsResource("two-adapter-ids/application.yaml", "application.yaml")
           .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
-          .addClass(DummyAdapters.class)                              // necessary due to anonymous class in DummyAdapters
+          .addClass(DummyAdapters.class)
+          .addClass(io.vanillabp.integration.test.adapter.TestPhaseTwoOutbox.class)                              // necessary due to anonymous class in DummyAdapters
           .addClass(TestAdapterDeploymentService.class) // deployment service required per prioritized adapter
           .addClass(TestAdapterDeploymentServiceProducer.class)
           .addClass(TestMigratableProcessService.class)             // element bean serving id 'test'

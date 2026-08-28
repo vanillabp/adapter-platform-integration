@@ -402,11 +402,6 @@ public class WorkflowTaskRegistryTest {
       }
 
       @Override
-      public boolean needsTwoPhaseCommitForStartingWorkflows() {
-        return false;
-      }
-
-      @Override
       public void startWorkflowPhaseOne(
           final String workflowModuleId,
           final String bpmnProcessId,
@@ -1496,11 +1491,6 @@ public class WorkflowTaskRegistryTest {
         final io.vanillabp.integration.spi.AggregatePersistenceAware<T> aggregatePersistence,
         final Object workflowAggregateId) {
       return WorkflowAwareness.UNKNOWN_TO_BPMS;
-    }
-
-    @Override
-    public boolean needsTwoPhaseCommitForStartingWorkflows() {
-      return false;
     }
 
     @Override

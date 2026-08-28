@@ -28,8 +28,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 /**
  * Broadcasting a BPMN signal. A signal is not addressed to a workflow, so
  * nothing is probed and no aggregate is touched - what matters is WHO gets it
- * (every BPMS the workflow module is deployed to) and WHEN (inside the transaction
- * for an embedded BPMS, after the commit for a remote one).
+ * (every BPMS the workflow module is deployed to) and WHEN (never inside the
+ * caller's transaction: one outbox entry per BPMS, dispatched after the commit).
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class SendSignalTest {
@@ -45,8 +45,6 @@ public class SendSignalTest {
 
     private final String adapterId;
 
-    private final boolean twoPhase;
-
     final List<String> phaseOne = new LinkedList<>();
 
     final List<String> phaseTwo = new LinkedList<>();
@@ -54,20 +52,13 @@ public class SendSignalTest {
     boolean fail = false;
 
     RecordingAdapter(
-        final String adapterId,
-        final boolean twoPhase) {
+        final String adapterId) {
       this.adapterId = adapterId;
-      this.twoPhase = twoPhase;
     }
 
     @Override
     public String getAdapterId() {
       return adapterId;
-    }
-
-    @Override
-    public boolean needsTwoPhaseCommitForStartingWorkflows() {
-      return twoPhase;
     }
 
     @Override
@@ -332,35 +323,37 @@ public class SendSignalTest {
   @DisplayName("The broadcast reaches every BPMS the workflow module is deployed to")
   public void everyDeployedBpmsIsReached() {
 
-    final var first = new RecordingAdapter("first-adapter", false);
-    final var second = new RecordingAdapter("second-adapter", false);
+    final var first = new RecordingAdapter("first-adapter");
+    final var second = new RecordingAdapter("second-adapter");
+    final var outbox = new RecordingOutbox();
 
-    processService(List.of(first, second), null).sendSignal("OrderReceived");
+    processService(List.of(first, second), outbox).sendSignal("OrderReceived");
 
     // the second adapter serves another workflow of the module, not this process -
     // a broadcast reaching only the elected BPMS would miss the workflows waiting
     // there
     assertEquals(List.of("OrderReceived"), first.phaseOne);
     assertEquals(List.of("OrderReceived"), second.phaseOne);
+    assertEquals(2, outbox.scheduled.size());
 
   }
 
   @Test
-  @DisplayName("A remote BPMS gets an outbox entry per BPMS, carrying its adapter and no aggregate")
-  public void remoteBpmsBroadcastsAfterTheCommit() {
+  @DisplayName("Every BPMS gets an outbox entry carrying its adapter and no aggregate")
+  public void everyBpmsBroadcastsAfterTheCommit() {
 
-    final var embedded = new RecordingAdapter("first-adapter", false);
-    final var remote = new RecordingAdapter("second-adapter", true);
+    final var first = new RecordingAdapter("first-adapter");
+    final var second = new RecordingAdapter("second-adapter");
     final var outbox = new RecordingOutbox();
 
-    processService(List.of(embedded, remote), outbox).sendSignal("OrderReceived");
+    processService(List.of(first, second), outbox).sendSignal("OrderReceived");
 
-    // the embedded BPMS broadcast inside the transaction, the remote one did not
-    assertEquals(List.of("OrderReceived"), embedded.phaseOne);
-    assertTrue(remote.phaseTwo.isEmpty());
+    // nothing was broadcast inside the caller's transaction
+    assertTrue(first.phaseTwo.isEmpty());
+    assertTrue(second.phaseTwo.isEmpty());
 
-    assertEquals(1, outbox.scheduled.size());
-    final var call = outbox.scheduled.getFirst();
+    assertEquals(2, outbox.scheduled.size());
+    final var call = outbox.scheduled.getLast();
     assertEquals("SEND_SIGNAL", call.operation());
     assertEquals("second-adapter", call.adapterId());
     assertEquals("OrderReceived", call.args().get(PhaseTwoCall.ARG_SIGNAL_NAME));
@@ -375,8 +368,8 @@ public class SendSignalTest {
   @DisplayName("Phase two broadcasts to the adapter the entry was written for")
   public void phaseTwoUsesTheRecordedAdapter() {
 
-    final var first = new RecordingAdapter("first-adapter", true);
-    final var second = new RecordingAdapter("second-adapter", true);
+    final var first = new RecordingAdapter("first-adapter");
+    final var second = new RecordingAdapter("second-adapter");
 
     processService(List.of(first, second), new RecordingOutbox())
         .sendSignalPhaseTwo("OrderReceived", "second-adapter");
@@ -392,7 +385,7 @@ public class SendSignalTest {
 
     final var exception = assertThrows(
         IllegalStateException.class,
-        () -> processService(List.of(new RecordingAdapter("first-adapter", true)), new RecordingOutbox())
+        () -> processService(List.of(new RecordingAdapter("first-adapter")), new RecordingOutbox())
             .sendSignalPhaseTwo("OrderReceived", "gone-adapter"));
 
     assertTrue(exception.getMessage().contains("gone-adapter"));
@@ -405,9 +398,9 @@ public class SendSignalTest {
   @DisplayName("One unreachable BPMS does not stop the broadcast to the others")
   public void oneFailingBpmsDoesNotStopTheOthers() {
 
-    final var failing = new RecordingAdapter("first-adapter", false);
+    final var failing = new RecordingAdapter("first-adapter");
     failing.fail = true;
-    final var reachable = new RecordingAdapter("second-adapter", false);
+    final var reachable = new RecordingAdapter("second-adapter");
 
     final var exception = assertThrows(
         IllegalStateException.class,
@@ -448,7 +441,7 @@ public class SendSignalTest {
 
     final var exception = assertThrows(
         IllegalArgumentException.class,
-        () -> processService(List.of(new RecordingAdapter("first-adapter", false)), null).sendSignal("  "));
+        () -> processService(List.of(new RecordingAdapter("first-adapter")), null).sendSignal("  "));
 
     assertTrue(exception.getMessage().contains(PROCESS));
     assertTrue(exception.getMessage().contains(MODULE));

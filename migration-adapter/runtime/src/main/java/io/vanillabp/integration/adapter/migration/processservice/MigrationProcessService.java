@@ -90,12 +90,10 @@ public class MigrationProcessService<A> {
   private final Class<?> aggregateIdType;
 
   /**
-   * Resolves the outbox used to schedule phase two of a two-phase workflow start.
-   * Provided by the platform integration; may be <code>null</code> in tests - if an
-   * adapter reporting
-   * {@link MigratableProcessService#needsTwoPhaseCommitForStartingWorkflows()} is
-   * first-priority, {@link #validatePhaseTwoOutboxAtStartup()} fails the startup
-   * with a guiding message when no outbox can be resolved.
+   * Resolves the outbox used to schedule phase two of every outbound operation.
+   * Provided by the platform integration; may be <code>null</code> in tests -
+   * {@link #validatePhaseTwoOutboxAtStartup()} fails the startup with a guiding
+   * message when no outbox can be resolved.
    */
   private final PhaseTwoOutboxResolver phaseTwoOutboxResolver;
 
@@ -302,31 +300,18 @@ public class MigrationProcessService<A> {
 
   }
 
-  public boolean needsTwoPhaseCommitForStartingWorkflows() {
-
-    return adapterProcessServices
-        .getFirst()
-        .needsTwoPhaseCommitForStartingWorkflows();
-
-  }
-
   /**
-   * Validates AT STARTUP that an outbox is available if the first-priority adapter
-   * requires a two-phase commit for starting workflows - a configuration defect must
-   * not surface first at runtime. If the first-priority adapter does not require a
-   * two-phase commit, nothing is resolved and nothing materializes (an application
-   * using only embedded BPMS must not be forced to have an outbox store). Called by
-   * the platform integration once the application context is ready (not
-   * mid-bean-construction, so no persistence infrastructure is materialized early).
+   * Validates AT STARTUP that an outbox is available - a configuration defect must not
+   * surface first at runtime, and every adapter needs one, because phase two of every
+   * outbound operation is dispatched through it (decision 26 in the repository's
+   * DECISIONS.md). Called by the platform integration once the application context is
+   * ready (not mid-bean-construction, so no persistence infrastructure is materialized
+   * early).
    *
-   * @throws IllegalStateException If an outbox is required but none can be resolved,
-   *           naming the remedies
+   * @throws IllegalStateException If no outbox can be resolved, naming the remedies
    */
   public void validatePhaseTwoOutboxAtStartup() {
 
-    if (!needsTwoPhaseCommitForStartingWorkflows()) {
-      return;
-    }
     if (resolvePhaseTwoOutbox() == null) {
       throw new IllegalStateException(
           buildNoOutboxMessage(
@@ -368,20 +353,17 @@ public class MigrationProcessService<A> {
    * Validates AT STARTUP that the work VanillaBP does on this aggregate has a
    * transaction to run in, and reports what that transaction covers.
    * <p>
-   * Three outcomes. No runner at all ends the boot where the first-priority adapter needs
-   * a two-phase commit: such an application cannot start a single workflow (the aggregate
-   * and the outbox entry have to be written in one transaction), so booting green would
-   * only move the failure to the first workflow. Where every prioritized adapter is
-   * embedded, the engine owns the transaction and VanillaBP joins it, so nothing is
-   * demanded here - the same line the outbox validation draws. A store the platform can
-   * tell is not covered gets a WARN naming what is given up. A combination the platform
-   * can name a fix for ends the boot as well, unless the application accepts unguarded
-   * writes (<code>vanillabp.transactions.unguarded-aggregate-writes</code>) - the message
-   * is then logged as a WARN, because a decision like this has to stay visible.
+   * Three outcomes. No runner at all ends the boot: such an application cannot start a
+   * single workflow (the aggregate and the outbox entry have to be written in one
+   * transaction), so booting green would only move the failure to the first workflow.
+   * A store the platform can tell is not covered gets a WARN naming what is given up. A
+   * combination the platform can name a fix for ends the boot as well, unless the
+   * application accepts unguarded writes
+   * (<code>vanillabp.transactions.unguarded-aggregate-writes</code>) - the message is
+   * then logged as a WARN, because a decision like this has to stay visible.
    *
-   * @throws IllegalStateException If no runner is available for an aggregate whose adapter
-   *           needs a two-phase commit, or the coverage cannot work and unguarded writes
-   *           are not accepted
+   * @throws IllegalStateException If no runner is available, or the coverage cannot work
+   *           and unguarded writes are not accepted
    */
   public void validateTransactionRunnerAtStartup() {
 
@@ -390,17 +372,7 @@ public class MigrationProcessService<A> {
     }
     final var runner = getTransactionRunner(null);
     if (runner == null) {
-      if (needsTwoPhaseCommitForStartingWorkflows()) {
-        throw new IllegalStateException(buildNoTransactionRunnerMessage());
-      }
-      log.debug(
-          "No transaction runner is available for workflow aggregate '{}' - the prioritized adapter "
-              + "of BPMN process '{}' of workflow module '{}' is embedded, so the engine's "
-              + "transaction is the one used",
-          workflowAggregateClass.getName(),
-          bpmnProcessId,
-          workflowModuleId);
-      return;
+      throw new IllegalStateException(buildNoTransactionRunnerMessage());
     }
     log.info(
         "Workflow aggregate '{}' (BPMN process '{}' of workflow module '{}') is processed in the "
@@ -1450,17 +1422,17 @@ public class MigrationProcessService<A> {
       final String adapterId) {
 
     return """
-        Adapter '%s' requires a two-phase commit for starting workflows of BPMN process '%s' \
-        of workflow module '%s', but no PhaseTwoOutbox is available for aggregate '%s'! \
-        To solve this either
+        Everything BPMN process '%s' of workflow module '%s' sends to its BPMS is dispatched \
+        through a PhaseTwoOutbox after the caller's transaction committed, but none is available \
+        for aggregate '%s' (adapter '%s')! To solve this either
         %s
         - define your own bean implementing io.vanillabp.integration.spi.PhaseTwoOutbox \
         (assign it to specific aggregates via a io.vanillabp.integration.spi.PhaseTwoOutboxAware bean)."""
         .formatted(
-            adapterId,
             bpmnProcessId,
             workflowModuleId,
             workflowAggregateClass.getName(),
+            adapterId,
             phaseTwoOutboxResolver == null
                 ? "- provide a PhaseTwoOutboxResolver (platform integration), or"
                 : phaseTwoOutboxResolver.remediesDescription());
@@ -1496,24 +1468,22 @@ public class MigrationProcessService<A> {
 
     adapter.startWorkflowPhaseOne(workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, attachedAggregate);
 
-    if (adapter.needsTwoPhaseCommitForStartingWorkflows()) {
-      // backstop only: the outbox was already resolved and validated at startup
-      // (validatePhaseTwoOutboxAtStartup) - this fires only if that was skipped
-      final var outbox = resolvePhaseTwoOutbox();
-      if (outbox == null) {
-        throw new IllegalStateException(
-            buildNoOutboxMessage(adapter.getAdapterId()));
-      }
-      final var scheduled = outbox.scheduleStartWorkflow(
-          workflowModuleId,
-          bpmnProcessId,
-          aggregateId,
-          adapter.getAdapterId());
-      if (!scheduled) {
-        reportDiscardedSchedule(
-            "starting the workflow of aggregate '%s' (BPMN process '%s' of workflow module '%s')"
-                .formatted(aggregateId, bpmnProcessId, workflowModuleId));
-      }
+    // backstop only: the outbox was already resolved and validated at startup
+    // (validatePhaseTwoOutboxAtStartup) - this fires only if that was skipped
+    final var outbox = resolvePhaseTwoOutbox();
+    if (outbox == null) {
+      throw new IllegalStateException(
+          buildNoOutboxMessage(adapter.getAdapterId()));
+    }
+    final var scheduled = outbox.scheduleStartWorkflow(
+        workflowModuleId,
+        bpmnProcessId,
+        aggregateId,
+        adapter.getAdapterId());
+    if (!scheduled) {
+      reportDiscardedSchedule(
+          "starting the workflow of aggregate '%s' (BPMN process '%s' of workflow module '%s')"
+              .formatted(aggregateId, bpmnProcessId, workflowModuleId));
     }
 
     // the workflow belongs to this adapter from now on, which the next operation on
@@ -1649,10 +1619,9 @@ public class MigrationProcessService<A> {
    * Completes an asynchronous task (a <code>&#64;WorkflowTask</code> method with a
    * <code>&#64;TaskId</code> parameter returned without completing). The aggregate
    * is saved, the BPMS holding the task is located by probing the prioritized
-   * adapters ({@link WorkflowLocator}), and the completion runs in phase one
-   * (embedded BPMS - entirely within the caller's transaction) or is scheduled
-   * through the phase-two outbox (remote BPMS - after a non-advancing phase-one
-   * check).
+   * adapters ({@link WorkflowLocator}), a non-advancing phase-one check runs inside
+   * the caller's transaction and the completion itself is scheduled through the
+   * phase-two outbox.
    *
    * @param workflowAggregate The workflow aggregate
    * @param taskId The task's ID (as reported to the <code>&#64;TaskId</code>
@@ -1854,8 +1823,8 @@ public class MigrationProcessService<A> {
   /**
    * Correlates a message with the aggregate's workflow: the aggregate is saved,
    * the BPMS running the workflow is located by probing
-   * {@code awarenessOfWorkflow}, and the correlation runs in phase one (embedded)
-   * or is scheduled through the outbox (remote). PAYLOAD DOCTRINE: no message
+   * {@code awarenessOfWorkflow}, and the correlation is scheduled through the
+   * outbox. PAYLOAD DOCTRINE: no message
    * content travels to the BPMS - only the message name and the optional
    * correlation id.
    *
@@ -1909,20 +1878,18 @@ public class MigrationProcessService<A> {
         workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, attachedAggregate, messageName,
         correlationId);
 
-    if (adapter.needsTwoPhaseCommitForStartingWorkflows()) {
-      final var outbox = resolvePhaseTwoOutbox();
-      if (outbox == null) {
-        throw new IllegalStateException(
-            buildNoOutboxMessage(adapter.getAdapterId()));
-      }
-      final var scheduled = outbox
-          .scheduleCorrelateMessage(workflowModuleId, bpmnProcessId, aggregateId, messageName, correlationId);
-      if (!scheduled) {
-        reportDiscardedSchedule(
-            "correlating message '%s' (correlation id '%s') with the workflow of aggregate '%s' "
-                .formatted(messageName, correlationId, aggregateId) + "(BPMN process '%s' of workflow module '%s')"
-                    .formatted(bpmnProcessId, workflowModuleId));
-      }
+    final var outbox = resolvePhaseTwoOutbox();
+    if (outbox == null) {
+      throw new IllegalStateException(
+          buildNoOutboxMessage(adapter.getAdapterId()));
+    }
+    final var scheduled = outbox
+        .scheduleCorrelateMessage(workflowModuleId, bpmnProcessId, aggregateId, messageName, correlationId);
+    if (!scheduled) {
+      reportDiscardedSchedule(
+          "correlating message '%s' (correlation id '%s') with the workflow of aggregate '%s' "
+              .formatted(messageName, correlationId, aggregateId) + "(BPMN process '%s' of workflow module '%s')"
+                  .formatted(bpmnProcessId, workflowModuleId));
     }
 
     return attachedAggregate;
@@ -1932,8 +1899,7 @@ public class MigrationProcessService<A> {
   /**
    * Pushes a changed workflow-aggregate to the BPMS holding its workflow: the
    * aggregate is saved, the BPMS is located by probing {@code awarenessOfWorkflow},
-   * and the push runs in phase one (embedded) or is scheduled through the outbox
-   * (remote).
+   * and the push is scheduled through the outbox.
    * <p>
    * WHICH values travel is the sync model's business ({@code @SyncWithBPMS}), not
    * this method's. WHERE they land depends on the task ID: <code>null</code> means
@@ -1988,16 +1954,14 @@ public class MigrationProcessService<A> {
     adapter.aggregateChangedPhaseOne(
         workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, attachedAggregate, taskId);
 
-    if (adapter.needsTwoPhaseCommitForStartingWorkflows()) {
-      final var outbox = resolvePhaseTwoOutbox();
-      if (outbox == null) {
-        throw new IllegalStateException(
-            buildNoOutboxMessage(adapter.getAdapterId()));
-      }
-      // no idempotency key, so nothing can discard it (decision 2 in the repository's
-      // DECISIONS.md: the values are read at dispatch time) - the answer is always true
-      outbox.scheduleAggregateChanged(workflowModuleId, bpmnProcessId, aggregateId, taskId);
+    final var outbox = resolvePhaseTwoOutbox();
+    if (outbox == null) {
+      throw new IllegalStateException(
+          buildNoOutboxMessage(adapter.getAdapterId()));
     }
+    // no idempotency key, so nothing can discard it (decision 2 in the repository's
+    // DECISIONS.md: the values are read at dispatch time) - the answer is always true
+    outbox.scheduleAggregateChanged(workflowModuleId, bpmnProcessId, aggregateId, taskId);
 
     return attachedAggregate;
 
@@ -2114,16 +2078,14 @@ public class MigrationProcessService<A> {
     for (final var adapter : targets) {
       try {
         adapter.sendSignalPhaseOne(workflowModuleId, bpmnProcessId, signalName);
-        if (adapter.needsTwoPhaseCommitForStartingWorkflows()) {
-          final var outbox = resolvePhaseTwoOutbox();
-          if (outbox == null) {
-            throw new IllegalStateException(
-                buildNoOutboxMessage(adapter.getAdapterId()));
-          }
-          // a broadcast signal has no idempotency key, so nothing can discard it - the
-          // answer is always true
-          outbox.scheduleSendSignal(workflowModuleId, bpmnProcessId, signalName, adapter.getAdapterId());
+        final var outbox = resolvePhaseTwoOutbox();
+        if (outbox == null) {
+          throw new IllegalStateException(
+              buildNoOutboxMessage(adapter.getAdapterId()));
         }
+        // a broadcast signal has no idempotency key, so nothing can discard it - the
+        // answer is always true
+        outbox.scheduleSendSignal(workflowModuleId, bpmnProcessId, signalName, adapter.getAdapterId());
       } catch (final RuntimeException e) {
         // every BPMS is asked before the first failure is reported: a broadcast
         // which stopped at the first unreachable BPMS would leave the others
@@ -2252,19 +2214,17 @@ public class MigrationProcessService<A> {
     adapter.startWorkflowByMessagePhaseOne(
         workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, attachedAggregate, messageName);
 
-    if (adapter.needsTwoPhaseCommitForStartingWorkflows()) {
-      final var outbox = resolvePhaseTwoOutbox();
-      if (outbox == null) {
-        throw new IllegalStateException(
-            buildNoOutboxMessage(adapter.getAdapterId()));
-      }
-      final var scheduled = outbox.scheduleStartWorkflowByMessage(
-          workflowModuleId, bpmnProcessId, aggregateId, messageName, adapter.getAdapterId());
-      if (!scheduled) {
-        reportDiscardedSchedule(
-            "starting the workflow of aggregate '%s' by message '%s' (BPMN process '%s' of workflow "
-                .formatted(aggregateId, messageName, bpmnProcessId) + "module '%s')".formatted(workflowModuleId));
-      }
+    final var outbox = resolvePhaseTwoOutbox();
+    if (outbox == null) {
+      throw new IllegalStateException(
+          buildNoOutboxMessage(adapter.getAdapterId()));
+    }
+    final var scheduled = outbox.scheduleStartWorkflowByMessage(
+        workflowModuleId, bpmnProcessId, aggregateId, messageName, adapter.getAdapterId());
+    if (!scheduled) {
+      reportDiscardedSchedule(
+          "starting the workflow of aggregate '%s' by message '%s' (BPMN process '%s' of workflow "
+              .formatted(aggregateId, messageName, bpmnProcessId) + "module '%s')".formatted(workflowModuleId));
     }
 
     rememberWorkflowAdapter(aggregateId, adapter.getAdapterId());
@@ -2655,17 +2615,15 @@ public class MigrationProcessService<A> {
     final var adapter = location.adapter();
     phaseOne.run(adapter, attachedAggregate);
 
-    if (adapter.needsTwoPhaseCommitForStartingWorkflows()) {
-      final var outbox = resolvePhaseTwoOutbox();
-      if (outbox == null) {
-        throw new IllegalStateException(
-            buildNoOutboxMessage(adapter.getAdapterId()));
-      }
-      if (!outboxAction.schedule(outbox, aggregateId)) {
-        reportDiscardedSchedule(operationDescription
-            + " "
-            + subject);
-      }
+    final var outbox = resolvePhaseTwoOutbox();
+    if (outbox == null) {
+      throw new IllegalStateException(
+          buildNoOutboxMessage(adapter.getAdapterId()));
+    }
+    if (!outboxAction.schedule(outbox, aggregateId)) {
+      reportDiscardedSchedule(operationDescription
+          + " "
+          + subject);
     }
 
     return attachedAggregate;

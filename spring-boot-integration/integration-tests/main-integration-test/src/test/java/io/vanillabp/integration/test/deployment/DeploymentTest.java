@@ -20,6 +20,8 @@ import io.vanillabp.integration.deployment.SpringBootDeploymentService;
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.test.TestPersistenceConfiguration;
+import io.vanillabp.integration.test.TestPhaseTwoOutboxConfiguration;
+import io.vanillabp.integration.test.TestTransactionRunnerConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.sample.SampleWorkflowService;
 import io.vanillabp.integration.test.utils.CapturedOutput;
@@ -68,7 +70,8 @@ public class DeploymentTest {
             DummyExtensionWiringConfiguration.class,
             WorkflowModuleAutoConfiguration.class,
             SpringBootMigrationAdapterAutoConfiguration.class,
-            TestPersistenceConfiguration.class,
+            TestPersistenceConfiguration.class, TestPhaseTwoOutboxConfiguration.class,
+            TestTransactionRunnerConfiguration.class,
             SampleWorkflowService.class,
             WorkflowModuleConfiguration.class,
             TestConfig.class)

@@ -8,7 +8,7 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
 
   private final String adapterId;
 
-  private final boolean needsTwoPhaseCommitForStartingWorkflows;
+  private final boolean deliversTasksAtLeastOnce;
 
   private final boolean readsAggregateInPhaseTwo;
 
@@ -20,14 +20,14 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
 
   public MigratableProcessService(
       final String adapterId,
-      final boolean needsTwoPhaseCommitForStartingWorkflows,
+      final boolean deliversTasksAtLeastOnce,
       final boolean readsAggregateInPhaseTwo,
       final Instance<DummyPhaseTwoListener> phaseTwoListeners,
       final Instance<DummyTaskAwarenessSource> taskAwarenessSources,
       final Instance<DummyViewerSource> viewerSources) {
 
     this.adapterId = adapterId;
-    this.needsTwoPhaseCommitForStartingWorkflows = needsTwoPhaseCommitForStartingWorkflows;
+    this.deliversTasksAtLeastOnce = deliversTasksAtLeastOnce;
     this.readsAggregateInPhaseTwo = readsAggregateInPhaseTwo;
     this.phaseTwoListeners = phaseTwoListeners;
     this.taskAwarenessSources = taskAwarenessSources;
@@ -115,18 +115,6 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
   }
 
   @Override
-  public boolean needsTwoPhaseCommitForStartingWorkflows() {
-
-    return needsTwoPhaseCommitForStartingWorkflows;
-
-  }
-
-  /**
-   * A dummy configured as a remote BPMS (two-phase commit) also stands in for its
-   * at-least-once task delivery: the outcome is reported after the local commit, so the
-   * same task may arrive again.
-   */
-  @Override
   public boolean isPhaseTwoFailureRepeatable(
       final Throwable failure) {
 
@@ -146,10 +134,14 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
 
   }
 
+  /**
+   * Whether this dummy stands in for a BPMS repeating a task it did not learn the
+   * outcome of - switched on by <code>dummy-adapter.at-least-once-delivery</code>.
+   */
   @Override
   public boolean deliversTasksAtLeastOnce() {
 
-    return needsTwoPhaseCommitForStartingWorkflows;
+    return deliversTasksAtLeastOnce;
 
   }
 
@@ -323,13 +315,6 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
       final String bpmnProcessId,
       final String signalName) {
 
-    // like an embedded BPMS: without a two-phase commit the broadcast happens here
-    if (!needsTwoPhaseCommitForStartingWorkflows && (phaseTwoListeners != null)) {
-      phaseTwoListeners
-          .stream()
-          .forEach(listener -> listener.broadcastSignal(signalName, false));
-    }
-
   }
 
   @Override
@@ -353,14 +338,6 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
       final AggregatePersistenceAware<A> aggregatePersistence,
       final A workflowAggregate,
       final String taskId) {
-
-    // like an embedded BPMS: without a two-phase commit the push happens here
-    if (!needsTwoPhaseCommitForStartingWorkflows && (phaseTwoListeners != null)) {
-      final var aggregateId = aggregatePersistence.getAggregateId(workflowAggregate);
-      phaseTwoListeners
-          .stream()
-          .forEach(listener -> listener.aggregateChanged(aggregateId, taskId, false));
-    }
 
   }
 

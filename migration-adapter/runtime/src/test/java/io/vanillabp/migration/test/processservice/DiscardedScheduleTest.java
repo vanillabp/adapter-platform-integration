@@ -128,7 +128,6 @@ public class DiscardedScheduleTest {
     @SuppressWarnings("unchecked")
     final MigratableProcessService<Object> adapter = mock(MigratableProcessService.class);
     lenient().when(adapter.getAdapterId()).thenReturn(ADAPTER);
-    lenient().when(adapter.needsTwoPhaseCommitForStartingWorkflows()).thenReturn(true);
     lenient()
         .when(adapter.awarenessOfWorkflow(any(), any(), any()))
         .thenReturn(WorkflowAwareness.ACTIVE);

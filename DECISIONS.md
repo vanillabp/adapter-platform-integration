@@ -519,3 +519,32 @@ documented per adapter rather than closed. And an adapter which cannot be asked 
 answers optimistically, which is safe while it is the only BPMS configured and is the reason
 a migration setup containing such an adapter routes by list order (see the wiki page
 "BPMS migration").
+
+### 26. There is no switch which lets an adapter act in phase one
+
+`MigratableProcessService` used to ask every adapter whether it needs a two-phase commit for
+starting workflows, and the core skipped the outbox for six operations where the answer was
+`false`: the start, the start by message, a task completion, a cancellation, a correlated
+message, a broadcast signal and a pushed aggregate. The method was named after starts, gated
+much more than starts, and described a variant which acts in phase one and leaves phase two
+empty. No adapter ever answered `false`, Camunda 7 deliberately so although it runs embedded
+(decision 2 of that adapter's log: a command which loses a concurrency conflict cannot be
+repeated inside the caller's transaction, because the conflict leaves that transaction
+rollback-only). What the switch really offered was a way to build an adapter the core does
+not run, and the next adapter is written by a team we are not sitting next to.
+
+So the method is gone rather than renamed, and entry 3 holds without exception: phase one
+asks, phase two acts, for every adapter and every operation. Two things follow from it which
+were conditional before and are unconditional now. Every application needs a resolvable
+`PhaseTwoOutbox`, and needs it at startup, because there is no adapter left which sends
+nothing through it. And every application needs a transaction VanillaBP can run its work in,
+because the aggregate and the outbox entry are written together or not at all.
+
+The embedded fast path is not forbidden forever; it is simply not part of this SPI. Bringing
+it back is a new decision here, with the core change which makes the core skip the outbox in
+exactly the cases the adapter names, and it will not come back as a sentence in a javadoc
+with no code behind it.
+
+What the removal does NOT touch is the inbound direction. A BPMS which delivers a task inside
+its own transaction still does, and `TaskInvocationContext.runInCurrentTransaction()` is where
+an adapter says so.

@@ -58,10 +58,9 @@ public class PersistedAdapterIdTest {
   }
 
   /**
-   * A REMOTE adapter: it needs a two-phase commit and may repeat a delivery, which is what
-   * makes the platform's own validations resolve both stores - the state this check runs
-   * in. An application whose adapters are all embedded persists neither entries nor
-   * delivery records, so there is nothing to ask about either.
+   * A REMOTE adapter: it may repeat a delivery, which is what makes the platform resolve
+   * a delivery log next to the outbox every application has - the state this check runs
+   * in.
    */
   private static MigratableProcessService<Object> adapter() {
 
@@ -134,13 +133,6 @@ public class PersistedAdapterIdTest {
           final String taskId) {
 
         return io.vanillabp.integration.adapter.spi.WorkflowAwareness.UNKNOWN_TO_BPMS;
-
-      }
-
-      @Override
-      public boolean needsTwoPhaseCommitForStartingWorkflows() {
-
-        return true;
 
       }
 

@@ -56,11 +56,35 @@ import io.vanillabp.spi.process.WorkflowHistory;
  * only be as right as the answers it gets, which is what
  * {@code ElectionScopeContractTest} of the migration adapter holds.
  *
+ * <h2>The two-phase contract</h2>
+ *
+ * Every operation which leaves for the BPMS is split in two, and the split is the same
+ * for every adapter and every operation: <b>phase one asks, phase two acts</b>. Phase
+ * one runs inside the transaction the application called from and may only ask
+ * questions and take locks - does the task still exist, is a subscription waiting for
+ * this message - so a wrong call fails where the application made it, with a stack
+ * trace still pointing at business code. Phase two runs after that transaction
+ * committed, dispatched through the {@link PhaseTwoOutbox}, and is the only place
+ * where the BPMS is changed.
+ * <p>
+ * This holds whether the BPMS is remote or runs embedded in the application: an
+ * embedded engine could commit with the application, but it cannot repeat a command
+ * which lost a concurrency conflict inside the caller's transaction, because the
+ * conflict leaves that transaction rollback-only. There is therefore no switch an
+ * adapter could throw to act in phase one, and an adapter which starts a workflow,
+ * completes a task or broadcasts a signal in phase one breaks the contract silently:
+ * the core will schedule phase two regardless, and the operation happens twice.
+ * <p>
+ * The other direction is untouched by this. A BPMS which delivers a task inside its
+ * own transaction still does so, which is what
+ * {@link io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext#runInCurrentTransaction()}
+ * reports: inbound work may share the caller's transaction, outbound work never does.
+ *
  * <p>
  * Two rules of this interface are written down where several places rely on them: an adapter
  * answers the election only for its own scope (decision 4 in the repository's DECISIONS.md), and
  * phase one asks while phase two acts
- * (decision 3 in the repository's DECISIONS.md).
+ * (decision 3 in the repository's DECISIONS.md, which entry 26 completed by removing the switch).
  *
  * @param <A> The aggregate type
  */
@@ -209,11 +233,6 @@ public interface MigratableProcessService<A> {
       String taskId);
 
   /**
-   * @return Whether the adapter needs a local transaction for starting a workflow properly.
-   */
-  boolean needsTwoPhaseCommitForStartingWorkflows();
-
-  /**
    * Whether this BPMS may deliver the same task more than once, so the core has to
    * remember what it processed (see
    * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). True for every REMOTE
@@ -309,34 +328,15 @@ public interface MigratableProcessService<A> {
   }
 
   /**
-   * Start a new workflow. Phase one of the two-phase commit. This phase is executed immediately before the
-   * local transaction is committed.
+   * Start a new workflow. Phase one of the two-phase commit, executed immediately
+   * before the local transaction is committed.
    * <p>
-   * Possible implementations:
-   * <ol>
-   *   <li>For BPM systems with eventual consistency this method may be used to...
-   *     <ol>
-   *       <li>
-   *         ...test for availability of a conflicting workflow instance (same BPMN process ID
-   *         and same aggregate ID).
-   *       </li>
-   *       <li>
-   *         ...create a lock for starting this workflow instance if this is supported by the BPMS.
-   *       </li>
-   *     </ol>
-   *   </li>
-   *   <li>
-   *     For embedded BPM systems using the same local transaction as the application this method may be used to...
-   *     <ol>
-   *       <li>
-   *         ...start the workflow without executing the next activities.
-   *       </li>
-   *       <li>
-   *         ...create a lock for starting this workflow instance if this is supported by the BPMS.
-   *       </li>
-   *     </ol>
-   *   </li>
-   * </ol>
+   * Contract (see the two-phase rules): this phase MUST NOT start the workflow, no
+   * matter whether the BPMS is remote or embedded. What it may do is ask and prepare:
+   * test whether a conflicting workflow instance exists (same BPMN process ID and same
+   * aggregate ID), or take a lock for the start where the BPMS offers one. The workflow
+   * itself is created in {@link #startWorkflowPhaseTwo} after the commit, so a
+   * rolled-back transaction leaves no workflow behind.
    *
    * @param workflowModuleId The ID of the workflow module the workflow belongs to
    * @param bpmnProcessId The BPMN process ID of the workflow to be started
@@ -364,31 +364,8 @@ public interface MigratableProcessService<A> {
    * idempotency key. In this situation the method has to return normally without
    * starting a second workflow instance.
    * <p>
-   * Possible implementations:
-   * <ol>
-   *   <li>For BPM systems with eventual consistency this method may be used to...
-   *     <ol>
-   *       <li>
-   *         ...start the workflow.
-   *       </li>
-   *       <li>
-   *         ...release the lock and start this workflow instance if this is supported by the BPMS.
-   *       </li>
-   *     </ol>
-   *   </li>
-   *   <li>
-   *     For embedded BPM systems using the same local transaction as the application this method may be used to...
-   *     <ol>
-   *       <li>
-   *         ...do nothing if workflow is already started in phase one.
-   *       </li>
-   *       <li>
-   *         ...release the lock and start this workflow instance if this is supported by the BPMS.
-   *       </li>
-   *     </ol>
-   *   </li>
-   * </ol>
-   *
+   * This is where the workflow is created, and where a lock taken in phase one is
+   * released.
    * <p>
    * How the workflow aggregate's ID is stored in the BPMS is the adapter's decision:
    * e.g. Camunda 7 uses its dedicated business key, whereas Camunda 8 stores the
@@ -414,12 +391,10 @@ public interface MigratableProcessService<A> {
    * adapter answered {@link WorkflowAwareness#ACTIVE} for the task.
    * <p>
    * Contract (see the two-phase rules): this phase MUST NOT advance the BPMN
-   * process. Embedded BPMS sharing the local transaction complete the task entirely
-   * here (a rollback takes the engine state with it); remote BPMS only perform a
-   * NON-ADVANCING existence check whose sole purpose is to abort the local
-   * transaction early if the task is already gone - ideally registered as a
-   * pre-commit hook (transaction synchronization) to minimize the window between
-   * check and phase two. The actual completion of a remote BPMS happens in
+   * process. All it does is a NON-ADVANCING existence check whose sole purpose is to
+   * abort the local transaction early if the task is already gone - ideally registered
+   * as a pre-commit hook (transaction synchronization) to minimize the window between
+   * check and phase two. The completion itself happens in
    * {@link #completeTaskPhaseTwo}.
    *
    * @param workflowModuleId The ID of the workflow module the workflow belongs to
@@ -437,8 +412,7 @@ public interface MigratableProcessService<A> {
 
   /**
    * Complete an asynchronous task - phase two, dispatched through the outbox after
-   * the local transaction was committed. Only called for adapters requiring a
-   * two-phase commit; embedded BPMS completed the task in phase one already.
+   * the local transaction was committed. This is where the task is completed.
    * <p>
    * <strong>Idempotency contract:</strong> at-least-once semantics - the task may
    * already be gone (completed by a previous dispatch attempt, or the workflow
@@ -499,8 +473,7 @@ public interface MigratableProcessService<A> {
 
   /**
    * Complete a USER task - phase one, same transactional contract as
-   * {@link #completeTaskPhaseOne} (embedded: complete entirely here; remote:
-   * non-advancing existence check only).
+   * {@link #completeTaskPhaseOne}: a non-advancing existence check, nothing else.
    *
    * @param workflowModuleId The ID of the workflow module the workflow belongs to
    * @param bpmnProcessId The BPMN process ID of the workflow
@@ -668,8 +641,7 @@ public interface MigratableProcessService<A> {
 
   /**
    * Start a new workflow by a message start event - phase one; start semantics
-   * apply ({@link #startWorkflowPhaseOne}: embedded BPMS start entirely here,
-   * remote BPMS validate only).
+   * apply ({@link #startWorkflowPhaseOne}: validate, never start).
    *
    * @param workflowModuleId The ID of the workflow module the workflow belongs to
    * @param bpmnProcessId The BPMN process ID of the workflow
@@ -705,9 +677,8 @@ public interface MigratableProcessService<A> {
   /**
    * Broadcast a BPMN signal - phase one, executed inside the caller's transaction.
    * A signal is not addressed to a workflow, so nothing is probed and no aggregate
-   * is involved: an EMBEDDED BPMS broadcasts here (a rollback takes the broadcast
-   * with it), a remote BPMS does nothing and broadcasts in
-   * {@link #sendSignalPhaseTwo} after the commit.
+   * is involved: there is nothing to check either, which is why the broadcast itself
+   * waits for {@link #sendSignalPhaseTwo} like every other outbound operation.
    * <p>
    * The signal name arrives as the application modelled it; scoping identifiers is
    * the adapter's business (see
@@ -731,8 +702,7 @@ public interface MigratableProcessService<A> {
 
   /**
    * Broadcast a BPMN signal - phase two, dispatched through the outbox after the
-   * local transaction was committed. Only called for adapters requiring a two-phase
-   * commit; embedded BPMS broadcast in phase one already.
+   * local transaction was committed. This is where the signal is broadcast.
    * <p>
    * <strong>Idempotency contract:</strong> there is NONE. A signal carries no key a
    * BPMS could deduplicate by, so a redelivered entry broadcasts a second time -
@@ -754,9 +724,9 @@ public interface MigratableProcessService<A> {
   /**
    * Push the values shared with the BPMS ({@code @SyncWithBPMS}) of a changed
    * workflow-aggregate - phase one, executed inside the caller's transaction AFTER
-   * the adapter answered {@link WorkflowAwareness#ACTIVE} for the workflow. An
-   * EMBEDDED BPMS writes here (a rollback takes the write with it), a remote BPMS
-   * does nothing and writes in {@link #aggregateChangedPhaseTwo} after the commit.
+   * the adapter answered {@link WorkflowAwareness#ACTIVE} for the workflow. Nothing
+   * is written here: the write is what {@link #aggregateChangedPhaseTwo} does after
+   * the commit.
    * <p>
    * WHICH values are pushed is not decided here: it is the sync model of the
    * aggregate, the same one a task completion uses. WHERE they land is: without a
@@ -794,8 +764,7 @@ public interface MigratableProcessService<A> {
 
   /**
    * Push the values of a changed workflow-aggregate - phase two, dispatched through
-   * the outbox after the local transaction was committed. Only called for adapters
-   * requiring a two-phase commit.
+   * the outbox after the local transaction was committed.
    * <p>
    * <strong>Idempotency contract:</strong> none is needed. The adapter reads the
    * values from the aggregate as it is NOW, so a redelivered entry writes the

@@ -34,6 +34,7 @@ public class AcceptedTransactionAnnotationStartupTest {
           .addAsResource("application.yaml")
           .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)
           .addClass(DummyAdapters.class)
+          .addClass(io.vanillabp.integration.test.adapter.TestPhaseTwoOutbox.class)
           .addClass(TestAdapterDeploymentService.class)
           .addClass(TestAdapterDeploymentServiceProducer.class)
           .addClass(TestMigratableProcessService.class))

@@ -54,13 +54,6 @@ public class DerivedAdapterIdProcessService implements MigratableProcessService<
   }
 
   @Override
-  public boolean needsTwoPhaseCommitForStartingWorkflows() {
-
-    return false;
-
-  }
-
-  @Override
   public void startWorkflowPhaseOne(
       final String workflowModuleId,
       final String bpmnProcessId,

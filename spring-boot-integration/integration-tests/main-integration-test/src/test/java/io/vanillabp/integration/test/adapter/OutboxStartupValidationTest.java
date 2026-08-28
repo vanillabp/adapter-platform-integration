@@ -12,19 +12,19 @@ import io.vanillabp.adapter.dummy.springboot.processservice.DummyAdapterProcessS
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.test.TestPersistenceConfiguration;
+import io.vanillabp.integration.test.TestPhaseTwoOutboxConfiguration;
+import io.vanillabp.integration.test.TestTransactionRunnerConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.sample.SampleWorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 
 /**
- * Startup validation of the phase-two outbox: a process whose
- * first-priority adapter requires a two-phase commit needs a resolvable outbox AT
- * STARTUP - the boot fails with a guiding message naming the remedies instead of
- * surfacing the gap at the first workflow start. A process whose first-priority
- * adapter does NOT require a two-phase commit boots without any outbox
- * materialized (an application using only an embedded BPMS must not be forced to
- * have an outbox store).
+ * Startup validation of the phase-two outbox: everything an application sends to its
+ * BPMS is dispatched after the caller's transaction committed, so every application
+ * needs a resolvable outbox and needs it AT STARTUP - the boot fails with a guiding
+ * message naming the remedies instead of surfacing the gap at the first workflow
+ * start.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class OutboxStartupValidationTest {
@@ -32,12 +32,10 @@ public class OutboxStartupValidationTest {
   private final ApplicationContextRunner contextRunner = new ApplicationContextRunner();
 
   @Test
-  public void twoPhaseCommitAdapterWithoutOutboxFailsAtStartupWithRemedies() {
+  public void anApplicationWithoutOutboxFailsAtStartupWithRemedies() {
 
     this.contextRunner
-        .withPropertyValues(
-            "spring.config.location=classpath:application.yaml",
-            "dummy-adapter.two-phase-commit=true")
+        .withPropertyValues("spring.config.location=classpath:application.yaml")
         .withInitializer(new ConfigDataApplicationContextInitializer())
         .withUserConfiguration(
             WorkflowModuleConfiguration.class, TestPersistenceConfiguration.class, SampleWorkflowService.class)
@@ -56,13 +54,13 @@ public class OutboxStartupValidationTest {
           }
           final var message = String.valueOf(cause.getMessage());
           Assertions.assertTrue(
-              message.contains("requires a two-phase commit"),
+              message.contains("is dispatched through a PhaseTwoOutbox"),
               "expected the guiding message but got: "
                   + message);
           // the message names the aggregate of the workflow service this application
           // brought and ALL remedies
           Assertions.assertTrue(
-              message.contains("is available for aggregate 'io.vanillabp.integration.test."),
+              message.contains("for aggregate 'io.vanillabp.integration.test."),
               "the message has to name an aggregate of the test application: "
                   + message);
           Assertions.assertTrue(message.contains("spring-boot-starter-data-jpa"));
@@ -75,15 +73,15 @@ public class OutboxStartupValidationTest {
   }
 
   @Test
-  public void adapterWithoutTwoPhaseCommitBootsWithoutAnyOutbox() {
+  public void anApplicationBringingAStoreBoots() {
 
     this.contextRunner
-        .withPropertyValues(
-            "spring.config.location=classpath:application.yaml",
-            "dummy-adapter.two-phase-commit=false")
+        .withPropertyValues("spring.config.location=classpath:application.yaml")
         .withInitializer(new ConfigDataApplicationContextInitializer())
         .withUserConfiguration(
-            WorkflowModuleConfiguration.class, TestPersistenceConfiguration.class, SampleWorkflowService.class)
+            WorkflowModuleConfiguration.class, TestPersistenceConfiguration.class,
+            TestPhaseTwoOutboxConfiguration.class, TestTransactionRunnerConfiguration.class,
+            SampleWorkflowService.class)
         .withConfiguration(
             AutoConfigurations.of(
                 DummyAdapterConfiguration.class, DummyAdapterProcessServiceConfiguration.class,
@@ -92,9 +90,7 @@ public class OutboxStartupValidationTest {
         .run(context -> {
 
           Assertions.assertNull(context.getStartupFailure(), "context should start");
-          // nothing outbox-related materializes for adapters not needing a
-          // two-phase commit
-          Assertions.assertTrue(context.getBeansOfType(PhaseTwoOutbox.class).isEmpty());
+          Assertions.assertEquals(1, context.getBeansOfType(PhaseTwoOutbox.class).size());
 
         });
 

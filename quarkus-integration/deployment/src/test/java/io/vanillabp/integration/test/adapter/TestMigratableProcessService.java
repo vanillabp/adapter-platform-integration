@@ -42,13 +42,6 @@ public class TestMigratableProcessService implements MigratableProcessService<Ob
   }
 
   @Override
-  public boolean needsTwoPhaseCommitForStartingWorkflows() {
-
-    return false;
-
-  }
-
-  @Override
   public void startWorkflowPhaseOne(
       final String workflowModuleId,
       final String bpmnProcessId,

@@ -35,9 +35,9 @@ public class DummyAdapterBeanRegistrar implements BeanRegistrar {
       final BeanRegistry registry,
       final Environment environment) {
 
-    final var needsTwoPhaseCommit = Boolean.TRUE.equals(
+    final var deliversTasksAtLeastOnce = Boolean.TRUE.equals(
         environment.getProperty(
-            DummyAdapterProcessServiceConfiguration.PROPERTY_TWO_PHASE_COMMIT, Boolean.class, Boolean.FALSE));
+            DummyAdapterProcessServiceConfiguration.PROPERTY_AT_LEAST_ONCE_DELIVERY, Boolean.class, Boolean.FALSE));
 
     AdapterBeanRegistrarSupport.forEachConfiguredAdapterId(
         environment,
@@ -48,7 +48,7 @@ public class DummyAdapterBeanRegistrar implements BeanRegistrar {
               "DummyAdapter_ProcessService_%s".formatted(adapterId),
               MigratableProcessService.class,
               spec -> spec.supplier(supplierContext -> new MigratableProcessService<>(
-                  adapterId, needsTwoPhaseCommit, supplierContext
+                  adapterId, deliversTasksAtLeastOnce, supplierContext
                       .beanProvider(DummyAdapterPhaseTwoListener.class), supplierContext
                           .beanProvider(
                               io.vanillabp.adapter.dummy.springboot.processservice.DummyTaskAwarenessSource.class), supplierContext

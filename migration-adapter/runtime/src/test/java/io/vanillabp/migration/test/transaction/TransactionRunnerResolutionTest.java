@@ -187,10 +187,8 @@ public class TransactionRunnerResolutionTest {
   @DisplayName("No runner at all ends the startup, naming the platform's remedies and both SPIs")
   public void noRunnerEndsTheStartup() {
 
-    // a remote BPMS: the aggregate and the outbox entry have to be written in one
-    // transaction, so an application without one cannot start a single workflow
-    when(adapterProcessService.needsTwoPhaseCommitForStartingWorkflows()).thenReturn(true);
-
+    // the aggregate and the outbox entry have to be written in one transaction, so an
+    // application without one cannot start a single workflow
     final var testee = processService(
         properties(null, null),
         new StubResolver(null, TransactionCoverage.unknown()));
@@ -203,20 +201,6 @@ public class TransactionRunnerResolutionTest {
     assertTrue(failure.getMessage().contains("TestProcess"), failure.getMessage());
     assertTrue(failure.getMessage().contains("do what the platform suggests"), failure.getMessage());
     assertTrue(failure.getMessage().contains("TransactionRunnerAware"), failure.getMessage());
-
-  }
-
-  @Test
-  @DisplayName("With an embedded BPMS a missing runner is no reason to refuse the startup")
-  public void embeddedBpmsNeedsNoRunnerOfItsOwn() {
-
-    // the engine owns the transaction and VanillaBP joins it, so nothing is demanded here
-    when(adapterProcessService.needsTwoPhaseCommitForStartingWorkflows()).thenReturn(false);
-
-    processService(
-        properties(null, null),
-        new StubResolver(null, TransactionCoverage.unknown()))
-        .validateTransactionRunnerAtStartup();
 
   }
 

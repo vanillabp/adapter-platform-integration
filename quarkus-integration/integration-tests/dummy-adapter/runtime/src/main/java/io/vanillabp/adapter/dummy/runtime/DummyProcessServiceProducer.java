@@ -26,11 +26,10 @@ import jakarta.enterprise.inject.Produces;
  * <code>vanillabp.*</code> tree are per-known-id lookups only and must never be
  * iterated to discover ids.
  * <p>
- * For testing the two-phase workflow start, the property
- * <code>dummy-adapter.two-phase-commit</code> forces
- * {@link MigratableProcessService#needsTwoPhaseCommitForStartingWorkflows()} to return
- * <code>true</code>, and optional {@link DummyPhaseTwoListener} beans are notified on
- * phase two.
+ * Optional {@link DummyPhaseTwoListener} beans are notified on phase two. The property
+ * <code>dummy-adapter.at-least-once-delivery</code> makes this dummy report the delivery
+ * behaviour of a BPMS which repeats a task it did not learn the outcome of
+ * ({@link MigratableProcessService#deliversTasksAtLeastOnce()}).
  */
 @ApplicationScoped
 public class DummyProcessServiceProducer {
@@ -38,11 +37,11 @@ public class DummyProcessServiceProducer {
   public static final String ADAPTER_TYPE = "dummy";
 
   /**
-   * The property forcing the dummy adapter to require a two-phase commit for starting
-   * workflows. Used by integration tests of
-   * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} implementations.
+   * The property making the dummy adapter report the task delivery of a BPMS which
+   * repeats a task it did not learn the outcome of. Used by the tests of the delivery
+   * record and of {@link io.vanillabp.integration.spi.PhaseTwoOutbox} implementations.
    */
-  public static final String PROPERTY_TWO_PHASE_COMMIT = "dummy-adapter.two-phase-commit";
+  public static final String PROPERTY_AT_LEAST_ONCE_DELIVERY = "dummy-adapter.at-least-once-delivery";
 
   /**
    * The property making the dummy adapter READ the workflow aggregate in phase two,
@@ -60,9 +59,9 @@ public class DummyProcessServiceProducer {
       @Any final Instance<DummyTaskAwarenessSource> taskAwarenessSources,
       @Any final Instance<DummyViewerSource> viewerSources) {
 
-    final var needsTwoPhaseCommit = ConfigProvider
+    final var deliversTasksAtLeastOnce = ConfigProvider
         .getConfig()
-        .getOptionalValue(PROPERTY_TWO_PHASE_COMMIT, Boolean.class)
+        .getOptionalValue(PROPERTY_AT_LEAST_ONCE_DELIVERY, Boolean.class)
         .orElse(Boolean.FALSE);
     final var readsAggregateInPhaseTwo = ConfigProvider
         .getConfig()
@@ -76,7 +75,7 @@ public class DummyProcessServiceProducer {
         .filter(adapter -> ADAPTER_TYPE.equals(adapter.getValue()))
         .map(Map.Entry::getKey)
         .sorted().<io.vanillabp.integration.adapter.spi.MigratableProcessService<Object>>map(
-            adapterId -> new MigratableProcessService<>(adapterId, needsTwoPhaseCommit, readsAggregateInPhaseTwo, phaseTwoListeners, taskAwarenessSources, viewerSources))
+            adapterId -> new MigratableProcessService<>(adapterId, deliversTasksAtLeastOnce, readsAggregateInPhaseTwo, phaseTwoListeners, taskAwarenessSources, viewerSources))
         .toList();
 
   }

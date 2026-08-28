@@ -26,7 +26,8 @@ public class BeanInstantiationTest {
   static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .setArchiveProducer(() -> ShrinkWrap
           .create(JavaArchive.class)
-          .addClass(DummyAdapters.class)                          // necessary due to anonymous class in DummyAdapters
+          .addClass(DummyAdapters.class)
+          .addClass(io.vanillabp.integration.test.adapter.TestPhaseTwoOutbox.class)                          // necessary due to anonymous class in DummyAdapters
           .addClass(TestAdapterDeploymentService.class) // deployment service required per prioritized adapter
           .addClass(TestAdapterDeploymentServiceProducer.class)
           .addClass(TestMigratableProcessService.class)           // process service of the mocked adapter

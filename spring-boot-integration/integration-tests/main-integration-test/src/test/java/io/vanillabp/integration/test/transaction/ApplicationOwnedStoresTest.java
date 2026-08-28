@@ -368,7 +368,7 @@ public class ApplicationOwnedStoresTest {
 
   private static final String APPLICATION_YAML = """
       dummy-adapter:
-        two-phase-commit: true
+        at-least-once-delivery: true
       vanillabp:
         adapters:
           test:

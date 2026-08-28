@@ -12,14 +12,13 @@ import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Startup validation of the phase-two outbox: the mocked adapter
- * requires a two-phase commit for starting workflows
- * ({@link TwoPhaseTestMigratableProcessService}) but neither a JDBC datasource nor a
- * MongoDB client is available - the BOOT has to fail with a guiding message naming
- * the aggregate and all remedies instead of surfacing the gap at the first workflow
- * start. (The green counterpart - an adapter NOT requiring a two-phase commit boots
- * without any outbox - is covered by every other test of this module, which all use
- * the non-two-phase {@link TestMigratableProcessService}.)
+ * Startup validation of the phase-two outbox: everything an application sends to its
+ * BPMS is dispatched after the caller's transaction committed, so it needs a store to
+ * plan those calls in. This application has none - neither a JDBC datasource nor a
+ * MongoDB client is available, and it brings no store of its own - so the BOOT has to
+ * fail with a guiding message naming the aggregate and all remedies instead of
+ * surfacing the gap at the first workflow start. The green counterpart is every other
+ * test of this module: they bring {@link TestPhaseTwoOutbox}.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class OutboxStartupValidationTest {
@@ -32,7 +31,7 @@ public class OutboxStartupValidationTest {
           .addAsResource("application.yaml")
           .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)
           .addClass(DummyAdapters.class)
-          .addClass(TwoPhaseTestMigratableProcessService.class))
+          .addClass(TestMigratableProcessService.class))
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter())
       .assertException(exception -> {
 
@@ -41,7 +40,7 @@ public class OutboxStartupValidationTest {
         final var failure = stringWriter.toString();
 
         Assertions.assertTrue(
-            failure.contains("requires a two-phase commit"),
+            failure.contains("is dispatched through a PhaseTwoOutbox"),
             "expected the guiding startup message but got: "
                 + failure);
         // the message names the aggregate and ALL remedies
@@ -58,7 +57,7 @@ public class OutboxStartupValidationTest {
    * failure above.
    */
   @Test
-  public void twoPhaseCommitAdapterWithoutOutboxFailsAtStartupWithRemedies() {
+  public void anApplicationWithoutOutboxFailsAtStartupWithRemedies() {
     // the assertException callback holds the assertions
   }
 

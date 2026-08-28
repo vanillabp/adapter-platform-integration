@@ -23,6 +23,8 @@ import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoCon
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.WorkflowAdapterCache;
 import io.vanillabp.integration.test.TestPersistenceConfiguration;
+import io.vanillabp.integration.test.TestPhaseTwoOutboxConfiguration;
+import io.vanillabp.integration.test.TestTransactionRunnerConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.sample.Aggregate;
 import io.vanillabp.integration.test.sample.SampleWorkflowService;
@@ -242,7 +244,8 @@ public class MigrationElectionTest {
         DummyAdapterProcessServiceConfiguration.class,
         WorkflowModuleAutoConfiguration.class,
         SpringBootMigrationAdapterAutoConfiguration.class,
-        TestPersistenceConfiguration.class,
+        TestPersistenceConfiguration.class, TestPhaseTwoOutboxConfiguration.class,
+        TestTransactionRunnerConfiguration.class,
         SampleWorkflowService.class,
         WorkflowModuleConfiguration.class,
         AggregatePersistenceConfiguration.class,
@@ -313,7 +316,8 @@ public class MigrationElectionTest {
         DummyAdapterProcessServiceConfiguration.class,
         WorkflowModuleAutoConfiguration.class,
         SpringBootMigrationAdapterAutoConfiguration.class,
-        TestPersistenceConfiguration.class,
+        TestPersistenceConfiguration.class, TestPhaseTwoOutboxConfiguration.class,
+        TestTransactionRunnerConfiguration.class,
         SampleWorkflowService.class,
         WorkflowModuleConfiguration.class,
         AggregatePersistenceConfiguration.class,

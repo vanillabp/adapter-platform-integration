@@ -11,6 +11,9 @@ public class WorkflowService {
   @Inject
   ProcessService<Aggregate> processService;
 
+  // starting a workflow persists the aggregate and plans phase two in the same
+  // transaction, so the caller has to open one
+  @jakarta.transaction.Transactional
   public Aggregate startWorkflow(
       final String content) {
 

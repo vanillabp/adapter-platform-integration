@@ -4,6 +4,36 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## The two-phase switch of the adapter SPI is gone (2026-08-28)
+
+`MigratableProcessService#needsTwoPhaseCommitForStartingWorkflows()` no longer exists.
+Phase one asks and phase two acts, for every adapter and every operation, and there is no
+longer a way to say otherwise (decision 26 of this repository's `DECISIONS.md`).
+
+**Adapters delete one method.** Every adapter answered `true`, so nothing about their
+behaviour changes; the `@Override` simply has to go, and with it any prose describing what
+the adapter would do in an embedded variant.
+
+**Every application needs an outbox and a transaction, and hears about it at startup.**
+`validatePhaseTwoOutboxAtStartup` and `validateTransactionRunnerAtStartup` used to skip an
+application whose first-priority adapter answered `false`. They no longer skip anything: an
+application without a resolvable `PhaseTwoOutbox`, or with nothing VanillaBP can run a
+transaction in, ends its boot with the guiding message which names the remedies. Applications
+running any of the shipped adapters are unaffected - they needed both before, because all
+three adapters answered `true`.
+
+**The message about a missing outbox reads differently.** It used to start with "Adapter 'x'
+requires a two-phase commit for starting workflows"; it now says that everything the process
+sends to its BPMS is dispatched through a `PhaseTwoOutbox`. A test asserting on the old
+wording has to be adjusted.
+
+**Test doubles of a BPMS may need a store now.** A double which pretended to be embedded made
+an application boot without an outbox and without a transaction manager, and let it start a
+workflow outside any transaction. All three are demanded now, which usually means one more
+bean in the test application plus a `@Transactional` on the method calling `startWorkflow` -
+the integration tests of this repository carry `TestPhaseTwoOutboxConfiguration` and
+`TestTransactionRunnerConfiguration` for the first part.
+
 ## The activation of a correlation travels to phase two (2026-08-27)
 
 The activation which planned a message correlation is carried with the outbox entry and

@@ -24,7 +24,7 @@ import jakarta.transaction.UserTransaction;
 /**
  * Integration test of the JDBC/JTA-based phase-two outbox using the dummy adapter
  * forced to require a two-phase commit
- * (<code>dummy-adapter.two-phase-commit: true</code>):
+ * (<code>dummy-adapter.at-least-once-delivery: true</code>):
  * <ul>
  *   <li>the outbox entry is enlisted in the local JTA transaction (visible within the
  *       transaction, gone on rollback),</li>

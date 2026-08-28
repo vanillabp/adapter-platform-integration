@@ -29,6 +29,7 @@ import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.test.TestPersistenceConfiguration;
+import io.vanillabp.integration.test.TestPhaseTwoOutboxConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.deployment.DeploymentTest;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
@@ -168,7 +169,7 @@ public class ClassLevelProcessVersionsTest {
             DummyAdapterProcessServiceConfiguration.class,
             WorkflowModuleAutoConfiguration.class,
             SpringBootMigrationAdapterAutoConfiguration.class,
-            TestPersistenceConfiguration.class,
+            TestPersistenceConfiguration.class, TestPhaseTwoOutboxConfiguration.class,
             LoanApprovalUpToTwo.class,
             LoanApprovalAfterTwo.class,
             WorkflowModuleConfiguration.class,

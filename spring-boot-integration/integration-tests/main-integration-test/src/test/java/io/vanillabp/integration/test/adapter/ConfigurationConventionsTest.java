@@ -15,6 +15,8 @@ import io.vanillabp.adapter.dummy.springboot.processservice.DummyAdapterProcessS
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.test.TestPersistenceConfiguration;
+import io.vanillabp.integration.test.TestPhaseTwoOutboxConfiguration;
+import io.vanillabp.integration.test.TestTransactionRunnerConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.sample.Aggregate;
 import io.vanillabp.integration.test.sample.SampleWorkflowService;
@@ -114,7 +116,7 @@ public class ConfigurationConventionsTest {
   }
 
   private static final Class<?>[] APPLICATION_CONFIGURATION = {
-      DummyAdapterConfiguration.class, DummyAdapterProcessServiceConfiguration.class, WorkflowModuleAutoConfiguration.class, SpringBootMigrationAdapterAutoConfiguration.class, io.vanillabp.integration.deployment.DeploymentAutoConfiguration.class, TestPersistenceConfiguration.class, SampleWorkflowService.class, WorkflowModuleConfiguration.class, AggregatePersistenceConfiguration.class
+      DummyAdapterConfiguration.class, DummyAdapterProcessServiceConfiguration.class, WorkflowModuleAutoConfiguration.class, SpringBootMigrationAdapterAutoConfiguration.class, io.vanillabp.integration.deployment.DeploymentAutoConfiguration.class, TestPersistenceConfiguration.class, TestPhaseTwoOutboxConfiguration.class, TestTransactionRunnerConfiguration.class, SampleWorkflowService.class, WorkflowModuleConfiguration.class, AggregatePersistenceConfiguration.class
   };
 
   /**
