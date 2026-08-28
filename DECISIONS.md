@@ -615,3 +615,36 @@ model - is planned instead of refused at the call. Its entry is repeated and fin
 used to be an exception after ten seconds of waiting; it is a blocked entry now, and the more
 common case of an ended workflow which the BPMS still knows keeps answering `COMPLETED` and stays
 a warned no-op.
+
+### 28. An adapter is registered completely or it does not exist
+
+The collaborators an adapter needs from the platform used to arrive one setter call at a time,
+after the constructor had already returned a usable object. A registrar which forgot one produced
+an adapter that deployed its BPMN files, ran its tasks and never reported a workflow end, and
+nothing anywhere failed: the object was valid, its field was simply null. There was also no place
+which said what a complete registration is - the list lived in whoever had written the last
+registrar, and the three adapters had drifted apart in exactly the way that invites.
+
+So the platform hands its collaborators over in one object, `AdapterCollaborators`, and an adapter
+takes it in its constructor. Five of them are mandatory, because both platform integrations
+provide them for every application: the wiring half and the runtime half of the task SPI, the
+name-clash scoping, the aggregate sync and the pre-commit registrar. A set built without one of
+them throws, naming the adapter id and what is missing, and says that no application can configure
+this away - it is the registration code.
+
+Two are handed over as `Optional`: the invoker for workflows which ended, and the one for
+workflows the BPMS started by itself. An adapter has to work without them, because an application
+which never asks for either has nothing to report to. Both platforms do provide them today,
+though, out of the same core bean as the mandatory ones - so an adapter built without one is
+nearly always a registration which left it out, and the build writes a WARN naming the adapter id
+and the collaborator. That is the second line: the first one is a compile error the day a
+registrar is written, the second one is a line in the log of the boot which caused it.
+
+What is NOT in the object: what an adapter resolves from its own configuration (a job timeout, a
+retry backoff, the variables a worker fetches) and what its own extension contributes (its
+metrics). Those are the adapter's own arguments, and the platform has nothing to say about them.
+
+The alternative was a check at `startWorkflowProcessing` asking each adapter which collaborators
+had arrived. It is the smaller change and it would have caught the same defect, one boot later.
+The parameter object was chosen because it changes every adapter's constructor, and the moment to
+do that is before an adapter written outside this repository exists (Stephan, 2026-08-28).

@@ -45,6 +45,11 @@ public class DummyDeploymentServiceProducer {
       final MigrationAdapterProperties properties,
       @Any final Instance<DummyDeploymentListener> deploymentListeners,
       final io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry workflowTaskRegistry,
+      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping,
+      final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync workflowAggregateSync,
+      final io.vanillabp.integration.adapter.spi.PreCommitRegistrar preCommitRegistrar,
+      @Any final Instance<io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker> workflowEndedInvoker,
+      @Any final Instance<io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker> bpmsInitiatedStartInvoker,
       @Any final Instance<DummyTaskWiringSource> taskWiringSource,
       @Any final Instance<DummyBpmsInitiatedStartSource> bpmsInitiatedStartSource,
       @Any final Instance<DummyProcessVersionSource> processVersionSource,
@@ -59,7 +64,11 @@ public class DummyDeploymentServiceProducer {
         .sorted()
         .<AdapterDeploymentService<Object, Object>>map(
             adapterId -> new DummyDeploymentService(
-                adapterId, deploymentListeners, workflowTaskRegistry, workflowTaskRegistry, taskWiringSource, workflowTaskRegistry, bpmsInitiatedStartSource, workflowTaskRegistry, processVersionSource, healthSource))
+                adapterId, deploymentListeners, io.vanillabp.integration.runtime.support.AdapterCollaboratorsSupport
+                    .collaborators(
+                        adapterId, workflowTaskRegistry, workflowTaskRegistry, scoping, workflowAggregateSync,
+                        preCommitRegistrar, workflowEndedInvoker,
+                        bpmsInitiatedStartInvoker), taskWiringSource, bpmsInitiatedStartSource, processVersionSource, healthSource))
         .toList();
 
   }

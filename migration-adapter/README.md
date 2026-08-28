@@ -1054,6 +1054,41 @@ itself; the implementation with the most specific generic type for the aggregate
 It is the single canonical interface used on all platforms — business code implements
 it regardless of running on Spring Boot or Quarkus.
 
+### What the platform hands an adapter (`AdapterCollaborators`)
+
+An adapter takes ONE object in its constructor, built by the platform integration it runs
+on (`AdapterBeanRegistrarSupport.collaborators` on Spring Boot,
+`AdapterCollaboratorsSupport.collaborators` on Quarkus). Five collaborators are mandatory,
+because both integrations provide them for every application:
+
+|        collaborator         |                                               what the adapter does with it                                               |
+|-----------------------------|---------------------------------------------------------------------------------------------------------------------------|
+| `WorkflowTaskWiring`        | asks while it reads a BPMN file: is this task wired, what is the aggregate-ID name, which parameters does the method read |
+| `WorkflowTaskInvoker`       | hands a delivered task to the application                                                                                 |
+| `NameClashAvoidanceSupport` | scopes what it deploys, so two workflow modules on one BPMS do not collide                                                |
+| `WorkflowAggregateSync`     | which values of a workflow aggregate the BPMS may see                                                                     |
+| `PreCommitRegistrar`        | hangs work which has to run before the caller's transaction commits                                                       |
+
+A set built without one of them throws, naming the adapter id and what is missing. Two more
+are handed over as `Optional`, because an adapter has to work without them - an application
+which asks for neither has nothing to report to:
+
+|        collaborator         |                                          what the adapter does with it                                          |
+|-----------------------------|-----------------------------------------------------------------------------------------------------------------|
+| `WorkflowEndedInvoker`      | reports that a workflow ended, and asks whether a process even needs the listener                               |
+| `BpmsInitiatedStartInvoker` | reports a workflow the BPMS started by itself, and validates the start events against the application's methods |
+
+Both platforms do provide those two today, out of the same core bean as the mandatory ones,
+so an adapter built without one is nearly always a registration which left it out - and the
+build writes a WARN naming the adapter id and the collaborator. Decision 28 says why the
+object exists at all: the collaborators used to arrive by setter, and a registrar which
+forgot one produced an adapter that deployed, ran tasks and never reported a workflow end,
+with nothing failing anywhere.
+
+What is NOT in the object stays the adapter's own constructor argument: what it resolves
+from its configuration (a job timeout, a retry backoff, the variables a worker fetches) and
+what its own extension contributes (its metrics).
+
 ### The transaction the work runs in
 
 VanillaBP wraps everything it does around one workflow aggregate in ONE transaction: the

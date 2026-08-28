@@ -10,32 +10,24 @@ import io.vanillabp.adapter.dummy.springboot.DummyAdapterConfiguration;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.adapter.spi.BpmnParseException;
 import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedContext;
-import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartContext;
-import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartResult;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-@RequiredArgsConstructor
 public class DeploymentService implements AdapterDeploymentService<Object, Object> {
 
   private final String adapterId;
 
   /**
-   * The core's task-processing entry point, provided by the platform integration.
+   * Everything the platform hands over, in one object: an adapter which is registered
+   * incompletely does not come into existence (see
+   * {@link io.vanillabp.integration.adapter.spi.AdapterCollaborators}).
    */
-  private final WorkflowTaskWiring workflowTaskWiring;
-
-  /**
-   * The runtime half of the split SPI. A real adapter holds it in its worker threads;
-   * this double is asked by the integration tests to deliver a task, so it holds both.
-   */
-  private final io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker workflowTaskInvoker;
+  private final io.vanillabp.integration.adapter.spi.AdapterCollaborators collaborators;
 
   /**
    * Test hook standing in for the BPMN model (see {@link DummyTaskWiringSource}).
@@ -43,22 +35,10 @@ public class DeploymentService implements AdapterDeploymentService<Object, Objec
   private final ObjectProvider<DummyTaskWiringSource> taskWiringSource;
 
   /**
-   * The core's entry point for workflows the BPMS starts on its own, provided by the
-   * platform integration.
-   */
-  private final BpmsInitiatedStartInvoker bpmsInitiatedStartInvoker;
-
-  /**
    * Test hook standing in for the start events of the BPMN model (see
    * {@link DummyBpmsInitiatedStartSource}).
    */
   private final ObjectProvider<DummyBpmsInitiatedStartSource> bpmsInitiatedStartSource;
-
-  /**
-   * The core's entry point for workflows which ended, provided by the platform
-   * integration.
-   */
-  private final WorkflowEndedInvoker workflowEndedInvoker;
 
   /**
    * Test hook standing in for the versions the BPMS deployed (see
@@ -71,6 +51,29 @@ public class DeploymentService implements AdapterDeploymentService<Object, Objec
    * {@link DummyHealthSource}).
    */
   private final ObjectProvider<DummyHealthSource> healthSource;
+
+  public DeploymentService(
+      final String adapterId,
+      final io.vanillabp.integration.adapter.spi.AdapterCollaborators collaborators,
+      final ObjectProvider<DummyTaskWiringSource> taskWiringSource,
+      final ObjectProvider<DummyBpmsInitiatedStartSource> bpmsInitiatedStartSource,
+      final ObjectProvider<DummyProcessVersionSource> processVersionSource,
+      final ObjectProvider<DummyHealthSource> healthSource) {
+
+    this.adapterId = adapterId;
+    this.collaborators = collaborators;
+    this.taskWiringSource = taskWiringSource;
+    this.bpmsInitiatedStartSource = bpmsInitiatedStartSource;
+    this.processVersionSource = processVersionSource;
+    this.healthSource = healthSource;
+
+  }
+
+  private WorkflowTaskWiring workflowTaskWiring() {
+
+    return collaborators.workflowTaskWiring();
+
+  }
 
   @Override
   public io.vanillabp.integration.adapter.spi.health.AdapterHealth checkHealth() {
@@ -139,7 +142,11 @@ public class DeploymentService implements AdapterDeploymentService<Object, Objec
         workflowModuleId,
         context.getKind());
 
-    workflowEndedInvoker.workflowEnded(workflowModuleId, bpmnProcessId, context);
+    // an adapter registered without this collaborator reports nothing, which is what the
+    // build of the collaborators warned about
+    collaborators
+        .workflowEndedInvoker()
+        .ifPresent(invoker -> invoker.workflowEnded(workflowModuleId, bpmnProcessId, context));
 
   }
 
@@ -220,28 +227,34 @@ public class DeploymentService implements AdapterDeploymentService<Object, Objec
     // @WorkflowTask method and vice versa; throwing here honors the
     // deployment-failure policy automatically
     taskWiringSource.ifAvailable(
-        source -> workflowTaskWiring.validateTaskWiring(
+        source -> workflowTaskWiring().validateTaskWiring(
             workflowModuleId,
             bpmnProcessId,
             source.tasksOf(adapterId, workflowModuleId, bpmnProcessId)));
 
     // like a real adapter: report the start events the BPMS fires on its own, so the
     // core can check the application's @WorkflowStartedByBpms methods against them
-    bpmsInitiatedStartSource.ifAvailable(
-        source -> bpmsInitiatedStartInvoker.validateBpmsInitiatedStarts(
-            workflowModuleId,
-            bpmnProcessId,
-            source.startEventsOf(adapterId, workflowModuleId, bpmnProcessId)));
+    collaborators
+        .bpmsInitiatedStartInvoker()
+        .ifPresent(
+            invoker -> bpmsInitiatedStartSource.ifAvailable(
+                source -> invoker.validateBpmsInitiatedStarts(
+                    workflowModuleId,
+                    bpmnProcessId,
+                    source.startEventsOf(adapterId, workflowModuleId, bpmnProcessId))));
 
     // like a real adapter which can be asked about its deployed versions: hand the
     // catalog over, so version specifications naming a version tag can be resolved
     processVersionSource.ifAvailable(
-        source -> workflowTaskWiring
+        source -> workflowTaskWiring()
             .registerProcessVersions(adapterId, workflowModuleId, bpmnProcessId, processVersions));
 
     // like a real adapter: a model pays for the end notification only where the
     // application asked for one
-    if (workflowEndedInvoker.workflowEndedHandlerExists(workflowModuleId, bpmnProcessId)) {
+    if (collaborators
+        .workflowEndedInvoker()
+        .map(invoker -> invoker.workflowEndedHandlerExists(workflowModuleId, bpmnProcessId))
+        .orElse(Boolean.FALSE)) {
       processesWithEndListener.add(bpmnProcessId);
       log.info(
           "Dummy-Adapter[{}]: attaching an end listener to BPMN process '{}' of {}",
@@ -273,7 +286,12 @@ public class DeploymentService implements AdapterDeploymentService<Object, Objec
         workflowModuleId,
         context.getStartEventId());
 
-    return bpmsInitiatedStartInvoker.startWorkflowByBpms(workflowModuleId, bpmnProcessId, context);
+    return collaborators
+        .bpmsInitiatedStartInvoker()
+        .orElseThrow(
+            () -> new IllegalStateException(
+                "the dummy adapter '%s' was registered without a bpmsInitiatedStartInvoker".formatted(adapterId)))
+        .startWorkflowByBpms(workflowModuleId, bpmnProcessId, context);
 
   }
 
@@ -293,7 +311,7 @@ public class DeploymentService implements AdapterDeploymentService<Object, Objec
 
     log.info("Dummy-Adapter[{}]: Invoking task '{}' of {}", adapterId, context.getTaskDefinition(), workflowModuleId);
 
-    return workflowTaskInvoker.invokeWorkflowTask(workflowModuleId, bpmnProcessId, context);
+    return collaborators.workflowTaskInvoker().invokeWorkflowTask(workflowModuleId, bpmnProcessId, context);
 
   }
 

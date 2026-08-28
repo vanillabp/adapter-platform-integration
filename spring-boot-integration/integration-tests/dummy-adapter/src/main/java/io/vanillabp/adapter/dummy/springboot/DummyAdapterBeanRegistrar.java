@@ -11,7 +11,6 @@ import io.vanillabp.adapter.dummy.springboot.processservice.DummyAdapterPhaseTwo
 import io.vanillabp.adapter.dummy.springboot.processservice.DummyAdapterProcessServiceConfiguration;
 import io.vanillabp.adapter.dummy.springboot.processservice.MigratableProcessService;
 import io.vanillabp.integration.adapter.AdapterBeanRegistrarSupport;
-import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
 
 /**
  * Registers the dummy adapter's per-adapter-id beans - the reference implementation
@@ -59,16 +58,13 @@ public class DummyAdapterBeanRegistrar implements BeanRegistrar {
               "DummyAdapter_DeploymentService_%s".formatted(adapterId),
               DeploymentService.class,
               spec -> spec.supplier(supplierContext -> new DeploymentService(
-                  adapterId, supplierContext.bean(WorkflowTaskRegistry.class), supplierContext
-                      .bean(WorkflowTaskRegistry.class), supplierContext
-                          .beanProvider(DummyTaskWiringSource.class), supplierContext
-                              .bean(WorkflowTaskRegistry.class), supplierContext
-                                  .beanProvider(DummyBpmsInitiatedStartSource.class), supplierContext
-                                      .bean(WorkflowTaskRegistry.class), supplierContext
-                                          .beanProvider(
-                                              io.vanillabp.adapter.dummy.springboot.deployment.DummyProcessVersionSource.class), supplierContext
-                                                  .beanProvider(
-                                                      io.vanillabp.adapter.dummy.springboot.deployment.DummyHealthSource.class))));
+                  adapterId, AdapterBeanRegistrarSupport.collaborators(supplierContext, adapterId), supplierContext
+                      .beanProvider(DummyTaskWiringSource.class), supplierContext
+                          .beanProvider(DummyBpmsInitiatedStartSource.class), supplierContext
+                              .beanProvider(
+                                  io.vanillabp.adapter.dummy.springboot.deployment.DummyProcessVersionSource.class), supplierContext
+                                      .beanProvider(
+                                          io.vanillabp.adapter.dummy.springboot.deployment.DummyHealthSource.class))));
 
         });
 
