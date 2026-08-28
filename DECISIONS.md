@@ -482,3 +482,40 @@ minutes, guarding a risk measured in days, would be green in exactly the install
 business code twice, and a green message which means nothing teaches its reader to ignore the next
 one.
 
+### 25. A workflow is located by asking, not by a registry
+
+Every operation on an existing workflow asks the configured adapters which of them holds it,
+and the answer is not written down anywhere persistent. A registry mapping workflow module,
+BPMN process and aggregate id to an adapter id was considered and rejected: it would be a
+second source of truth about something the BPMS already knows, it would need a schema, a
+cleanup and a repair path of its own, and it would be wrong exactly when it matters, after a
+crash or a migration.
+
+What that costs is one question per operation, which is a query against a remote BPMS and
+nothing at all against an embedded one, plus the walk over the adapters until one answers.
+The only accelerator is `WorkflowAdapterCache`, whose entries are hints and never answers
+(entry 5), so a lost hint costs a walk and never a wrong route.
+
+The workload this is sized for is the one VanillaBP is built for, and that is a product
+decision rather than a limit somebody forgot to lift: business processes whose steps are
+minutes and days apart, implemented in high quality and as cheaply as possible. An
+application which really moves thousands of operations per second has to be optimised
+anyway, and a project of that kind carries the budget to build what it needs; VanillaBP
+buying that case with complexity everybody else pays for would be the wrong trade. So the
+probe per operation stays, and an application in that other shape gets a design of its own
+rather than a registry bolted on here.
+
+Where the cost does show up first is a cluster of application nodes, and the lever there is
+the cache rather than the design: a shared `WorkflowAdapterCache` (Redis, Hazelcast, whatever
+the application already runs) is written once when the workflow starts and read by every
+node, so the BPMS is asked once per workflow instead of once per node. That is the
+recommended answer to "the election is our bottleneck", and it is the reason the cache SPI
+is a business SPI rather than an internal class.
+
+Two consequences the code carries visibly. The re-dispatch of a workflow start probes
+`awarenessOfWorkflowForRedispatch` instead of consulting a record, which is why that probe
+must never answer optimistically, and the residual duplicate window after a crash is
+documented per adapter rather than closed. And an adapter which cannot be asked at all
+answers optimistically, which is safe while it is the only BPMS configured and is the reason
+a migration setup containing such an adapter routes by list order (see the wiki page
+"BPMS migration").
