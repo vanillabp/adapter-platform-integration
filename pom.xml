@@ -70,7 +70,7 @@
     <!-- optional: metrics of the election cache are published if the application
          brings Micrometer; compiled against the OLDER of both platforms (Quarkus
          3.37.1 manages 1.16.6, Spring Boot 4.1.0 manages 1.17.0) -->
-    <micrometer.version>1.16.6</micrometer.version>
+    <micrometer.version>1.17.1</micrometer.version>
     <testcontainers.version>2.0.5</testcontainers.version>
     <!-- where the build breaks, in PERCENT of covered instructions per platform,
          enforced by test-coverage-report/coverage-gate. The rule stays 90 per platform, which is
