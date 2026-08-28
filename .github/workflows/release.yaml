@@ -38,7 +38,7 @@ jobs:
           echo "LAST_RELEASED_VERSION=${lastReleasedVersion}" >> "${GITHUB_ENV}"
           echo "Last released version: ${lastReleasedVersion}"
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
