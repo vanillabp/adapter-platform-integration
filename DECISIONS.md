@@ -484,10 +484,6 @@ one.
 
 ### 25. A workflow is located by asking, not by a registry
 
-> DRAFT, awaiting confirmation. It writes down a stance the code has followed since
-> 2026-07-28 and which lives in a prompt header today, which `AGENTS.md` forbids citing.
-> Nothing about the code changes with this entry.
-
 Every operation on an existing workflow asks the configured adapters which of them holds it,
 and the answer is not written down anywhere persistent. A registry mapping workflow module,
 BPMN process and aggregate id to an adapter id was considered and rejected: it would be a
@@ -500,10 +496,21 @@ nothing at all against an embedded one, plus the walk over the adapters until on
 The only accelerator is `WorkflowAdapterCache`, whose entries are hints and never answers
 (entry 5), so a lost hint costs a walk and never a wrong route.
 
-The workload this is sized for is the one VanillaBP is built for: business processes whose
-steps are minutes and days apart, not a stream of thousands of operations per second. An
-application in that other shape would feel the probe per operation, and the answer for it is
-not a registry bolted on here but a different design of its own.
+The workload this is sized for is the one VanillaBP is built for, and that is a product
+decision rather than a limit somebody forgot to lift: business processes whose steps are
+minutes and days apart, implemented in high quality and as cheaply as possible. An
+application which really moves thousands of operations per second has to be optimised
+anyway, and a project of that kind carries the budget to build what it needs; VanillaBP
+buying that case with complexity everybody else pays for would be the wrong trade. So the
+probe per operation stays, and an application in that other shape gets a design of its own
+rather than a registry bolted on here.
+
+Where the cost does show up first is a cluster of application nodes, and the lever there is
+the cache rather than the design: a shared `WorkflowAdapterCache` (Redis, Hazelcast, whatever
+the application already runs) is written once when the workflow starts and read by every
+node, so the BPMS is asked once per workflow instead of once per node. That is the
+recommended answer to "the election is our bottleneck", and it is the reason the cache SPI
+is a business SPI rather than an internal class.
 
 Two consequences the code carries visibly. The re-dispatch of a workflow start probes
 `awarenessOfWorkflowForRedispatch` instead of consulting a record, which is why that probe
