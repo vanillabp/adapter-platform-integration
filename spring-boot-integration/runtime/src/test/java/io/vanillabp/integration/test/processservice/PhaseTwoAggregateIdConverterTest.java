@@ -1,7 +1,6 @@
 package io.vanillabp.integration.test.processservice;
 
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -65,27 +64,33 @@ public class PhaseTwoAggregateIdConverterTest {
   }
 
   /**
-   * A mocked adapter answers a default method the way it answers every other one - with
-   * <code>null</code> - so it would contribute no phase operation at all and the core
-   * would refuse every call. These two stubs restore the SPI's own answer, the handlers
-   * bridging to the pair of methods per operation this test verifies against.
+   * What the adapter was asked to do. A mocked adapter answers a default method the way
+   * it answers every other one - with <code>null</code> - so it would contribute no
+   * phase operation at all and the core would refuse every call. What it answers here
+   * writes down the aggregate ID phase two was handed, which is what this test is about.
    */
-  private void adapterServesItsOperations() {
+  private final java.util.List<Object> phaseTwoAggregateIds = new java.util.ArrayList<>();
+
+  private void adapterRecordsItsOperations() {
 
     org.mockito.Mockito
         .lenient()
         .when(migratableProcessService.phaseOperations())
-        .thenCallRealMethod();
-    org.mockito.Mockito
-        .lenient()
-        .when(migratableProcessService.legacyPhaseOperations())
-        .thenCallRealMethod();
+        .thenReturn(
+            java.util.Map
+                .of(
+                    io.vanillabp.integration.spi.PhaseOperation.START_WORKFLOW,
+                    io.vanillabp.integration.adapter.spi.PhaseOperationHandler
+                        .of(
+                            request -> {
+                            },
+                            request -> phaseTwoAggregateIds.add(request.workflowAggregateId()))));
 
   }
 
   private void buildProcessService() {
 
-    adapterServesItsOperations();
+    adapterRecordsItsOperations();
 
     new ProcessServiceSpringBean<>(
         "test-module", "TestProcess", Object.class, buildProperties(), aggregatePersistenceAware, List
@@ -136,8 +141,7 @@ public class PhaseTwoAggregateIdConverterTest {
     buildProcessService();
     router.dispatch(startWorkflowCall("42"));
 
-    verify(migratableProcessService).startWorkflowPhaseTwo("test-module", "TestProcess", aggregatePersistenceAware,
-        42L);
+    org.junit.jupiter.api.Assertions.assertEquals(java.util.List.of(42L), phaseTwoAggregateIds);
 
   }
 
@@ -154,8 +158,7 @@ public class PhaseTwoAggregateIdConverterTest {
     // the dispatch must NOT fail (which would block the outbox entry permanently)
     router.dispatch(startWorkflowCall("custom-id-4711"));
 
-    verify(migratableProcessService).startWorkflowPhaseTwo(
-        "test-module", "TestProcess", aggregatePersistenceAware, "custom-id-4711");
+    org.junit.jupiter.api.Assertions.assertEquals(java.util.List.of("custom-id-4711"), phaseTwoAggregateIds);
 
   }
 

@@ -4,6 +4,25 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## The pair of methods per operation is gone (2026-08-29)
+
+The entry below kept the eighteen phase methods of `MigratableProcessService` as `default` methods
+behind a compatibility bridge, so the three adapters could move to handlers one pull request at a
+time. They have moved, so the bridge has no user left and both are gone: `LegacyPhaseOperations`,
+`legacyPhaseOperations()`, and `startWorkflowPhaseOne`/`…PhaseTwo` with their eight siblings.
+
+**`phaseOperations()` is abstract now.** An adapter says what it serves or it does not compile,
+which is where the compiler's insistence went that the pair of methods used to carry. The boot
+check stays as the second line: an adapter whose map is missing an operation every adapter has to
+serve is refused, naming the adapter and what is missing.
+
+**`serves(PhaseOperation)` is gone as well.** It had become `phaseOperations().containsKey(...)`,
+which is what the one caller asks now.
+
+**What an adapter has to do.** Nothing, if it already answers `phaseOperations()` - which the
+three adapters VanillaBP ships do. An adapter still written against the pair of methods moves its
+bodies into handlers; the entry below shows the shape.
+
 ## An operation is defined once, and an adapter contributes a handler for it (2026-08-29)
 
 Adding one two-phase operation used to touch five places in the core and three adapters: a pair of

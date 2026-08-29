@@ -335,6 +335,11 @@ public class BpmsInitiatedStartTest {
       }
 
       @Override
+      public java.util.Map<io.vanillabp.integration.spi.PhaseOperation, io.vanillabp.integration.adapter.spi.PhaseOperationHandler<A>> phaseOperations() {
+        return io.vanillabp.migration.test.TestPhaseOperations.doingNothing();
+      }
+
+      @Override
       public WorkflowAwareness awarenessOfTask(
           final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
           final Object workflowAggregateId,
@@ -356,136 +361,6 @@ public class BpmsInitiatedStartTest {
           final Object workflowAggregateId,
           final String taskId) {
         return WorkflowAwareness.UNKNOWN_TO_BPMS;
-      }
-
-      @Override
-      public void startWorkflowPhaseOne(
-          final String workflowModuleId,
-          final String bpmnProcessId,
-          final AggregatePersistenceAware<A> aggregatePersistence,
-          final A workflowAggregate) {
-      }
-
-      @Override
-      public void startWorkflowPhaseTwo(
-          final String workflowModuleId,
-          final String bpmnProcessId,
-          final AggregatePersistenceAware<A> aggregatePersistence,
-          final Object workflowAggregateId) {
-      }
-
-      @Override
-      public void completeTaskPhaseOne(
-          final String workflowModuleId,
-          final String bpmnProcessId,
-          final AggregatePersistenceAware<A> aggregatePersistence,
-          final A workflowAggregate,
-          final String taskId) {
-      }
-
-      @Override
-      public void completeTaskPhaseTwo(
-          final String workflowModuleId,
-          final String bpmnProcessId,
-          final AggregatePersistenceAware<A> aggregatePersistence,
-          final Object workflowAggregateId,
-          final String taskId) {
-      }
-
-      @Override
-      public void cancelTaskPhaseOne(
-          final String workflowModuleId,
-          final String bpmnProcessId,
-          final AggregatePersistenceAware<A> aggregatePersistence,
-          final A workflowAggregate,
-          final String taskId,
-          final String bpmnErrorCode) {
-      }
-
-      @Override
-      public void cancelTaskPhaseTwo(
-          final String workflowModuleId,
-          final String bpmnProcessId,
-          final AggregatePersistenceAware<A> aggregatePersistence,
-          final Object workflowAggregateId,
-          final String taskId,
-          final String bpmnErrorCode) {
-      }
-
-      @Override
-      public void completeUserTaskPhaseOne(
-          final String workflowModuleId,
-          final String bpmnProcessId,
-          final AggregatePersistenceAware<A> aggregatePersistence,
-          final A workflowAggregate,
-          final String taskId) {
-      }
-
-      @Override
-      public void completeUserTaskPhaseTwo(
-          final String workflowModuleId,
-          final String bpmnProcessId,
-          final AggregatePersistenceAware<A> aggregatePersistence,
-          final Object workflowAggregateId,
-          final String taskId) {
-      }
-
-      @Override
-      public void cancelUserTaskPhaseOne(
-          final String workflowModuleId,
-          final String bpmnProcessId,
-          final AggregatePersistenceAware<A> aggregatePersistence,
-          final A workflowAggregate,
-          final String taskId,
-          final String bpmnErrorCode) {
-      }
-
-      @Override
-      public void cancelUserTaskPhaseTwo(
-          final String workflowModuleId,
-          final String bpmnProcessId,
-          final AggregatePersistenceAware<A> aggregatePersistence,
-          final Object workflowAggregateId,
-          final String taskId,
-          final String bpmnErrorCode) {
-      }
-
-      @Override
-      public void correlateMessagePhaseOne(
-          final String workflowModuleId,
-          final String bpmnProcessId,
-          final AggregatePersistenceAware<A> aggregatePersistence,
-          final A workflowAggregate,
-          final String messageName,
-          final String correlationId) {
-      }
-
-      @Override
-      public void correlateMessagePhaseTwo(
-          final String workflowModuleId,
-          final String bpmnProcessId,
-          final AggregatePersistenceAware<A> aggregatePersistence,
-          final Object workflowAggregateId,
-          final String messageName,
-          final String correlationId) {
-      }
-
-      @Override
-      public void startWorkflowByMessagePhaseOne(
-          final String workflowModuleId,
-          final String bpmnProcessId,
-          final AggregatePersistenceAware<A> aggregatePersistence,
-          final A workflowAggregate,
-          final String messageName) {
-      }
-
-      @Override
-      public void startWorkflowByMessagePhaseTwo(
-          final String workflowModuleId,
-          final String bpmnProcessId,
-          final AggregatePersistenceAware<A> aggregatePersistence,
-          final Object workflowAggregateId,
-          final String messageName) {
       }
 
     };

@@ -124,8 +124,8 @@ public class DiscardedScheduleTest {
       final PhaseTwoOutbox outbox) {
 
     @SuppressWarnings("unchecked")
-    final MigratableProcessService<Object> adapter = io.vanillabp.migration.test.AdapterMocks
-        .servingItsOperations(mock(MigratableProcessService.class));
+    final MigratableProcessService<Object> adapter = mock(MigratableProcessService.class);
+    io.vanillabp.migration.test.AdapterMocks.recordingItsOperations(adapter);
     lenient().when(adapter.getAdapterId()).thenReturn(ADAPTER);
     lenient()
         .when(adapter.awarenessOfWorkflow(any(), any(), any()))

@@ -2,6 +2,7 @@ package io.vanillabp.migration.test.processservice;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -45,13 +46,15 @@ public class MigrationProcessServiceTest {
   private MigratableProcessService<Object> processService;
 
   /**
-   * A mocked adapter answers no phase operations at all unless it is told to - see
-   * {@link io.vanillabp.migration.test.AdapterMocks}.
+   * What the adapter was asked to do - a mocked adapter answers no phase operations at
+   * all unless it is told to, see {@link io.vanillabp.migration.test.AdapterMocks}.
    */
-  @org.junit.jupiter.api.BeforeEach
-  public void adapterServesItsOperations() {
+  private io.vanillabp.migration.test.RecordedPhaseOperations<Object> recorded;
 
-    io.vanillabp.migration.test.AdapterMocks.servingItsOperations(processService);
+  @org.junit.jupiter.api.BeforeEach
+  public void adapterRecordsItsOperations() {
+
+    recorded = io.vanillabp.migration.test.AdapterMocks.recordingItsOperations(processService);
 
   }
 
@@ -162,6 +165,8 @@ public class MigrationProcessServiceTest {
 
     @SuppressWarnings("unchecked")
     final MigratableProcessService<Object> secondAdapter = org.mockito.Mockito.mock(MigratableProcessService.class);
+    final var recordedOfSecondAdapter = io.vanillabp.migration.test.AdapterMocks
+        .recordingItsOperations(secondAdapter);
     when(processService.getAdapterId()).thenReturn("first-adapter");
     when(secondAdapter.getAdapterId()).thenReturn("second-adapter");
 
@@ -179,8 +184,13 @@ public class MigrationProcessServiceTest {
     testee.startWorkflow(aggregate);
 
     // phase one has to run in the highest-priority adapter only
-    verify(processService).startWorkflowPhaseOne("test-module", "TestProcess", aggregatePersistence, aggregate);
-    verify(secondAdapter, never()).startWorkflowPhaseOne(any(), any(), any(), any());
+    final var phaseOne = recorded.phaseOneOf(PhaseOperation.START_WORKFLOW);
+    assertEquals(1, phaseOne.size());
+    assertEquals("test-module", phaseOne.getFirst().workflowModuleId());
+    assertEquals("TestProcess", phaseOne.getFirst().bpmnProcessId());
+    assertEquals(aggregatePersistence, phaseOne.getFirst().aggregatePersistence());
+    assertEquals(aggregate, phaseOne.getFirst().workflowAggregate());
+    assertTrue(recordedOfSecondAdapter.phaseOne().isEmpty());
 
   }
 
@@ -212,7 +222,7 @@ public class MigrationProcessServiceTest {
         () -> testee.startWorkflow(aggregate));
 
     // the adapter is never reached
-    verify(processService, never()).startWorkflowPhaseOne(any(), any(), any(), any());
+    assertTrue(recorded.phaseOne().isEmpty());
 
   }
 
@@ -237,9 +247,11 @@ public class MigrationProcessServiceTest {
     final var result = testee.startWorkflow(detachedAggregate);
 
     assertSame(attachedAggregate, result);
-    verify(processService).startWorkflowPhaseOne("test-module", "TestProcess", aggregatePersistence, attachedAggregate);
-    verify(processService, never())
-        .startWorkflowPhaseOne("test-module", "TestProcess", aggregatePersistence, detachedAggregate);
+    // the ATTACHED aggregate reaches phase one, never the one the caller handed in
+    final var phaseOne = recorded.phaseOneOf(PhaseOperation.START_WORKFLOW);
+    assertEquals(1, phaseOne.size());
+    assertEquals(attachedAggregate, phaseOne.getFirst().workflowAggregate());
+    assertNotEquals(detachedAggregate, phaseOne.getFirst().workflowAggregate());
 
   }
 
@@ -282,7 +294,9 @@ public class MigrationProcessServiceTest {
 
     testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), false);
 
-    verify(processService).startWorkflowPhaseTwo("test-module", "TestProcess", aggregatePersistence, 42L);
+    final var phaseTwo = recorded.phaseTwoOf(PhaseOperation.START_WORKFLOW);
+    assertEquals(1, phaseTwo.size());
+    assertEquals(42L, phaseTwo.getFirst().workflowAggregate());
 
   }
 
@@ -306,7 +320,7 @@ public class MigrationProcessServiceTest {
     assertTrue(exception.getMessage().contains("TestProcess"));
     assertTrue(exception.getMessage().contains("test-module"));
     assertTrue(exception.getMessage().contains("configuration"));
-    verify(processService, never()).startWorkflowPhaseTwo(any(), any(), any(), any());
+    assertTrue(recorded.phaseTwo().isEmpty());
 
   }
 
@@ -325,7 +339,7 @@ public class MigrationProcessServiceTest {
     testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), true);
 
     // the previous dispatch already started the workflow - no second start
-    verify(processService, never()).startWorkflowPhaseTwo(any(), any(), any(), any());
+    assertTrue(recorded.phaseTwo().isEmpty());
 
   }
 
@@ -343,7 +357,9 @@ public class MigrationProcessServiceTest {
 
     testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), true);
 
-    verify(processService).startWorkflowPhaseTwo("test-module", "TestProcess", aggregatePersistence, 42L);
+    final var phaseTwo = recorded.phaseTwoOf(PhaseOperation.START_WORKFLOW);
+    assertEquals(1, phaseTwo.size());
+    assertEquals(42L, phaseTwo.getFirst().workflowAggregate());
 
   }
 
@@ -365,7 +381,7 @@ public class MigrationProcessServiceTest {
 
     assertTrue(exception.getMessage().contains("test-adapter"));
     assertTrue(exception.getMessage().contains("retried"));
-    verify(processService, never()).startWorkflowPhaseTwo(any(), any(), any(), any());
+    assertTrue(recorded.phaseTwo().isEmpty());
 
   }
 
@@ -382,7 +398,9 @@ public class MigrationProcessServiceTest {
     testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), false);
 
     verify(processService, never()).awarenessOfWorkflowForRedispatch(any(), any(), any());
-    verify(processService).startWorkflowPhaseTwo("test-module", "TestProcess", aggregatePersistence, 42L);
+    final var phaseTwo = recorded.phaseTwoOf(PhaseOperation.START_WORKFLOW);
+    assertEquals(1, phaseTwo.size());
+    assertEquals(42L, phaseTwo.getFirst().workflowAggregate());
 
   }
 
@@ -406,7 +424,7 @@ public class MigrationProcessServiceTest {
             Map.of(PhaseTwoCall.ARG_MESSAGE_NAME, "test-message"),
             true);
 
-    verify(processService, never()).startWorkflowByMessagePhaseTwo(any(), any(), any(), any(), any());
+    assertTrue(recorded.phaseTwo().isEmpty());
 
   }
 
@@ -548,13 +566,11 @@ public class MigrationProcessServiceTest {
     when(processService.getAdapterId()).thenReturn("test-adapter");
     final var rejected = new IllegalArgumentException("the engine rejects this request");
     org.mockito.Mockito
-        .doThrow(rejected)
-        .when(processService)
-        .startWorkflowPhaseTwo(
-            org.mockito.ArgumentMatchers.eq("test-module"),
-            org.mockito.ArgumentMatchers.eq("TestProcess"),
-            org.mockito.ArgumentMatchers.any(),
-            org.mockito.ArgumentMatchers.eq(42L));
+        .lenient()
+        .when(processService.phaseOperations())
+        .thenReturn(
+            io.vanillabp.migration.test.TestPhaseOperations
+                .failingInPhaseTwo(PhaseOperation.START_WORKFLOW, rejected));
     when(processService.isPhaseTwoFailureRepeatable(rejected)).thenReturn(false);
 
     final var testee = new MigrationProcessService<>(
@@ -580,13 +596,11 @@ public class MigrationProcessServiceTest {
     when(processService.getAdapterId()).thenReturn("test-adapter");
     final var conflict = new IllegalStateException("another transaction touched the same row");
     org.mockito.Mockito
-        .doThrow(conflict)
-        .when(processService)
-        .startWorkflowPhaseTwo(
-            org.mockito.ArgumentMatchers.eq("test-module"),
-            org.mockito.ArgumentMatchers.eq("TestProcess"),
-            org.mockito.ArgumentMatchers.any(),
-            org.mockito.ArgumentMatchers.eq(42L));
+        .lenient()
+        .when(processService.phaseOperations())
+        .thenReturn(
+            io.vanillabp.migration.test.TestPhaseOperations
+                .failingInPhaseTwo(PhaseOperation.START_WORKFLOW, conflict));
     when(processService.isPhaseTwoFailureRepeatable(conflict)).thenReturn(true);
 
     final var testee = new MigrationProcessService<>(

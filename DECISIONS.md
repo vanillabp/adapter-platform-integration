@@ -672,13 +672,14 @@ BPMS. An adapter contributes a `PhaseOperationHandler` per operation - phase one
 acts, which is entry 3 - and an operation missing from its map is an operation this BPMS has
 nothing like. That is a legitimate answer for an operation which says so (a signal, a push into a
 running instance) and a defect for the rest, so the boot refuses an adapter which cannot serve
-what every adapter has to serve. The map is the statement and the boot reads it; it does not look
-behind a handler to see whether the method a compatibility bridge calls was ever written. That
-would be reflection, and reflection is a lie in a native image - a method nobody registered looks
-like a method nobody wrote, and every adapter of a native application would be refused. The first
-attempt did exactly that and the native build of this repository caught it.
+what every adapter has to serve. The map is the statement and the boot reads it; asking the
+adapter's class anything would be reflection, and reflection is a lie in a native image - a method
+nobody registered looks like a method nobody wrote, and every adapter of a native application
+would be refused. The first attempt did exactly that and the native build of this repository
+caught it.
 
 The reason to do it now rather than when the escalation stories arrive: the next adapter is built
 by a vendor rather than by this team, so the shape they implement against has to be the one we
-want to live with (Stephan, 2026-08-28). The compatibility bridge stays until the three adapters
-this repository ships have moved, one pull request each.
+want to live with (Stephan, 2026-08-28). A compatibility bridge carried the three adapters this
+repository ships across, one pull request each, and went with the pair of methods once they had
+moved - so `phaseOperations()` is abstract and is the only way an adapter describes outbound work.

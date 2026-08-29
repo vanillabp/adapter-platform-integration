@@ -68,23 +68,16 @@ public class AggregateChangedTest {
     }
 
     @Override
-    public void aggregateChangedPhaseOne(
-        final String workflowModuleId,
-        final String bpmnProcessId,
-        final AggregatePersistenceAware<Object> aggregatePersistence,
-        final Object workflowAggregate,
-        final String taskId) {
-      phaseOnePushes.add(new Push(workflowAggregate, taskId));
-    }
+    public java.util.Map<PhaseOperation, io.vanillabp.integration.adapter.spi.PhaseOperationHandler<Object>> phaseOperations() {
 
-    @Override
-    public void aggregateChangedPhaseTwo(
-        final String workflowModuleId,
-        final String bpmnProcessId,
-        final AggregatePersistenceAware<Object> aggregatePersistence,
-        final Object workflowAggregateId,
-        final String taskId) {
-      phaseTwoPushes.add(new Push(workflowAggregateId, taskId));
+      return io.vanillabp.migration.test.TestPhaseOperations
+          .with(
+              PhaseOperation.AGGREGATE_CHANGED,
+              io.vanillabp.integration.adapter.spi.PhaseOperationHandler
+                  .of(
+                      request -> phaseOnePushes.add(new Push(request.workflowAggregate(), request.taskId())),
+                      request -> phaseTwoPushes.add(new Push(request.workflowAggregateId(), request.taskId()))));
+
     }
 
   }
@@ -299,7 +292,18 @@ public class AggregateChangedTest {
   @DisplayName("An adapter whose BPMS cannot update a running instance says so")
   public void anAdapterWithoutSupportFailsGuiding() {
 
+    // how an adapter says it: the operation is missing from its map, which is allowed
+    // because a push is not required of every adapter
     final var adapter = new SendSignalTest.RecordingAdapter("first-adapter") {
+
+      @Override
+      public java.util.Map<io.vanillabp.integration.spi.PhaseOperation, io.vanillabp.integration.adapter.spi.PhaseOperationHandler<Object>> phaseOperations() {
+
+        final var operations = super.phaseOperations();
+        operations.remove(io.vanillabp.integration.spi.PhaseOperation.AGGREGATE_CHANGED);
+        return operations;
+
+      }
 
       @Override
       public WorkflowAwareness awarenessOfWorkflow(
@@ -312,11 +316,13 @@ public class AggregateChangedTest {
     };
 
     final var exception = assertThrows(
-        UnsupportedOperationException.class,
+        io.vanillabp.integration.adapter.spi.PhaseOperationNotSupported.class,
         () -> processService(List.of(adapter), null).aggregateChanged(new Object(), null));
 
     assertTrue(exception.getMessage().contains("first-adapter"));
     assertTrue(exception.getMessage().contains(PROCESS));
+    // and what the operation itself says about the way out
+    assertTrue(exception.getMessage().contains("model a task the workflow waits at"));
 
   }
 

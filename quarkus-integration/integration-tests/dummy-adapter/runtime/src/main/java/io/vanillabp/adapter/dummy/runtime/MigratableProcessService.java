@@ -1,7 +1,13 @@
 package io.vanillabp.adapter.dummy.runtime;
 
+import java.util.Map;
+
+import io.vanillabp.integration.adapter.spi.PhaseOneRequest;
+import io.vanillabp.integration.adapter.spi.PhaseOperationHandler;
+import io.vanillabp.integration.adapter.spi.PhaseTwoRequest;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.PhaseOperation;
 import jakarta.enterprise.inject.Instance;
 
 public class MigratableProcessService<A> implements io.vanillabp.integration.adapter.spi.MigratableProcessService<A> {
@@ -39,6 +45,54 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
   public String getAdapterId() {
 
     return adapterId;
+
+  }
+
+  /**
+   * What this dummy does for each operation: it logs, and it tells the listeners a test
+   * registered. Phase one changes nothing, phase two is what a test watches.
+   */
+  @Override
+  public Map<PhaseOperation, PhaseOperationHandler<A>> phaseOperations() {
+
+    return Map
+        .ofEntries(
+            Map
+                .entry(
+                    PhaseOperation.START_WORKFLOW,
+                    PhaseOperationHandler.of(this::preflightStart, this::startWorkflow)),
+            Map
+                .entry(
+                    PhaseOperation.START_WORKFLOW_BY_MESSAGE,
+                    PhaseOperationHandler.of(this::preflightStartByMessage, this::startWorkflowByMessage)),
+            Map
+                .entry(
+                    PhaseOperation.COMPLETE_TASK,
+                    PhaseOperationHandler.of(this::preflightCompleteTask, this::completeTask)),
+            Map
+                .entry(
+                    PhaseOperation.CANCEL_TASK,
+                    PhaseOperationHandler.of(this::preflightCancelTask, this::cancelTask)),
+            Map
+                .entry(
+                    PhaseOperation.COMPLETE_USER_TASK,
+                    PhaseOperationHandler.of(this::preflightCompleteUserTask, this::completeUserTask)),
+            Map
+                .entry(
+                    PhaseOperation.CANCEL_USER_TASK,
+                    PhaseOperationHandler.of(this::preflightCancelUserTask, this::cancelUserTask)),
+            Map
+                .entry(
+                    PhaseOperation.CORRELATE_MESSAGE,
+                    PhaseOperationHandler.of(this::preflightCorrelateMessage, this::correlateMessage)),
+            Map
+                .entry(
+                    PhaseOperation.SEND_SIGNAL,
+                    PhaseOperationHandler.of(this::preflightSendSignal, this::sendSignal)),
+            Map
+                .entry(
+                    PhaseOperation.AGGREGATE_CHANGED,
+                    PhaseOperationHandler.of(this::preflightAggregateChanged, this::pushChangedAggregate)));
 
   }
 
@@ -184,256 +238,170 @@ public class MigratableProcessService<A> implements io.vanillabp.integration.ada
 
   }
 
-  @Override
-  public void startWorkflowPhaseOne(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final A workflowAggregate) {
+  private void preflightStart(
+      final PhaseOneRequest<A> request) {
 
   }
 
-  @Override
-  public void startWorkflowPhaseTwo(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final Object workflowAggregateId) {
+  private void startWorkflow(
+      final PhaseTwoRequest<A> request) {
 
-    readAggregateLikeARemoteBpms(aggregatePersistence, workflowAggregateId);
+    readAggregateLikeARemoteBpms(request.aggregatePersistence(), request.workflowAggregateId());
 
     if (phaseTwoListeners != null) {
       phaseTwoListeners
           .stream()
-          .forEach(listener -> listener.startedWorkflowPhaseTwo(adapterId, workflowAggregateId));
+          .forEach(listener -> listener.startedWorkflowPhaseTwo(adapterId, request.workflowAggregateId()));
     }
 
   }
 
-  @Override
-  public void completeTaskPhaseOne(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final A workflowAggregate,
-      final String taskId) {
+  private void preflightCompleteTask(
+      final PhaseOneRequest<A> request) {
 
   }
 
-  @Override
-  public void completeTaskPhaseTwo(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final Object workflowAggregateId,
-      final String taskId) {
+  private void completeTask(
+      final PhaseTwoRequest<A> request) {
 
-    readAggregateLikeARemoteBpms(aggregatePersistence, workflowAggregateId);
+    readAggregateLikeARemoteBpms(request.aggregatePersistence(), request.workflowAggregateId());
 
     if (phaseTwoListeners != null) {
       phaseTwoListeners
           .stream()
-          .forEach(listener -> listener.completedTaskPhaseTwo(adapterId, workflowAggregateId, taskId));
+          .forEach(
+              listener -> listener.completedTaskPhaseTwo(adapterId, request.workflowAggregateId(), request.taskId()));
     }
 
   }
 
-  @Override
-  public void cancelTaskPhaseOne(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final A workflowAggregate,
-      final String taskId,
-      final String bpmnErrorCode) {
+  private void preflightCancelTask(
+      final PhaseOneRequest<A> request) {
 
   }
 
-  @Override
-  public void cancelTaskPhaseTwo(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final Object workflowAggregateId,
-      final String taskId,
-      final String bpmnErrorCode) {
+  private void cancelTask(
+      final PhaseTwoRequest<A> request) {
 
-    readAggregateLikeARemoteBpms(aggregatePersistence, workflowAggregateId);
+    readAggregateLikeARemoteBpms(request.aggregatePersistence(), request.workflowAggregateId());
 
     if (phaseTwoListeners != null) {
       phaseTwoListeners
           .stream()
-          .forEach(listener -> listener.canceledTaskPhaseTwo(workflowAggregateId, taskId, bpmnErrorCode));
+          .forEach(listener -> listener.canceledTaskPhaseTwo(request.workflowAggregateId(), request.taskId(),
+              request.bpmnErrorCode()));
     }
 
   }
 
-  @Override
-  public void completeUserTaskPhaseOne(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final A workflowAggregate,
-      final String taskId) {
+  private void preflightCompleteUserTask(
+      final PhaseOneRequest<A> request) {
 
   }
 
-  @Override
-  public void completeUserTaskPhaseTwo(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final Object workflowAggregateId,
-      final String taskId) {
+  private void completeUserTask(
+      final PhaseTwoRequest<A> request) {
 
-    readAggregateLikeARemoteBpms(aggregatePersistence, workflowAggregateId);
+    readAggregateLikeARemoteBpms(request.aggregatePersistence(), request.workflowAggregateId());
 
     if (phaseTwoListeners != null) {
       phaseTwoListeners
           .stream()
-          .forEach(listener -> listener.completedUserTaskPhaseTwo(workflowAggregateId, taskId));
+          .forEach(listener -> listener.completedUserTaskPhaseTwo(request.workflowAggregateId(), request.taskId()));
     }
 
   }
 
-  @Override
-  public void cancelUserTaskPhaseOne(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final A workflowAggregate,
-      final String taskId,
-      final String bpmnErrorCode) {
+  private void preflightCancelUserTask(
+      final PhaseOneRequest<A> request) {
 
   }
 
-  @Override
-  public void cancelUserTaskPhaseTwo(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final Object workflowAggregateId,
-      final String taskId,
-      final String bpmnErrorCode) {
+  private void cancelUserTask(
+      final PhaseTwoRequest<A> request) {
 
-    readAggregateLikeARemoteBpms(aggregatePersistence, workflowAggregateId);
+    readAggregateLikeARemoteBpms(request.aggregatePersistence(), request.workflowAggregateId());
 
     if (phaseTwoListeners != null) {
       phaseTwoListeners
           .stream()
-          .forEach(listener -> listener.canceledUserTaskPhaseTwo(workflowAggregateId, taskId, bpmnErrorCode));
+          .forEach(listener -> listener.canceledUserTaskPhaseTwo(request.workflowAggregateId(), request.taskId(),
+              request.bpmnErrorCode()));
     }
 
   }
 
-  @Override
-  public void sendSignalPhaseOne(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final String signalName) {
+  private void preflightSendSignal(
+      final PhaseOneRequest<A> request) {
 
   }
 
-  @Override
-  public void sendSignalPhaseTwo(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final String signalName) {
+  private void sendSignal(
+      final PhaseTwoRequest<A> request) {
 
     if (phaseTwoListeners != null) {
       phaseTwoListeners
           .stream()
-          .forEach(listener -> listener.broadcastSignal(signalName, true));
+          .forEach(listener -> listener.broadcastSignal(request.signalName(), true));
     }
 
   }
 
-  @Override
-  public void aggregateChangedPhaseOne(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final A workflowAggregate,
-      final String taskId) {
+  private void preflightAggregateChanged(
+      final PhaseOneRequest<A> request) {
 
   }
 
-  @Override
-  public void aggregateChangedPhaseTwo(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final Object workflowAggregateId,
-      final String taskId) {
+  private void pushChangedAggregate(
+      final PhaseTwoRequest<A> request) {
 
-    readAggregateLikeARemoteBpms(aggregatePersistence, workflowAggregateId);
+    readAggregateLikeARemoteBpms(request.aggregatePersistence(), request.workflowAggregateId());
 
     if (phaseTwoListeners != null) {
       phaseTwoListeners
           .stream()
-          .forEach(listener -> listener.aggregateChanged(workflowAggregateId, taskId, true));
+          .forEach(listener -> listener.aggregateChanged(request.workflowAggregateId(), request.taskId(), true));
     }
 
   }
 
-  @Override
-  public void correlateMessagePhaseOne(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final A workflowAggregate,
-      final String messageName,
-      final String correlationId) {
+  private void preflightCorrelateMessage(
+      final PhaseOneRequest<A> request) {
 
   }
 
-  @Override
-  public void correlateMessagePhaseTwo(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final Object workflowAggregateId,
-      final String messageName,
-      final String correlationId) {
+  private void correlateMessage(
+      final PhaseTwoRequest<A> request) {
 
-    readAggregateLikeARemoteBpms(aggregatePersistence, workflowAggregateId);
+    readAggregateLikeARemoteBpms(request.aggregatePersistence(), request.workflowAggregateId());
 
     if (phaseTwoListeners != null) {
       phaseTwoListeners
           .stream()
-          .forEach(listener -> listener.correlatedMessagePhaseTwo(workflowAggregateId, messageName, correlationId));
+          .forEach(listener -> listener.correlatedMessagePhaseTwo(request.workflowAggregateId(), request.messageName(),
+              request.correlationId()));
     }
 
   }
 
-  @Override
-  public void startWorkflowByMessagePhaseOne(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final A workflowAggregate,
-      final String messageName) {
+  private void preflightStartByMessage(
+      final PhaseOneRequest<A> request) {
 
   }
 
-  @Override
-  public void startWorkflowByMessagePhaseTwo(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final Object workflowAggregateId,
-      final String messageName) {
+  private void startWorkflowByMessage(
+      final PhaseTwoRequest<A> request) {
 
-    readAggregateLikeARemoteBpms(aggregatePersistence, workflowAggregateId);
+    readAggregateLikeARemoteBpms(request.aggregatePersistence(), request.workflowAggregateId());
 
     if (phaseTwoListeners != null) {
       phaseTwoListeners
           .stream()
-          .forEach(listener -> listener.startedWorkflowByMessagePhaseTwo(workflowAggregateId, messageName));
+          .forEach(listener -> listener.startedWorkflowByMessagePhaseTwo(request.workflowAggregateId(),
+              request.messageName()));
     }
 
   }
-
 
   @Override
   public java.util.List<io.vanillabp.spi.process.ProcessDefinition> getProcessDefinitions(

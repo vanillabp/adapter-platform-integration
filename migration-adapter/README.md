@@ -789,7 +789,8 @@ everything about it which is not one BPMS' business:
 What an operation DOES is the other place, and it belongs to the adapter: a
 `PhaseOperationHandler` with `phaseOne(PhaseOneRequest)` and
 `phaseTwo(PhaseTwoRequest)`, contributed per operation in
-`MigratableProcessService#phaseOperations()`.
+`MigratableProcessService#phaseOperations()`. That map is the only way an adapter
+describes outbound work; there is no method per operation and phase any more.
 
 **Adding an operation therefore costs one constant in `PhaseOperation` and one entry in
 each adapter's map.** Nothing else: the outbox stores name, args and key without
@@ -807,20 +808,10 @@ enum constants nothing else guarantees them.
 An adapter which cannot serve an operation every adapter has to serve is refused while
 the application boots (`MigrationProcessService#validateAdapterOperationsAtStartup()`,
 held by `AdapterOperationsAtStartupTest`). The map is the adapter's statement about what
-it serves, so a forgotten operation is caught before a workflow waits for it. The check
-does not look behind a handler: asking the class whether it implements the method a
-bridge calls would mean reflection, and in a native image a method nobody registered
-looks like a method nobody wrote — every adapter of a native application would be
-refused. An adapter on the bridge therefore serves every core operation, and a method it
-never implemented answers for itself when it is called, as it did before handlers.
-
-**The compatibility bridge.** `phaseOperations()` answers, by default, a handler per
-core operation calling the pair of methods each operation used to be
-(`startWorkflowPhaseOne`/`…PhaseTwo` and their eight siblings, still on
-`MigratableProcessService`). An adapter which changes nothing therefore behaves exactly
-as before, and an adapter moving one operation at a time merges its own handlers into
-`legacyPhaseOperations()`. The bridge and the methods it calls go together, once the
-three adapters VanillaBP ships have moved.
+it serves, so a forgotten operation is caught before a workflow waits for it — and it is
+the whole question, because asking the adapter's class anything would mean reflection,
+which is a lie in a native image: a method nobody registered looks like a method nobody
+wrote, and every adapter of a native application would be refused.
 
 #### Operations of extensions
 
