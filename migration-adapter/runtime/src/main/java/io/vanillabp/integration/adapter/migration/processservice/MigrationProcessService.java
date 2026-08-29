@@ -2387,6 +2387,13 @@ public class MigrationProcessService<A> {
    * adapter was written against an older SPI and never learned about it. The second one
    * would show as a workflow standing still, hours after the application booted, which
    * is why the boot asks instead.
+   * <p>
+   * What it does NOT do is look behind a handler. An adapter which still runs on the
+   * compatibility bridge serves every core operation by definition, and a method it
+   * never implemented answers for itself when it is called - which is what it did
+   * before handlers existed. Asking the class instead would mean reflection, and
+   * reflection is a lie in a native image: a method nobody registered looks like a
+   * method nobody wrote, so every adapter of a native application would be refused.
    */
   public void validateAdapterOperationsAtStartup() {
 

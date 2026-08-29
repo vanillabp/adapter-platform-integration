@@ -43,12 +43,14 @@ The bridge and the eighteen methods it calls go together, once the three adapter
 have moved.
 
 **What an adapter author has to know.** The pair of methods per operation is `default` now instead
-of abstract, so the compiler no longer insists on them. What took its place is a check while the
-application boots: an adapter which serves neither way an operation every adapter has to serve is
-refused, naming the adapter and what is missing. An operation which is not required of every
-adapter - `SEND_SIGNAL` and `AGGREGATE_CHANGED`, because a BPMS may have nothing like them - is
-simply absent from the map, and the application asking for one gets a
-`PhaseOperationNotSupported` naming the adapter and what to do instead.
+of abstract, so the compiler no longer insists on them, and an adapter written against handlers is
+not made to implement methods it does not use. The map is what states which operations an adapter
+serves, and the boot refuses an adapter missing one every adapter has to serve, naming the adapter
+and what is missing. An operation which is not required of every adapter - `SEND_SIGNAL` and
+`AGGREGATE_CHANGED`, because a BPMS may have nothing like them - is simply absent from the map, and
+the application asking for one gets a `PhaseOperationNotSupported` naming the adapter and what to
+do instead. An adapter still on the bridge serves every core operation, and a method it never
+implemented says so when it is called, exactly as before.
 
 **Renamed:** `PhaseTwoOperation` is `PhaseOperation`, `PhaseTwoOperationRegistry` is
 `PhaseOperationRegistry` and `PhaseTwoOperationDispatch` is `PhaseOperationDispatch` - the type

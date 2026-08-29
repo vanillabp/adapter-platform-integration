@@ -672,10 +672,11 @@ BPMS. An adapter contributes a `PhaseOperationHandler` per operation - phase one
 acts, which is entry 3 - and an operation missing from its map is an operation this BPMS has
 nothing like. That is a legitimate answer for an operation which says so (a signal, a push into a
 running instance) and a defect for the rest, so the boot refuses an adapter which cannot serve
-what every adapter has to serve. This check exists because the pair of methods stopped being
-abstract: an adapter which contributes handlers must not be made to implement methods it does not
-use, and losing the compiler's insistence without replacing it would have moved the report from
-build time to the first workflow standing still.
+what every adapter has to serve. The map is the statement and the boot reads it; it does not look
+behind a handler to see whether the method a compatibility bridge calls was ever written. That
+would be reflection, and reflection is a lie in a native image - a method nobody registered looks
+like a method nobody wrote, and every adapter of a native application would be refused. The first
+attempt did exactly that and the native build of this repository caught it.
 
 The reason to do it now rather than when the escalation stories arrive: the next adapter is built
 by a vendor rather than by this team, so the shape they implement against has to be the one we

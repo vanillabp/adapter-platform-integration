@@ -154,13 +154,16 @@ public interface MigratableProcessService<A> {
   }
 
   /**
-   * Whether this adapter can execute the given operation. Asked while the application
-   * boots, once per adapter and operation, so an adapter which cannot serve an
-   * operation every adapter has to serve is refused before a workflow waits for it.
+   * Whether this adapter can execute the given operation - which is whether it
+   * contributes a handler for it. Asked while the application boots, once per adapter
+   * and operation, so an adapter missing an operation every adapter has to serve is
+   * refused before a workflow waits for it.
    * <p>
-   * It is more than "is there a handler": as long as the compatibility bridge is
-   * around, a handler may be one which calls a method the adapter never implemented,
-   * and that has to count as absent.
+   * An adapter which has not moved to handlers answers the compatibility bridge here,
+   * so it serves every core operation and the two it may not be able to serve answer
+   * for themselves when they are called, exactly as they did before. What the boot
+   * check protects is the shape adapters are written in now: there the map IS the
+   * statement, and a forgotten operation is a forgotten operation.
    *
    * @param operation The operation to ask about
    * @return Whether a handler serves it
@@ -168,12 +171,7 @@ public interface MigratableProcessService<A> {
   default boolean serves(
       final PhaseOperation operation) {
 
-    final var handler = phaseOperations()
-        .get(operation);
-    if (handler == null) {
-      return false;
-    }
-    return !LegacyPhaseOperations.isBridge(handler) || LegacyPhaseOperations.isImplementedBy(getClass(), operation);
+    return phaseOperations().containsKey(operation);
 
   }
 
@@ -964,10 +962,10 @@ public interface MigratableProcessService<A> {
   }
 
   /**
-   * What an adapter which has neither a handler nor the method behind it throws. It is
-   * reached only where the boot check was skipped: an adapter missing an operation
-   * every adapter has to serve does not get to run, see
-   * {@code MigrationProcessService#validateAdapterOperationsAtStartup()}.
+   * What an adapter on the compatibility bridge throws where the method behind a
+   * handler was never implemented. An adapter which has moved to handlers cannot get
+   * here: there a missing operation is a missing entry in its map, and the boot refuses
+   * it (see {@code MigrationProcessService#validateAdapterOperationsAtStartup()}).
    */
   private UnsupportedOperationException notImplemented(
       final PhaseOperation operation,

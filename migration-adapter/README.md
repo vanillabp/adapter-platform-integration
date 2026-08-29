@@ -806,9 +806,13 @@ enum constants nothing else guarantees them.
 
 An adapter which cannot serve an operation every adapter has to serve is refused while
 the application boots (`MigrationProcessService#validateAdapterOperationsAtStartup()`,
-held by `AdapterOperationsAtStartupTest`). That check took the compiler's place: the
-phase methods used to be abstract, and an adapter which contributes handlers must not be
-made to implement them.
+held by `AdapterOperationsAtStartupTest`). The map is the adapter's statement about what
+it serves, so a forgotten operation is caught before a workflow waits for it. The check
+does not look behind a handler: asking the class whether it implements the method a
+bridge calls would mean reflection, and in a native image a method nobody registered
+looks like a method nobody wrote — every adapter of a native application would be
+refused. An adapter on the bridge therefore serves every core operation, and a method it
+never implemented answers for itself when it is called, as it did before handlers.
 
 **The compatibility bridge.** `phaseOperations()` answers, by default, a handler per
 core operation calling the pair of methods each operation used to be

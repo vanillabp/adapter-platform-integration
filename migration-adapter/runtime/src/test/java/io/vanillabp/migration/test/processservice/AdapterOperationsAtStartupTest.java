@@ -25,10 +25,12 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
  * An adapter which cannot serve an operation every adapter has to serve is refused
- * while the application boots. Before handlers, the compiler enforced that: the phase
- * methods were abstract. They are not any more - an adapter contributes handlers
- * instead - so this check is what took the compiler's place, and it has to accept both
- * shapes as long as the compatibility bridge is around.
+ * while the application boots. The map an adapter answers IS its statement about what
+ * it serves, so a forgotten operation is caught before a workflow waits for it.
+ * <p>
+ * An adapter which still runs on the compatibility bridge serves every core operation
+ * by definition, which the second test holds: the check must not refuse the three
+ * adapters VanillaBP ships today.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AdapterOperationsAtStartupTest {
@@ -133,7 +135,7 @@ public class AdapterOperationsAtStartupTest {
   }
 
   @Test
-  @DisplayName("An adapter which still implements the pair of methods per operation boots as well")
+  @DisplayName("An adapter still running on the compatibility bridge boots as well")
   public void theCompatibilityBridgeCounts() {
 
     processService(new SendSignalTest.RecordingAdapter("first-adapter"))
