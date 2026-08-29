@@ -4,67 +4,31 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
-## The task-invoker SPI is split into wiring and runtime (2026-08-28)
+## An adapter is registered completely, or it does not come into existence (2026-08-28)
 
-`WorkflowTaskInvoker` carried thirty methods: wiring-time duties an adapter calls while it deploys,
-and runtime duties its worker threads call. Which of them were mandatory, and when, was written in
-the javadoc and nowhere else - and Camunda 7 forgot one of them for a year, so a typo in a
-`@WorkflowTask(taskDefinition = ...)` stayed silent until a workflow reached the task.
+The collaborators the platform hands an adapter used to arrive one setter call at a time, after the
+constructor had returned. A registrar which forgot one produced an adapter that deployed its BPMN
+files, ran its tasks and never reported a workflow end - with nothing failing anywhere, because the
+object was valid and its field was simply null.
 
-**Two interfaces now.** `WorkflowTaskWiring` holds what an adapter calls while deploying
-(`validateTaskWiring`, `taskParameterNames`, `workflowTaskCompletesAsynchronously`,
-`workflowsShareTheWorkflowAggregate`, `reportConcurrentTokenElements`,
-`unsharedWorkflowAggregateProperties`, `registerProcessVersions`, `registerDeployedVersion`, and
-`resolveWorkflowAggregateIdName`, which answers the same at both times and is therefore on both).
-`WorkflowTaskInvoker` keeps the runtime ones (`invokeWorkflowTask`,
-`syncedWorkflowAggregateValues` in both flavours, `workflowTaskHandlerExists`,
-`resolveWorkflowAggregateIdName` and the two deprecated fallbacks). The core's
-`WorkflowTaskRegistry` implements both, so the platform hands out the same object and an adapter
-changes the TYPE of its fields, not where they come from: deployment code takes
-`WorkflowTaskWiring`, worker threads take `WorkflowTaskInvoker`.
+**They arrive in one object now.** `AdapterCollaborators` is built by the platform and handed to
+the adapter's constructor. Five collaborators are mandatory and a set without one of them throws,
+naming the adapter id and what is missing: `WorkflowTaskWiring`, `WorkflowTaskInvoker`,
+`NameClashAvoidanceSupport`, `WorkflowAggregateSync` and `PreCommitRegistrar`. Two are handed over
+as `Optional` because an adapter has to work without them - `WorkflowEndedInvoker` and
+`BpmsInitiatedStartInvoker` - and an adapter built without one gets a WARN naming it, since both
+platforms do provide them for every application.
 
-**Two calls became the core's duty.** `validateNoUnwiredWorkflowTaskMethods(module)` and
-`resolveProcessVersions(module)` are module-level and need nothing an adapter knows, so the core
-runs them itself once the last adapter of a workflow module finished deploying. **Adapters must
-remove their own calls** - calling them twice is harmless but pointless, and the point of the story
-is that nobody has to remember them. What stays with the adapter is `registerDeployedVersion`: only
-it knows which version its BPMS ended up with.
+**What an adapter has to change.** Its deployment service and its process service take
+`AdapterCollaborators` instead of the individual collaborators, and their `set...` calls for those
+go away. The platform builds the object:
+`AdapterBeanRegistrarSupport.collaborators(supplierContext, adapterId)` on Spring Boot,
+`AdapterCollaboratorsSupport.collaborators(...)` on Quarkus. What an adapter resolves from its own
+configuration - a job timeout, a retry backoff, the variables a worker fetches - and what its own
+extension contributes stay its own constructor arguments; the object carries nothing of that.
 
-**An application sees one difference.** A `@WorkflowTask` method matching no task of any BPMN
-process of its module now ends the boot on EVERY adapter, Camunda 7 included, with the message which
-names the method and the fix. An application which lived with such a method (a leftover after a
-model change) has to remove it or widen its annotation.
-
-## The task-invoker SPI is split into wiring and runtime (2026-08-28)
-
-`WorkflowTaskInvoker` carried thirty methods: wiring-time duties an adapter calls while it deploys,
-and runtime duties its worker threads call. Which of them were mandatory, and when, was written in
-the javadoc and nowhere else - and Camunda 7 forgot one of them for a year, so a typo in a
-`@WorkflowTask(taskDefinition = ...)` stayed silent until a workflow reached the task.
-
-**Two interfaces now.** `WorkflowTaskWiring` holds what an adapter calls while deploying
-(`validateTaskWiring`, `taskParameterNames`, `workflowTaskCompletesAsynchronously`,
-`workflowsShareTheWorkflowAggregate`, `reportConcurrentTokenElements`,
-`unsharedWorkflowAggregateProperties`, `registerProcessVersions`, `registerDeployedVersion`, and
-`resolveWorkflowAggregateIdName`, which answers the same at both times and is therefore on both).
-`WorkflowTaskInvoker` keeps the runtime ones (`invokeWorkflowTask`,
-`syncedWorkflowAggregateValues` in both flavours, `workflowTaskHandlerExists`,
-`resolveWorkflowAggregateIdName` and the two deprecated fallbacks). The core's
-`WorkflowTaskRegistry` implements both, so the platform hands out the same object and an adapter
-changes the TYPE of its fields, not where they come from: deployment code takes
-`WorkflowTaskWiring`, worker threads take `WorkflowTaskInvoker`.
-
-**Two calls became the core's duty.** `validateNoUnwiredWorkflowTaskMethods(module)` and
-`resolveProcessVersions(module)` are module-level and need nothing an adapter knows, so the core
-runs them itself once the last adapter of a workflow module finished deploying. **Adapters must
-remove their own calls** - calling them twice is harmless but pointless, and the point of the story
-is that nobody has to remember them. What stays with the adapter is `registerDeployedVersion`: only
-it knows which version its BPMS ended up with.
-
-**An application sees one difference.** A `@WorkflowTask` method matching no task of any BPMN
-process of its module now ends the boot on EVERY adapter, Camunda 7 included, with the message which
-names the method and the fix. An application which lived with such a method (a leftover after a
-model change) has to remove it or widen its annotation.
+**An application sees no difference.** Nothing in its configuration or its code changes; this is
+about how an adapter is wired to the platform. Decision 28 has the reasoning.
 
 ## The task-invoker SPI is split into wiring and runtime (2026-08-28)
 

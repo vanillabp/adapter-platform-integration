@@ -8,6 +8,14 @@ import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.core.env.Environment;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.spi.AdapterCollaborators;
+import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
+import io.vanillabp.integration.adapter.spi.PreCommitRegistrar;
+import io.vanillabp.integration.adapter.spi.WorkflowAggregateSync;
+import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker;
+import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker;
+import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
+import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 
 /**
@@ -111,6 +119,35 @@ public final class AdapterBeanRegistrarSupport {
     if (properties.getAdapters().isEmpty() && properties.getPrioritizedAdapters().isEmpty()) {
       adapterIdConsumer.accept(adapterType);
     }
+
+  }
+
+  /**
+   * Collects what this platform hands to an adapter, so that a registrar asks for the
+   * set instead of remembering the individual beans. The two collaborators an
+   * application may not have are looked up as providers and stay absent if no bean
+   * exists - which {@link AdapterCollaborators} reports naming the adapter id.
+   *
+   * @param supplierContext The context of the bean being registered
+   * @param adapterId The adapter id the beans are registered for
+   * @return The collaborators, complete
+   * @see AdapterCollaborators
+   */
+  public static AdapterCollaborators collaborators(
+      final org.springframework.beans.factory.BeanRegistry.SupplierContext supplierContext,
+      final String adapterId) {
+
+    return AdapterCollaborators
+        .forAdapter(adapterId)
+        .workflowTaskWiring(supplierContext.bean(WorkflowTaskWiring.class))
+        .workflowTaskInvoker(supplierContext.bean(WorkflowTaskInvoker.class))
+        .scoping(supplierContext.bean(NameClashAvoidanceSupport.class))
+        .workflowAggregateSync(supplierContext.bean(WorkflowAggregateSync.class))
+        .preCommitRegistrar(supplierContext.bean(PreCommitRegistrar.class))
+        .workflowEndedInvoker(supplierContext.beanProvider(WorkflowEndedInvoker.class).getIfAvailable())
+        .bpmsInitiatedStartInvoker(
+            supplierContext.beanProvider(BpmsInitiatedStartInvoker.class).getIfAvailable())
+        .build();
 
   }
 

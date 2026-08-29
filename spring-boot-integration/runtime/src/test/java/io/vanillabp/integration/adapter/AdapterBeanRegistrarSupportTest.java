@@ -173,4 +173,85 @@ public class AdapterBeanRegistrarSupportTest {
 
   }
 
+  /**
+   * What a registrar gets handed, and what it is told when a collaborator did not
+   * resolve: the two the platform provides for every application are looked up as
+   * beans, the two an application may not ask for as providers.
+   */
+  @org.junit.jupiter.api.Nested
+  @DisplayName("The collaborators a registrar asks for")
+  class Collaborators {
+
+    private org.springframework.beans.factory.BeanRegistry.SupplierContext contextWithout(
+        final Class<?>... absent) {
+
+      final var absentTypes = List.of(absent);
+      final var context = org.mockito.Mockito
+          .mock(org.springframework.beans.factory.BeanRegistry.SupplierContext.class);
+      org.mockito.Mockito
+          .lenient()
+          .when(context.bean(org.mockito.ArgumentMatchers.any(Class.class)))
+          .thenAnswer(invocation -> org.mockito.Mockito.mock((Class<?>) invocation.getArgument(0)));
+      org.mockito.Mockito
+          .lenient()
+          .when(context.beanProvider(org.mockito.ArgumentMatchers.any(Class.class)))
+          .thenAnswer(invocation -> {
+            final Class<?> type = invocation.getArgument(0);
+            final var provider = org.mockito.Mockito
+                .mock(org.springframework.beans.factory.ObjectProvider.class);
+            org.mockito.Mockito
+                .lenient()
+                .when(provider.getIfAvailable())
+                .thenReturn(
+                    absentTypes.contains(type)
+                        ? null
+                        : org.mockito.Mockito.mock(type));
+            return provider;
+          });
+      return context;
+
+    }
+
+    @Test
+    @DisplayName("A complete context yields every collaborator")
+    public void aCompleteContextYieldsEverything() {
+
+      final var collaborators = AdapterBeanRegistrarSupport.collaborators(contextWithout(), "c7");
+
+      assertEquals("c7", collaborators.adapterId());
+      org.junit.jupiter.api.Assertions.assertNotNull(collaborators.workflowTaskWiring());
+      org.junit.jupiter.api.Assertions.assertNotNull(collaborators.workflowTaskInvoker());
+      org.junit.jupiter.api.Assertions.assertNotNull(collaborators.scoping());
+      org.junit.jupiter.api.Assertions.assertNotNull(collaborators.workflowAggregateSync());
+      org.junit.jupiter.api.Assertions.assertNotNull(collaborators.preCommitRegistrar());
+      org.junit.jupiter.api.Assertions.assertTrue(collaborators.workflowEndedInvoker().isPresent());
+      org.junit.jupiter.api.Assertions.assertTrue(collaborators.bpmsInitiatedStartInvoker().isPresent());
+
+    }
+
+    @Test
+    @DisplayName("A collaborator which did not resolve is absent and named in the log")
+    public void anUnresolvedCollaboratorIsNamed(
+        final io.vanillabp.integration.test.utils.CapturedOutput output) {
+
+      final var collaborators = AdapterBeanRegistrarSupport
+          .collaborators(
+              contextWithout(io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker.class),
+              "dummy");
+
+      org.junit.jupiter.api.Assertions
+          .assertTrue(collaborators.workflowEndedInvoker().isEmpty(), "the adapter reports no workflow end");
+      org.junit.jupiter.api.Assertions
+          .assertTrue(collaborators.bpmsInitiatedStartInvoker().isPresent(), "the other one arrived");
+      final var logged = output.getAll();
+      org.junit.jupiter.api.Assertions.assertTrue(logged.contains("'dummy'"), "the line names the adapter id: "
+          + logged);
+      org.junit.jupiter.api.Assertions
+          .assertTrue(logged.contains("workflowEndedInvoker"), "and the collaborator: "
+              + logged);
+
+    }
+
+  }
+
 }
