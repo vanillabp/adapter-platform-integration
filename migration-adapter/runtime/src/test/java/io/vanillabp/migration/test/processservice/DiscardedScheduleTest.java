@@ -3,8 +3,6 @@ package io.vanillabp.migration.test.processservice;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -126,7 +124,8 @@ public class DiscardedScheduleTest {
       final PhaseTwoOutbox outbox) {
 
     @SuppressWarnings("unchecked")
-    final MigratableProcessService<Object> adapter = mock(MigratableProcessService.class);
+    final MigratableProcessService<Object> adapter = io.vanillabp.migration.test.AdapterMocks
+        .servingItsOperations(mock(MigratableProcessService.class));
     lenient().when(adapter.getAdapterId()).thenReturn(ADAPTER);
     lenient()
         .when(adapter.awarenessOfWorkflow(any(), any(), any()))
@@ -176,10 +175,7 @@ public class DiscardedScheduleTest {
   public void aDiscardedCorrelationIsReported() {
 
     final var outbox = mock(PhaseTwoOutbox.class);
-    when(
-        outbox
-            .scheduleCorrelateMessage(
-                eq(MODULE), eq(PROCESS), any(), eq("ItemShipped"), eq("item-4711")))
+    when(outbox.schedule(any()))
         .thenReturn(false);
 
     serviceWithDiscardingOutbox(outbox).correlateMessage(new Object(), "ItemShipped", "item-4711");
@@ -203,7 +199,7 @@ public class DiscardedScheduleTest {
   public void aDiscardedStartIsReported() {
 
     final var outbox = mock(PhaseTwoOutbox.class);
-    when(outbox.scheduleStartWorkflow(eq(MODULE), eq(PROCESS), any(), anyString()))
+    when(outbox.schedule(any()))
         .thenReturn(false);
 
     serviceWithDiscardingOutbox(outbox).startWorkflow(new Object());
@@ -220,10 +216,7 @@ public class DiscardedScheduleTest {
   public void aScheduledOperationIsSilent() {
 
     final var outbox = mock(PhaseTwoOutbox.class);
-    when(
-        outbox
-            .scheduleCorrelateMessage(
-                eq(MODULE), eq(PROCESS), any(), eq("ItemShipped"), eq("item-4711")))
+    when(outbox.schedule(any()))
         .thenReturn(true);
 
     serviceWithDiscardingOutbox(outbox).correlateMessage(new Object(), "ItemShipped", "item-4711");

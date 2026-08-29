@@ -9,10 +9,16 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
 import io.vanillabp.integration.adapter.migration.workflowtask.TaskDeliveryKey;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskHandler;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
+import io.vanillabp.integration.adapter.spi.PhaseOneRequest;
+import io.vanillabp.integration.adapter.spi.PhaseOperationHandler;
+import io.vanillabp.integration.adapter.spi.PhaseTwoRequest;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.Election;
+import io.vanillabp.integration.spi.PhaseOperation;
+import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.spi.TaskDeliveryLog;
@@ -1570,8 +1576,260 @@ public class MigrationProcessService<A> {
 
   }
 
+  /**
+   * Executes an operation on the workflow of the given aggregate: the aggregate is
+   * saved, the BPMS which serves the operation is elected, the operation's phase one
+   * runs inside the caller's transaction and its phase two is planned in the outbox.
+   * <p>
+   * This is the one method every outbound call of an application ends up in. What
+   * differs per operation is the operation itself - which BPMS serves it
+   * ({@link Election}), what its handler asks and does, how its idempotency key is
+   * built - so an operation added later is a constant in {@link PhaseOperation} and a
+   * handler per adapter, and nothing here.
+   *
+   * @param operation The operation to execute
+   * @param workflowAggregate The workflow aggregate, <code>null</code> for an operation
+   *          which is not about one workflow (a broadcast signal)
+   * @param args The operation's arguments, see {@link PhaseTwoCall#args()}
+   * @return The attached workflow aggregate, <code>null</code> where none was given
+   */
+  public A execute(
+      final PhaseOperation operation,
+      final A workflowAggregate,
+      final Map<String, String> args) {
+
+    return switch (operation.election()) {
+      case STARTS_THE_WORKFLOW -> startWorkflow(operation, workflowAggregate, args);
+      case HOLDS_THE_TASK, HOLDS_THE_USER_TASK, HOLDS_THE_WORKFLOW -> addressWorkflow(
+          operation, workflowAggregate, args);
+      case EVERY_DEPLOYED_BPMS -> broadcast(operation, args);
+      case OWN_DISPATCH -> throw notAProcessServiceOperation(operation);
+    };
+
+  }
+
+  /**
+   * Starts the workflow of a newly saved aggregate.
+   *
+   * @param workflowAggregate The workflow aggregate
+   * @return The attached workflow aggregate
+   */
   public A startWorkflow(
       final A workflowAggregate) {
+
+    return execute(PhaseOperation.START_WORKFLOW, workflowAggregate, Map.of());
+
+  }
+
+  /**
+   * Starts a new workflow by a message start event - start semantics like
+   * {@link #startWorkflow(Object)}: the FIRST prioritized adapter starts, its ID is
+   * persisted with the outbox entry, and a workflow is started at most once per
+   * aggregate.
+   *
+   * @param workflowAggregate The workflow aggregate
+   * @param messageName The BPMN message name of the message start event
+   * @return The attached workflow aggregate
+   */
+  public A startWorkflowByMessage(
+      final A workflowAggregate,
+      final String messageName) {
+
+    return execute(
+        PhaseOperation.START_WORKFLOW_BY_MESSAGE,
+        workflowAggregate,
+        Map.of(PhaseTwoCall.ARG_MESSAGE_NAME, messageName));
+
+  }
+
+  /**
+   * Completes an asynchronous task (a <code>&#64;WorkflowTask</code> method with a
+   * <code>&#64;TaskId</code> parameter returned without completing).
+   *
+   * @param workflowAggregate The workflow aggregate
+   * @param taskId The task's ID (as reported to the <code>&#64;TaskId</code> parameter)
+   * @return The attached workflow aggregate
+   */
+  public A completeTask(
+      final A workflowAggregate,
+      final String taskId) {
+
+    return execute(PhaseOperation.COMPLETE_TASK, workflowAggregate, Map.of(PhaseTwoCall.ARG_TASK_ID, taskId));
+
+  }
+
+  /**
+   * Cancels an asynchronous task by BPMN error.
+   *
+   * @param workflowAggregate The workflow aggregate
+   * @param taskId The task's ID
+   * @param bpmnErrorCode The error code to be caught by BPMN error boundary events
+   * @return The attached workflow aggregate
+   */
+  public A cancelTask(
+      final A workflowAggregate,
+      final String taskId,
+      final String bpmnErrorCode) {
+
+    return execute(
+        PhaseOperation.CANCEL_TASK,
+        workflowAggregate,
+        Map.of(PhaseTwoCall.ARG_TASK_ID, taskId, PhaseTwoCall.ARG_BPMN_ERROR_CODE, bpmnErrorCode));
+
+  }
+
+  /**
+   * Completes a USER task - user-task IDs live in a namespace of their own, which is
+   * why this is an operation of its own.
+   *
+   * @param workflowAggregate The workflow aggregate
+   * @param taskId The user task's ID
+   * @return The attached workflow aggregate
+   */
+  public A completeUserTask(
+      final A workflowAggregate,
+      final String taskId) {
+
+    return execute(PhaseOperation.COMPLETE_USER_TASK, workflowAggregate, Map.of(PhaseTwoCall.ARG_TASK_ID, taskId));
+
+  }
+
+  /**
+   * Cancels a USER task by BPMN error.
+   *
+   * @param workflowAggregate The workflow aggregate
+   * @param taskId The user task's ID
+   * @param bpmnErrorCode The error code to be caught by BPMN error boundary events
+   * @return The attached workflow aggregate
+   */
+  public A cancelUserTask(
+      final A workflowAggregate,
+      final String taskId,
+      final String bpmnErrorCode) {
+
+    return execute(
+        PhaseOperation.CANCEL_USER_TASK,
+        workflowAggregate,
+        Map.of(PhaseTwoCall.ARG_TASK_ID, taskId, PhaseTwoCall.ARG_BPMN_ERROR_CODE, bpmnErrorCode));
+
+  }
+
+  /**
+   * Correlates a message with the aggregate's workflow. PAYLOAD DOCTRINE: no message
+   * content travels to the BPMS - only the message name and the optional correlation
+   * id.
+   *
+   * @param workflowAggregate The workflow aggregate
+   * @param messageName The BPMN message name
+   * @param correlationId The correlation id or <code>null</code>
+   * @return The attached workflow aggregate
+   */
+  public A correlateMessage(
+      final A workflowAggregate,
+      final String messageName,
+      final String correlationId) {
+
+    final var args = new java.util.LinkedHashMap<String, String>();
+    args.put(PhaseTwoCall.ARG_MESSAGE_NAME, messageName);
+    if (correlationId != null) {
+      args.put(PhaseTwoCall.ARG_CORRELATION_ID, correlationId);
+    }
+    return execute(PhaseOperation.CORRELATE_MESSAGE, workflowAggregate, args);
+
+  }
+
+  /**
+   * Pushes a changed workflow-aggregate to the BPMS holding its workflow.
+   * <p>
+   * WHICH values travel is the sync model's business ({@code @SyncWithBPMS}), not this
+   * method's. WHERE they land depends on the task ID: <code>null</code> means the
+   * workflow's global scope, a task ID means the scope of that task instance only - a
+   * task-scoped push deliberately leaves the global values as they were.
+   *
+   * @param workflowAggregate The workflow aggregate
+   * @param taskId The ID of the task whose scope receives the values, or
+   *        <code>null</code> for the workflow's global scope
+   * @return The attached workflow aggregate
+   */
+  public A aggregateChanged(
+      final A workflowAggregate,
+      final String taskId) {
+
+    return execute(
+        PhaseOperation.AGGREGATE_CHANGED,
+        workflowAggregate,
+        taskId == null
+            ? Map.of()
+            : Map.of(PhaseTwoCall.ARG_TASK_ID, taskId));
+
+  }
+
+  /**
+   * Broadcasts a BPMN signal to every BPMS the workflow module is deployed to.
+   * <p>
+   * A signal is not addressed to a workflow, so nothing is probed and no aggregate is
+   * loaded or saved. Every deployed BPMS is asked, not only the first-priority one:
+   * during a migration the workflows waiting for the signal are spread across them, and
+   * a broadcast reaching half of them would be worse than none.
+   *
+   * @param signalName The PLAIN BPMN signal name
+   */
+  public void sendSignal(
+      final String signalName) {
+
+    if ((signalName == null) || signalName.isBlank()) {
+      throw new IllegalArgumentException(
+          """
+              No signal name given (BPMN process '%s' of workflow module '%s')! Pass the signal name \
+              as it is modelled - VanillaBP applies the name scoping of the workflow module."""
+              .formatted(bpmnProcessId, workflowModuleId));
+    }
+    execute(PhaseOperation.SEND_SIGNAL, null, Map.of(PhaseTwoCall.ARG_SIGNAL_NAME, signalName));
+
+  }
+
+  /**
+   * Executes phase two of an operation, dispatched by the {@link PhaseTwoRouter} after
+   * the local transaction was committed. The BPMS is elected the way the operation says
+   * ({@link Election}): the adapter persisted with the entry for the operations which
+   * chose one in phase one, a fresh probe for the operations which address whichever
+   * BPMS holds the workflow now.
+   *
+   * @param operation The operation to execute
+   * @param workflowAggregateId The ID of the workflow aggregate in its own type, or
+   *          <code>null</code> for an operation which is not about one workflow
+   * @param adapterId The adapter ID persisted with the entry, or <code>null</code>
+   * @param args The operation's arguments as they were scheduled
+   * @param previouslyAttempted Whether the outbox entry was dispatched before
+   */
+  public void executePhaseTwo(
+      final PhaseOperation operation,
+      final Object workflowAggregateId,
+      final String adapterId,
+      final Map<String, String> args,
+      final boolean previouslyAttempted) {
+
+    switch (operation.election()) {
+      case STARTS_THE_WORKFLOW -> startWorkflowPhaseTwo(
+          operation, workflowAggregateId, adapterId, args, previouslyAttempted);
+      case HOLDS_THE_TASK, HOLDS_THE_USER_TASK, HOLDS_THE_WORKFLOW -> addressWorkflowPhaseTwo(
+          operation, workflowAggregateId, args);
+      case EVERY_DEPLOYED_BPMS -> broadcastPhaseTwo(operation, adapterId, args);
+      case OWN_DISPATCH -> throw notAProcessServiceOperation(operation);
+    }
+
+  }
+
+  /**
+   * Phase one of an operation which STARTS a workflow: there is nothing to probe yet,
+   * so the first prioritized adapter is elected and its id travels with the entry -
+   * phase two uses exactly this adapter instead of re-electing one from the then-current
+   * priorities.
+   */
+  private A startWorkflow(
+      final PhaseOperation operation,
+      final A workflowAggregate,
+      final Map<String, String> args) {
 
     // persist to get ID in case of @Id @GeneratedValue
     // or force optimistic locking exceptions before running
@@ -1589,33 +1847,18 @@ public class MigrationProcessService<A> {
           """
               The ID of the workflow aggregate of class '%s' is null or blank after saving! The ID \
               identifies the workflow in the BPMS (business key / process variable) and is part of \
-              the start's idempotency key - assign it before calling startWorkflow or use a \
-              generated ID which is assigned on save."""
-              .formatted(workflowAggregateClass.getName()));
+              the start's idempotency key - assign it before %s or use a generated ID which is \
+              assigned on save."""
+              .formatted(workflowAggregateClass.getName(), operation.describe(args)));
     }
 
     final var adapter = adapterProcessServices
         .getFirst();
 
-    adapter.startWorkflowPhaseOne(workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, attachedAggregate);
+    handlerOf(adapter, operation, args)
+        .phaseOne(phaseOneRequest(attachedAggregate, args));
 
-    // backstop only: the outbox was already resolved and validated at startup
-    // (validatePhaseTwoOutboxAtStartup) - this fires only if that was skipped
-    final var outbox = resolvePhaseTwoOutbox();
-    if (outbox == null) {
-      throw new IllegalStateException(
-          buildNoOutboxMessage(adapter.getAdapterId()));
-    }
-    final var scheduled = outbox.scheduleStartWorkflow(
-        workflowModuleId,
-        bpmnProcessId,
-        aggregateId,
-        adapter.getAdapterId());
-    if (!scheduled) {
-      reportDiscardedSchedule(
-          "starting the workflow of aggregate '%s' (BPMN process '%s' of workflow module '%s')"
-              .formatted(aggregateId, bpmnProcessId, workflowModuleId));
-    }
+    schedulePhaseTwo(operation, aggregateId, adapter.getAdapterId(), adapter.getAdapterId(), args);
 
     // the workflow belongs to this adapter from now on, which the next operation on
     // it has to know BEFORE phase two ran: on a remote BPMS the start is dispatched
@@ -1628,71 +1871,45 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Executes phase two of starting a workflow, dispatched by the
-   * {@link PhaseTwoRouter} after the local transaction of
-   * {@link #startWorkflow(Object)} was committed. The adapter elected in phase one
-   * was persisted with the outbox entry and is used here - there is no re-election
-   * from the then-current priorities.
-   *
-   * @param workflowAggregateId The ID of the workflow aggregate (in its original type)
-   * @param adapterId The ID of the adapter elected in phase one
+   * Phase two of an operation which STARTS a workflow. The adapter elected in phase one
+   * was persisted with the outbox entry and is used here - there is no re-election from
+   * the then-current priorities. If the entry was dispatched before (a recovered or
+   * retried entry), the re-dispatch mitigation probes
+   * {@link MigratableProcessService#awarenessOfWorkflowForRedispatch} on the recorded
+   * adapter FIRST: a workflow already known there means the previous dispatch already
+   * started it - the entry is consumed without starting a second instance. The residual
+   * at-least-once window (a crash between the remote start and marking the entry done,
+   * before any awareness lag caught up) remains and is ACCEPTED - this mitigation
+   * minimizes duplicates, it does not close the window.
    */
-  public void startWorkflowPhaseTwo(
-      final Object workflowAggregateId,
-      final String adapterId) {
-
-    startWorkflowPhaseTwo(workflowAggregateId, adapterId, false);
-
-  }
-
-  /**
-   * Executes phase two of starting a workflow - see
-   * {@link #startWorkflowPhaseTwo(Object, String)}. If the outbox entry was
-   * dispatched before (a recovered or retried entry), the re-dispatch mitigation
-   * probes {@link MigratableProcessService#awarenessOfWorkflowForRedispatch} on
-   * the recorded adapter FIRST: a workflow already known there means the previous
-   * dispatch already started it - the entry is consumed without starting a second
-   * instance. The residual at-least-once window (a crash between the remote start
-   * and marking the entry done, before any awareness lag caught up) remains and
-   * is ACCEPTED - this mitigation minimizes duplicates, it does not close the
-   * window.
-   *
-   * @param workflowAggregateId The ID of the workflow aggregate (in its original type)
-   * @param adapterId The ID of the adapter elected in phase one
-   * @param previouslyAttempted Whether the outbox entry was dispatched before
-   */
-  public void startWorkflowPhaseTwo(
+  private void startWorkflowPhaseTwo(
+      final PhaseOperation operation,
       final Object workflowAggregateId,
       final String adapterId,
+      final Map<String, String> args,
       final boolean previouslyAttempted) {
 
+    final var subject = subjectOf(workflowAggregateId);
     final var adapter = adapterProcessServices
         .stream()
         .filter(processService -> processService.getAdapterId().equals(adapterId))
         .findFirst()
         .orElseThrow(() -> new IllegalStateException(
             """
-                Cannot execute phase two of starting the workflow of aggregate '%s': adapter '%s' is \
-                not (or no longer) configured for BPMN process '%s' of workflow module '%s'! The \
-                outbox entry is stale - the adapter was probably removed from the configuration \
-                (property 'vanillabp.prioritized-adapters' or its module-/workflow-level \
-                overrides) after the entry was scheduled. Restore the adapter's configuration or \
-                remove the entry from the outbox store."""
-                .formatted(
-                    workflowAggregateId,
-                    adapterId,
-                    bpmnProcessId,
-                    workflowModuleId)));
+                Cannot execute phase two of %s of %s: adapter '%s' is not (or no longer) configured! \
+                The outbox entry is stale - the adapter was probably removed from the configuration \
+                (property 'vanillabp.prioritized-adapters' or its module-/workflow-level overrides) \
+                after the entry was scheduled. Restore the adapter's configuration or remove the \
+                entry from the outbox store."""
+                .formatted(operation.describe(args), subject, adapterId)));
 
-    if (previouslyAttempted && skipRedispatchedStart(adapter, workflowAggregateId, "starting the workflow")) {
+    if (previouslyAttempted && skipRedispatchedStart(adapter, workflowAggregateId, operation.describe(args))) {
       return;
     }
     runPhaseTwo(
         adapter,
-        "starting the workflow of aggregate '%s'".formatted(workflowAggregateId),
-        () -> adapter
-            .startWorkflowPhaseTwo(
-                workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId));
+        "%s of %s".formatted(operation.describe(args), subject),
+        () -> handlerOf(adapter, operation, args).phaseTwo(phaseTwoRequest(workflowAggregateId, args)));
     // the workflow exists now, and this adapter created it: the next operation on it
     // (the classic one is correlating the message which lets it continue) probes this
     // adapter first and waits out its BPMS' visibility delay instead of failing
@@ -1747,266 +1964,51 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Completes an asynchronous task (a <code>&#64;WorkflowTask</code> method with a
-   * <code>&#64;TaskId</code> parameter returned without completing). The aggregate
-   * is saved, the BPMS holding the task is located by probing the prioritized
-   * adapters ({@link WorkflowLocator}), a non-advancing phase-one check runs inside
-   * the caller's transaction and the completion itself is scheduled through the
-   * phase-two outbox.
-   *
-   * @param workflowAggregate The workflow aggregate
-   * @param taskId The task's ID (as reported to the <code>&#64;TaskId</code>
-   *        parameter)
-   * @return The attached workflow aggregate
+   * Phase one of an operation addressed to whichever BPMS holds the task respectively
+   * the workflow: the aggregate is saved, the adapters are probed the way the
+   * operation's election says, the elected adapter's handler asks its question and the
+   * operation is planned in the outbox.
    */
-  public A completeTask(
+  private A addressWorkflow(
+      final PhaseOperation operation,
       final A workflowAggregate,
-      final String taskId) {
+      final Map<String, String> args) {
 
-    return executeTaskOperation(
-        workflowAggregate,
-        taskId,
-        "completing",
-        (
-            adapter,
-            aggregateId) -> adapter.awarenessOfTask(workflowScope(), aggregateId, taskId),
-        (
-            adapter,
-            attachedAggregate) -> adapter
-                .completeTaskPhaseOne(
-                    workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, attachedAggregate, taskId),
-        (
-            outbox,
-            aggregateId) -> outbox
-                .scheduleCompleteTask(workflowModuleId, bpmnProcessId, aggregateId, taskId));
-
-  }
-
-  /**
-   * Cancels an asynchronous task by BPMN error - same flow as
-   * {@link #completeTask(Object, String)}.
-   *
-   * @param workflowAggregate The workflow aggregate
-   * @param taskId The task's ID
-   * @param bpmnErrorCode The error code to be caught by BPMN error boundary events
-   * @return The attached workflow aggregate
-   */
-  public A cancelTask(
-      final A workflowAggregate,
-      final String taskId,
-      final String bpmnErrorCode) {
-
-    return executeTaskOperation(
-        workflowAggregate,
-        taskId,
-        "canceling",
-        (
-            adapter,
-            aggregateId) -> adapter.awarenessOfTask(workflowScope(), aggregateId, taskId),
-        (
-            adapter,
-            attachedAggregate) -> adapter
-                .cancelTaskPhaseOne(
-                    workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, attachedAggregate, taskId,
-                    bpmnErrorCode),
-        (
-            outbox,
-            aggregateId) -> outbox
-                .scheduleCancelTask(workflowModuleId, bpmnProcessId, aggregateId, taskId, bpmnErrorCode));
-
-  }
-
-  @FunctionalInterface
-  private interface PhaseOneAction<A> {
-
-    void run(
-        MigratableProcessService<A> adapter,
-        A attachedAggregate);
-
-  }
-
-  @FunctionalInterface
-  private interface OutboxAction {
-
-    boolean schedule(
-        PhaseTwoOutbox outbox,
-        Object aggregateId);
-
-  }
-
-  /**
-   * Completes a USER task - same flow as {@link #completeTask(Object, String)}
-   * but probing {@code awarenessOfUserTask} and executing the user-task SPI
-   * methods (user-task IDs live in a different namespace than service-task IDs).
-   *
-   * @param workflowAggregate The workflow aggregate
-   * @param taskId The user task's ID
-   * @return The attached workflow aggregate
-   */
-  public A completeUserTask(
-      final A workflowAggregate,
-      final String taskId) {
-
-    return executeTaskOperation(
-        workflowAggregate,
-        taskId,
-        "completing user",
-        (
-            adapter,
-            aggregateId) -> adapter.awarenessOfUserTask(workflowScope(), aggregateId, taskId),
-        (
-            adapter,
-            attachedAggregate) -> adapter
-                .completeUserTaskPhaseOne(
-                    workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, attachedAggregate, taskId),
-        (
-            outbox,
-            aggregateId) -> outbox
-                .scheduleCompleteUserTask(workflowModuleId, bpmnProcessId, aggregateId, taskId));
-
-  }
-
-  /**
-   * Cancels a USER task by BPMN error - same flow as
-   * {@link #cancelTask(Object, String, String)}.
-   *
-   * @param workflowAggregate The workflow aggregate
-   * @param taskId The user task's ID
-   * @param bpmnErrorCode The error code to be caught by BPMN error boundary events
-   * @return The attached workflow aggregate
-   */
-  public A cancelUserTask(
-      final A workflowAggregate,
-      final String taskId,
-      final String bpmnErrorCode) {
-
-    return executeTaskOperation(
-        workflowAggregate,
-        taskId,
-        "canceling user",
-        (
-            adapter,
-            aggregateId) -> adapter.awarenessOfUserTask(workflowScope(), aggregateId, taskId),
-        (
-            adapter,
-            attachedAggregate) -> adapter
-                .cancelUserTaskPhaseOne(
-                    workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, attachedAggregate, taskId,
-                    bpmnErrorCode),
-        (
-            outbox,
-            aggregateId) -> outbox
-                .scheduleCancelUserTask(workflowModuleId, bpmnProcessId, aggregateId, taskId, bpmnErrorCode));
-
-  }
-
-  /**
-   * Executes phase two of completing a user task - see
-   * {@link #completeTaskPhaseTwo(Object, String)}.
-   *
-   * @param workflowAggregateId The ID of the workflow aggregate (original type)
-   * @param taskId The user task's ID
-   */
-  public void completeUserTaskPhaseTwo(
-      final Object workflowAggregateId,
-      final String taskId) {
-
-    executeTaskPhaseTwo(
-        workflowAggregateId,
-        taskId,
-        "completing user",
-        (
-            adapter,
-            aggregateId) -> adapter.awarenessOfUserTask(workflowScope(), aggregateId, taskId),
-        adapter -> adapter
-            .completeUserTaskPhaseTwo(
-                workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, taskId));
-
-  }
-
-  /**
-   * Executes phase two of canceling a user task - see
-   * {@link #cancelTaskPhaseTwo(Object, String, String)}.
-   *
-   * @param workflowAggregateId The ID of the workflow aggregate (original type)
-   * @param taskId The user task's ID
-   * @param bpmnErrorCode The error code to be caught by BPMN error boundary events
-   */
-  public void cancelUserTaskPhaseTwo(
-      final Object workflowAggregateId,
-      final String taskId,
-      final String bpmnErrorCode) {
-
-    executeTaskPhaseTwo(
-        workflowAggregateId,
-        taskId,
-        "canceling user",
-        (
-            adapter,
-            aggregateId) -> adapter.awarenessOfUserTask(workflowScope(), aggregateId, taskId),
-        adapter -> adapter
-            .cancelUserTaskPhaseTwo(
-                workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, taskId,
-                bpmnErrorCode));
-
-  }
-
-  /**
-   * Correlates a message with the aggregate's workflow: the aggregate is saved,
-   * the BPMS running the workflow is located by probing
-   * {@code awarenessOfWorkflow}, and the correlation is scheduled through the
-   * outbox. PAYLOAD DOCTRINE: no message
-   * content travels to the BPMS - only the message name and the optional
-   * correlation id.
-   *
-   * @param workflowAggregate The workflow aggregate
-   * @param messageName The BPMN message name
-   * @param correlationId The correlation id or <code>null</code>
-   * @return The attached workflow aggregate
-   */
-  public A correlateMessage(
-      final A workflowAggregate,
-      final String messageName,
-      final String correlationId) {
-
+    // persist changes made before the operation - identical to a workflow start, the
+    // aggregate rides the caller's transaction
     final var attachedAggregate = aggregatePersistenceSupport
         .save(workflowAggregate);
     final var aggregateId = aggregatePersistenceSupport
         .getAggregateId(attachedAggregate);
 
-    final var subject = "workflow of aggregate '%s' (BPMN process '%s' of workflow module '%s')"
-        .formatted(aggregateId, bpmnProcessId, workflowModuleId);
+    final var subject = subjectOf(aggregateId);
 
     final var location = workflowLocator.locate(
         adapterProcessServices,
-        adapter -> adapter.awarenessOfWorkflow(workflowScope(), aggregatePersistenceSupport, aggregateId),
+        adapter -> probe(operation, adapter, aggregateId, args),
         aggregateId,
         subject,
         WorkflowLocator.Patience.NONE);
 
     switch (location.awareness()) {
       case COMPLETED -> {
-        // the workflow already ended - correlating is a no-op with warning
+        // what the operation would advance is over: a no-op with a warning, and the
+        // aggregate is saved either way - which is what the caller mainly wanted
         log.warn(
-            "Ignored correlating message '{}' with {}: adapter '{}' reports the workflow as "
-                + "already completed",
-            messageName,
+            "Ignored {} of {}: adapter '{}' reports it as already completed",
+            operation.describe(args),
             subject,
             location.adapter().getAdapterId());
         return attachedAggregate;
       }
       case UNKNOWN_TO_BPMS -> {
-        if (!location.isUnknownButExpected()) {
-          throw new io.vanillabp.spi.process.WorkflowNotFoundException(
-              ("No configured BPMS knows the %s - message '%s' cannot be correlated (probed "
-                  + "adapters, in prioritized order: %s)! Likely causes: %s To START a workflow by "
-                  + "a message use startWorkflowByMessage instead.")
-                  .formatted(subject, messageName, prioritizedAdapters, likelyCausesOfUnknownWorkflow()));
+        if (!addressesTheWorkflow(operation) || !location.isUnknownButExpected()) {
+          throw unknownToEveryBpms(operation, args, subject);
         }
-        // the workflow exists - adapter '...' holds it - but its read model has not
-        // caught up. Plan the correlation and let the dispatch ask again, where
+        // the workflow exists - the hinted adapter holds it - but its read model has
+        // not caught up. Plan the operation and let the dispatch ask again, where
         // waiting costs an attempt instead of the caller's database connection
-        reportNotVisibleYet(location.hintedAdapterId(), subject, "correlating message '%s'".formatted(messageName));
+        reportNotVisibleYet(location.hintedAdapterId(), subject, operation.describe(args));
       }
       default -> {
         // ACTIVE - fall through
@@ -2015,153 +2017,411 @@ public class MigrationProcessService<A> {
 
     final var adapter = location.adapter();
     if (adapter != null) {
-      adapter.correlateMessagePhaseOne(
-          workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, attachedAggregate, messageName,
-          correlationId);
+      handlerOf(adapter, operation, args)
+          .phaseOne(phaseOneRequest(attachedAggregate, args));
     }
 
-    final var outbox = resolvePhaseTwoOutbox();
-    if (outbox == null) {
-      throw new IllegalStateException(
-          buildNoOutboxMessage(adapterIdOf(location)));
-    }
-    final var scheduled = outbox
-        .scheduleCorrelateMessage(workflowModuleId, bpmnProcessId, aggregateId, messageName, correlationId);
-    if (!scheduled) {
-      reportDiscardedSchedule(
-          "correlating message '%s' (correlation id '%s') with the workflow of aggregate '%s' "
-              .formatted(messageName, correlationId, aggregateId) + "(BPMN process '%s' of workflow module '%s')"
-                  .formatted(bpmnProcessId, workflowModuleId));
-    }
+    // NO adapter id is persisted: the BPMS which holds the workflow is asked again at
+    // dispatch time, because between the two phases a migration may have moved it
+    schedulePhaseTwo(operation, aggregateId, null, adapterIdOf(location), args);
 
     return attachedAggregate;
 
   }
 
   /**
-   * Pushes a changed workflow-aggregate to the BPMS holding its workflow: the
-   * aggregate is saved, the BPMS is located by probing {@code awarenessOfWorkflow},
-   * and the push is scheduled through the outbox.
-   * <p>
-   * WHICH values travel is the sync model's business ({@code @SyncWithBPMS}), not
-   * this method's. WHERE they land depends on the task ID: <code>null</code> means
-   * the workflow's global scope, a task ID means the scope of that task instance
-   * only - a task-scoped push deliberately leaves the global values as they were.
-   *
-   * @param workflowAggregate The workflow aggregate
-   * @param taskId The ID of the task whose scope receives the values, or
-   *        <code>null</code> for the workflow's global scope
-   * @return The attached workflow aggregate
+   * Phase two of an operation addressed to whichever BPMS holds the task respectively
+   * the workflow - the election runs again here, and what is gone by now is a stale
+   * entry (logged, consumed).
    */
-  public A aggregateChanged(
-      final A workflowAggregate,
-      final String taskId) {
-
-    final var attachedAggregate = aggregatePersistenceSupport
-        .save(workflowAggregate);
-    final var aggregateId = aggregatePersistenceSupport
-        .getAggregateId(attachedAggregate);
-
-    final var subject = "workflow of aggregate '%s' (BPMN process '%s' of workflow module '%s')"
-        .formatted(aggregateId, bpmnProcessId, workflowModuleId);
-
-    final var location = workflowLocator.locate(
-        adapterProcessServices,
-        adapter -> adapter.awarenessOfWorkflow(workflowScope(), aggregatePersistenceSupport, aggregateId),
-        aggregateId,
-        subject,
-        WorkflowLocator.Patience.NONE);
-
-    switch (location.awareness()) {
-      case COMPLETED -> {
-        // a workflow which ended has no variables worth updating - the aggregate is
-        // saved either way, which is what the caller mainly wanted
-        log.warn(
-            "Ignored pushing the changed aggregate of {} to the BPMS: adapter '{}' reports the "
-                + "workflow as already completed",
-            subject,
-            location.adapter().getAdapterId());
-        return attachedAggregate;
-      }
-      case UNKNOWN_TO_BPMS -> {
-        if (!location.isUnknownButExpected()) {
-          throw new io.vanillabp.spi.process.WorkflowNotFoundException(
-              ("No configured BPMS knows the %s - the changed aggregate cannot be pushed (probed "
-                  + "adapters, in prioritized order: %s)! The aggregate itself was saved. Likely "
-                  + "causes: %s")
-                  .formatted(subject, prioritizedAdapters, likelyCausesOfUnknownWorkflow()));
-        }
-        reportNotVisibleYet(location.hintedAdapterId(), subject, "pushing the changed aggregate");
-      }
-      default -> {
-        // ACTIVE - fall through
-      }
-    }
-
-    final var adapter = location.adapter();
-    if (adapter != null) {
-      adapter.aggregateChangedPhaseOne(
-          workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, attachedAggregate, taskId);
-    }
-
-    final var outbox = resolvePhaseTwoOutbox();
-    if (outbox == null) {
-      throw new IllegalStateException(
-          buildNoOutboxMessage(adapterIdOf(location)));
-    }
-    // no idempotency key, so nothing can discard it (decision 2 in the repository's
-    // DECISIONS.md: the values are read at dispatch time) - the answer is always true
-    outbox.scheduleAggregateChanged(workflowModuleId, bpmnProcessId, aggregateId, taskId);
-
-    return attachedAggregate;
-
-  }
-
-  /**
-   * Executes phase two of pushing a changed workflow-aggregate - dispatch-time
-   * election via probing; a workflow gone by now is a stale entry (logged,
-   * consumed). The values are read from the aggregate as it is now.
-   *
-   * @param workflowAggregateId The ID of the workflow aggregate (original type)
-   * @param taskId The ID of the task whose scope receives the values, or
-   *        <code>null</code> for the workflow's global scope
-   */
-  public void aggregateChangedPhaseTwo(
+  private void addressWorkflowPhaseTwo(
+      final PhaseOperation operation,
       final Object workflowAggregateId,
-      final String taskId) {
+      final Map<String, String> args) {
 
-    final var subject = "workflow of aggregate '%s' (BPMN process '%s' of workflow module '%s')"
-        .formatted(workflowAggregateId, bpmnProcessId, workflowModuleId);
+    final var subject = subjectOf(workflowAggregateId);
 
+    // a task probe is a command against the engine rather than a search, so its answer
+    // is exact and waiting for a read model would buy nothing - an unreachable BPMS is
+    // still worth a second question here, where no application transaction is open. A
+    // workflow is searched for, so there the visibility window is waited out
     final var location = workflowLocator.locate(
         adapterProcessServices,
-        adapter -> adapter.awarenessOfWorkflow(workflowScope(), aggregatePersistenceSupport, workflowAggregateId),
+        adapter -> probe(operation, adapter, workflowAggregateId, args),
         workflowAggregateId,
         subject,
-        WorkflowLocator.Patience.WAIT_FOR_VISIBILITY);
+        addressesTheWorkflow(operation)
+            ? WorkflowLocator.Patience.WAIT_FOR_VISIBILITY
+            : WorkflowLocator.Patience.RETRY_UNAVAILABLE);
 
     switch (location.awareness()) {
       case UNKNOWN_TO_BPMS -> {
-        if (location.isUnknownButExpected()) {
-          throw stillNotVisible(location.hintedAdapterId(), subject, "pushing the changed aggregate");
+        if (addressesTheWorkflow(operation) && location.isUnknownButExpected()) {
+          throw stillNotVisible(location.hintedAdapterId(), subject, operation.describe(args));
         }
         log.warn(
-            "Skipped phase two of pushing the changed aggregate of {}: the workflow is gone (stale "
-                + "outbox entry); the entry is consumed",
+            "Skipped phase two of {} of {}: no configured BPMS knows it any more (a stale outbox "
+                + "entry - it disappeared between scheduling and dispatch); the entry is consumed",
+            operation.describe(args),
             subject);
       }
       case COMPLETED -> log.warn(
-          "Skipped phase two of pushing the changed aggregate of {}: the workflow has ended; the "
-              + "entry is consumed",
+          "Skipped phase two of {} of {}: it has ended already; the entry is consumed",
+          operation.describe(args),
           subject);
+      // BPMS_UNAVAILABLE cannot reach here (locate throws) - the outbox retries
       default -> runPhaseTwo(
           location.adapter(),
-          "pushing the changed aggregate of %s".formatted(subject),
-          () -> location
-              .adapter()
-              .aggregateChangedPhaseTwo(
-                  workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, taskId));
+          "%s of %s".formatted(operation.describe(args), subject),
+          () -> handlerOf(location.adapter(), operation, args)
+              .phaseTwo(phaseTwoRequest(workflowAggregateId, args)));
     }
+
+  }
+
+  /**
+   * Phase one of an operation every deployed BPMS gets: one outbox entry per BPMS, each
+   * carrying the adapter it was written for.
+   */
+  private A broadcast(
+      final PhaseOperation operation,
+      final Map<String, String> args) {
+
+    final var targets = deploymentAdapterProcessServices.isEmpty()
+        ? adapterProcessServices
+        : deploymentAdapterProcessServices;
+
+    RuntimeException failure = null;
+    for (final var adapter : targets) {
+      try {
+        handlerOf(adapter, operation, args)
+            .phaseOne(phaseOneRequest(null, args));
+        schedulePhaseTwo(operation, null, adapter.getAdapterId(), adapter.getAdapterId(), args);
+      } catch (final RuntimeException e) {
+        // every BPMS is asked before the first failure is reported: a broadcast
+        // which stopped at the first unreachable BPMS would leave the others
+        // waiting, and the outbox retries what was scheduled anyway
+        log.error(
+            "{} of workflow module '{}' through adapter '{}' failed",
+            operation.describe(args),
+            workflowModuleId,
+            adapter.getAdapterId(),
+            e);
+        if (failure == null) {
+          failure = e;
+        }
+      }
+    }
+    if (failure != null) {
+      throw failure;
+    }
+    return null;
+
+  }
+
+  /**
+   * Phase two of an operation every deployed BPMS gets. The adapter of the entry is the
+   * one it was written for - there is no election, a broadcast is not about a workflow.
+   */
+  private void broadcastPhaseTwo(
+      final PhaseOperation operation,
+      final String adapterId,
+      final Map<String, String> args) {
+
+    final var adapter = deploymentAdapterProcessServices
+        .stream()
+        .filter(candidate -> candidate.getAdapterId().equals(adapterId))
+        .findFirst()
+        .orElseThrow(() -> new IllegalStateException(
+            """
+                Cannot execute phase two of %s of BPMN process '%s' (workflow module '%s'): the \
+                adapter '%s' the outbox entry was written for is not configured (any more)! Either \
+                restore the adapter's configuration or remove the entry from the outbox store."""
+                .formatted(operation.describe(args), bpmnProcessId, workflowModuleId, adapterId)));
+
+    runPhaseTwo(
+        adapter,
+        "%s of %s".formatted(operation.describe(args), subjectOf(null)),
+        () -> handlerOf(adapter, operation, args).phaseTwo(phaseTwoRequest(null, args)));
+
+  }
+
+  /**
+   * Plans phase two of an operation in the outbox of this aggregate.
+   *
+   * @param operation The operation being planned
+   * @param workflowAggregateId The aggregate the operation is about, or
+   *          <code>null</code> where it is about none
+   * @param persistedAdapterId The adapter which has to execute phase two, or
+   *          <code>null</code> where it is elected at dispatch time
+   * @param electedAdapterId The adapter phase one talked to - names the adapter in the
+   *          message about a missing outbox, where the persisted one is null
+   * @param args The operation's arguments
+   */
+  private void schedulePhaseTwo(
+      final PhaseOperation operation,
+      final Object workflowAggregateId,
+      final String persistedAdapterId,
+      final String electedAdapterId,
+      final Map<String, String> args) {
+
+    final var scheduledArgs = withActivation(operation, args);
+
+    // backstop only: the outbox was already resolved and validated at startup
+    // (validatePhaseTwoOutboxAtStartup) - this fires only if that was skipped
+    final var outbox = resolvePhaseTwoOutbox();
+    if (outbox == null) {
+      throw new IllegalStateException(
+          buildNoOutboxMessage(electedAdapterId));
+    }
+
+    final var scheduled = outbox
+        .schedule(
+            PhaseTwoCall
+                .of(
+                    operation,
+                    workflowModuleId,
+                    bpmnProcessId,
+                    workflowAggregateId == null
+                        ? null
+                        : workflowAggregateId.toString(),
+                    persistedAdapterId,
+                    scheduledArgs));
+    if (!scheduled) {
+      reportDiscardedSchedule(
+          "%s of %s".formatted(operation.describe(scheduledArgs), subjectOf(workflowAggregateId)));
+    }
+
+  }
+
+  /**
+   * Adds the activation the call is planned in to the arguments of an operation which
+   * asked to carry it.
+   * <p>
+   * Read HERE and not while the idempotency key is derived: this is the one path such
+   * an operation is planned on, it runs on the thread the handler runs on, and the
+   * value has to reach the adapter at dispatch time as well - by then nothing remembers
+   * that thread.
+   */
+  private static Map<String, String> withActivation(
+      final PhaseOperation operation,
+      final Map<String, String> args) {
+
+    if (!operation.carriesActivation()) {
+      return args;
+    }
+    final var activationId = io.vanillabp.integration.spi.RunningActivation.current();
+    if (activationId == null) {
+      return args;
+    }
+    final var withActivation = new java.util.LinkedHashMap<>(args);
+    withActivation.put(PhaseTwoCall.ARG_ACTIVATION_ID, activationId);
+    return withActivation;
+
+  }
+
+  /**
+   * Asks one adapter the question the operation's election is about.
+   */
+  private WorkflowAwareness probe(
+      final PhaseOperation operation,
+      final MigratableProcessService<A> adapter,
+      final Object workflowAggregateId,
+      final Map<String, String> args) {
+
+    return switch (operation.election()) {
+      case HOLDS_THE_TASK -> adapter
+          .awarenessOfTask(workflowScope(), workflowAggregateId, args.get(PhaseTwoCall.ARG_TASK_ID));
+      case HOLDS_THE_USER_TASK -> adapter
+          .awarenessOfUserTask(workflowScope(), workflowAggregateId, args.get(PhaseTwoCall.ARG_TASK_ID));
+      case HOLDS_THE_WORKFLOW -> adapter
+          .awarenessOfWorkflow(workflowScope(), aggregatePersistenceSupport, workflowAggregateId);
+      default -> throw new IllegalStateException(
+          "The election '%s' of operation '%s' asks no adapter anything!"
+              .formatted(operation.election(), operation.name()));
+    };
+
+  }
+
+  /**
+   * Whether the operation addresses the workflow itself rather than a task of it, which
+   * decides three things: how patiently the BPMS is looked for, whether an operation may
+   * be planned although no BPMS reports the workflow yet, and what a failure is called.
+   * A workflow is SEARCHED for, so a read model which is a moment behind is the ordinary
+   * case on an eventually consistent BPMS; a task is asked about by its ID, which is an
+   * exact question, so an unknown task is a definite answer.
+   */
+  private static boolean addressesTheWorkflow(
+      final PhaseOperation operation) {
+
+    return operation.election() == Election.HOLDS_THE_WORKFLOW;
+
+  }
+
+  /**
+   * What phase one throws where every configured BPMS says it does not know what the
+   * operation addresses.
+   */
+  private RuntimeException unknownToEveryBpms(
+      final PhaseOperation operation,
+      final Map<String, String> args,
+      final String subject) {
+
+    final var hint = operation.wording().hintWhenUnknown();
+    final var message = """
+        No configured BPMS can serve %s of %s (probed adapters, in prioritized order: %s)! The \
+        aggregate itself was saved. Likely causes: %s%s"""
+        .formatted(
+            operation.describe(args),
+            subject,
+            prioritizedAdapters,
+            addressesTheWorkflow(operation)
+                ? likelyCausesOfUnknownWorkflow()
+                : likelyCausesOfUnknownTask(),
+            hint.isEmpty()
+                ? ""
+                : " "
+                    + hint);
+    return addressesTheWorkflow(operation)
+        ? new io.vanillabp.spi.process.WorkflowNotFoundException(message)
+        : new io.vanillabp.spi.process.TaskNotFoundException(message);
+
+  }
+
+  private static String likelyCausesOfUnknownTask() {
+
+    return "the task ID is wrong or outdated, the task was already completed long ago, or the "
+        + "workflow was terminated. If a BPMS was reported unavailable, this operation would have "
+        + "failed differently - an unknown task is a definite answer of all adapters.";
+
+  }
+
+  /**
+   * What every message about an operation names: the workflow it happened to. What
+   * happened is the operation's own words ({@link PhaseOperation#describe(Map)}).
+   */
+  private String subjectOf(
+      final Object workflowAggregateId) {
+
+    return workflowAggregateId == null
+        ? "BPMN process '%s' of workflow module '%s'".formatted(bpmnProcessId, workflowModuleId)
+        : "aggregate '%s' (BPMN process '%s' of workflow module '%s')"
+            .formatted(workflowAggregateId, bpmnProcessId, workflowModuleId);
+
+  }
+
+  private PhaseOneRequest<A> phaseOneRequest(
+      final A workflowAggregate,
+      final Map<String, String> args) {
+
+    return new PhaseOneRequest<>(
+        workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregate, args);
+
+  }
+
+  private PhaseTwoRequest<A> phaseTwoRequest(
+      final Object workflowAggregateId,
+      final Map<String, String> args) {
+
+    return new PhaseTwoRequest<>(
+        workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, args);
+
+  }
+
+  private static IllegalArgumentException notAProcessServiceOperation(
+      final PhaseOperation operation) {
+
+    return new IllegalArgumentException(
+        """
+            The operation '%s' elects no BPMS (%s): it is dispatched by the extension which \
+            contributed it, not through a process service. Register it with a \
+            PhaseOperationDispatch of your own instead of routing it here."""
+            .formatted(operation.name(), operation.election()));
+
+  }
+
+  /**
+   * What ONE adapter does for ONE operation. Answered from the map the adapter
+   * contributed, which is read once per adapter: a handler is a collaborator of the
+   * adapter, not a per-call object.
+   */
+  private PhaseOperationHandler<A> handlerOf(
+      final MigratableProcessService<A> adapter,
+      final PhaseOperation operation,
+      final Map<String, String> args) {
+
+    final var handler = phaseOperationsOf(adapter)
+        .get(operation);
+    if (handler == null) {
+      throw new io.vanillabp.integration.adapter.spi.PhaseOperationNotSupported(
+          adapter.getAdapterId(), operation, workflowModuleId, bpmnProcessId, args);
+    }
+    return handler;
+
+  }
+
+  /**
+   * The handlers of one adapter, by operation. Cached per adapter id: the adapters of a
+   * process service are fixed, and an adapter is free to build its map fresh.
+   */
+  private Map<PhaseOperation, PhaseOperationHandler<A>> phaseOperationsOf(
+      final MigratableProcessService<A> adapter) {
+
+    return phaseOperations
+        .computeIfAbsent(adapter.getAdapterId(), adapterId -> adapter.phaseOperations());
+
+  }
+
+  /**
+   * The handlers of every adapter of this process service, by adapter id.
+   */
+  private final Map<String, Map<PhaseOperation, PhaseOperationHandler<A>>> phaseOperations = new java.util.concurrent.ConcurrentHashMap<>();
+
+  /**
+   * Refuses AT STARTUP an adapter which cannot serve an operation every adapter has to
+   * serve.
+   * <p>
+   * An adapter contributes a handler per operation, and the map may miss one for two
+   * reasons: the BPMS has nothing like the operation, which is legitimate for an
+   * operation which says so ({@link PhaseOperation#requiredOfEveryAdapter()}), or the
+   * adapter was written against an older SPI and never learned about it. The second one
+   * would show as a workflow standing still, hours after the application booted, which
+   * is why the boot asks instead.
+   */
+  public void validateAdapterOperationsAtStartup() {
+
+    java.util.stream.Stream
+        .concat(adapterProcessServices.stream(), deploymentAdapterProcessServices.stream())
+        .distinct()
+        .forEach(this::validateOperationsOf);
+
+  }
+
+  private void validateOperationsOf(
+      final MigratableProcessService<A> adapter) {
+
+    final var missing = PhaseOperation.CORE_OPERATIONS
+        .stream()
+        .filter(PhaseOperation::requiredOfEveryAdapter)
+        .filter(operation -> !adapter.serves(operation))
+        .map(PhaseOperation::name)
+        .toList();
+    if (missing.isEmpty()) {
+      return;
+    }
+    throw new IllegalStateException(
+        """
+            The VanillaBP adapter '%s' cannot serve the operations %s of BPMN process '%s' of \
+            workflow module '%s', although every adapter has to: its '%s' contributes no handler \
+            for them. Add a PhaseOperationHandler per missing operation - see the javadoc of \
+            io.vanillabp.integration.adapter.spi.PhaseOperationHandler - or remove the adapter \
+            from the prioritized adapters of this workflow module."""
+            .formatted(
+                adapter.getAdapterId(),
+                missing,
+                bpmnProcessId,
+                workflowModuleId,
+                adapter.getClass().getSimpleName()));
 
   }
 
@@ -2202,265 +2462,6 @@ public class MigrationProcessService<A> {
     return servedBpmnProcessIds == null
         ? io.vanillabp.integration.adapter.spi.WorkflowScope.of(workflowModuleId, bpmnProcessId)
         : new io.vanillabp.integration.adapter.spi.WorkflowScope(workflowModuleId, servedBpmnProcessIds);
-
-  }
-
-  /**
-   * Broadcasts a BPMN signal to every BPMS the workflow module is deployed to.
-   * <p>
-   * A signal is not addressed to a workflow, so nothing is probed and no aggregate
-   * is loaded or saved. Embedded BPMS broadcast inside the caller's transaction
-   * (a rollback takes the broadcast with it), remote BPMS get an outbox entry each
-   * and broadcast after the commit.
-   * <p>
-   * Every deployed BPMS is asked, not only the first-priority one: during a
-   * migration the workflows waiting for the signal are spread across them, and a
-   * broadcast reaching half of them would be worse than none.
-   *
-   * @param signalName The PLAIN BPMN signal name
-   */
-  public void sendSignal(
-      final String signalName) {
-
-    if ((signalName == null) || signalName.isBlank()) {
-      throw new IllegalArgumentException(
-          """
-              No signal name given (BPMN process '%s' of workflow module '%s')! Pass the signal name \
-              as it is modelled - VanillaBP applies the name scoping of the workflow module."""
-              .formatted(bpmnProcessId, workflowModuleId));
-    }
-
-    final var targets = deploymentAdapterProcessServices.isEmpty()
-        ? adapterProcessServices
-        : deploymentAdapterProcessServices;
-
-    RuntimeException failure = null;
-    for (final var adapter : targets) {
-      try {
-        adapter.sendSignalPhaseOne(workflowModuleId, bpmnProcessId, signalName);
-        final var outbox = resolvePhaseTwoOutbox();
-        if (outbox == null) {
-          throw new IllegalStateException(
-              buildNoOutboxMessage(adapter.getAdapterId()));
-        }
-        // a broadcast signal has no idempotency key, so nothing can discard it - the
-        // answer is always true
-        outbox.scheduleSendSignal(workflowModuleId, bpmnProcessId, signalName, adapter.getAdapterId());
-      } catch (final RuntimeException e) {
-        // every BPMS is asked before the first failure is reported: a broadcast
-        // which stopped at the first unreachable BPMS would leave the others
-        // waiting, and the outbox retries what was scheduled anyway
-        log.error(
-            "Broadcasting signal '{}' of workflow module '{}' to adapter '{}' failed",
-            signalName,
-            workflowModuleId,
-            adapter.getAdapterId(),
-            e);
-        if (failure == null) {
-          failure = e;
-        }
-      }
-    }
-    if (failure != null) {
-      throw failure;
-    }
-
-  }
-
-  /**
-   * Executes phase two of broadcasting a signal, dispatched by the
-   * {@link PhaseTwoRouter} after the local transaction was committed. The adapter
-   * of the entry is the one the broadcast was scheduled for - there is no
-   * election, a broadcast is not about a workflow.
-   *
-   * @param signalName The PLAIN BPMN signal name
-   * @param adapterId The ID of the adapter to broadcast to
-   */
-  public void sendSignalPhaseTwo(
-      final String signalName,
-      final String adapterId) {
-
-    final var adapter = deploymentAdapterProcessServices
-        .stream()
-        .filter(candidate -> candidate.getAdapterId().equals(adapterId))
-        .findFirst()
-        .orElseThrow(() -> new IllegalStateException(
-            """
-                Cannot broadcast signal '%s' of BPMN process '%s' (workflow module '%s'): the adapter \
-                '%s' the outbox entry was written for is not configured (any more)! Either restore the \
-                adapter's configuration or remove the entry from the outbox store."""
-                .formatted(signalName, bpmnProcessId, workflowModuleId, adapterId)));
-
-    runPhaseTwo(
-        adapter,
-        "sending signal '%s'".formatted(signalName),
-        () -> adapter.sendSignalPhaseTwo(workflowModuleId, bpmnProcessId, signalName));
-
-  }
-
-  /**
-   * Executes phase two of correlating a message - dispatch-time election via
-   * probing (like task operations); a workflow gone by now is a stale entry
-   * (logged, consumed).
-   *
-   * @param workflowAggregateId The ID of the workflow aggregate (original type)
-   * @param messageName The BPMN message name
-   * @param correlationId The correlation id or <code>null</code>
-   * @param activationId What the BPMS called the element instance this correlation was
-   *          planned in, or <code>null</code> - carried through to the adapter, whose
-   *          BPMS may deduplicate messages in a net of its own
-   */
-  public void correlateMessagePhaseTwo(
-      final Object workflowAggregateId,
-      final String messageName,
-      final String correlationId,
-      final String activationId) {
-
-    final var subject = "workflow of aggregate '%s' (BPMN process '%s' of workflow module '%s')"
-        .formatted(workflowAggregateId, bpmnProcessId, workflowModuleId);
-
-    final var location = workflowLocator.locate(
-        adapterProcessServices,
-        adapter -> adapter.awarenessOfWorkflow(workflowScope(), aggregatePersistenceSupport, workflowAggregateId),
-        workflowAggregateId,
-        subject,
-        WorkflowLocator.Patience.WAIT_FOR_VISIBILITY);
-
-    switch (location.awareness()) {
-      case UNKNOWN_TO_BPMS -> {
-        if (location.isUnknownButExpected()) {
-          throw stillNotVisible(
-              location.hintedAdapterId(), subject, "correlating message '%s'".formatted(messageName));
-        }
-        log.warn(
-            "Skipped phase two of correlating message '{}' with {}: the workflow is gone (stale "
-                + "outbox entry); the entry is consumed",
-            messageName,
-            subject);
-      }
-      case COMPLETED -> log.warn(
-          "Skipped phase two of correlating message '{}' with {}: the workflow has ended; the "
-              + "entry is consumed",
-          messageName,
-          subject);
-      default -> runPhaseTwo(
-          location.adapter(),
-          "correlating message '%s' with %s".formatted(messageName, subject),
-          () -> location
-              .adapter()
-              .correlateMessagePhaseTwo(
-                  workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, messageName,
-                  correlationId, activationId));
-    }
-
-  }
-
-  /**
-   * Starts a new workflow by a message start event - start semantics like
-   * {@link #startWorkflow(Object)}: the FIRST prioritized adapter starts, its ID
-   * is persisted with the outbox entry, and a workflow is started at most once
-   * per aggregate.
-   *
-   * @param workflowAggregate The workflow aggregate
-   * @param messageName The BPMN message name of the message start event
-   * @return The attached workflow aggregate
-   */
-  public A startWorkflowByMessage(
-      final A workflowAggregate,
-      final String messageName) {
-
-    final var attachedAggregate = aggregatePersistenceSupport
-        .save(workflowAggregate);
-    final var aggregateId = aggregatePersistenceSupport
-        .getAggregateId(attachedAggregate);
-    if ((aggregateId == null) || aggregateId.toString().isBlank()) {
-      throw new IllegalStateException(
-          ("The ID of the workflow aggregate of class '%s' is null or blank after saving! The ID "
-              + "identifies the workflow in the BPMS and is part of the start's idempotency key - "
-              + "assign it before calling startWorkflowByMessage or use a generated ID.")
-              .formatted(workflowAggregateClass.getName()));
-    }
-
-    final var adapter = adapterProcessServices
-        .getFirst();
-    adapter.startWorkflowByMessagePhaseOne(
-        workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, attachedAggregate, messageName);
-
-    final var outbox = resolvePhaseTwoOutbox();
-    if (outbox == null) {
-      throw new IllegalStateException(
-          buildNoOutboxMessage(adapter.getAdapterId()));
-    }
-    final var scheduled = outbox.scheduleStartWorkflowByMessage(
-        workflowModuleId, bpmnProcessId, aggregateId, messageName, adapter.getAdapterId());
-    if (!scheduled) {
-      reportDiscardedSchedule(
-          "starting the workflow of aggregate '%s' by message '%s' (BPMN process '%s' of workflow "
-              .formatted(aggregateId, messageName, bpmnProcessId) + "module '%s')".formatted(workflowModuleId));
-    }
-
-    rememberWorkflowAdapter(aggregateId, adapter.getAdapterId());
-
-    return attachedAggregate;
-
-  }
-
-  /**
-   * Executes phase two of starting a workflow by message - the adapter persisted
-   * with the entry is used (start semantics, no re-election).
-   *
-   * @param workflowAggregateId The ID of the workflow aggregate (original type)
-   * @param messageName The BPMN message name
-   * @param adapterId The ID of the adapter elected in phase one
-   */
-  public void startWorkflowByMessagePhaseTwo(
-      final Object workflowAggregateId,
-      final String messageName,
-      final String adapterId) {
-
-    startWorkflowByMessagePhaseTwo(workflowAggregateId, messageName, adapterId, false);
-
-  }
-
-  /**
-   * Executes phase two of starting a workflow by message - see
-   * {@link #startWorkflowByMessagePhaseTwo(Object, String, String)}; a previously
-   * attempted entry runs the same re-dispatch mitigation as
-   * {@link #startWorkflowPhaseTwo(Object, String, boolean)}.
-   *
-   * @param workflowAggregateId The ID of the workflow aggregate (original type)
-   * @param messageName The BPMN message name
-   * @param adapterId The ID of the adapter elected in phase one
-   * @param previouslyAttempted Whether the outbox entry was dispatched before
-   */
-  public void startWorkflowByMessagePhaseTwo(
-      final Object workflowAggregateId,
-      final String messageName,
-      final String adapterId,
-      final boolean previouslyAttempted) {
-
-    final var adapter = adapterProcessServices
-        .stream()
-        .filter(processService -> processService.getAdapterId().equals(adapterId))
-        .findFirst()
-        .orElseThrow(() -> new IllegalStateException(
-            ("Cannot execute phase two of starting the workflow of aggregate '%s' by message '%s': "
-                + "adapter '%s' is not (or no longer) configured for BPMN process '%s' of workflow "
-                + "module '%s'! The outbox entry is stale - restore the adapter's configuration or "
-                + "remove the entry from the outbox store.")
-                .formatted(workflowAggregateId, messageName, adapterId, bpmnProcessId, workflowModuleId)));
-
-    if (previouslyAttempted && skipRedispatchedStart(
-        adapter, workflowAggregateId, "starting the workflow by message '%s'".formatted(messageName))) {
-      return;
-    }
-    runPhaseTwo(
-        adapter,
-        "starting the workflow of aggregate '%s' by message '%s'".formatted(workflowAggregateId, messageName),
-        () -> adapter
-            .startWorkflowByMessagePhaseTwo(
-                workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, messageName));
-    rememberWorkflowAdapter(workflowAggregateId, adapterId);
 
   }
 
@@ -2690,15 +2691,6 @@ public class MigrationProcessService<A> {
 
   }
 
-  @FunctionalInterface
-  private interface TaskAwarenessProbe<A> {
-
-    io.vanillabp.integration.adapter.spi.WorkflowAwareness probe(
-        MigratableProcessService<A> adapter,
-        Object workflowAggregateId);
-
-  }
-
   /**
    * Says that an operation the application asked for will not happen: the store found
    * an identical one still waiting for its dispatch and discarded this one.
@@ -2749,124 +2741,6 @@ public class MigrationProcessService<A> {
 
   }
 
-  private A executeTaskOperation(
-      final A workflowAggregate,
-      final String taskId,
-      final String operationDescription,
-      final TaskAwarenessProbe<A> awarenessProbe,
-      final PhaseOneAction<A> phaseOne,
-      final OutboxAction outboxAction) {
-
-    // persist changes made before completing/canceling - identical to
-    // startWorkflow the aggregate rides the caller's transaction
-    final var attachedAggregate = aggregatePersistenceSupport
-        .save(workflowAggregate);
-    final var aggregateId = aggregatePersistenceSupport
-        .getAggregateId(attachedAggregate);
-
-    final var subject = "task '%s' of workflow aggregate '%s' (BPMN process '%s' of workflow module '%s')"
-        .formatted(taskId, aggregateId, bpmnProcessId, workflowModuleId);
-
-    final var location = workflowLocator.locate(
-        adapterProcessServices,
-        adapter -> awarenessProbe.probe(adapter, aggregateId),
-        aggregateId,
-        subject,
-        WorkflowLocator.Patience.NONE);
-
-    switch (location.awareness()) {
-      case COMPLETED -> {
-        // idempotent completion: the task is already done - a no-op with warning
-        log.warn(
-            "Ignored {} {}: adapter '{}' reports it as already completed",
-            operationDescription,
-            subject,
-            location.adapter().getAdapterId());
-        return attachedAggregate;
-      }
-      case UNKNOWN_TO_BPMS -> throw new io.vanillabp.spi.process.TaskNotFoundException(
-          ("No configured BPMS knows %s (probed adapters, in prioritized order: %s)! Likely "
-              + "causes: the task ID is wrong or outdated, the task was already completed long "
-              + "ago, or the workflow was terminated. If a BPMS was reported unavailable, this "
-              + "operation would have failed differently - an unknown task is a definite answer "
-              + "of all adapters.")
-              .formatted(subject, prioritizedAdapters));
-      default -> {
-        // ACTIVE - fall through to the execution below
-      }
-    }
-
-    final var adapter = location.adapter();
-    phaseOne.run(adapter, attachedAggregate);
-
-    final var outbox = resolvePhaseTwoOutbox();
-    if (outbox == null) {
-      throw new IllegalStateException(
-          buildNoOutboxMessage(adapter.getAdapterId()));
-    }
-    if (!outboxAction.schedule(outbox, aggregateId)) {
-      reportDiscardedSchedule(operationDescription
-          + " "
-          + subject);
-    }
-
-    return attachedAggregate;
-
-  }
-
-  /**
-   * Executes phase two of completing a task, dispatched by the
-   * {@link PhaseTwoRouter} after the local transaction was committed. Unlike
-   * workflow starts NO adapter was persisted with the outbox entry - the adapter is
-   * elected NOW by probing (the BPMS holding the task answers).
-   *
-   * @param workflowAggregateId The ID of the workflow aggregate (original type)
-   * @param taskId The task's ID
-   */
-  public void completeTaskPhaseTwo(
-      final Object workflowAggregateId,
-      final String taskId) {
-
-    executeTaskPhaseTwo(
-        workflowAggregateId,
-        taskId,
-        "completing",
-        (
-            adapter,
-            aggregateId) -> adapter.awarenessOfTask(workflowScope(), aggregateId, taskId),
-        adapter -> adapter
-            .completeTaskPhaseTwo(
-                workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, taskId));
-
-  }
-
-  /**
-   * Executes phase two of canceling a task - see
-   * {@link #completeTaskPhaseTwo(Object, String)}.
-   *
-   * @param workflowAggregateId The ID of the workflow aggregate (original type)
-   * @param taskId The task's ID
-   * @param bpmnErrorCode The error code to be caught by BPMN error boundary events
-   */
-  public void cancelTaskPhaseTwo(
-      final Object workflowAggregateId,
-      final String taskId,
-      final String bpmnErrorCode) {
-
-    executeTaskPhaseTwo(
-        workflowAggregateId,
-        taskId,
-        "canceling",
-        (
-            adapter,
-            aggregateId) -> adapter.awarenessOfTask(workflowScope(), aggregateId, taskId),
-        adapter -> adapter
-            .cancelTaskPhaseTwo(
-                workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, taskId,
-                bpmnErrorCode));
-
-  }
-
   /**
    * Runs a phase-two operation and lets the adapter classify a failure:
    * the outbox repeats what may succeed on the next attempt - a concurrency conflict
@@ -2890,53 +2764,10 @@ public class MigrationProcessService<A> {
       }
       throw new io.vanillabp.integration.spi.PhaseTwoPermanentFailure(
           """
-              Phase two of %s failed for BPMN process '%s' of workflow module '%s', and adapter '%s' \
-              says that repeating it cannot help. The outbox entry is blocked instead of being \
-              retried - look at the cause, fix what it names, and remove the entry."""
-              .formatted(
-                  operationDescription,
-                  bpmnProcessId,
-                  workflowModuleId,
-                  adapter.getAdapterId()), e);
-    }
-
-  }
-
-  private void executeTaskPhaseTwo(
-      final Object workflowAggregateId,
-      final String taskId,
-      final String operationDescription,
-      final TaskAwarenessProbe<A> awarenessProbe,
-      final java.util.function.Consumer<MigratableProcessService<A>> phaseTwo) {
-
-    final var subject = "task '%s' of workflow aggregate '%s' (BPMN process '%s' of workflow module '%s')"
-        .formatted(taskId, workflowAggregateId, bpmnProcessId, workflowModuleId);
-
-    // a task probe is a command against the engine rather than a search, so its answer
-    // is exact and waiting for a read model would buy nothing - an unreachable BPMS is
-    // still worth a second question here, where no application transaction is open
-    final var location = workflowLocator.locate(
-        adapterProcessServices,
-        adapter -> awarenessProbe.probe(adapter, workflowAggregateId),
-        workflowAggregateId,
-        subject,
-        WorkflowLocator.Patience.RETRY_UNAVAILABLE);
-
-    switch (location.awareness()) {
-      // stale outbox entry: the task disappeared between phase one and this
-      // dispatch (e.g. completed by a redelivered at-least-once job, or a boundary
-      // event canceled it). The entry is consumed - throwing would retry a call
-      // which can never succeed.
-      case UNKNOWN_TO_BPMS, COMPLETED -> log.warn(
-          "Skipped phase two of {} {}: the task is gone (stale outbox entry - it disappeared "
-              + "between scheduling and dispatch); the outbox entry is consumed",
-          operationDescription,
-          subject);
-      // BPMS_UNAVAILABLE cannot reach here (locate throws) - the outbox retries
-      default -> runPhaseTwo(
-          location.adapter(),
-          "%s of %s".formatted(operationDescription, subject),
-          () -> phaseTwo.accept(location.adapter()));
+              Phase two of %s failed, and adapter '%s' says that repeating it cannot help. The \
+              outbox entry is blocked instead of being retried - look at the cause, fix what it \
+              names, and remove the entry."""
+              .formatted(operationDescription, adapter.getAdapterId()), e);
     }
 
   }

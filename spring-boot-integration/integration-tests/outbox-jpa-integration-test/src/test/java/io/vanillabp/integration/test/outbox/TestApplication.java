@@ -57,7 +57,7 @@ public class TestApplication {
    */
   @Bean
   public SampleExtension sampleExtension(
-      final io.vanillabp.integration.spi.PhaseTwoOperationRegistry registry) {
+      final io.vanillabp.integration.spi.PhaseOperationRegistry registry) {
 
     return new SampleExtension(registry);
 

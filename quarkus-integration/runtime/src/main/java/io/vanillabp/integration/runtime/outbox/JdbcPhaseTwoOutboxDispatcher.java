@@ -22,8 +22,8 @@ import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterPropertiesMapper;
 import io.vanillabp.integration.runtime.deployment.VanillaBpDeploymentRunner;
+import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.spi.PhaseTwoCall;
-import io.vanillabp.integration.spi.PhaseTwoOperation;
 import jakarta.annotation.PreDestroy;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -129,7 +129,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
    * @param id The entry's ID
    * @param workflowModuleId The ID of the workflow module the workflow belongs to
    * @param bpmnProcessId The BPMN process ID of the workflow
-   * @param operation The name of the scheduled {@link PhaseTwoOperation}
+   * @param operation The name of the scheduled {@link PhaseOperation}
    * @param aggregateId The workflow aggregate's ID in serialized form
    * @param adapterId The ID of the elected BPMS adapter (may be <code>null</code>)
    * @param attempts The number of dispatch attempts so far

@@ -21,6 +21,7 @@ import io.vanillabp.integration.adapter.migration.processservice.MigrationProces
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
@@ -372,7 +373,12 @@ public class SendSignalTest {
     final var second = new RecordingAdapter("second-adapter");
 
     processService(List.of(first, second), new RecordingOutbox())
-        .sendSignalPhaseTwo("OrderReceived", "second-adapter");
+        .executePhaseTwo(
+            PhaseOperation.SEND_SIGNAL,
+            null,
+            "second-adapter",
+            Map.of(PhaseTwoCall.ARG_SIGNAL_NAME, "OrderReceived"),
+            false);
 
     assertTrue(first.phaseTwo.isEmpty());
     assertEquals(List.of("OrderReceived"), second.phaseTwo);
@@ -386,7 +392,12 @@ public class SendSignalTest {
     final var exception = assertThrows(
         IllegalStateException.class,
         () -> processService(List.of(new RecordingAdapter("first-adapter")), new RecordingOutbox())
-            .sendSignalPhaseTwo("OrderReceived", "gone-adapter"));
+            .executePhaseTwo(
+                PhaseOperation.SEND_SIGNAL,
+                null,
+                "gone-adapter",
+                Map.of(PhaseTwoCall.ARG_SIGNAL_NAME, "OrderReceived"),
+                false));
 
     assertTrue(exception.getMessage().contains("gone-adapter"));
     assertTrue(exception.getMessage().contains("OrderReceived"));

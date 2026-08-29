@@ -694,8 +694,10 @@ the boot naming both methods.
 Starting a workflow must be atomic with the local database transaction that persists
 the workflow aggregate — otherwise a crash could produce a workflow in the BPMS without
 an aggregate ("ghost workflow") or vice versa. Since remote BPMS cannot take part in
-the local transaction, every operation which reaches a BPMS is split into two phases
-(`MigratableProcessService`):
+the local transaction, every operation which reaches a BPMS is split into two phases. An
+adapter contributes one `PhaseOperationHandler` per operation
+(`MigratableProcessService#phaseOperations()`), and a handler is exactly those two
+phases:
 
 - **Phase one** runs inside the local transaction and only ASKS - is the task still
   parked, is a subscription waiting, is such a message declared. It never advances
@@ -738,9 +740,9 @@ String form, elected adapter ID, operation-specific args). The dispatch chain is
 short as possible:
 
 ```
-schedule*                     dispatch(call)         startWorkflowPhaseTwo(id, adapterId)
+schedule(call)                dispatch(call)         handler.phaseTwo(request)
 ProcessService ──► PhaseTwoOutbox (store) ──► PhaseTwoRouter ──► MigrationProcessService ──► adapter
-      within local TX             after commit        (core-owned)     (adapter selection)
+      within local TX             after commit        (core-owned)     (adapter election)
 ```
 
 The core-owned `PhaseTwoRouter` holds a registry `(workflowModuleId, bpmnProcessId)
@@ -758,49 +760,93 @@ message naming that case. The other operations (message correlation, completing 
 user-task pair, pushing a changed aggregate) probe the prioritized adapters at
 dispatch time instead, so their calls carry no adapter ID; the exception is
 `SEND_SIGNAL`, which names the broadcasting adapter because a broadcast reaches every
-adapter of the module. Each operation gets its own typed `schedule*` default method in
-`PhaseTwoOutbox` building the `PhaseTwoCall`.
+adapter of the module. Which of the two it is, is not written anywhere in the core: it
+follows from the operation's `Election`, and so do the probe the core asks and the
+patience it asks with.
 
-#### Which operations exist: the operation registry
+#### An operation is defined once
 
-An operation is not a hardcoded case in the router but an entry of the
-`PhaseTwoOperationRegistry` (business SPI), consisting of three things:
+An operation is a `PhaseOperation` (business SPI) and nothing else. The record carries
+everything about it which is not one BPMS' business:
 
 - its **name**, which the store persists and which is therefore a contract: never
   rename an operation, never change what an existing name means,
-- its **idempotency-key derivation** (`PhaseTwoOperation.IdempotencyKey`, a function
-  of the `PhaseTwoCall`), which is just as persisted as the name, and
-- its **dispatch** (`PhaseTwoOperationDispatch`), which is not persisted at all: it
-  is registered at startup by whoever owns the operation.
+- its **idempotency-key derivation** (`PhaseOperation.IdempotencyKey`, a function
+  of the `PhaseTwoCall`), which is just as persisted as the name,
+- its **election** (`Election`), which says which BPMS serves it: the first
+  prioritized adapter for a start, whichever adapter holds the task, the user task or
+  the workflow for the operations addressed to a running one, every deployed BPMS for a
+  broadcast, and "the extension dispatches it itself" for an operation which never
+  reaches an adapter. The core reads the probe, the patience and the shape of the
+  "nobody knows this" failure off this one value,
+- whether **every adapter has to serve it**, which decides whether a missing handler
+  fails the boot or is an honest "this BPMS has nothing like it",
+- whether the **activation** the call was planned in travels with it, and
+- its **wording**: how the operation names itself in a log line or an exception
+  ("correlating message 'approved'"), what to add where no BPMS knows the workflow, and
+  what to do instead where an adapter cannot serve it.
+
+What an operation DOES is the other place, and it belongs to the adapter: a
+`PhaseOperationHandler` with `phaseOne(PhaseOneRequest)` and
+`phaseTwo(PhaseTwoRequest)`, contributed per operation in
+`MigratableProcessService#phaseOperations()`.
+
+**Adding an operation therefore costs one constant in `PhaseOperation` and one entry in
+each adapter's map.** Nothing else: the outbox stores name, args and key without
+knowing them, the router dispatches by name, and `MigrationProcessService` runs every
+operation through `execute` and `executePhaseTwo`. `AddingAnOperationTest` adds one and
+runs it through both phases to keep that true.
 
 VanillaBP's own operations (`START_WORKFLOW`, `COMPLETE_TASK`, `CANCEL_TASK`,
 `COMPLETE_USER_TASK`, `CANCEL_USER_TASK`, `CORRELATE_MESSAGE`,
-`START_WORKFLOW_BY_MESSAGE`, `SEND_SIGNAL`, `AGGREGATE_CHANGED`) are constants of `PhaseTwoOperation`, registered by the
-`PhaseTwoRouter` while it is built. Their dispatch is the process-service routing
-described above. Their names and key rules are pinned by
-`PhaseTwoOperationContractTest`, because since they stopped being enum constants nothing
-else guarantees them.
+`START_WORKFLOW_BY_MESSAGE`, `SEND_SIGNAL`, `AGGREGATE_CHANGED`) are constants of
+`PhaseOperation`, registered by the `PhaseTwoRouter` while it is built. Their names and
+key rules are pinned by `PhaseOperationContractTest`, because since they stopped being
+enum constants nothing else guarantees them.
 
-An **extension** contributes operations of its own, which is why the registry exists.
-It builds them with `PhaseTwoOperation.extensionOperation(name, key)`, which enforces
-a namespace (`my-extension:MY_OPERATION`), and registers them together with its own
-dispatch:
+An adapter which cannot serve an operation every adapter has to serve is refused while
+the application boots (`MigrationProcessService#validateAdapterOperationsAtStartup()`,
+held by `AdapterOperationsAtStartupTest`). That check took the compiler's place: the
+phase methods used to be abstract, and an adapter which contributes handlers must not be
+made to implement them.
+
+**The compatibility bridge.** `phaseOperations()` answers, by default, a handler per
+core operation calling the pair of methods each operation used to be
+(`startWorkflowPhaseOne`/`…PhaseTwo` and their eight siblings, still on
+`MigratableProcessService`). An adapter which changes nothing therefore behaves exactly
+as before, and an adapter moving one operation at a time merges its own handlers into
+`legacyPhaseOperations()`. The bridge and the methods it calls go together, once the
+three adapters VanillaBP ships have moved.
+
+#### Operations of extensions
+
+An **extension** contributes operations of its own, which is why the registry
+(`PhaseOperationRegistry`) exists. It builds them with
+`PhaseOperation.extensionOperation(name)`, which enforces a namespace
+(`my-extension:MY_OPERATION`), and registers them together with its own dispatch:
 
 ```java
 registry.register(
-    PhaseTwoOperation.extensionOperation(
-        "my-extension:NOTIFY",
-        call -> Optional.of(call.workflowAggregateId() + "|" + call.args().get("event"))),
+    PhaseOperation
+        .extensionOperation("my-extension:NOTIFY")
+        .idempotencyKey(call -> Optional.of(call.workflowAggregateId() + "|" + call.args().get("event")))
+        .describedAs(args -> "notifying about '%s'".formatted(args.get("event")))
+        .build(),
     (call, previouslyAttempted) -> notify(call));
 ```
 
 The registry is offered as a bean by both platform integrations (Spring Boot:
-`vanillaBpPhaseTwoOperationRegistry`; Quarkus: a `@Singleton` producer). Scheduling
+`vanillaBpPhaseOperationRegistry`; Quarkus: a `@Singleton` producer). Scheduling
 works as for core operations: build the call with
 `PhaseTwoCall.of(operation, ...)` and hand it to the `PhaseTwoOutbox`, inside the
 business transaction. Dispatch then goes straight to the extension's handler: the
 aggregate-ID-to-adapter election of the core operations does not apply, and no
 process service has to be registered for the call's BPMN process.
+
+An extension whose operation addresses a workflow the way a core operation does says so
+through its `Election` and hands it to `PhaseTwoRouter#registerOperation` instead. It is
+then routed to the process services like a core operation, and every adapter which is to
+serve it contributes a handler for it - which is what `AddingAnOperationTest` does.
 
 Rules the registry enforces at registration time, each with a guiding message: an
 operation is registered exactly once, an extension name is namespaced, and the core's
@@ -837,7 +883,7 @@ The core does not implement (or depend on) any outbox itself — it only defines
   beyond that (`StoredKey`, shared with the inbound delivery key) — gruelbox refuses a
   longer unique request ID, and an aggregate ID longer than the 1024 characters of the
   `AGGREGATE_ID` column is refused where the call is built, with a message naming the
-  column. The derivation rules per operation are documented on `PhaseTwoOperation` and
+  column. The derivation rules per operation are documented on `PhaseOperation` and
   are a persisted contract.
 - **The activation which planned a correlation is part of its key**, and of no other key
   (decision 23 of this repository). A called process is a secondary workflow of the SAME
@@ -846,16 +892,16 @@ The core does not implement (or depend on) any outbox itself — it only defines
   core opens around a task delivery and around a workflow the BPMS started, filled from
   `TaskInvocationContext#getActivationId()` respectively
   `BpmsInitiatedStartContext#getNativeInstanceId()`.
-  `PhaseTwoOutbox#scheduleCorrelateMessage` reads it into `ARG_ACTIVATION_ID` - the one
-  path a correlation is planned on, and the one which runs on the handler's thread - and
-  `PhaseTwoOperation.CORRELATE_MESSAGE` derives from that argument, which keeps the
+  `CORRELATE_MESSAGE` is the one operation which says it `carriesActivation()`, so the
+  core reads the scope into `ARG_ACTIVATION_ID` while it plans the call - the one path a
+  correlation is planned on, and the one which runs on the handler's thread - and
+  `PhaseOperation.CORRELATE_MESSAGE` derives from that argument, which keeps the
   derivation a pure function of what a store persists. Outside any invocation there is
   none and the key is what it always was, which is the fallback a REST endpoint and a
   thread the handler started themselves get. `START_WORKFLOW` and the task operations must
   NOT carry it: they deduplicate across activations on purpose.
-- **The same argument reaches the adapter at dispatch time**, through the seven-argument
-  `MigratableProcessService#correlateMessagePhaseTwo` whose `default` forwards to the
-  six-argument one every adapter implements. Phase two runs on the dispatcher's thread,
+- **The same argument reaches the adapter at dispatch time**, as
+  `PhaseTwoRequest#activationId()`. Phase two runs on the dispatcher's thread,
   long after the thread which knew the activation has moved on, so the value travels with
   the entry rather than being read again. A BPMS which deduplicates messages in a net of
   its own needs the same distinction there: Camunda 8 derives a message id from the same
@@ -873,9 +919,9 @@ The core does not implement (or depend on) any outbox itself — it only defines
   module/process/aggregate/operation) and left as a monitorable trail.
 - **At-least-once residual window:** a crash between the remote BPMS call and
   marking the entry DONE re-dispatches the entry on recovery. This is accepted
-  (eventual consistency); adapters MUST therefore tolerate repeated
-  `startWorkflowPhaseTwo` calls — a second call for an already-started workflow has
-  to return without starting another workflow instance.
+  (eventual consistency); an adapter's handler MUST therefore tolerate a repeated
+  phase two — a second `START_WORKFLOW` for an already-started workflow has to return
+  without starting another workflow instance.
 - **START re-dispatch mitigation (minimizes, does not close, the window):** stores
   pass "this entry was dispatched before" to
   `PhaseTwoRouter.dispatch(call, previouslyAttempted)` (the JDBC/MongoDB defaults
@@ -936,12 +982,15 @@ place where neither election nor aggregate applies:
   spread across the BPMS, and a partial broadcast is worse than none.
 - Every adapter is asked before the first failure is reported: a broadcast which
   stopped at the first unreachable BPMS would leave the others waiting.
-- Embedded adapters broadcast in `sendSignalPhaseOne` (inside the caller's
-  transaction), remote ones get one `SEND_SIGNAL` outbox entry EACH, carrying their
-  adapter id - dispatch goes to exactly that adapter, without probing. There is no
-  idempotency key: nothing about a signal can be deduplicated.
+- Every adapter gets one `SEND_SIGNAL` outbox entry, carrying its adapter id -
+  dispatch goes to exactly that adapter, without probing. There is no idempotency key:
+  nothing about a signal can be deduplicated.
 - The call carries no aggregate ID, which is why `PhaseTwoCall` allows it to be
-  absent. The router's `SEND_SIGNAL` dispatch therefore does not convert one.
+  absent. The router converts none where the call carries none.
+- An adapter whose BPMS has no signals contributes no handler for `SEND_SIGNAL`, which
+  is allowed because the operation is not required of every adapter: the application
+  asking for one gets a `PhaseOperationNotSupported` naming the adapter and what to do
+  instead.
 
 ### Pushing a changed aggregate (`aggregateChanged`)
 
@@ -1390,7 +1439,7 @@ platform modules and not in the stores. One place, so a store cannot forget.
    SPI so business code never sees adapter-implementation interfaces:
    `io.vanillabp.integration.spi.AggregatePersistenceAware` — the single canonical
    persistence abstraction used on all platforms — the outbox contract
-   (`PhaseTwoOutbox` incl. `PhaseTwoCall`/`PhaseTwoOperation`, plus the
+   (`PhaseTwoOutbox` incl. `PhaseTwoCall`/`PhaseOperation`, plus the
    per-aggregate attribution `PhaseTwoOutboxAware`), and the transaction the work runs in
    (`TransactionRunner` plus the per-aggregate attribution `TransactionRunnerAware`):
    custom outboxes and custom transactions are

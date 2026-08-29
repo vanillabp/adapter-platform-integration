@@ -2,8 +2,10 @@ package io.vanillabp.integration.adapter.spi;
 
 import java.io.InputStream;
 import java.util.List;
+import java.util.Map;
 
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.spi.process.ProcessDefinition;
 import io.vanillabp.spi.process.WorkflowHistory;
@@ -94,6 +96,86 @@ public interface MigratableProcessService<A> {
    * @return The adapter's ID this service belongs to
    */
   String getAdapterId();
+
+  /**
+   * What this adapter does for each operation it can serve, by operation.
+   * <p>
+   * This is where an adapter's outbound work lives: one
+   * {@link PhaseOperationHandler} per {@link PhaseOperation}, each of them the pair of
+   * "ask" and "act" for this BPMS. Everything else about an operation - which BPMS
+   * executes it, which probe finds that BPMS, what its idempotency key is, how a
+   * failure is worded - belongs to the operation and to the core, so an operation added
+   * later costs an adapter exactly one entry here.
+   * <p>
+   * An operation which is missing from the map is one this BPMS has nothing like. That
+   * is allowed for an operation which is not
+   * {@link PhaseOperation#requiredOfEveryAdapter()} - a BPMS without signals is a BPMS
+   * without signals - and the application learns so when it asks
+   * ({@link PhaseOperationNotSupported}). An operation which IS required and is missing
+   * fails the boot instead, naming this adapter.
+   * <p>
+   * The default answers a handler per core operation calling the pair of methods each
+   * operation used to be, so an adapter written before handlers keeps working
+   * unchanged. An adapter moving ONE operation at a time merges into that map:
+   *
+   * <pre>
+   * &#64;Override
+   * public Map&lt;PhaseOperation, PhaseOperationHandler&lt;A&gt;&gt; phaseOperations() {
+   *   final var operations = new HashMap&lt;&gt;(legacyPhaseOperations());
+   *   operations.put(PhaseOperation.COMPLETE_TASK, completeTask);
+   *   return operations;
+   * }
+   * </pre>
+   *
+   * The map is read once per adapter while the application boots, so it may be built
+   * fresh here.
+   *
+   * @return A handler per operation this adapter serves
+   */
+  default Map<PhaseOperation, PhaseOperationHandler<A>> phaseOperations() {
+
+    return legacyPhaseOperations();
+
+  }
+
+  /**
+   * A handler per core operation calling the pair of methods that operation used to be
+   * - what {@link #phaseOperations()} answers by default, and what an adapter moving one
+   * operation at a time merges its own handlers into.
+   * <p>
+   * Temporary, like the methods it calls: it goes when they do.
+   *
+   * @return A handler per core operation
+   */
+  default Map<PhaseOperation, PhaseOperationHandler<A>> legacyPhaseOperations() {
+
+    return LegacyPhaseOperations.of(this);
+
+  }
+
+  /**
+   * Whether this adapter can execute the given operation. Asked while the application
+   * boots, once per adapter and operation, so an adapter which cannot serve an
+   * operation every adapter has to serve is refused before a workflow waits for it.
+   * <p>
+   * It is more than "is there a handler": as long as the compatibility bridge is
+   * around, a handler may be one which calls a method the adapter never implemented,
+   * and that has to count as absent.
+   *
+   * @param operation The operation to ask about
+   * @return Whether a handler serves it
+   */
+  default boolean serves(
+      final PhaseOperation operation) {
+
+    final var handler = phaseOperations()
+        .get(operation);
+    if (handler == null) {
+      return false;
+    }
+    return !LegacyPhaseOperations.isBridge(handler) || LegacyPhaseOperations.isImplementedBy(getClass(), operation);
+
+  }
 
   /**
    * Determine whether the target BPMS is aware of the given task. Used by the
@@ -373,11 +455,15 @@ public interface MigratableProcessService<A> {
    * @param aggregatePersistence The persistence of the workflow-aggregate
    * @param workflowAggregate The workflow-aggregate
    */
-  void startWorkflowPhaseOne(
-      String workflowModuleId,
-      String bpmnProcessId,
-      AggregatePersistenceAware<A> aggregatePersistence,
-      A workflowAggregate);
+  default void startWorkflowPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate) {
+
+    throw notImplemented(PhaseOperation.START_WORKFLOW, "startWorkflowPhaseOne");
+
+  }
 
 
   /**
@@ -408,11 +494,15 @@ public interface MigratableProcessService<A> {
    * @param aggregatePersistence The persistence of the workflow-aggregate
    * @param workflowAggregateId The ID of the workflow aggregate
    */
-  void startWorkflowPhaseTwo(
-      String workflowModuleId,
-      String bpmnProcessId,
-      AggregatePersistenceAware<A> aggregatePersistence,
-      Object workflowAggregateId);
+  default void startWorkflowPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId) {
+
+    throw notImplemented(PhaseOperation.START_WORKFLOW, "startWorkflowPhaseTwo");
+
+  }
 
   /**
    * Complete an asynchronous task (a <code>&#64;WorkflowTask</code> method with a
@@ -433,12 +523,16 @@ public interface MigratableProcessService<A> {
    * @param workflowAggregate The workflow-aggregate
    * @param taskId The ID of the task to complete
    */
-  void completeTaskPhaseOne(
-      String workflowModuleId,
-      String bpmnProcessId,
-      AggregatePersistenceAware<A> aggregatePersistence,
-      A workflowAggregate,
-      String taskId);
+  default void completeTaskPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate,
+      final String taskId) {
+
+    throw notImplemented(PhaseOperation.COMPLETE_TASK, "completeTaskPhaseOne");
+
+  }
 
   /**
    * Complete an asynchronous task - phase two, dispatched through the outbox after
@@ -456,12 +550,16 @@ public interface MigratableProcessService<A> {
    * @param workflowAggregateId The ID of the workflow aggregate
    * @param taskId The ID of the task to complete
    */
-  void completeTaskPhaseTwo(
-      String workflowModuleId,
-      String bpmnProcessId,
-      AggregatePersistenceAware<A> aggregatePersistence,
-      Object workflowAggregateId,
-      String taskId);
+  default void completeTaskPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String taskId) {
+
+    throw notImplemented(PhaseOperation.COMPLETE_TASK, "completeTaskPhaseTwo");
+
+  }
 
   /**
    * Cancel an asynchronous task by BPMN error. Phase one - same transactional
@@ -474,13 +572,17 @@ public interface MigratableProcessService<A> {
    * @param taskId The ID of the task to cancel
    * @param bpmnErrorCode The error code to be caught by BPMN error boundary events
    */
-  void cancelTaskPhaseOne(
-      String workflowModuleId,
-      String bpmnProcessId,
-      AggregatePersistenceAware<A> aggregatePersistence,
-      A workflowAggregate,
-      String taskId,
-      String bpmnErrorCode);
+  default void cancelTaskPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate,
+      final String taskId,
+      final String bpmnErrorCode) {
+
+    throw notImplemented(PhaseOperation.CANCEL_TASK, "cancelTaskPhaseOne");
+
+  }
 
   /**
    * Cancel an asynchronous task by BPMN error - phase two, same idempotency
@@ -493,13 +595,17 @@ public interface MigratableProcessService<A> {
    * @param taskId The ID of the task to cancel
    * @param bpmnErrorCode The error code to be caught by BPMN error boundary events
    */
-  void cancelTaskPhaseTwo(
-      String workflowModuleId,
-      String bpmnProcessId,
-      AggregatePersistenceAware<A> aggregatePersistence,
-      Object workflowAggregateId,
-      String taskId,
-      String bpmnErrorCode);
+  default void cancelTaskPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String taskId,
+      final String bpmnErrorCode) {
+
+    throw notImplemented(PhaseOperation.CANCEL_TASK, "cancelTaskPhaseTwo");
+
+  }
 
   /**
    * Complete a USER task - phase one, same transactional contract as
@@ -511,12 +617,16 @@ public interface MigratableProcessService<A> {
    * @param workflowAggregate The workflow-aggregate
    * @param taskId The ID of the user task to complete
    */
-  void completeUserTaskPhaseOne(
-      String workflowModuleId,
-      String bpmnProcessId,
-      AggregatePersistenceAware<A> aggregatePersistence,
-      A workflowAggregate,
-      String taskId);
+  default void completeUserTaskPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate,
+      final String taskId) {
+
+    throw notImplemented(PhaseOperation.COMPLETE_USER_TASK, "completeUserTaskPhaseOne");
+
+  }
 
   /**
    * Complete a USER task - phase two, same idempotency contract as
@@ -528,12 +638,16 @@ public interface MigratableProcessService<A> {
    * @param workflowAggregateId The ID of the workflow aggregate
    * @param taskId The ID of the user task to complete
    */
-  void completeUserTaskPhaseTwo(
-      String workflowModuleId,
-      String bpmnProcessId,
-      AggregatePersistenceAware<A> aggregatePersistence,
-      Object workflowAggregateId,
-      String taskId);
+  default void completeUserTaskPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String taskId) {
+
+    throw notImplemented(PhaseOperation.COMPLETE_USER_TASK, "completeUserTaskPhaseTwo");
+
+  }
 
   /**
    * Cancel a USER task by BPMN error - phase one, same transactional contract as
@@ -546,13 +660,17 @@ public interface MigratableProcessService<A> {
    * @param taskId The ID of the user task to cancel
    * @param bpmnErrorCode The error code to be caught by BPMN error boundary events
    */
-  void cancelUserTaskPhaseOne(
-      String workflowModuleId,
-      String bpmnProcessId,
-      AggregatePersistenceAware<A> aggregatePersistence,
-      A workflowAggregate,
-      String taskId,
-      String bpmnErrorCode);
+  default void cancelUserTaskPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate,
+      final String taskId,
+      final String bpmnErrorCode) {
+
+    throw notImplemented(PhaseOperation.CANCEL_USER_TASK, "cancelUserTaskPhaseOne");
+
+  }
 
   /**
    * Cancel a USER task by BPMN error - phase two, same idempotency contract as
@@ -565,13 +683,17 @@ public interface MigratableProcessService<A> {
    * @param taskId The ID of the user task to cancel
    * @param bpmnErrorCode The error code to be caught by BPMN error boundary events
    */
-  void cancelUserTaskPhaseTwo(
-      String workflowModuleId,
-      String bpmnProcessId,
-      AggregatePersistenceAware<A> aggregatePersistence,
-      Object workflowAggregateId,
-      String taskId,
-      String bpmnErrorCode);
+  default void cancelUserTaskPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String taskId,
+      final String bpmnErrorCode) {
+
+    throw notImplemented(PhaseOperation.CANCEL_USER_TASK, "cancelUserTaskPhaseTwo");
+
+  }
 
   /**
    * Correlate a message with the workflow of the given aggregate - phase one,
@@ -592,13 +714,17 @@ public interface MigratableProcessService<A> {
    *        additionally disambiguates BETWEEN waiting occurrences of the same
    *        message)
    */
-  void correlateMessagePhaseOne(
-      String workflowModuleId,
-      String bpmnProcessId,
-      AggregatePersistenceAware<A> aggregatePersistence,
-      A workflowAggregate,
-      String messageName,
-      String correlationId);
+  default void correlateMessagePhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate,
+      final String messageName,
+      final String correlationId) {
+
+    throw notImplemented(PhaseOperation.CORRELATE_MESSAGE, "correlateMessagePhaseOne");
+
+  }
 
   /**
    * Correlate a message - phase two, dispatched through the outbox after the
@@ -614,13 +740,17 @@ public interface MigratableProcessService<A> {
    * @param messageName The BPMN message name
    * @param correlationId The correlation id or <code>null</code>
    */
-  void correlateMessagePhaseTwo(
-      String workflowModuleId,
-      String bpmnProcessId,
-      AggregatePersistenceAware<A> aggregatePersistence,
-      Object workflowAggregateId,
-      String messageName,
-      String correlationId);
+  default void correlateMessagePhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String messageName,
+      final String correlationId) {
+
+    throw notImplemented(PhaseOperation.CORRELATE_MESSAGE, "correlateMessagePhaseTwo");
+
+  }
 
   /**
    * Correlate a message - phase two, additionally told which ACTIVATION of a BPMN element
@@ -679,12 +809,16 @@ public interface MigratableProcessService<A> {
    * @param workflowAggregate The workflow-aggregate
    * @param messageName The BPMN message name of the message start event
    */
-  void startWorkflowByMessagePhaseOne(
-      String workflowModuleId,
-      String bpmnProcessId,
-      AggregatePersistenceAware<A> aggregatePersistence,
-      A workflowAggregate,
-      String messageName);
+  default void startWorkflowByMessagePhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate,
+      final String messageName) {
+
+    throw notImplemented(PhaseOperation.START_WORKFLOW_BY_MESSAGE, "startWorkflowByMessagePhaseOne");
+
+  }
 
   /**
    * Start a new workflow by a message start event - phase two; idempotency
@@ -697,12 +831,16 @@ public interface MigratableProcessService<A> {
    * @param workflowAggregateId The ID of the workflow aggregate
    * @param messageName The BPMN message name of the message start event
    */
-  void startWorkflowByMessagePhaseTwo(
-      String workflowModuleId,
-      String bpmnProcessId,
-      AggregatePersistenceAware<A> aggregatePersistence,
-      Object workflowAggregateId,
-      String messageName);
+  default void startWorkflowByMessagePhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String messageName) {
+
+    throw notImplemented(PhaseOperation.START_WORKFLOW_BY_MESSAGE, "startWorkflowByMessagePhaseTwo");
+
+  }
 
   /**
    * Broadcast a BPMN signal - phase one, executed inside the caller's transaction.
@@ -726,7 +864,9 @@ public interface MigratableProcessService<A> {
       final String bpmnProcessId,
       final String signalName) {
 
-    throw signalsNotSupported(signalName, workflowModuleId);
+    throw new PhaseOperationNotSupported(
+        getAdapterId(), PhaseOperation.SEND_SIGNAL, workflowModuleId, bpmnProcessId, Map
+            .of(io.vanillabp.integration.spi.PhaseTwoCall.ARG_SIGNAL_NAME, signalName));
 
   }
 
@@ -747,7 +887,9 @@ public interface MigratableProcessService<A> {
       final String bpmnProcessId,
       final String signalName) {
 
-    throw signalsNotSupported(signalName, workflowModuleId);
+    throw new PhaseOperationNotSupported(
+        getAdapterId(), PhaseOperation.SEND_SIGNAL, workflowModuleId, bpmnProcessId, Map
+            .of(io.vanillabp.integration.spi.PhaseTwoCall.ARG_SIGNAL_NAME, signalName));
 
   }
 
@@ -788,7 +930,8 @@ public interface MigratableProcessService<A> {
       final A workflowAggregate,
       final String taskId) {
 
-    throw aggregateChangedNotSupported(workflowModuleId, bpmnProcessId);
+    throw new PhaseOperationNotSupported(
+        getAdapterId(), PhaseOperation.AGGREGATE_CHANGED, workflowModuleId, bpmnProcessId, Map.of());
 
   }
 
@@ -815,34 +958,28 @@ public interface MigratableProcessService<A> {
       final Object workflowAggregateId,
       final String taskId) {
 
-    throw aggregateChangedNotSupported(workflowModuleId, bpmnProcessId);
+    throw new PhaseOperationNotSupported(
+        getAdapterId(), PhaseOperation.AGGREGATE_CHANGED, workflowModuleId, bpmnProcessId, Map.of());
 
   }
 
-  private UnsupportedOperationException aggregateChangedNotSupported(
-      final String workflowModuleId,
-      final String bpmnProcessId) {
+  /**
+   * What an adapter which has neither a handler nor the method behind it throws. It is
+   * reached only where the boot check was skipped: an adapter missing an operation
+   * every adapter has to serve does not get to run, see
+   * {@code MigrationProcessService#validateAdapterOperationsAtStartup()}.
+   */
+  private UnsupportedOperationException notImplemented(
+      final PhaseOperation operation,
+      final String method) {
 
     return new UnsupportedOperationException(
-        ("The VanillaBP adapter '%s' cannot push a changed workflow-aggregate of BPMN process '%s' "
-            + "(workflow module '%s') to its BPMS: the BPMS cannot update a running instance, or "
-            + "the adapter predates aggregateChanged. Remove the adapter from the prioritized "
-            + "adapters of this workflow module, or model a task the workflow waits at - completing "
-            + "it pushes the aggregate as well.")
-            .formatted(getAdapterId(), bpmnProcessId, workflowModuleId));
-
-  }
-
-  private UnsupportedOperationException signalsNotSupported(
-      final String signalName,
-      final String workflowModuleId) {
-
-    return new UnsupportedOperationException(
-        ("The VanillaBP adapter '%s' cannot broadcast the signal '%s' of workflow module '%s': its "
-            + "BPMS has no signals, or the adapter predates them. Remove the adapter from the "
-            + "prioritized adapters of this workflow module, or replace the signal by a message "
-            + "correlated to the workflow which waits for it.")
-            .formatted(getAdapterId(), signalName, workflowModuleId));
+        """
+            The VanillaBP adapter '%s' does not implement the operation '%s': it contributes no \
+            handler for it in 'phaseOperations()' and does not override '%s' either. Every adapter \
+            has to serve this operation - write a PhaseOperationHandler for it, which is the shape \
+            adapters are written in now."""
+            .formatted(getAdapterId(), operation.name(), method));
 
   }
 

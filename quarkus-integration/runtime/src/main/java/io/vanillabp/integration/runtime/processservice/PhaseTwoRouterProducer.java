@@ -2,7 +2,7 @@ package io.vanillabp.integration.runtime.processservice;
 
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.runtime.workflowtask.QuarkusTransactionRunner;
-import io.vanillabp.integration.spi.PhaseTwoOperationRegistry;
+import io.vanillabp.integration.spi.PhaseOperationRegistry;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Singleton;
@@ -69,7 +69,7 @@ public class PhaseTwoRouterProducer {
    */
   @Produces
   @Singleton
-  public PhaseTwoOperationRegistry phaseTwoOperationRegistry(
+  public PhaseOperationRegistry phaseTwoOperationRegistry(
       final PhaseTwoRouter phaseTwoRouter) {
 
     return phaseTwoRouter.getOperations();

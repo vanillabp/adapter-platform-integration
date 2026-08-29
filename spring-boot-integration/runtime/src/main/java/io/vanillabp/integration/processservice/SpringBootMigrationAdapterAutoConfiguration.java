@@ -277,7 +277,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    * @return The operation registry
    */
   @Bean
-  public io.vanillabp.integration.spi.PhaseTwoOperationRegistry vanillaBpPhaseTwoOperationRegistry(
+  public io.vanillabp.integration.spi.PhaseOperationRegistry vanillaBpPhaseOperationRegistry(
       final PhaseTwoRouter phaseTwoRouter) {
 
     return phaseTwoRouter.getOperations();
@@ -638,6 +638,12 @@ public class SpringBootMigrationAdapterAutoConfiguration {
         .filter(ProcessServiceSpringBean.class::isInstance)
         .map(ProcessServiceSpringBean.class::cast)
         .forEach(processService -> {
+          // first of all: an adapter which cannot serve an operation every adapter has
+          // to serve is a gap nothing later would report except a workflow standing
+          // still
+          processService
+              .getMigrationProcessService()
+              .validateAdapterOperationsAtStartup();
           processService
               .getMigrationProcessService()
               .validatePhaseTwoOutboxAtStartup();

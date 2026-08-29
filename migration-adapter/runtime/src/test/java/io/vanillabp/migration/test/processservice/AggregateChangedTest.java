@@ -21,6 +21,7 @@ import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxR
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
@@ -267,7 +268,12 @@ public class AggregateChangedTest {
 
     final var adapter = new RecordingAdapter("first-adapter");
 
-    processService(List.of(adapter), new RecordingOutbox()).aggregateChangedPhaseTwo("42", "task-1");
+    processService(List.of(adapter), new RecordingOutbox()).executePhaseTwo(
+        PhaseOperation.AGGREGATE_CHANGED,
+        "42",
+        null,
+        Map.of(PhaseTwoCall.ARG_TASK_ID, "task-1"),
+        false);
 
     assertEquals(1, adapter.phaseTwoPushes.size());
     assertEquals("42", adapter.phaseTwoPushes.getFirst().aggregate());
@@ -282,7 +288,8 @@ public class AggregateChangedTest {
     final var adapter = new RecordingAdapter("first-adapter");
     adapter.awareness = WorkflowAwareness.COMPLETED;
 
-    processService(List.of(adapter), new RecordingOutbox()).aggregateChangedPhaseTwo("42", null);
+    processService(List.of(adapter), new RecordingOutbox()).executePhaseTwo(PhaseOperation.AGGREGATE_CHANGED, "42",
+        null, Map.of(), false);
 
     assertTrue(adapter.phaseTwoPushes.isEmpty());
 

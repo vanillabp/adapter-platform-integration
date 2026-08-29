@@ -15,7 +15,7 @@ import java.util.Optional;
  * converter registered by the platform integration.
  *
  * The operation is carried by NAME: stores persist it, and the core's router
- * resolves it in the {@link PhaseTwoOperationRegistry} at dispatch time. Build
+ * resolves it in the {@link PhaseOperationRegistry} at dispatch time. Build
  * calls through {@link #of} (scheduling side - derives the idempotency key from
  * the operation) or {@link #forDispatch} (a store rebuilding a call from a
  * persisted entry).
@@ -25,17 +25,17 @@ import java.util.Optional;
  * repository's DECISIONS.md.
  *
  * @param operation The NAME of the operation to execute (see
- *        {@link PhaseTwoOperation#name()})
+ *        {@link PhaseOperation#name()})
  * @param workflowModuleId The ID of the workflow module the workflow belongs to
  * @param bpmnProcessId The BPMN process ID of the workflow
  * @param workflowAggregateId The workflow-aggregate ID in serialized (String) form,
  *        or <code>null</code> for an operation which is not about one workflow
  * @param adapterId The ID of the elected BPMS adapter - set for
- *        {@link PhaseTwoOperation#START_WORKFLOW} (the adapter elected in phase one
+ *        {@link PhaseOperation#START_WORKFLOW} (the adapter elected in phase one
  *        is persisted and used in phase two), <code>null</code> for probing
  *        operations which determine the adapter at dispatch time
  * @param args Additional operation-specific arguments (empty for
- *        {@link PhaseTwoOperation#START_WORKFLOW})
+ *        {@link PhaseOperation#START_WORKFLOW})
  * @param idempotencyKey The key deduplicating this call, derived by the operation
  *        when the call was built and bounded to
  *        {@link #MAX_IDEMPOTENCY_KEY_LENGTH} characters - {@link Optional#empty()}
@@ -73,43 +73,43 @@ public record PhaseTwoCall(
 
   /**
    * The {@link #args()} key carrying the task ID of
-   * {@link PhaseTwoOperation#COMPLETE_TASK} / {@link PhaseTwoOperation#CANCEL_TASK}
+   * {@link PhaseOperation#COMPLETE_TASK} / {@link PhaseOperation#CANCEL_TASK}
    * calls. Part of the persisted contract - never change the literal.
    */
   public static final String ARG_TASK_ID = "taskId";
 
   /**
    * The {@link #args()} key carrying the BPMN error code of
-   * {@link PhaseTwoOperation#CANCEL_TASK} calls. Part of the persisted contract -
+   * {@link PhaseOperation#CANCEL_TASK} calls. Part of the persisted contract -
    * never change the literal.
    */
   public static final String ARG_BPMN_ERROR_CODE = "bpmnErrorCode";
 
   /**
    * The {@link #args()} key carrying the message name of
-   * {@link PhaseTwoOperation#CORRELATE_MESSAGE} /
-   * {@link PhaseTwoOperation#START_WORKFLOW_BY_MESSAGE} calls. Part of the
+   * {@link PhaseOperation#CORRELATE_MESSAGE} /
+   * {@link PhaseOperation#START_WORKFLOW_BY_MESSAGE} calls. Part of the
    * persisted contract - never change the literal.
    */
   public static final String ARG_MESSAGE_NAME = "messageName";
 
   /**
    * The {@link #args()} key carrying the optional correlation id of
-   * {@link PhaseTwoOperation#CORRELATE_MESSAGE} calls. Part of the persisted
+   * {@link PhaseOperation#CORRELATE_MESSAGE} calls. Part of the persisted
    * contract - never change the literal.
    */
   public static final String ARG_CORRELATION_ID = "correlationId";
 
   /**
    * The {@link #args()} key carrying the signal name of
-   * {@link PhaseTwoOperation#SEND_SIGNAL} calls. Part of the persisted contract -
+   * {@link PhaseOperation#SEND_SIGNAL} calls. Part of the persisted contract -
    * never change the literal.
    */
   public static final String ARG_SIGNAL_NAME = "signalName";
 
   /**
    * The {@link #args()} key carrying the activation a
-   * {@link PhaseTwoOperation#CORRELATE_MESSAGE} was planned in, absent where it was
+   * {@link PhaseOperation#CORRELATE_MESSAGE} was planned in, absent where it was
    * planned outside any ({@link RunningActivation}). Part of the persisted contract -
    * never change the literal.
    * <p>
@@ -133,7 +133,7 @@ public record PhaseTwoCall(
 
   /**
    * Builds a call to be scheduled, deriving its idempotency key from the given
-   * operation (see the derivation rules documented on {@link PhaseTwoOperation}).
+   * operation (see the derivation rules documented on {@link PhaseOperation}).
    *
    * @param operation The operation to execute
    * @param workflowModuleId The ID of the workflow module the workflow belongs to
@@ -147,7 +147,7 @@ public record PhaseTwoCall(
    *         {@link #MAX_AGGREGATE_ID_LENGTH} characters (guiding message)
    */
   public static PhaseTwoCall of(
-      final PhaseTwoOperation operation,
+      final PhaseOperation operation,
       final String workflowModuleId,
       final String bpmnProcessId,
       final String workflowAggregateId,
@@ -179,7 +179,7 @@ public record PhaseTwoCall(
    * business code which owns it.
    */
   private static void validateAggregateIdLength(
-      final PhaseTwoOperation operation,
+      final PhaseOperation operation,
       final String workflowModuleId,
       final String bpmnProcessId,
       final String workflowAggregateId) {

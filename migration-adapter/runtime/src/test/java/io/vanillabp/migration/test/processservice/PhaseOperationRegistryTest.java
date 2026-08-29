@@ -10,9 +10,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import io.vanillabp.integration.spi.PhaseTwoOperation;
-import io.vanillabp.integration.spi.PhaseTwoOperationDispatch;
-import io.vanillabp.integration.spi.PhaseTwoOperationRegistry;
+import io.vanillabp.integration.spi.PhaseOperation;
+import io.vanillabp.integration.spi.PhaseOperationDispatch;
+import io.vanillabp.integration.spi.PhaseOperationRegistry;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
@@ -21,19 +21,19 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * reserved.
  */
 @ExtendWith(SuppressOutputExtension.class)
-public class PhaseTwoOperationRegistryTest {
+public class PhaseOperationRegistryTest {
 
-  private static final PhaseTwoOperationDispatch NOOP = (
+  private static final PhaseOperationDispatch NOOP = (
       call,
       previouslyAttempted) -> {
   };
 
-  private final PhaseTwoOperationRegistry testee = new PhaseTwoOperationRegistry();
+  private final PhaseOperationRegistry testee = new PhaseOperationRegistry();
 
-  private static PhaseTwoOperation extensionOperation(
+  private static PhaseOperation extensionOperation(
       final String name) {
 
-    return PhaseTwoOperation.extensionOperation(name, call -> Optional.empty());
+    return PhaseOperation.extensionOperation(name).build();
 
   }
 
@@ -71,8 +71,9 @@ public class PhaseTwoOperationRegistryTest {
 
     // built through the plain constructor: 'extensionOperation' would already
     // reject it for the missing namespace - the point here is the reservation
-    final var squatter = new PhaseTwoOperation(
-        PhaseTwoOperation.START_WORKFLOW.name(), call -> Optional.empty());
+    final var squatter = new PhaseOperation(
+        PhaseOperation.START_WORKFLOW.name(), call -> Optional
+            .empty(), io.vanillabp.integration.spi.Election.OWN_DISPATCH, false, false, new PhaseOperation.Wording(args -> "squatting", "", ""));
 
     final var exception = assertThrowsExactly(
         IllegalArgumentException.class,
@@ -117,7 +118,7 @@ public class PhaseTwoOperationRegistryTest {
 
     assertThrowsExactly(
         IllegalArgumentException.class,
-        () -> new PhaseTwoOperation(" ", call -> Optional.empty()));
+        () -> PhaseOperation.extensionOperation(" ").build());
 
   }
 

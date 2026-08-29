@@ -12,7 +12,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
-import io.vanillabp.integration.spi.PhaseTwoOperation;
+import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.test.Aggregate;
 import io.vanillabp.integration.test.AggregatePersistence;
 import io.vanillabp.integration.test.RecordingPhaseTwoListener;
@@ -78,7 +78,7 @@ public class OutboxMetricsTest {
     assertTrue(
         meterRegistry
             .get(VanillaBpMetrics.OUTBOX_DISPATCHES)
-            .tag(VanillaBpMetrics.TAG_OPERATION, PhaseTwoOperation.START_WORKFLOW.name())
+            .tag(VanillaBpMetrics.TAG_OPERATION, PhaseOperation.START_WORKFLOW.name())
             .counter()
             .count() >= 1.0,
         "the dispatch of the started workflow's phase two has to be counted");

@@ -10,8 +10,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.spi.PhaseTwoCall;
-import io.vanillabp.integration.spi.PhaseTwoOperation;
 import io.vanillabp.integration.spi.RunningActivation;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
@@ -26,10 +26,10 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * test by adjusting the expectation - fix the operation.
  */
 @ExtendWith(SuppressOutputExtension.class)
-public class PhaseTwoOperationContractTest {
+public class PhaseOperationContractTest {
 
   private static PhaseTwoCall call(
-      final PhaseTwoOperation operation,
+      final PhaseOperation operation,
       final Map<String, String> args) {
 
     return PhaseTwoCall
@@ -53,7 +53,7 @@ public class PhaseTwoOperationContractTest {
                 "START_WORKFLOW_BY_MESSAGE",
                 "SEND_SIGNAL",
                 "AGGREGATE_CHANGED"),
-        PhaseTwoOperation.coreOperationNames());
+        PhaseOperation.coreOperationNames());
 
   }
 
@@ -63,14 +63,14 @@ public class PhaseTwoOperationContractTest {
 
     assertEquals(
         "START_WORKFLOW|test-module|TestProcess|42",
-        call(PhaseTwoOperation.START_WORKFLOW, Map.of()).idempotencyKey().orElseThrow());
+        call(PhaseOperation.START_WORKFLOW, Map.of()).idempotencyKey().orElseThrow());
 
     // by message: same key, the plain start's name included - a workflow is started at
     // most once per aggregate, regardless of the triggering message
     assertEquals(
         "START_WORKFLOW|test-module|TestProcess|42",
         call(
-            PhaseTwoOperation.START_WORKFLOW_BY_MESSAGE,
+            PhaseOperation.START_WORKFLOW_BY_MESSAGE,
             Map.of(PhaseTwoCall.ARG_MESSAGE_NAME, "OrderReceived")).idempotencyKey().orElseThrow());
 
   }
@@ -82,18 +82,18 @@ public class PhaseTwoOperationContractTest {
     assertEquals(
         "COMPLETE_TASK|test-module|TestProcess|42|task-1",
         call(
-            PhaseTwoOperation.COMPLETE_TASK,
+            PhaseOperation.COMPLETE_TASK,
             Map.of(PhaseTwoCall.ARG_TASK_ID, "task-1")).idempotencyKey().orElseThrow());
     assertEquals(
         "COMPLETE_USER_TASK|test-module|TestProcess|42|task-1",
         call(
-            PhaseTwoOperation.COMPLETE_USER_TASK,
+            PhaseOperation.COMPLETE_USER_TASK,
             Map.of(PhaseTwoCall.ARG_TASK_ID, "task-1")).idempotencyKey().orElseThrow());
     // the BPMN error code is NOT part of the key: one task is cancelled once
     assertEquals(
         "CANCEL_TASK|test-module|TestProcess|42|task-1",
         call(
-            PhaseTwoOperation.CANCEL_TASK,
+            PhaseOperation.CANCEL_TASK,
             Map
                 .of(
                     PhaseTwoCall.ARG_TASK_ID, "task-1",
@@ -102,7 +102,7 @@ public class PhaseTwoOperationContractTest {
     assertEquals(
         "CANCEL_USER_TASK|test-module|TestProcess|42|task-1",
         call(
-            PhaseTwoOperation.CANCEL_USER_TASK,
+            PhaseOperation.CANCEL_USER_TASK,
             Map
                 .of(
                     PhaseTwoCall.ARG_TASK_ID, "task-1",
@@ -117,10 +117,10 @@ public class PhaseTwoOperationContractTest {
 
     final var keys = java.util.stream.Stream
         .of(
-            PhaseTwoOperation.COMPLETE_TASK,
-            PhaseTwoOperation.CANCEL_TASK,
-            PhaseTwoOperation.COMPLETE_USER_TASK,
-            PhaseTwoOperation.CANCEL_USER_TASK)
+            PhaseOperation.COMPLETE_TASK,
+            PhaseOperation.CANCEL_TASK,
+            PhaseOperation.COMPLETE_USER_TASK,
+            PhaseOperation.CANCEL_USER_TASK)
         .map(operation -> call(operation, Map.of(PhaseTwoCall.ARG_TASK_ID, "task-1"))
             .idempotencyKey()
             .orElseThrow())
@@ -138,7 +138,7 @@ public class PhaseTwoOperationContractTest {
     assertEquals(
         "CORRELATE_MESSAGE|test-module|TestProcess|42|OrderReceived|correlation-1",
         call(
-            PhaseTwoOperation.CORRELATE_MESSAGE,
+            PhaseOperation.CORRELATE_MESSAGE,
             Map
                 .of(
                     PhaseTwoCall.ARG_MESSAGE_NAME, "OrderReceived",
@@ -150,7 +150,7 @@ public class PhaseTwoOperationContractTest {
     // double-correlate (documented residual)
     assertTrue(
         call(
-            PhaseTwoOperation.CORRELATE_MESSAGE,
+            PhaseOperation.CORRELATE_MESSAGE,
             Map.of(PhaseTwoCall.ARG_MESSAGE_NAME, "OrderReceived")).idempotencyKey().isEmpty());
 
   }
@@ -169,7 +169,7 @@ public class PhaseTwoOperationContractTest {
             PhaseTwoCall.ARG_ACTIVATION_ID, "element-instance-99");
     assertEquals(
         "CORRELATE_MESSAGE|test-module|TestProcess|42|OrderReceived|correlation-1|element-instance-99",
-        call(PhaseTwoOperation.CORRELATE_MESSAGE, withActivation).idempotencyKey().orElseThrow());
+        call(PhaseOperation.CORRELATE_MESSAGE, withActivation).idempotencyKey().orElseThrow());
 
     // an entry written before this existed carries no such arg and keeps its key, which
     // is what lets it dispatch across the upgrade
@@ -179,12 +179,12 @@ public class PhaseTwoOperationContractTest {
             PhaseTwoCall.ARG_CORRELATION_ID, "correlation-1");
     assertEquals(
         "CORRELATE_MESSAGE|test-module|TestProcess|42|OrderReceived|correlation-1",
-        call(PhaseTwoOperation.CORRELATE_MESSAGE, withoutActivation).idempotencyKey().orElseThrow());
+        call(PhaseOperation.CORRELATE_MESSAGE, withoutActivation).idempotencyKey().orElseThrow());
 
     try (var activation = RunningActivation.of("element-instance-99")) {
       assertEquals(
           "CORRELATE_MESSAGE|test-module|TestProcess|42|OrderReceived|correlation-1",
-          call(PhaseTwoOperation.CORRELATE_MESSAGE, withoutActivation).idempotencyKey().orElseThrow(),
+          call(PhaseOperation.CORRELATE_MESSAGE, withoutActivation).idempotencyKey().orElseThrow(),
           "the scope is read where a correlation is PLANNED, not where its key is derived");
     }
 
@@ -199,13 +199,13 @@ public class PhaseTwoOperationContractTest {
     // of one element
     assertEquals(
         "START_WORKFLOW|test-module|TestProcess|42",
-        call(PhaseTwoOperation.START_WORKFLOW, Map.of(PhaseTwoCall.ARG_ACTIVATION_ID, "element-instance-99"))
+        call(PhaseOperation.START_WORKFLOW, Map.of(PhaseTwoCall.ARG_ACTIVATION_ID, "element-instance-99"))
             .idempotencyKey()
             .orElseThrow());
     assertEquals(
         "COMPLETE_TASK|test-module|TestProcess|42|task-1",
         call(
-            PhaseTwoOperation.COMPLETE_TASK,
+            PhaseOperation.COMPLETE_TASK,
             Map
                 .of(
                     PhaseTwoCall.ARG_TASK_ID, "task-1",
@@ -216,7 +216,7 @@ public class PhaseTwoOperationContractTest {
     // deliberately not deduplicated
     assertTrue(
         call(
-            PhaseTwoOperation.CORRELATE_MESSAGE,
+            PhaseOperation.CORRELATE_MESSAGE,
             Map
                 .of(
                     PhaseTwoCall.ARG_MESSAGE_NAME, "OrderReceived",
@@ -225,7 +225,7 @@ public class PhaseTwoOperationContractTest {
             .isEmpty());
     assertTrue(
         call(
-            PhaseTwoOperation.SEND_SIGNAL,
+            PhaseOperation.SEND_SIGNAL,
             Map
                 .of(
                     PhaseTwoCall.ARG_SIGNAL_NAME, "Recalled",
@@ -242,7 +242,7 @@ public class PhaseTwoOperationContractTest {
     assertTrue(
         PhaseTwoCall
             .of(
-                PhaseTwoOperation.SEND_SIGNAL, "test-module", "TestProcess", null, "test-adapter", Map
+                PhaseOperation.SEND_SIGNAL, "test-module", "TestProcess", null, "test-adapter", Map
                     .of(PhaseTwoCall.ARG_SIGNAL_NAME, "OrderReceived"))
             .idempotencyKey()
             .isEmpty());
@@ -254,9 +254,9 @@ public class PhaseTwoOperationContractTest {
   public void aggregateChangedHasNoKey() {
 
     assertTrue(
-        call(PhaseTwoOperation.AGGREGATE_CHANGED, Map.of()).idempotencyKey().isEmpty());
+        call(PhaseOperation.AGGREGATE_CHANGED, Map.of()).idempotencyKey().isEmpty());
     assertTrue(
-        call(PhaseTwoOperation.AGGREGATE_CHANGED, Map.of(PhaseTwoCall.ARG_TASK_ID, "task-1"))
+        call(PhaseOperation.AGGREGATE_CHANGED, Map.of(PhaseTwoCall.ARG_TASK_ID, "task-1"))
             .idempotencyKey()
             .isEmpty());
 
@@ -271,7 +271,7 @@ public class PhaseTwoOperationContractTest {
     final var aggregateId = "a".repeat(300);
     final var key = PhaseTwoCall
         .of(
-            PhaseTwoOperation.CORRELATE_MESSAGE, "test-module", "TestProcess", aggregateId, null, Map
+            PhaseOperation.CORRELATE_MESSAGE, "test-module", "TestProcess", aggregateId, null, Map
                 .of(
                     PhaseTwoCall.ARG_MESSAGE_NAME, "OrderReceived",
                     PhaseTwoCall.ARG_CORRELATION_ID, "correlation-1"))
@@ -299,7 +299,7 @@ public class PhaseTwoOperationContractTest {
         .assertThrows(
             IllegalArgumentException.class,
             () -> PhaseTwoCall
-                .of(PhaseTwoOperation.START_WORKFLOW, "test-module", "TestProcess", aggregateId, "test-adapter", Map
+                .of(PhaseOperation.START_WORKFLOW, "test-module", "TestProcess", aggregateId, "test-adapter", Map
                     .of()));
 
     // the message has to name the column and the length, because it replaces a
@@ -318,7 +318,7 @@ public class PhaseTwoOperationContractTest {
     assertTrue(
         PhaseTwoCall
             .of(
-                PhaseTwoOperation.START_WORKFLOW, "test-module", "TestProcess", "a"
+                PhaseOperation.START_WORKFLOW, "test-module", "TestProcess", "a"
                     .repeat(PhaseTwoCall.MAX_AGGREGATE_ID_LENGTH),
                 "test-adapter", Map.of())
             .idempotencyKey()

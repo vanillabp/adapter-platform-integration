@@ -35,7 +35,7 @@ this avoids; a workflow which the application believes it started and which the 
 the other.
 
 The outbox dispatches at-least-once, so everything phase two does has to be repeatable. Where an
-operation can be identified, `PhaseTwoOperation` gives it an idempotency key, and where it cannot
+operation can be identified, `PhaseOperation` gives it an idempotency key, and where it cannot
 (a broadcast signal has nothing to deduplicate on, and `AGGREGATE_CHANGED` reads its values at
 dispatch time) the entry carries none and the residual duplicate is documented rather than hidden.
 A test which called VanillaBP has to wait for the BPMS to catch up instead of reading its state in
@@ -648,3 +648,36 @@ The alternative was a check at `startWorkflowProcessing` asking each adapter whi
 had arrived. It is the smaller change and it would have caught the same defect, one boot later.
 The parameter object was chosen because it changes every adapter's constructor, and the moment to
 do that is before an adapter written outside this repository exists (Stephan, 2026-08-28).
+
+### 29. An operation says everything about itself, an adapter says what it does
+
+One two-phase operation used to be written down five times in the core: a pair of methods on the
+adapter SPI, a constant carrying its persisted name and idempotency-key rule, a typed `schedule*`
+default building its outbox call, a registration in the router, and an `execute*` body in the
+process service which differed from its neighbour in a probe and a log line. An adapter wrote it
+twice more. Four of those places knew nothing an operation needed to decide - they repeated what
+the operation already was - and the escalation stories waiting in the roadmap would have added a
+sixth.
+
+An operation is therefore one `PhaseOperation`: its name, its key rule, the `Election` naming
+which BPMS serves it, whether every adapter has to be able to serve it, whether the activation the
+call was planned in travels with it, and the words it names itself with in a message a developer
+reads. The core reads the probe, the patience of the election and the shape of the failure off the
+election; the router dispatches by name; the process service runs everything through one `execute`
+and one `executePhaseTwo`. Adding an operation is a constant here and a handler in each adapter
+which can serve it, and a test adds one to prove it stays that way.
+
+What an operation does NOT say is what it does, because that is not one answer: it is one per
+BPMS. An adapter contributes a `PhaseOperationHandler` per operation - phase one asks, phase two
+acts, which is entry 3 - and an operation missing from its map is an operation this BPMS has
+nothing like. That is a legitimate answer for an operation which says so (a signal, a push into a
+running instance) and a defect for the rest, so the boot refuses an adapter which cannot serve
+what every adapter has to serve. This check exists because the pair of methods stopped being
+abstract: an adapter which contributes handlers must not be made to implement methods it does not
+use, and losing the compiler's insistence without replacing it would have moved the report from
+build time to the first workflow standing still.
+
+The reason to do it now rather than when the escalation stories arrive: the next adapter is built
+by a vendor rather than by this team, so the shape they implement against has to be the one we
+want to live with (Stephan, 2026-08-28). The compatibility bridge stays until the three adapters
+this repository ships have moved, one pull request each.

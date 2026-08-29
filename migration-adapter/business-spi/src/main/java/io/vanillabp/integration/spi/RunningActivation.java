@@ -4,7 +4,7 @@ package io.vanillabp.integration.spi;
  * Which activation of a BPMN element is executing on this thread, for the moment an
  * operation is planned. Opened by the core around everything it delivers to application
  * code and read where a phase-two key is derived
- * ({@link PhaseTwoOperation#CORRELATE_MESSAGE}), so the application passes nothing and
+ * ({@link PhaseOperation#CORRELATE_MESSAGE}), so the application passes nothing and
  * an operation started from a REST endpoint keeps the key it always had.
  * <p>
  * <strong>What an activation identity is.</strong> The value the delivering adapter

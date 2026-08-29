@@ -1,9 +1,9 @@
 package io.vanillabp.integration.spi;
 
 /**
- * What a {@link PhaseTwoOperation} does once the local transaction was committed
+ * What a {@link PhaseOperation} does once the local transaction was committed
  * and the outbox store hands its entry back for execution. Registered together
- * with the operation in the {@link PhaseTwoOperationRegistry}: the core registers
+ * with the operation in the {@link PhaseOperationRegistry}: the core registers
  * the dispatch of its own operations (routing into the process service of the
  * call's workflow module and BPMN process), an extension registers the dispatch
  * of the operations it contributes.
@@ -14,7 +14,7 @@ package io.vanillabp.integration.spi;
  * to say &quot;not now&quot;, never a way to say &quot;never&quot;.
  */
 @FunctionalInterface
-public interface PhaseTwoOperationDispatch {
+public interface PhaseOperationDispatch {
 
   /**
    * Execute the given call.

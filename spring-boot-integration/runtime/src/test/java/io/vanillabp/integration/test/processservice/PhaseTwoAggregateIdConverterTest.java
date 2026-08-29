@@ -20,8 +20,8 @@ import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.processservice.ProcessServiceSpringBean;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.spi.PhaseTwoCall;
-import io.vanillabp.integration.spi.PhaseTwoOperation;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
@@ -64,7 +64,28 @@ public class PhaseTwoAggregateIdConverterTest {
 
   }
 
+  /**
+   * A mocked adapter answers a default method the way it answers every other one - with
+   * <code>null</code> - so it would contribute no phase operation at all and the core
+   * would refuse every call. These two stubs restore the SPI's own answer, the handlers
+   * bridging to the pair of methods per operation this test verifies against.
+   */
+  private void adapterServesItsOperations() {
+
+    org.mockito.Mockito
+        .lenient()
+        .when(migratableProcessService.phaseOperations())
+        .thenCallRealMethod();
+    org.mockito.Mockito
+        .lenient()
+        .when(migratableProcessService.legacyPhaseOperations())
+        .thenCallRealMethod();
+
+  }
+
   private void buildProcessService() {
+
+    adapterServesItsOperations();
 
     new ProcessServiceSpringBean<>(
         "test-module", "TestProcess", Object.class, buildProperties(), aggregatePersistenceAware, List
@@ -77,7 +98,7 @@ public class PhaseTwoAggregateIdConverterTest {
 
     return PhaseTwoCall
         .of(
-            PhaseTwoOperation.START_WORKFLOW, "test-module", "TestProcess", serializedAggregateId, "test-adapter", Map
+            PhaseOperation.START_WORKFLOW, "test-module", "TestProcess", serializedAggregateId, "test-adapter", Map
                 .of());
 
   }

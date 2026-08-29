@@ -41,7 +41,7 @@ public class OutboxDispatchTest {
    * in which its key stops deduplicating. A count over the whole table would already be
    * satisfied by a sibling test's entry, which is the same mistake in a hiding place.
    * The key of a start ends in the aggregate's ID (see
-   * {@code PhaseTwoOperation#START_WORKFLOW}).
+   * {@code PhaseOperation#START_WORKFLOW}).
    */
   private static final String COUNT_PROCESSED_START_OF_AGGREGATE = "select count(*) from TXNO_OUTBOX "
       + "where processed = true and uniqueRequestId like '%%|%s'";

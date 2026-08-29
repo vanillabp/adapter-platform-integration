@@ -48,7 +48,7 @@ public class PhaseTwoOutboxEntry {
 
   /**
    * The name of the scheduled
-   * {@link io.vanillabp.integration.spi.PhaseTwoOperation}.
+   * {@link io.vanillabp.integration.spi.PhaseOperation}.
    */
   private String operation;
 

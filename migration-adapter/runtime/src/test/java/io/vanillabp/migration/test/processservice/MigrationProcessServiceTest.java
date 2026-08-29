@@ -25,6 +25,8 @@ import io.vanillabp.integration.adapter.migration.processservice.MigrationProces
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxResolver;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.PhaseOperation;
+import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
@@ -41,6 +43,17 @@ public class MigrationProcessServiceTest {
 
   @Mock
   private MigratableProcessService<Object> processService;
+
+  /**
+   * A mocked adapter answers no phase operations at all unless it is told to - see
+   * {@link io.vanillabp.migration.test.AdapterMocks}.
+   */
+  @org.junit.jupiter.api.BeforeEach
+  public void adapterServesItsOperations() {
+
+    io.vanillabp.migration.test.AdapterMocks.servingItsOperations(processService);
+
+  }
 
   @Mock
   private AggregatePersistenceAware<Object> aggregatePersistence;
@@ -190,7 +203,7 @@ public class MigrationProcessServiceTest {
         IllegalStateException.class,
         () -> testee.startWorkflow(aggregate));
     assertTrue(nullException.getMessage().contains(Object.class.getName()));
-    assertTrue(nullException.getMessage().contains("startWorkflow"));
+    assertTrue(nullException.getMessage().contains("starting the workflow"));
 
     // blank ID
     when(aggregatePersistence.getAggregateId(aggregate)).thenReturn("  ");
@@ -250,7 +263,10 @@ public class MigrationProcessServiceTest {
     // the adapter elected in phase one is part of the scheduled call: phase two
     // uses exactly this adapter instead of re-electing one from the then-current
     // priorities
-    verify(phaseTwoOutbox).scheduleStartWorkflow("test-module", "TestProcess", 42L, "test-adapter");
+    verify(phaseTwoOutbox)
+        .schedule(
+            PhaseTwoCall
+                .of(PhaseOperation.START_WORKFLOW, "test-module", "TestProcess", "42", "test-adapter", Map.of()));
 
   }
 
@@ -264,7 +280,7 @@ public class MigrationProcessServiceTest {
         "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
             .of(processService), phaseTwoOutboxResolver);
 
-    testee.startWorkflowPhaseTwo(42L, "test-adapter");
+    testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), false);
 
     verify(processService).startWorkflowPhaseTwo("test-module", "TestProcess", aggregatePersistence, 42L);
 
@@ -282,7 +298,7 @@ public class MigrationProcessServiceTest {
 
     final var exception = assertThrowsExactly(
         IllegalStateException.class,
-        () -> testee.startWorkflowPhaseTwo(42L, "removed-adapter"));
+        () -> testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "removed-adapter", Map.of(), false));
 
     // the message has to name the stale adapter, the BPMN process, the workflow
     // module and that the entry is stale after a configuration change
@@ -306,7 +322,7 @@ public class MigrationProcessServiceTest {
         "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
             .of(processService), phaseTwoOutboxResolver);
 
-    testee.startWorkflowPhaseTwo(42L, "test-adapter", true);
+    testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), true);
 
     // the previous dispatch already started the workflow - no second start
     verify(processService, never()).startWorkflowPhaseTwo(any(), any(), any(), any());
@@ -325,7 +341,7 @@ public class MigrationProcessServiceTest {
         "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
             .of(processService), phaseTwoOutboxResolver);
 
-    testee.startWorkflowPhaseTwo(42L, "test-adapter", true);
+    testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), true);
 
     verify(processService).startWorkflowPhaseTwo("test-module", "TestProcess", aggregatePersistence, 42L);
 
@@ -345,7 +361,7 @@ public class MigrationProcessServiceTest {
 
     final var exception = assertThrowsExactly(
         IllegalStateException.class,
-        () -> testee.startWorkflowPhaseTwo(42L, "test-adapter", true));
+        () -> testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), true));
 
     assertTrue(exception.getMessage().contains("test-adapter"));
     assertTrue(exception.getMessage().contains("retried"));
@@ -363,7 +379,7 @@ public class MigrationProcessServiceTest {
         "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
             .of(processService), phaseTwoOutboxResolver);
 
-    testee.startWorkflowPhaseTwo(42L, "test-adapter", false);
+    testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), false);
 
     verify(processService, never()).awarenessOfWorkflowForRedispatch(any(), any(), any());
     verify(processService).startWorkflowPhaseTwo("test-module", "TestProcess", aggregatePersistence, 42L);
@@ -382,7 +398,13 @@ public class MigrationProcessServiceTest {
         "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
             .of(processService), phaseTwoOutboxResolver);
 
-    testee.startWorkflowByMessagePhaseTwo(42L, "test-message", "test-adapter", true);
+    testee
+        .executePhaseTwo(
+            PhaseOperation.START_WORKFLOW_BY_MESSAGE,
+            42L,
+            "test-adapter",
+            Map.of(PhaseTwoCall.ARG_MESSAGE_NAME, "test-message"),
+            true);
 
     verify(processService, never()).startWorkflowByMessagePhaseTwo(any(), any(), any(), any(), any());
 
@@ -462,7 +484,10 @@ public class MigrationProcessServiceTest {
     when(aggregatePersistence.getAggregateId(aggregate)).thenReturn(42L);
     testee.startWorkflow(aggregate);
 
-    verify(phaseTwoOutbox).scheduleStartWorkflow("test-module", "TestProcess", 42L, "test-adapter");
+    verify(phaseTwoOutbox)
+        .schedule(
+            PhaseTwoCall
+                .of(PhaseOperation.START_WORKFLOW, "test-module", "TestProcess", "42", "test-adapter", Map.of()));
     // resolved exactly once (at startup), not per workflow start
     verify(phaseTwoOutboxResolver).resolveFor(Object.class);
 
@@ -538,7 +563,7 @@ public class MigrationProcessServiceTest {
 
     final var failure = assertThrowsExactly(
         io.vanillabp.integration.spi.PhaseTwoPermanentFailure.class,
-        () -> testee.startWorkflowPhaseTwo(42L, "test-adapter", false));
+        () -> testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), false));
 
     assertEquals(rejected, failure.getCause());
     // the store blocks the entry on this, so the message has to say why it will not
@@ -572,7 +597,7 @@ public class MigrationProcessServiceTest {
         conflict,
         assertThrowsExactly(
             IllegalStateException.class,
-            () -> testee.startWorkflowPhaseTwo(42L, "test-adapter", false)));
+            () -> testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), false)));
 
   }
 
@@ -586,7 +611,7 @@ public class MigrationProcessServiceTest {
     final var testee = new MigrationProcessService<>(
         "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
             .of(processService), phaseTwoOutboxResolver, cache);
-    testee.startWorkflowPhaseTwo(42L, "test-adapter", false);
+    testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), false);
 
     // the next operation on that workflow probes this adapter first, which is what
     // lets it wait out an eventually consistent BPMS instead of failing

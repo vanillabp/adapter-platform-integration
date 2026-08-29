@@ -4,6 +4,68 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## An operation is defined once, and an adapter contributes a handler for it (2026-08-29)
+
+Adding one two-phase operation used to touch five places in the core and three adapters: a pair of
+methods on `MigratableProcessService`, a constant carrying its name and key rule, a typed
+`schedule*` default on `PhaseTwoOutbox`, a registration in the `PhaseTwoRouter`, and an `execute*`
+body in `MigrationProcessService` which was almost the one next to it. Four of those places knew
+nothing an operation needed to decide - they only repeated it.
+
+**An operation is now one `PhaseOperation`.** The record carries its persisted name, its
+idempotency-key rule, the `Election` saying which BPMS serves it, whether every adapter has to be
+able to serve it, whether the activation the call was planned in travels with it, and the words it
+names itself with in a log line or an exception. `MigrationProcessService` runs every operation
+through one `execute` and one `executePhaseTwo`, the router dispatches by name, and the outbox
+stores name, args and key without knowing any of them. Adding an operation is a constant plus a
+handler per adapter, which `AddingAnOperationTest` demonstrates by adding one.
+
+**An adapter contributes handlers.** `MigratableProcessService#phaseOperations()` answers a
+`PhaseOperationHandler` per operation - `phaseOne(PhaseOneRequest)` and
+`phaseTwo(PhaseTwoRequest)`, the request carrying the workflow and the operation's arguments
+behind named accessors (`taskId()`, `messageName()`, `correlationId()`, `activationId()`, …).
+
+**No adapter has to change yet.** The default of `phaseOperations()` is a handler per core
+operation calling the methods that operation used to be, so an adapter which changes nothing
+behaves exactly as before. An adapter moving one operation at a time merges its own handlers into
+`legacyPhaseOperations()`:
+
+```java
+@Override
+public Map<PhaseOperation, PhaseOperationHandler<A>> phaseOperations() {
+  final var operations = new HashMap<>(legacyPhaseOperations());
+  operations.put(PhaseOperation.COMPLETE_TASK, completeTask);
+  return operations;
+}
+```
+
+The bridge and the eighteen methods it calls go together, once the three adapters VanillaBP ships
+have moved.
+
+**What an adapter author has to know.** The pair of methods per operation is `default` now instead
+of abstract, so the compiler no longer insists on them. What took its place is a check while the
+application boots: an adapter which serves neither way an operation every adapter has to serve is
+refused, naming the adapter and what is missing. An operation which is not required of every
+adapter - `SEND_SIGNAL` and `AGGREGATE_CHANGED`, because a BPMS may have nothing like them - is
+simply absent from the map, and the application asking for one gets a
+`PhaseOperationNotSupported` naming the adapter and what to do instead.
+
+**Renamed:** `PhaseTwoOperation` is `PhaseOperation`, `PhaseTwoOperationRegistry` is
+`PhaseOperationRegistry` and `PhaseTwoOperationDispatch` is `PhaseOperationDispatch` - the type
+describes both phases now, not only the second. The persisted names of the operations are
+unchanged, so outbox entries written by an earlier version dispatch and deduplicate as they did.
+An extension builds its operation with a builder now
+(`PhaseOperation.extensionOperation(name).idempotencyKey(…).describedAs(…).build()`) instead of the
+two-argument factory.
+
+**Gone:** the nine typed `schedule*` defaults of `PhaseTwoOutbox`. A store implements
+`schedule(PhaseTwoCall)` and always did; the defaults were the core's own convenience and the core
+builds its calls from the operation now. An application which called one of them - there was no
+reason to - builds the call with `PhaseTwoCall.of(operation, …)`.
+
+**An application sees no difference.** `ProcessService` is untouched, and so is everything an
+application writes.
+
 ## An adapter is registered completely, or it does not come into existence (2026-08-28)
 
 The collaborators the platform hands an adapter used to arrive one setter call at a time, after the
@@ -139,7 +201,7 @@ schema changes and no entry has to be migrated.
 
 **Where the key reads it from changed, not what it is.** The derivation used to read the
 running activation off the thread; it reads the argument now. The key is byte-identical
-either way - `PhaseTwoOperationContractTest` pins both shapes - and the derivation is a pure
+either way - `PhaseOperationContractTest` pins both shapes - and the derivation is a pure
 function of what a store persists again. An application-owned store building calls through
 `PhaseTwoCall.of` itself rather than through `PhaseTwoOutbox#scheduleCorrelateMessage` now
 has to put the argument in itself if it wants the activation in the key; the shipped stores
@@ -1110,11 +1172,11 @@ behavior.
 
 ## Phase-two operations become a registry (2026-08-12)
 
-The closed enum `PhaseTwoOperation` becomes an open registry, so
+The closed enum `PhaseOperation` becomes an open registry, so
 extensions can use the outbox for crash-safe after-commit work of their own and new
 core operations no longer edit a shared enum plus a `switch`.
 
-- **`PhaseTwoOperation` is no longer an enum** but a record of a persisted NAME and
+- **`PhaseOperation` is no longer an enum** but a record of a persisted NAME and
   its idempotency-key derivation. The seven core operations stay constants of that
   class under UNCHANGED names and UNCHANGED key rules (`START_WORKFLOW`,
   `COMPLETE_TASK`, `CANCEL_TASK`, `COMPLETE_USER_TASK`, `CANCEL_USER_TASK`,
@@ -1129,7 +1191,7 @@ core operations no longer edit a shared enum plus a `switch`.
   constructing calls directly have to switch to the factories.
 - **Breaking for custom `PhaseTwoOutbox` stores** in exactly two places: persist
   `call.operation()` instead of `call.operation().name()`, and stop resolving the
-  persisted name (no more `PhaseTwoOperation.valueOf`) - hand it to the router as a
+  persisted name (no more `PhaseOperation.valueOf`) - hand it to the router as a
   String. Nothing else about the store contract changed; stores still never
   interpret operations.
 - **Unknown operations are the router's business now.** An entry whose operation is
@@ -1137,10 +1199,10 @@ core operations no longer edit a shared enum plus a `switch`.
   registered ones; the entry stays in the store and its retry/blocking behavior is
   unchanged. This covers the new case of an extension having been removed from the
   application.
-- **New: extensions register their own operations.** `PhaseTwoOperation`
+- **New: extensions register their own operations.** `PhaseOperation`
   `.extensionOperation(name, key)` enforces a namespace (`my-extension:NOTIFY`), and
-  `PhaseTwoOperationRegistry.register(operation, dispatch)` adds it. The registry is
-  a bean on both platforms (Spring Boot `vanillaBpPhaseTwoOperationRegistry`,
+  `PhaseOperationRegistry.register(operation, dispatch)` adds it. The registry is
+  a bean on both platforms (Spring Boot `vanillaBpPhaseOperationRegistry`,
   Quarkus a `@Singleton` producer). An extension operation is dispatched to its own
   handler, without the aggregate-to-adapter election of the core operations.
 - **No schema change.** The persisted encoding is still the operation's name; the
@@ -1479,7 +1541,7 @@ and the query methods became `default`). Application-facing:
   Process-Engine-API cannot deliver cancellations - see the adapters' READMEs).
   Methods WITHOUT a `@TaskEvent` parameter only ever receive CREATED deliveries -
   a CANCELED delivery is skipped entirely (no transaction, no side effects).
-- **Custom outbox stores:** two new `PhaseTwoOperation`s (`COMPLETE_TASK`,
+- **Custom outbox stores:** two new `PhaseOperation`s (`COMPLETE_TASK`,
   `CANCEL_TASK`) flow through the UNCHANGED `schedule(PhaseTwoCall)` contract -
   stores need no code changes IF they persist `PhaseTwoCall.args()` (the task ID
   and error code travel there; helpers
@@ -1544,7 +1606,7 @@ Two related consolidations, breaking for applications using their own
 
 - **Outbox SPI relocated to the business SPI** (breaking for applications
   implementing a custom outbox): `PhaseTwoOutbox`, `PhaseTwoCall`,
-  `PhaseTwoOperation` and the new `PhaseTwoOutboxAware` moved from the adapter SPI
+  `PhaseOperation` and the new `PhaseTwoOutboxAware` moved from the adapter SPI
   (`io.vanillabp.integration.adapter.spi`, module `migration-adapter-spi`) to the
   business SPI (`io.vanillabp.integration.spi`, module `vanillabp-integration-spi`,
   next to `AggregatePersistenceAware`). The split is deliberate: the adapter SPI is
@@ -1808,7 +1870,7 @@ Breaking changes of the outbox part of the adapter SPI and the platform beans
   (store-level unique constraint, duplicate schedule = no-op returning `false`),
   DONE instead of delete (async cleanup after `vanillabp.outbox.retention`,
   default 7 days), documented at-least-once residual window. Key derivation rules
-  live on `PhaseTwoOperation` and are a persisted contract.
+  live on `PhaseOperation` and are a persisted contract.
 - **Store schemas changed** (entries of the previous format are not migrated —
   never released): Quarkus JDBC table `VANILLABP_PHASE_TWO_OUTBOX` gained
   `ADAPTER_ID`, `IDEMPOTENCY_KEY` (unique), `STATUS`, `DONE_AT` and dropped

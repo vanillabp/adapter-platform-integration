@@ -24,7 +24,7 @@ public interface GruelboxPhaseTwoDispatch {
    * {@link io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter}.
    *
    * @param operation The name of the scheduled {@link
-   *        io.vanillabp.integration.spi.PhaseTwoOperation}
+   *        io.vanillabp.integration.spi.PhaseOperation}
    * @param workflowModuleId The ID of the workflow module the workflow belongs to
    * @param bpmnProcessId The BPMN process ID of the workflow
    * @param workflowAggregateId The ID of the workflow aggregate in serialized form

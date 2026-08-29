@@ -13,7 +13,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.vanillabp.integration.adapter.migration.observability.MicrometerVanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
-import io.vanillabp.integration.spi.PhaseTwoOperation;
+import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.ProcessService;
 
@@ -69,7 +69,7 @@ public class OutboxMetricsTest {
     assertTrue(
         registry
             .get(VanillaBpMetrics.OUTBOX_DISPATCHES)
-            .tag(VanillaBpMetrics.TAG_OPERATION, PhaseTwoOperation.START_WORKFLOW.name())
+            .tag(VanillaBpMetrics.TAG_OPERATION, PhaseOperation.START_WORKFLOW.name())
             .counter()
             .count() >= 1.0,
         "the dispatch of the started workflow's phase two has to be counted");

@@ -17,8 +17,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
+import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.spi.PhaseTwoCall;
-import io.vanillabp.integration.spi.PhaseTwoOperation;
 import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
@@ -60,7 +60,7 @@ public class PhaseTwoRouterTest {
     registerProcessService();
 
     final var call = PhaseTwoCall
-        .of(PhaseTwoOperation.START_WORKFLOW, "test-module", "TestProcess", "42", "test-adapter", Map.of());
+        .of(PhaseOperation.START_WORKFLOW, "test-module", "TestProcess", "42", "test-adapter", Map.of());
     testee.dispatch(call);
     testee.dispatch(call, true);
 
@@ -70,7 +70,7 @@ public class PhaseTwoRouterTest {
             .get(io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.OUTBOX_DISPATCHES)
             .tag(
                 io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.TAG_OPERATION,
-                PhaseTwoOperation.START_WORKFLOW.name())
+                PhaseOperation.START_WORKFLOW.name())
             .counter()
             .count());
     assertEquals(
@@ -84,7 +84,7 @@ public class PhaseTwoRouterTest {
     Mockito
         .doThrow(new io.vanillabp.integration.spi.PhaseTwoPermanentFailure("no such process", null))
         .when(processService)
-        .startWorkflowPhaseTwo(42L, "test-adapter", false);
+        .executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), false);
     assertThrowsExactly(
         io.vanillabp.integration.spi.PhaseTwoPermanentFailure.class,
         () -> testee.dispatch(call));
@@ -114,7 +114,7 @@ public class PhaseTwoRouterTest {
 
     router.dispatch(PhaseTwoCall
         .of(
-            PhaseTwoOperation.START_WORKFLOW, "test-module", "TestProcess", "42", "test-adapter", Map.of()));
+            PhaseOperation.START_WORKFLOW, "test-module", "TestProcess", "42", "test-adapter", Map.of()));
 
     assertTrue(runner.dispatchedInsideTransaction, "phase two ran without the transaction the platform provided");
 
@@ -139,7 +139,7 @@ public class PhaseTwoRouterTest {
         final var result = work.get();
         dispatchedInsideTransaction = insideTransaction && Mockito.mockingDetails(processService).getInvocations()
             .stream().anyMatch(
-                invocation -> invocation.getMethod().getName().equals("startWorkflowPhaseTwo"));
+                invocation -> invocation.getMethod().getName().equals("executePhaseTwo"));
         return result;
       } finally {
         insideTransaction = false;
@@ -190,9 +190,9 @@ public class PhaseTwoRouterTest {
 
     testee.dispatch(PhaseTwoCall
         .of(
-            PhaseTwoOperation.START_WORKFLOW, "test-module", "TestProcess", "42", "test-adapter", Map.of()));
+            PhaseOperation.START_WORKFLOW, "test-module", "TestProcess", "42", "test-adapter", Map.of()));
 
-    verify(processService).startWorkflowPhaseTwo(42L, "test-adapter", false);
+    verify(processService).executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), false);
 
   }
 
@@ -208,7 +208,7 @@ public class PhaseTwoRouterTest {
         .dispatch(
             PhaseTwoCall
                 .forDispatch(
-                    PhaseTwoOperation.CORRELATE_MESSAGE.name(),
+                    PhaseOperation.CORRELATE_MESSAGE.name(),
                     "test-module",
                     "TestProcess",
                     "42",
@@ -221,7 +221,17 @@ public class PhaseTwoRouterTest {
 
     // a BPMS with a message deduplication of its own needs the same distinction there,
     // and phase two runs on the dispatcher's thread
-    verify(processService).correlateMessagePhaseTwo(42L, "OfferRequested", "partner-42", "element-instance-99");
+    verify(processService)
+        .executePhaseTwo(
+            PhaseOperation.CORRELATE_MESSAGE,
+            42L,
+            null,
+            Map
+                .of(
+                    PhaseTwoCall.ARG_MESSAGE_NAME, "OfferRequested",
+                    PhaseTwoCall.ARG_CORRELATION_ID, "partner-42",
+                    PhaseTwoCall.ARG_ACTIVATION_ID, "element-instance-99"),
+            false);
 
   }
 
@@ -237,7 +247,7 @@ public class PhaseTwoRouterTest {
         .dispatch(
             PhaseTwoCall
                 .forDispatch(
-                    PhaseTwoOperation.CORRELATE_MESSAGE.name(),
+                    PhaseOperation.CORRELATE_MESSAGE.name(),
                     "test-module",
                     "TestProcess",
                     "42",
@@ -247,7 +257,16 @@ public class PhaseTwoRouterTest {
                             PhaseTwoCall.ARG_MESSAGE_NAME, "OfferRequested",
                             PhaseTwoCall.ARG_CORRELATION_ID, "partner-42")));
 
-    verify(processService).correlateMessagePhaseTwo(42L, "OfferRequested", "partner-42", null);
+    verify(processService)
+        .executePhaseTwo(
+            PhaseOperation.CORRELATE_MESSAGE,
+            42L,
+            null,
+            Map
+                .of(
+                    PhaseTwoCall.ARG_MESSAGE_NAME, "OfferRequested",
+                    PhaseTwoCall.ARG_CORRELATION_ID, "partner-42"),
+            false);
 
   }
 
@@ -261,7 +280,7 @@ public class PhaseTwoRouterTest {
         IllegalStateException.class,
         () -> testee.dispatch(PhaseTwoCall
             .of(
-                PhaseTwoOperation.START_WORKFLOW, "test-module", "RemovedProcess", "42", "test-adapter", Map.of())));
+                PhaseOperation.START_WORKFLOW, "test-module", "RemovedProcess", "42", "test-adapter", Map.of())));
 
     // the message has to name the process, the module and that the entry stays
     // visible in the outbox store
@@ -282,10 +301,16 @@ public class PhaseTwoRouterTest {
     testee
         .dispatch(PhaseTwoCall
             .of(
-                PhaseTwoOperation.SEND_SIGNAL, "test-module", "TestProcess", null, "test-adapter", Map
+                PhaseOperation.SEND_SIGNAL, "test-module", "TestProcess", null, "test-adapter", Map
                     .of(PhaseTwoCall.ARG_SIGNAL_NAME, "OrderCancelled")));
 
-    verify(processService).sendSignalPhaseTwo("OrderCancelled", "test-adapter");
+    verify(processService)
+        .executePhaseTwo(
+            PhaseOperation.SEND_SIGNAL,
+            null,
+            "test-adapter",
+            Map.of(PhaseTwoCall.ARG_SIGNAL_NAME, "OrderCancelled"),
+            false);
     verify(processService, Mockito.never()).convertAggregateId(Mockito.any());
 
   }
@@ -301,7 +326,7 @@ public class PhaseTwoRouterTest {
         () -> testee
             .dispatch(PhaseTwoCall
                 .of(
-                    PhaseTwoOperation.SEND_SIGNAL, "test-module", "RemovedProcess", null, "test-adapter", Map
+                    PhaseOperation.SEND_SIGNAL, "test-module", "RemovedProcess", null, "test-adapter", Map
                         .of(PhaseTwoCall.ARG_SIGNAL_NAME, "OrderCancelled"))));
 
     assertTrue(exception.getMessage().contains("OrderCancelled"), exception.getMessage());
@@ -315,8 +340,9 @@ public class PhaseTwoRouterTest {
   @DisplayName("An operation of an extension is dispatched to the extension's own handler")
   public void extensionOperationIsDispatchedToItsHandler() {
 
-    final var operation = PhaseTwoOperation
-        .extensionOperation("my-extension:NOTIFY", call -> java.util.Optional.empty());
+    final var operation = PhaseOperation
+        .extensionOperation("my-extension:NOTIFY")
+        .build();
     final var dispatched = new java.util.concurrent.atomic.AtomicReference<PhaseTwoCall>();
     testee
         .getOperations()

@@ -2,11 +2,11 @@ package io.vanillabp.integration.adapter.migration.processservice;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.BiConsumer;
 
+import io.vanillabp.integration.spi.PhaseOperation;
+import io.vanillabp.integration.spi.PhaseOperationDispatch;
+import io.vanillabp.integration.spi.PhaseOperationRegistry;
 import io.vanillabp.integration.spi.PhaseTwoCall;
-import io.vanillabp.integration.spi.PhaseTwoOperation;
-import io.vanillabp.integration.spi.PhaseTwoOperationRegistry;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.TransactionRunner;
 
@@ -29,10 +29,10 @@ import io.vanillabp.integration.spi.TransactionRunner;
  * aggregate's persistence support), so the conversion happens exactly once, here.
  * <p>
  * WHICH operations exist is not hardcoded here: the router owns a
- * {@link PhaseTwoOperationRegistry} and registers the dispatch of VanillaBP's core
+ * {@link PhaseOperationRegistry} and registers the dispatch of VanillaBP's core
  * operations into it while it is built. An extension registers its own operations
  * in the same registry (see {@link #getOperations()}) and receives their calls in
- * its own {@link io.vanillabp.integration.spi.PhaseTwoOperationDispatch} - the
+ * its own {@link io.vanillabp.integration.spi.PhaseOperationDispatch} - the
  * process-service routing below applies to core operations only.
  * <p>
  * Why anything reaches this router at all instead of running in the caller's transaction is
@@ -50,7 +50,7 @@ public final class PhaseTwoRouter {
 
   private final Map<RegistrationKey, MigrationProcessService<?>> registrations = new ConcurrentHashMap<>();
 
-  private final PhaseTwoOperationRegistry operations;
+  private final PhaseOperationRegistry operations;
 
   /**
    * Provides the transaction (and whatever else the platform needs, e.g. an active
@@ -82,7 +82,7 @@ public final class PhaseTwoRouter {
 
   public PhaseTwoRouter() {
 
-    this(new PhaseTwoOperationRegistry(), null);
+    this(new PhaseOperationRegistry(), null);
 
   }
 
@@ -91,7 +91,7 @@ public final class PhaseTwoRouter {
    *        resolve dispatched operations from
    */
   public PhaseTwoRouter(
-      final PhaseTwoOperationRegistry operations) {
+      final PhaseOperationRegistry operations) {
 
     this(operations, null);
 
@@ -104,7 +104,7 @@ public final class PhaseTwoRouter {
   public PhaseTwoRouter(
       final TransactionRunner transactionRunner) {
 
-    this(new PhaseTwoOperationRegistry(), transactionRunner);
+    this(new PhaseOperationRegistry(), transactionRunner);
 
   }
 
@@ -115,7 +115,7 @@ public final class PhaseTwoRouter {
    *        {@link #transactionRunner}
    */
   public PhaseTwoRouter(
-      final PhaseTwoOperationRegistry operations,
+      final PhaseOperationRegistry operations,
       final TransactionRunner transactionRunner) {
 
     this.operations = operations;
@@ -130,7 +130,7 @@ public final class PhaseTwoRouter {
    *
    * @return The operation registry used by this router
    */
-  public PhaseTwoOperationRegistry getOperations() {
+  public PhaseOperationRegistry getOperations() {
 
     return operations;
 
@@ -264,195 +264,79 @@ public final class PhaseTwoRouter {
   }
 
   /**
-   * Registers the dispatch of VanillaBP's core operations: each of them routes to
-   * the process service of the call's workflow module and BPMN process.
+   * Registers the dispatch of every operation the core owns: each of them routes to the
+   * process service of the call's workflow module and BPMN process.
    */
   private void registerCoreOperations() {
 
-    operations
-        .registerCoreOperation(
-            PhaseTwoOperation.START_WORKFLOW,
-            (
-                call,
-                previouslyAttempted) -> withProcessService(
-                    call,
-                    (
-                        processService,
-                        workflowAggregateId) -> processService
-                            .startWorkflowPhaseTwo(
-                                workflowAggregateId,
-                                call.adapterId(),
-                                previouslyAttempted)));
+    PhaseOperation.CORE_OPERATIONS
+        .forEach(this::registerOperation);
 
-    operations
-        .registerCoreOperation(
-            PhaseTwoOperation.COMPLETE_TASK,
-            (
-                call,
-                previouslyAttempted) -> withProcessService(
-                    call,
-                    (
-                        processService,
-                        workflowAggregateId) -> processService
-                            .completeTaskPhaseTwo(
-                                workflowAggregateId,
-                                call.args().get(PhaseTwoCall.ARG_TASK_ID))));
+  }
 
-    operations
-        .registerCoreOperation(
-            PhaseTwoOperation.CANCEL_TASK,
-            (
-                call,
-                previouslyAttempted) -> withProcessService(
-                    call,
-                    (
-                        processService,
-                        workflowAggregateId) -> processService
-                            .cancelTaskPhaseTwo(
-                                workflowAggregateId,
-                                call.args().get(PhaseTwoCall.ARG_TASK_ID),
-                                call.args().get(PhaseTwoCall.ARG_BPMN_ERROR_CODE))));
+  /**
+   * Registers an operation which is executed by the BPMS adapters rather than by
+   * whoever contributed it: the router resolves the process service of the call's
+   * workflow module and BPMN process, converts the aggregate ID and lets the process
+   * service run the operation's phase two through the elected adapter's handler.
+   * <p>
+   * The core registers its own operations this way while this router is built. An
+   * extension whose operation addresses a workflow the way a core operation does - it
+   * says so through its {@link PhaseOperation#election()} - registers it here as well
+   * and contributes a handler per adapter, instead of registering a dispatch of its own
+   * in {@link #getOperations()}.
+   *
+   * @param operation The operation to route to the process services
+   */
+  public void registerOperation(
+      final PhaseOperation operation) {
 
-    operations
-        .registerCoreOperation(
-            PhaseTwoOperation.COMPLETE_USER_TASK,
-            (
-                call,
-                previouslyAttempted) -> withProcessService(
-                    call,
-                    (
-                        processService,
-                        workflowAggregateId) -> processService
-                            .completeUserTaskPhaseTwo(
-                                workflowAggregateId,
-                                call.args().get(PhaseTwoCall.ARG_TASK_ID))));
-
-    operations
-        .registerCoreOperation(
-            PhaseTwoOperation.CANCEL_USER_TASK,
-            (
-                call,
-                previouslyAttempted) -> withProcessService(
-                    call,
-                    (
-                        processService,
-                        workflowAggregateId) -> processService
-                            .cancelUserTaskPhaseTwo(
-                                workflowAggregateId,
-                                call.args().get(PhaseTwoCall.ARG_TASK_ID),
-                                call.args().get(PhaseTwoCall.ARG_BPMN_ERROR_CODE))));
-
-    operations
-        .registerCoreOperation(
-            PhaseTwoOperation.CORRELATE_MESSAGE,
-            (
-                call,
-                previouslyAttempted) -> withProcessService(
-                    call,
-                    (
-                        processService,
-                        workflowAggregateId) -> processService
-                            .correlateMessagePhaseTwo(
-                                workflowAggregateId,
-                                call.args().get(PhaseTwoCall.ARG_MESSAGE_NAME),
-                                call.args().get(PhaseTwoCall.ARG_CORRELATION_ID),
-                                call.args().get(PhaseTwoCall.ARG_ACTIVATION_ID))));
-
-    operations
-        .registerCoreOperation(
-            PhaseTwoOperation.AGGREGATE_CHANGED,
-            (
-                call,
-                previouslyAttempted) -> withProcessService(
-                    call,
-                    (
-                        processService,
-                        workflowAggregateId) -> processService
-                            .aggregateChangedPhaseTwo(
-                                workflowAggregateId,
-                                call.args().get(PhaseTwoCall.ARG_TASK_ID))));
-
-    operations
-        .registerCoreOperation(
-            PhaseTwoOperation.SEND_SIGNAL,
-            (
-                call,
-                previouslyAttempted) -> {
-              // a broadcast is not about one workflow: no aggregate ID is converted
-              // and no process service has to hold an aggregate - only the routing
-              // by (module, process) applies
-              final var processService = registrations
-                  .get(new RegistrationKey(call.workflowModuleId(), call.bpmnProcessId()));
-              if (processService == null) {
-                throw new IllegalStateException(
-                    """
-                        Cannot dispatch outbox entry (operation '%s', signal '%s'): BPMN process '%s' of \
-                        workflow module '%s' is not (or no longer) part of this application! If the \
-                        process was removed on purpose, remove the entry from the outbox store - it \
-                        stays visible there for operations."""
-                        .formatted(
-                            call.operation(),
-                            call.args().get(PhaseTwoCall.ARG_SIGNAL_NAME),
-                            call.bpmnProcessId(),
-                            call.workflowModuleId()));
-              }
-              processService
-                  .sendSignalPhaseTwo(call.args().get(PhaseTwoCall.ARG_SIGNAL_NAME), call.adapterId());
-            });
-
-    operations
-        .registerCoreOperation(
-            PhaseTwoOperation.START_WORKFLOW_BY_MESSAGE,
-            (
-                call,
-                previouslyAttempted) -> withProcessService(
-                    call,
-                    (
-                        processService,
-                        workflowAggregateId) -> processService
-                            .startWorkflowByMessagePhaseTwo(
-                                workflowAggregateId,
-                                call.args().get(PhaseTwoCall.ARG_MESSAGE_NAME),
-                                call.adapterId(),
-                                previouslyAttempted)));
+    final PhaseOperationDispatch dispatch = (
+        call,
+        previouslyAttempted) -> dispatchToProcessService(operation, call, previouslyAttempted);
+    if (PhaseOperation.coreOperation(operation.name()).isPresent()) {
+      operations.registerCoreOperation(operation, dispatch);
+    } else {
+      operations.register(operation, dispatch);
+    }
 
   }
 
   /**
    * Resolves the process service of the call's workflow module and BPMN process,
-   * converts the serialized aggregate ID and hands both to the given action - the
-   * shared part of every core operation's dispatch.
+   * converts the serialized aggregate ID and lets it execute phase two - the shared
+   * dispatch of every operation an adapter executes.
    *
-   * @param call The call being dispatched
-   * @param action What to do with the process service and the converted aggregate
-   *        ID
-   * @throws IllegalStateException If no process service is registered for the
-   *         call's workflow module/BPMN process
+   * @throws IllegalStateException If no process service is registered for the call's
+   *         workflow module/BPMN process
    */
-  private void withProcessService(
+  private void dispatchToProcessService(
+      final PhaseOperation operation,
       final PhaseTwoCall call,
-      final BiConsumer<MigrationProcessService<?>, Object> action) {
+      final boolean previouslyAttempted) {
 
     final var processService = registrations
         .get(new RegistrationKey(call.workflowModuleId(), call.bpmnProcessId()));
     if (processService == null) {
       throw new IllegalStateException(
           """
-              Cannot dispatch outbox entry (operation '%s', aggregate ID '%s'): BPMN process '%s' of \
-              workflow module '%s' is not (or no longer) part of this application! If the process was \
-              removed on purpose, remove the entry from the outbox store - it stays visible there for \
-              operations."""
+              Cannot dispatch outbox entry (%s): BPMN process '%s' of workflow module '%s' is not \
+              (or no longer) part of this application! If the process was removed on purpose, \
+              remove the entry from the outbox store - it stays visible there for operations."""
               .formatted(
-                  call.operation(),
-                  call.workflowAggregateId(),
+                  operation.describe(call.args()),
                   call.bpmnProcessId(),
                   call.workflowModuleId()));
     }
 
-    action
-        .accept(
-            processService,
-            processService.convertAggregateId(call.workflowAggregateId()));
+    // an operation which is not about ONE workflow carries no aggregate ID - there is
+    // nothing to convert, and the routing by (module, process) is all that applies
+    final var workflowAggregateId = call.workflowAggregateId() == null
+        ? null
+        : processService.convertAggregateId(call.workflowAggregateId());
+
+    processService
+        .executePhaseTwo(operation, workflowAggregateId, call.adapterId(), call.args(), previouslyAttempted);
 
   }
 

@@ -19,8 +19,8 @@ import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
+import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.spi.PhaseTwoCall;
-import io.vanillabp.integration.spi.PhaseTwoOperation;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
@@ -109,7 +109,7 @@ public class GruelboxDeduplicationWindowTest {
 
     return PhaseTwoCall
         .of(
-            PhaseTwoOperation.CORRELATE_MESSAGE, "test-module", "TestProcess", aggregateId, null, Map
+            PhaseOperation.CORRELATE_MESSAGE, "test-module", "TestProcess", aggregateId, null, Map
                 .of(
                     PhaseTwoCall.ARG_MESSAGE_NAME, "OfferRequested",
                     PhaseTwoCall.ARG_CORRELATION_ID, correlationId));
@@ -249,7 +249,7 @@ public class GruelboxDeduplicationWindowTest {
 
     final var signal = PhaseTwoCall
         .of(
-            PhaseTwoOperation.SEND_SIGNAL, "test-module", "TestProcess", null, "test-adapter", Map
+            PhaseOperation.SEND_SIGNAL, "test-module", "TestProcess", null, "test-adapter", Map
                 .of(PhaseTwoCall.ARG_SIGNAL_NAME, "OfferWithdrawn"));
 
     assertTrue(scheduled(transactions, testee, signal));

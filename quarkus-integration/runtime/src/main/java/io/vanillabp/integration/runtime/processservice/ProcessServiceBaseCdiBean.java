@@ -365,6 +365,9 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
   public void onStart(
       @Observes final StartupEvent event) {
 
+    // first of all: an adapter which cannot serve an operation every adapter has to
+    // serve is a gap nothing later would report except a workflow standing still
+    migrationProcessService.validateAdapterOperationsAtStartup();
     migrationProcessService.validatePhaseTwoOutboxAtStartup();
     // after the outbox: an application which configured a remote BPMS without a store
     // hears about the store first, which is the more specific gap
