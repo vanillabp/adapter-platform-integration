@@ -58,6 +58,15 @@ public interface VanillaBpMetrics {
   String TASK_REDELIVERIES_DEDUPLICATED = "vanillabp.task.redeliveries.deduplicated";
 
   /**
+   * Repeated deliveries which arrived while the first one was still running, so the
+   * record could not answer them and the <code>&#64;WorkflowTask</code> method ran a
+   * second time. The counterpart of {@link #TASK_REDELIVERIES_DEDUPLICATED}: the two
+   * together are what a BPMS handing the same task out twice ends up as, and this one
+   * is the half nothing can catch afterwards.
+   */
+  String TASK_REDELIVERIES_CONCURRENT = "vanillabp.task.redeliveries.concurrent";
+
+  /**
    * Phase-two calls dispatched out of the transaction outbox.
    */
   String OUTBOX_DISPATCHES = "vanillabp.outbox.dispatches";
@@ -173,6 +182,23 @@ public interface VanillaBpMetrics {
    * @param taskDefinition The task definition delivered
    */
   default void taskRedeliveryDeduplicated(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String taskDefinition) {
+
+  }
+
+  /**
+   * A repeated delivery ran at the same time as the delivery it repeats, so both
+   * handlers ran and only one record was written.
+   *
+   * @param adapterId The id of the adapter which delivered the task
+   * @param workflowModuleId The workflow module of the BPMN process
+   * @param bpmnProcessId The BPMN process the task belongs to
+   * @param taskDefinition The task definition delivered
+   */
+  default void taskRedeliveryRanConcurrently(
       final String adapterId,
       final String workflowModuleId,
       final String bpmnProcessId,

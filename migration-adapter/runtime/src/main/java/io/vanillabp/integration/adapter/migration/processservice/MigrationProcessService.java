@@ -1231,12 +1231,56 @@ public class MigrationProcessService<A> {
     if (deliveryLog == null) {
       return;
     }
-    deliveryLog.record(
+    final var recordWasWritten = deliveryLog.record(
         new TaskDelivery(
             deliveryKey, context.getAdapterId(), workflowModuleId, bpmnProcessId, context
                 .getWorkflowAggregateId(), context
                     .getTaskDefinition(), outcome.kind().name(), outcome.errorCode(), outcome
                         .errorName(), java.time.Instant.now()));
+    if (!recordWasWritten) {
+      reportHandlerRanTwiceAtTheSameTime(deliveryKey, context);
+    }
+
+  }
+
+  /**
+   * Says that the handler of this task ran twice at the same time, which is the one case
+   * a record written after the work cannot prevent: a delivery starting while another
+   * one is still running finds no record yet, so both run and only the one committing
+   * first gets its record written.
+   * <p>
+   * The delivery which lost is the only place where the overlap becomes visible at all,
+   * so it is where it is said out loud. Nothing is rolled back: the record which stands
+   * describes work which was really done, and this delivery's own work committed just as
+   * well.
+   */
+  private void reportHandlerRanTwiceAtTheSameTime(
+      final String deliveryKey,
+      final TaskInvocationContext context) {
+
+    log.warn(
+        """
+            Two deliveries of task '{}' (BPMN process '{}' of workflow module '{}', workflow \
+            aggregate '{}') were processed at the SAME time: adapter '{}' handed the task out \
+            again while the first handler was still running, so both found no record and the \
+            @WorkflowTask method ran twice. The record written by the delivery which committed \
+            first stands and this one added nothing to it (delivery key '{}'). Whatever the \
+            handler did beside writing the workflow aggregate, sending a mail for instance, \
+            happened twice. Key such decisions on the state of the workflow aggregate, and where \
+            the BPMS lets you say how long a task stays locked, a lock which outlasts the handler \
+            keeps the second delivery from being handed out at all.""",
+        context.getTaskDefinition(),
+        bpmnProcessId,
+        workflowModuleId,
+        context.getWorkflowAggregateId(),
+        context.getAdapterId(),
+        deliveryKey);
+    metrics
+        .taskRedeliveryRanConcurrently(
+            context.getAdapterId(),
+            workflowModuleId,
+            bpmnProcessId,
+            context.getTaskDefinition());
 
   }
 

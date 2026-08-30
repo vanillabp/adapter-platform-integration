@@ -24,8 +24,10 @@ import java.util.Optional;
  * store, enforced by the store's own mechanism (unique index/constraint). A second
  * {@link #record(TaskDelivery)} of the same key is a no-op returning
  * <code>false</code> - two nodes processing the same delivery concurrently (both
- * having read no record) end up with one record, and the loser's transaction fails
- * respectively is ignored.
+ * having read no record) end up with one record. Nothing is rolled back then, because
+ * both handlers really ran; the core writes one WARN naming the delivery, the adapter
+ * and the workflow, and counts the case as
+ * <code>vanillabp.task.redeliveries.concurrent</code>.
  * <p>
  * <strong>Retention:</strong> records are deleted asynchronously once
  * <code>vanillabp.delivery.retention</code> passed, which defaults to
@@ -80,7 +82,8 @@ public interface TaskDeliveryLog {
    * @param delivery What was processed, and with which outcome
    * @return <code>true</code> if the record was written, <code>false</code> if a
    *         record of the same {@link TaskDelivery#deliveryKey()} already existed
-   *         (no-op)
+   *         (no-op, which the core reports as two deliveries having run at the same
+   *         time)
    */
   boolean record(
       TaskDelivery delivery);

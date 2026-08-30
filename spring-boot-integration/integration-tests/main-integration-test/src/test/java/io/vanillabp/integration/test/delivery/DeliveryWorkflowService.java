@@ -1,5 +1,7 @@
 package io.vanillabp.integration.test.delivery;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.TaskException;
 import io.vanillabp.spi.service.TaskId;
@@ -57,6 +59,28 @@ public class DeliveryWorkflowService {
 
     aggregate.setInvocations(aggregate.getInvocations() + 1);
     aggregate.setStatus("awaiting-completion");
+
+  }
+
+  /**
+   * What {@link #concurrentTask(DeliveryAggregate)} does before it returns, so a test
+   * can hold one delivery inside the handler while it hands the same task out a second
+   * time. Nothing, until a test puts something in.
+   */
+  public static final AtomicReference<Runnable> WHILE_THE_CONCURRENT_TASK_RUNS = new AtomicReference<>(() -> {
+  });
+
+  /**
+   * A task whose handler can be held inside its transaction, which is what two
+   * deliveries of one task overlapping each other needs.
+   */
+  @WorkflowTask
+  public void concurrentTask(
+      final DeliveryAggregate aggregate) {
+
+    aggregate.setInvocations(aggregate.getInvocations() + 1);
+    aggregate.setStatus("processed-concurrently");
+    WHILE_THE_CONCURRENT_TASK_RUNS.get().run();
 
   }
 

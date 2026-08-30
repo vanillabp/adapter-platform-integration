@@ -496,6 +496,16 @@ remembers a processed delivery and answers a repeated one from the record:
   outcome again - skipping both handler and answer would leave the task open forever.
   A handler which threw leaves no record: the rollback took it, and the BPMS' retry
   runs the handler again.
+- Two deliveries of one task which OVERLAP are the case a record written after the work
+  cannot catch: both read no record, both run the handler, and the second `record(...)`
+  finds the key taken and returns `false`. Nothing is rolled back there, because both
+  handlers really did their work. What the core does with that knowledge is say it out
+  loud: `MigrationProcessService#reportHandlerRanTwiceAtTheSameTime` writes one WARN
+  naming the task, the workflow, the adapter and the delivery key, and counts the case as
+  `vanillabp.task.redeliveries.concurrent`, the counterpart of
+  `vanillabp.task.redeliveries.deduplicated`. Both halves are held by
+  `InboundIdempotencyTest#twoDeliveriesAtTheSameTimeAreNamedAndCounted`, on Spring Boot
+  and on Quarkus.
 - `TaskDeliveryLog` and `TaskDeliveryLogAware` live in the business SPI next to
   `PhaseTwoOutbox`, with the same per-aggregate resolution
   (`TaskDeliveryLogResolver`, implemented per platform): a record has to ride the
