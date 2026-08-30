@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.vanillabp.quarkus</groupId>
+    <artifactId>test-applications</artifactId>
+    <version>2.0.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>application-with-workflow-module-config-in-a-jar</artifactId>
+  <name>Quarkus integration - Integration test application whose configuration is in a JAR</name>
+  <!-- A workflow module which ships nothing but its descriptor, its BPMN resource and its
+       configuration, in every location and every format the config source providers read.
+       It is the normal shape of a workflow module packaged as its own Maven module, and the
+       shape a native image has to carry the files of: a file inside a dependency JAR is not
+       part of an image unless the extension named it. -->
+</project>

@@ -16,3 +16,12 @@ vanillabp:
       adapters:
         demo1:
           resources-location: classpath:processes/dummy
+    jar-module:
+      adapters:
+        demo1:
+          resources-location: classpath:jar-module/processes/dummy
+native-image-test:
+  application-profile-section: from-the-plain-file
+'%tenant':
+  native-image-test:
+    application-profile-section: from-the-tenant-file

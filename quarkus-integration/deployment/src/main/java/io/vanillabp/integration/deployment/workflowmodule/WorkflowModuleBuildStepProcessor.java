@@ -10,6 +10,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -23,6 +25,7 @@ import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
 import io.quarkus.deployment.builditem.RunTimeConfigBuilderBuildItem;
 import io.quarkus.deployment.builditem.StaticInitConfigBuilderBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.quarkus.gizmo.ClassCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.runtime.configuration.ConfigBuilder;
@@ -364,26 +367,55 @@ public class WorkflowModuleBuildStepProcessor {
   }
 
   /**
-   * Watches module-specific configuration files for hot deployment in a workflow application.
-   * This method identifies and monitors all possible configuration files (properties or YAML)
-   * associated with workflow modules as defined in the build process, scanning them from the
-   * application archives. Both locations loaded by the config source providers are watched:
-   * files at the classpath root (<code>{id}[-{profile}].{ext}</code>) and files inside a
-   * subdirectory named after the workflow module ID
-   * (<code>{id}/{id}[-{profile}].{ext}</code>). Therefore, files are registered using their
-   * path relative to the archive root, not just their file name.
+   * Collects the module-specific configuration files (properties or YAML) of all workflow
+   * modules found and hands the very same list to the two consumers which need it: dev mode
+   * watches those files, and the native image carries them as resources. Both locations
+   * loaded by the config source providers are covered, files at the classpath root
+   * (<code>{id}[-{profile}].{ext}</code>) and files inside a subdirectory named after the
+   * workflow module ID (<code>{id}/{id}[-{profile}].{ext}</code>), which is why a file is
+   * registered by its path relative to the archive root rather than by its name.
+   * <p>
+   * A native image carries only the resources it was told about, and a file which is watched
+   * in dev mode but missing from the image is the difference between a workflow module whose
+   * settings apply and one whose settings are silently the defaults. Building the list once
+   * is what keeps the two from drifting apart.
    *
    * @param allWorkflowModules A {@link VanillaBpWorkflowModulesBuildItem} containing information about all workflow modules.
    * @param applicationArchives An {@link ApplicationArchivesBuildItem} containing the archives to be scanned for configuration files.
    * @param watchedFiles A {@link BuildProducer} that collects {@link HotDeploymentWatchedFileBuildItem} instances for hot deployment purposes.
+   * @param nativeImageResources A {@link BuildProducer} putting the files into a native image.
    * @see WorkflowModuleSpecificPropertiesConfigSourceProvider#getConfigSources(ClassLoader)
    * @see WorkflowModuleSpecificYamlConfigSourceProvider#getConfigSources(ClassLoader)
    */
   @BuildStep
-  void watchWorkflowModuleSpecificConfigFiles(
+  void watchAndEmbedWorkflowModuleSpecificConfigFiles(
       final VanillaBpWorkflowModulesBuildItem allWorkflowModules,
       final ApplicationArchivesBuildItem applicationArchives,
-      final BuildProducer<HotDeploymentWatchedFileBuildItem> watchedFiles) {
+      final BuildProducer<HotDeploymentWatchedFileBuildItem> watchedFiles,
+      final BuildProducer<NativeImageResourceBuildItem> nativeImageResources) {
+
+    workflowModuleSpecificConfigFiles(allWorkflowModules, applicationArchives)
+        .forEach(relativePath -> {
+          watchedFiles.produce(new HotDeploymentWatchedFileBuildItem(relativePath));
+          nativeImageResources.produce(new NativeImageResourceBuildItem(relativePath));
+        });
+
+  }
+
+  /**
+   * Searches all application archives for the configuration files the config source providers
+   * of a workflow module load: the file named after the workflow module ID and every
+   * profile-specific variant of it, at the classpath root as well as inside a subdirectory
+   * named after the ID, for each file extension both providers support.
+   *
+   * @param allWorkflowModules All workflow modules found
+   * @param applicationArchives The archives of this Quarkus build
+   * @return The paths of those files relative to the root of the archive holding them,
+   *         deduplicated because the same path may show up in more than one archive
+   */
+  private static SortedSet<String> workflowModuleSpecificConfigFiles(
+      final VanillaBpWorkflowModulesBuildItem allWorkflowModules,
+      final ApplicationArchivesBuildItem applicationArchives) {
 
     // determine all relative paths possible
 
@@ -413,6 +445,7 @@ public class WorkflowModuleBuildStepProcessor {
 
     // search archives for config files
 
+    final var configFiles = new TreeSet<String>();
     applicationArchives
         .getAllArchives()
         // traverse all archives
@@ -423,8 +456,8 @@ public class WorkflowModuleBuildStepProcessor {
                     forEach(pattern -> Optional
                         .ofNullable(visit.getRelativePath("/"))
                         .filter(relativePath -> pattern.matcher(relativePath).matches())
-                        .map(HotDeploymentWatchedFileBuildItem::new)
-                        .ifPresent(watchedFiles::produce)))));
+                        .ifPresent(configFiles::add)))));
+    return configFiles;
 
   }
 
