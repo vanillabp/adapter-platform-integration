@@ -57,6 +57,15 @@ value wins (see `MigrationAdapterProperties`).
   (like Camunda 8) may not know an instance *yet*, and only the migration adapter can
   decide to fall back to the next adapter in the list.
 
+A migration is three states of one configured list, and the picture below walks them: the old
+BPMS on its own, both of them side by side while the workflows already running finish where they
+are, and the new one alone once the old one holds nothing any more.
+
+```mermaid
+flowchart LR
+  A["before:<br/>prioritized-adapters: [c7]"] --> B["during:<br/>prioritized-adapters: [c8, c7]<br/>new workflows start in c8 · existing ones are found in c7 by probing<br/>module deployed to the UNION of both · signals fan out to both"] --> C["after:<br/>prioritized-adapters: [c8]<br/>(only once c7 holds no ACTIVE workflow — nothing checks this for you)"]
+```
+
 ### Awareness contract (`WorkflowAwareness`)
 
 Asking a BPMS whether it knows a workflow or task has four possible answers
@@ -88,6 +97,30 @@ falls through to the next adapter, `COMPLETED` is a warned no-op, and
 `BPMS_UNAVAILABLE` fails naming the adapter — it NEVER falls back. New workflows always
 start in the first-priority adapter (no probing).
 
+The walk itself is drawn below. A cached hint is probed first and the remaining adapters follow in
+list order, and each of the four answers ends the walk in its own way.
+
+```mermaid
+flowchart TB
+  S["operation on an EXISTING workflow<br/>(complete/cancel task, user task, correlate, aggregateChanged, viewer)"] --> L["prioritized adapters for (module, process):<br/>workflow › module › global — most specific non-empty list wins"]
+  L --> H{"cache hint for<br/>(module, process, id)?"}
+  H -->|yes| P0["probe the hinted adapter first"]
+  H -->|no| P["probe next adapter in list order<br/>awarenessOfTask / awarenessOfUserTask / awarenessOfWorkflow<br/>with WorkflowScope (module + served process ids)"]
+  P0 --> R
+  P --> R{"answer"}
+  R -->|ACTIVE| OK["execute here; cache.put"]
+  R -->|COMPLETED| CO["warned no-op<br/>(viewer: regular result)"]
+  R -->|UNKNOWN_TO_BPMS| N{"more adapters?"}
+  N -->|yes| P
+  N -->|no| HH{"was there a hint?"}
+  HH -->|"yes — we started it there"| SCH["plan the entry, return<br/>(the dispatch asks again)"]
+  HH -->|no| NF["WorkflowNotFoundException / TaskNotFoundException<br/>(never started · started elsewhere · ended · another node, no shared cache)"]
+  R -->|BPMS_UNAVAILABLE| F["fail at once, naming the adapter<br/>NEVER fall back to the next adapter"]
+
+  classDef warn fill:#fff3cd,stroke:#1e1e1e;
+  class F warn;
+```
+
 How long the walk may take is the CALLER's decision (`WorkflowLocator.Patience`), because
 the same walk runs in places whose cost is not comparable. In **phase one** it runs
 inside the application's transaction, holding a database connection and the locks on the
@@ -101,6 +134,25 @@ is drawn there. The three patiences are held by
 `WorkflowLocatorTest#withoutPatienceAHintedAdapterIsAskedOnce`,
 `#withoutPatienceAnUnavailableBpmsFailsAtOnce` and
 `#retryingPatienceDoesNotWaitForVisibility`.
+
+At the dispatch the same walk gains the two loops the phase-one walk must not have, one for a BPMS
+which cannot be reached and one for a workflow which is not visible yet. Where the first picture
+ends in an exception, this one ends in an entry which is repeated and finally blocked.
+
+```mermaid
+flowchart TB
+  D["phase-two dispatch of the entry"] --> DR{"probe answers"}
+  DR -->|ACTIVE| DO["run phase two"]
+  DR -->|COMPLETED| DC["consume the entry (workflow ended)"]
+  DR -->|"UNKNOWN_TO_BPMS, hinted<br/>(workflow operation)"| DW["ask again until<br/>workflowVisibilityDelay() is used up<br/>(C8: 10 s window)"] --> DR2{"visible now?"}
+  DR2 -->|yes| DO
+  DR2 -->|no| DRE["repeat the entry — blocked when the attempts are used up"]
+  DR -->|"UNKNOWN_TO_BPMS, no hint<br/>· or a task operation"| DS["consume the entry (stale)"]
+  DR -->|BPMS_UNAVAILABLE| DU["retry 2× 500 ms apart"] --> DRE
+
+  classDef warn fill:#fff3cd,stroke:#1e1e1e;
+  class DW,DU,DRE warn;
+```
 
 An adapter which cannot ask its BPMS at all says so (`canLocateWorkflows()`, `default true`)
 and the core refuses to boot a workflow module which prioritizes it next to another
@@ -347,6 +399,60 @@ entry is repeated and finally blocked, and the counter of blocked entries is whe
 shows. That is the price of never refusing an operation on a workflow which merely is not
 searchable yet.
 
+Correlating a message is the operation on which both patiences show up in one call, and the
+picture follows such a call from the caller's transaction to the BPMS: phase one asks the adapters
+once and lets the caller commit, the dispatch asks again, waits out the window and only then
+publishes the message.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant App as Application (in its tx; maybe inside a @WorkflowTask)
+  participant PS as MigrationProcessService
+  participant WL as WorkflowLocator
+  participant AD as Adapter holding the workflow
+  participant OB as PhaseTwoOutbox
+  participant BPMS
+
+  App->>PS: correlateMessage(aggregate, messageName[, correlationId])
+  PS->>PS: save aggregate
+  PS->>WL: locate(awarenessOfWorkflow, scope, persistence, id) — Patience.NONE
+  WL-->>PS: adapter · COMPLETED → warned no-op · unknown WITH a hint → plan it anyway · unknown WITHOUT one → WorkflowNotFoundException
+  opt an adapter reported the workflow
+    PS->>AD: correlateMessagePhaseOne(…)
+  end
+  alt Camunda 7
+    AD->>BPMS: query: execution waiting for message (tenant, business key, correlation id via local variable "<process>-<message>")
+    Note over AD: none → exception → caller's tx fails
+  else Camunda 8
+    AD->>AD: does a deployed model of the module declare this message name?
+    Note over AD: no → exception · yes → nothing asked of the cluster (it buffers for the TTL)
+  else Process-Engine-API
+    Note over AD: nothing — CorrelateMessageCmd is final, no PREFLIGHT_CHECK
+  end
+  PS->>OB: scheduleCorrelateMessage(…, activationId from RunningActivation)
+  Note over OB: key = CORRELATE_MESSAGE|module|process|id|message|correlationId|activationId<br/>dedups WAITING entries only; multi-instance siblings get distinct keys
+  App->>App: COMMIT
+  OB-->>PS: dispatch
+  PS->>WL: locate again — Patience.WAIT_FOR_VISIBILITY (waits out the window here, and repeats the entry while the hinted BPMS stays silent)
+  PS->>AD: correlateMessagePhaseTwo(…, activationId)
+  alt Camunda 7
+    AD->>BPMS: correlate (tolerates a subscription gone meanwhile)
+  else Camunda 8
+    AD->>BPMS: PublishMessage(name, correlationKey, messageId derived from the key, TTL)
+    Note over BPMS: cluster dedups the messageId for the TTL (1 h default) — longer than the outbox
+    opt the cluster still holds that message id
+      BPMS-->>AD: refused: HTTP 409 (REST) · gRPC ALREADY_EXISTS, recognised by the CODE and never by the wording
+      Note over AD: the entry counts as done, since repeating the publish would be refused again
+    end
+  else Process-Engine-API
+    AD->>BPMS: CorrelateMessageCmd(correlationKey = correlationId ?? id, DEFAULT mode)
+  end
+```
+
+Starting a workflow by a message follows the same shape and derives the plain start's idempotency
+key, so a workflow is started at most once per aggregate whichever of the two calls did it.
+
 `WorkflowVisibilityDelayTest` runs the ordinary sequence on both platforms
 (`correlationIsPlannedAndDispatchedWhenTheWorkflowShowsUp`, `unknownWorkflowStillFailsFast`),
 `WorkflowLocatorTest#withoutAHintAnUnknownWorkflowIsNotExpected` and
@@ -398,6 +504,57 @@ together with `#readFailsAfterTheVisibilityWindowPassed`.
    (Spring Boot: `SmartLifecycle.stop()`; Quarkus: a `ShutdownEvent` observer) so no
    new workflow jobs are processed while web/messaging infrastructure is being torn
    down.
+
+The pipeline is a protocol rather than a set of calls, which is what the picture shows: the order
+the core calls an adapter in, and the points at which the adapter calls back into the core
+while it reads a file.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant P as Platform (Spring / Quarkus)
+  participant DS as DeploymentService (core)
+  participant AD as AdapterDeploymentService<BPMN,PC>
+  participant WT as WorkflowTaskWiring
+  participant BS as BpmsInitiatedStartInvoker
+  participant WE as WorkflowEndedInvoker
+  participant EXT as ExtensionWiringService (0..n)
+
+  P->>AD: constructor — AdapterPlatformVersion.requireCompatiblePlatform(type, class)
+  P->>DS: deploy(module)
+  DS->>DS: adapters = prioritized(module) ∪ every workflow-level override
+  DS->>AD: validateDistinctAdapterInstances(ids)  [default: nothing; >1 id of this type]
+  DS->>AD: defaultNameClashAvoidance()  [all three: BY_ADAPTER since 2026-08-22]
+  DS->>AD: warnAboutUnscopedIdentifiers(module) if mode is NONE
+  loop per BPMN file of the module
+    DS->>AD: readBpmn(module, filename, stream) → BPMN model
+    loop per executable process in the file
+      DS->>AD: prepareBpmn(module, filename, processId, model, PC) → PC
+      Note over AD: rewrite identifiers ONCE PER FILE (guard via PC) · C7: asyncBefore/After, listeners · C8: listeners, correlationKey, input mappings · PEA: raw XML rewrite
+      DS->>AD: wireBpmn(module, filename, processId, model, PC)
+      AD->>WT: validateTaskWiring(module, process, tasks)  — MANDATORY
+      AD->>WT: reportConcurrentTokenElements(…)  — optional
+      AD->>WT: registerProcessVersions(module, process, ProcessVersionCatalog)  — optional
+      AD->>WT: workflowTaskCompletesAsynchronously / taskParameterNames / workflowsShareTheWorkflowAggregate  — as needed
+      AD->>BS: validateBpmsInitiatedStarts(module, process, start events)  — if the BPMS can report starts
+      AD->>WE: workflowEndedHandlerExists(module, process)  — attach end listener only if true
+      DS->>EXT: wireBpmn(…) for every extension whose model/PC types match
+    end
+  end
+  DS->>AD: deployResources(module, PC)
+  AD->>WT: registerDeployedVersion(module, process, version)  — per process, the adapter's own duty
+  Note over DS,WT: once EVERY adapter of the module deployed, the CORE calls:<br/>validateNoUnwiredWorkflowTaskMethods(module) · resolveProcessVersions(module)<br/>(module-level, nothing an adapter knows — no adapter may forget them any more)
+  DS->>WT: validateNoUnwiredWorkflowTaskMethods(module)
+  DS->>WT: resolveProcessVersions(module)
+  Note over DS: failure → deployment-failure policy: fail | warn (non-first-priority only)
+  P->>DS: application ready
+  DS->>AD: startWorkflowProcessing(module, PC)  — every adapter of the union
+  DS->>EXT: startWorkflowProcessing(…)
+  P->>DS: shutdown
+  DS->>EXT: stopWorkflowProcessing (reverse order)
+  DS->>AD: stopWorkflowProcessing
+  P->>AD: checkHealth()  [default null = unknown]
+```
 
 `DeploymentServiceTest` holds the pipeline itself, the deployment union of a
 workflow-level override included (`workflowLevelAdapterIsIncludedInDeploymentUnion`), the
@@ -524,11 +681,141 @@ reached the task.
    rolls back and propagates - the adapter applies its BPMS' retry semantics and
    must not complete the task.
 
+One delivery of one task runs through the core as the picture shows: the delivery log is read
+before the aggregate is loaded, the handler runs inside the one transaction together with the
+aggregate and the record, and the answer to the BPMS follows that commit on a remote BPMS while
+Camunda 7 gives it inside the engine's own transaction.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant BPMS
+  participant AD as Adapter handler thread
+  participant WT as WorkflowTaskRegistry (core)
+  participant TX as TransactionRunner
+  participant DL as TaskDeliveryLog
+  participant AG as Aggregate persistence
+  participant H as @WorkflowTask method
+
+  BPMS->>AD: deliver task (C7: engine executes behavior · C8: job activated · PEA: subscription callback)
+  AD->>WT: invokeWorkflowTask(module, process, TaskInvocationContext)  — WorkflowTaskInvoker, the runtime half
+  Note over WT: context: taskDefinition, aggregateId, deliveryId (C8 job key · PEA task id ·<br/>C7 none on the shared datasource, the engine's job id on an own one),<br/>activationId, adapterId, processVersion, runInCurrentTransaction
+  WT->>TX: requireNew  (C7 on the shared datasource: inCurrent — the engine's job tx)
+  WT->>DL: recordedDelivery(adapterId|module|process|event|deliveryId)
+  alt no record (first delivery)
+    WT->>AG: loadById(aggregateId)
+    WT->>H: invoke(aggregate, bound params)
+    alt returns
+      WT->>AG: save(aggregate)
+      WT->>DL: record(key, COMPLETED | COMPLETION_PENDING if @TaskId)
+    else TaskException(code)
+      WT->>AG: save(aggregate)  — COMMITTED on purpose
+      WT->>DL: record(key, BPMN_ERROR, code)
+    else other exception
+      Note over WT,TX: rollback, no record; rethrown unchanged (conflict → one guiding ERROR)
+    end
+    Note over WT,DL: record() == false → another delivery of this key committed while the handler ran:<br/>one WARN (task, process, module, aggregate, adapter, delivery key)<br/>+ vanillabp.task.redeliveries.concurrent. No rollback, both handlers really ran.
+  else record exists (redelivery)
+    Note over WT: handler is NOT run; recorded outcome is returned again<br/>COMPLETION_PENDING → stillOpen(key) (LAST_SEEN_AT), age vs max-task-age
+  end
+  TX-->>WT: COMMIT
+  WT-->>AD: WorkflowTaskOutcome
+
+  alt Camunda 7
+    AD->>BPMS: leave activity / throw BpmnError / stay parked — the engine's transaction,<br/>which on an own datasource is NOT the one committed above
+  else Camunda 8
+    AD->>BPMS: CompleteJob(+shared values) / ThrowError / FailJob / UpdateTimeout(lock renewal) — AFTER the commit
+  else Process-Engine-API
+    AD->>BPMS: completeTask(payload) / completeTaskByError / failTask — AFTER the commit
+    Note over AD: InterruptedException on completion: silent return
+  end
+
+  Note over BPMS,AD: Between COMMIT and the answer the BPMS may redeliver → step 5 finds the record.<br/>Two deliveries at the SAME time both find no record and both run; the one which loses<br/>the record says so (WARN) and is counted.
+```
+
 `WorkflowTaskRegistryTest` holds the wiring calls and the outcomes one by one
 (`validateTaskWiring`, `validateNoUnwiredWorkflowTaskMethods`,
 `taskExceptionYieldsBpmnErrorAndCommits`, `otherExceptionPropagatesWithoutSaving`), and
 `WorkflowTaskProcessingTest#taskProcessingCoversAllOutcomesAndBindings` runs the same
 outcomes through a booted application on both platforms.
+
+What an adapter hands the core is a bag of getters per delivery, and the picture lists the three
+of them next to the invoker interfaces which receive them: a task delivery, a workflow the BPMS
+started by itself and the end of a workflow.
+
+```mermaid
+classDiagram
+  direction LR
+  class WorkflowTaskInvoker {
+    <<core, implemented by WorkflowTaskRegistry — RUNTIME half>>
+    +invokeWorkflowTask(module, process, TaskInvocationContext) WorkflowTaskOutcome
+    +syncedWorkflowAggregateValues(...) Map
+    +syncedWorkflowAggregateValuesInCurrentTransaction(...) Map
+    +resolveWorkflowAggregateIdName(module, process) String  «also on WorkflowTaskWiring»
+    +workflowTaskHandlerExists(module, process, task) boolean  «optional notifications»
+  }
+  class TaskInvocationContext {
+    <<adapter builds one per delivery>>
+    +getTaskDefinition() String
+    +getWorkflowAggregateId() String  «serialized»
+    +getTaskId() String  «default null; needed for @TaskId»
+    +getTaskEvent() Event  «default null → CREATED»
+    +getTaskParameter(name) Object  «default null»
+    +getMultiInstances() Map  «default empty»
+    +getProcessVersion() String  «default null → matches every method without version»
+    +runInCurrentTransaction() boolean  «default false; C7 true, except on an own engine datasource»
+    +getAdapterId() String  «default null — fills the election cache»
+    +getDeliveryId() String  «default null → no record; C8 job key, PEA task id, C7 the engine's job id on an own datasource and none otherwise, never for a user task»
+    +getActivationId() String  «default null; C7 activityInstanceId, C8 elementInstanceKey, PEA task id»
+    +predatesDeployedVersion() boolean
+  }
+  class WorkflowTaskOutcome {
+    kind: COMPLETED | COMPLETION_PENDING | BPMN_ERROR
+    errorCode, errorName
+    openFor, maxAgeExceeded
+  }
+  class BpmsInitiatedStartInvoker {
+    <<core>>
+    +validateBpmsInitiatedStarts(module, process, specs)
+    +startWorkflowByBpms(module, process, BpmsInitiatedStartContext) BpmsInitiatedStartResult
+  }
+  class BpmsInitiatedStartContext {
+    +getStartEventId() String
+    +getKind() TIMER | SIGNAL | CONDITIONAL
+    +getStartInstant() Instant  «ideal: the time the engine scheduled the start for; C7: the notification's moment»
+    +getNaturalIdentity() String  «default null»
+    +getSignalName() String
+    +getVariables() Map
+    +getNativeInstanceId() String  «C8: process instance key; C7 null»
+    +getProcessVersion() String
+    +runInCurrentTransaction() boolean
+    +getAggregateSyncMode() AggregateSyncMode
+    +getAdapterId() String
+  }
+  class BpmsInitiatedStartResult {
+    aggregateId, aggregateIdName
+    variablesToWriteBack (id + shared values)
+  }
+  class WorkflowEndedInvoker {
+    <<core>>
+    +workflowEndedHandlerExists(module, process) boolean  «true also when release-on-workflow-end is on»
+    +workflowEnded(module, process, WorkflowEndedContext)
+  }
+  class WorkflowEndedContext {
+    +getWorkflowAggregateId() String
+    +getKind() COMPLETED | TERMINATED  «C8 never sees TERMINATED»
+    +getEndTime() Instant
+    +getEndEventId() String  «default null; C8 always null»
+    +getProcessVersion() String
+    +runInCurrentTransaction() boolean
+    +getAdapterId() String
+  }
+  WorkflowTaskInvoker ..> TaskInvocationContext
+  WorkflowTaskInvoker ..> WorkflowTaskOutcome
+  BpmsInitiatedStartInvoker ..> BpmsInitiatedStartContext
+  BpmsInitiatedStartInvoker ..> BpmsInitiatedStartResult
+  WorkflowEndedInvoker ..> WorkflowEndedContext
+```
 
 An adapter's `AdapterDeploymentService` extends `ExtensionWiringService`
 ("the wiring service with deployment"): preparing/wiring and starting/stopping of
@@ -633,6 +920,35 @@ remembers a processed delivery and answers a repeated one from the record:
   (`validateTaskDeliveryLogAtStartup`, once per process service) instead of a failed
   boot. Unlike the outbox, nothing is broken without a log - the behaviour is the one
   every VanillaBP had before, and the wiki's rule about idempotent handlers covers it.
+
+Camunda 7 on an own engine datasource is the mode which makes a redelivery visible to the core at
+all, and the picture shows why: the engine's job transaction is one the application's persistence
+cannot join, so the record commits before the engine rolls its job back, and the job the engine
+runs again is answered from the record without entering the `@WorkflowTask` method.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant E as C7 engine (own datasource)
+  participant AD as Camunda7WorkflowTaskBehavior
+  participant WT as WorkflowTaskRegistry (core)
+  participant DB as Application datasource
+  E->>AD: execute job J (asyncBefore continuation of the task)
+  AD->>WT: invokeWorkflowTask(context: deliveryId = J, runInCurrentTransaction = false)
+  WT->>DB: BEGIN (requireNew) · handler · save aggregate · record(key … J) · COMMIT
+  WT-->>AD: WorkflowTaskOutcome
+  AD-->>E: leave activity
+  E--xE: the job transaction rolls back — the record stands, the job does not
+  E->>AD: execute job J again (retries decremented)
+  AD->>WT: invokeWorkflowTask(deliveryId = J)
+  WT->>DB: recordedDelivery(key … J) — found
+  WT-->>AD: the recorded outcome; the @WorkflowTask method is not entered
+```
+
+Two deliveries of that mode carry no identity at all, the notification about a user task and the
+one about a cancelled task. Both travel with whatever job the engine happens to run, and one such
+job creates respectively cancels every task the token reaches, so its id would name several
+deliveries at once.
 
 `InboundIdempotencyTest` holds the mechanism at both levels: in the core
 (`repeatedDeliveryIsAnsweredFromTheRecord`, `aRolledBackDeliveryIsProcessedAgain`,
@@ -922,6 +1238,37 @@ phases:
   resolvable outbox cannot send anything to its BPMS, so the boot fails with a guiding
   message naming the remedies (the same message remains as a runtime backstop).
 
+Starting a workflow is the operation the two phases read most easily on, and the picture follows
+one start from the application's transaction to whichever of the three BPMS the module is
+configured for.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant App
+  participant PS as MigrationProcessService
+  participant AD as first prioritized adapter
+  participant OB as PhaseTwoOutbox
+  participant BPMS
+  App->>PS: startWorkflow(aggregate)   [inside App's tx]
+  PS->>PS: validate id round-trips through String; save aggregate
+  Note over PS: no election — new workflows always go to the FIRST adapter
+  PS->>AD: startWorkflowPhaseOne(module, process, aggregate)
+  PS->>OB: scheduleStartWorkflow(… adapterId)   [same tx]
+  PS->>PS: remember adapter in WorkflowAdapterCache (hint)
+  App->>App: COMMIT
+  OB-->>PS: dispatch → startWorkflowPhaseTwo(id, adapterId)
+  PS->>AD: startWorkflowPhaseTwo
+  alt Camunda 7
+    AD->>BPMS: startProcessInstanceByKey(scoped id, businessKey=id, tenant?) unless instanceExists
+    Note over AD,BPMS: shared values as process variables
+  else Camunda 8
+    AD->>BPMS: CreateProcessInstance(scoped id, variables: idName=id + shared values)
+  else Process-Engine-API
+    AD->>BPMS: StartProcessCommand(SYNC, payload: idName=id + shared values)
+  end
+```
+
 What stays untouched by this is the INBOUND direction: a BPMS which delivers a task
 inside its own transaction still does, which `TaskInvocationContext.runInCurrentTransaction()`
 reports. Inbound work may share the caller's transaction, outbound work never does.
@@ -1026,6 +1373,73 @@ it serves, so a forgotten operation is caught before a workflow waits for it —
 the whole question, because asking the adapter's class anything would mean reflection,
 which is a lie in a native image: a method nobody registered looks like a method nobody
 wrote, and every adapter of a native application would be refused.
+
+`MigratableProcessService` is what an adapter implements, and its shape is the statement: a few
+switches about what its BPMS can do, the probes the election walks, the map of handlers per
+operation and the read-only methods the viewer reads through.
+
+```mermaid
+classDiagram
+  class MigratableProcessService {
+    <<adapter SPI, one instance per adapter id>>
+    +getAdapterId() String
+    .. identity & switches ..
+    +canLocateWorkflows() boolean  «default true; C8 without secondary storage and PEA: false ⇒ the boot refuses a second adapter»
+    +deliversTasksAtLeastOnce() boolean  «default false; C8/PEA true; C7 true on an own engine datasource»
+    +isPhaseTwoFailureRepeatable(Throwable) boolean  «default true; false ⇒ BLOCKED after one attempt»
+    +workflowVisibilityDelay() WorkflowVisibilityDelay  «default none; C8: 10 s»
+    +openTaskCount(module, process) Long  «default null»
+    .. probes (phase one AND at dispatch) ..
+    +awarenessOfTask(scope, aggregateId, taskId) WorkflowAwareness
+    +awarenessOfUserTask(scope, aggregateId, taskId) WorkflowAwareness
+    +awarenessOfWorkflow(scope, persistence, aggregateId) WorkflowAwareness
+    +awarenessOfWorkflowForRedispatch(...) WorkflowAwareness  «default → awarenessOfWorkflow; NEVER optimistic»
+    .. what this adapter does, per operation ..
+    +phaseOperations() Map~PhaseOperation, PhaseOperationHandler~
+    «the map is the statement; the boot refuses an adapter missing a required operation»
+    .. viewer (read-only, no tx) ..
+    +getProcessDefinitions(...) List  «default throws guiding»
+    +getBpmnXml(nativeDefinitionId) InputStream
+    +getWorkflowHistory(...) WorkflowHistory
+  }
+  class WorkflowAwareness {
+    <<enumeration>>
+    ACTIVE — use this adapter
+    COMPLETED — warned no-op (viewer: result)
+    UNKNOWN_TO_BPMS — fall through to next adapter
+    BPMS_UNAVAILABLE — retry 2×, never fall back
+  }
+  class WorkflowScope {
+    workflowModuleId
+    bpmnProcessIds (served, incl. secondary)
+    «an adapter answers ONLY for this scope»
+  }
+  class PhaseOperationHandler {
+    <<one per operation, contributed by the adapter>>
+    +phaseOne(PhaseOneRequest)  «ask, inside the caller's tx; throwing fails it»
+    +phaseTwo(PhaseTwoRequest)  «act, after the commit, at-least-once»
+  }
+  class PhaseOperation {
+    <<business SPI, the whole definition of an operation>>
+    name  «persisted — never rename»
+    idempotencyKey(call)  «persisted rule»
+    election  «STARTS_THE_WORKFLOW · HOLDS_THE_TASK · HOLDS_THE_USER_TASK · HOLDS_THE_WORKFLOW · EVERY_DEPLOYED_BPMS · OWN_DISPATCH»
+    requiredOfEveryAdapter  «false: SEND_SIGNAL, AGGREGATE_CHANGED»
+    carriesActivation  «true: CORRELATE_MESSAGE only»
+    wording  «describe(args) · hintWhenUnknown · remedyWhenUnsupported»
+  }
+  class PhaseTwoRequest {
+    <<phase one's twin carries the aggregate, this one its ID>>
+    workflowModuleId · bpmnProcessId · aggregatePersistence
+    workflowAggregateId  «null for a broadcast»
+    taskId() · bpmnErrorCode() · messageName() · correlationId() · signalName() · activationId()
+  }
+  MigratableProcessService ..> WorkflowAwareness
+  MigratableProcessService ..> WorkflowScope
+  MigratableProcessService o-- PhaseOperationHandler
+  PhaseOperationHandler ..> PhaseTwoRequest
+  PhaseOperation <.. PhaseOperationHandler : keyed by
+```
 
 #### Operations of extensions
 
@@ -1147,6 +1561,59 @@ The core does not implement (or depend on) any outbox itself — it only defines
   residual permits anyway) — adapters that cannot query reliably answer
   `UNKNOWN_TO_BPMS`.
 
+The picture puts the same start on a time line which crosses a crash: what the caller's
+transaction commits, what the dispatcher picks up afterwards, and where the redispatch probe sits
+between a repeated entry and a second workflow.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant App as Application (in its tx)
+  participant PS as MigrationProcessService
+  participant AD as Adapter handler (first prioritized)
+  participant OB as PhaseTwoOutbox store
+  participant DP as Store dispatcher (own thread)
+  participant RT as PhaseTwoRouter
+  participant BPMS
+
+  App->>PS: startWorkflow(aggregate)
+  PS->>PS: save aggregate
+  PS->>PS: execute(START_WORKFLOW, …) — the election says: first prioritized adapter
+  PS->>AD: phaseOne(PhaseOneRequest)
+  Note over AD: C7: definition lookup · C8: client configured? · PEA: PREFLIGHT_CHECK
+  PS->>OB: schedule(PhaseTwoCall of START_WORKFLOW, adapterId)
+  Note over OB: unique DEDUP_KEY among WAITING entries (decision 22)<br/>duplicate → false → WARN "discarded schedule"
+  PS->>PS: cache.put(module, process, id → adapterId)  (hint at scheduling time)
+  App->>App: COMMIT (aggregate + entry together)
+
+  DP->>OB: claim due entry (JDBC/Mongo: attempts++ before dispatch; gruelbox: no claim)
+  DP->>RT: dispatch(call, previouslyAttempted)
+  RT->>RT: requireTransaction (Quarkus) / gruelbox tx (Spring)
+  RT->>PS: executePhaseTwo(START_WORKFLOW, id, adapterId, args, previouslyAttempted)
+  alt previouslyAttempted
+    PS->>AD: awarenessOfWorkflowForRedispatch(scope, persistence, id)
+    Note over AD: NEVER optimistic: C7 history query · C8 search (UNKNOWN without secondary storage) · PEA UNKNOWN
+    alt ACTIVE / COMPLETED
+      PS-->>RT: consumed, no second start
+    else UNKNOWN_TO_BPMS
+      PS->>AD: phaseTwo(PhaseTwoRequest)
+    end
+  else first attempt
+    PS->>AD: phaseTwo(PhaseTwoRequest)
+  end
+  AD->>BPMS: create instance (C7 business key · C8 id variable + shared values · PEA SYNC start)
+  Note over AD,BPMS: crash HERE = accepted at-least-once residual
+  AD-->>RT: ok
+  RT-->>DP: ok
+  DP->>OB: mark DONE (gruelbox: row deleted later if the key is reused)
+  Note over OB: retention sweep after vanillabp.outbox.retention
+
+  opt failure
+    DP->>AD: isPhaseTwoFailureRepeatable(e)?
+    Note over DP: true → retry with backoff · false → PhaseTwoPermanentFailure → BLOCKED after one attempt
+  end
+```
+
 Every rule of that list has a test. Scheduling inside the transaction and dispatching after
 the commit are `OutboxDispatchTest#entryWrittenInSameTransactionAndPhaseTwoDispatchedAfterCommit`
 and `#rollbackLeavesNoEntryAndNoPhaseTwo`; the idempotency key is
@@ -1256,6 +1723,50 @@ the stores do not promise.
 WHAT is pushed stays the sync model's business. This operation adds no second
 way of choosing values, which is what keeps the aggregate the single source of truth.
 
+Which values a BPMS gets to see is computed in one place and written at several, and that is what
+the picture shows: the aggregate's annotations decide the map, the core computes it, every
+outbound operation carries it to the BPMS, and nothing in VanillaBP ever reads it back.
+
+```mermaid
+flowchart LR
+  subgraph APP["Application"]
+    AGG["workflow aggregate<br/>@SyncWithBPMS / @NoSyncWithBPMS<br/>(class › attribute › nested type; default: adapter's = FULL)"]
+  end
+
+  subgraph CORE["Core"]
+    SV["syncedWorkflowAggregateValues(…)<br/>computes the shared map;<br/>id attribute ALWAYS included"]
+    UP["unsharedWorkflowAggregateProperties<br/>→ startup WARN per expression reading an unshared attribute (C7)"]
+    TPN["taskParameterNames(module, process, task)<br/>→ what a subscription must fetch"]
+  end
+
+  AGG --> SV
+  AGG --> UP
+
+  subgraph WRITE["Where an adapter writes the shared values"]
+    W1["start (phase two)"]
+    W2["@WorkflowTask completion<br/>C7: inside the engine tx, before the activity is left<br/>C8: on CompleteJob, after the local commit<br/>PEA: command payload, read in an OWN tx after the commit"]
+    W3["complete/cancel task, user task (phase two)"]
+    W4["correlate message / start by message (phase two)<br/>(C8/PEA: no message content, values on the command)"]
+    W5["aggregateChanged(aggregate[, taskId])<br/>C7: setVariables / setVariablesLocal at the scope the task runs in<br/>+ marker `vanillabpAggregateChanged` if nothing is shared<br/>C8: SetVariables (needs secondary storage)<br/>PEA: refused in phase ONE"]
+    W0["NOT: user-task listener completion on C8 (decision 1)<br/>NOT: signals (no aggregate)"]
+  end
+
+  SV --> W1 & W2 & W3 & W4 & W5
+
+  subgraph READ["What reads them"]
+    R1["BPMS expressions: gateways, conditions, multi-instance collections, C7 conditional events"]
+    R2["Nothing in VanillaBP: values are never read back — the aggregate stays the source of truth"]
+    R3["@TaskParam: the ONE place a variable comes back in (model-mapped values)"]
+  end
+
+  W1 & W2 & W3 & W4 & W5 --> R1
+  TPN --> R3
+
+  classDef c7 fill:#f3e8ff,stroke:#1e1e1e;
+  classDef note fill:#fff3cd,stroke:#1e1e1e;
+  class W0,R2 note;
+```
+
 ### Workflows the BPMS starts itself (`BpmsInitiatedStartInvoker`)
 
 A timer, signal or conditional start event produces a workflow nobody asked for - and
@@ -1297,6 +1808,39 @@ extension-enablement story.
 An adapter whose BPMS cannot report such a start implements none of this and fails the
 deployment of such a process with a guiding message instead - a workflow which could
 never obtain an aggregate is better refused than deployed.
+
+The other direction is drawn below, a start the BPMS decided on: the adapter reports it, the core
+derives the ID and builds the aggregate, and the adapter writes the ID back into the running
+instance.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant BPMS
+  participant AD as Adapter
+  participant BS as BpmsInitiatedStartInvoker (core)
+  participant AG as Aggregate persistence
+  participant App as @WorkflowStartedByBpms (optional)
+  Note over AD: wiring time: validateBpmsInitiatedStarts(module, process, start events) — PEA throws here (no API), deployment-failure policy applies
+  alt Camunda 7
+    BPMS->>AD: execution listener on the start event (engine tx)
+    AD->>BS: startWorkflowByBpms(ctx: triggerTime=now, nativeInstanceId=null, runInCurrentTransaction=true)
+  else Camunda 8
+    BPMS->>AD: job of the injected `end` execution listener on the start event (worker thread)
+    AD->>BS: startWorkflowByBpms(ctx: nativeInstanceId=processInstanceKey, runInCurrentTransaction=false)
+  end
+  BS->>BS: derive id: BPMS identity > trigger time > generated > left to persistence
+  BS->>AG: find existing aggregate with that id (repeated notification builds nothing twice)
+  BS->>BS: instantiate, write id + variables the model set
+  BS->>App: optional hook builds/enriches the aggregate
+  BS->>AG: save   [C7: engine tx · C8: requireNew]
+  BS-->>AD: result: aggregateId, idName, variables to write back
+  alt Camunda 7
+    AD->>BPMS: setBusinessKey(aggregateId)
+  else Camunda 8
+    AD->>BPMS: CompleteJob(variables: idName=id + shared values)
+  end
+```
 
 Building and validating are `BpmsInitiatedStartTest` (`aggregateIsBuiltFromTheTrigger`,
 `repeatedNotificationCreatesNothingTwice`, `methodNamingAnUnknownStartEventFailsTheBoot`), the
@@ -1383,6 +1927,55 @@ What is NOT in the object stays the adapter's own constructor argument: what it 
 from its configuration (a job timeout, a retry backoff, the variables a worker fetches) and
 what its own extension contributes (its metrics).
 
+Where the collaborators come from differs per platform, which the picture puts side by side: the
+adapter's Spring Boot module registers one bean per configured id, its Quarkus modules produce the
+same per id through a build step and a producer, and both hand the adapter the one object. The
+business SPI at the bottom is the part an adapter never implements itself.
+
+```mermaid
+flowchart TB
+  subgraph ADAPTER["Adapter repository: core + spring-boot + quarkus/runtime + quarkus/deployment"]
+    CORE["core (platform-neutral)<br/>XxxDeploymentService : AdapterDeploymentService<br/>XxxProcessService : MigratableProcessService<br/>handlers building the inbound contexts<br/>META-INF/vanillabp/adapter-&lt;type&gt;.properties"]
+  end
+
+  subgraph SPRING["Spring Boot module"]
+    S1["AutoConfiguration after SpringBootMigrationAdapterAutoConfiguration"]
+    S2["BeanRegistrar: for each id in vanillabp.adapters with type == mine:<br/>ONE element bean AdapterDeploymentService named after the id<br/>ONE element bean MigratableProcessService named after the id<br/>(never a List bean)"]
+    S3["@ConfigurationProperties(&quot;vanillabp&quot;) overlay with MY keys only"]
+    S1 --> S2 --> S3
+  end
+
+  subgraph QUARKUS["Quarkus modules"]
+    Q1["deployment: BuildStep announces the adapter (capability io.vanillabp.adapter.&lt;type&gt;),<br/>AdditionalBeanBuildItem(setUnremovable) for the producers"]
+    Q2["runtime: @Singleton producers → List&lt;MigratableProcessService&lt;Object&gt;&gt;, List&lt;AdapterDeploymentService&gt;<br/>(platform flattens the lists)"]
+    Q3["RUN_TIME @ConfigMapping(prefix=&quot;vanillabp&quot;) overlay — never @Inject the mapping"]
+    Q1 --> Q2 --> Q3
+  end
+
+  CORE --> SPRING
+  CORE --> QUARKUS
+
+  subgraph PLATFORM["Platform hands the adapter ONE object, in its constructor"]
+    P1["AdapterCollaborators — mandatory: WorkflowTaskWiring (deploying) · WorkflowTaskInvoker (runtime)<br/>· NameClashAvoidanceSupport · WorkflowAggregateSync · PreCommitRegistrar"]
+    P2["AdapterCollaborators — Optional: WorkflowEndedInvoker · BpmsInitiatedStartInvoker<br/>(absent is reported with the adapter id at build time)"]
+    P3["MigrationAdapterProperties (resolved 4-level keys) · TransactionRunner (via core)"]
+  end
+  SPRING --> PLATFORM
+  QUARKUS --> PLATFORM
+
+  subgraph BSPI["Business SPI — implemented by the PLATFORM or the APPLICATION, never by an adapter"]
+    B1["PhaseTwoOutbox (+ Aware) — stores: gruelbox/JDBC/Mongo"]
+    B2["TaskDeliveryLog (+ Aware) — JDBC/Mongo"]
+    B3["TransactionRunner (+ Aware)"]
+    B4["AggregatePersistenceAware"]
+    B5["WorkflowAdapterCache"]
+  end
+  PLATFORM -.uses on the adapter's behalf.-> BSPI
+
+  classDef note fill:#fff3cd,stroke:#1e1e1e;
+  class BSPI note;
+```
+
 ### The transaction the work runs in
 
 VanillaBP wraps everything it does around one workflow aggregate in ONE transaction: the
@@ -1395,6 +1988,48 @@ transaction is proved per platform by the outbox and delivery integration tests 
 by a unit test. The core's abstraction for it is
 `io.vanillabp.integration.spi.TransactionRunner` (module `business-spi`, with `requireNew`,
 `inCurrent` and `requireTransaction`), and every platform provides an implementation of it.
+
+Three transaction boundaries meet in the core, and the picture is about which work belongs to
+which of them: the transaction the application opened, the one the dispatcher runs phase two in
+after that commit, and the inbound one an adapter's worker or engine thread brings along.
+
+```mermaid
+flowchart TB
+  subgraph CALLER["Caller's transaction (the application opened it)"]
+    direction TB
+    A1["save workflow aggregate"] --> A2["elect adapter as the operation's Election says<br/>(WorkflowLocator: cache hint → probes;<br/>one question per adapter, nothing sleeps here)"]
+    A2 --> A3["handler.phaseOne(request)<br/>asks only, never advances<br/>(skipped where only a hint answered)"]
+    A3 --> A4["outbox.schedule(PhaseTwoCall)<br/>enlisted in this transaction"]
+    A4 --> A5["pre-commit hook<br/>(C8 job-timeout / user-task update,<br/>PEA PREFLIGHT_CHECK)"]
+    A5 --> C["COMMIT"]
+  end
+
+  C -->|"entry becomes visible"| D0
+
+  subgraph DISPATCH["Dispatcher thread, after the commit"]
+    direction TB
+    D0["store picks entry by due time<br/>(no ORDER BY)"] --> D1["PhaseTwoRouter.dispatch(call, previouslyAttempted)"]
+    D1 --> D2{"runner handed in?"}
+    D2 -->|"Quarkus: yes → requireTransaction + request context"| D3["MigrationProcessService.executePhaseTwo<br/>re-probe (the operations addressed to a running workflow) /<br/>redispatch probe (the operations which start one)"]
+    D2 -->|"Spring Boot: no → gruelbox's own transaction"| D3
+    D3 --> D3a["this is where waiting is allowed:<br/>unavailable BPMS 2×500 ms · visibility window (C8: 10 s)"]
+    D3a --> D4["handler.phaseTwo(request)<br/>loads aggregate for the payload, acts on the BPMS"]
+    D4 --> D5["entry DONE (or retry / BLOCKED)"]
+  end
+
+  subgraph INBOUND["Inbound: adapter's worker / engine thread"]
+    direction TB
+    I0["adapter receives task / start / end"] --> I1{"context.runInCurrentTransaction()?"}
+    I1 -->|"C7: true → engine job transaction"| I2
+    I1 -->|"C8, PEA: false → TransactionRunner.requireNew"| I2
+    I2["delivery-log lookup → loadById → handler → save → record"] --> I3["COMMIT"]
+    I3 --> I4["adapter answers the BPMS<br/>C7: inside the same engine tx<br/>C8: CompleteJob/ThrowError/FailJob after commit<br/>PEA: completeTask/…ByError/failTask after commit"]
+  end
+
+  classDef tx fill:#e6f0ff,stroke:#1e1e1e;
+  classDef warn fill:#fff3cd,stroke:#1e1e1e;
+  class A2,D2 warn;
+```
 
 An application whose aggregates live in a system the platform does not manage implements the
 runner itself, and `TransactionRunnerResolver` (implemented per platform) picks it in four
