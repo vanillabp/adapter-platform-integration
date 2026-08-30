@@ -229,6 +229,13 @@ public class WorkflowEndedTest {
 
   private MigrationProcessService<Aggregate> processService() {
 
+    return processService(null);
+
+  }
+
+  private MigrationProcessService<Aggregate> processService(
+      final io.vanillabp.integration.spi.WorkflowAdapterCache cache) {
+
     final var properties = MigrationAdapterProperties
         .builder()
         .adapters(Map.of("test-adapter", AdapterConfigProperties.ofType("dummy")))
@@ -241,7 +248,7 @@ public class WorkflowEndedTest {
     lenient().when(adapter.getAdapterId()).thenReturn("test-adapter");
 
     return new MigrationProcessService<>(
-        MODULE, PROCESS, Aggregate.class, properties, persistence, List.of(adapter), null);
+        MODULE, PROCESS, Aggregate.class, properties, persistence, List.of(adapter), null, cache);
 
   }
 
@@ -274,7 +281,23 @@ public class WorkflowEndedTest {
       final String endEventId,
       final boolean joinTransaction) {
 
+    return context(aggregateId, kind, endEventId, joinTransaction, null);
+
+  }
+
+  private WorkflowEndedContext context(
+      final String aggregateId,
+      final WorkflowEnd.Kind kind,
+      final String endEventId,
+      final boolean joinTransaction,
+      final String adapterId) {
+
     return new WorkflowEndedContext() {
+
+      @Override
+      public String getAdapterId() {
+        return adapterId;
+      }
 
       @Override
       public String getWorkflowAggregateId() {
@@ -322,6 +345,63 @@ public class WorkflowEndedTest {
     assertEquals("COMPLETED@%s/Event_Done".formatted(END_TIME), aggregate.endedAs);
     assertTrue(persistence.saved, "the aggregate has to be saved - that is what the method changed it for");
     assertTrue(transactionRunner.requireNewUsed);
+
+  }
+
+  @Test
+  @DisplayName("The end marks the election hint instead of refreshing it")
+  public void theEndMarksTheElectionHint() {
+
+    final var cache = new io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCache();
+    final var registry = new WorkflowTaskRegistry(new TransactionRunnerStub());
+    registry
+        .registerWorkflowService(
+            MODULE, PROCESS, NoticingService.class, NoticingService::new, type -> null, processService(cache));
+    storeAggregate("4713");
+    cache.put(MODULE, PROCESS, "4713", "test-adapter");
+
+    registry
+        .workflowEnded(
+            MODULE,
+            PROCESS,
+            context("4713", WorkflowEnd.Kind.COMPLETED, "Event_Done", false, "test-adapter"));
+
+    assertEquals(
+        "test-adapter",
+        cache.get(MODULE, PROCESS, "4713").orElseThrow(),
+        "an operation which crossed the end still finds the adapter which held the workflow");
+    assertEquals(
+        1,
+        cache.endedSize(),
+        "but the hint is not worth a full time-to-live any more");
+
+  }
+
+  @Test
+  @DisplayName("An election cache which releases ended workflows makes the end worth reporting")
+  public void theCacheReleaseAsksForTheEndNotification() {
+
+    final var properties = MigrationAdapterProperties
+        .builder()
+        .adapters(Map.of("test-adapter", AdapterConfigProperties.ofType("dummy")))
+        .prioritizedAdapters(List.of("test-adapter"))
+        .workflowAdapterCache(
+            io.vanillabp.integration.adapter.migration.config.WorkflowAdapterCacheProperties
+                .builder()
+                .releaseOnWorkflowEnd(true)
+                .build())
+        .build();
+    properties.validateAndLink();
+
+    final var registry = new WorkflowTaskRegistry(
+        new TransactionRunnerStub(), null, List.of(), properties);
+    registry
+        .registerWorkflowService(
+            MODULE, PROCESS, SilentService.class, SilentService::new, type -> null, processService(null));
+
+    assertTrue(
+        registry.workflowEndedHandlerExists(MODULE, PROCESS),
+        "without the notification the cache never learns that a workflow is over");
 
   }
 

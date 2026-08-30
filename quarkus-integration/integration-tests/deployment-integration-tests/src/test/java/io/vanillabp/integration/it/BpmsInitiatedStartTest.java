@@ -18,6 +18,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.adapter.dummy.runtime.DummyDeploymentService;
+import io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartContext;
 import io.vanillabp.integration.test.deployment.StartAggregate;
@@ -64,6 +65,9 @@ public class BpmsInitiatedStartTest {
   @Inject
   @Any
   Instance<List<AdapterDeploymentService<Object, Object>>> deploymentServices;
+
+  @Inject
+  WorkflowAdapterCacheStatistics statistics;
 
   private DummyDeploymentService dummyAdapter() {
 
@@ -214,9 +218,20 @@ public class BpmsInitiatedStartTest {
                 return null;
               }
 
+              @Override
+              public String getAdapterId() {
+                return "demo1";
+              }
+
             });
 
     assertEquals("ended:TERMINATED/null", persistence.stored("ended-4711").getStartedBy());
+
+    // the notification proves which BPMS held the workflow AND that it is over: the
+    // hint is marked rather than refreshed, so it leaves the cache long before a
+    // living one would
+    assertEquals(1, statistics.getEndedMarks());
+    assertEquals(1, statistics.getEndedSize().orElseThrow());
 
   }
 

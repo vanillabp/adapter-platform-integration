@@ -25,8 +25,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * {@link PhaseOperationDispatch} - the aggregate-ID-to-adapter election of the
  * core operations does not apply to it.
  * <p>
- * Outbox stores never touch this registry: they persist the operation's name, its
- * arguments and its idempotency key and stay operation-agnostic.
+ * An outbox store never interprets an operation: it persists the name, the arguments
+ * and the idempotency key, and hands them back unchanged. What a store written by an
+ * application does ask for is {@link #dispatchFor(String)}, the dispatch belonging to a
+ * name it read back, so that it can hand the call on without knowing what the operation
+ * means.
  */
 public final class PhaseOperationRegistry {
 

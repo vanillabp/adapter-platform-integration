@@ -80,6 +80,18 @@ public class InstrumentedWorkflowAdapterCache implements WorkflowAdapterCache {
   }
 
   @Override
+  public void putEnded(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final String adapterId) {
+
+    statistics.recordEndedMark();
+    delegate.putEnded(workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId);
+
+  }
+
+  @Override
   public void invalidate(
       final String workflowModuleId,
       final String bpmnProcessId,

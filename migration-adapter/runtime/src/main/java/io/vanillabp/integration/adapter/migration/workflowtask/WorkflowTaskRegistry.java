@@ -743,18 +743,25 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
    * by the adapters while wiring, so a model pays for a listener respectively a worker
    * only where the end is used.
    * <p>
-   * Beside an application's <code>&#64;WorkflowEnded</code> method there is a second
-   * reason to want it: a workflow module which releases the records of its processed task
-   * deliveries when a workflow ends needs the notification to do so. That is
-   * why no adapter had to be touched for the release.
+   * Beside an application's <code>&#64;WorkflowEnded</code> method there are two more
+   * reasons to want it: a workflow module which releases the records of its processed
+   * task deliveries when a workflow ends needs the notification to do so, and so does an
+   * election cache which is to let go of the hint of an ended workflow early. That is
+   * why no adapter had to be touched for either of them.
    */
   @Override
   public boolean workflowEndedHandlerExists(
       final String workflowModuleId,
       final String bpmnProcessId) {
 
-    return workflowEndedHandlers.handlerExists(workflowModuleId, bpmnProcessId) || ((properties != null) && properties
-        .releasesDeliveryRecordsOnWorkflowEnd(workflowModuleId));
+    if (workflowEndedHandlers.handlerExists(workflowModuleId, bpmnProcessId)) {
+      return true;
+    }
+    if (properties == null) {
+      return false;
+    }
+    return properties.releasesDeliveryRecordsOnWorkflowEnd(workflowModuleId) || properties
+        .releasesElectionHintsOnWorkflowEnd();
 
   }
 

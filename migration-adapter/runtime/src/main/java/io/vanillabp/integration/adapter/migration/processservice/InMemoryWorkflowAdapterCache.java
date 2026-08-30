@@ -23,6 +23,12 @@ import io.vanillabp.integration.spi.WorkflowAdapterCache;
  * One instance is shared by all process services of the application (the key
  * includes workflow module and BPMN process, the size bound applies globally).
  * <p>
+ * The hint of a workflow which ENDED is kept as well, and much shorter
+ * (<code>.ended-time-to-live</code>, five minutes): it still answers the operation
+ * which arrives after the end - which is what keeps such an operation a warned no-op -
+ * but it can never become useful again, so it leaves early instead of occupying a place
+ * for an hour.
+ * <p>
  * The cache reports its size and its evictions to the application's
  * {@link WorkflowAdapterCacheStatistics}, including whether an evicted entry had
  * ever been read - that is what the eviction-pressure warning is made of.
@@ -48,14 +54,22 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
 
     private final long expiresAtMillis;
 
+    /**
+     * Whether this is the hint of a workflow which ENDED - kept for a much shorter
+     * time, and counted separately so an operator can see the release working.
+     */
+    private final boolean ended;
+
     private boolean used;
 
     private Entry(
         final String adapterId,
-        final long expiresAtMillis) {
+        final long expiresAtMillis,
+        final boolean ended) {
 
       this.adapterId = adapterId;
       this.expiresAtMillis = expiresAtMillis;
+      this.ended = ended;
 
     }
 
@@ -65,9 +79,19 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
 
   private final long timeToLiveMillis;
 
+  private final long endedTimeToLiveMillis;
+
   private final WorkflowAdapterCacheStatistics statistics;
 
   private final Map<Key, Entry> entries;
+
+  /**
+   * How many of the entries held are marks of ended workflows, counted along instead of
+   * being recounted: a gauge is read on every scrape and must not walk the map the
+   * election needs (see decision 18 in the repository's DECISIONS.md). Guarded by the
+   * monitor of {@link #entries}.
+   */
+  private int endedEntries;
 
   public InMemoryWorkflowAdapterCache() {
 
@@ -79,7 +103,8 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
       final WorkflowAdapterCacheProperties properties,
       final WorkflowAdapterCacheStatistics statistics) {
 
-    this(properties.getMaxEntries(), properties.getTimeToLive(), statistics);
+    this(
+        properties.getMaxEntries(), properties.getTimeToLive(), properties.getEndedTimeToLive(), statistics);
 
   }
 
@@ -91,17 +116,32 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
       final int maxEntries,
       final Duration timeToLive) {
 
-    this(maxEntries, timeToLive, null);
+    this(maxEntries, timeToLive, WorkflowAdapterCacheProperties.DEFAULT_ENDED_TIME_TO_LIVE, null);
+
+  }
+
+  /**
+   * Visible for tests - production code passes the configured
+   * {@link WorkflowAdapterCacheProperties}.
+   */
+  public InMemoryWorkflowAdapterCache(
+      final int maxEntries,
+      final Duration timeToLive,
+      final Duration endedTimeToLive) {
+
+    this(maxEntries, timeToLive, endedTimeToLive, null);
 
   }
 
   public InMemoryWorkflowAdapterCache(
       final int maxEntries,
       final Duration timeToLive,
+      final Duration endedTimeToLive,
       final WorkflowAdapterCacheStatistics statistics) {
 
     this.maxEntries = maxEntries;
     this.timeToLiveMillis = timeToLive.toMillis();
+    this.endedTimeToLiveMillis = endedTimeToLive.toMillis();
     this.statistics = statistics;
     // access-ordered LinkedHashMap = LRU; all access synchronized on it
     this.entries = new LinkedHashMap<>(16, 0.75f, true) {
@@ -117,6 +157,7 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
     };
     if (statistics != null) {
       statistics.registerSize(this::size);
+      statistics.registerEndedSize(this::endedSize);
     }
 
   }
@@ -134,10 +175,29 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
 
   }
 
+  /**
+   * How many of the entries held are hints of workflows which ended - reported as a
+   * metric of its own, because that number is what tells an operator whether the
+   * release is working: it rises while workflows end and falls again as the shorter
+   * lifetime takes those entries away.
+   *
+   * @return The number of entries marked as ended
+   */
+  public int endedSize() {
+
+    synchronized (entries) {
+      return endedEntries;
+    }
+
+  }
+
   private void reportEviction(
       final Key key,
       final Entry entry) {
 
+    if (entry.ended) {
+      --endedEntries;
+    }
     if (statistics == null) {
       return;
     }
@@ -164,6 +224,9 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
       if (entry.expiresAtMillis < System.currentTimeMillis()) {
         // expiry is not eviction pressure: the entry lived its full time-to-live
         entries.remove(key);
+        if (entry.ended) {
+          --endedEntries;
+        }
         return Optional.empty();
       }
       entry.used = true;
@@ -180,9 +243,40 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
       final String adapterId) {
 
     final var key = new Key(workflowModuleId, bpmnProcessId, workflowAggregateId);
-    final var entry = new Entry(adapterId, System.currentTimeMillis() + timeToLiveMillis);
+    final var entry = new Entry(adapterId, System.currentTimeMillis() + timeToLiveMillis, false);
     synchronized (entries) {
-      entries.put(key, entry);
+      final var replaced = entries.put(key, entry);
+      if ((replaced != null) && replaced.ended) {
+        --endedEntries;
+      }
+    }
+
+  }
+
+  @Override
+  public void putEnded(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final String adapterId) {
+
+    final var key = new Key(workflowModuleId, bpmnProcessId, workflowAggregateId);
+    final var entry = new Entry(adapterId, System.currentTimeMillis() + endedTimeToLiveMillis, true);
+    synchronized (entries) {
+      final var current = entries.get(key);
+      // an entry which is only waiting to be dropped on the next read says nothing
+      // about anybody
+      final var currentIsAlive = (current != null) && (current.expiresAtMillis >= System.currentTimeMillis());
+      if (currentIsAlive && !current.adapterId.equals(adapterId)) {
+        // the key names the aggregate and not the instance, so an entry naming another
+        // adapter belongs to a second workflow on the same aggregate, elected after the
+        // one which just ended - the newer knowledge stays
+        return;
+      }
+      final var replaced = entries.put(key, entry);
+      if ((replaced == null) || !replaced.ended) {
+        ++endedEntries;
+      }
     }
 
   }
@@ -195,7 +289,10 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
 
     final var key = new Key(workflowModuleId, bpmnProcessId, workflowAggregateId);
     synchronized (entries) {
-      entries.remove(key);
+      final var removed = entries.remove(key);
+      if ((removed != null) && removed.ended) {
+        --endedEntries;
+      }
     }
 
   }

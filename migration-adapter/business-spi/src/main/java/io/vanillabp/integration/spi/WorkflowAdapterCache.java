@@ -56,9 +56,50 @@ public interface WorkflowAdapterCache {
       String adapterId);
 
   /**
+   * Store the adapter of a workflow which ENDED. The hint stays readable - an
+   * operation arriving after the end (a <code>completeTask</code> which lost a race
+   * with a timeout, a message correlated by an endpoint which did not learn about the
+   * end, an outbox entry dispatched afterwards, a read of the viewer API) still asks
+   * the adapter which held the workflow, gets "completed" and becomes a warned no-op
+   * instead of walking every adapter and failing where the BPMS has forgotten the
+   * instance meanwhile. What changes is how long the hint is worth keeping: it can
+   * never become useful again, so an implementation which can say so gives it a
+   * lifetime of its own (the in-memory default:
+   * <code>vanillabp.workflow-adapter-cache.ended-time-to-live</code>, five minutes,
+   * against an hour for a living workflow).
+   * <p>
+   * The key is workflow module, BPMN process and aggregate ID and does NOT name the
+   * instance, so a second workflow on the same aggregate writes the same entry. An
+   * entry naming ANOTHER adapter is therefore left untouched: only an election of that
+   * second workflow can have written it, and the end reported here is the older
+   * knowledge of the two.
+   * <p>
+   * The default marks nothing and stores the hint like any other, which is what every
+   * cache written before this method existed does - such a cache keeps behaving exactly
+   * as it did, at the price of holding the hint of an ended workflow for a full
+   * {@link #put(String, String, String, String)} lifetime.
+   *
+   * @param workflowModuleId The ID of the workflow module
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param workflowAggregateId The workflow-aggregate ID in serialized form
+   * @param adapterId The ID of the adapter which held the ended workflow
+   */
+  default void putEnded(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final String adapterId) {
+
+    put(workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId);
+
+  }
+
+  /**
    * Drop the entry of a workflow - called when a cached hint turned out to be
-   * stale (the adapter no longer knows the workflow) or the workflow completed.
-   * Invalidating an absent entry is a no-op.
+   * stale (the adapter no longer knows the workflow). The end of a workflow does NOT
+   * drop its entry, it marks it
+   * ({@link #putEnded(String, String, String, String)}). Invalidating an absent entry
+   * is a no-op.
    *
    * @param workflowModuleId The ID of the workflow module
    * @param bpmnProcessId The BPMN process ID of the workflow
