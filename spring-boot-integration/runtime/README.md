@@ -171,7 +171,11 @@ a missing outbox fails the boot naming the remedies. Every outbox instance needs
 dispatchers polling the same store would compete and double-dispatch (dedicated
 stores are configured via `vanillabp.outbox.jdbc.table` /
 `vanillabp.outbox.mongo.collection`, or set up as additional user-defined beans -
-see the `outbox-mixed-integration-test` for the recipe).
+see the `outbox-mixed-integration-test` for the recipe). The attribution is held by
+`StoreAttributionTest` (`anOutboxAwareBeanWinsOverTheDefaults`,
+`twoOutboxDefaultsAndAnUndetectableAggregateFailGuiding`,
+`aProxiedStoreIsReportedByItsTargetClass`) and, against a booted application, by
+`MixedPersistenceOutboxTest`.
 
 This module provides two
 default implementations, both configured by the `vanillabp.outbox.*` properties
@@ -224,6 +228,13 @@ disable an unwanted default via its `enabled` flag:
    user-defined gruelbox instances (e.g. a dedicated hot-process outbox) do not
    suppress the default; with several transaction managers (mixed persistence)
    the JDBC/JPA one has to be named `transactionManager`.
+   `GruelboxOutboxWiringTest` holds the wiring rules of this default
+   (`theDefaultConfigurationCreatesTheOutboxTable`, `aCustomTableNameSwitchesTheMigrationOff`,
+   `aMissingTableStopsTheStartupInsteadOfTheFirstWorkflow`,
+   `theConventionallyNamedTransactionManagerWins`),
+   `GruelboxOutboxSchemaHandoverTest` the handover to an application-managed schema,
+   `GruelboxDeduplicationWindowTest` the released key of a dispatched entry, and
+   `EnableSchedulingRegressionTest#noVanillaBpTaskSchedulerBean` the private executor.
 2. **MongoDB (own implementation, gruelbox is JDBC-only):** `MongoPhaseTwoOutbox`
    writes entries into the collection `vanillabp-phase-two-outbox` via
    `MongoTemplate` within the current transaction, persisting all `PhaseTwoCall`

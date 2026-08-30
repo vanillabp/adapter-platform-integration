@@ -7,7 +7,9 @@ answers make, and the things about VanillaBP you cannot infer from your own BPMS
 
 Everything stated here is taken from the code of this repository or from a numbered entry of its
 [`DECISIONS.md`](../DECISIONS.md). Where a statement is an assumption rather than something the
-code holds, it says so.
+code holds, it says so. What the core promises you is held by tests of this repository, and
+[`README.md`](./README.md) names them per section, so a promise which stops being true turns a
+build red here rather than surfacing in your adapter.
 
 ## Vocabulary
 
@@ -109,7 +111,8 @@ A failure thrown out of `wireBpmn` or `deployResources` is subject to
 `vanillabp.adapters.<id>.deployment-failure`. The default `fail` ends the boot; `warn` lets an
 adapter which is not first in the priority order fail without preventing the application from
 starting, which is what an application migrating away from an old BPMS needs when that BPMS is
-down. Throwing is all you do. The policy is the core's.
+down. Throwing is all you do. The policy is the core's
+(`DeploymentFailureFailTest`, `DeploymentFailureWarnTest`).
 
 In your constructor, call
 `AdapterPlatformVersion.requireCompatiblePlatform(adapterType, aClassOfYourCore)` and ship a
@@ -135,8 +138,9 @@ The core operations today are `START_WORKFLOW`, `START_WORKFLOW_BY_MESSAGE`, `CO
 `AGGREGATE_CHANGED`. Leaving one out of the map says your BPMS has nothing like it. That is a
 legitimate answer for `SEND_SIGNAL` and for `AGGREGATE_CHANGED`, and the application learns about
 it as a `PhaseOperationNotSupported` when it actually asks. For every other operation the boot
-refuses your adapter and names it. The map itself is the statement, and the boot reads the map:
-nothing looks behind a handler, because that would be reflection and a native image has none.
+refuses your adapter and names it (`AdapterOperationsAtStartupTest`). The map itself is the
+statement, and the boot reads the map: nothing looks behind a handler, because that would be
+reflection and a native image has none.
 
 A handler is a pair of methods, and the split between them is the same for every adapter and every
 operation: phase one asks, phase two acts (decision 3).
@@ -198,7 +202,7 @@ around: a registrar which forgot one setter produced an adapter which deployed i
 tasks and never reported a workflow end, with nothing failing anywhere (decision 28).
 
 Five collaborators are always there, and a set built without one of them throws while naming your
-adapter id:
+adapter id (`AdapterCollaboratorsTest#aMissingMandatoryCollaboratorIsRefused`):
 
 `workflowTaskWiring()` is what you call while you read a BPMN file. `workflowTaskInvoker()` is
 where a delivered task goes at runtime. Both are implemented by the same core object, and they are
@@ -316,6 +320,9 @@ task id nor an aggregate id is sufficient evidence on its own. Two adapter ids m
 backend, which is the supported setup migrating a workflow module from one scoping to another, and
 there the keys are global and do answer. Two workflow modules of one backend may carry the same
 aggregate id, because aggregate ids are unique per aggregate type and not across an application.
+`ElectionScopeContractTest` holds this from the core's side: the walk reaching the holder, the
+walk stopping at an adapter which claims more than it holds, and a workflow of another module of
+the same adapter not being claimed.
 
 A probe must never advance the workflow. It is a question asked before an operation is routed, and
 it is asked of adapters which do not hold the subject at all, so a probe which completes a task or
@@ -336,7 +343,8 @@ a recovered or repeated `START_WORKFLOW` entry is dispatched, and answering "kno
 start. A wrong "known" therefore loses a workflow, while a wrong "unknown" costs the duplicate the
 at-least-once residual permits anyway. Its default delegates to the ordinary workflow probe, which
 is right only where that probe is an honest query. Where it is not, override this one and answer
-`UNKNOWN_TO_BPMS`.
+`UNKNOWN_TO_BPMS`. `OutboxRedispatchMitigationTest#retriedStartEntryDoesNotStartASecondWorkflow`
+is the probe doing its job.
 
 `canLocateWorkflows()` deserves an honest answer for the same reason. If your BPMS cannot be asked
 whether it holds a workflow, the only answer which keeps a single-BPMS application working is an
@@ -346,6 +354,8 @@ core refuse that combination while it boots. The message names your adapter, the
 and the ways out, one of which is `vanillabp.election.guessing-adapters: ACCEPTED` for an operator
 who accepts the risk. The answer is fetched after you deployed, so an adapter which only learns
 what its BPMS can do while deploying may answer from what it found out by then.
+`GuessingAdapterStartupTest` holds the refusal, `AcceptedGuessingAdapterStartupTest` the accepted
+variant.
 
 Report a visibility delay where your reads lag. A remote BPMS whose probe reads an exported read
 model answers "unknown" for a workflow which exists, and that is what the read model knows rather
@@ -367,7 +377,9 @@ Phase one never sleeps, because it runs inside the caller's transaction and hold
 connection and the locks on the aggregate. The waiting happens where no application transaction is
 open. A read has no second place to go, so it waits itself, bounded by the same hint and the same
 window. A hint exists only where VanillaBP knew the answer without asking anybody, because it
-started the workflow itself or because a delivery for that workflow arrived from that BPMS.
+started the workflow itself or because a delivery for that workflow arrived from that BPMS. Every
+row of that table is a case of `WorkflowLocatorTest`, and the read column additionally of
+`ViewerApiTest#readWaitsForAnEventuallyConsistentAdapterToCatchUp`.
 
 One question about a task may not reach you at all. Where the delivery of that task wrote a record
 naming your adapter and saying the task is still open, the core routes by that record instead of
@@ -406,14 +418,16 @@ own idempotency is the only net.
 Two deliveries of one task at the same moment both run. Your BPMS' lock is the only thing which
 prevents it. When it happens, the core writes a warning naming the task and counts it, because a
 record can only speak about work which is already committed and neither of the two had committed
-when the other read.
+when the other read (`InboundIdempotencyTest#twoDeliveriesAtTheSameTimeAreNamedAndCounted`).
 
 A phase-two call may arrive twice, may arrive for a task which is already gone, and, for
 everything except a start and a signal, may arrive after the workflow moved to another adapter.
 Answer honestly; the core re-probes.
 
 A rebuilt BPMS which restarts its key range makes old delivery records answer new deliveries.
-Document the operational step for your BPMS.
+Document the operational step for your BPMS. This one is an assumption rather than something a
+test holds: it follows from the delivery id being your BPMS' own identity, and a BPMS which never
+reuses a key after a rebuild would disprove it.
 
 ### About ordering
 
@@ -427,7 +441,10 @@ A message may be correlated before the subscription waiting for it exists. Do no
 subscription" as an error unless your BPMS does.
 
 `deployResources` of every adapter of a workflow module completes before any
-`startWorkflowProcessing` runs. On the way down, extensions stop first and adapters last.
+`startWorkflowProcessing` runs. On the way down, extensions stop first and adapters last. Both
+orders are held by `DeploymentServiceTest#extensionWiringServicesAreStoppedBeforeAdapters` and
+`MultiAdapterDeploymentTest#bothAdaptersDeployAndStart`, with `ShutdownReverseOrderTest` for the
+way down against a booted application.
 
 ## 6. Registering your adapter per platform
 

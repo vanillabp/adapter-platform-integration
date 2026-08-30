@@ -66,7 +66,8 @@ used (deactivated - `vanillabp.outbox.jdbc.enabled`/`vanillabp.outbox.mongo.enab
 startup fails guiding towards `PhaseTwoOutboxAware` (Quarkus has no platform-side
 knowledge of which persistence manages an aggregate). Resolution happens AT STARTUP
 via an inherited `StartupEvent` observer on `ProcessServiceBaseCdiBean` - a missing
-outbox fails the boot naming the remedies. Store names are configurable
+outbox fails the boot naming the remedies (`QuarkusStoreAttributionTest` for the
+resolution, `OutboxStartupValidationTest` for the boot which ends). Store names are configurable
 (`vanillabp.outbox.jdbc.table`, `vanillabp.outbox.mongo.collection`); every outbox
 instance needs its OWN store (two dispatchers polling the same store would compete
 and double-dispatch).

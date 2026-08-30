@@ -42,6 +42,11 @@ the wiki page listing them) and that the VanillaBP BOM does not manage adapter v
 adapters are released on their own schedule. The adapters themselves are deliberately not
 listed in compiled code: a list in a JAR is out of date the day a new adapter appears.
 
+`NoBpmsAdapterCheckTest` holds the check itself (`aWorkflowModuleWithoutAnAdapterEndsTheBoot`,
+`theCheckRunsBeforeTheFirstBean`, `theNeighbouringCasesAreLeftAlone`), and
+`NoAdapterBootTest#bootWithoutAnyAdapterYieldsGuidingMessage` holds the neighbouring case
+from the auto-configuration.
+
 ## Configuration binding
 
 The user-facing `vanillabp.*` configuration tree is modeled ONCE, in the
@@ -70,6 +75,10 @@ BPMS adapters contribute their own keys to the same tree (e.g.
 coexist, and keys unknown to the core view are ignored by the JavaBean binding.
 The adapter-id set is always derived from the core properties
 (`adapterTypes()`), never from an overlay map.
+
+`VanillaBpConfigurationBindingTest` holds the binding onto the core model, the overlay
+coexistence and the environment-variable rules; the guiding validation itself lives in the
+core and is held by `MigrationAdapterPropertiesTest`.
 
 ## The store of processed task deliveries
 

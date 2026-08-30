@@ -74,7 +74,10 @@ The distinction between `UNKNOWN_TO_BPMS` and `BPMS_UNAVAILABLE` is crucial: onl
 definite "not known" permits falling back to the next adapter — a temporary failure
 must not silently elect the wrong BPMS. There is an instance-level method
 (`awarenessOfWorkflow`) in addition to the task-level one because message correlation
-has no task ID and task IDs are not unique across BPMSs.
+has no task ID and task IDs are not unique across BPMSs. `WorkflowLocatorTest` walks the
+four answers one at a time (`activeStopsTheWalk`, `unknownFallsThrough`,
+`completedIsReported`, `unavailableNeverFallsBack`), so a fall-back sneaked into the
+unavailable branch turns the build red.
 
 The election runtime lives in `WorkflowLocator` (one instance per process service):
 every operation on an EXISTING workflow (complete/cancel task, user task, message
@@ -94,7 +97,10 @@ application transaction is open, so an unreachable BPMS is worth two more questi
 worth its window. A **read** of the viewer/history API waits for the same window, for the
 opposite reason: there is no outbox entry behind it which could ask again later, so what
 it does not wait for becomes an error in the application. Decision 27 says why the split
-is drawn there.
+is drawn there. The three patiences are held by
+`WorkflowLocatorTest#withoutPatienceAHintedAdapterIsAskedOnce`,
+`#withoutPatienceAnUnavailableBpmsFailsAtOnce` and
+`#retryingPatienceDoesNotWaitForVisibility`.
 
 An adapter which cannot ask its BPMS at all says so (`canLocateWorkflows()`, `default true`)
 and the core refuses to boot a workflow module which prioritizes it next to another
@@ -105,7 +111,8 @@ whether the cluster has secondary storage - and before anything touches a workfl
 application which wants that routing anyway sets
 `vanillabp.election.guessing-adapters: ACCEPTED` (per module:
 `vanillabp.workflow-modules.<id>.election.guessing-adapters`) and keeps the message as a
-WARN.
+WARN. `GuessingAdapterStartupTest` boots such a pairing and expects the refusal on both
+platforms, `AcceptedGuessingAdapterStartupTest` the accepted variant.
 
 What the walk cannot do is check the answers, and the SPI is where that duty is
 written down: an adapter answers ONLY for the workflows and tasks of the scope it is
@@ -133,7 +140,11 @@ expiring in-memory default (`InMemoryWorkflowAdapterCache`, 10&nbsp;000 entries 
 1&nbsp;h TTL by default, both configurable — see below); an application bean
 implementing `WorkflowAdapterCache` replaces it — cluster setups plug their own
 shared cache infrastructure this way (VanillaBP deliberately ships no distributed
-implementation).
+implementation). What a hint is worth is held by
+`WorkflowLocatorTest#staleCacheHitIsRepaired` and
+`#unavailableCachedAdapterNeverFallsThrough`, the bounded default by
+`InMemoryWorkflowAdapterCacheTest`, and the replacement by an application bean by
+`MigrationElectionTest#applicationProvidedCacheReplacesTheDefault`.
 
 ### An ended workflow lets go of its hint
 
@@ -152,7 +163,8 @@ ends in a `WorkflowNotFoundException` as soon as the BPMS has forgotten the inst
 which is a matter of Camunda 7's `history-time-to-live` respectively how long Camunda 8's
 secondary storage keeps a finished process. What the mark changes is the lifetime:
 `vanillabp.workflow-adapter-cache.ended-time-to-live` (five minutes) against
-`.time-to-live` (one hour), validated against each other at startup.
+`.time-to-live` (one hour), validated against each other at startup
+(`WorkflowAdapterCachePropertiesTest#endedTimeToLiveHasToBeShorter`).
 
 The key is workflow module, BPMN process and aggregate ID and does not name the instance,
 so a second workflow on the same aggregate writes the same entry. Order therefore matters
@@ -175,6 +187,13 @@ back to `put`, so a cache written before this existed compiles and behaves exact
 did. A cache which wants the saving implements the method and gives such an entry a
 lifetime of its own (Redis: an `EX` of its own; Hazelcast: a per-entry `ttl`).
 
+What holds all of this: `WorkflowLocatorTest#theEndMarksTheHint` and its two
+`completed*MarksTheEntry` siblings for the marking, `#aCacheWithoutTheMarkKeepsWorking` for
+the `default` method, `InMemoryWorkflowAdapterCacheTest#endedEntriesExpireEarlier` and
+`#aSecondWorkflowOnTheSameAggregateWins` for the two lifetimes and the shared key, and
+`WorkflowEndedTest#theCacheReleaseAsksForTheEndNotification` for the switch which makes the
+notification arrive at all.
+
 ### Sizing the election cache, and knowing when to
 
 Both bounds are properties of the platform, not of an adapter:
@@ -193,7 +212,9 @@ which lengthens the pauses this kind of application cares about most; it would t
 deterministic bound for one depending on GC tuning
 (`-XX:SoftRefLRUPolicyMSPerMB`), for a cache whose loss is cheap by design; and the
 numbers do not call for it, since 100.000 entries are roughly 30&nbsp;MB and raising
-the bound is the cheaper answer. An application which really wants soft or off-heap
+the bound is the cheaper answer. Both memory figures are estimates from the size of one
+entry rather than something measured, and a heap dump of an application running a full
+cache is what would correct them. An application which really wants soft or off-heap
 semantics has the SPI bean for it.
 
 **What is measured.** `WorkflowAdapterCacheStatistics` (one per application) counts
@@ -222,6 +243,10 @@ workflow, decided the outcome. The keys of unused evictions are therefore rememb
 Ten of them within an hour produce ONE guiding WARN naming the observed number, the
 observation period and the property to raise. Heap pressure is deliberately not the
 trigger, because the cache cannot see the old generation and the JVM does not tell it.
+`WorkflowAdapterCacheStatisticsTest` holds the counting and the rule the warning follows:
+`lookupOfAnEvictedEntryIsALostHint`, `onlyUnusedEvictionsCountTowardsThePressure`,
+`evictionPressureIsWarnedAboutOncePerHour` and
+`sizeIsUnknownForAnApplicationProvidedCache`.
 
 The workflow probe takes the aggregate's persistence because a BPMS without a business
 key finds the workflow by the process variable carrying the aggregate's ID, and that
@@ -322,6 +347,13 @@ entry is repeated and finally blocked, and the counter of blocked entries is whe
 shows. That is the price of never refusing an operation on a workflow which merely is not
 searchable yet.
 
+`WorkflowVisibilityDelayTest` runs the ordinary sequence on both platforms
+(`correlationIsPlannedAndDispatchedWhenTheWorkflowShowsUp`, `unknownWorkflowStillFailsFast`),
+`WorkflowLocatorTest#withoutAHintAnUnknownWorkflowIsNotExpected` and
+`#hintedAdapterIsAskedAgainWithinItsVisibilityWindow` hold the two halves of the hint rule,
+and the read path is `ViewerApiTest#readWaitsForAnEventuallyConsistentAdapterToCatchUp`
+together with `#readFailsAfterTheVisibilityWindowPassed`.
+
 ### Deployment pipeline
 
 `DeploymentService` orchestrates deployment per workflow module:
@@ -366,6 +398,14 @@ searchable yet.
    (Spring Boot: `SmartLifecycle.stop()`; Quarkus: a `ShutdownEvent` observer) so no
    new workflow jobs are processed while web/messaging infrastructure is being torn
    down.
+
+`DeploymentServiceTest` holds the pipeline itself, the deployment union of a
+workflow-level override included (`workflowLevelAdapterIsIncludedInDeploymentUnion`), the
+WARN about a configured workflow id no BPMN process matches
+(`unknownConfiguredWorkflowIdIsWarned`) and the reverse shutdown order
+(`extensionWiringServicesAreStoppedBeforeAdapters`). `DeploymentPipelineTest`,
+`MultiAdapterDeploymentTest` and `ShutdownReverseOrderTest` run the same against a booted
+application per platform.
 
 ### Name-clash avoidance (`NameClashAvoidanceSupport`)
 
@@ -439,6 +479,11 @@ invokes that only for more than one id of a type), and
 deployed processes are known. Changing the mode is a BPMS **migration**, not a
 property change — hence a differing mode makes two adapter ids of one type distinct.
 
+`NameClashAvoidanceServiceTest` goes through all of it: the resolution and the composition
+(`mostSpecificLevelWins`, `prefixComposesIdentifiers`, `readingBackStripsKnownPrefixOnly`),
+the adapter default (`defaultsToByAdapter`) and both guardrails
+(`byAdapterIsRejectedWithoutNativeIsolation`, `collidingProcessIdsAreReported`).
+
 ### Workflow-task processing
 
 `@WorkflowTask` methods are executed by the core (package `workflowtask`): the
@@ -479,6 +524,12 @@ reached the task.
    rolls back and propagates - the adapter applies its BPMS' retry semantics and
    must not complete the task.
 
+`WorkflowTaskRegistryTest` holds the wiring calls and the outcomes one by one
+(`validateTaskWiring`, `validateNoUnwiredWorkflowTaskMethods`,
+`taskExceptionYieldsBpmnErrorAndCommits`, `otherExceptionPropagatesWithoutSaving`), and
+`WorkflowTaskProcessingTest#taskProcessingCoversAllOutcomesAndBindings` runs the same
+outcomes through a booted application on both platforms.
+
 An adapter's `AdapterDeploymentService` extends `ExtensionWiringService`
 ("the wiring service with deployment"): preparing/wiring and starting/stopping of
 workflow processing are inherited, reading and deploying of BPMS resources is added.
@@ -493,7 +544,10 @@ setting `vanillabp.adapters.<id>.deployment-failure` to `warn` lets the applicat
 start anyway if a NON-first-priority adapter fails to deploy (the failure is logged
 and that adapter does not process workflows). A failure of the first-priority adapter
 always fails the boot, regardless of the policy, because new workflows could not be
-started otherwise.
+started otherwise. Both halves are held by
+`DeploymentServiceTest#nonPrimaryAdapterFailureWithWarnPolicyBootsAnyway` and
+`#primaryAdapterFailureFailsEvenWithWarnPolicy`, and per platform by
+`DeploymentFailureWarnTest` and `DeploymentFailureFailTest`.
 
 #### The variables a handler reads (`taskParameterNames`)
 
@@ -523,7 +577,9 @@ The method is a `default` returning an empty collection, so an adapter which nev
 it keeps the behaviour it had. BPMS-initiated starts deliberately have no counterpart: the
 core copies EVERY variable such a start carries into the workflow aggregate it builds
 (`BpmsInitiatedStartExecution#writeVariables`), so a start worker has to ask for all of them
-regardless of what any `@TaskParam` names.
+regardless of what any `@TaskParam` names. The union and its order are held by
+`WorkflowTaskRegistryTest#theUnionOfEveryMethodServingTheElement`,
+`#theDeclaredNamesAreReported` and `#theDefaultAnswersNothing`.
 
 #### Deliveries VanillaBP already processed (`TaskDeliveryLog` SPI)
 
@@ -578,6 +634,12 @@ remembers a processed delivery and answers a repeated one from the record:
   boot. Unlike the outbox, nothing is broken without a log - the behaviour is the one
   every VanillaBP had before, and the wiki's rule about idempotent handlers covers it.
 
+`InboundIdempotencyTest` holds the mechanism at both levels: in the core
+(`repeatedDeliveryIsAnsweredFromTheRecord`, `aRolledBackDeliveryIsProcessedAgain`,
+`deliveriesWithoutAnIdentityAreNotDeduplicated`, `aMissingDeliveryLogIsReportedAtStartup`)
+and once per platform against a booted application. `TaskDeliveryKeyTest` holds the
+qualification and the hashing.
+
 #### The end of a workflow releases its records
 
 Age alone is a poor answer to "how long does a record have to be kept": seven days are
@@ -608,6 +670,9 @@ since nothing of an ended instance can be redelivered.
   WARN at startup; with the option off nothing is logged.
 - The retention stays for everything the end of a workflow does not cover: workflows
   still running, aggregates whose workflow never ends, stores without the release.
+
+`DeliveryRecordReleaseTest` holds every one of those bullets, in the core and once per
+platform.
 
 #### How old an open task is
 
@@ -646,6 +711,9 @@ waiting legitimately.
   the age measured here keeps counting from the first one,
   which is why refreshing that one was never an option.
 
+The measurement and its property are `OpenTaskAgeTest`, from `anOverdueTaskIsReportedOnce`
+through `theMaximumAgeResolvesMostSpecificFirst` to `zeroSwitchesTheReportOff`.
+
 #### The retention of a record is its own property
 
 `vanillabp.delivery.retention` decides how long a record is kept, and it defaults to
@@ -675,6 +743,11 @@ different kinds get two properties is decision 24.
   `async-task-lock-renewal` - and the horizon is set by how long the application is stopped
   and by whoever resolves an incident. A check against the interval would pass in exactly
   the installations about to run business code twice.
+
+Move one of the two numbers away from its default and `DeliveryRetentionTest` says which
+window applies to what: `theDeliveryHalfFollowsTheOutboxRetention`,
+`theOutboxDoesNotFollowTheOtherWayRound`, `movingOnlyTheOutboxNumberIsReported`,
+`agreementIsSilent`.
 
 #### The record of a task which is still open
 
@@ -714,6 +787,12 @@ the record of a task nobody hands out any more expires as it always did.
   missing column would have surfaced at the first delivery. `validateSchemaExists` and
   `createSchemaIfNotExists` therefore verify the columns added later as well, and the
   message names the `ALTER TABLE` which repairs it.
+
+`OpenTaskRecordRetentionTest` holds the two timestamps and the expiry,
+`OpenTaskTouchesTest` the bounded memory and the blocks, `OpenTaskRetentionTest` the
+survival of an open task's record on both platforms, and
+`JdbcTaskDeliverySchemaTest#aMissingColumnIsReportedAtStartup` the check which now reads
+columns instead of only the table.
 
 #### The record answers which BPMS holds a task
 
@@ -760,6 +839,12 @@ walk anybody. Why that is not the registry decision 25 rejected is decision 30.
   name an adapter" is a different one: it answers where to route, not whether the workflow is
   alive. Whether the record's meaning is widened that far is its own decision.
 
+`TaskElectionFromDeliveryRecordTest` holds the routing
+(`anOpenRecordElectsTheAdapterWithoutAnyProbe`,
+`aClosedTaskIsTheWarnedNoOpWithoutAnyProbe`, `withoutARecordTheAdaptersAreProbed`,
+`theRecordIsClosedAfterPhaseTwoAndNotBefore`) and `TaskRecordLookupTest` the store side of
+it.
+
 #### Two instances creating the schema at once
 
 `createSchemaIfNotExists` asks the JDBC metadata and then runs the DDL, because
@@ -776,6 +861,8 @@ really failed and the message is the one it always was. Deliberately no SQL stat
 database reports that collision differently, and the metadata question is the portable answer.
 The Quarkus phase-two outbox does the same for its own table. The MongoDB stores need nothing:
 MongoDB answers a `createIndex` of an index which is already there with its name.
+`JdbcTaskDeliverySchemaTest#twoInstancesCreateTheSchemaAtOnce` is the race itself, and
+`#anUnanswerableMetadataQuestionIsANo` the second question failing.
 
 #### Process versions (`version` attribute)
 
@@ -803,7 +890,10 @@ Two methods wired to the same BPMN element are ambiguous exactly when their rang
 OVERLAP (`VersionRange.overlaps`, interval math). A range naming a tag cannot be placed
 before a BPMS was asked, so the check runs twice: at registration for everything
 decidable without a BPMS, and again during `resolveProcessVersions`. Both times it fails
-the boot naming both methods.
+the boot naming both methods. `ProcessVersionMatchingTest` holds the grammar and both
+checks (`numericRanges`, `versionTagsAreResolvedByTheBpms`,
+`overlappingTagRangesFailAfterTheDeployment`, `unknownVersionTagIsReported`,
+`recordedVersionsAvoidQueries`).
 
 ### Two-phase workflow start (`PhaseTwoOutbox` SPI)
 
@@ -836,6 +926,11 @@ What stays untouched by this is the INBOUND direction: a BPMS which delivers a t
 inside its own transaction still does, which `TaskInvocationContext.runInCurrentTransaction()`
 reports. Inbound work may share the caller's transaction, outbound work never does.
 
+The split itself is held by `AddingAnOperationTest#phaseOneRunsAndIsPlanned` and
+`#phaseTwoIsDispatchedThroughTheRouter`, the resolution of the outbox per aggregate by
+`StoreAttributionTest` respectively `QuarkusStoreAttributionTest`, and the boot which ends
+without one by `OutboxStartupValidationTest`.
+
 **What phase two may expect:** the dispatch calls back into the
 application - a remote BPMS adapter loads the workflow aggregate to build what it
 sends to the BPMS - and it does so on the outbox dispatcher's own thread, where
@@ -849,6 +944,9 @@ well, and stores which dispatch inside their own transaction (gruelbox on Spring
 Boot) keep theirs. Spring Boot passes no runner today: gruelbox brings the
 transaction, and Spring Data opens what it needs per call - see the platform's
 wiki page for what an application may rely on.
+`PhaseTwoRouterTest#dispatchRunsInsideTheProvidedTransaction` holds the transaction around a
+dispatch, `PhaseTwoJpaContextTest` and `PhaseTwoMongoContextTest` what an application may touch
+there.
 
 A scheduled call is described by the immutable value type `PhaseTwoCall`
 (operation, workflow module, BPMN process, workflow-aggregate ID in serialized
@@ -967,7 +1065,8 @@ stale adapter ID of a START entry), so an extension temporarily missing from the
 application does not silently lose its scheduled work.
 
 Stores never look into the registry: they persist name, args and key and stay
-operation-agnostic.
+operation-agnostic. `PhaseOperationRegistryTest` holds the rules the registry enforces, and
+`ExtensionOperationDispatchTest` runs an extension operation through both platforms.
 
 The core does not implement (or depend on) any outbox itself — it only defines the
 `PhaseTwoOutbox` contract (stores implement exactly one method,
@@ -1048,6 +1147,19 @@ The core does not implement (or depend on) any outbox itself — it only defines
   residual permits anyway) — adapters that cannot query reliably answer
   `UNKNOWN_TO_BPMS`.
 
+Every rule of that list has a test. Scheduling inside the transaction and dispatching after
+the commit are `OutboxDispatchTest#entryWrittenInSameTransactionAndPhaseTwoDispatchedAfterCommit`
+and `#rollbackLeavesNoEntryAndNoPhaseTwo`; the idempotency key is
+`OutboxDispatchTest#duplicateScheduleAgainstAPendingEntryIsNoOp` next to
+`RepeatedOperationTest#aSecondStartAfterTheDispatchIsPlanned`; the key released with the
+dispatch is `GruelboxDeduplicationWindowTest#aDispatchedEntryIsReleased`; recovery after a
+restart is `OutboxRecoveryTest`; the redispatch probe is
+`OutboxRedispatchMitigationTest#retriedStartEntryDoesNotStartASecondWorkflow`; the
+discarded schedule is `DiscardedScheduleTest`; and the activation carried by a
+correlation's key is `ActivationIdentityTest` together with
+`PhaseOperationContractTest#noOtherKeyCarriesAnActivation`. That a missing outbox ends the
+boot is `OutboxStartupValidationTest`.
+
 Default implementations are provided by the platform integrations (configured via
 `vanillabp.outbox.*` — keys, defaults and documentation are modeled ONCE in the
 core class `PhaseTwoOutboxProperties`, bound as part of the `vanillabp.*` tree;
@@ -1077,6 +1189,9 @@ point is that nothing depends on it:
   a normalized fiction: Camunda 7 tells a cancellation from a regular end by the
   execution's delete reason, Camunda 8 never sees a cancelled instance's end.
 
+`WorkflowEndedTest` holds all four bullets, `withoutAMethodNothingHappens` for the question
+asked while wiring and `aDeletedAggregateIsNoError` for the aggregate which is gone.
+
 ### Broadcasting signals
 
 A signal is the one BPMS operation which is not about a workflow, so it is the one
@@ -1103,6 +1218,11 @@ place where neither election nor aggregate applies:
   asking for one gets a `PhaseOperationNotSupported` naming the adapter and what to do
   instead.
 
+`SendSignalTest` holds the fan-out over the deployment union (`everyDeployedBpmsIsReached`,
+`oneFailingBpmsDoesNotStopTheOthers`), the adapter recorded per entry
+(`phaseTwoUsesTheRecordedAdapter`) and the refusal (`anAdapterWithoutSignalsSaysSo`), in the
+core and on both platforms.
+
 ### Pushing a changed aggregate (`aggregateChanged`)
 
 `MigrationProcessService.aggregateChanged(aggregate, taskId)` is `correlateMessage` with
@@ -1127,6 +1247,11 @@ There is no ordering guarantee between outbox entries: the dispatchers select by
 in the same transaction may reach a remote BPMS in the other order. That is documented
 rather than fixed - inventing an order here would promise something the stores do not
 implement, and an application which needs one can keep the calls in separate transactions.
+
+`AggregateChangedTest` holds the shape and both decisions (`theTaskIdDecidesTheScope`,
+`phaseTwoElectsByProbing`, `aCompletedWorkflowIsNoFailure`, `anUnknownWorkflowFailsGuiding`).
+The missing ordering has no test because there is nothing to hold: the sentence says what
+the stores do not promise.
 
 WHAT is pushed stays the sync model's business. This operation adds no second
 way of choosing values, which is what keeps the aggregate the single source of truth.
@@ -1173,6 +1298,10 @@ An adapter whose BPMS cannot report such a start implements none of this and fai
 deployment of such a process with a guiding message instead - a workflow which could
 never obtain an aggregate is better refused than deployed.
 
+Building and validating are `BpmsInitiatedStartTest` (`aggregateIsBuiltFromTheTrigger`,
+`repeatedNotificationCreatesNothingTwice`, `methodNamingAnUnknownStartEventFailsTheBoot`), the
+ID rules are `BpmsInitiatedStartIdTest`.
+
 ### Viewer/history API (read path)
 
 `ProcessService#getProcessDefinitions`, `#getBpmnXml` and `#getWorkflowHistory` are
@@ -1203,6 +1332,10 @@ Adapters answer "I do not know this workflow" with an empty list / `null`; a BPM
 without an element history reports `elementsHistory()` as `null` (the SPI's
 "not supported by the underlying BPMS"), and an eventually consistent BPMS reports
 what is visible instead of raising an error.
+
+The composite id and the read path are `ViewerApiTest` (`compositeIdSchemeRoundTrips`,
+`bpmnXmlIsRoutedByTheCompositeId`, `completedWorkflowsAreViewable`,
+`malformedProcessDefinitionIdRaisesGuidingError`).
 
 ### Aggregate persistence
 
@@ -1243,7 +1376,8 @@ so an adapter built without one is nearly always a registration which left it ou
 build writes a WARN naming the adapter id and the collaborator. Decision 28 says why the
 object exists at all: the collaborators used to arrive by setter, and a registrar which
 forgot one produced an adapter that deployed, ran tasks and never reported a workflow end,
-with nothing failing anywhere.
+with nothing failing anywhere. `AdapterCollaboratorsTest` holds both halves, the refusal of
+a missing mandatory collaborator and the WARN about an absent optional one.
 
 What is NOT in the object stays the adapter's own constructor argument: what it resolves
 from its configuration (a job timeout, a retry backoff, the variables a worker fetches) and
@@ -1344,6 +1478,12 @@ configuration is available as the injectable core object `MigrationAdapterProper
 (adapter ids, workflow modules, prioritized adapters), which is usually all an extension
 needs to know about the setup.
 
+**What holds the matching and the ordering.**
+`DeploymentServiceTest#extensionWiringServicesAreFilteredAndCalled`,
+`#subtypeExtensionIsNeitherWiredNorStarted` and `#wiringServicesAreSortedByOrder` in the
+core, `DeploymentPipelineTest#extensionsWiredInOrder` and `#nonMatchingExtensionUntouched`
+against a booted application.
+
 ### Adapter/platform version guard (`AdapterPlatformVersion`)
 
 Applications pin the VanillaBP versions themselves, usually by importing
@@ -1375,7 +1515,8 @@ not. Versions are compared by their numeric parts with the qualifier ignored, so
 compatible — the guard must never break a build it does not understand. When it does fail,
 the message names the required version and every artifact to raise (starting with the
 BOM), following the [configuration/error-message principle](#features) of guiding the
-developer instead of just reporting.
+developer instead of just reporting. The comparison and both escape hatches are `AdapterPlatformVersionTest`:
+`testQualifiersAreIgnored`, `testUnparseableVersions` and `testFailureIsNotCached`.
 
 ## The older versions a BPMS still holds
 
@@ -1414,6 +1555,10 @@ and the same exemption applies to a `@WorkflowStartedByBpms` method naming a sta
 new model dropped. What used to be caught by those checks is caught by the dead-method
 warning instead, which reports rather than fails: a version which does not exist YET is
 normal during a rolling deployment.
+
+Every verdict the check can reach is a case of `OldProcessVersionsTest`, from
+`anUnservedVersionWithInstancesIsAnError` and `anUnservedVersionWithoutInstancesWarns` to
+`outfadingTheDeployedVersionFailsTheBoot` and `aMethodServingNoHeldVersionIsReported`.
 
 ### What the check costs, and what it may cost in two years
 
@@ -1473,6 +1618,11 @@ The core answers the part it owns, and only that part:
   warns once per BPMN process where there is none. An aggregate with a version attribute stays
   quiet, because then the collision is the exception above instead of a lost write.
 
+`AggregateWriteConflictTest` holds the classification and the report
+(`optimisticLockingIsRecognizedByName`, `conflictIsReportedAndPropagated`,
+`otherFailuresArePassedThroughSilently`, `theWarningIsGivenOncePerProcess`), and each
+platform runs the same conflict through a booted application.
+
 ## What an operator gets to see
 
 Three things about one delivery, built in the core because every BPMS passes through it:
@@ -1512,6 +1662,12 @@ does is inside it, and nothing had to be repeated per BPMS.
   On Quarkus the gauges are registered by a `StartupEvent` observer running AFTER the outbox
   dispatchers, because a store asked before its table exists cannot count.
 
+`MicrometerVanillaBpMetricsTest` holds the counting, the tags and the records dropped while
+no registry is bound; `AdapterHealthReportTest` holds the health verdicts including
+`unconfiguredAdapterDoesNotDragTheApplicationDown`; `DeliveryMdcTest` holds the keys put
+back afterwards; `ObservabilityTest` and `OutboxMetricsTest` run all of it through a booted
+application per platform.
+
 ### Reading a metric must not cost anything
 
 A counter is a number we already hold. A gauge is a question asked at the moment somebody
@@ -1542,6 +1698,10 @@ Three decisions inside it are worth knowing before changing it:
 
 The wrapping happens in `MicrometerVanillaBpMetrics#registerPendingOutboxEntries`, not in the
 platform modules and not in the stores. One place, so a store cannot forget.
+
+The window, the serialized collectors and the failure which does not stay are
+`CachedGaugeValueTest`: `oneMeasurementPerWindow`, `concurrentCollectorsShareOneMeasurement`,
+`aFailureDoesNotStay`, `aZeroWindowSwitchesTheHoldingOff`.
 
 ## Modules
 

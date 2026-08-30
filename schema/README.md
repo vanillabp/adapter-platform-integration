@@ -100,3 +100,7 @@ schema/bin/schema-version.sh open 2.1.0    # a new, empty latest.xml, included a
 
 A build therefore always regenerates the SQL from the changelog. The SQL is not committed, so it
 cannot drift away from the changelog - the changelog is what a reviewer reads.
+
+`ChangelogAppliesTest` applies the changelog to H2 and checks both tables and the unique
+index, and `GeneratedSqlOnPostgresIT#postgresAcceptsTheGeneratedSql` runs the generated
+statements against a PostgreSQL container.
