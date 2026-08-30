@@ -30,6 +30,11 @@
 
   <properties>
     <jupiter.version>5.12.2</jupiter.version>
+    <!-- this module is the test harness itself and belongs to neither platform's report,
+         so its own tests measure nothing anybody aggregates; the empty agent keeps
+         Surefire's inherited '@{jacoco.agent}' resolvable -->
+    <jacoco.skip>true</jacoco.skip>
+    <jacoco.agent/>
   </properties>
 
   <dependencies>
@@ -71,6 +76,20 @@
       <groupId>org.mockito</groupId>
       <artifactId>mockito-junit-jupiter</artifactId>
       <version>5.23.0</version>
+    </dependency>
+    <!-- the tests of this module run test classes of their own, which needs an engine
+         and a launcher next to the API the module is built against -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-engine</artifactId>
+      <version>5.14.4</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.platform</groupId>
+      <artifactId>junit-platform-launcher</artifactId>
+      <version>1.14.4</version>
+      <scope>test</scope>
     </dependency>
   </dependencies>
 </project>

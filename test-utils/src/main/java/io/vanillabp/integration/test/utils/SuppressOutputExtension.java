@@ -21,6 +21,10 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
    * restored to the original streams. This prevents background threads (e.g., from
    * Testcontainers or database drivers) from printing output after the test class finishes.
    * Use on test classes together with {@code @ExtendWith(SuppressOutputExtension.class)}.
+   * <p>
+   * That null stream carries the console it hides, so a class running after this one in the
+   * same fork can still replay the output of a failing test to somewhere somebody reads it.
+   * See {@code SuppressOutputExtensionTest#aFailingClassIsReadableBehindASilencingClass}.
    */
   @Target(ElementType.TYPE)
   @Retention(RetentionPolicy.RUNTIME)
@@ -175,17 +179,23 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
     }
 
     if (context.getExecutionException().isPresent()) {
+      final var console = consoleBehind(originalOut);
       if (classLevel) {
-        originalOut.println("---- Captured Output (class level) ----");
+        console.println("---- Captured Output (class level) ----");
       } else {
-        originalOut.println("----------- Captured Output -----------");
+        console.println("----------- Captured Output -----------");
       }
-      originalOut.println(allBuffer.toString());
-      originalOut.println("---------------------------------------");
+      console.println(allBuffer.toString());
+      console.println("---------------------------------------");
     }
 
   }
 
+  /**
+   * Puts back exactly what was installed before this class started capturing, a stream
+   * silenced by an earlier class included: that class asked for its background threads to
+   * stay out of a green build, and it is still the one printing between the classes.
+   */
   private void restoreOriginalOutputStreams() {
 
     System.setOut(originalOut);
@@ -195,9 +205,49 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
 
   private void silenceOutputStreams() {
 
-    final var nullOut = new PrintStream(OutputStream.nullOutputStream());
-    System.setOut(nullOut);
-    System.setErr(nullOut);
+    System.setOut(new SilencedConsole(consoleBehind(originalOut)));
+    System.setErr(new SilencedConsole(consoleBehind(originalErr)));
+
+  }
+
+  /**
+   * The console a failure is replayed to, which is not always the stream this class found
+   * installed.
+   * <p>
+   * All test classes of a module share one fork, and a class annotated with
+   * {@link SuppressBackgroundOutput} deliberately leaves a stream behind which drops
+   * everything written to it. The next class finds that stream where the console used to be
+   * and would replay the reason for its red build into it, so a failing test would say
+   * nothing at all - which is why the silenced stream keeps a reference to what it hid and
+   * this method asks for it.
+   *
+   * @param stream What this class found installed when it started capturing
+   * @return The stream somebody reads
+   */
+  private static PrintStream consoleBehind(
+      final PrintStream stream) {
+
+    return stream instanceof SilencedConsole silenced
+        ? silenced.console
+        : stream;
+
+  }
+
+  /**
+   * What a class silencing its background output leaves behind: everything written is
+   * dropped, and the console it replaced stays reachable for whoever comes next.
+   */
+  private static class SilencedConsole extends PrintStream {
+
+    private final PrintStream console;
+
+    SilencedConsole(
+        final PrintStream console) {
+
+      super(OutputStream.nullOutputStream());
+      this.console = console;
+
+    }
 
   }
 
