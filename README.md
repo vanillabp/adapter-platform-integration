@@ -45,6 +45,11 @@ contributors know what you are working on.
 plug in. To learn which BPMS are supported, visit [https://www.vanillabp.io](https://www.vanillabp.io), which also
 links to the corresponding adapter repositories.
 
+Writing an adapter for another BPMS, in a repository of your own? Read
+[`migration-adapter/ADAPTER-AUTHORS.md`](./migration-adapter/ADAPTER-AUTHORS.md). It is written for a team without
+access to this workspace and describes the two interfaces to implement, the calls the core expects back, what your
+answers promise and what a wrong one costs.
+
 ### Where a snapshot comes from
 
 Snapshots in GitHub Packages are published from `main`, and from nowhere else. There is one

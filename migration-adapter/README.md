@@ -9,6 +9,11 @@ to adapters of supported BPMSs is done by this module which is used by platform
 integrations  as a dependency. This ensures the same behavior of VanillaBP on
 different platforms.
 
+This file explains the core to whoever changes it. If you are BUILDING an adapter rather than
+changing the core, read [`ADAPTER-AUTHORS.md`](./ADAPTER-AUTHORS.md) instead: it collects the
+duties spread across the sections below into one document a team without access to this workspace
+can read from top to bottom.
+
 ## Two kinds of plug-ins: adapters and extensions
 
 Everything that takes part in deploying a workflow module implements

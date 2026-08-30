@@ -8,6 +8,12 @@ touch, and how to build. [`CONTRIBUTING.md`](./CONTRIBUTING.md) carries the one 
 to lose sight of while writing code, and [`UPGRADE.md`](./UPGRADE.md) records every breaking change
 with its reasoning.
 
+Changing the adapter SPI touches a second document:
+[`migration-adapter/ADAPTER-AUTHORS.md`](./migration-adapter/ADAPTER-AUTHORS.md) is what an adapter
+team outside this workspace implements against. It is the guide such a team is handed, so a change
+to what an adapter implements, calls back or promises is not finished until that document says the
+new thing.
+
 ## The decision log is binding
 
 [`DECISIONS.md`](./DECISIONS.md) holds the decisions several places in this repository rely on. It
