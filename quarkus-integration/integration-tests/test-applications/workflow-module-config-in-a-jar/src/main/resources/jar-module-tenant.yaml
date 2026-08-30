@@ -1,0 +1,2 @@
+native-image-test:
+  jar-module-root-yaml: from-the-tenant-file

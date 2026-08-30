@@ -1,0 +1,2 @@
+native-image-test:
+  jar-module-subdirectory-yaml: from-the-plain-file

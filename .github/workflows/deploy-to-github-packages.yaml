@@ -93,6 +93,21 @@ jobs:
     # the MongoDB parts moved behind beans the extension registers only where the MongoDB
     # client is present. Its own job: the native build takes minutes and must not delay
     # publishing.
+    #
+    # Two images, because a profile reaches a binary in two ways and the configuration of a
+    # workflow module has to survive both: one image knows no profile and is told about one
+    # when it starts, the other was built with the profile and needs no argument at all.
+    name: "native-build (${{ matrix.image }})"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: built-without-a-profile
+            built-with: ""
+            started-with: "-Dquarkus.profile=tenant"
+          - image: built-with-the-tenant-profile
+            built-with: "-Dquarkus.profile=tenant"
+            started-with: ""
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -118,20 +133,31 @@ jobs:
           USER_TOKEN: "${{ secrets.VANILLABP_USER_TOKEN }}"
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           CI: false
+      # the JVM half of the same assertion: everything the binary has to reproduce works
+      # here already, so a regression on the JVM cannot hide behind a green native run
+      - name: Boot the application on the JVM
+        if: matrix.built-with == ''
+        run: |
+          java -jar quarkus-integration/integration-tests/native-image-tests/target/quarkus-app/quarkus-run.jar
+          java -Dquarkus.profile=tenant -jar quarkus-integration/integration-tests/native-image-tests/target/quarkus-app/quarkus-run.jar
       - name: Build the application as a native image
         run: mvn -s $GITHUB_WORKSPACE/.github/workflows/github-packages-settings.xml
           --batch-mode --no-transfer-progress
           -pl quarkus-integration/integration-tests/native-image-tests
-          -Dnative -Dquarkus.native.container-build=true package
+          ${{ matrix.built-with }} -Dnative -Dquarkus.native.container-build=true package
         env:
           USER_NAME: "${{ secrets.VANILLABP_USER_NAME }}"
           USER_TOKEN: "${{ secrets.VANILLABP_USER_TOKEN }}"
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           CI: false
-      # a binary which cannot start is no proof: the application boots, deploys its
-      # workflow module, starts a workflow and reads the aggregate back. Its exit code
-      # is the result
-      - name: Boot the native image
+      # a binary which cannot start is no proof: the application boots, deploys its two
+      # workflow modules, reads the configuration they ship out of the image, starts a
+      # workflow and reads the aggregate back. Its exit code is the result
+      - name: Boot the native image with the tenant profile active
+        run: ./quarkus-integration/integration-tests/native-image-tests/target/*-runner ${{ matrix.started-with }}
+      # the same binary told nothing: the plain files of both workflow modules have to win
+      - name: Boot the native image without a profile
+        if: matrix.built-with == ''
         run: ./quarkus-integration/integration-tests/native-image-tests/target/*-runner
   deploy-coverage-report:
     if: "${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch }}"

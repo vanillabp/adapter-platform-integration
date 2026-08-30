@@ -67,7 +67,20 @@ as possible at **build time**, following Quarkus' extension philosophy:
    always wins. The gap to 250 absorbs the ordinal SmallRye adds per active profile, so
    a module's `-prod` file cannot climb above the application's files. The reasoning and
    the full ordinal table live in the javadoc of `WorkflowModuleBuildStepProcessor`. The
-   files are also registered for dev-mode hot reload.
+   files are collected once, by their path relative to the archive holding them, and that
+   one list is handed to dev-mode hot reload and to the native image alike
+   (`watchAndEmbedWorkflowModuleSpecificConfigFiles`). A native image carries only the
+   resources it was told about, so a file missing from that list is a workflow module
+   silently running on its defaults, and building the list twice is how the two would
+   drift apart. Profile-specific variants are part of it, which is what lets
+   `-Dquarkus.profile=<name>` on a binary pick among a module's files as it does on the
+   JVM (`native-image-tests`, whose application asserts every location and both formats,
+   in its own archive and in a dependency JAR).
+   The application's own `application-<profile>.yaml` is a different animal and stays
+   Quarkus': that file list is resolved while the image is built, so a profile chosen at
+   the binary adds nothing to it. `ProfileSpecificApplicationFilesBuildStepProcessor` says
+   so during a native build and names the three ways to those values, rather than VanillaBP
+   growing a loading mechanism next to Quarkus' own.
 5. **Aggregate persistence:** a CDI bean implementing `AggregatePersistenceAware`
    always wins, the most specific generic type first (`AggregatePersistenceResolver`,
    Jandex-based). For an aggregate having none, VanillaBP asks the aggregate what it

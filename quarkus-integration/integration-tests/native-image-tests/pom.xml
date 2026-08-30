@@ -10,7 +10,7 @@
 
   <artifactId>native-image-tests</artifactId>
   <name>Quarkus integration - Integration tests - Native image</name>
-  <description>An application with a relational database and no MongoDB anywhere, built as a native image. The build is the test: GraalVM resolves every referenced method while it builds, so a reference to an optional extension nobody asked for ends it.</description>
+  <description>An application with a relational database and no MongoDB anywhere, built as a native image. The build is one half of the test: GraalVM resolves every referenced method while it builds, so a reference to an optional extension nobody asked for ends it. The binary is the other half: it reads the configuration its two workflow modules ship, out of the image and not off a classpath, and its exit code says whether the profile it was started with picked the right file.</description>
 
   <dependencies>
     <dependency>
@@ -21,6 +21,13 @@
     <dependency>
       <groupId>io.vanillabp.quarkus.adapter</groupId>
       <artifactId>dummy-adapter</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <!-- a workflow module packaged as its own Maven module: its configuration files live
+         in a dependency JAR, which is where an image has to pick them up from -->
+    <dependency>
+      <groupId>io.vanillabp.quarkus</groupId>
+      <artifactId>application-with-workflow-module-config-in-a-jar</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>

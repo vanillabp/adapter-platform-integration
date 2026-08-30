@@ -1,0 +1,2 @@
+native-image-test:
+  test-module-root-yaml: from-the-plain-file

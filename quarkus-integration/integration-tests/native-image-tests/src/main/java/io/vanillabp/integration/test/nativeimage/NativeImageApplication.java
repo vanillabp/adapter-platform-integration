@@ -16,6 +16,12 @@ import jakarta.inject.Inject;
  * process service and reads the aggregate back out of the relational database. Anything going
  * wrong on that way either throws or leaves the aggregate unwritten, and the exit code is
  * what the pipeline of the platform looks at.
+ * <p>
+ * The second thing it asserts is the configuration its workflow modules ship, see
+ * {@link WorkflowModuleConfigurationCheck}: those files are read from the classpath, which a
+ * binary has none of, so they reach it only as registered resources. Started with
+ * <code>-Dquarkus.profile=tenant</code> the same binary has to answer with the values of the
+ * profile-specific files.
  */
 @QuarkusMain
 public class NativeImageApplication implements QuarkusApplication {
@@ -28,9 +34,22 @@ public class NativeImageApplication implements QuarkusApplication {
   @Inject
   OrderAggregateRepository repository;
 
+  @Inject
+  WorkflowModuleConfigurationCheck configuration;
+
   @Override
   public int run(
       final String... args) {
+
+    final var configurationComplaints = configuration.whatTheConfigurationGotWrong();
+    if (!configurationComplaints.isEmpty()) {
+      System.err.println(
+          "With the profile(s) '%s' active the configuration of the workflow modules was not read as expected:%n  %s"
+              .formatted(configuration.activeProfiles(), String.join("\n  ", configurationComplaints)));
+      return 2;
+    }
+    System.out.println("VanillaBP read the configuration of both workflow modules with the profile(s) '%s' active."
+        .formatted(configuration.activeProfiles()));
 
     final var stored = QuarkusTransaction
         .requiringNew()

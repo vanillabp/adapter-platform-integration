@@ -44,7 +44,7 @@ public class WorkflowModuleSpecificPropertiesConfigSourceProvider extends Abstra
   private final int ordinal;
 
   /**
-   * Made public to be used by WorkflowModuleBuildStepProcessor#watchWorkflowModuleSpecificConfigFiles.
+   * Made public to be used by WorkflowModuleBuildStepProcessor when it collects the files to watch and to embed into a native image.
    *
    * @return The file extensions supported
    */
