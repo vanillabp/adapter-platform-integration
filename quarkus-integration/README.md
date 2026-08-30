@@ -74,13 +74,17 @@ as possible at **build time**, following Quarkus' extension philosophy:
    silently running on its defaults, and building the list twice is how the two would
    drift apart. Profile-specific variants are part of it, which is what lets
    `-Dquarkus.profile=<name>` on a binary pick among a module's files as it does on the
-   JVM (`native-image-tests`, whose application asserts every location and both formats,
-   in its own archive and in a dependency JAR).
+   JVM (`native-image-tests`, whose `WorkflowModuleConfigurationCheck` asserts every
+   location and both formats while the application boots, in its own archive and in a
+   dependency JAR). On the JVM the same rule is held by
+   `WorkflowModuleConfigurationIsADefaultTest` and
+   `WorkflowModuleProfileFileBeatsPlainFileTest`.
    The application's own `application-<profile>.yaml` is a different animal and stays
    Quarkus': that file list is resolved while the image is built, so a profile chosen at
    the binary adds nothing to it. `ProfileSpecificApplicationFilesBuildStepProcessor` says
-   so during a native build and names the three ways to those values, rather than VanillaBP
-   growing a loading mechanism next to Quarkus' own.
+   so during a native build and names the ways to those values, rather than VanillaBP
+   growing a loading mechanism next to Quarkus' own
+   (`ProfileSpecificApplicationFilesTest`).
 5. **Aggregate persistence:** a CDI bean implementing `AggregatePersistenceAware`
    always wins, the most specific generic type first (`AggregatePersistenceResolver`,
    Jandex-based). For an aggregate having none, VanillaBP asks the aggregate what it
@@ -91,7 +95,9 @@ as possible at **build time**, following Quarkus' extension philosophy:
    (package `runtime/persistence`), and one `@Singleton` subclass per aggregate is
    generated with Gizmo, so the runtime lookup finds a normal CDI bean. Two
    repositories for one aggregate fail the build; an aggregate using none of the
-   idioms fails it, too, with a message naming what was looked for. Everything about
+   idioms fails it, too, with a message naming what was looked for
+   (`DefaultAggregatePersistenceResolverTest#severalRepositoriesFailTheBuild` and
+   `#unknownAggregateIsNotServed`). Everything about
    the aggregate's ID (name, type, value) comes from reflection (`AggregateIdTypes`),
    not from the persistence framework: it is needed at build and startup time, where
    no session is guaranteed to be around.
@@ -116,7 +122,9 @@ as possible at **build time**, following Quarkus' extension philosophy:
    unknown-key validation passes if ANY registered mapping knows a key, so the
    platform mapping and the adapter overlays validate the tree together and a typo
    under `vanillabp.*` fails the startup (Quarkus is stricter than Spring Boot
-   here - accepted).
+   here - accepted). `QuarkusMigrationAdapterPropertiesMapperTest` holds the mapping onto
+   the core model, `UnknownPropertyKeyConfigurationTest` the typo and
+   `EnvironmentVariableMisbindingTest` the environment variable which does not bind.
 8. **Runtime deployment pipeline:** `VanillaBpDeploymentRunner` (runtime module)
    observes the `StartupEvent` and drives the core `DeploymentService` for every
    workflow module found in the classpath:
@@ -179,7 +187,9 @@ and a name ending in `_ClientProxy` belongs to no file the developer can open.
 `Instance#handles()` yields a handle per bean, and `Handle#getBean().getBeanClass()` is the
 declared class, which is what `QuarkusTransactionRunnerResolver` reports. The
 suffix is never cut off a runtime class name: that guesses at a naming convention of the
-container and breaks the day the container changes it.
+container and breaks the day the container changes it. `NoAdapterExtensionTest` holds the
+build failure without an adapter, `QuarkusTransactionRunnerResolverTest` the class an
+adapter-free message names.
 
 ## Hints
 
@@ -248,7 +258,9 @@ manages an aggregate.
   immediately and deleted again from an interposed synchronization when the transaction
   ends in anything but a commit - the same best-effort compensation `MongoPhaseTwoOutbox`
   does for its entries. Next to the index the retention reads it creates one on `taskId`,
-  which is what `recordOfTask` reads by.
+  which is what `recordOfTask` reads by. `MongoTaskDeliveryLogTest` holds the record and
+  its compensation (`aRecordIsWrittenAndReadBack`, `aRolledBackTransactionLeavesNoRecord`,
+  `theRecordOfATaskAnswersTheElection`, `expiredRecordsAreDeleted`).
 - Both observe the `StartupEvent` to create their schema (unless
   `vanillabp.outbox.create-schema` is disabled) and to start the core's
   `TaskDeliveryRetentionCleanup`, which calls `cleanUpExpiredRecords` per
@@ -256,6 +268,9 @@ manages an aggregate.
 - The same run refreshes the records of the tasks which are still open: the core
   collects the keys the BPMS redelivered, `cleanUpExpiredRecords` writes them before it
   deletes anything, and the JDBC store batches while the MongoDB one bulk-writes.
+- The attribution per aggregate is held by `QuarkusStoreAttributionTest`
+  (`eachAggregateGetsTheStoreOfItsPersistence`, `awareBeansWin`,
+  `aMismatchingSingleDefaultIsRefused`).
 - `JdbcPhaseTwoOutboxDispatcher` creates its table the same way the core's delivery store does,
   including the answer to two instances creating it at the same moment: a refused DDL asks the
   metadata again through a connection of its own and stays quiet where the table is there now.
@@ -277,12 +292,14 @@ nothing produces the `MeterRegistry` the producer needs.
   `VanillaBpReadinessCheck`.
 
 Both beans are `setUnremovable()`: Micrometer resp. SmallRye Health collect them at startup,
-nothing injects them.
+nothing injects them. `ObservabilityTest` asserts the meters and the readiness answer of a
+booted application, `OutboxMetricsTest` the backlog gauge.
 
 The pending-entry gauges of the outbox stores are registered by a `StartupEvent` observer with
 `@Priority(APPLICATION + 800)`, which is later than the outbox dispatchers' own observers. They
 create their table on startup, and a store asked before its table exists cannot count, so
-without the priority the gauge would silently never appear.
+without the priority the gauge would silently never appear
+(`OutboxMetricsTest#outboxReportsItsBacklogAndItsDispatches`).
 
 ## Noteworthy & Contributors
 

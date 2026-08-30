@@ -164,13 +164,15 @@ types to enforce a consistent code style.
 Use the following command to build the project, run all tests, and generate the code coverage report:
 
 ```shell
-mvn install verify
+mvn install
 ```
 
 *Hint:* Note that `mvn install` is used instead of `mvn package`. This is
 necessary because the Quarkus integration tests load modules not from the
 `target` directories of submodules, but from the local Maven repository
-populated by `mvn install`.
+populated by `mvn install`. Do not write `mvn install verify` either: `install`
+already runs every phase `verify` has, so naming both walks two lifecycles per
+module and reports every compiler warning twice.
 
 ## Decision log
 
