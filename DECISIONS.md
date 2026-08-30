@@ -575,14 +575,26 @@ they are the reason the table below looks like it does:
 3. a BPMS which is not available right now produces an exception - and asking it is the only
    honest way to find out.
 
-|                  The probe answers                  |                phase one does                |              the dispatch does               |
-|-----------------------------------------------------|----------------------------------------------|----------------------------------------------|
-| `ACTIVE`                                            | the operation runs                           | the operation runs                           |
-| `COMPLETED`                                         | warned no-op                                 | the entry is consumed                        |
-| `UNKNOWN_TO_BPMS`, task operation                   | `TaskNotFoundException` at once              | the entry is consumed (the task is gone)     |
-| `UNKNOWN_TO_BPMS`, workflow operation, hint present | the operation is planned, the caller returns | waits out the window, then repeats the entry |
-| `UNKNOWN_TO_BPMS`, no hint                          | `WorkflowNotFoundException` at once          | the entry is consumed (stale)                |
-| `BPMS_UNAVAILABLE`                                  | exception naming the adapter, at once        | retried twice, then the entry is repeated    |
+|                  The probe answers                  |                phase one does                |              the dispatch does               |                      a read does                       |
+|-----------------------------------------------------|----------------------------------------------|----------------------------------------------|--------------------------------------------------------|
+| `ACTIVE`                                            | the operation runs                           | the operation runs                           | the adapter answers                                    |
+| `COMPLETED`                                         | warned no-op                                 | the entry is consumed                        | the adapter answers (an ended workflow is viewable)    |
+| `UNKNOWN_TO_BPMS`, task operation                   | `TaskNotFoundException` at once              | the entry is consumed (the task is gone)     | -                                                      |
+| `UNKNOWN_TO_BPMS`, workflow operation, hint present | the operation is planned, the caller returns | waits out the window, then repeats the entry | waits out the window, then `WorkflowNotFoundException` |
+| `UNKNOWN_TO_BPMS`, no hint                          | `WorkflowNotFoundException` at once          | the entry is consumed (stale)                | `WorkflowNotFoundException` at once                    |
+| `BPMS_UNAVAILABLE`                                  | exception naming the adapter, at once        | retried twice, then the entry is repeated    | retried twice, then the exception                      |
+
+The read is the column this decision first forgot, and a red blueprint nightly is what
+said so (story 176): the viewer of a workflow started seconds ago asked Camunda 8 while
+its exporter was still behind, got the honest "unknown" and raised
+`WorkflowNotFoundException` in the application, which goal 2 above forbids. Where a write
+operation is planned in phase one and does its waiting in the dispatch, a read has no
+second place to go: nothing repeats it, so it either waits itself or hands the caller an
+error. It therefore waits like the dispatch does, bounded by a hint and by the adapter's
+`workflowVisibilityDelay`. What that costs is the mirror image again: a read carrying a
+stale hint answers after the window instead of at once, and the message then names the
+adapter which was expected to hold the workflow, because an exporter which stopped looks
+exactly like one which is behind.
 
 What makes the hint the dividing line: a hint exists only where VanillaBP knew the answer without
 asking anybody - it started the workflow itself, or a delivery for that workflow arrived from that

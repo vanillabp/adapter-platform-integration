@@ -2609,6 +2609,17 @@ public class MigrationProcessService<A> {
    * a regular result here (an ended workflow still has definitions and a history);
    * only a subject unknown to EVERY adapter raises the SPI's
    * {@code WorkflowNotFoundException}.
+   * <p>
+   * A read is the caller which has to do its own waiting. An operation advancing a
+   * workflow is planned in phase one and waits for an eventually consistent read model
+   * in the dispatch, where no transaction is open (decision 27 in the repository's
+   * DECISIONS.md); a read has no second place to wait in - it answers the caller or it
+   * fails, and a failure is not repeated by anybody. So where a hint says which adapter
+   * holds the workflow, the read waits out that adapter's
+   * {@code workflowVisibilityDelay}: asking for the history of a workflow the same
+   * application started seconds ago is the ordinary case, and the one to three seconds
+   * Camunda 8's exporter lags behind must not turn it into an error. Without a hint
+   * nothing is waited for - a workflow nobody has ever seen fails at once.
    */
   private WorkflowLocator.Location<A> locateForReading(
       final Object aggregateId,
@@ -2617,22 +2628,33 @@ public class MigrationProcessService<A> {
     final var subject = "workflow of aggregate '%s' (BPMN process '%s' of workflow module '%s')"
         .formatted(aggregateId, bpmnProcessId, workflowModuleId);
 
-    // a read answers as fast as it can: the caller waits for it, and a workflow which
-    // is not findable yet is not made findable by holding the line
+    // the hint is what buys the waiting: it says the workflow exists, so an adapter not
+    // reporting it yet is asked again until its visibility window is used up. Nothing
+    // repeats a read later, so this is the only place it can happen
     final var location = workflowLocator.locate(
         adapterProcessServices,
         adapter -> adapter.awarenessOfWorkflow(workflowScope(), aggregatePersistenceSupport, aggregateId),
         aggregateId,
         subject,
-        WorkflowLocator.Patience.NONE);
+        WorkflowLocator.Patience.WAIT_FOR_VISIBILITY);
 
     if (location.awareness() == WorkflowAwareness.UNKNOWN_TO_BPMS) {
       throw new io.vanillabp.spi.process.WorkflowNotFoundException(
           ("No configured BPMS knows the %s - %s cannot be determined (probed adapters, in "
               + "prioritized order: %s)! Likely causes: the workflow was never started, was "
               + "started through another system, or its history was already cleaned up in the "
-              + "BPMS.")
-              .formatted(subject, subjectOfRead, prioritizedAdapters));
+              + "BPMS.%s")
+              .formatted(
+                  subject,
+                  subjectOfRead,
+                  prioritizedAdapters,
+                  location.isUnknownButExpected()
+                      ? (" The adapter '%s' was expected to hold this workflow (VanillaBP started "
+                          + "it there or was handed a delivery for it) and still did not report it "
+                          + "after its workflowVisibilityDelay had passed - if that BPMS answers "
+                          + "from a read model, its exporter is behind or has stopped.")
+                          .formatted(location.hintedAdapterId())
+                      : ""));
     }
     return location;
 

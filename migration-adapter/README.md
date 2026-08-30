@@ -81,12 +81,15 @@ falls through to the next adapter, `COMPLETED` is a warned no-op, and
 start in the first-priority adapter (no probing).
 
 How long the walk may take is the CALLER's decision (`WorkflowLocator.Patience`), because
-the same walk runs in two places whose cost is not comparable. In **phase one** it runs
+the same walk runs in places whose cost is not comparable. In **phase one** it runs
 inside the application's transaction, holding a database connection and the locks on the
 workflow aggregate: it asks every adapter once and never sleeps. At **dispatch** time no
 application transaction is open, so an unreachable BPMS is worth two more questions
 (500&nbsp;ms apart, fixed — "optimize late") and a read model which has not caught up is
-worth its window. Decision 27 says why the split is drawn there.
+worth its window. A **read** of the viewer/history API waits for the same window, for the
+opposite reason: there is no outbox entry behind it which could ask again later, so what
+it does not wait for becomes an error in the application. Decision 27 says why the split
+is drawn there.
 
 An adapter which cannot ask its BPMS at all says so (`canLocateWorkflows()`, `default true`)
 and the core refuses to boot a workflow module which prioritizes it next to another
@@ -221,9 +224,9 @@ Four pieces solve it, and the split matters:
    leaves an entry behind, and the next operation on that aggregate ID is planned and
    dispatched until the outbox blocks it, instead of failing at the call.
 
-4. **The waiting happens at the dispatch, never in the caller's transaction.** Phase one
-   asks once. Where the answer is "unknown" although a hint says the workflow exists, the
-   operation is PLANNED - the aggregate is saved, the outbox entry is written, the caller
+4. **The waiting happens at the dispatch and in a read, never in the caller's
+   transaction.** Phase one asks once. Where the answer is "unknown" although a hint says
+   the workflow exists, the operation is PLANNED - the aggregate is saved, the outbox entry is written, the caller
    returns - and the dispatch asks again, waits out the window and repeats the entry while
    the BPMS still says nothing. In everyday operation (Camunda 8 lags one to three
    seconds) that costs an attempt and nobody an error; while an exporter is broken it
@@ -232,6 +235,15 @@ Four pieces solve it, and the split matters:
    arrive - the cluster runs out of job retries and Camunda raises an incident of its own;
    where no job is behind it (a correlation from a REST endpoint), the blocked entry and
    its counter are that place. Decision 27 carries this, including what it costs.
+
+   A read of the viewer/history API (`getProcessDefinitions`, `getWorkflowHistory`) is the
+   one caller which waits for itself. It has no phase two to plan and nothing repeats it
+   later, so it waits where a hint says which adapter holds the workflow. Asking for the
+   history of a workflow the application started seconds ago is what a viewer does all day,
+   and the seconds Camunda 8's exporter lags behind must not answer it with
+   `WorkflowNotFoundException`. Without a hint the read still fails at once, and a hint
+   which never comes true costs the window before the failure names the adapter which was
+   expected to answer.
 
 **What was deliberately NOT built: an outbox query.** A `START_WORKFLOW` entry still
 `OPEN` would prove "too early rather than unknown", and one `DONE` a moment ago would
