@@ -11,6 +11,12 @@ make an entry untrue, ask before you write the change: an entry is superseded ra
 keeps its number, and the successor takes the next free one.
 [`AGENTS.md`](./AGENTS.md) says the same in the form an agent reads.
 
+If your change touches the adapter SPI, it touches
+[`migration-adapter/ADAPTER-AUTHORS.md`](./migration-adapter/ADAPTER-AUTHORS.md) as well. That
+document is what a team building an adapter outside this workspace implements against, and it is
+the one place where the SPI is described as a whole rather than method by method. A change to what
+an adapter implements, calls back or promises is not finished until it says the new thing.
+
 Two of those rules are easy to lose sight of while writing code, so they are spelled out here as
 well.
 
