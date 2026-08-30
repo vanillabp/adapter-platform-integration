@@ -2,6 +2,8 @@ package io.vanillabp.integration.it;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -75,8 +77,8 @@ public class MongoTaskDeliveryLogTest {
       final String outcome) {
 
     return new TaskDelivery(
-        deliveryKey, "test-adapter", "test-module", "TestProcess", "4711", "processTask", outcome, "PAYMENT_FAILED", "PaymentFailed", java.time.Instant
-            .now());
+        deliveryKey, "test-adapter", "test-module", "TestProcess", "4711", "processTask", null, outcome, "PAYMENT_FAILED", "PaymentFailed", java.time.Instant
+            .now(), null);
 
   }
 
@@ -97,6 +99,37 @@ public class MongoTaskDeliveryLogTest {
     assertEquals("BPMN_ERROR", recorded.get().outcome());
     assertEquals("PAYMENT_FAILED", recorded.get().bpmnErrorCode());
     assertEquals("PaymentFailed", recorded.get().bpmnErrorName());
+
+  }
+
+  @Test
+  @DisplayName("The record of an open task is found by that task, and says when it was closed")
+  public void theRecordOfATaskAnswersTheElection() throws Exception {
+
+    userTransaction.begin();
+    deliveryLog
+        .record(
+            new TaskDelivery(
+                "job-open", "test-adapter", "test-module", "TestProcess", "4711", "awaitCompletion", "task-77", "COMPLETION_PENDING", null, null, java.time.Instant
+                    .now(), null));
+    userTransaction.commit();
+
+    final var open = deliveryLog.recordOfTask("test-module", "TestProcess", "4711", "task-77");
+    assertTrue(open.isPresent(), "this is what a completeTask reads instead of asking a BPMS");
+    assertEquals("test-adapter", open.get().adapterId());
+    assertNull(open.get().taskClosedAt(), "a record is born open");
+    assertTrue(
+        deliveryLog.recordOfTask("test-module", "TestProcess", "4711", "another-task").isEmpty(),
+        "another task is another question");
+
+    assertEquals(1, deliveryLog.markTaskClosed("test-module", "TestProcess", "4711", "task-77"));
+
+    assertNotNull(
+        deliveryLog.recordOfTask("test-module", "TestProcess", "4711", "task-77").orElseThrow().taskClosedAt());
+    assertEquals(
+        0,
+        deliveryLog.markTaskClosed("test-module", "TestProcess", "4711", "task-77"),
+        "the task was closed when it was first closed");
 
   }
 
@@ -148,8 +181,8 @@ public class MongoTaskDeliveryLogTest {
       final String workflowAggregateId) {
 
     return new TaskDelivery(
-        deliveryKey, "test-adapter", workflowModuleId, bpmnProcessId, workflowAggregateId, "processTask", "COMPLETED", null, null, java.time.Instant
-            .now());
+        deliveryKey, "test-adapter", workflowModuleId, bpmnProcessId, workflowAggregateId, "processTask", null, "COMPLETED", null, null, java.time.Instant
+            .now(), null);
 
   }
 

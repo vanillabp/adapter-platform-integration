@@ -44,6 +44,13 @@ public class TaskDeliveryDocument {
   private String taskDefinition;
 
   /**
+   * The BPMS' identity of the task this delivery was about - what the application passes
+   * back to complete or cancel it, and what lets the election answer from this document
+   * which adapter holds that task. Absent in a document written before it existed.
+   */
+  private String taskId;
+
+  /**
    * The outcome reported to the BPMS, which a repeated delivery is answered with.
    */
   private String outcome;
@@ -64,5 +71,11 @@ public class TaskDeliveryDocument {
    * {@link #recordedAt} and moved forward while an open task keeps being redelivered.
    */
   private Instant lastSeenAt;
+
+  /**
+   * When the application's completion or cancellation of this task reached the BPMS, and
+   * <code>null</code> while it is still open. Written once, after phase two succeeded.
+   */
+  private Instant taskClosedAt;
 
 }

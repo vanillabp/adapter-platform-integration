@@ -86,8 +86,8 @@ public class MongoDeliveryLogCompensationTest {
       final String key) {
 
     return new TaskDelivery(
-        key, "test-adapter", "test-module", "SampleWorkflowService", "4711", "someTask", "COMPLETED", null, null, java.time.Instant
-            .now());
+        key, "test-adapter", "test-module", "SampleWorkflowService", "4711", "someTask", null, "COMPLETED", null, null, java.time.Instant
+            .now(), null);
 
   }
 

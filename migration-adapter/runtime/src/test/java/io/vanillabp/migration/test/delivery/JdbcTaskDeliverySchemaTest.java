@@ -96,6 +96,8 @@ public class JdbcTaskDeliverySchemaTest {
                   BPMN_ERROR_NAME VARCHAR(255), \
                   RECORDED_AT TIMESTAMP NOT NULL, \
                   LAST_SEEN_AT TIMESTAMP NOT NULL, \
+                  TASK_ID VARCHAR(255), \
+                  TASK_CLOSED_AT TIMESTAMP, \
                   CONSTRAINT PK_VANILLABP_TASK_DELIVERY PRIMARY KEY (DELIVERY_KEY))""");
     }
 
@@ -169,6 +171,58 @@ public class JdbcTaskDeliverySchemaTest {
         failure.getMessage());
     // what is lost without it, which is the reason to act at all
     assertTrue(failure.getMessage().contains("renamed adapter id"), failure.getMessage());
+
+  }
+
+  /**
+   * The table of an earlier version: with ADAPTER_ID, without the two columns which tell the
+   * election which BPMS holds a task.
+   */
+  private static void createTableWithoutTheTaskColumns(
+      final String database) throws SQLException {
+
+    try (Connection connection = h2(database).acquire(); var statement = connection.createStatement()) {
+      statement
+          .executeUpdate(
+              """
+                  CREATE TABLE VANILLABP_TASK_DELIVERY (\
+                  DELIVERY_KEY VARCHAR(512) PRIMARY KEY, \
+                  ADAPTER_ID VARCHAR(255), \
+                  WORKFLOW_MODULE_ID VARCHAR(255) NOT NULL, \
+                  BPMN_PROCESS_ID VARCHAR(255) NOT NULL, \
+                  AGGREGATE_ID VARCHAR(1024), \
+                  TASK_DEFINITION VARCHAR(255), \
+                  OUTCOME VARCHAR(32) NOT NULL, \
+                  BPMN_ERROR_CODE VARCHAR(255), \
+                  BPMN_ERROR_NAME VARCHAR(255), \
+                  RECORDED_AT TIMESTAMP NOT NULL, \
+                  LAST_SEEN_AT TIMESTAMP NOT NULL)""");
+    }
+
+  }
+
+  @Test
+  @DisplayName("A table without TASK_ID names the column, the index it is read by and what is lost")
+  public void aTableWithoutTheTaskColumnsIsReported() throws SQLException {
+
+    createTableWithoutTheTaskColumns("without-task-id");
+
+    final var failure = assertThrows(
+        IllegalStateException.class,
+        () -> storeOn("without-task-id").validateSchemaExists());
+
+    assertTrue(failure.getMessage().contains("TASK_ID"), failure.getMessage());
+    assertTrue(
+        failure.getMessage().contains("ALTER TABLE VANILLABP_TASK_DELIVERY ADD TASK_ID VARCHAR(255)"),
+        failure.getMessage());
+    // a column read once per task operation without an index costs more than it saves, so the
+    // remedy names the index too
+    assertTrue(
+        failure
+            .getMessage()
+            .contains("CREATE INDEX VANILLABP_TASK_DELIVERY_TASK ON VANILLABP_TASK_DELIVERY (TASK_ID)"),
+        failure.getMessage());
+    assertTrue(failure.getMessage().contains("ask the configured BPMS"), failure.getMessage());
 
   }
 

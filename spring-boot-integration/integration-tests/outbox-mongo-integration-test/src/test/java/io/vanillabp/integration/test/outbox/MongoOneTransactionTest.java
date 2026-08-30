@@ -129,7 +129,7 @@ public class MongoOneTransactionTest {
           .record(
               new TaskDelivery(
                   "test-module|SampleWorkflowService|one-transaction|job-1", "test-adapter", "test-module", "SampleWorkflowService", started
-                      .getId(), "someTask", "COMPLETED", null, null, java.time.Instant.now()));
+                      .getId(), "someTask", null, "COMPLETED", null, null, java.time.Instant.now(), null));
 
       // still inside the transaction: nothing of this is visible to anybody else
       assertEquals(0, visibleOutside("outbox-test-aggregate"), "the aggregate was written before the commit");
@@ -159,7 +159,7 @@ public class MongoOneTransactionTest {
               .record(
                   new TaskDelivery(
                       "test-module|SampleWorkflowService|rolled-back|job-1", "test-adapter", "test-module", "SampleWorkflowService", started
-                          .getId(), "someTask", "COMPLETED", null, null, java.time.Instant.now()));
+                          .getId(), "someTask", null, "COMPLETED", null, null, java.time.Instant.now(), null));
           throw new RuntimeException("no commit for this one");
         }));
 

@@ -145,6 +145,32 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
 
   }
 
+  /**
+   * The record which left one task open - read within the caller's transaction, through the
+   * connection bound to it, so it sees what that transaction has written itself.
+   */
+  @Override
+  public Optional<TaskDelivery> recordOfTask(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final String taskId) {
+
+    return store.recordOfTask(workflowModuleId, bpmnProcessId, workflowAggregateId, taskId);
+
+  }
+
+  @Override
+  public int markTaskClosed(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final String taskId) {
+
+    return store.markTaskClosed(workflowModuleId, bpmnProcessId, workflowAggregateId, taskId);
+
+  }
+
   @Override
   public int releaseRecordsOf(
       final String workflowModuleId,

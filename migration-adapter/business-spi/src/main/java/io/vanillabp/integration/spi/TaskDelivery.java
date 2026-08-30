@@ -17,7 +17,8 @@ import java.time.Instant;
  * <p>
  * Why the record keeps a moment the handler ran and a moment the task was last seen open is
  * decision 6 in the repository's DECISIONS.md; why the adapter id is a field of its own is
- * decision 17 in the repository's DECISIONS.md.
+ * decision 17 in the repository's DECISIONS.md; why the task and the moment it was closed are
+ * fields of their own is decision 30 in the repository's DECISIONS.md.
  *
  * @param deliveryKey The identity of the delivery, unique within the store: built by
  *          the core from the delivering adapter, the workflow module, the BPMN
@@ -35,6 +36,12 @@ import java.time.Instant;
  * @param bpmnProcessId The BPMN process ID of the workflow
  * @param workflowAggregateId The workflow aggregate's ID in serialized form
  * @param taskDefinition The task definition (or BPMN activity ID) delivered
+ * @param taskId The BPMS' identity of the task this delivery was about - what the
+ *          application receives in a <code>&#64;TaskId</code> parameter and passes back to
+ *          <code>ProcessService#completeTask</code>. It is what lets VanillaBP answer from
+ *          this record which adapter holds a task instead of asking every BPMS, so a store
+ *          which can be queried by it saves a round trip per task operation. May be
+ *          <code>null</code> where the BPMS names no task or the record predates this field
  * @param outcome The outcome reported to the BPMS, as the core names it - a
  *          redelivery is answered with exactly this outcome instead of running the
  *          business code again
@@ -51,6 +58,12 @@ import java.time.Instant;
  *          between that moment and now IS the age of the open task, and a task nobody
  *          will ever complete is the only thing that age ever grows into. See
  *          <code>vanillabp.delivery.max-task-age</code>
+ * @param taskClosedAt When the application's completion or cancellation of this task
+ *          reached the BPMS - <code>null</code> for as long as the task is still open. It is
+ *          written after phase two succeeded and not when the caller asked, because between
+ *          the two the task is still open and its redeliveries still renew the BPMS' lock on
+ *          it. Once it is set, a second completion of the same task is the warned no-op it
+ *          always was, and no BPMS has to be asked for that either
  */
 public record TaskDelivery(
                            String deliveryKey,
@@ -59,9 +72,11 @@ public record TaskDelivery(
                            String bpmnProcessId,
                            String workflowAggregateId,
                            String taskDefinition,
+                           String taskId,
                            String outcome,
                            String bpmnErrorCode,
                            String bpmnErrorName,
-                           Instant recordedAt) {
+                           Instant recordedAt,
+                           Instant taskClosedAt) {
 
 }

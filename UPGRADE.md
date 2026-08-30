@@ -4,6 +4,38 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## The delivery record answers which BPMS holds a task (2026-08-30)
+
+Completing or cancelling a task used to ask every configured BPMS which of them holds it, once per
+call. VanillaBP reads its own delivery record of that task instead now: it names the adapter which
+delivered the task and says whether the application has closed it since. On Camunda 8 that saves
+one round trip per task operation, the one the adapter's phase one repeats a moment later anyway.
+Where no record answers, the walk over the adapters runs exactly as before - so Camunda 7 loses
+nothing, and neither does an application which switched `deduplicate-deliveries` off.
+
+**The table VANILLABP_TASK_DELIVERY gets two columns**, `TASK_ID VARCHAR(255)` and
+`TASK_CLOSED_AT` (the timestamp type of the existing `RECORDED_AT`), plus the index
+`VANILLABP_TASK_DELIVERY_TASK` on `TASK_ID` - the record is read by the task once per operation,
+and without the index that read costs more than the round trip it saves. Both columns are nullable:
+a record written before them is simply not part of an answer.
+
+**An application which lets VanillaBP create its schema** (`vanillabp.outbox.create-schema`, the
+default) gets them on a table it creates from now on. A table which exists already is NOT altered -
+VanillaBP creates tables, it does not migrate them - so the startup names the two columns, the
+statements which add them and the artifact which does it, and stops there rather than writing into
+a table it does not understand.
+
+**An application which manages its own schema** applies the new changeset of
+`io.vanillabp:vanillabp-schema` (`vanillabp-task-delivery-task-2.0.0` in
+`vanillabp/schema/changelog.xml`, respectively the regenerated Flyway file). It is a changeset of
+its own rather than a change to the one which creates the table, because that one was applied
+already.
+
+**A store the application wrote itself** keeps working unchanged: `TaskDeliveryLog` gained
+`recordOfTask` and `markTaskClosed`, both `default`, answering "nothing" and doing nothing. An
+application which implements them saves the round trip; one which does not pays what it always
+paid.
+
 ## The end of a workflow marks its election hint instead of refreshing it (2026-08-30)
 
 `WorkflowAdapterCache` has a fourth method, `putEnded(workflowModuleId, bpmnProcessId,

@@ -241,12 +241,14 @@ manages an aggregate.
 - `JdbcTaskDeliveryLog` acquires its Agroal connection within the running JTA
   transaction, so it is enlisted there. The SQL and the portable DDL of table
   `VANILLABP_TASK_DELIVERY` live in the core (`JdbcTaskDeliveryStore`), shared with
-  Spring Boot.
+  Spring Boot. `recordOfTask` and `markTaskClosed` go to the same store: they are what lets
+  a task operation elect its BPMS from the record instead of asking one (decision 30).
 - `MongoTaskDeliveryLog` writes into `vanillabp-task-deliveries` of
   `quarkus.mongodb.database`. MongoDB is no JTA resource, so the record is written
   immediately and deleted again from an interposed synchronization when the transaction
   ends in anything but a commit - the same best-effort compensation `MongoPhaseTwoOutbox`
-  does for its entries.
+  does for its entries. Next to the index the retention reads it creates one on `taskId`,
+  which is what `recordOfTask` reads by.
 - Both observe the `StartupEvent` to create their schema (unless
   `vanillabp.outbox.create-schema` is disabled) and to start the core's
   `TaskDeliveryRetentionCleanup`, which calls `cleanUpExpiredRecords` per

@@ -62,9 +62,9 @@ public class OpenTaskRecordRetentionTest {
 
     testee.record(
         new TaskDelivery(
-            deliveryKey, "adapter", "test-module", "TestProcess", "4711", "awaitCompletion", outcome, null, null, Instant
+            deliveryKey, "adapter", "test-module", "TestProcess", "4711", "awaitCompletion", null, outcome, null, null, Instant
                 .now()
-                .minus(age)));
+                .minus(age), null));
 
   }
 
@@ -79,8 +79,8 @@ public class OpenTaskRecordRetentionTest {
     testee
         .record(
             new TaskDelivery(
-                deliveryKey, adapterId, "test-module", "TestProcess", "4711", "awaitCompletion", outcome, null, null, Instant
-                    .now()));
+                deliveryKey, adapterId, "test-module", "TestProcess", "4711", "awaitCompletion", null, outcome, null, null, Instant
+                    .now(), null));
 
   }
 
@@ -96,8 +96,8 @@ public class OpenTaskRecordRetentionTest {
     testee
         .record(
             new TaskDelivery(
-                "open-without-adapter", null, "test-module", "TestProcess", "4711", "awaitCompletion", "COMPLETION_PENDING", null, null, Instant
-                    .now()));
+                "open-without-adapter", null, "test-module", "TestProcess", "4711", "awaitCompletion", null, "COMPLETION_PENDING", null, null, Instant
+                    .now(), null));
 
     assertEquals(
         java.util.Set.of("old-bpms", "new-bpms"),

@@ -24,9 +24,11 @@ import lombok.extern.slf4j.Slf4j;
  * A record is INSERTed once and never rewritten: the delivery key is the primary key, so
  * two nodes processing the same delivery concurrently end up with one record and the
  * loser learns it from the constraint violation ({@link #record(TaskDelivery)} returns
- * <code>false</code> then, exactly like a duplicate outbox entry). The only column which
- * ever changes afterwards is <code>LAST_SEEN_AT</code>, the moment the BPMS last
- * redelivered the task the record answers - what the retention counts from.
+ * <code>false</code> then, exactly like a duplicate outbox entry). Two columns change
+ * afterwards and nothing else does: <code>LAST_SEEN_AT</code>, the moment the BPMS last
+ * redelivered the task the record answers - what the retention counts from - and
+ * <code>TASK_CLOSED_AT</code>, the moment the application's completion of that task reached
+ * the BPMS.
  * <p>
  * The DDL is kept portable the same way the Quarkus outbox does it: table existence is
  * checked via JDBC metadata (<code>CREATE TABLE IF NOT EXISTS</code> is not supported
@@ -39,7 +41,8 @@ import lombok.extern.slf4j.Slf4j;
  * repository's DECISIONS.md; where the schema comes from and why the startup check reads the
  * columns is decision 16 in the repository's DECISIONS.md; why the adapter id is a column of its
  * own is
- * decision 17 in the repository's DECISIONS.md.
+ * decision 17 in the repository's DECISIONS.md; why the record also answers which adapter holds a
+ * task is decision 30 in the repository's DECISIONS.md.
  */
 @Slf4j
 // see decision 1 in the repository's DECISIONS.md
@@ -52,10 +55,38 @@ public class JdbcTaskDeliveryStore {
   public static final String DEFAULT_TABLE_NAME = "VANILLABP_TASK_DELIVERY";
 
   private static final String SELECT_DELIVERY = """
-      SELECT ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, TASK_DEFINITION, OUTCOME, \
-      BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT \
+      SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, \
+      TASK_DEFINITION, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, TASK_CLOSED_AT \
       FROM %s \
       WHERE DELIVERY_KEY = ?""";
+
+  /**
+   * The record which left one task open, read once per task operation of the application:
+   * the election asks it instead of asking every configured BPMS which of them holds the
+   * task. TASK_ID is indexed, so this is a lookup and not a scan; the remaining columns
+   * narrow the answer down to the one workflow, because a task id is only unique within its
+   * BPMS.
+   * <p>
+   * Only a record reporting <code>COMPLETION_PENDING</code> qualifies - that is the outcome
+   * which leaves a task open, and only such a task can be completed or cancelled later.
+   * Ordered by RECORDED_AT so the most recent one answers where a task was delivered more
+   * than once (a redelivery of an open task writes no second record, but a task cancelled
+   * and created again does).
+   */
+  private static final String SELECT_RECORD_OF_TASK = """
+      SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, \
+      TASK_DEFINITION, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, TASK_CLOSED_AT \
+      FROM %s \
+      WHERE TASK_ID = ? AND WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND AGGREGATE_ID = ? \
+      AND OUTCOME = ? \
+      ORDER BY RECORDED_AT DESC""";
+
+  /**
+   * How many rows the election reads: the newest record of that task, and nothing behind it.
+   * Set on the statement rather than written as a LIMIT clause, for the reason
+   * {@link #ROWS_OF_AN_EXISTENCE_QUESTION} spells out.
+   */
+  private static final int ROWS_OF_THE_NEWEST_RECORD = 1;
 
   /**
    * The adapter ids the OPEN records of one BPMN process belong to. Asked once
@@ -96,11 +127,27 @@ public class JdbcTaskDeliveryStore {
    */
   private static final int ROWS_OF_AN_EXISTENCE_QUESTION = 1;
 
+  /**
+   * The outcome of a delivery which left its task open - the only records the three
+   * questions about open tasks are interested in.
+   */
+  private static final String COMPLETION_PENDING = io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome.Kind.COMPLETION_PENDING
+      .name();
+
   private static final String INSERT_DELIVERY = """
       INSERT INTO %s \
       (DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, TASK_DEFINITION, \
-      OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, LAST_SEEN_AT) \
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""";
+      TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, LAST_SEEN_AT) \
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""";
+
+  // TASK_CLOSED_AT is not written here: a record is born open, and the moment the
+  // application's completion reached the BPMS is the one thing about a task which is known
+  // long after the handler ran
+  private static final String CLOSE_TASK = """
+      UPDATE %s \
+      SET TASK_CLOSED_AT = ? \
+      WHERE TASK_ID = ? AND WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND AGGREGATE_ID = ? \
+      AND TASK_CLOSED_AT IS NULL""";
 
   // one key per execution instead of an IN list, whose length is capped differently by
   // every database (Oracle at 1000 expressions, SQL Server at about 2100 parameters) -
@@ -124,7 +171,11 @@ public class JdbcTaskDeliveryStore {
 
   private final String selectDelivery;
 
+  private final String selectRecordOfTask;
+
   private final String insertDelivery;
+
+  private final String closeTask;
 
   private final String touchDelivery;
 
@@ -145,7 +196,9 @@ public class JdbcTaskDeliveryStore {
     this.connectionAccess = connectionAccess;
     this.tableName = tableName;
     this.selectDelivery = SELECT_DELIVERY.formatted(tableName);
+    this.selectRecordOfTask = SELECT_RECORD_OF_TASK.formatted(tableName);
     this.insertDelivery = INSERT_DELIVERY.formatted(tableName);
+    this.closeTask = CLOSE_TASK.formatted(tableName);
     this.touchDelivery = TOUCH_DELIVERY.formatted(tableName);
     this.deleteExpiredDeliveries = DELETE_EXPIRED_DELIVERIES.formatted(tableName);
     this.deleteDeliveriesOfWorkflow = DELETE_DELIVERIES_OF_WORKFLOW.formatted(tableName);
@@ -182,15 +235,7 @@ public class JdbcTaskDeliveryStore {
           if (!resultSet.next()) {
             return Optional.empty();
           }
-          final var recordedAt = resultSet.getTimestamp(9);
-          return Optional
-              .of(
-                  new TaskDelivery(
-                      deliveryKey, resultSet.getString(1), resultSet.getString(2), resultSet.getString(3), resultSet
-                          .getString(4), resultSet.getString(5), resultSet.getString(6), resultSet
-                              .getString(7), resultSet.getString(8), recordedAt == null
-                                  ? null
-                                  : recordedAt.toInstant()));
+          return Optional.of(readRecord(resultSet));
         }
       }
     } catch (final SQLException e) {
@@ -200,6 +245,124 @@ public class JdbcTaskDeliveryStore {
     } finally {
       release(connection);
     }
+
+  }
+
+  /**
+   * The record which left one task open, whether or not the task has been closed since -
+   * what the election of a task operation reads instead of asking a BPMS (see
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLog#recordOfTask}).
+   * <p>
+   * A failure is NOT swallowed here, unlike the startup questions above: this read decides
+   * whether an operation is routed at all, and a store which quietly answers "nothing" would
+   * turn a broken table into a silently doubled number of BPMS round trips.
+   *
+   * @param workflowModuleId The workflow module of the workflow
+   * @param bpmnProcessId The BPMN process of the workflow
+   * @param workflowAggregateId The workflow aggregate's ID in serialized form
+   * @param taskId The BPMS' identity of the task
+   * @return The record or {@link Optional#empty()} if there is none
+   */
+  public Optional<TaskDelivery> recordOfTask(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final String taskId) {
+
+    Connection connection = null;
+    try {
+      connection = connectionAccess.acquire();
+      try (var statement = connection.prepareStatement(selectRecordOfTask)) {
+        statement.setMaxRows(ROWS_OF_THE_NEWEST_RECORD);
+        statement.setString(1, taskId);
+        statement.setString(2, workflowModuleId);
+        statement.setString(3, bpmnProcessId);
+        statement.setString(4, workflowAggregateId);
+        statement.setString(5, COMPLETION_PENDING);
+        try (var resultSet = statement.executeQuery()) {
+          if (!resultSet.next()) {
+            return Optional.empty();
+          }
+          return Optional.of(readRecord(resultSet));
+        }
+      }
+    } catch (final SQLException e) {
+      throw new RuntimeException(
+          """
+              Could not read the record of task '%s' of workflow '%s' (BPMN process '%s' of \
+              workflow module '%s') from table '%s'!"""
+              .formatted(taskId, workflowAggregateId, bpmnProcessId, workflowModuleId, tableName), e);
+    } finally {
+      release(connection);
+    }
+
+  }
+
+  /**
+   * Writes down that the application's completion or cancellation of one task reached the
+   * BPMS (see {@link io.vanillabp.integration.spi.TaskDeliveryLog#markTaskClosed}). Runs
+   * where the dispatch of phase two runs, so it commits with whatever that thread commits.
+   * <p>
+   * <code>TASK_CLOSED_AT IS NULL</code> keeps a repeated dispatch from moving the moment: the
+   * task was closed when it was first closed, and the age of an open task is measured
+   * against exactly such a fixed moment elsewhere in this table.
+   *
+   * @param workflowModuleId The workflow module of the workflow
+   * @param bpmnProcessId The BPMN process of the workflow
+   * @param workflowAggregateId The workflow aggregate's ID in serialized form
+   * @param taskId The BPMS' identity of the closed task
+   * @return The number of records marked
+   */
+  public int markTaskClosed(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final String taskId) {
+
+    Connection connection = null;
+    try {
+      connection = connectionAccess.acquire();
+      try (var statement = connection.prepareStatement(closeTask)) {
+        statement.setTimestamp(1, Timestamp.from(Instant.now()));
+        statement.setString(2, taskId);
+        statement.setString(3, workflowModuleId);
+        statement.setString(4, bpmnProcessId);
+        statement.setString(5, workflowAggregateId);
+        return statement.executeUpdate();
+      }
+    } catch (final SQLException e) {
+      throw new RuntimeException(
+          """
+              Could not mark task '%s' of workflow '%s' (BPMN process '%s' of workflow module \
+              '%s') as closed in table '%s'!"""
+              .formatted(taskId, workflowAggregateId, bpmnProcessId, workflowModuleId, tableName), e);
+    } finally {
+      release(connection);
+    }
+
+  }
+
+  /**
+   * Reads one row into a record. Both statements selecting a whole record list their columns
+   * in the same order, which is what lets them share this.
+   *
+   * @param resultSet The result set positioned on the row
+   * @return The record it holds
+   */
+  private static TaskDelivery readRecord(
+      final java.sql.ResultSet resultSet) throws SQLException {
+
+    final var recordedAt = resultSet.getTimestamp(11);
+    final var taskClosedAt = resultSet.getTimestamp(12);
+    return new TaskDelivery(
+        resultSet.getString(1), resultSet.getString(2), resultSet.getString(3), resultSet
+            .getString(4), resultSet.getString(5), resultSet.getString(6), resultSet
+                .getString(7), resultSet.getString(8), resultSet.getString(9), resultSet
+                    .getString(10), recordedAt == null
+                        ? null
+                        : recordedAt.toInstant(), taskClosedAt == null
+                            ? null
+                            : taskClosedAt.toInstant());
 
   }
 
@@ -223,11 +386,7 @@ public class JdbcTaskDeliveryStore {
       try (var statement = connection.prepareStatement(selectAdapterIdsOfOpenTasks)) {
         statement.setString(1, workflowModuleId);
         statement.setString(2, bpmnProcessId);
-        statement
-            .setString(
-                3,
-                io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome.Kind.COMPLETION_PENDING
-                    .name());
+        statement.setString(3, COMPLETION_PENDING);
         try (var resultSet = statement.executeQuery()) {
           final var adapterIds = new java.util.LinkedHashSet<String>();
           while (resultSet.next()) {
@@ -275,16 +434,17 @@ public class JdbcTaskDeliveryStore {
         statement.setString(4, delivery.bpmnProcessId());
         statement.setString(5, delivery.workflowAggregateId());
         statement.setString(6, delivery.taskDefinition());
-        statement.setString(7, delivery.outcome());
-        statement.setString(8, delivery.bpmnErrorCode());
-        statement.setString(9, delivery.bpmnErrorName());
+        statement.setString(7, delivery.taskId());
+        statement.setString(8, delivery.outcome());
+        statement.setString(9, delivery.bpmnErrorCode());
+        statement.setString(10, delivery.bpmnErrorName());
         final var recordedAt = Timestamp.from(delivery.recordedAt() == null
             ? Instant.now()
             : delivery.recordedAt());
-        statement.setTimestamp(10, recordedAt);
+        statement.setTimestamp(11, recordedAt);
         // the record was seen the moment it was written; a redelivery of a task which
         // stays open moves this one and leaves RECORDED_AT where it is
-        statement.setTimestamp(11, recordedAt);
+        statement.setTimestamp(12, recordedAt);
         statement.executeUpdate();
       }
       return true;
@@ -461,9 +621,13 @@ public class JdbcTaskDeliveryStore {
   private static final List<AddedColumn> ADDED_COLUMNS = List
       .of(
           new AddedColumn(
-              "LAST_SEEN_AT", "TIMESTAMP (the type your database uses for the existing column RECORDED_AT), filled with the value of RECORDED_AT and NOT NULL", "the records of the tasks your application leaves open cannot be kept alive - they would expire while the tasks are still being redelivered"),
+              "LAST_SEEN_AT", "TIMESTAMP (the type your database uses for the existing column RECORDED_AT), filled with the value of RECORDED_AT and NOT NULL", "the records of the tasks your application leaves open cannot be kept alive - they would expire while the tasks are still being redelivered", null),
           new AddedColumn(
-              "ADAPTER_ID", "VARCHAR(255) (nullable: a record written before the column existed has no adapter id)", "VanillaBP cannot tell at startup that an adapter id which open records still belong to is not configured any more, which is what a renamed adapter id looks like"));
+              "ADAPTER_ID", "VARCHAR(255) (nullable: a record written before the column existed has no adapter id)", "VanillaBP cannot tell at startup that an adapter id which open records still belong to is not configured any more, which is what a renamed adapter id looks like", null),
+          new AddedColumn(
+              "TASK_ID", "VARCHAR(255) (nullable: a record written before the column existed names no task)", "every completion or cancellation of a task has to ask the configured BPMS which of them holds it, although the record of that task already knows", "CREATE INDEX %s_TASK ON %s (TASK_ID)"),
+          new AddedColumn(
+              "TASK_CLOSED_AT", "TIMESTAMP (the type your database uses for the existing column RECORDED_AT), nullable", "a task which was completed already cannot be recognised from the record, so a repeated completion asks the BPMS before it becomes the no-op it always was", null));
 
   /**
    * A column a later version of VanillaBP added: its name, the statement which adds it and
@@ -473,11 +637,15 @@ public class JdbcTaskDeliveryStore {
    * @param name The column's name
    * @param definition What to add it as
    * @param whatIsLost What VanillaBP cannot do without it
+   * @param indexStatement The statement creating the index the column is read by, with two
+   *          placeholders for the table name, or <code>null</code> where the column is
+   *          written and read without one
    */
   private record AddedColumn(
                              String name,
                              String definition,
-                             String whatIsLost) {
+                             String whatIsLost,
+                             String indexStatement) {
   }
 
   /**
@@ -501,6 +669,13 @@ public class JdbcTaskDeliveryStore {
         statement.executeUpdate(buildCreateTable(connection, tableName));
         statement.executeUpdate(
             "CREATE INDEX %s_AGE ON %s (LAST_SEEN_AT)".formatted(tableName, tableName));
+        // the election of a task operation looks a record up by the task the caller names,
+        // once per operation - without this index that read is a table scan and costs more
+        // than the BPMS round trip it saves. TASK_ID alone is selective (a BPMS names its
+        // tasks uniquely) and stays well inside MySQL's key-length limit, which an index
+        // spanning AGGREGATE_ID would not
+        statement.executeUpdate(
+            "CREATE INDEX %s_TASK ON %s (TASK_ID)".formatted(tableName, tableName));
       }
     } catch (final SQLException e) {
       if (createdConcurrently()) {
@@ -613,9 +788,13 @@ public class JdbcTaskDeliveryStore {
               - apply the current schema of VanillaBP with your migration tool: the artifact \
               'io.vanillabp:vanillabp-schema' ships the Liquibase changelog \
               'vanillabp/schema/changelog.xml' and the SQL generated from it for Flyway, or
-              - add the column yourself: ALTER TABLE %s ADD %s %s."""
+              - add the column yourself: ALTER TABLE %s ADD %s %s.%s"""
               .formatted(tableName, column.name(), column.whatIsLost(), tableName, column.name(), column
-                  .definition()));
+                  .definition(),
+                  column.indexStatement() == null
+                      ? ""
+                      : " It is read per task operation, so add the index it is looked up by as well: %s."
+                          .formatted(column.indexStatement().formatted(tableName, tableName))));
     }
 
   }
@@ -686,12 +865,14 @@ public class JdbcTaskDeliveryStore {
         BPMN_PROCESS_ID VARCHAR(255) NOT NULL, \
         AGGREGATE_ID VARCHAR(1024), \
         TASK_DEFINITION VARCHAR(255), \
+        TASK_ID VARCHAR(255), \
         OUTCOME VARCHAR(32) NOT NULL, \
         BPMN_ERROR_CODE VARCHAR(255), \
         BPMN_ERROR_NAME VARCHAR(255), \
         RECORDED_AT %s NOT NULL, \
-        LAST_SEEN_AT %s NOT NULL)"""
-        .formatted(tableName, timestampType, timestampType);
+        LAST_SEEN_AT %s NOT NULL, \
+        TASK_CLOSED_AT %s)"""
+        .formatted(tableName, timestampType, timestampType, timestampType);
 
   }
 
@@ -717,11 +898,7 @@ public class JdbcTaskDeliveryStore {
         statement.setMaxRows(ROWS_OF_AN_EXISTENCE_QUESTION);
         statement.setString(1, workflowModuleId);
         statement.setString(2, bpmnProcessId);
-        statement
-            .setString(
-                3,
-                io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome.Kind.COMPLETION_PENDING
-                    .name());
+        statement.setString(3, COMPLETION_PENDING);
         try (var resultSet = statement.executeQuery()) {
           return resultSet.next();
         }

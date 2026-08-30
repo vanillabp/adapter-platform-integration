@@ -152,7 +152,8 @@ public class StartupQuestionCostTest {
           .record(
               new TaskDelivery(
                   "delivery-%d".formatted(record), "c7", MODULE, PROCESS, "aggregate-%d".formatted(
-                      record), "aTask", WorkflowTaskOutcome.Kind.COMPLETION_PENDING.name(), null, null, Instant.now()));
+                      record), "aTask", null, WorkflowTaskOutcome.Kind.COMPLETION_PENDING.name(), null, null, Instant
+                          .now(), null));
     }
     statements.clear();
     return store;

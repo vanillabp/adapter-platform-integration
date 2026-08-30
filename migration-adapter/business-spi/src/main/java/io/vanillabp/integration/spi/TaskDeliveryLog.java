@@ -58,7 +58,8 @@ import java.util.Optional;
  * <p>
  * Why a delivery is written down at all, and why the record carries two timestamps rather than one,
  * is decision 6 in the repository's DECISIONS.md. Why the adapter id has to travel with it is
- * decision 17 in the repository's DECISIONS.md.
+ * decision 17 in the repository's DECISIONS.md, and why the record also answers which adapter
+ * holds a task is decision 30 in the repository's DECISIONS.md.
  */
 public interface TaskDeliveryLog {
 
@@ -176,6 +177,81 @@ public interface TaskDeliveryLog {
       final String bpmnProcessId,
       final String workflowAggregateId,
       final Instant recordedBefore) {
+
+    return 0;
+
+  }
+
+  /**
+   * The record which left the given task open, whether or not that task has been closed
+   * since - the one question the BPMS election of a task operation would otherwise have to
+   * ask every configured BPMS.
+   *
+   * <h2>What the core does with it</h2>
+   *
+   * A record whose {@link TaskDelivery#taskClosedAt()} is <code>null</code> names the
+   * adapter which delivered that task, and that adapter is the one which holds it: no BPMS
+   * is probed. A record which carries the moment says the application completed or
+   * cancelled this task already, and the operation is the warned no-op it always was.
+   * Nothing at all - because this store cannot answer, because no delivery was ever
+   * recorded, or because the retention deleted the record - means the election walks the
+   * adapters exactly as before. That fallback is what keeps the answer a hint rather than a
+   * registry (see decision 30 in the repository's DECISIONS.md).
+   *
+   * <h2>What a store has to answer</h2>
+   *
+   * The record of the delivery which reported <code>COMPLETION_PENDING</code> for this task,
+   * the most recently written one where a task was delivered more than once. A store which
+   * cannot be queried by the task id answers {@link Optional#empty()}, which is what the
+   * default does - every store written before this existed keeps working, and its
+   * application pays the probe it always paid.
+   * <p>
+   * This is asked on the caller's thread inside the caller's transaction, once per task
+   * operation, so it has to be a cheap indexed read rather than a scan.
+   *
+   * @param workflowModuleId The workflow module of the workflow
+   * @param bpmnProcessId The BPMN process of the workflow
+   * @param workflowAggregateId The workflow aggregate's ID in serialized form
+   * @param taskId The BPMS' identity of the task (see {@link TaskDelivery#taskId()})
+   * @return The record or {@link Optional#empty()} where there is none or this store cannot
+   *         say
+   */
+  default Optional<TaskDelivery> recordOfTask(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final String taskId) {
+
+    return Optional.empty();
+
+  }
+
+  /**
+   * Writes down that the application's completion or cancellation of this task reached the
+   * BPMS, so the next operation on it is answered as a no-op without asking anybody.
+   * <p>
+   * Called AFTER phase two succeeded, on the thread dispatching it. Not when the caller
+   * asked: until phase two ran, the task is still open for the BPMS, and on a BPMS which
+   * hands a task out again to renew its lock it is exactly this record which answers those
+   * redeliveries. A second call in that window is already refused by the outbox' idempotency
+   * key (see decision 22 in the repository's DECISIONS.md), which is the gap this closes:
+   * the key is free again once the entry was dispatched, and from there on the record
+   * answers.
+   * <p>
+   * A store which cannot do it does nothing, which is what the default does: the election
+   * then probes for a task which is gone and gets the same no-op one round trip later.
+   *
+   * @param workflowModuleId The workflow module of the workflow
+   * @param bpmnProcessId The BPMN process of the workflow
+   * @param workflowAggregateId The workflow aggregate's ID in serialized form
+   * @param taskId The BPMS' identity of the closed task
+   * @return The number of records marked
+   */
+  default int markTaskClosed(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final String taskId) {
 
     return 0;
 

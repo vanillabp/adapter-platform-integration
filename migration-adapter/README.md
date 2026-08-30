@@ -710,6 +710,51 @@ the record of a task nobody hands out any more expires as it always did.
   `createSchemaIfNotExists` therefore verify the columns added later as well, and the
   message names the `ALTER TABLE` which repairs it.
 
+#### The record answers which BPMS holds a task
+
+A workflow is located by asking the adapters (decision 25), and for a task that question was
+asked twice on Camunda 8: the election sends `newUpdateTimeoutCommand` against the job, and the
+adapter's phase one sends the same command again a moment later as its pre-commit check. The
+record of that task's delivery knew the answer to the first one all along - it names the adapter
+which delivered - so `completeTask`, `cancelTask` and their user-task twins read it before they
+walk anybody. Why that is not the registry decision 25 rejected is decision 30.
+
+- The record carries `TASK_ID`, the BPMS' identity of the task, and `TASK_CLOSED_AT`, the moment
+  the application's completion of it reached the BPMS. `MigrationProcessService.recordDelivery`
+  writes the first from `TaskInvocationContext.getTaskId()`, and both columns are nullable, so a
+  record written before them is not part of any answer.
+- `TaskDeliveryLog.recordOfTask(module, process, aggregateId, taskId)` is the question, and it is
+  the record which reported `COMPLETION_PENDING` - the only outcome which leaves a task for the
+  application to complete later. `markTaskClosed` is the note. Both are `default` methods
+  answering nothing respectively doing nothing, so a store an application wrote stays valid and
+  its election walks as it always did.
+- `MigrationProcessService.locateFromDeliveryRecord` turns the record into the `Location` the
+  walk would have produced: an open record elects the adapter it names, a closed one is the warned
+  no-op with the message it always had, and everything else answers `null` and lets
+  `WorkflowLocator` decide. `null` is the answer to a missing store, `deduplicate-deliveries`
+  switched off, a passed retention, a BPMS which reports no delivery identity (Camunda 7 delivers
+  in the application's transaction, so a redelivery proves nothing was committed) and an adapter
+  which is not prioritized for this workflow any more.
+- The note is written in `addressWorkflowPhaseTwo`, after phase two succeeded, on the dispatching
+  thread. Not when the caller asked: until phase two ran the task is still open for the BPMS, and
+  on Camunda 8 this very record is what answers the redeliveries which renew the job's lock. A
+  second call inside that window is refused by the outbox' idempotency key (decision 22), and that
+  key is free again from the dispatch on - which is where the record takes over. A failed note is
+  a WARN and nothing more: the completion reached the BPMS, and repeating it because a note failed
+  would be the worse mistake.
+- `TASK_ID` is indexed (`<table>_TASK`, the MongoDB stores index `taskId`). The read happens once
+  per task operation, and a scan there would cost more than the round trip it saves. The index
+  spans that column alone, because one over the three narrowing columns would exceed the
+  key-length limit of MySQL and of a DB2 database using 4K pages - `AGGREGATE_ID` holds up to 1024
+  characters.
+- What stays: phase two elects by probing, so a workflow which changed its BPMS between the call
+  and the dispatch is still found, and the adapters keep their phase one, so a task which
+  disappeared between the delivery and the call still fails synchronously.
+- What is deliberately NOT routed this way is `correlateMessage` and `aggregateChanged`. There is
+  no task and therefore no record naming one, and the question "did any delivery of this aggregate
+  name an adapter" is a different one: it answers where to route, not whether the workflow is
+  alive. Whether the record's meaning is widened that far is its own decision.
+
 #### Two instances creating the schema at once
 
 `createSchemaIfNotExists` asks the JDBC metadata and then runs the DDL, because
