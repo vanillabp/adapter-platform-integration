@@ -60,14 +60,17 @@ import lombok.extern.slf4j.Slf4j;
  * </ul>
  * <p>
  * <b>Who may sleep, and where.</b> Every caller says how patient the walk may be
- * ({@link Patience}), because the same walk runs in two places whose cost is not
+ * ({@link Patience}), because the same walk runs in places whose cost is not
  * comparable. In phase one it runs INSIDE the caller's database transaction, holding
  * its connection and the locks on the workflow aggregate: a walk which sleeps there
  * drains the connection pool of every caller at once, which is why phase one asks
  * once and never sleeps. At dispatch time no application transaction is open, the
  * work belongs to the outbox anyway and a repetition costs an entry another attempt -
  * so that is where a BPMS gets a second chance and where a read model gets the
- * moment it needs (decision 27 in the repository's DECISIONS.md).
+ * moment it needs (decision 27 in the repository's DECISIONS.md). A read of the
+ * viewer/history API waits too, for the opposite reason: there is no outbox entry
+ * behind it which could ask again later, so an answer it does not wait for is an
+ * error the application sees.
  * <p>
  * The two rules this walk rests on are written down where the adapters can read them too: an
  * adapter answers only for its own scope and the walk never falls back (decision 4 in the
@@ -98,7 +101,9 @@ public final class WorkflowLocator {
 
     /**
      * Additionally wait out the {@code workflowVisibilityDelay} of an adapter a hint
-     * points at: the workflow exists, its BPMS just has not made it findable yet.
+     * points at: the workflow exists, its BPMS just has not made it findable yet. The
+     * dispatch of a phase-two entry and every read of the viewer/history API ask for
+     * this - the one because it may repeat itself, the other because nobody repeats it.
      */
     WAIT_FOR_VISIBILITY
 
