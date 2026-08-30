@@ -83,12 +83,16 @@ aggregate is detected once in `SpringPersistenceTechnology`, shared by both reso
   the connection belongs to the Spring-managed transaction. The SQL and the portable DDL
   of table `VANILLABP_TASK_DELIVERY` live in the core (`JdbcTaskDeliveryStore`), shared
   with Quarkus. Deliberately NOT gruelbox: gruelbox stores calls to be dispatched, a
-  delivery record is a fact to be read back.
+  delivery record is a fact to be read back. `recordOfTask` and `markTaskClosed` go to the
+  same store: they are what lets a task operation elect its BPMS from the record instead of
+  asking one (decision 30), and the connection they use is the caller's, so the read sees
+  what the caller's own transaction wrote.
 - `MongoTaskDeliveryLog` writes `TaskDeliveryDocument`s into `vanillabp-task-deliveries`
   through the `MongoTemplate`, keyed by the delivery key (the document ID gives
   uniqueness). A duplicate is detected by a pre-check read: inside a MongoDB transaction
   a duplicate-key error would abort the whole transaction, the aggregate changes
-  included.
+  included. Its auto-configuration creates a second index, on `taskId`, which is what
+  `recordOfTask` reads by.
 - Both come with an auto-configuration of their own
   (`vanillabp.outbox.jdbc.enabled` / `.mongo.enabled`), create their schema unless
   `vanillabp.outbox.create-schema` is disabled and delete expired records per

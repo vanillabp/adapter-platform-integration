@@ -1231,12 +1231,14 @@ public class MigrationProcessService<A> {
     if (deliveryLog == null) {
       return;
     }
+    // the task travels with the record so the election of a later completion can read from
+    // it which adapter holds that task, instead of asking every configured BPMS
     final var recordWasWritten = deliveryLog.record(
         new TaskDelivery(
             deliveryKey, context.getAdapterId(), workflowModuleId, bpmnProcessId, context
-                .getWorkflowAggregateId(), context
-                    .getTaskDefinition(), outcome.kind().name(), outcome.errorCode(), outcome
-                        .errorName(), java.time.Instant.now()));
+                .getWorkflowAggregateId(), context.getTaskDefinition(), context
+                    .getTaskId(), outcome.kind().name(), outcome.errorCode(), outcome
+                        .errorName(), java.time.Instant.now(), null));
     if (!recordWasWritten) {
       reportHandlerRanTwiceAtTheSameTime(deliveryKey, context);
     }
@@ -2052,12 +2054,15 @@ public class MigrationProcessService<A> {
 
     final var subject = subjectOf(aggregateId);
 
-    final var location = workflowLocator.locate(
-        adapterProcessServices,
-        adapter -> probe(operation, adapter, aggregateId, args),
-        aggregateId,
-        subject,
-        WorkflowLocator.Patience.NONE);
+    final var recordedLocation = locateFromDeliveryRecord(operation, aggregateId, args);
+    final var location = recordedLocation != null
+        ? recordedLocation
+        : workflowLocator.locate(
+            adapterProcessServices,
+            adapter -> probe(operation, adapter, aggregateId, args),
+            aggregateId,
+            subject,
+            WorkflowLocator.Patience.NONE);
 
     switch (location.awareness()) {
       case COMPLETED -> {
@@ -2139,12 +2144,146 @@ public class MigrationProcessService<A> {
           operation.describe(args),
           subject);
       // BPMS_UNAVAILABLE cannot reach here (locate throws) - the outbox retries
-      default -> runPhaseTwo(
-          location.adapter(),
-          "%s of %s".formatted(operation.describe(args), subject),
-          () -> handlerOf(location.adapter(), operation, args)
-              .phaseTwo(phaseTwoRequest(workflowAggregateId, args)));
+      default -> {
+        runPhaseTwo(
+            location.adapter(),
+            "%s of %s".formatted(operation.describe(args), subject),
+            () -> handlerOf(location.adapter(), operation, args)
+                .phaseTwo(phaseTwoRequest(workflowAggregateId, args)));
+        writeDownThatTheTaskIsClosed(operation, workflowAggregateId, args);
+      }
     }
+
+  }
+
+  /**
+   * Answers from the delivery record of this aggregate which adapter holds the task the
+   * operation names, so no BPMS has to be asked for it.
+   * <p>
+   * VanillaBP wrote that record while the handler of the task ran, in the database of the
+   * workflow aggregate: it names the adapter which delivered the task, and it says whether
+   * the application has closed that task since. Both answers are exactly what the walk over
+   * the adapters would ask a BPMS for, one round trip per operation - on Camunda 8 the very
+   * command the adapter's phase one sends again a moment later.
+   * <p>
+   * <code>null</code> means the record cannot answer, and then everything happens as it did
+   * before: no store, deliveries not deduplicated, the retention gone over the record, a BPMS
+   * which reports no delivery identity, a workflow started before this version was deployed,
+   * or an adapter which is not configured any more. That fallback is what keeps the record a
+   * hint rather than a registry (see decision 30 in the repository's DECISIONS.md).
+   *
+   * @param operation The operation being elected for
+   * @param workflowAggregateId The workflow aggregate the operation is about
+   * @param args The operation's arguments, which name the task
+   * @return The location, or <code>null</code> where the record cannot answer
+   */
+  private WorkflowLocator.Location<A> locateFromDeliveryRecord(
+      final PhaseOperation operation,
+      final Object workflowAggregateId,
+      final Map<String, String> args) {
+
+    if (!addressesATask(operation) || (workflowAggregateId == null)) {
+      return null;
+    }
+    final var taskId = args.get(PhaseTwoCall.ARG_TASK_ID);
+    if ((taskId == null) || taskId.isBlank()) {
+      return null;
+    }
+    final var deliveryLog = resolveTaskDeliveryLog();
+    if (deliveryLog == null) {
+      return null;
+    }
+    final var record = deliveryLog
+        .recordOfTask(workflowModuleId, bpmnProcessId, workflowAggregateId.toString(), taskId)
+        .orElse(null);
+    if ((record == null) || (record.adapterId() == null)) {
+      return null;
+    }
+    final var adapter = adapterProcessServices
+        .stream()
+        .filter(candidate -> candidate.getAdapterId().equals(record.adapterId()))
+        .findFirst()
+        .orElse(null);
+    if (adapter == null) {
+      // the adapter which delivered the task is not prioritized for this workflow any more -
+      // the walk elects from the configuration as it reads now
+      log.debug(
+          "Adapter '{}' recorded for task '{}' of aggregate '{}' is not a prioritized adapter - "
+              + "probing instead",
+          record.adapterId(),
+          taskId,
+          workflowAggregateId);
+      return null;
+    }
+    log.debug(
+        "Adapter '{}' delivered task '{}' of aggregate '{}' and the task is {} - no BPMS is asked "
+            + "which of them holds it",
+        record.adapterId(),
+        taskId,
+        workflowAggregateId,
+        record.taskClosedAt() == null
+            ? "still open"
+            : "closed since %s".formatted(record.taskClosedAt()));
+    return new WorkflowLocator.Location<>(
+        record.taskClosedAt() == null
+            ? WorkflowAwareness.ACTIVE
+            : WorkflowAwareness.COMPLETED, adapter, null);
+
+  }
+
+  /**
+   * Writes into the delivery record that the application's completion or cancellation of a
+   * task reached the BPMS - here and not when the caller asked, because until this moment the
+   * task is still open and its redeliveries still renew the lock the BPMS holds on it.
+   * <p>
+   * A failure is reported and swallowed: the operation itself went through, the outbox entry
+   * is done, and repeating a dispatch which succeeded because a mark did not is the worse of
+   * the two. What is lost is one BPMS round trip on the next operation naming that task.
+   *
+   * @param operation The operation which was dispatched
+   * @param workflowAggregateId The workflow aggregate it was about
+   * @param args The operation's arguments, which name the task
+   */
+  private void writeDownThatTheTaskIsClosed(
+      final PhaseOperation operation,
+      final Object workflowAggregateId,
+      final Map<String, String> args) {
+
+    if (!addressesATask(operation) || (workflowAggregateId == null)) {
+      return;
+    }
+    final var taskId = args.get(PhaseTwoCall.ARG_TASK_ID);
+    if ((taskId == null) || taskId.isBlank()) {
+      return;
+    }
+    final var deliveryLog = resolveTaskDeliveryLog();
+    if (deliveryLog == null) {
+      return;
+    }
+    try {
+      deliveryLog
+          .markTaskClosed(workflowModuleId, bpmnProcessId, workflowAggregateId.toString(), taskId);
+    } catch (final RuntimeException e) {
+      log.warn(
+          "Task '{}' of {} was closed in its BPMS, but the delivery record could not be marked "
+              + "accordingly - the next operation naming this task asks the configured BPMS again "
+              + "instead of being answered from the record",
+          taskId,
+          subjectOf(workflowAggregateId),
+          e);
+    }
+
+  }
+
+  /**
+   * Whether the operation is about ONE task of a workflow - the operations whose election
+   * the delivery record of that task can answer, because a record exists per delivered task
+   * and none exists for a workflow as a whole.
+   */
+  private static boolean addressesATask(
+      final PhaseOperation operation) {
+
+    return (operation.election() == Election.HOLDS_THE_TASK) || (operation.election() == Election.HOLDS_THE_USER_TASK);
 
   }
 

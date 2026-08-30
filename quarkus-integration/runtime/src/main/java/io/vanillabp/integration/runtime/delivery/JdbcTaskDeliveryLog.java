@@ -249,6 +249,36 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
 
   }
 
+  /**
+   * The record which left one task open - read within the caller's JTA transaction, through
+   * a connection Agroal enlists there, so it sees what that transaction has written itself.
+   */
+  @Override
+  public Optional<TaskDelivery> recordOfTask(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final String taskId) {
+
+    return isAvailable()
+        ? getStore().recordOfTask(workflowModuleId, bpmnProcessId, workflowAggregateId, taskId)
+        : Optional.empty();
+
+  }
+
+  @Override
+  public int markTaskClosed(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final String taskId) {
+
+    return isAvailable()
+        ? getStore().markTaskClosed(workflowModuleId, bpmnProcessId, workflowAggregateId, taskId)
+        : 0;
+
+  }
+
   @Override
   public int releaseRecordsOf(
       final String workflowModuleId,

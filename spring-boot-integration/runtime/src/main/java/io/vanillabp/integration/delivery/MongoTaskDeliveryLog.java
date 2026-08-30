@@ -44,6 +44,13 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
    */
   public static final String DEFAULT_COLLECTION_NAME = "vanillabp-task-deliveries";
 
+  /**
+   * The outcome of a delivery which left its task open - the only records the questions
+   * about open tasks are interested in.
+   */
+  private static final String COMPLETION_PENDING = io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome.Kind.COMPLETION_PENDING
+      .name();
+
   private final MongoTemplate mongoTemplate;
 
   private final String collection;
@@ -94,12 +101,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
         .ofNullable(
             mongoTemplate
                 .findById(deliveryKey, TaskDeliveryDocument.class, collection))
-        .map(document -> new TaskDelivery(
-            document.getId(), document.getAdapterId(), document.getWorkflowModuleId(), document
-                .getBpmnProcessId(), document
-                    .getAggregateId(), document.getTaskDefinition(), document
-                        .getOutcome(), document.getBpmnErrorCode(), document
-                            .getBpmnErrorName(), document.getRecordedAt()));
+        .map(MongoTaskDeliveryLog::recordOf);
 
   }
 
@@ -127,12 +129,14 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
           ? Instant.now()
           : delivery.recordedAt();
       mongoTemplate.insert(
+          // taskClosedAt stays absent: a record is born open, and the moment the
+          // application's completion reached the BPMS is known long after the handler ran
           new TaskDeliveryDocument(
               delivery.deliveryKey(), delivery.adapterId(), delivery.workflowModuleId(), delivery
                   .bpmnProcessId(), delivery
-                      .workflowAggregateId(), delivery.taskDefinition(), delivery
+                      .workflowAggregateId(), delivery.taskDefinition(), delivery.taskId(), delivery
                           .outcome(), delivery.bpmnErrorCode(), delivery
-                              .bpmnErrorName(), recordedAt, recordedAt),
+                              .bpmnErrorName(), recordedAt, recordedAt, null),
           collection);
       compensateUnlessCommitted(delivery);
       return true;
@@ -162,13 +166,98 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
                 .and("bpmnProcessId")
                 .is(bpmnProcessId)
                 .and("outcome")
-                .is(
-                    io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome.Kind.COMPLETION_PENDING
-                        .name())
+                .is(COMPLETION_PENDING)
                 .and("adapterId")
                 .ne(null));
     return new java.util.LinkedHashSet<>(
         mongoTemplate.findDistinct(query, "adapterId", collection, String.class));
+
+  }
+
+  /**
+   * The record which left one task open, whether or not it has been closed since - what the
+   * BPMS election of a task operation reads instead of asking a BPMS (see
+   * {@link TaskDeliveryLog#recordOfTask}). Read through the template of the running
+   * transaction, and sorted so the most recent record answers where a task was delivered
+   * more than once.
+   */
+  @Override
+  public Optional<TaskDelivery> recordOfTask(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final String taskId) {
+
+    final var query = Query
+        .query(
+            Criteria
+                .where("taskId")
+                .is(taskId)
+                .and("workflowModuleId")
+                .is(workflowModuleId)
+                .and("bpmnProcessId")
+                .is(bpmnProcessId)
+                .and("aggregateId")
+                .is(workflowAggregateId)
+                .and("outcome")
+                .is(COMPLETION_PENDING))
+        .with(
+            org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "recordedAt"))
+        .limit(1);
+    return Optional
+        .ofNullable(mongoTemplate.findOne(query, TaskDeliveryDocument.class, collection))
+        .map(MongoTaskDeliveryLog::recordOf);
+
+  }
+
+  /**
+   * Writes down that the application's completion or cancellation of one task reached the
+   * BPMS. The filter demands an absent <code>taskClosedAt</code>, so a repeated dispatch
+   * does not move the moment the task was closed.
+   */
+  @Override
+  public int markTaskClosed(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final String taskId) {
+
+    return (int) mongoTemplate
+        .updateFirst(
+            Query
+                .query(
+                    Criteria
+                        .where("taskId")
+                        .is(taskId)
+                        .and("workflowModuleId")
+                        .is(workflowModuleId)
+                        .and("bpmnProcessId")
+                        .is(bpmnProcessId)
+                        .and("aggregateId")
+                        .is(workflowAggregateId)
+                        .and("taskClosedAt")
+                        .is(null)),
+            Update.update("taskClosedAt", Instant.now()),
+            TaskDeliveryDocument.class,
+            collection)
+        .getModifiedCount();
+
+  }
+
+  /**
+   * The record one document holds.
+   *
+   * @param document The document read
+   * @return What VanillaBP remembers about that delivery
+   */
+  private static TaskDelivery recordOf(
+      final TaskDeliveryDocument document) {
+
+    return new TaskDelivery(
+        document.getId(), document.getAdapterId(), document.getWorkflowModuleId(), document
+            .getBpmnProcessId(), document.getAggregateId(), document.getTaskDefinition(), document
+                .getTaskId(), document.getOutcome(), document.getBpmnErrorCode(), document
+                    .getBpmnErrorName(), document.getRecordedAt(), document.getTaskClosedAt());
 
   }
 
@@ -187,9 +276,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
                         .and("bpmnProcessId")
                         .is(bpmnProcessId)
                         .and("outcome")
-                        .is(
-                            io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome.Kind.COMPLETION_PENDING
-                                .name())),
+                        .is(COMPLETION_PENDING)),
             collection);
 
   }

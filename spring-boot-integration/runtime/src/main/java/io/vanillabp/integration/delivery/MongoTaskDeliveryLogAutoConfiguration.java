@@ -25,10 +25,11 @@ import io.vanillabp.integration.spi.TaskDeliveryLog;
  * The records live in the collection
  * {@value MongoTaskDeliveryLog#DEFAULT_COLLECTION_NAME} and are keyed by the delivery
  * key, so uniqueness comes from the document ID and no unique index is needed. Unless
- * <code>vanillabp.outbox.create-schema</code> is disabled, an index on the record's
- * timestamp is created for the retention cleanup
+ * <code>vanillabp.outbox.create-schema</code> is disabled, two indexes are created: one on
+ * the record's timestamp for the retention cleanup
  * (<code>vanillabp.delivery.retention</code>, falling back to
- * <code>vanillabp.outbox.retention</code>).
+ * <code>vanillabp.outbox.retention</code>), and one on the task id, which is what the BPMS
+ * election of a task operation reads a record by.
  */
 @AutoConfiguration(
     after = JdbcTaskDeliveryLogAutoConfiguration.class,
@@ -89,6 +90,13 @@ public class MongoTaskDeliveryLogAutoConfiguration {
             .indexOps(MongoTaskDeliveryLog.DEFAULT_COLLECTION_NAME)
             .createIndex(new Index()
                 .on("lastSeenAt", Sort.Direction.ASC));
+        // the election of a task operation looks a record up by the task the caller
+        // names, once per operation - without this index that read is a collection scan
+        // and costs more than the BPMS round trip it saves
+        mongoTemplate
+            .indexOps(MongoTaskDeliveryLog.DEFAULT_COLLECTION_NAME)
+            .createIndex(new Index()
+                .on("taskId", Sort.Direction.ASC));
       }
       deliveryLog.start();
     };

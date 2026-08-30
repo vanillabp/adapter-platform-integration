@@ -695,3 +695,39 @@ by a vendor rather than by this team, so the shape they implement against has to
 want to live with (Stephan, 2026-08-28). A compatibility bridge carried the three adapters this
 repository ships across, one pull request each, and went with the pair of methods once they had
 moved - so `phaseOperations()` is abstract and is the only way an adapter describes outbound work.
+
+### 30. A task operation is routed by the record the delivery of that task wrote
+
+Entry 25 buys the freedom to migrate a workflow between BPMS with one question per operation:
+which adapter holds this? For a task that question was asked twice on Camunda 8 - once by the
+election, as `newUpdateTimeoutCommand` against the job, and once again a moment later by the
+adapter's own phase one, which sends the same command as its pre-commit check. Two round trips to
+a cluster for something VanillaBP had already written down.
+
+Because it had: the delivery record of that task names the adapter which delivered it and says the
+task was left open. It lives in the database of the workflow aggregate, so it is read inside the
+transaction the caller has open anyway, and every node of a cluster sees it - unlike the election
+cache of entry 5, which is why a shared cache is not the answer for this one operation. What the
+record could not say was WHICH task it belonged to, so it carries the task id now, and the moment
+the application's completion of that task reached the BPMS.
+
+This is not the registry entry 25 rejected, and the difference is the fallback rather than the
+wording. Nothing is written for the sake of routing: the record exists, is written by the delivery
+itself in the delivery's transaction, and is deleted by a retention which was there before. It
+answers only about a task, never about a workflow. And where it says nothing - no store,
+`deduplicate-deliveries` switched off, the retention passed, an upgrade whose open tasks predate
+it, Camunda 7 which reports no delivery at all because it delivers in the application's
+transaction - the walk runs exactly as it did. A registry which is wrong routes wrongly; this one
+is either right or silent.
+
+The moment a task was closed is written after phase two succeeded, on the dispatching thread, and
+not when the caller asked. Between the two the task is still open for the BPMS, and on Camunda 8 it
+is this very record which answers the redeliveries that renew the job's lock - marking it earlier
+would let that lock expire. A second call inside that window is refused by the outbox' idempotency
+key already (entry 22), and that key is free again once the entry was dispatched: from there on the
+record is what makes a repeated completion the warned no-op it always was.
+
+What this does not touch: phase two elects by probing, as it always did, so a workflow which
+changed its BPMS between the call and the dispatch is still found. And the adapters keep their
+phase one, so a task which disappeared between the delivery and the call still fails synchronously
+where it always failed.

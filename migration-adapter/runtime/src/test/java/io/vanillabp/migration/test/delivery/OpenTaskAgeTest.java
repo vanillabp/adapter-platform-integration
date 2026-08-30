@@ -183,8 +183,10 @@ public class OpenTaskAgeTest {
                   delivery) -> new TaskDelivery(
                       delivery.deliveryKey(), delivery.adapterId(), delivery.workflowModuleId(), delivery
                           .bpmnProcessId(), delivery
-                              .workflowAggregateId(), delivery.taskDefinition(), delivery.outcome(), delivery
-                                  .bpmnErrorCode(), delivery.bpmnErrorName(), Instant.now().minus(age)));
+                              .workflowAggregateId(), delivery.taskDefinition(), delivery.taskId(), delivery
+                                  .outcome(), delivery.bpmnErrorCode(), delivery.bpmnErrorName(), Instant
+                                      .now()
+                                      .minus(age), delivery.taskClosedAt()));
 
     }
 
@@ -563,8 +565,9 @@ public class OpenTaskAgeTest {
                 delivery) -> new TaskDelivery(
                     delivery.deliveryKey(), delivery.adapterId(), delivery.workflowModuleId(), delivery
                         .bpmnProcessId(), delivery
-                            .workflowAggregateId(), delivery.taskDefinition(), delivery.outcome(), delivery
-                                .bpmnErrorCode(), delivery.bpmnErrorName(), null));
+                            .workflowAggregateId(), delivery.taskDefinition(), delivery.taskId(), delivery
+                                .outcome(), delivery.bpmnErrorCode(), delivery
+                                    .bpmnErrorName(), null, delivery.taskClosedAt()));
 
     final var second = testee.invokeWorkflowTask(MODULE, PROCESS, delivery("4714", "job-1"));
 

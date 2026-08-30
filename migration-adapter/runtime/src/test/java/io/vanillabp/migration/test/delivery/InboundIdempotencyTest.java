@@ -539,8 +539,8 @@ public class InboundIdempotencyTest {
         key,
         new TaskDelivery(
             key, recorded.adapterId(), recorded.workflowModuleId(), recorded.bpmnProcessId(), recorded
-                .workflowAggregateId(), recorded.taskDefinition(), "WHATEVER", null, null, recorded
-                    .recordedAt()));
+                .workflowAggregateId(), recorded.taskDefinition(), recorded.taskId(), "WHATEVER", null, null, recorded
+                    .recordedAt(), null));
 
     final var messages = loggedBy(
         MigrationProcessService.class,

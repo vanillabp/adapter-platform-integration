@@ -82,7 +82,8 @@ schema/bin/schema-version.sh open 2.1.0    # a new, empty latest.xml, included a
 ## Adding a change in a later version
 
 - Put it into `latest.xml`. Never edit a released file - the build says so if you do.
-- The changeset id is `vanillabp-<table>-<version>`, its `labels` attribute is that version.
+- The changeset id is `vanillabp-<table>-<version>`, plus a word naming the change where one
+  table gets more than one changeset in a version. Its `labels` attribute is that version.
 - Add one `liquibase-maven-plugin` execution per database for the new version in `pom.xml`, with
   `labelFilter` set to it. That is what keeps a Flyway file per release holding only that release's
   statements - Flyway applies files, not diffs - and it is deliberately a visible, reviewed change

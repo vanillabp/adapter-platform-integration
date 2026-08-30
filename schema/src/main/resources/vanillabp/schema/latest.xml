@@ -113,4 +113,34 @@
     </modifySql>
   </changeSet>
 
+  <changeSet author="VanillaBP" id="vanillabp-task-delivery-task-2.0.0" labels="2.0.0">
+    <comment>
+      What the record says about the task it was written for. TASK_ID is the BPMS' identity of that
+      task - what the application receives in a @TaskId parameter and passes back to complete or
+      cancel it - and it is what lets VanillaBP answer from the record which BPMS holds a task,
+      instead of asking every configured one per operation. TASK_CLOSED_AT is written once the
+      application's completion or cancellation reached the BPMS, so a repeated completion is the
+      warned no-op it always was without asking anybody either. Both are nullable: a record written
+      before them knows neither, and is simply not part of an answer. A changeset of its own rather
+      than columns added to the one above, because that one was applied already.
+    </comment>
+    <addColumn tableName="${vanillabp.delivery.table}">
+      <column name="TASK_ID" type="VARCHAR(255)" />
+      <column name="TASK_CLOSED_AT" type="TIMESTAMP" />
+    </addColumn>
+    <!-- the record is looked up by the task the caller names, once per task operation - without
+         this index that read is a table scan and costs more than the BPMS round trip it saves.
+         TASK_ID alone, because an index spanning AGGREGATE_ID would exceed the key-length limit of
+         MySQL and of a DB2 database using 4K pages. -->
+    <createIndex tableName="${vanillabp.delivery.table}" indexName="${vanillabp.delivery.table}_TASK">
+      <column name="TASK_ID" />
+    </createIndex>
+    <!-- MySQL's TIMESTAMP ends in 2038 and auto-initializes, which is why the runtime creates
+         DATETIME(6) there as well - an application which starts with the runtime's tables and
+         later switches to this changelog has to end up with the same columns. -->
+    <modifySql dbms="mysql,mariadb">
+      <replace replace="timestamp" with="datetime(6)" />
+    </modifySql>
+  </changeSet>
+
 </databaseChangeLog>

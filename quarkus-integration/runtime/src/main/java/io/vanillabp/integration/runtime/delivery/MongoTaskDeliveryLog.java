@@ -66,6 +66,13 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
    */
   public static final String DEFAULT_COLLECTION_NAME = "vanillabp-task-deliveries";
 
+  /**
+   * The outcome of a delivery which left its task open - the only records the questions
+   * about open tasks are interested in.
+   */
+  private static final String COMPLETION_PENDING = io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome.Kind.COMPLETION_PENDING
+      .name();
+
   @Inject
   Instance<MongoClient> mongoClient;
 
@@ -169,6 +176,10 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
       // MongoDB answers a createIndex of an index which is already there with its name, so
       // two instances starting at the same moment do not collide over it
       deliveryCollection().createIndex(Indexes.ascending("lastSeenAt"));
+      // the election of a task operation looks a record up by the task the caller names,
+      // once per operation - without this index that read is a collection scan and costs
+      // more than the BPMS round trip it saves
+      deliveryCollection().createIndex(Indexes.ascending("taskId"));
     }
     retentionCleanup = new TaskDeliveryRetentionCleanup(
         DEFAULT_COLLECTION_NAME, getDeliveryRetention(), this::cleanUpExpiredRecords);
@@ -255,14 +266,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
                 : collection
                     .find(new Document("_id", deliveryKey))
                     .first())
-        .map(document -> new TaskDelivery(
-            deliveryKey, document.getString("adapterId"), document.getString("workflowModuleId"), document
-                .getString("bpmnProcessId"), document
-                    .getString("aggregateId"), document.getString("taskDefinition"), document
-                        .getString("outcome"), document.getString("bpmnErrorCode"), document
-                            .getString("bpmnErrorName"), document.getDate("recordedAt") == null
-                                ? null
-                                : document.getDate("recordedAt").toInstant()));
+        .map(MongoTaskDeliveryLog::recordOf);
 
   }
 
@@ -288,6 +292,9 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
         .append("bpmnProcessId", delivery.bpmnProcessId())
         .append("aggregateId", delivery.workflowAggregateId())
         .append("taskDefinition", delivery.taskDefinition())
+        // the task the delivery was about: what lets the election answer from this record
+        // which adapter holds that task instead of asking every configured BPMS
+        .append("taskId", delivery.taskId())
         .append("outcome", delivery.outcome())
         .append("bpmnErrorCode", delivery.bpmnErrorCode())
         .append("bpmnErrorName", delivery.bpmnErrorName())
@@ -362,6 +369,104 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   }
 
   /**
+   * The record which left one task open, whether or not it has been closed since - what the
+   * BPMS election of a task operation reads instead of asking a BPMS (see
+   * {@link TaskDeliveryLog#recordOfTask}). Read through the session of the running
+   * transaction where there is one, and sorted so the most recent record answers where a
+   * task was delivered more than once.
+   */
+  @Override
+  public Optional<TaskDelivery> recordOfTask(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final String taskId) {
+
+    final var session = io.vanillabp.integration.runtime.mongo.MongoSessions
+        .activeSession(txRegistry);
+    final var collection = deliveryCollection();
+    final var filter = new Document("taskId", taskId)
+        .append("workflowModuleId", workflowModuleId)
+        .append("bpmnProcessId", bpmnProcessId)
+        .append("aggregateId", workflowAggregateId)
+        .append("outcome", COMPLETION_PENDING);
+    final var newestFirst = new Document("recordedAt", -1);
+    return Optional
+        .ofNullable(
+            session != null
+                ? collection
+                    .find(session, filter)
+                    .sort(newestFirst)
+                    .first()
+                : collection
+                    .find(filter)
+                    .sort(newestFirst)
+                    .first())
+        .map(MongoTaskDeliveryLog::recordOf);
+
+  }
+
+  /**
+   * Writes down that the application's completion or cancellation of one task reached the
+   * BPMS. The filter demands an absent <code>taskClosedAt</code>, so a repeated dispatch
+   * does not move the moment the task was closed.
+   */
+  @Override
+  public int markTaskClosed(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final String taskId) {
+
+    final var session = io.vanillabp.integration.runtime.mongo.MongoSessions
+        .activeSession(txRegistry);
+    final var collection = deliveryCollection();
+    final var filter = new Document("taskId", taskId)
+        .append("workflowModuleId", workflowModuleId)
+        .append("bpmnProcessId", bpmnProcessId)
+        .append("aggregateId", workflowAggregateId)
+        .append("taskClosedAt", null);
+    final var closeIt = Updates.set("taskClosedAt", new Date());
+    final var result = session != null
+        ? collection.updateOne(session, filter, closeIt)
+        : collection.updateOne(filter, closeIt);
+    return (int) result.getModifiedCount();
+
+  }
+
+  /**
+   * The record one document holds.
+   *
+   * @param document The document read
+   * @return What VanillaBP remembers about that delivery
+   */
+  private static TaskDelivery recordOf(
+      final Document document) {
+
+    return new TaskDelivery(
+        document.getString("_id"), document.getString("adapterId"), document
+            .getString("workflowModuleId"), document.getString("bpmnProcessId"), document
+                .getString("aggregateId"), document.getString("taskDefinition"), document
+                    .getString("taskId"), document.getString("outcome"), document
+                        .getString("bpmnErrorCode"), document.getString("bpmnErrorName"), instantOf(
+                            document.getDate("recordedAt")), instantOf(document.getDate("taskClosedAt")));
+
+  }
+
+  /**
+   * @param date A moment the document holds or <code>null</code>
+   * @return The same moment, or <code>null</code>
+   */
+  private static java.time.Instant instantOf(
+      final Date date) {
+
+    return date == null
+        ? null
+        : date.toInstant();
+
+  }
+
+  /**
    * The adapter ids the OPEN records of one BPMN process belong to: asked once
    * per BPMN process at startup.
    */
@@ -372,10 +477,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
 
     final var filter = new Document("workflowModuleId", workflowModuleId)
         .append("bpmnProcessId", bpmnProcessId)
-        .append(
-            "outcome",
-            io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome.Kind.COMPLETION_PENDING
-                .name())
+        .append("outcome", COMPLETION_PENDING)
         .append("adapterId", new Document("$ne", null));
     final var adapterIds = new java.util.LinkedHashSet<String>();
     deliveryCollection()
@@ -392,10 +494,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
 
     final var filter = new Document("workflowModuleId", workflowModuleId)
         .append("bpmnProcessId", bpmnProcessId)
-        .append(
-            "outcome",
-            io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome.Kind.COMPLETION_PENDING
-                .name());
+        .append("outcome", COMPLETION_PENDING);
     return deliveryCollection().countDocuments(filter) > 0;
 
   }
