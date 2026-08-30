@@ -264,7 +264,10 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
     final var entry = new Entry(adapterId, System.currentTimeMillis() + endedTimeToLiveMillis, true);
     synchronized (entries) {
       final var current = entries.get(key);
-      if ((current != null) && !current.adapterId.equals(adapterId)) {
+      // an entry which is only waiting to be dropped on the next read says nothing
+      // about anybody
+      final var currentIsAlive = (current != null) && (current.expiresAtMillis >= System.currentTimeMillis());
+      if (currentIsAlive && !current.adapterId.equals(adapterId)) {
         // the key names the aggregate and not the instance, so an entry naming another
         // adapter belongs to a second workflow on the same aggregate, elected after the
         // one which just ended - the newer knowledge stays
