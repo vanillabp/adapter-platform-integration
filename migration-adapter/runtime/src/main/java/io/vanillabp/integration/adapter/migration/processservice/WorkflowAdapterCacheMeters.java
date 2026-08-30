@@ -15,7 +15,7 @@ import io.micrometer.core.instrument.binder.MeterBinder;
  * found Micrometer in the classpath - an application without it runs unchanged and
  * simply reports no metrics.
  * <p>
- * The size gauge reports NaN as long as the cache in use does not know its size,
+ * The two size gauges report NaN as long as the cache in use does not know its size,
  * which is every implementation but VanillaBP's in-memory default (Micrometer
  * treats NaN as "no measurement" and most backends skip it). The eviction counters
  * stay at zero for the same reason - an application-provided cache manages its own
@@ -47,6 +47,19 @@ public class WorkflowAdapterCacheMeters implements MeterBinder {
                 .findFirst()
                 .orElse(Double.NaN))
         .description("Number of BPMS elections currently cached")
+        .register(registry);
+
+    Gauge
+        .builder(
+            WorkflowAdapterCacheStatistics.METER_SIZE_ENDED,
+            statistics,
+            currentStatistics -> currentStatistics
+                .getEndedSize()
+                .stream()
+                .mapToDouble(size -> size)
+                .findFirst()
+                .orElse(Double.NaN))
+        .description("Number of cached elections whose workflow ended")
         .register(registry);
 
     FunctionCounter
@@ -87,6 +100,14 @@ public class WorkflowAdapterCacheMeters implements MeterBinder {
             statistics,
             WorkflowAdapterCacheStatistics::getLostHints)
         .description("Lookups which would have been a hit with a bigger cache")
+        .register(registry);
+
+    FunctionCounter
+        .builder(
+            WorkflowAdapterCacheStatistics.METER_ENDED_MARKS,
+            statistics,
+            WorkflowAdapterCacheStatistics::getEndedMarks)
+        .description("Cached elections whose workflow ended and which are kept only briefly")
         .register(registry);
 
   }

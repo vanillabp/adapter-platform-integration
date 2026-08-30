@@ -390,11 +390,24 @@ public class BpmsInitiatedStartTest {
                   return "Event_Done";
                 }
 
+                @Override
+                public String getAdapterId() {
+                  return "test";
+                }
+
               });
 
       // the method ran against the loaded aggregate and its change was saved
       Assertions
           .assertEquals("COMPLETED/Event_Done", WorkflowStartConfiguration.AGGREGATES.get("4711").getRegion());
+
+      // the notification proves which BPMS held the workflow AND that it is over, so
+      // the election hint is marked rather than refreshed: it still answers the
+      // operation which crossed the end and leaves the cache long before a living one
+      final var statistics = context
+          .getBean(io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics.class);
+      Assertions.assertEquals(1, statistics.getEndedMarks());
+      Assertions.assertEquals(1, statistics.getEndedSize().orElseThrow());
 
     }
 

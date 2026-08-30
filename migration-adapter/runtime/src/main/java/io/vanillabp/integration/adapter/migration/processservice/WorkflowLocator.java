@@ -22,7 +22,10 @@ import lombok.extern.slf4j.Slf4j;
  * election puts the (workflow module, BPMN process, aggregate ID) &rarr; adapter
  * ID association, and so do the moments VanillaBP knows the answer for certain
  * ({@link #remember(Object, String)}: phase two of a start, and every inbound
- * delivery). The next election for the same workflow probes the cached adapter
+ * delivery). The end of a workflow is the one delivery which does not refresh the
+ * association but MARKS it ({@link #rememberWorkflowEnded(Object, String)}): the hint
+ * is still read - an operation arriving after the end stays a warned no-op - and it
+ * leaves the cache long before a hint of a running workflow would. The next election for the same workflow probes the cached adapter
  * first. Cache entries are HINTS, not truth - a hit whose adapter answers
  * {@link WorkflowAwareness#UNKNOWN_TO_BPMS} for longer than that adapter's
  * {@code workflowVisibilityDelay} falls through to the full walk and repairs the
@@ -167,6 +170,38 @@ public final class WorkflowLocator {
   }
 
   /**
+   * Records that the workflow of the given aggregate ENDED in the given adapter. The
+   * hint is kept rather than dropped, because the end is not the last thing which
+   * happens to a workflow: a task completed after a timeout, a message correlated by an
+   * endpoint which did not learn about the end, an outbox entry dispatched behind it and
+   * a read of the viewer API all still ask, and with the hint they ask the adapter which
+   * held the workflow and get the warned no-op instead of a walk which fails once the
+   * BPMS has forgotten the instance.
+   * <p>
+   * What the marking changes is the lifetime: a hint which can never become useful again
+   * has no business occupying a place - in the shared cache of a cluster, on
+   * infrastructure the application pays for - for as long as one of a running workflow.
+   * Marking is also why the end no longer REFRESHES the hint, which is what it did while
+   * it was an inbound delivery like any other.
+   * <p>
+   * Without a cache the call does nothing.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate (any type - its
+   *        serialized form is the key)
+   * @param adapterId The ID of the adapter which held the ended workflow
+   */
+  public void rememberWorkflowEnded(
+      final Object workflowAggregateId,
+      final String adapterId) {
+
+    if ((cache == null) || (workflowAggregateId == null) || (adapterId == null)) {
+      return;
+    }
+    cache.putEnded(workflowModuleId, bpmnProcessId, workflowAggregateId.toString(), adapterId);
+
+  }
+
+  /**
    * The outcome of a walk which did not fail: either an adapter answered
    * {@link WorkflowAwareness#ACTIVE} (execute the operation there),
    * {@link WorkflowAwareness#COMPLETED} (the operation is a no-op) or every
@@ -293,8 +328,10 @@ public final class WorkflowLocator {
         return new Location<>(awareness, cachedAdapter, null);
       }
       case COMPLETED -> {
-        // the workflow ended - the hint won't be needed again
-        cache.invalidate(workflowModuleId, bpmnProcessId, serializedAggregateId);
+        // the workflow ended - the hint is marked rather than dropped, so the next
+        // operation on it is answered by the same adapter (a warned no-op) instead of
+        // walking everybody, and it leaves the cache long before a living one would
+        cache.putEnded(workflowModuleId, bpmnProcessId, serializedAggregateId, cachedAdapterId);
         return new Location<>(awareness, cachedAdapter, null);
       }
       case UNKNOWN_TO_BPMS -> {
@@ -334,6 +371,11 @@ public final class WorkflowLocator {
           return new Location<>(awareness, adapter, null);
         }
         case COMPLETED -> {
+          if ((cache != null) && (serializedAggregateId != null)) {
+            // an ended workflow is worth remembering too, for the operation which
+            // arrives right behind the end - marked, so the entry lives briefly
+            cache.putEnded(workflowModuleId, bpmnProcessId, serializedAggregateId, adapter.getAdapterId());
+          }
           return new Location<>(awareness, adapter, null);
         }
         case UNKNOWN_TO_BPMS -> log.debug(

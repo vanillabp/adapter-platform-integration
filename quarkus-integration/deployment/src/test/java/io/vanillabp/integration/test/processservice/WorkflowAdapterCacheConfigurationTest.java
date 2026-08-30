@@ -59,13 +59,19 @@ public class WorkflowAdapterCacheConfigurationTest {
   WorkflowAdapterCacheStatistics statistics;
 
   @Test
-  @DisplayName("The configured bounds reach the in-memory cache")
+  @DisplayName("The configured bounds and lifetimes reach the in-memory cache")
   public void configuredBoundsReachTheCache() {
 
     Assertions.assertEquals(2, properties.getWorkflowAdapterCache().getMaxEntries());
     Assertions.assertEquals(
         Duration.ofMinutes(30),
         properties.getWorkflowAdapterCache().getTimeToLive());
+    Assertions.assertEquals(
+        Duration.ofMinutes(2),
+        properties.getWorkflowAdapterCache().getEndedTimeToLive());
+    Assertions.assertTrue(
+        properties.getWorkflowAdapterCache().isReleaseOnWorkflowEnd(),
+        "an application asking for the release has the end of every workflow reported");
 
     Assertions.assertInstanceOf(InMemoryWorkflowAdapterCache.class, cache);
 
@@ -78,6 +84,18 @@ public class WorkflowAdapterCacheConfigurationTest {
         statistics.getSize().orElseThrow(),
         "the configured bound has to be the cache's bound");
     Assertions.assertEquals(1, statistics.getEvictions());
+
+    // the workflow of the entry last written ended
+    cache.putEnded(MODULE, PROCESS, "3", "test");
+
+    Assertions.assertEquals(
+        "test",
+        cache.get(MODULE, PROCESS, "3").orElseThrow(),
+        "an operation arriving after the end still finds the adapter which held the workflow");
+    Assertions.assertEquals(
+        1,
+        statistics.getEndedSize().orElseThrow(),
+        "and the entry is counted apart from the living ones");
 
   }
 

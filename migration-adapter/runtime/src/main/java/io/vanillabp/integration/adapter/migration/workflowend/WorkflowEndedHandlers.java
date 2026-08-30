@@ -232,8 +232,10 @@ public class WorkflowEndedHandlers {
       final WorkflowEndedContext context,
       final TransactionRunner transactionRunner) {
 
-    // the notification proves which BPMS held this workflow
-    processService.rememberWorkflowAdapter(context.getWorkflowAggregateId(), context.getAdapterId());
+    // the notification proves which BPMS held this workflow - and that the workflow is
+    // over, so the hint is marked instead of refreshed: it is still read while an
+    // operation may still arrive, and it leaves the cache long before a living one
+    processService.rememberWorkflowEnded(context.getWorkflowAggregateId(), context.getAdapterId());
 
     final var releaseRecords = processService.releasesDeliveryRecordsOnWorkflowEnd();
     // the bound of the release, taken BEFORE anything is done: an aggregate may outlive

@@ -1,6 +1,7 @@
 package io.vanillabp.migration.test.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -31,6 +32,10 @@ public class WorkflowAdapterCachePropertiesTest {
 
     assertEquals(10_000, properties.getMaxEntries());
     assertEquals(Duration.ofHours(1), properties.getTimeToLive());
+    assertEquals(Duration.ofMinutes(5), properties.getEndedTimeToLive());
+    assertFalse(
+        properties.isReleaseOnWorkflowEnd(),
+        "reporting the end of every workflow is not something an application pays for unasked");
 
   }
 
@@ -105,6 +110,56 @@ public class WorkflowAdapterCachePropertiesTest {
   }
 
   @Test
+  @DisplayName("An ended workflow's entry expiring immediately is rejected, naming the property")
+  public void endedTimeToLiveHasToBePositive() {
+
+    final var message = assertThrows(
+        IllegalStateException.class,
+        () -> WorkflowAdapterCacheProperties
+            .builder()
+            .endedTimeToLive(Duration.ZERO)
+            .build()
+            .validate())
+        .getMessage();
+
+    assertTrue(
+        message.contains(WorkflowAdapterCacheProperties.ENDED_TIME_TO_LIVE_PROPERTY),
+        "the message has to name the property but got: "
+            + message);
+
+    assertThrows(
+        IllegalStateException.class,
+        () -> WorkflowAdapterCacheProperties
+            .builder()
+            .endedTimeToLive(null)
+            .build()
+            .validate());
+
+  }
+
+  @Test
+  @DisplayName("An ended workflow outliving a running one is rejected, naming both properties")
+  public void endedTimeToLiveHasToBeShorter() {
+
+    final var message = assertThrows(
+        IllegalStateException.class,
+        () -> WorkflowAdapterCacheProperties
+            .builder()
+            .timeToLive(Duration.ofMinutes(1))
+            .endedTimeToLive(Duration.ofMinutes(5))
+            .build()
+            .validate())
+        .getMessage();
+
+    assertTrue(
+        message.contains(WorkflowAdapterCacheProperties.ENDED_TIME_TO_LIVE_PROPERTY) && message
+            .contains(WorkflowAdapterCacheProperties.TIME_TO_LIVE_PROPERTY),
+        "the message has to name both properties but got: "
+            + message);
+
+  }
+
+  @Test
   @DisplayName("Configured bounds pass the validation")
   public void configuredBoundsAreAccepted() {
 
@@ -112,6 +167,8 @@ public class WorkflowAdapterCachePropertiesTest {
         .builder()
         .maxEntries(100_000)
         .timeToLive(Duration.ofMinutes(30))
+        .endedTimeToLive(Duration.ofMinutes(1))
+        .releaseOnWorkflowEnd(true)
         .build()
         .validate();
 

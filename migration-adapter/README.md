@@ -130,6 +130,46 @@ implementing `WorkflowAdapterCache` replaces it — cluster setups plug their ow
 shared cache infrastructure this way (VanillaBP deliberately ships no distributed
 implementation).
 
+### An ended workflow lets go of its hint
+
+The end of a workflow used to be an inbound delivery like any other, so it REFRESHED the
+hint of a workflow which had just become uninteresting, and the entry then waited out a
+full time-to-live in a cache a cluster pays for. The end now MARKS the hint instead
+(`WorkflowAdapterCache.putEnded`, `WorkflowLocator.rememberWorkflowEnded`), and so does a
+probe which answers `COMPLETED`.
+
+A mark is not a deletion, and that is the point. What still arrives after a workflow
+ended is a `completeTask` which lost its race with a timeout, a message correlated by an
+endpoint which did not learn about the end, an outbox entry dispatched behind it and a
+read of the viewer API. With the hint each of them asks the adapter which held the
+workflow, hears `COMPLETED` and becomes a warned no-op; without it the full walk runs and
+ends in a `WorkflowNotFoundException` as soon as the BPMS has forgotten the instance,
+which is a matter of Camunda 7's `history-time-to-live` respectively how long Camunda 8's
+secondary storage keeps a finished process. What the mark changes is the lifetime:
+`vanillabp.workflow-adapter-cache.ended-time-to-live` (five minutes) against
+`.time-to-live` (one hour), validated against each other at startup.
+
+The key is workflow module, BPMN process and aggregate ID and does not name the instance,
+so a second workflow on the same aggregate writes the same entry. Order therefore matters
+and is handled where the entry is written: a mark leaves an entry naming ANOTHER adapter
+alone, because only the election of that second workflow can have written it. Two
+workflows on the same aggregate in the SAME adapter are indistinguishable by the key, so a
+late mark shortens the fresh hint - one walk, never a wrong route.
+
+`vanillabp.workflow-adapter-cache.release-on-workflow-end` (default `false`) is what makes
+the notification arrive at all. VanillaBP has a BPMS report the end of a workflow only
+where somebody asked for it, so this is the third consumer of that one signal next to a
+`@WorkflowEnded` method and `vanillabp.delivery.release-on-workflow-end`, and switching it
+on attaches a listener respectively a worker to every deployed process of the module.
+Where one of the other two asked already, the cache is served at no extra cost. It stays
+best effort: the Process-Engine-API reports no end at all and Camunda 8 reports `COMPLETED`
+and never `TERMINATED`, so the lifetime remains the backstop rather than the exception.
+
+An application's own cache decides for itself: `putEnded` is a `default` method falling
+back to `put`, so a cache written before this existed compiles and behaves exactly as it
+did. A cache which wants the saving implements the method and gives such an entry a
+lifetime of its own (Redis: an `EX` of its own; Hazelcast: a per-entry `ttl`).
+
 ### Sizing the election cache, and knowing when to
 
 Both bounds are properties of the platform, not of an adapter:
@@ -152,7 +192,11 @@ the bound is the cheaper answer. An application which really wants soft or off-h
 semantics has the SPI bean for it.
 
 **What is measured.** `WorkflowAdapterCacheStatistics` (one per application) counts
-hits, misses, evictions, evictions before an entry was ever read, and LOST HINTS. The
+hits, misses, evictions, evictions before an entry was ever read, LOST HINTS, and what the
+end of a workflow does: how often a hint was marked, and how many of the entries held are
+marks. The second number is what tells an operator whether the release works, since it
+rises while workflows end and falls again as the shorter lifetime takes those entries
+away. The
 process services wrap WHATEVER cache is in use into an
 `InstrumentedWorkflowAdapterCache` reporting there, so hits and misses exist for an
 application-provided cache as well. A number which disappears once somebody plugs in
@@ -212,8 +256,8 @@ Four pieces solve it, and the split matters:
 3. **The cache is filled where VanillaBP knows the answer without asking**
    (`MigrationProcessService.rememberWorkflowAdapter`): when a start is SCHEDULED (the
    elected adapter is decided then), again after its phase two, and on every inbound
-   delivery - a task, a user task, a `@WorkflowEnded` notification, a BPMS-initiated
-   start. For the latter the inbound contexts carry the adapter's id
+   delivery - a task, a user task, a BPMS-initiated start. The end of a workflow is the
+   one delivery which marks the hint instead of refreshing it (see above). For the latter the inbound contexts carry the adapter's id
    (`TaskInvocationContext.getAdapterId()` and its siblings, `default null`, implemented
    by all three adapters). A delivery PROVES which BPMS holds the workflow.
 

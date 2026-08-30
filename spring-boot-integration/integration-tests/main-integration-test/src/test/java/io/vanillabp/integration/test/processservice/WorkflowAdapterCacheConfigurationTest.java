@@ -104,6 +104,66 @@ public class WorkflowAdapterCacheConfigurationTest {
   }
 
   @Test
+  @DisplayName("The lifetime of an ended workflow's entry is configurable, too")
+  public void theEndedLifetimeReachesTheCache() {
+
+    contextRunner()
+        .withPropertyValues(
+            "vanillabp.workflow-adapter-cache.ended-time-to-live=2m",
+            "vanillabp.workflow-adapter-cache.release-on-workflow-end=true")
+        .run(context -> {
+
+          final var properties = context.getBean(MigrationAdapterProperties.class);
+          Assertions.assertEquals(
+              Duration.ofMinutes(2),
+              properties.getWorkflowAdapterCache().getEndedTimeToLive());
+          Assertions.assertTrue(
+              properties.getWorkflowAdapterCache().isReleaseOnWorkflowEnd(),
+              "an application asking for the release has the end of every workflow reported");
+
+          final var cache = context.getBean(WorkflowAdapterCache.class);
+          final var statistics = context.getBean(WorkflowAdapterCacheStatistics.class);
+
+          cache.put(MODULE, PROCESS, "42", "test");
+          cache.putEnded(MODULE, PROCESS, "42", "test");
+
+          Assertions.assertEquals(
+              "test",
+              cache.get(MODULE, PROCESS, "42").orElseThrow(),
+              "an operation arriving after the end still finds the adapter which held the workflow");
+          Assertions.assertEquals(
+              1,
+              statistics.getEndedSize().orElseThrow(),
+              "and the entry is counted apart from the living ones");
+
+        });
+
+  }
+
+  @Test
+  @DisplayName("An ended workflow outliving a running one fails the startup, naming both properties")
+  public void anEndedLifetimeLongerThanTheLivingOneFailsTheStartup() {
+
+    contextRunner()
+        .withPropertyValues(
+            "vanillabp.workflow-adapter-cache.time-to-live=1m",
+            "vanillabp.workflow-adapter-cache.ended-time-to-live=5m")
+        .run(context -> {
+
+          final var failure = context.getStartupFailure();
+          Assertions.assertNotNull(failure, "the startup has to fail");
+          final var message = messagesOf(failure);
+          Assertions.assertTrue(
+              message.contains(WorkflowAdapterCacheProperties.ENDED_TIME_TO_LIVE_PROPERTY) && message
+                  .contains(WorkflowAdapterCacheProperties.TIME_TO_LIVE_PROPERTY),
+              "the failure has to name both properties but got: "
+                  + message);
+
+        });
+
+  }
+
+  @Test
   @DisplayName("An unconfigured application keeps the defaults")
   public void defaultsApplyWithoutConfiguration() {
 
@@ -117,6 +177,9 @@ public class WorkflowAdapterCacheConfigurationTest {
           Assertions.assertEquals(
               WorkflowAdapterCacheProperties.DEFAULT_TIME_TO_LIVE,
               properties.getWorkflowAdapterCache().getTimeToLive());
+          Assertions.assertEquals(
+              WorkflowAdapterCacheProperties.DEFAULT_ENDED_TIME_TO_LIVE,
+              properties.getWorkflowAdapterCache().getEndedTimeToLive());
 
         });
 
@@ -229,6 +292,17 @@ public class WorkflowAdapterCacheConfigurationTest {
           Assertions.assertTrue(
               statistics.getSize().isEmpty(),
               "an application's cache reports no size");
+
+          // a cache written before ended workflows were marked keeps working: the mark
+          // falls back to an ordinary hint
+          cache.putEnded(MODULE, PROCESS, "4711", "test");
+          Assertions.assertEquals(
+              "test",
+              cache.get(MODULE, PROCESS, "4711").orElseThrow(),
+              "the default of putEnded stores the hint like put does");
+          Assertions.assertTrue(
+              statistics.getEndedSize().isEmpty(),
+              "and it does not tell ended workflows apart");
 
         });
 

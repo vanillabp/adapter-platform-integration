@@ -426,6 +426,25 @@ public interface QuarkusMigrationAdapterProperties {
     @WithDefault("PT1H")
     Duration timeToLive();
 
+    /**
+     * How long the entry of a workflow which ENDED is kept - much shorter than
+     * {@link #timeToLive()}, since such an entry cannot become useful again.
+     *
+     * @return The time-to-live of the entry of an ended workflow
+     */
+    @WithDefault("PT5M")
+    Duration endedTimeToLive();
+
+    /**
+     * Whether the end of a workflow is reported for this cache's sake, so an ended
+     * workflow lets go of its entry after {@link #endedTimeToLive()}. Switching it on
+     * attaches a listener respectively a worker to every deployed process.
+     *
+     * @return Whether an ended workflow releases its entry early
+     */
+    @WithDefault("false")
+    boolean releaseOnWorkflowEnd();
+
   }
 
   /**

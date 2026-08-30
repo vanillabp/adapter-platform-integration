@@ -4,6 +4,36 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## The end of a workflow marks its election hint instead of refreshing it (2026-08-30)
+
+`WorkflowAdapterCache` has a fourth method, `putEnded(workflowModuleId, bpmnProcessId,
+workflowAggregateId, adapterId)`, and it is a `default` falling back to `put`. **An
+application which brought its own cache bean does not have to change anything**: without
+the override the hint of an ended workflow lives as long as any other one, which is what
+happened before.
+
+**What changed for everybody.** The notification of a workflow's end used to be an inbound
+delivery like any other and wrote the hint anew, so the entry of a workflow which had just
+become uninteresting got a fresh hour. It is marked now, and so is an entry whose probe
+answers `COMPLETED`. A marked entry is still read, so an operation which crossed the end
+stays the warned no-op it was; it simply leaves the cache after
+`vanillabp.workflow-adapter-cache.ended-time-to-live` (five minutes, validated to be
+shorter than `.time-to-live`).
+
+**What is new to configure.** `vanillabp.workflow-adapter-cache.release-on-workflow-end`
+(default `false`) has the BPMS report the end of a workflow for the cache's sake. It is
+the third consumer of that signal next to a `@WorkflowEnded` method and
+`vanillabp.delivery.release-on-workflow-end`, and switching it on attaches a listener
+respectively a worker to every deployed process. Where one of the other two asked for the
+end already, the cache is served for free. A cluster sharing its cache is who this is
+meant for.
+
+**Two new meters**, next to the ones the cache already publishes:
+`vanillabp.workflow.adapter.cache.ended.marks` (hints marked) and
+`vanillabp.workflow.adapter.cache.size.ended` (marks currently held). An
+application-provided cache reports the first one and, like every other size, not the
+second.
+
 ## The pair of methods per operation is gone (2026-08-29)
 
 The entry below kept the eighteen phase methods of `MigratableProcessService` as `default` methods

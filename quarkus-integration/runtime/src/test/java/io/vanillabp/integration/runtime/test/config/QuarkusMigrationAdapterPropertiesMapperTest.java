@@ -191,7 +191,9 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
 
   private record WorkflowAdapterCacheProperties(
                                                 int maxEntries,
-                                                Duration timeToLive) implements QuarkusMigrationAdapterProperties.WorkflowAdapterCacheProperties {
+                                                Duration timeToLive,
+                                                Duration endedTimeToLive,
+                                                boolean releaseOnWorkflowEnd) implements QuarkusMigrationAdapterProperties.WorkflowAdapterCacheProperties {
   }
 
   private record MetricsProperties(
@@ -335,7 +337,9 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                                                                                                                                             false, "hot-outbox")), new WorkflowAdapterCacheProperties(
                                                                                                                                                                 50_000, Duration
                                                                                                                                                                     .ofMinutes(
-                                                                                                                                                                        30)));
+                                                                                                                                                                        30), Duration
+                                                                                                                                                                            .ofMinutes(
+                                                                                                                                                                                2), true));
 
     final var core = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(properties);
 
@@ -395,6 +399,8 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
 
     assertEquals(50_000, core.getWorkflowAdapterCache().getMaxEntries());
     assertEquals(Duration.ofMinutes(30), core.getWorkflowAdapterCache().getTimeToLive());
+    assertEquals(Duration.ofMinutes(2), core.getWorkflowAdapterCache().getEndedTimeToLive());
+    assertTrue(core.getWorkflowAdapterCache().isReleaseOnWorkflowEnd());
 
   }
 
@@ -413,6 +419,8 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     final var coreDefaults = new io.vanillabp.integration.adapter.migration.config.WorkflowAdapterCacheProperties();
     assertEquals(coreDefaults.getMaxEntries(), mappedDefaults.getMaxEntries());
     assertEquals(coreDefaults.getTimeToLive(), mappedDefaults.getTimeToLive());
+    assertEquals(coreDefaults.getEndedTimeToLive(), mappedDefaults.getEndedTimeToLive());
+    assertEquals(coreDefaults.isReleaseOnWorkflowEnd(), mappedDefaults.isReleaseOnWorkflowEnd());
 
   }
 

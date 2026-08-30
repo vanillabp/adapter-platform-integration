@@ -72,6 +72,40 @@ public class WorkflowAdapterCacheMetersTest {
   }
 
   @Test
+  @DisplayName("What the end of a workflow does to the cache is counted separately")
+  public void endedWorkflowsAreCountedApart() {
+
+    final var properties = WorkflowAdapterCacheProperties
+        .builder()
+        .maxEntries(10)
+        .timeToLive(Duration.ofHours(1))
+        .endedTimeToLive(Duration.ofMinutes(5))
+        .build();
+    final var statistics = new WorkflowAdapterCacheStatistics(properties);
+    final var cache = InstrumentedWorkflowAdapterCache.instrument(
+        new InMemoryWorkflowAdapterCache(properties, statistics), statistics);
+
+    final var registry = new SimpleMeterRegistry();
+    new WorkflowAdapterCacheMeters(statistics).bindTo(registry);
+
+    cache.put(MODULE, PROCESS, "1", "adapter-a");
+    cache.put(MODULE, PROCESS, "2", "adapter-a");
+    cache.putEnded(MODULE, PROCESS, "2", "adapter-a");
+
+    assertEquals(
+        2.0,
+        registry.get(WorkflowAdapterCacheStatistics.METER_SIZE).gauge().value());
+    assertEquals(
+        1.0,
+        registry.get(WorkflowAdapterCacheStatistics.METER_SIZE_ENDED).gauge().value(),
+        "an operator has to see how much of the cache is waiting to be released");
+    assertEquals(
+        1.0,
+        registry.get(WorkflowAdapterCacheStatistics.METER_ENDED_MARKS).functionCounter().count());
+
+  }
+
+  @Test
   @DisplayName("A cache not reporting its size gauges NaN, not zero")
   public void unknownSizeIsNaN() {
 
@@ -83,6 +117,9 @@ public class WorkflowAdapterCacheMetersTest {
     assertTrue(
         Double.isNaN(registry.get(WorkflowAdapterCacheStatistics.METER_SIZE).gauge().value()),
         "an application-provided cache does not report a size");
+    assertTrue(
+        Double.isNaN(registry.get(WorkflowAdapterCacheStatistics.METER_SIZE_ENDED).gauge().value()),
+        "and it does not tell ended workflows apart either");
 
   }
 

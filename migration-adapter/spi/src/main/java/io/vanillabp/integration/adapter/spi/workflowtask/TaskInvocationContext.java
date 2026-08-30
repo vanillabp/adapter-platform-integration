@@ -175,8 +175,12 @@ public interface TaskInvocationContext {
    * reader will otherwise take for the same value under a second name. This one is the
    * identity of a DELIVERY and stays equal while the BPMS repeats itself; that one is
    * the identity of an ACTIVATION and differs between two activations of one element.
-   * An adapter which cannot answer this one can still answer that one, and Camunda 7 is
-   * exactly that case.
+   * An adapter which cannot answer this one can still answer that one, and Camunda 7
+   * shows both halves. On a datasource shared with the application the delivery runs in
+   * the transaction the application commits, so a repetition proves that nothing was
+   * written and there is no delivery to name; on a datasource of its own the engine
+   * commits its job separately and names the delivery by the job it is running, which is
+   * the same value while it retries and a different one for new work.
    *
    * @return The delivery's identity or <code>null</code>
    */
@@ -198,8 +202,8 @@ public interface TaskInvocationContext {
    * That is what tells it apart from {@link #getDeliveryId()}, whose contract is the
    * opposite: equal across redeliveries. A BPMS naming its deliveries after the element
    * instance answers one value for both, which is why the two were not told apart
-   * before; a BPMS which delivers inside its own transaction reports no delivery id and
-   * still knows its activity instance.
+   * before; a BPMS whose delivery is bound to the application's transaction reports no
+   * delivery id and still knows its activity instance.
    * <p>
    * The core reads it while the handler runs
    * ({@link io.vanillabp.integration.spi.RunningActivation}) and puts it into the

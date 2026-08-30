@@ -10,3 +10,5 @@ vanillabp:
   workflow-adapter-cache:
     max-entries: 2
     time-to-live: 30m
+    ended-time-to-live: 2m
+    release-on-workflow-end: true

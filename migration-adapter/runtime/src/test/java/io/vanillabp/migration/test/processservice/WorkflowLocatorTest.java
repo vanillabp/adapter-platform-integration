@@ -19,6 +19,7 @@ import io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflo
 import io.vanillabp.integration.adapter.migration.processservice.WorkflowLocator;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
+import io.vanillabp.integration.spi.WorkflowAdapterCache;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
@@ -316,8 +317,8 @@ public class WorkflowLocatorTest {
   }
 
   @Test
-  @DisplayName("A COMPLETED answer on a cache hit is reported and drops the entry")
-  public void completedCacheHitDropsTheEntry() {
+  @DisplayName("A COMPLETED answer on a cache hit is reported and marks the entry")
+  public void completedCacheHitMarksTheEntry() {
 
     final var cache = new InMemoryWorkflowAdapterCache();
     cache.put(MODULE, PROCESS, "42", "second");
@@ -329,7 +330,32 @@ public class WorkflowLocatorTest {
     assertEquals(WorkflowAwareness.COMPLETED, location.awareness());
     assertSame(second, location.adapter());
     assertEquals(0, first.probes.get(), "the cache hit must skip the walk");
-    assertTrue(cache.get(MODULE, PROCESS, "42").isEmpty(), "a completed workflow's entry is dropped");
+    // dropping it would send the next operation on that workflow through the full walk,
+    // which is where a BPMS that forgot the instance turns a no-op into an exception
+    assertEquals(
+        "second",
+        cache.get(MODULE, PROCESS, "42").orElseThrow(),
+        "a completed workflow's entry still answers");
+    assertEquals(1, cache.endedSize(), "and lives on the short lifetime of an ended workflow");
+
+  }
+
+  @Test
+  @DisplayName("A COMPLETED answer found by the walk is remembered as an ended workflow")
+  public void completedWalkMarksTheEntry() {
+
+    final var cache = new InMemoryWorkflowAdapterCache();
+    final var first = new ProbeAdapter("first", WorkflowAwareness.UNKNOWN_TO_BPMS);
+    final var second = new ProbeAdapter("second", WorkflowAwareness.COMPLETED);
+
+    final var location = locate(cache, first, second);
+
+    assertEquals(WorkflowAwareness.COMPLETED, location.awareness());
+    assertEquals(
+        "second",
+        cache.get(MODULE, PROCESS, "42").orElseThrow(),
+        "the operation arriving right behind the end skips the walk");
+    assertEquals(1, cache.endedSize());
 
   }
 
@@ -551,6 +577,71 @@ public class WorkflowLocatorTest {
     new WorkflowLocator(MODULE, PROCESS, cache).remember(42L, "remote");
 
     assertEquals("remote", cache.get(MODULE, PROCESS, "42").orElseThrow());
+    assertEquals(0, cache.endedSize(), "a running workflow is not marked");
+
+  }
+
+  @Test
+  @DisplayName("A cache which does not know about ended workflows keeps working unchanged")
+  public void aCacheWithoutTheMarkKeepsWorking() {
+
+    // exactly the three methods an application implemented before ended workflows were
+    // marked - it has to compile and to behave as it always did
+    final var cache = new WorkflowAdapterCache() {
+
+      private final java.util.Map<String, String> entries = new java.util.HashMap<>();
+
+      @Override
+      public java.util.Optional<String> get(
+          final String workflowModuleId,
+          final String bpmnProcessId,
+          final String workflowAggregateId) {
+        return java.util.Optional.ofNullable(entries.get(workflowAggregateId));
+      }
+
+      @Override
+      public void put(
+          final String workflowModuleId,
+          final String bpmnProcessId,
+          final String workflowAggregateId,
+          final String adapterId) {
+        entries.put(workflowAggregateId, adapterId);
+      }
+
+      @Override
+      public void invalidate(
+          final String workflowModuleId,
+          final String bpmnProcessId,
+          final String workflowAggregateId) {
+        entries.remove(workflowAggregateId);
+      }
+
+    };
+
+    new WorkflowLocator(MODULE, PROCESS, cache).rememberWorkflowEnded(42L, "remote");
+
+    assertEquals(
+        "remote",
+        cache.get(MODULE, PROCESS, "42").orElseThrow(),
+        "the mark falls back to an ordinary hint, which is what such a cache always stored");
+
+  }
+
+  @Test
+  @DisplayName("The end of a workflow marks the hint instead of refreshing it")
+  public void theEndMarksTheHint() {
+
+    final var cache = new InMemoryWorkflowAdapterCache();
+    final var locator = new WorkflowLocator(MODULE, PROCESS, cache);
+
+    locator.remember(42L, "remote");
+    locator.rememberWorkflowEnded(42L, "remote");
+
+    assertEquals(
+        "remote",
+        cache.get(MODULE, PROCESS, "42").orElseThrow(),
+        "an operation which crossed the end still finds the adapter which held the workflow");
+    assertEquals(1, cache.endedSize(), "and the hint is on its way out");
 
   }
 

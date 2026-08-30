@@ -1437,8 +1437,9 @@ public class MigrationProcessService<A> {
    * Records which adapter holds the workflow of the given aggregate, for the
    * moments VanillaBP knows it without asking anybody: scheduling a start (the
    * elected adapter is decided then), phase two of that start, and every inbound
-   * delivery (a task, a user task, the end of a workflow, a start the BPMS
-   * performed).
+   * delivery (a task, a user task, a start the BPMS performed). The end of a
+   * workflow is the exception and goes to
+   * {@link #rememberWorkflowEnded(Object, String)}.
    * <p>
    * Recording at SCHEDULING time is what makes an operation following the start
    * right away work at all: on a remote BPMS the instance is created after the
@@ -1460,6 +1461,30 @@ public class MigrationProcessService<A> {
       final String adapterId) {
 
     workflowLocator.remember(workflowAggregateId, adapterId);
+
+  }
+
+  /**
+   * Records that the workflow of the given aggregate ENDED in the given adapter -
+   * called by the notification the BPMS sends when it does. The hint stays readable,
+   * because an operation which crossed the end still has to become the warned no-op it
+   * was before, but it is not refreshed: the end was the one inbound delivery which
+   * extended the lifetime of a hint at the very moment it became useless.
+   * <p>
+   * How long a marked hint lives is the cache's business - the in-memory default keeps
+   * it for <code>vanillabp.workflow-adapter-cache.ended-time-to-live</code>, an
+   * application's own cache for as long as it implements
+   * {@link io.vanillabp.integration.spi.WorkflowAdapterCache#putEnded} to say so.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param adapterId The ID of the adapter which held the ended workflow or
+   *        <code>null</code>
+   */
+  public void rememberWorkflowEnded(
+      final Object workflowAggregateId,
+      final String adapterId) {
+
+    workflowLocator.rememberWorkflowEnded(workflowAggregateId, adapterId);
 
   }
 

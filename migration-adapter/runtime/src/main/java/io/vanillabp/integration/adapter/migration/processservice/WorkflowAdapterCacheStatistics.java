@@ -43,6 +43,9 @@ public class WorkflowAdapterCacheStatistics {
   public static final String METER_SIZE = METER_PREFIX
       + ".size";
 
+  public static final String METER_SIZE_ENDED = METER_PREFIX
+      + ".size.ended";
+
   public static final String METER_HITS = METER_PREFIX
       + ".hits";
 
@@ -57,6 +60,9 @@ public class WorkflowAdapterCacheStatistics {
 
   public static final String METER_LOST_HINTS = METER_PREFIX
       + ".lost.hints";
+
+  public static final String METER_ENDED_MARKS = METER_PREFIX
+      + ".ended.marks";
 
   /**
    * How many lost hints have to pile up before the eviction-pressure warning is
@@ -82,6 +88,8 @@ public class WorkflowAdapterCacheStatistics {
 
   private final LongAdder lostHints = new LongAdder();
 
+  private final LongAdder endedMarks = new LongAdder();
+
   /**
    * The key hashes of entries evicted before they were ever read, bounded exactly
    * like the cache itself: an eviction older than a full turn of the cache says
@@ -96,6 +104,12 @@ public class WorkflowAdapterCacheStatistics {
    * knowing it (the in-memory default) or <code>null</code>.
    */
   private volatile IntSupplier sizeSupplier;
+
+  /**
+   * Reports how many of the entries held belong to workflows which ended, registered
+   * by the same implementation as {@link #sizeSupplier} or <code>null</code>.
+   */
+  private volatile IntSupplier endedSizeSupplier;
 
   private long lostHintsSinceLastWarning;
 
@@ -138,6 +152,19 @@ public class WorkflowAdapterCacheStatistics {
   }
 
   /**
+   * Registers where the number of entries of ENDED workflows is read from - called by
+   * a cache implementation which distinguishes them.
+   *
+   * @param endedSizeSupplier Reports how many entries are marked as ended
+   */
+  public void registerEndedSize(
+      final IntSupplier endedSizeSupplier) {
+
+    this.endedSizeSupplier = endedSizeSupplier;
+
+  }
+
+  /**
    * The current number of entries, or {@link OptionalInt#empty()} if the cache in
    * use does not report it (every implementation but VanillaBP's in-memory
    * default).
@@ -147,6 +174,22 @@ public class WorkflowAdapterCacheStatistics {
   public OptionalInt getSize() {
 
     final var supplier = sizeSupplier;
+    return supplier == null
+        ? OptionalInt.empty()
+        : OptionalInt.of(supplier.getAsInt());
+
+  }
+
+  /**
+   * How many of the entries held belong to workflows which ended, or
+   * {@link OptionalInt#empty()} if the cache in use does not tell them apart (every
+   * implementation but VanillaBP's in-memory default).
+   *
+   * @return The number of entries marked as ended
+   */
+  public OptionalInt getEndedSize() {
+
+    final var supplier = endedSizeSupplier;
     return supplier == null
         ? OptionalInt.empty()
         : OptionalInt.of(supplier.getAsInt());
@@ -180,6 +223,24 @@ public class WorkflowAdapterCacheStatistics {
   public long getLostHints() {
 
     return lostHints.sum();
+
+  }
+
+  public long getEndedMarks() {
+
+    return endedMarks.sum();
+
+  }
+
+  /**
+   * Counts a hint which was marked as belonging to an ended workflow. Counted for
+   * every cache in use, the application's own included: it says how often the end of a
+   * workflow reached the cache at all, which is the first thing to look at when the
+   * release seems not to work (the end is reported only where somebody asked for it).
+   */
+  public void recordEndedMark() {
+
+    endedMarks.increment();
 
   }
 

@@ -855,6 +855,27 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
+   * Whether the election cache is told about workflows which ended
+   * (<code>vanillabp.workflow-adapter-cache.release-on-workflow-end</code>), so their
+   * hints leave it after
+   * {@link WorkflowAdapterCacheProperties#getEndedTimeToLive()} instead of after a full
+   * time-to-live. Global rather than per workflow module: there is one cache per
+   * application, and what it costs is one listener per deployed process either way.
+   * <p>
+   * This is the third reason to have the BPMS report the end of a workflow, next to an
+   * application's <code>&#64;WorkflowEnded</code> method and the release of delivery
+   * records - and where one of those asked for it already, the cache is served for
+   * free.
+   *
+   * @return Whether the end of a workflow is reported for the election cache's sake
+   */
+  public boolean releasesElectionHintsOnWorkflowEnd() {
+
+    return (workflowAdapterCache != null) && workflowAdapterCache.isReleaseOnWorkflowEnd();
+
+  }
+
+  /**
    * The property naming the decision of
    * {@link #releasesDeliveryRecordsOnWorkflowEnd(String)}, for the messages which have to
    * tell where the behaviour they describe comes from.
