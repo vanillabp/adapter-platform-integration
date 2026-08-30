@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.sql.DataSource;
 
@@ -44,8 +47,9 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
  * under the same delivery identity - as a BPMS which never learned the result does - and
  * the <code>&#64;WorkflowTask</code> method has to run once while both deliveries are
  * answered with the same outcome. Also pinned: a delivery whose handler threw leaves no
- * record (its retry runs the handler again) and the task-level switch turns the feature
- * off.
+ * record (its retry runs the handler again), the task-level switch turns the feature
+ * off, and two deliveries of one task which overlap each other are named in the log and
+ * counted, since a record written after the work cannot prevent that case.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class InboundIdempotencyTest {
@@ -152,7 +156,8 @@ public class InboundIdempotencyTest {
                   new BpmnTaskSpec("Activity_Error", "raiseBpmnError"),
                   new BpmnTaskSpec("Activity_Fail", "failTask"),
                   new BpmnTaskSpec("Activity_Undeduplicated", "undeduplicatedTask"),
-                  new BpmnTaskSpec("Activity_Await", "awaitCompletion"))
+                  new BpmnTaskSpec("Activity_Await", "awaitCompletion"),
+                  new BpmnTaskSpec("Activity_Concurrent", "concurrentTask"))
               : List.of();
 
     }
@@ -346,6 +351,96 @@ public class InboundIdempotencyTest {
               .mapToDouble(io.micrometer.core.instrument.Counter::count)
               .sum(),
           "a repeated delivery answered from the record is what this meter counts");
+
+    }
+
+  }
+
+  /**
+   * The case the record cannot catch: the BPMS hands the task out again while the first
+   * handler is still running, so neither delivery finds a record and the
+   * <code>&#64;WorkflowTask</code> method runs twice. One record is written, and the
+   * delivery which lost the race is where that becomes visible.
+   */
+  @Test
+  public void twoDeliveriesAtTheSameTimeAreNamedAndCounted(
+      final io.vanillabp.integration.test.utils.CapturedOutput captured) throws Exception {
+
+    DeliveryConfiguration.AGGREGATES.clear();
+
+    try (var testApp = buildTestApp(); var context = runTestApplication(testApp)) {
+
+      final var dummyAdapter = context.getBean("DummyAdapter_DeploymentService_test", DeploymentService.class);
+
+      final var registry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+      context
+          .getBean(io.vanillabp.integration.adapter.migration.observability.MicrometerVanillaBpMetrics.class)
+          .bindTo(registry);
+
+      final var firstHandlerIsRunning = new CountDownLatch(1);
+      final var secondDeliveryCommitted = new CountDownLatch(1);
+      final var handlerRuns = new AtomicInteger();
+      // the first delivery to arrive stays in the handler until the second one is
+      // through, which is the overlap a real BPMS produces when its lock is too short
+      DeliveryWorkflowService.WHILE_THE_CONCURRENT_TASK_RUNS.set(() -> {
+        if (handlerRuns.incrementAndGet() > 1) {
+          return;
+        }
+        firstHandlerIsRunning.countDown();
+        try {
+          secondDeliveryCommitted.await(30, TimeUnit.SECONDS);
+        } catch (final InterruptedException e) {
+          Thread
+              .currentThread()
+              .interrupt();
+        }
+      });
+
+      try {
+
+        storeAggregate("4715");
+        final var heldDelivery = new Thread(
+            () -> dummyAdapter.invokeTask(MODULE, PROCESS, delivery("concurrentTask", "4715", "job-6")));
+        heldDelivery.start();
+        Assertions.assertTrue(
+            firstHandlerIsRunning.await(30, TimeUnit.SECONDS),
+            "the first delivery never reached the handler");
+
+        dummyAdapter.invokeTask(MODULE, PROCESS, delivery("concurrentTask", "4715", "job-6"));
+        secondDeliveryCommitted.countDown();
+        heldDelivery.join(TimeUnit.SECONDS.toMillis(30));
+
+        Assertions.assertEquals(2, handlerRuns.get(), "both deliveries have to run the handler");
+        Assertions.assertEquals(1, recordCount(context, "4715"), "one delivery key, one record");
+
+      } finally {
+        DeliveryWorkflowService.WHILE_THE_CONCURRENT_TASK_RUNS.set(() -> {
+        });
+      }
+
+      Assertions.assertTrue(
+          captured
+              .getAll()
+              .contains("were processed at the SAME time"),
+          () -> "the overlap has to be said out loud: "
+              + captured.getAll());
+      Assertions.assertTrue(
+          captured
+              .getAll()
+              .contains("test|test-module|DeliveryProcess|CREATED|job-6"),
+          "the WARN names the delivery key, the adapter and the workflow");
+
+      Assertions.assertEquals(
+          1.0,
+          registry
+              .get(
+                  io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.TASK_REDELIVERIES_CONCURRENT)
+              .tag(
+                  io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.TAG_TASK_DEFINITION,
+                  "concurrentTask")
+              .counter()
+              .count(),
+          "the delivery which found the key taken is what this meter counts");
 
     }
 

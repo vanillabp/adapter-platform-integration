@@ -170,6 +170,31 @@ public class MicrometerVanillaBpMetrics implements VanillaBpMetrics, MeterBinder
   }
 
   @Override
+  public void taskRedeliveryRanConcurrently(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String taskDefinition) {
+
+    final var meterRegistry = registry;
+    if (meterRegistry == null) {
+      return;
+    }
+
+    counter(
+        meterRegistry,
+        TASK_REDELIVERIES_CONCURRENT,
+        "Repeated deliveries which overlapped the delivery they repeat, so the handler ran twice",
+        Tags.of(
+            TAG_ADAPTER, tagValue(adapterId),
+            TAG_WORKFLOW_MODULE, tagValue(workflowModuleId),
+            TAG_BPMN_PROCESS, tagValue(bpmnProcessId),
+            TAG_TASK_DEFINITION, tagValue(taskDefinition)))
+        .increment();
+
+  }
+
+  @Override
   public void outboxDispatchStarted(
       final String operation,
       final boolean previouslyAttempted) {
