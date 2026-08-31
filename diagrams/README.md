@@ -46,22 +46,22 @@ it shows. Change a picture where you change the prose around it. There is no sec
 diagram source anywhere, and that is deliberate: two copies drift apart, and the reader has no way
 of telling which one is current.
 
-| Picture | Section of `migration-adapter/README.md` |
-|---|---|
-| Moving a workflow module from one BPMS to the next | [BPMS election by prioritized adapters](../migration-adapter/README.md#bpms-election-by-prioritized-adapters) |
-| The walk which asks each adapter whether it holds a workflow, and the second walk at the dispatch | [Awareness contract](../migration-adapter/README.md#awareness-contract-workflowawareness) |
-| Correlating a message, and what each adapter checks before the commit | [Waiting for a workflow to become visible](../migration-adapter/README.md#waiting-for-a-workflow-to-become-visible) |
-| The order the core calls an adapter in while a workflow module deploys | [Deployment pipeline](../migration-adapter/README.md#deployment-pipeline) |
-| One task delivered, and the same task delivered twice | [Workflow-task processing](../migration-adapter/README.md#workflow-task-processing) |
-| The contexts an adapter builds and hands to the core | [Workflow-task processing](../migration-adapter/README.md#workflow-task-processing) |
-| Camunda 7 on an engine datasource of its own, where the two commits are separate | [Deliveries VanillaBP already processed](../migration-adapter/README.md#deliveries-vanillabp-already-processed-taskdeliverylog-spi) |
-| `startWorkflow` from the application, across the commit into phase two | [Two-phase workflow start](../migration-adapter/README.md#two-phase-workflow-start-phasetwooutbox-spi) |
-| The same start on a time line which crosses a crash | [Two-phase workflow start](../migration-adapter/README.md#two-phase-workflow-start-phasetwooutbox-spi) |
-| What is left on `MigratableProcessService` once the handlers carry the operations | [An operation is defined once](../migration-adapter/README.md#an-operation-is-defined-once) |
-| Which points write the aggregate's shared values, and what reads them | [Pushing a changed aggregate](../migration-adapter/README.md#pushing-a-changed-aggregate-aggregatechanged) |
-| A timer, signal or conditional start event firing in the BPMS | [Workflows the BPMS starts itself](../migration-adapter/README.md#workflows-the-bpms-starts-itself-bpmsinitiatedstartinvoker) |
-| What an adapter registers per platform, and what it never implements | [What the platform hands an adapter](../migration-adapter/README.md#what-the-platform-hands-an-adapter-adaptercollaborators) |
-| The three transaction boundaries and which work belongs to which | [The transaction the work runs in](../migration-adapter/README.md#the-transaction-the-work-runs-in) |
+|                                              Picture                                              |                                              Section of `migration-adapter/README.md`                                               |
+|---------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------|
+| Moving a workflow module from one BPMS to the next                                                | [BPMS election by prioritized adapters](../migration-adapter/README.md#bpms-election-by-prioritized-adapters)                       |
+| The walk which asks each adapter whether it holds a workflow, and the second walk at the dispatch | [Awareness contract](../migration-adapter/README.md#awareness-contract-workflowawareness)                                           |
+| Correlating a message, and what each adapter checks before the commit                             | [Waiting for a workflow to become visible](../migration-adapter/README.md#waiting-for-a-workflow-to-become-visible)                 |
+| The order the core calls an adapter in while a workflow module deploys                            | [Deployment pipeline](../migration-adapter/README.md#deployment-pipeline)                                                           |
+| One task delivered, and the same task delivered twice                                             | [Workflow-task processing](../migration-adapter/README.md#workflow-task-processing)                                                 |
+| The contexts an adapter builds and hands to the core                                              | [Workflow-task processing](../migration-adapter/README.md#workflow-task-processing)                                                 |
+| Camunda 7 on an engine datasource of its own, where the two commits are separate                  | [Deliveries VanillaBP already processed](../migration-adapter/README.md#deliveries-vanillabp-already-processed-taskdeliverylog-spi) |
+| `startWorkflow` from the application, across the commit into phase two                            | [Two-phase workflow start](../migration-adapter/README.md#two-phase-workflow-start-phasetwooutbox-spi)                              |
+| The same start on a time line which crosses a crash                                               | [Two-phase workflow start](../migration-adapter/README.md#two-phase-workflow-start-phasetwooutbox-spi)                              |
+| What is left on `MigratableProcessService` once the handlers carry the operations                 | [An operation is defined once](../migration-adapter/README.md#an-operation-is-defined-once)                                         |
+| Which points write the aggregate's shared values, and what reads them                             | [Pushing a changed aggregate](../migration-adapter/README.md#pushing-a-changed-aggregate-aggregatechanged)                          |
+| A timer, signal or conditional start event firing in the BPMS                                     | [Workflows the BPMS starts itself](../migration-adapter/README.md#workflows-the-bpms-starts-itself-bpmsinitiatedstartinvoker)       |
+| What an adapter registers per platform, and what it never implements                              | [What the platform hands an adapter](../migration-adapter/README.md#what-the-platform-hands-an-adapter-adaptercollaborators)        |
+| The three transaction boundaries and which work belongs to which                                  | [The transaction the work runs in](../migration-adapter/README.md#the-transaction-the-work-runs-in)                                 |
 
 ## Two traps worth knowing before you edit one
 
