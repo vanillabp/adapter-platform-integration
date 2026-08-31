@@ -1962,14 +1962,14 @@ flowchart TB
   subgraph SPRING["Spring Boot module"]
     S1["AutoConfiguration after SpringBootMigrationAdapterAutoConfiguration"]
     S2["BeanRegistrar: for each id in vanillabp.adapters with type == mine:<br/>ONE element bean AdapterDeploymentService named after the id<br/>ONE element bean MigratableProcessService named after the id<br/>(never a List bean)"]
-    S3["@ConfigurationProperties(&quot;vanillabp&quot;) overlay with MY keys only"]
+    S3["@ConfigurationProperties for the vanillabp prefix, overlay with MY keys only"]
     S1 --> S2 --> S3
   end
 
   subgraph QUARKUS["Quarkus modules"]
     Q1["deployment: BuildStep announces the adapter (capability io.vanillabp.adapter.&lt;type&gt;),<br/>AdditionalBeanBuildItem(setUnremovable) for the producers"]
     Q2["runtime: @Singleton producers → List&lt;MigratableProcessService&lt;Object&gt;&gt;, List&lt;AdapterDeploymentService&gt;<br/>(platform flattens the lists)"]
-    Q3["RUN_TIME @ConfigMapping(prefix=&quot;vanillabp&quot;) overlay — never @Inject the mapping"]
+    Q3["RUN_TIME @ConfigMapping for the vanillabp prefix, overlay, never @Inject the mapping"]
     Q1 --> Q2 --> Q3
   end
 
