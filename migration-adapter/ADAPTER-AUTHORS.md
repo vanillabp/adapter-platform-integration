@@ -51,12 +51,28 @@ the individual adapters, which is exactly why an application could not be migrat
 to another. If you find yourself writing retry logic, an idempotency registry or a rule about
 which BPMS should serve a call, stop and ask us instead of writing it.
 
-Four consequences are worth stating before the interfaces.
+Five consequences are worth stating before the interfaces.
 
 You build one runtime object per configured adapter id, never one per type. Two ids of your type
 side by side is how an application migrates from one cluster, one tenancy model or one engine
 version to the next, and an adapter which builds a single instance from whichever id it finds
 first silently breaks that.
+
+What makes two such ids DIFFERENT is knowledge only you have, and the core asks you for it once at
+startup wherever more than one id of your type is configured
+(`AdapterDeploymentService.validateDistinctAdapterInstances`). End the boot for a pair which
+addresses the same system, and name the property which would tell the two apart, because the core
+formats no message here. An embedded engine wants a database or a table prefix of its own, which is
+what Camunda 7 answers with `data-source-name` and `table-prefix`; a remote one wants an address,
+credentials, a cluster or a tenant of its own, which is what Camunda 8 answers with; the
+Process-Engine-API can tell nothing apart and refuses the second id outright. Two ids which
+deliberately share one backend are a supported setup, and what keeps them from answering for each
+other is the scope contract of section 4.
+
+The id is an identity and not a label. Every outbox entry and every delivery record carries the one
+it was written for, so renaming an id orphans the work those records still hold open, and the
+symptom arrives much later as a workflow which was saved and never started (decision 17). Read it
+from configuration and derive it from nothing which can move.
 
 Your configuration lives under `vanillabp.adapters.<id>.*`, in the same tree the platform keys
 live in, contributed as an overlay of the `vanillabp` prefix. Do not open a namespace of your own.
@@ -70,6 +86,14 @@ You never implement the business SPI. `PhaseTwoOutbox`, `TaskDeliveryLog`, `Tran
 `AggregatePersistenceAware` and `WorkflowAdapterCache` are implemented by the platform or by the
 application. The core uses them on your behalf, and a type from the adapter SPI must never appear
 in a module business code compiles against.
+
+Your messages are part of the SPI although no interface carries them. VanillaBP's promise is that a
+developer reaches a working configuration from what the application says at startup, with almost no
+documentation, so every failure of yours names the workflow module, the BPMN process and the
+workflow aggregate it is about, says what was attempted, and gives at least one way out with the
+exact property key or the change to make. Validate at startup rather than at the first workflow,
+prefer a warned no-op over an exception for work which already happened, and never echo a
+credential. Nothing enforces this, and a review holds you to it anyway.
 
 ## 2. The two interfaces
 
@@ -191,9 +215,9 @@ does:
 
 |                  Method                  | Default |                                                                                                                                                           What it decides                                                                                                                                                           |
 |------------------------------------------|---------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `deliversTasksAtLeastOnce()`             | `false` | whether a missing delivery log is worth a guiding message at startup. It does not switch deduplication on; `getDeliveryId()` does.                                                                                                                                                                                                  |
-| `isPhaseTwoFailureRepeatable(Throwable)` | `true`  | a `false` blocks the outbox entry after one attempt instead of retrying it. Keep the list of permanent failures short: repeating is the safe answer.                                                                                                                                                                                |
-| `workflowVisibilityDelay()`              | none    | how long an `UNKNOWN_TO_BPMS` of your BPMS may still turn into `ACTIVE`. Report a window where your probe reads a model which lags behind the engine.                                                                                                                                                                               |
+| `deliversTasksAtLeastOnce()`             | `false` | say `true` where your BPMS learns a task's outcome only AFTER the application committed locally, which is every remote BPMS and an embedded one on a datasource of its own. The default is right only where the delivery shares the application's transaction, because a repeated delivery there proves nothing was committed. What it decides is whether a missing delivery log is worth a guiding message at startup. It does not switch deduplication on; `getDeliveryId()` does. |
+| `isPhaseTwoFailureRepeatable(Throwable)` | `true`  | a `false` blocks the outbox entry after one attempt instead of retrying it. Say it only for what your BPMS answers identically every time, a malformed request or an identifier which does not exist. Keep that list short: repeating is the safe answer. |
+| `workflowVisibilityDelay()`              | none    | how long an `UNKNOWN_TO_BPMS` of your BPMS may still turn into `ACTIVE`. Report a window where your probe reads a model which lags behind the engine, and no longer than it honestly needs: the waiting happens on the outbox dispatcher's thread. |
 | `canLocateWorkflows()`                   | `true`  | whether your workflow probe asks your BPMS or guesses. See section 4.                                                                                                                                                                                                                                                               |
 | `openTaskCount(module, process)`         | `null`  | how many tasks of a process your BPMS holds open, asked once at startup so an upgraded application learns how long its unrecorded deliveries can still surprise it. Answer only if your BPMS counts and you read the number; fetching the tasks to count them makes the boot grow with the years the application ran (decision 19). |
 
@@ -219,7 +243,24 @@ task. That check is the core's now, which is what section 3.2 ends with.
 `scoping()` is `NameClashAvoidanceSupport`, how you keep the identifiers of two workflow modules
 apart. `workflowAggregateSync()` tells you which values of an aggregate your BPMS may see.
 `preCommitRegistrar()` is where you hang a check which has to run right before the caller's
-transaction commits.
+transaction commits, which is what shrinks the window in which its answer can go stale.
+
+Scoping is worth its own paragraph, because the core only ever speaks plain identifiers and
+everything BPMS-specific about them is yours. `modeFor(module, process, adapterId)` answers which
+of three modes applies, and what a mode MEANS is your BPMS' business. `BY_ADAPTER` is its own
+isolation mechanism, a tenant on both Camunda adapters and whatever plays that part on yours; it is
+the default every adapter reports, because it is what version 1 did and an application upgrading
+without touching its configuration has to find its running workflows again. `USE_PREFIX` puts the
+workflow module id in front of the identifiers your BPMS sees and takes it off again on the way
+back, which is the answer where a vendor licenses per tenant; `scopedProcessId` and its siblings
+give you the one form, `plainProcessId` and its siblings the other. `NONE` scopes nothing, and
+every adapter reports it per workflow module naming the alternatives its own BPMS offers. Refuse a
+mode your BPMS cannot serve while you deploy, rather than putting every workflow module into one
+scope, and where your isolation is configured while no level asks for `BY_ADAPTER`, hand that
+property key to `validateNoneNameClashStrategy`: the setting and the mode contradict each other,
+and quietly ignoring the setting is the one outcome nobody asked for. On your side it comes down to
+one habit: scope on the way out, at every boundary your BPMS sees, and unscope on the way back,
+the identifiers of an inbound delivery included.
 
 Two collaborators arrive as `Optional`, because an application which never asks for them has
 nothing to report to: `workflowEndedInvoker()` and `bpmsInitiatedStartInvoker()`. Work without
@@ -283,7 +324,8 @@ What your context answers decides how much of VanillaBP works for your BPMS:
 | `getProcessVersion()`       | matched against the `version` attribute of the annotations                                                                                                                                                                                                                                |
 | `getTaskParameter(name)`    | values the MODEL produced, never values of the aggregate                                                                                                                                                                                                                                  |
 | `getMultiInstances()`       | index, total and element of a multi-instance activity                                                                                                                                                                                                                                     |
-| `runInCurrentTransaction()` | whether your BPMS delivers inside a transaction of its own which the core should join                                                                                                                                                                                                     |
+| `runInCurrentTransaction()` | whether the delivery already runs inside a transaction the application's persistence takes part in, which is the only case in which the core joins instead of opening one of its own. A transaction of your BPMS which that persistence does not join is not this |
+| `predatesDeployedVersion()` | whether this delivery belongs to a workflow which was already running before the version this boot deployed. Nothing is routed by it. It turns the report about a task open for too long into an "at least", because such a task was open before VanillaBP ever wrote a record for it and its age counts from the first delivery afterwards. Answer it by comparing two values you already hold, never by asking your BPMS, and answer `false` where your BPMS counts no versions |
 
 Then act on the outcome. A completed task is completed with the shared values, which you read
 through `syncedWorkflowAggregateValues` (or its `...InCurrentTransaction` variant where the
@@ -291,6 +333,16 @@ handler's transaction is still open, which is what an embedded engine needs). A 
 thrown into the model by whatever mechanism your BPMS has, and the aggregate's changes stay
 committed. A pending completion means you leave the task open and the application completes it
 later by its task id.
+
+WHICH values are shared is never your decision. `workflowAggregateSync()` answers it from the
+aggregate's `@SyncWithBPMS` model and the default your adapter declares, and what is left to you is
+when and where they land: an embedded engine writes them inside its own transaction at every point
+it touches the workflow, a remote one attaches them to every command it sends on that workflow's
+behalf. Beside those values travels the technical variable named after the aggregate's id
+attribute, whose name `resolveWorkflowAggregateIdName` gives you, or the business key where your
+BPMS has one. It is not part of the shared map and it does not depend on the model at all: write it
+with every command, including for an aggregate annotated `@NoSyncWithBPMS`, which shares nothing
+and would be unfindable afterwards without it (decision 10).
 
 Any exception the core throws back at you means the transaction was rolled back and no record was
 written. Apply your BPMS' retry semantics and never report the task as completed. A version
@@ -390,10 +442,12 @@ started the workflow itself or because a delivery for that workflow arrived from
 row of that table is a case of `WorkflowLocatorTest`, and the read column additionally of
 `ViewerApiTest#readWaitsForAnEventuallyConsistentAdapterToCatchUp`.
 
-One question about a task may not reach you at all. Where the delivery of that task wrote a record
-naming your adapter and saying the task is still open, the core routes by that record instead of
-probing (decision 30). It is either right or silent: where no record exists, the walk runs exactly
-as it always did.
+One question about a task may not reach you at all. Where the CALL names a task and the delivery of
+that task wrote a record naming your adapter, phase one routes by that record instead of probing
+(decision 30). A record of a task still open answers for every operation, a closed one only for the
+operations which end that task, because the workflow may well run on. The dispatch of the entry
+probes as it always did, so a workflow which changed its BPMS in between is still found, and where
+no record exists the walk runs exactly as it always did. It is either right or silent.
 
 ## 5. What you must never assume
 
@@ -588,20 +642,23 @@ number is good for.
 
 ## 8. The checklist before your first pull request
 
-1. One `MigratableProcessService` and one `AdapterDeploymentService` per configured adapter id.
-   Configuration under `vanillabp.adapters.<id>.*`, validated at startup with messages naming the
-   keys to add, and an unconfigured application still boots.
+1. One `MigratableProcessService` and one `AdapterDeploymentService` per configured adapter id,
+   and two ids of your type refused at boot where nothing tells them apart. Configuration under
+   `vanillabp.adapters.<id>.*`, validated at startup with messages naming the keys to add, and an
+   unconfigured application still boots.
 2. The pipeline in order: `readBpmn`, then `prepareBpmn` rewriting once per file, then `wireBpmn`
    with the wiring calls, then `deployResources` ending with `registerDeployedVersion` per process,
-   then `startWorkflowProcessing` and `stopWorkflowProcessing`. The two module-level checks are the
-   core's and you do not call them.
+   then `startWorkflowProcessing` and `stopWorkflowProcessing`. Every name-clash mode either served
+   or refused with a message. The two module-level checks are the core's and you do not call them.
 3. A handler per operation your BPMS can serve, and only the operations which allow it left out.
    Phase one asks, phase two acts, idempotently, throwing on anything but "already gone".
 4. Probes scoped, never advancing, `UNKNOWN_TO_BPMS` and `BPMS_UNAVAILABLE` mapped honestly, the
    redispatch probe never optimistic, a visibility delay reported where your reads lag, and
    `canLocateWorkflows()` answered `false` where your BPMS cannot be asked about a workflow at all.
 5. Inbound contexts carrying the delivery id, the activation id, the adapter id and the process
-   version. Act on the outcome, and never report a task as completed after an exception.
+   version, and identifiers unscoped on the way in. Act on the outcome, send the shared values plus
+   the variable named after the aggregate's id with every command, and never report a task as
+   completed after an exception.
 6. Permanent phase-two failures classified narrowly, your shutdown policy written down, your
    inbound threads bounded.
 7. Your gaps written down honestly, and a deployment which fails where a missing capability would
@@ -620,7 +677,7 @@ election does with your answers, how the outbox dispatches, what the platform ha
 Read it when you want to know why the SPI looks the way it does.
 
 [`DECISIONS.md`](../DECISIONS.md) of this repository is where the reasoning lives which several
-places rely on. This document points at entries 3, 4, 19, 26, 27, 28, 29 and 30.
+places rely on. This document points at entries 3, 4, 10, 17, 19, 26, 27, 28, 29 and 30.
 
 If something here is wrong, or if you need a promise this SPI does not make, tell us. The SPI was
 finalised before an adapter written outside this repository existed, precisely so that the shape
