@@ -41,6 +41,10 @@ Developers who want to contribute to VanillaBP should familiarize themselves wit
 reading the `README.md` files of the respective submodules. Please create an [issue](./issues) first to let other
 contributors know what you are working on.
 
+The pictures which belong to those READMEs are catalogued in [`diagrams/README.md`](./diagrams):
+the architecture overview as a drawing, plus a table saying which section of
+`migration-adapter/README.md` holds each Mermaid diagram.
+
 *Hint:* This repository is not about BPMS-specific adapters. It provides the infrastructure into which such adapters
 plug in. To learn which BPMS are supported, visit [https://www.vanillabp.io](https://www.vanillabp.io), which also
 links to the corresponding adapter repositories.
