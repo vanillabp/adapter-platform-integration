@@ -87,6 +87,9 @@ readBpmn → prepareBpmn → wireBpmn → deployResources → startWorkflowProce
                                                       stopWorkflowProcessing
 ```
 
+The same pipeline is drawn call by call, with every call-back you make while wiring, under
+[Deployment pipeline](./README.md#deployment-pipeline) in the core's README.
+
 `BPMN` is your own model type, whatever your BPMS parses a file into. `PC` is a processing context
 you invent: an accumulator the core threads through the whole pipeline, from the first file of a
 module to `startWorkflowProcessing`. Extensions such as the Business Cockpit join a pipeline by
@@ -131,7 +134,9 @@ What your BPMS does is one method: `phaseOperations()`, returning a
 outbound work. An operation is defined once in the core, and the definition carries its persisted
 name, its idempotency-key rule, which BPMS serves it, whether every adapter has to serve it, and
 the words it names itself with in a message. What it DOES is the only part which differs per BPMS,
-and that is your handler (decision 29 in the repository's `DECISIONS.md`).
+and that is your handler (decision 29 in the repository's `DECISIONS.md`). What is left on the
+interface once the handlers carry the operations is drawn under
+[An operation is defined once](./README.md#an-operation-is-defined-once).
 
 The core operations today are `START_WORKFLOW`, `START_WORKFLOW_BY_MESSAGE`, `COMPLETE_TASK`,
 `CANCEL_TASK`, `COMPLETE_USER_TASK`, `CANCEL_USER_TASK`, `CORRELATE_MESSAGE`, `SEND_SIGNAL` and
@@ -261,6 +266,8 @@ last adapter of a workflow module finished deploying. Do not call them.
 You build a `TaskInvocationContext` per delivery and make that call on your own thread; the core
 resolves the handler, opens a transaction, loads the aggregate, binds the parameters, runs the
 method, saves the aggregate, writes the delivery record and hands you back a `WorkflowTaskOutcome`.
+The context and the two other ones you build are drawn beside the delivery they belong to, under
+[Workflow-task processing](./README.md#workflow-task-processing).
 
 What your context answers decides how much of VanillaBP works for your BPMS:
 
@@ -453,6 +460,9 @@ are exercised by the platform's own tests, and they are kept current by those te
 
 * Spring Boot: `spring-boot-integration/integration-tests/dummy-adapter`
 * Quarkus: `quarkus-integration/integration-tests/dummy-adapter`
+
+Which bean goes where on each platform, and which interfaces you never implement yourself, is drawn
+under [What the platform hands an adapter](./README.md#what-the-platform-hands-an-adapter-adaptercollaborators).
 
 ### Spring Boot
 
