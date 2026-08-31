@@ -57,6 +57,14 @@ public class DiscardedScheduleTest {
 
   private static final String ADAPTER = "test-adapter";
 
+  /**
+   * What the counter of a refused schedule saw, in the order it was told: an alarm on
+   * <code>vanillabp.outbox.discarded</code> is how a workflow waiting for a message
+   * nobody will send again is found in hours instead of weeks, so the count and the WARN
+   * have to move together.
+   */
+  private final java.util.List<String> discardedOperations = new java.util.ArrayList<>();
+
   private ListAppender<ILoggingEvent> logWatcher;
 
   private Logger serviceLogger;
@@ -152,8 +160,22 @@ public class DiscardedScheduleTest {
 
     };
 
-    return new MigrationProcessService<>(
+    final var service = new MigrationProcessService<>(
         MODULE, PROCESS, Object.class, properties(), persistence, List.of(adapter), resolver);
+    service
+        .setMetrics(
+            new io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics() {
+
+              @Override
+              public void outboxScheduleDiscarded(
+                  final String operation) {
+
+                discardedOperations.add(operation);
+
+              }
+
+            });
+    return service;
 
   }
 
@@ -208,6 +230,43 @@ public class DiscardedScheduleTest {
     assertTrue(warning.contains("starting the workflow"), warning);
     assertTrue(warning.contains("4711"), warning);
     assertTrue(warning.contains(PROCESS), warning);
+
+  }
+
+  @Test
+  @DisplayName("Every refused schedule is counted, named by the operation which was lost")
+  public void aDiscardedScheduleIsCountedPerOperation() {
+
+    final var outbox = mock(PhaseTwoOutbox.class);
+    when(outbox.schedule(any()))
+        .thenReturn(false);
+    final var testee = serviceWithDiscardingOutbox(outbox);
+
+    testee.correlateMessage(new Object(), "ItemShipped", "item-4711");
+
+    assertEquals(
+        List.of("CORRELATE_MESSAGE"),
+        discardedOperations,
+        "the operation is the tag, because a lost message and a workflow which never "
+            + "started are different alarms");
+    assertEquals(1, logWatcher.list.size(), "one WARN, one increment");
+
+    testee.startWorkflow(new Object());
+
+    assertEquals(List.of("CORRELATE_MESSAGE", "START_WORKFLOW"), discardedOperations);
+
+  }
+
+  @Test
+  @DisplayName("A planned operation is not counted as discarded")
+  public void aPlannedOperationIsNotCounted() {
+
+    final var outbox = new PendingKeyOutbox();
+
+    serviceWithDiscardingOutbox(outbox).correlateMessage(new Object(), "ItemShipped", "item-4711");
+
+    assertTrue(discardedOperations.isEmpty(), "nothing was lost: "
+        + discardedOperations);
 
   }
 

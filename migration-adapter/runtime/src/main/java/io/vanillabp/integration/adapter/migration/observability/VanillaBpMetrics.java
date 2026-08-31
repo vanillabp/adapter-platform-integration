@@ -97,6 +97,20 @@ public interface VanillaBpMetrics {
   String OUTBOX_FAILURES = "vanillabp.outbox.failures";
 
   /**
+   * Schedules the outbox refused because an operation of the same idempotency key was
+   * still waiting for its dispatch, so something the application asked for will not
+   * happen. Counted once in the core rather than in each store, so every outbox
+   * implementation reports the same number.
+   * <p>
+   * Two causes end up here and nothing can tell them apart: a redelivered dispatch of a
+   * call which was recorded before loses nothing, while a second, legitimate operation
+   * of the same key loses everything and leaves a workflow waiting for a message nobody
+   * will send again. Every increment writes the WARN of
+   * <code>MigrationProcessService</code> as well, which names both of them.
+   */
+  String OUTBOX_DISCARDED = "vanillabp.outbox.discarded";
+
+  /**
    * Outbox entries waiting to be dispatched, reported by the stores which can count
    * them ({@link io.vanillabp.integration.spi.PhaseTwoOutbox#pendingCalls()}).
    */
@@ -259,6 +273,17 @@ public interface VanillaBpMetrics {
   default void outboxDispatchFailed(
       final String operation,
       final boolean permanent) {
+
+  }
+
+  /**
+   * An operation was not planned because the outbox found an operation of the same
+   * idempotency key still waiting for its dispatch.
+   *
+   * @param operation The persisted name of the phase-two operation which was dropped
+   */
+  default void outboxScheduleDiscarded(
+      final String operation) {
 
   }
 

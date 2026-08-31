@@ -1535,7 +1535,10 @@ The core does not implement (or depend on) any outbox itself — it only defines
   A store which discards a schedule returns `false`, and
   `MigrationProcessService#reportDiscardedSchedule` turns that into a WARN naming
   what was dropped, because a discard against a pending entry is as likely to be a
-  lost operation as a redelivery. The key is bounded to 250 characters and hashed
+  lost operation as a redelivery. The same place counts it as
+  `vanillabp.outbox.discarded`, tagged by operation, so the case can be alarmed on
+  instead of being read: the count is taken in the core rather than in each store, which
+  is why gruelbox and the VanillaBP stores report the same number. The key is bounded to 250 characters and hashed
   beyond that (`StoredKey`, shared with the inbound delivery key) — gruelbox refuses a
   longer unique request ID, and an aggregate ID longer than the 1024 characters of the
   `AGGREGATE_ID` column is refused where the call is built, with a message naming the
@@ -2315,7 +2318,15 @@ does is inside it, and nothing had to be repeated per BPMS.
   measurement, and the tag values are what a deployment fixes: adapter id, workflow module,
   BPMN process, task definition, operation. Never an aggregate id or a job key - those would grow
   one time series per workflow, and they belong in the log anyway.
-  One of the counters is not about a delivery at all: `vanillabp.task.elections.from.record` says
+  Two of the counters are not about a delivery at all. `vanillabp.outbox.discarded` says how
+  often an operation the application asked for was NOT planned, because the outbox found one
+  of the same idempotency key still waiting for its dispatch. Which of the two causes it was
+  cannot be told here: a redelivered dispatch of a recorded call loses nothing, a second,
+  legitimate operation of the same key loses everything and leaves a workflow waiting for a
+  message nobody sends again. That is why it is a counter and not a log line alone. Alert on
+  it, read the WARN it comes with, and where the cause is a repeating scope, vary the
+  correlation id per round or element (see [two-phase workflow start](#two-phase-workflow-start-phasetwooutbox-spi)).
+  And `vanillabp.task.elections.from.record` says
   how often a call naming a task was routed without asking any BPMS, which is the number the next
   step of that feature is decided on, see [the record answers which BPMS holds a
   task](#the-record-answers-which-bpms-holds-a-task).

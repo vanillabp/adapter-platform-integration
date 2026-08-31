@@ -2479,6 +2479,7 @@ public class MigrationProcessService<A> {
                     scheduledArgs));
     if (!scheduled) {
       reportDiscardedSchedule(
+          operation,
           "%s of %s".formatted(operation.describe(scheduledArgs), subjectOf(workflowAggregateId)));
     }
 
@@ -3024,10 +3025,18 @@ public class MigrationProcessService<A> {
    * repository's DECISIONS.md). Outside one - a REST endpoint, an adapter reporting no
    * activation - the correlation id is still the only thing left to vary.
    *
+   * Counted as well as logged, because a line in a log is found by somebody already
+   * looking. The counter carries the operation, so a discarded correlation and a
+   * discarded start can be alarmed on separately.
+   *
+   * @param operation The operation which was dropped
    * @param subject What was dropped, named the way the caller would recognise it
    */
   private void reportDiscardedSchedule(
+      final PhaseOperation operation,
       final String subject) {
+
+    metrics.outboxScheduleDiscarded(operation.name());
 
     final var activation = io.vanillabp.integration.spi.RunningActivation.current();
     if (activation == null) {

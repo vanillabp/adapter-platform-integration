@@ -268,6 +268,24 @@ public class MicrometerVanillaBpMetrics implements VanillaBpMetrics, MeterBinder
 
   }
 
+  @Override
+  public void outboxScheduleDiscarded(
+      final String operation) {
+
+    final var meterRegistry = registry;
+    if (meterRegistry == null) {
+      return;
+    }
+
+    counter(
+        meterRegistry,
+        OUTBOX_DISCARDED,
+        "Operations not planned because one of the same idempotency key was still waiting",
+        Tags.of(TAG_OPERATION, tagValue(operation)))
+        .increment();
+
+  }
+
   /**
    * The supplier is NOT registered as the gauge reads it. Counting the waiting entries
    * of an outbox is a query, a gauge is read on every collection, and every instance of

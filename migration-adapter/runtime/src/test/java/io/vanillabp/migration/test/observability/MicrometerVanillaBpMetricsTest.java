@@ -35,6 +35,7 @@ public class MicrometerVanillaBpMetricsTest {
                       "c8", "module", "Process", "task", VanillaBpMetrics.DeliveryOutcome.COMPLETED, 1_000L);
               metrics.outboxDispatchStarted("START_WORKFLOW", true);
               metrics.outboxDispatchFailed("START_WORKFLOW", false);
+              metrics.outboxScheduleDiscarded("START_WORKFLOW");
               metrics.taskRedeliveryDeduplicated("c8", "module", "Process", "task");
             },
             "beans are built before the metrics infrastructure binds them");
@@ -158,6 +159,38 @@ public class MicrometerVanillaBpMetricsTest {
                 .counter()
                 .count(),
             "a failure repeating cannot fix is told apart from one which can");
+
+  }
+
+  @Test
+  @DisplayName("A refused schedule is counted per operation")
+  public void discardedSchedulesAreCounted() {
+
+    final var registry = new SimpleMeterRegistry();
+    final var metrics = new MicrometerVanillaBpMetrics();
+    metrics.bindTo(registry);
+
+    metrics.outboxScheduleDiscarded("CORRELATE_MESSAGE");
+    metrics.outboxScheduleDiscarded("CORRELATE_MESSAGE");
+    metrics.outboxScheduleDiscarded("START_WORKFLOW");
+
+    Assertions
+        .assertEquals(
+            2.0,
+            registry
+                .get(VanillaBpMetrics.OUTBOX_DISCARDED)
+                .tag(VanillaBpMetrics.TAG_OPERATION, "CORRELATE_MESSAGE")
+                .counter()
+                .count());
+    Assertions
+        .assertEquals(
+            1.0,
+            registry
+                .get(VanillaBpMetrics.OUTBOX_DISCARDED)
+                .tag(VanillaBpMetrics.TAG_OPERATION, "START_WORKFLOW")
+                .counter()
+                .count(),
+            "a lost message and a workflow which never started are different alarms");
 
   }
 
