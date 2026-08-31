@@ -317,7 +317,9 @@ building a second aggregate.
 
 The election walks the prioritized adapters and stops at the first `ACTIVE`, so it is exactly as
 right as the answers it gets. The core cannot check any of this. Which adapters may be asked is
-its business; which workflows an adapter owns is only yours.
+its business; which workflows an adapter owns is only yours. The walk is drawn twice under
+[Awareness contract](./README.md#awareness-contract-workflowawareness) in the core's README, once
+as it runs inside the caller's transaction and once as it runs at the dispatch of an outbox entry.
 
 Answer for the scope you are given, not for what your instance holds. Every probe takes a
 `WorkflowScope`, the workflow module and the plain BPMN process ids the calling process service

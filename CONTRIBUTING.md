@@ -17,6 +17,15 @@ document is what a team building an adapter outside this workspace implements ag
 the one place where the SPI is described as a whole rather than method by method. A change to what
 an adapter implements, calls back or promises is not finished until it says the new thing.
 
+A changed picture is rendered before it is committed. `bin/render-diagrams.sh` draws every Mermaid
+block of the repository and fails where one does not parse, which is what a semicolon inside a note
+or a message does; [`diagrams/README.md`](./diagrams/README.md) has that trap written down together
+with the reason it is easy to walk into. A pull request touching a Markdown file runs the same
+script, because a block which does not parse is not a smaller picture but an error message where
+the picture was, and both times that happened here nobody saw it for weeks. The script is not part
+of the Maven build: it pulls a headless browser on first use, and a local build has to work without
+a network.
+
 Two of those rules are easy to lose sight of while writing code, so they are spelled out here as
 well.
 

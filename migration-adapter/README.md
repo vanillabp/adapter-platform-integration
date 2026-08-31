@@ -1755,7 +1755,7 @@ flowchart LR
   end
 
   subgraph CORE["Core"]
-    SV["syncedWorkflowAggregateValues(…)<br/>computes the shared map,<br/>id attribute ALWAYS included"]
+    SV["syncedWorkflowAggregateValues(…)<br/>computes the shared map:<br/>what the sync model shares, and only that"]
     UP["unsharedWorkflowAggregateProperties<br/>→ startup WARN per expression reading an unshared attribute (C7)"]
     TPN["taskParameterNames(module, process, task)<br/>→ what a subscription must fetch"]
   end
@@ -1769,6 +1769,7 @@ flowchart LR
     W3["complete/cancel task, user task (phase two)"]
     W4["correlate message / start by message (phase two)<br/>(C8/PEA: no message content, values on the command)"]
     W5["aggregateChanged(aggregate[, taskId])<br/>C7: setVariables / setVariablesLocal at the scope the task runs in<br/>+ marker `vanillabpAggregateChanged` if nothing is shared<br/>C8: SetVariables (needs secondary storage)<br/>PEA: refused in phase ONE"]
+    WID["BESIDE the values, at every one of them: the variable named<br/>after the id attribute · not part of the map, added by whoever<br/>sends the command · written for @NoSyncWithBPMS too (decision 10)"]
     W0["NOT: user-task listener completion on C8 (decision 1)<br/>NOT: signals (no aggregate)"]
   end
 
@@ -1785,7 +1786,7 @@ flowchart LR
 
   classDef c7 fill:#f3e8ff,stroke:#1e1e1e;
   classDef note fill:#fff3cd,stroke:#1e1e1e;
-  class W0,R2 note;
+  class WID,W0,R2 note;
 ```
 
 ### Workflows the BPMS starts itself (`BpmsInitiatedStartInvoker`)

@@ -75,6 +75,8 @@ Angle brackets and round brackets are safe. Mermaid escapes `<` and `>` itself, 
 Quarkus)` needs no quoting. The one place a semicolon belongs is at the end of a `classDef` or
 `class` statement, where it terminates rather than interrupts.
 
-Before you commit a changed diagram, render it once. `npx -p @mermaid-js/mermaid-cli mmdc -i
-picture.mmd -o picture.svg` uses the same renderer GitHub and the IntelliJ plugin do, and it fails
-loudly on anything they would fail on quietly.
+Before you commit a changed diagram, render it once. `../bin/render-diagrams.sh` draws every
+Mermaid block of every Markdown file of the repository, and a single file is
+`../bin/render-diagrams.sh migration-adapter/README.md`. It runs `npx -p @mermaid-js/mermaid-cli
+mmdc`, the same renderer GitHub and the IntelliJ plugin use, so it fails loudly on anything they
+would fail on quietly. A pull request which touches a Markdown file runs it too.
