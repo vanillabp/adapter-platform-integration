@@ -197,7 +197,7 @@ public interface MigratableProcessService<A> {
    * {@link #awarenessOfWorkflow(WorkflowScope, AggregatePersistenceAware, Object)} deliberately
    * answers an optimistic ACTIVE for the election) must override this method and
    * return {@link WorkflowAwareness#UNKNOWN_TO_BPMS} - the start proceeds and the
-   * adapter's idempotency contract of {@link #startWorkflowPhaseTwo} applies.
+   * adapter's idempotency contract of {@link PhaseOperationHandler#phaseTwo} applies.
    * <p>
    * The default delegates to
    * {@link #awarenessOfWorkflow(WorkflowScope, AggregatePersistenceAware, Object)} - correct for

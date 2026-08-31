@@ -73,10 +73,9 @@ public final class PhaseOperationRegistry {
 
   /**
    * Register an operation contributed by an extension. Its name has to be
-   * namespaced (see
-   * {@link PhaseOperation#extensionOperation(String, PhaseOperation.IdempotencyKey)}),
-   * which keeps it distinct from VanillaBP's core operations and from the
-   * operations of other extensions.
+   * namespaced (see {@link PhaseOperation#extensionOperation(String)}), which keeps it
+   * distinct from VanillaBP's core operations and from the operations of other
+   * extensions.
    *
    * @param operation The extension's operation
    * @param dispatch What to do with a call of that operation after the commit

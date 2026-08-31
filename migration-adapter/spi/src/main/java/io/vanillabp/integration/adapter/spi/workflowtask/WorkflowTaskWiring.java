@@ -34,9 +34,9 @@ import java.util.Collection;
  * what a model reads but the aggregate does not share.</li>
  * </ul>
  * At the end of <code>deployResources</code>, per BPMN process:
- * {@link #registerDeployedVersion(String, String, String)} - also when your BPMS deployed
- * nothing because nothing changed. Only the adapter knows which version its BPMS ended up
- * with, which is why this one stays here.
+ * {@link #registerDeployedVersion(String, String, String, String)} - also when your BPMS
+ * deployed nothing because nothing changed. Only the adapter knows which version its BPMS
+ * ended up with, which is why this one stays here.
  * <p>
  * <b>What the core does on its own</b>, once the last adapter of a workflow module
  * finished deploying: {@link #validateNoUnwiredWorkflowTaskMethods(String)} and

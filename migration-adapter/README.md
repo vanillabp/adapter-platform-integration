@@ -1272,12 +1272,12 @@ sequenceDiagram
   App->>PS: startWorkflow(aggregate)   [inside App's tx]
   PS->>PS: validate id round-trips through String, then save aggregate
   Note over PS: no election — new workflows always go to the FIRST adapter
-  PS->>AD: startWorkflowPhaseOne(module, process, aggregate)
-  PS->>OB: scheduleStartWorkflow(… adapterId)   [same tx]
+  PS->>AD: phaseOne(START_WORKFLOW request)
+  PS->>OB: schedule(START_WORKFLOW call, … adapterId)   [same tx]
   PS->>PS: remember adapter in WorkflowAdapterCache (hint)
   App->>App: COMMIT
   OB-->>PS: dispatch → startWorkflowPhaseTwo(id, adapterId)
-  PS->>AD: startWorkflowPhaseTwo
+  PS->>AD: phaseTwo(START_WORKFLOW request)
   alt Camunda 7
     AD->>BPMS: startProcessInstanceByKey(scoped id, businessKey=id, tenant?) unless instanceExists
     Note over AD,BPMS: shared values as process variables

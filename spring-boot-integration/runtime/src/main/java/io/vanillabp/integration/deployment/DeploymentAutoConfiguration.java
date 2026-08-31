@@ -58,7 +58,7 @@ public class DeploymentAutoConfiguration {
         .toList();
 
     // the wiring interface goes in as well: the two module-level checks nobody has to
-    // remember are the core's own duty since story 158
+    // remember are the core's own duty, not an adapter's
     final var deploymentService = new DeploymentService(
         properties, deploymentServices, wiringServices, workflowTaskWiring);
 

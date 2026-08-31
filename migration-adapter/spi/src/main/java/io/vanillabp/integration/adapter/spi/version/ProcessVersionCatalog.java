@@ -5,7 +5,7 @@ import java.util.List;
 /**
  * What a BPMS knows about the deployed versions of a BPMN process - implemented by an
  * adapter whose BPMS can tell, handed to the core during <code>wireBpmn</code> using
- * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker#registerProcessVersions}.
+ * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#registerProcessVersions}.
  * <p>
  * The core needs it only for version SPECIFICATIONS naming a version TAG
  * (<code>&#64;WorkflowTask(version = "release-2024")</code>, <code>version = "&gt;v1.4"</code>):
@@ -61,7 +61,7 @@ public interface ProcessVersionCatalog {
    * still holds - what the startup check for old process versions needs to tell whether
    * the application still serves one. The specs are built exactly like the
    * ones handed to
-   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker#validateTaskWiring},
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#validateTaskWiring},
    * so both directions of the wiring speak about the same thing.
    * <p>
    * Reading a model is BPMS-specific and not every BPMS can do it: an adapter which

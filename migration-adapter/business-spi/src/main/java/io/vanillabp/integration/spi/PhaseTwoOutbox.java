@@ -69,10 +69,9 @@ package io.vanillabp.integration.spi;
  * deduplication window does not widen this one: a redispatch reads the very entry
  * which is still not DONE, so it is the store's own attempt bookkeeping - gruelbox' or
  * the STATUS/ATTEMPTS columns of the stores VanillaBP wrote itself - which carries the
- * guarantee, never the idempotency key. This residual
- * window is accepted (eventual consistency); adapters keep their operations
- * idempotent (see
- * {@code MigratableProcessService#startWorkflowPhaseTwo}). The window is MINIMIZED
+ * guarantee, never the idempotency key. This residual window is accepted (eventual
+ * consistency); adapters keep their operations idempotent, which the adapter SPI's
+ * {@code PhaseOperationHandler} demands of its phase two. The window is MINIMIZED
  * (not closed) for START operations: a store passing
  * &quot;this entry was dispatched before&quot; to the router's dispatch method
  * triggers a probe of the recorded adapter's
@@ -96,8 +95,7 @@ public interface PhaseTwoOutbox {
    * Schedule the given phase-two call. MUST be invoked within the still-running
    * local transaction that persists the workflow aggregate, and MUST enlist in that
    * transaction (entry becomes visible if and only if the transaction commits).
-   *
-   * @param call The phase-two call to schedule
+   * <p>
    * The return value is not decoration: a <code>false</code> means an operation the
    * application asked for will not happen. The store logs it, naming both causes it
    * cannot tell apart - a redelivered at-least-once dispatch, or a genuinely second

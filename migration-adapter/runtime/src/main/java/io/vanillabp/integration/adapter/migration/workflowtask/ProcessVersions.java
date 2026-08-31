@@ -14,7 +14,7 @@ import io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog;
  * What the BPMS of every adapter knows about the deployed versions of the BPMN
  * processes, per (workflow module, BPMN process) - registered by the adapters during
  * <code>wireBpmn</code> (see
- * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker#registerProcessVersions})
+ * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#registerProcessVersions})
  * and used to place a version TAG named by <code>&#64;WorkflowTask(version = ...)</code>
  * and its siblings in the deployment order.
  * <p>
@@ -102,7 +102,7 @@ public class ProcessVersions {
 
   /**
    * Remembers the version an adapter deployed during this boot - see
-   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker#registerDeployedVersion}.
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#registerDeployedVersion}.
    *
    * @param adapterId The adapter ID
    * @param workflowModuleId The workflow module ID
