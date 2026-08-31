@@ -714,7 +714,13 @@ the application's completion of that task reached the BPMS.
 This is not the registry entry 25 rejected, and the difference is the fallback rather than the
 wording. Nothing is written for the sake of routing: the record exists, is written by the delivery
 itself in the delivery's transaction, and is deleted by a retention which was there before. It
-answers only about a task, never about a workflow. And where it says nothing - no store,
+answers only about a task, never about a workflow. What decides whether it may answer is therefore
+not how an operation is declared, but whether the call at hand names a task. `aggregateChanged`
+addresses a workflow and names a task whenever the application passes a task id, and that call is
+elected from the record like any other, while the overload without one walks the adapters as it
+always did. A closed record is narrower still: it turns into the warned no-op only for the
+operations which end the task it names, because a push writes into a scope that outlives the task
+and the workflow may well run on. And where it says nothing - no store,
 `deduplicate-deliveries` switched off, the retention passed, an upgrade whose open tasks predate
 it, Camunda 7 which reports no delivery at all because it delivers in the application's
 transaction - the walk runs exactly as it did. A registry which is wrong routes wrongly; this one
