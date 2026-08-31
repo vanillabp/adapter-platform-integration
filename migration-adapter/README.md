@@ -800,8 +800,8 @@ A workflow is located by asking the adapters (decision 25), and for a task that 
 asked twice on Camunda 8: the election sends `newUpdateTimeoutCommand` against the job, and the
 adapter's phase one sends the same command again a moment later as its pre-commit check. The
 record of that task's delivery knew the answer to the first one all along - it names the adapter
-which delivered - so `completeTask`, `cancelTask` and their user-task twins read it before they
-walk anybody. Why that is not the registry decision 25 rejected is decision 30.
+which delivered - so every call naming a task reads it before it walks anybody. Why that is not
+the registry decision 25 rejected is decision 30.
 
 - The record carries `TASK_ID`, the BPMS' identity of the task, and `TASK_CLOSED_AT`, the moment
   the application's completion of it reached the BPMS. `MigrationProcessService.recordDelivery`
@@ -819,6 +819,14 @@ walk anybody. Why that is not the registry decision 25 rejected is decision 30.
   switched off, a passed retention, a BPMS which reports no delivery identity (Camunda 7 delivers
   in the application's transaction, so a redelivery proves nothing was committed) and an adapter
   which is not prioritized for this workflow any more.
+- What decides whether it is asked at all is the CALL and not the operation: the arguments name a
+  task, or they do not. That is why `aggregateChanged(aggregate, taskId)` is routed by the record
+  as well, although `AGGREGATE_CHANGED` is elected by whoever holds the workflow - while the task
+  is open, the BPMS holding it is the BPMS holding the workflow around it, and on Camunda 8 that
+  saves a search against the secondary storage. A CLOSED record answers only the operations which
+  end the task themselves (`endsTheTaskItNames`), because the scope a
+  push writes into outlives the task and so may the workflow. The same predicate decides the note:
+  a push completes nothing, so it never marks a record closed.
 - The note is written in `addressWorkflowPhaseTwo`, after phase two succeeded, on the dispatching
   thread. Not when the caller asked: until phase two ran the task is still open for the BPMS, and
   on Camunda 8 this very record is what answers the redeliveries which renew the job's lock. A
@@ -834,16 +842,27 @@ walk anybody. Why that is not the registry decision 25 rejected is decision 30.
 - What stays: phase two elects by probing, so a workflow which changed its BPMS between the call
   and the dispatch is still found, and the adapters keep their phase one, so a task which
   disappeared between the delivery and the call still fails synchronously.
-- What is deliberately NOT routed this way is `correlateMessage` and `aggregateChanged`. There is
-  no task and therefore no record naming one, and the question "did any delivery of this aggregate
-  name an adapter" is a different one: it answers where to route, not whether the workflow is
-  alive. Whether the record's meaning is widened that far is its own decision.
+- What is deliberately NOT routed this way is `correlateMessage` and an `aggregateChanged` without
+  a task id. Nothing names a task there, so no record is about them, and the question "did any
+  delivery of this aggregate name an adapter" is a different one: it answers where to route, not
+  whether the workflow is alive. Whether the record's meaning is widened that far is its own
+  decision, and `vanillabp.task.elections.from.record` is the number to decide it on.
+- That counter is what the record answered, tagged by adapter, workflow module, BPMN process and
+  operation. Only the answers are counted. A store which does not implement `recordOfTask` returns
+  nothing, and nothing looks exactly like a task no record was ever written for, so counting the
+  fallback would report a defect where there is none - the counter is read against how many task
+  operations the application makes.
 
 `TaskElectionFromDeliveryRecordTest` holds the routing
 (`anOpenRecordElectsTheAdapterWithoutAnyProbe`,
 `aClosedTaskIsTheWarnedNoOpWithoutAnyProbe`, `withoutARecordTheAdaptersAreProbed`,
-`theRecordIsClosedAfterPhaseTwoAndNotBefore`) and `TaskRecordLookupTest` the store side of
-it.
+`theRecordIsClosedAfterPhaseTwoAndNotBefore`), the push into the scope of a task
+(`anAggregatePushNamingATaskIsElectedFromTheRecord`,
+`anAggregatePushWithoutATaskProbesAsItAlwaysDid`,
+`aClosedTaskDoesNotDecideAboutTheWorkflowAroundIt`,
+`anAggregatePushLeavesTheRecordOfItsTaskOpen`) and the counter
+(`anAnswerFromTheRecordIsCounted`); `TaskRecordLookupTest` holds the store side of it and
+`MicrometerVanillaBpMetricsTest#electionsAnsweredFromTheRecordAreCounted` the meter.
 
 #### Two instances creating the schema at once
 
@@ -1226,9 +1245,11 @@ core and on both platforms.
 ### Pushing a changed aggregate (`aggregateChanged`)
 
 `MigrationProcessService.aggregateChanged(aggregate, taskId)` is `correlateMessage` with
-another verb: save the aggregate, locate the BPMS by probing `awarenessOfWorkflow` and
-schedule an `AGGREGATE_CHANGED` outbox entry. A completed workflow is a warned no-op, an unknown one a
-`WorkflowNotFoundException` naming that the aggregate WAS saved.
+another verb: save the aggregate, locate the BPMS and schedule an `AGGREGATE_CHANGED` outbox
+entry. A completed workflow is a warned no-op, an unknown one a `WorkflowNotFoundException`
+naming that the aggregate WAS saved. Locating means probing `awarenessOfWorkflow`, except where
+the call names a task and the delivery record of that task is still open - then the record
+answers, see [the record answers which BPMS holds a task](#the-record-answers-which-bpms-holds-a-task).
 
 Two decisions are worth knowing:
 
@@ -1643,8 +1664,12 @@ does is inside it, and nothing had to be repeated per BPMS.
   normal state while beans are being built.
   The meters are cached per tag combination, because a delivery must not pay for its own
   measurement, and the tag values are what a deployment fixes: adapter id, workflow module,
-  BPMN process, task definition. Never an aggregate id or a job key - those would grow one
-  time series per workflow, and they belong in the log anyway.
+  BPMN process, task definition, operation. Never an aggregate id or a job key - those would grow
+  one time series per workflow, and they belong in the log anyway.
+  One of the counters is not about a delivery at all: `vanillabp.task.elections.from.record` says
+  how often a call naming a task was routed without asking any BPMS, which is the number the next
+  step of that feature is decided on, see [the record answers which BPMS holds a
+  task](#the-record-answers-which-bpms-holds-a-task).
 - `DeliveryMdc` is a `try`-with-resources remembering the previous values of its six keys and
   putting them back, so a thread the application uses for other work is handed over unchanged.
   It is used around the task delivery and around the phase-two dispatch in `PhaseTwoRouter`,

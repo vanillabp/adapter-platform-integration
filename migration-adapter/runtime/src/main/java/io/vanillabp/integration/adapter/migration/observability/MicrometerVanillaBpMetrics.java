@@ -195,6 +195,31 @@ public class MicrometerVanillaBpMetrics implements VanillaBpMetrics, MeterBinder
   }
 
   @Override
+  public void taskElectionAnsweredFromRecord(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String operation) {
+
+    final var meterRegistry = registry;
+    if (meterRegistry == null) {
+      return;
+    }
+
+    counter(
+        meterRegistry,
+        TASK_ELECTIONS_FROM_RECORD,
+        "Elections answered by the delivery record of the task the call names, instead of by asking every BPMS",
+        Tags.of(
+            TAG_ADAPTER, tagValue(adapterId),
+            TAG_WORKFLOW_MODULE, tagValue(workflowModuleId),
+            TAG_BPMN_PROCESS, tagValue(bpmnProcessId),
+            TAG_OPERATION, tagValue(operation)))
+        .increment();
+
+  }
+
+  @Override
   public void outboxDispatchStarted(
       final String operation,
       final boolean previouslyAttempted) {

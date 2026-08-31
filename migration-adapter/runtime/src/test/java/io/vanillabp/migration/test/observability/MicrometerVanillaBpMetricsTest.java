@@ -162,6 +162,41 @@ public class MicrometerVanillaBpMetricsTest {
   }
 
   @Test
+  @DisplayName("An election answered by the delivery record is counted per operation")
+  public void electionsAnsweredFromTheRecordAreCounted() {
+
+    final var registry = new SimpleMeterRegistry();
+    final var metrics = new MicrometerVanillaBpMetrics();
+    metrics.bindTo(registry);
+
+    metrics.taskElectionAnsweredFromRecord("c8", "module", "Process", "COMPLETE_TASK");
+    metrics.taskElectionAnsweredFromRecord("c8", "module", "Process", "COMPLETE_TASK");
+    metrics.taskElectionAnsweredFromRecord("c8", "module", "Process", "AGGREGATE_CHANGED");
+
+    Assertions
+        .assertEquals(
+            2.0,
+            registry
+                .get(VanillaBpMetrics.TASK_ELECTIONS_FROM_RECORD)
+                .tag(VanillaBpMetrics.TAG_ADAPTER, "c8")
+                .tag(VanillaBpMetrics.TAG_WORKFLOW_MODULE, "module")
+                .tag(VanillaBpMetrics.TAG_BPMN_PROCESS, "Process")
+                .tag(VanillaBpMetrics.TAG_OPERATION, "COMPLETE_TASK")
+                .counter()
+                .count(),
+            "what the record saved is read per operation, and the place it happened is a tag");
+    Assertions
+        .assertEquals(
+            1.0,
+            registry
+                .get(VanillaBpMetrics.TASK_ELECTIONS_FROM_RECORD)
+                .tag(VanillaBpMetrics.TAG_OPERATION, "AGGREGATE_CHANGED")
+                .counter()
+                .count());
+
+  }
+
+  @Test
   @DisplayName("A store which can count its waiting entries gets a gauge, whenever it registers")
   public void pendingOutboxEntriesAreGauged() {
 
