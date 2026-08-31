@@ -2157,8 +2157,8 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Answers from the delivery record of this aggregate which adapter holds the task the
-   * operation names, so no BPMS has to be asked for it.
+   * Answers from the delivery record of this aggregate which adapter holds the task THIS
+   * CALL names, so no BPMS has to be asked for it.
    * <p>
    * VanillaBP wrote that record while the handler of the task ran, in the database of the
    * workflow aggregate: it names the adapter which delivered the task, and it says whether
@@ -2166,11 +2166,20 @@ public class MigrationProcessService<A> {
    * the adapters would ask a BPMS for, one round trip per operation - on Camunda 8 the very
    * command the adapter's phase one sends again a moment later.
    * <p>
+   * What decides whether the record can answer is the CALL rather than the operation: a call
+   * which names a task asks about that task, however the operation is elected. Pushing a
+   * changed aggregate into the scope of a task is the case where the two differ - the values
+   * land in the workflow, and the task the call names is what says where. As long as that task
+   * is open, the BPMS holding it is the BPMS holding the workflow around it, which is why the
+   * answer stays one about a task (see decision 30 in the repository's DECISIONS.md). A task
+   * which is over says nothing about the workflow around it, so a closed record answers only
+   * the operations which end the task themselves.
+   * <p>
    * <code>null</code> means the record cannot answer, and then everything happens as it did
    * before: no store, deliveries not deduplicated, the retention gone over the record, a BPMS
    * which reports no delivery identity, a workflow started before this version was deployed,
    * or an adapter which is not configured any more. That fallback is what keeps the record a
-   * hint rather than a registry (see decision 30 in the repository's DECISIONS.md).
+   * hint rather than a registry.
    *
    * @param operation The operation being elected for
    * @param workflowAggregateId The workflow aggregate the operation is about
@@ -2182,11 +2191,11 @@ public class MigrationProcessService<A> {
       final Object workflowAggregateId,
       final Map<String, String> args) {
 
-    if (!addressesATask(operation) || (workflowAggregateId == null)) {
+    if (workflowAggregateId == null) {
       return null;
     }
-    final var taskId = args.get(PhaseTwoCall.ARG_TASK_ID);
-    if ((taskId == null) || taskId.isBlank()) {
+    final var taskId = theTaskNamedBy(args);
+    if (taskId == null) {
       return null;
     }
     final var deliveryLog = resolveTaskDeliveryLog();
@@ -2215,17 +2224,33 @@ public class MigrationProcessService<A> {
           workflowAggregateId);
       return null;
     }
+    final var taskIsOpen = record.taskClosedAt() == null;
+    if (!taskIsOpen && !endsTheTaskItNames(operation)) {
+      // a task which is over is no statement about the workflow around it: the scope the
+      // push writes into outlives the task, and so may the workflow. Only an operation
+      // which ends the task itself may read a closed record as "there is nothing left to
+      // do here"
+      log.debug(
+          "Task '{}' of aggregate '{}' was closed at {}, which does not say whether its workflow "
+              + "still runs - probing instead",
+          taskId,
+          workflowAggregateId,
+          record.taskClosedAt());
+      return null;
+    }
+    metrics
+        .taskElectionAnsweredFromRecord(record.adapterId(), workflowModuleId, bpmnProcessId, operation.name());
     log.debug(
         "Adapter '{}' delivered task '{}' of aggregate '{}' and the task is {} - no BPMS is asked "
             + "which of them holds it",
         record.adapterId(),
         taskId,
         workflowAggregateId,
-        record.taskClosedAt() == null
+        taskIsOpen
             ? "still open"
             : "closed since %s".formatted(record.taskClosedAt()));
     return new WorkflowLocator.Location<>(
-        record.taskClosedAt() == null
+        taskIsOpen
             ? WorkflowAwareness.ACTIVE
             : WorkflowAwareness.COMPLETED, adapter, null);
 
@@ -2239,6 +2264,12 @@ public class MigrationProcessService<A> {
    * A failure is reported and swallowed: the operation itself went through, the outbox entry
    * is done, and repeating a dispatch which succeeded because a mark did not is the worse of
    * the two. What is lost is one BPMS round trip on the next operation naming that task.
+   * <p>
+   * Asked of the OPERATION and not of the call, unlike the election in
+   * {@link #locateFromDeliveryRecord(PhaseOperation, Object, Map)}: a call which merely names
+   * a task leaves that task open - pushing a changed aggregate into its scope completes
+   * nothing - so writing the moment of a completion there would close a record while the BPMS
+   * still hands the task out.
    *
    * @param operation The operation which was dispatched
    * @param workflowAggregateId The workflow aggregate it was about
@@ -2249,11 +2280,11 @@ public class MigrationProcessService<A> {
       final Object workflowAggregateId,
       final Map<String, String> args) {
 
-    if (!addressesATask(operation) || (workflowAggregateId == null)) {
+    if (!endsTheTaskItNames(operation) || (workflowAggregateId == null)) {
       return;
     }
-    final var taskId = args.get(PhaseTwoCall.ARG_TASK_ID);
-    if ((taskId == null) || taskId.isBlank()) {
+    final var taskId = theTaskNamedBy(args);
+    if (taskId == null) {
       return;
     }
     final var deliveryLog = resolveTaskDeliveryLog();
@@ -2276,14 +2307,29 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Whether the operation is about ONE task of a workflow - the operations whose election
-   * the delivery record of that task can answer, because a record exists per delivered task
-   * and none exists for a workflow as a whole.
+   * Whether the operation ENDS the task it names, which is what an operation elected by
+   * whoever holds a task does: completing it or cancelling it. An operation elected by
+   * whoever holds the WORKFLOW may name a task as well, and then it says where its values
+   * go rather than that the task is finished.
    */
-  private static boolean addressesATask(
+  private static boolean endsTheTaskItNames(
       final PhaseOperation operation) {
 
     return (operation.election() == Election.HOLDS_THE_TASK) || (operation.election() == Election.HOLDS_THE_USER_TASK);
+
+  }
+
+  /**
+   * The task a call names, or <code>null</code> where it names none - the question which
+   * decides whether the delivery record of a task can be asked at all.
+   */
+  private static String theTaskNamedBy(
+      final Map<String, String> args) {
+
+    final var taskId = args.get(PhaseTwoCall.ARG_TASK_ID);
+    return ((taskId == null) || taskId.isBlank())
+        ? null
+        : taskId;
 
   }
 

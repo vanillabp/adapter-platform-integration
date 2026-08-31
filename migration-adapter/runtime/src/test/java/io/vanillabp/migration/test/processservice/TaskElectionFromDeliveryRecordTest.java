@@ -19,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxResolver;
 import io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver;
@@ -45,6 +46,12 @@ import io.vanillabp.migration.test.RecordedPhaseOperations;
  * answers. What it must NOT do is answer where it cannot: no record, an adapter which is not
  * prioritized any more, a store which cannot be queried by a task, and the probe decides as
  * it always did.
+ * <p>
+ * The same holds for a call which names a task although its operation is about the workflow -
+ * pushing a changed aggregate into the scope of one task. It asks about that task like every
+ * other call naming one, as long as the task is open; a task which is over says nothing about
+ * the workflow around it. And how often the record answered is counted, because that number is
+ * what says whether reading it was worth anything.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TaskElectionFromDeliveryRecordTest {
@@ -229,6 +236,40 @@ public class TaskElectionFromDeliveryRecordTest {
 
   }
 
+  /** What the elections answered from the record were counted as. */
+  static class RecordingMetrics implements VanillaBpMetrics {
+
+    /**
+     * One counted election.
+     *
+     * @param adapterId The adapter the record named
+     * @param workflowModuleId The workflow module of the BPMN process
+     * @param bpmnProcessId The BPMN process the task belongs to
+     * @param operation The operation whose call named the task
+     */
+    record AnsweredElection(
+                            String adapterId,
+                            String workflowModuleId,
+                            String bpmnProcessId,
+                            String operation) {
+    }
+
+    final List<AnsweredElection> answeredFromRecord = new ArrayList<>();
+
+    @Override
+    public void taskElectionAnsweredFromRecord(
+        final String adapterId,
+        final String workflowModuleId,
+        final String bpmnProcessId,
+        final String operation) {
+
+      answeredFromRecord
+          .add(new AnsweredElection(adapterId, workflowModuleId, bpmnProcessId, operation));
+
+    }
+
+  }
+
   /** The outbox, reduced to what it is here: what phase two was planned with. */
   static class CapturingOutbox implements PhaseTwoOutbox {
 
@@ -247,6 +288,8 @@ public class TaskElectionFromDeliveryRecordTest {
   private final InMemoryDeliveryLog deliveryLog = new InMemoryDeliveryLog();
 
   private final CapturingOutbox outbox = new CapturingOutbox();
+
+  private final RecordingMetrics metrics = new RecordingMetrics();
 
   private static AggregatePersistenceAware<Object> persistence() {
 
@@ -302,7 +345,7 @@ public class TaskElectionFromDeliveryRecordTest {
       final ProbeAdapter adapter,
       final TaskDeliveryLog log) {
 
-    return new MigrationProcessService<>(
+    final var service = new MigrationProcessService<>(
         MODULE, PROCESS, Object.class, properties(), persistence(), List.of(adapter), new PhaseTwoOutboxResolver() {
 
           @Override
@@ -338,6 +381,8 @@ public class TaskElectionFromDeliveryRecordTest {
           }
 
         });
+    service.setMetrics(metrics);
+    return service;
 
   }
 
@@ -549,6 +594,122 @@ public class TaskElectionFromDeliveryRecordTest {
         messages.stream().anyMatch(message -> message.contains("delivery record could not be marked")),
         "what was lost is said out loud: "
             + messages);
+
+  }
+
+  @Test
+  @DisplayName("An election the record answered is counted, and one which walked is not")
+  public void anAnswerFromTheRecordIsCounted() {
+
+    final var adapter = new ProbeAdapter(ADAPTER);
+    final var service = serviceWith(adapter, deliveryLog);
+    recordOpenTaskOf(ADAPTER, TASK);
+
+    service.completeTask(new Object(), TASK);
+
+    assertEquals(
+        List
+            .of(
+                new RecordingMetrics.AnsweredElection(
+                    ADAPTER, MODULE, PROCESS, PhaseOperation.COMPLETE_TASK.name())),
+        metrics.answeredFromRecord,
+        "the number which says whether reading the record was worth anything");
+
+    service.completeTask(new Object(), "a-task-nobody-wrote-a-record-for");
+
+    assertEquals(
+        1,
+        metrics.answeredFromRecord.size(),
+        "a walk is not counted: a store which cannot be queried by a task answers nothing either, "
+            + "and calling that a miss would name a defect where there is none");
+
+  }
+
+  @Test
+  @DisplayName("An aggregate push into the scope of an open task elects that task's adapter")
+  public void anAggregatePushNamingATaskIsElectedFromTheRecord() {
+
+    final var adapter = new ProbeAdapter(ADAPTER);
+    final var service = serviceWith(adapter, deliveryLog);
+    recordOpenTaskOf(ADAPTER, TASK);
+
+    service.aggregateChanged(new Object(), TASK);
+
+    assertEquals(
+        0,
+        adapter.probes.get(),
+        "the call names a task, so the record answers it - on Camunda 8 that saves a search against "
+            + "the secondary storage");
+    assertEquals(
+        1,
+        adapter.operations.phaseOneOf(PhaseOperation.AGGREGATE_CHANGED).size(),
+        "the adapter the record names pushes the values as it always did");
+    assertEquals(
+        List
+            .of(
+                new RecordingMetrics.AnsweredElection(
+                    ADAPTER, MODULE, PROCESS, PhaseOperation.AGGREGATE_CHANGED.name())),
+        metrics.answeredFromRecord);
+
+  }
+
+  @Test
+  @DisplayName("An aggregate push without a task id probes, exactly as before")
+  public void anAggregatePushWithoutATaskProbesAsItAlwaysDid() {
+
+    final var adapter = new ProbeAdapter(ADAPTER);
+    final var service = serviceWith(adapter, deliveryLog);
+    recordOpenTaskOf(ADAPTER, TASK);
+
+    service.aggregateChanged(new Object(), null);
+
+    assertEquals(
+        1,
+        adapter.probes.get(),
+        "nothing names a task here, and no workflow is ever located from a record");
+    assertTrue(metrics.answeredFromRecord.isEmpty());
+
+  }
+
+  @Test
+  @DisplayName("A task which is over says nothing about the workflow around it")
+  public void aClosedTaskDoesNotDecideAboutTheWorkflowAroundIt() {
+
+    final var adapter = new ProbeAdapter(ADAPTER);
+    final var service = serviceWith(adapter, deliveryLog);
+    recordOpenTaskOf(ADAPTER, TASK);
+    deliveryLog.markTaskClosed(MODULE, PROCESS, AGGREGATE, TASK);
+
+    service.aggregateChanged(new Object(), TASK);
+
+    assertEquals(
+        1,
+        adapter.probes.get(),
+        "the scope the values go into outlives the task, and so may the workflow");
+    assertEquals(
+        1,
+        adapter.operations.phaseOneOf(PhaseOperation.AGGREGATE_CHANGED).size(),
+        "so the push happens rather than being the no-op a completion of that task would be");
+
+  }
+
+  @Test
+  @DisplayName("An aggregate push leaves the record of the task it names open")
+  public void anAggregatePushLeavesTheRecordOfItsTaskOpen() {
+
+    final var adapter = new ProbeAdapter(ADAPTER);
+    final var service = serviceWith(adapter, deliveryLog);
+    recordOpenTaskOf(ADAPTER, TASK);
+
+    service.aggregateChanged(new Object(), TASK);
+    final var planned = outbox.scheduled.get(0);
+    service
+        .executePhaseTwo(PhaseOperation.AGGREGATE_CHANGED, AGGREGATE, planned.adapterId(), planned.args(), false);
+
+    assertNull(
+        deliveryLog.recordOfTask(MODULE, PROCESS, AGGREGATE, TASK).orElseThrow().taskClosedAt(),
+        "a push completes nothing - the BPMS still hands that task out, and its redeliveries are "
+            + "still answered from this record");
 
   }
 

@@ -67,6 +67,20 @@ public interface VanillaBpMetrics {
   String TASK_REDELIVERIES_CONCURRENT = "vanillabp.task.redeliveries.concurrent";
 
   /**
+   * Elections which the delivery record of a task answered, so no BPMS was asked which
+   * of them holds it. Counted for every operation whose call names a task, the push of
+   * a changed aggregate into the scope of one included.
+   * <p>
+   * Only the answered elections are counted, and there is deliberately no counter for
+   * the ones which fell back to the walk: a store which does not implement
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLog#recordOfTask} answers nothing,
+   * which is indistinguishable from a task nobody wrote a record for, and reporting
+   * that as a miss would name a defect where there is none. It is read against how many
+   * of an application's calls name a task at all.
+   */
+  String TASK_ELECTIONS_FROM_RECORD = "vanillabp.task.elections.from.record";
+
+  /**
    * Phase-two calls dispatched out of the transaction outbox.
    */
   String OUTBOX_DISPATCHES = "vanillabp.outbox.dispatches";
@@ -203,6 +217,23 @@ public interface VanillaBpMetrics {
       final String workflowModuleId,
       final String bpmnProcessId,
       final String taskDefinition) {
+
+  }
+
+  /**
+   * The delivery record of a task answered which adapter holds it, so the walk over the
+   * configured BPMS did not run.
+   *
+   * @param adapterId The id of the adapter the record names
+   * @param workflowModuleId The workflow module of the BPMN process
+   * @param bpmnProcessId The BPMN process the task belongs to
+   * @param operation The persisted name of the operation whose call named the task
+   */
+  default void taskElectionAnsweredFromRecord(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String operation) {
 
   }
 
