@@ -108,7 +108,7 @@ flowchart TB
   H -->|no| P["probe next adapter in list order<br/>awarenessOfTask / awarenessOfUserTask / awarenessOfWorkflow<br/>with WorkflowScope (module + served process ids)"]
   P0 --> R
   P --> R{"answer"}
-  R -->|ACTIVE| OK["execute here; cache.put"]
+  R -->|ACTIVE| OK["execute here, then cache.put"]
   R -->|COMPLETED| CO["warned no-op<br/>(viewer: regular result)"]
   R -->|UNKNOWN_TO_BPMS| N{"more adapters?"}
   N -->|yes| P
@@ -407,7 +407,7 @@ publishes the message.
 ```mermaid
 sequenceDiagram
   autonumber
-  participant App as Application (in its tx; maybe inside a @WorkflowTask)
+  participant App as Application (in its tx, maybe inside a @WorkflowTask)
   participant PS as MigrationProcessService
   participant WL as WorkflowLocator
   participant AD as Adapter holding the workflow
@@ -431,7 +431,7 @@ sequenceDiagram
     Note over AD: nothing — CorrelateMessageCmd is final, no PREFLIGHT_CHECK
   end
   PS->>OB: scheduleCorrelateMessage(…, activationId from RunningActivation)
-  Note over OB: key = CORRELATE_MESSAGE|module|process|id|message|correlationId|activationId<br/>dedups WAITING entries only; multi-instance siblings get distinct keys
+  Note over OB: key = CORRELATE_MESSAGE|module|process|id|message|correlationId|activationId<br/>dedups WAITING entries only · multi-instance siblings get distinct keys
   App->>App: COMMIT
   OB-->>PS: dispatch
   PS->>WL: locate again — Patience.WAIT_FOR_VISIBILITY (waits out the window here, and repeats the entry while the hinted BPMS stays silent)
@@ -523,7 +523,7 @@ sequenceDiagram
   P->>AD: constructor — AdapterPlatformVersion.requireCompatiblePlatform(type, class)
   P->>DS: deploy(module)
   DS->>DS: adapters = prioritized(module) ∪ every workflow-level override
-  DS->>AD: validateDistinctAdapterInstances(ids)  [default: nothing; >1 id of this type]
+  DS->>AD: validateDistinctAdapterInstances(ids)  [does nothing by default, asked when more than one id has this type]
   DS->>AD: defaultNameClashAvoidance()  [all three: BY_ADAPTER since 2026-08-22]
   DS->>AD: warnAboutUnscopedIdentifiers(module) if mode is NONE
   loop per BPMN file of the module
@@ -712,11 +712,11 @@ sequenceDiagram
       WT->>AG: save(aggregate)  — COMMITTED on purpose
       WT->>DL: record(key, BPMN_ERROR, code)
     else other exception
-      Note over WT,TX: rollback, no record; rethrown unchanged (conflict → one guiding ERROR)
+      Note over WT,TX: rollback, no record · rethrown unchanged (conflict → one guiding ERROR)
     end
     Note over WT,DL: record() == false → another delivery of this key committed while the handler ran:<br/>one WARN (task, process, module, aggregate, adapter, delivery key)<br/>+ vanillabp.task.redeliveries.concurrent. No rollback, both handlers really ran.
   else record exists (redelivery)
-    Note over WT: handler is NOT run; recorded outcome is returned again<br/>COMPLETION_PENDING → stillOpen(key) (LAST_SEEN_AT), age vs max-task-age
+    Note over WT: handler is NOT run, the recorded outcome is returned again<br/>COMPLETION_PENDING → stillOpen(key) (LAST_SEEN_AT), age vs max-task-age
   end
   TX-->>WT: COMMIT
   WT-->>AD: WorkflowTaskOutcome
@@ -730,7 +730,7 @@ sequenceDiagram
     Note over AD: InterruptedException on completion: silent return
   end
 
-  Note over BPMS,AD: Between COMMIT and the answer the BPMS may redeliver → step 5 finds the record.<br/>Two deliveries at the SAME time both find no record and both run; the one which loses<br/>the record says so (WARN) and is counted.
+  Note over BPMS,AD: Between COMMIT and the answer the BPMS may redeliver → step 5 finds the record.<br/>Two deliveries at the SAME time both find no record and both run. The one which loses<br/>the record says so (WARN) and is counted.
 ```
 
 `WorkflowTaskRegistryTest` holds the wiring calls and the outcomes one by one
@@ -758,15 +758,15 @@ classDiagram
     <<adapter builds one per delivery>>
     +getTaskDefinition() String
     +getWorkflowAggregateId() String  «serialized»
-    +getTaskId() String  «default null; needed for @TaskId»
+    +getTaskId() String  «default null, needed for @TaskId»
     +getTaskEvent() Event  «default null → CREATED»
     +getTaskParameter(name) Object  «default null»
     +getMultiInstances() Map  «default empty»
     +getProcessVersion() String  «default null → matches every method without version»
-    +runInCurrentTransaction() boolean  «default false; C7 true, except on an own engine datasource»
+    +runInCurrentTransaction() boolean  «default false · C7 true, except on an own engine datasource»
     +getAdapterId() String  «default null — fills the election cache»
-    +getDeliveryId() String  «default null → no record; C8 job key, PEA task id, C7 the engine's job id on an own datasource and none otherwise, never for a user task»
-    +getActivationId() String  «default null; C7 activityInstanceId, C8 elementInstanceKey, PEA task id»
+    +getDeliveryId() String  «default null → no record · C8 job key, PEA task id, C7 the engine's job id on an own datasource and none otherwise, never for a user task»
+    +getActivationId() String  «default null · C7 activityInstanceId, C8 elementInstanceKey, PEA task id»
     +predatesDeployedVersion() boolean
   }
   class WorkflowTaskOutcome {
@@ -782,11 +782,11 @@ classDiagram
   class BpmsInitiatedStartContext {
     +getStartEventId() String
     +getKind() TIMER | SIGNAL | CONDITIONAL
-    +getStartInstant() Instant  «ideal: the time the engine scheduled the start for; C7: the notification's moment»
+    +getStartInstant() Instant  «ideal: the time the engine scheduled the start for · C7: the notification's moment»
     +getNaturalIdentity() String  «default null»
     +getSignalName() String
     +getVariables() Map
-    +getNativeInstanceId() String  «C8: process instance key; C7 null»
+    +getNativeInstanceId() String  «C8: process instance key · C7 null»
     +getProcessVersion() String
     +runInCurrentTransaction() boolean
     +getAggregateSyncMode() AggregateSyncMode
@@ -805,7 +805,7 @@ classDiagram
     +getWorkflowAggregateId() String
     +getKind() COMPLETED | TERMINATED  «C8 never sees TERMINATED»
     +getEndTime() Instant
-    +getEndEventId() String  «default null; C8 always null»
+    +getEndEventId() String  «default null · C8 always null»
     +getProcessVersion() String
     +runInCurrentTransaction() boolean
     +getAdapterId() String
@@ -942,7 +942,7 @@ sequenceDiagram
   E->>AD: execute job J again (retries decremented)
   AD->>WT: invokeWorkflowTask(deliveryId = J)
   WT->>DB: recordedDelivery(key … J) — found
-  WT-->>AD: the recorded outcome; the @WorkflowTask method is not entered
+  WT-->>AD: the recorded outcome, the @WorkflowTask method is not entered
 ```
 
 Two deliveries of that mode carry no identity at all, the notification about a user task and the
@@ -1251,7 +1251,7 @@ sequenceDiagram
   participant OB as PhaseTwoOutbox
   participant BPMS
   App->>PS: startWorkflow(aggregate)   [inside App's tx]
-  PS->>PS: validate id round-trips through String; save aggregate
+  PS->>PS: validate id round-trips through String, then save aggregate
   Note over PS: no election — new workflows always go to the FIRST adapter
   PS->>AD: startWorkflowPhaseOne(module, process, aggregate)
   PS->>OB: scheduleStartWorkflow(… adapterId)   [same tx]
@@ -1384,19 +1384,19 @@ classDiagram
     <<adapter SPI, one instance per adapter id>>
     +getAdapterId() String
     .. identity & switches ..
-    +canLocateWorkflows() boolean  «default true; C8 without secondary storage and PEA: false ⇒ the boot refuses a second adapter»
-    +deliversTasksAtLeastOnce() boolean  «default false; C8/PEA true; C7 true on an own engine datasource»
-    +isPhaseTwoFailureRepeatable(Throwable) boolean  «default true; false ⇒ BLOCKED after one attempt»
-    +workflowVisibilityDelay() WorkflowVisibilityDelay  «default none; C8: 10 s»
+    +canLocateWorkflows() boolean  «default true · C8 without secondary storage and PEA: false ⇒ the boot refuses a second adapter»
+    +deliversTasksAtLeastOnce() boolean  «default false · C8/PEA true · C7 true on an own engine datasource»
+    +isPhaseTwoFailureRepeatable(Throwable) boolean  «default true · false ⇒ BLOCKED after one attempt»
+    +workflowVisibilityDelay() WorkflowVisibilityDelay  «default none · C8: 10 s»
     +openTaskCount(module, process) Long  «default null»
     .. probes (phase one AND at dispatch) ..
     +awarenessOfTask(scope, aggregateId, taskId) WorkflowAwareness
     +awarenessOfUserTask(scope, aggregateId, taskId) WorkflowAwareness
     +awarenessOfWorkflow(scope, persistence, aggregateId) WorkflowAwareness
-    +awarenessOfWorkflowForRedispatch(...) WorkflowAwareness  «default → awarenessOfWorkflow; NEVER optimistic»
+    +awarenessOfWorkflowForRedispatch(...) WorkflowAwareness  «default → awarenessOfWorkflow · NEVER optimistic»
     .. what this adapter does, per operation ..
     +phaseOperations() Map~PhaseOperation, PhaseOperationHandler~
-    «the map is the statement; the boot refuses an adapter missing a required operation»
+    «the map is the statement, and the boot refuses an adapter missing a required operation»
     .. viewer (read-only, no tx) ..
     +getProcessDefinitions(...) List  «default throws guiding»
     +getBpmnXml(nativeDefinitionId) InputStream
@@ -1416,7 +1416,7 @@ classDiagram
   }
   class PhaseOperationHandler {
     <<one per operation, contributed by the adapter>>
-    +phaseOne(PhaseOneRequest)  «ask, inside the caller's tx; throwing fails it»
+    +phaseOne(PhaseOneRequest)  «ask, inside the caller's tx · throwing fails it»
     +phaseTwo(PhaseTwoRequest)  «act, after the commit, at-least-once»
   }
   class PhaseOperation {
@@ -1586,7 +1586,7 @@ sequenceDiagram
   PS->>PS: cache.put(module, process, id → adapterId)  (hint at scheduling time)
   App->>App: COMMIT (aggregate + entry together)
 
-  DP->>OB: claim due entry (JDBC/Mongo: attempts++ before dispatch; gruelbox: no claim)
+  DP->>OB: claim due entry (JDBC/Mongo: attempts++ before dispatch · gruelbox: no claim)
   DP->>RT: dispatch(call, previouslyAttempted)
   RT->>RT: requireTransaction (Quarkus) / gruelbox tx (Spring)
   RT->>PS: executePhaseTwo(START_WORKFLOW, id, adapterId, args, previouslyAttempted)
@@ -1730,11 +1730,11 @@ outbound operation carries it to the BPMS, and nothing in VanillaBP ever reads i
 ```mermaid
 flowchart LR
   subgraph APP["Application"]
-    AGG["workflow aggregate<br/>@SyncWithBPMS / @NoSyncWithBPMS<br/>(class › attribute › nested type; default: adapter's = FULL)"]
+    AGG["workflow aggregate<br/>@SyncWithBPMS / @NoSyncWithBPMS<br/>(class › attribute › nested type · default: adapter's = FULL)"]
   end
 
   subgraph CORE["Core"]
-    SV["syncedWorkflowAggregateValues(…)<br/>computes the shared map;<br/>id attribute ALWAYS included"]
+    SV["syncedWorkflowAggregateValues(…)<br/>computes the shared map,<br/>id attribute ALWAYS included"]
     UP["unsharedWorkflowAggregateProperties<br/>→ startup WARN per expression reading an unshared attribute (C7)"]
     TPN["taskParameterNames(module, process, task)<br/>→ what a subscription must fetch"]
   end
@@ -1829,7 +1829,7 @@ sequenceDiagram
     BPMS->>AD: job of the injected `end` execution listener on the start event (worker thread)
     AD->>BS: startWorkflowByBpms(ctx: nativeInstanceId=processInstanceKey, runInCurrentTransaction=false)
   end
-  BS->>BS: derive id: BPMS identity > trigger time > generated > left to persistence
+  BS->>BS: derive id: BPMS identity › trigger time › generated › left to persistence
   BS->>AG: find existing aggregate with that id (repeated notification builds nothing twice)
   BS->>BS: instantiate, write id + variables the model set
   BS->>App: optional hook builds/enriches the aggregate
@@ -1997,7 +1997,7 @@ after that commit, and the inbound one an adapter's worker or engine thread brin
 flowchart TB
   subgraph CALLER["Caller's transaction (the application opened it)"]
     direction TB
-    A1["save workflow aggregate"] --> A2["elect adapter as the operation's Election says<br/>(WorkflowLocator: cache hint → probes;<br/>one question per adapter, nothing sleeps here)"]
+    A1["save workflow aggregate"] --> A2["elect adapter as the operation's Election says<br/>(WorkflowLocator: cache hint → probes,<br/>one question per adapter, nothing sleeps here)"]
     A2 --> A3["handler.phaseOne(request)<br/>asks only, never advances<br/>(skipped where only a hint answered)"]
     A3 --> A4["outbox.schedule(PhaseTwoCall)<br/>enlisted in this transaction"]
     A4 --> A5["pre-commit hook<br/>(C8 job-timeout / user-task update,<br/>PEA PREFLIGHT_CHECK)"]
