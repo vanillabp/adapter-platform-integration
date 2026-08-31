@@ -29,7 +29,8 @@ import io.vanillabp.spi.process.WorkflowNotFoundException;
  * the correlation's election probes that adapter first - and where that adapter does
  * not report the workflow yet, the correlation is PLANNED rather than waited for: the
  * caller's transaction is not the place to sit out a read model. The dispatch asks
- * again and takes the time. A workflow nobody ever started has no such record and
+ * again, and where the answer is still no it hands the entry back with a due time instead
+ * of holding its thread. A workflow nobody ever started has no such record and
  * still fails immediately, inside the call.
  */
 @SpringBootTest(classes = TestApplication.class)
@@ -116,7 +117,7 @@ public class WorkflowVisibilityDelayTest {
             + elapsed);
     assertTrue(
         awareness.remainingInvisibleProbes() > 0,
-        "phase one asks once and leaves the waiting to the dispatch");
+        "phase one asks once and leaves asking again to the dispatch");
 
     final var deadline = System.currentTimeMillis() + 10000;
     while (listener.getCorrelatedMessages().isEmpty()) {

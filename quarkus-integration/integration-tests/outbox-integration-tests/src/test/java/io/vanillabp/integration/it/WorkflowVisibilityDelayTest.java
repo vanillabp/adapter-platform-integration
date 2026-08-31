@@ -33,7 +33,8 @@ import jakarta.transaction.UserTransaction;
  * correlation's election probes that adapter first - and where that adapter does not
  * report the workflow yet, the correlation is PLANNED rather than waited for: the
  * caller's transaction is not the place to sit out a read model. The dispatch asks
- * again and takes the time. A workflow nobody ever started has no such record and
+ * again, and where the answer is still no it hands the entry back with a due time instead
+ * of holding its thread. A workflow nobody ever started has no such record and
  * fails immediately, inside the call.
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -101,8 +102,10 @@ public class WorkflowVisibilityDelayTest {
 
     final var aggregate = started("visibility-delay");
     // the BPMS holds the workflow but reports it as unknown for the next three
-    // probes - what an exporter-fed read model does right after a start
-    awareness.becomeVisibleAfter(3, Duration.ofSeconds(5));
+    // probes - what an exporter-fed read model does right after a start. Each dispatch
+    // asks once and gives the entry back due in the window, so three probes are three
+    // attempts: the window is what decides how long the correlation takes
+    awareness.becomeVisibleAfter(3, Duration.ofSeconds(1));
 
     final var startedAt = System.nanoTime();
     userTransaction.begin();
@@ -123,7 +126,7 @@ public class WorkflowVisibilityDelayTest {
             + elapsed);
     assertTrue(
         awareness.remainingInvisibleProbes() > 0,
-        "phase one asks once and leaves the waiting to the dispatch");
+        "phase one asks once and leaves asking again to the dispatch");
 
     final var deadline = System.currentTimeMillis() + 30_000;
     while (listener.getCorrelatedMessages().isEmpty()) {

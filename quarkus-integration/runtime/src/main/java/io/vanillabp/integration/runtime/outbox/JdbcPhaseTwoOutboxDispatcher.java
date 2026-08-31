@@ -107,6 +107,16 @@ public class JdbcPhaseTwoOutboxDispatcher {
       SET STATUS = '%s' \
       WHERE ID = ?""";
 
+  /**
+   * Moves the next attempt of a claimed entry closer than the configured backoff, for a
+   * dispatch which said how long its reason lasts. The claim already counted the
+   * attempt, so this shortens the wait and nothing else.
+   */
+  private static final String RESCHEDULE_ENTRY = """
+      UPDATE %s \
+      SET NEXT_ATTEMPT_AT = ? \
+      WHERE ID = ?""";
+
   private static final String DELETE_EXPIRED_DONE_ENTRIES = """
       DELETE FROM %s \
       WHERE STATUS = '%s' AND DONE_AT < ?""";
@@ -120,6 +130,8 @@ public class JdbcPhaseTwoOutboxDispatcher {
   private String markEntryDone;
 
   private String markEntryBlocked;
+
+  private String rescheduleEntry;
 
   private String deleteExpiredDoneEntries;
 
@@ -206,6 +218,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
     claimEntry = CLAIM_ENTRY.formatted(tableName);
     markEntryDone = MARK_ENTRY_DONE.formatted(tableName, STATUS_DONE);
     markEntryBlocked = MARK_ENTRY_BLOCKED.formatted(tableName, STATUS_BLOCKED);
+    rescheduleEntry = RESCHEDULE_ENTRY.formatted(tableName);
     deleteExpiredDoneEntries = DELETE_EXPIRED_DONE_ENTRIES.formatted(tableName, STATUS_DONE);
 
     if (properties.isCreateSchema()) {
@@ -504,6 +517,31 @@ public class JdbcPhaseTwoOutboxDispatcher {
             entry.attempts() + 1,
             entry.id(),
             e);
+        return;
+      }
+      final var retryAfter = io.vanillabp.integration.spi.PhaseTwoRetryLater.retryAfter(e);
+      if (retryAfter != null) {
+        // the dispatch knows when asking again can help - a workflow the BPMS has not
+        // made searchable yet is the case - so the entry waits that long instead of the
+        // configured backoff. What ends a reason which never goes away is the attempts
+        // counted above, not this due time
+        try (var statement = connection.prepareStatement(rescheduleEntry)) {
+          statement.setTimestamp(1, Timestamp.from(Instant.now().plus(retryAfter)));
+          statement.setString(2, entry.id());
+          statement.executeUpdate();
+        }
+        log.info(
+            "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' cannot "
+                + "run yet - the outbox entry '{}' is dispatched again in {} ({} of {} attempts used): {}",
+            entry.operation(),
+            entry.bpmnProcessId(),
+            entry.workflowModuleId(),
+            entry.aggregateId(),
+            entry.id(),
+            retryAfter,
+            entry.attempts() + 1,
+            properties.getBlockAfterAttempts(),
+            e.getMessage());
       } else {
         log.warn(
             "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "

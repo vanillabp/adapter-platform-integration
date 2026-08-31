@@ -30,6 +30,16 @@ import lombok.extern.slf4j.Slf4j;
  * {@link org.springframework.scheduling.TaskScheduler} bean is registered or used, so
  * an application's own scheduling setup (e.g. <code>&#64;EnableScheduling</code>)
  * stays unaffected.
+ * <p>
+ * One thing the stores VanillaBP wrote itself can do and this one cannot: shorten the
+ * wait of a single entry. A dispatch which knows that repeating helps in a moment says
+ * so ({@link io.vanillabp.integration.spi.PhaseTwoRetryLater} - a workflow its BPMS has
+ * not made searchable yet), and gruelbox schedules the next attempt itself, from the
+ * <code>attemptFrequency</code> configured for the whole outbox. So here such an entry
+ * comes back with the ordinary backoff, later than it had to be but never sooner. What
+ * matters for the workflows around it is the same either way: nothing waits on this
+ * thread, so the entries of every other workflow are dispatched while that one is due
+ * again.
  */
 @RequiredArgsConstructor
 @Slf4j

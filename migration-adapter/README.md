@@ -135,18 +135,18 @@ is drawn there. The three patiences are held by
 `#withoutPatienceAnUnavailableBpmsFailsAtOnce` and
 `#retryingPatienceDoesNotWaitForVisibility`.
 
-At the dispatch the same walk gains the two loops the phase-one walk must not have, one for a BPMS
-which cannot be reached and one for a workflow which is not visible yet. Where the first picture
-ends in an exception, this one ends in an entry which is repeated and finally blocked.
+At the dispatch the same walk gains the loop the phase-one walk must not have, for a BPMS which
+cannot be reached. A workflow which is not visible yet gets no loop at all: the entry goes back to
+the store, due in the window, because this thread dispatches the entries of every other workflow
+too. Where the first picture ends in an exception, this one ends in an entry which is repeated and
+finally blocked.
 
 ```mermaid
 flowchart TB
   D["phase-two dispatch of the entry"] --> DR{"probe answers"}
   DR -->|ACTIVE| DO["run phase two"]
   DR -->|COMPLETED| DC["consume the entry (workflow ended)"]
-  DR -->|"UNKNOWN_TO_BPMS, hinted<br/>(workflow operation)"| DW["ask again until<br/>workflowVisibilityDelay() is used up<br/>(C8: 10 s window)"] --> DR2{"visible now?"}
-  DR2 -->|yes| DO
-  DR2 -->|no| DRE["repeat the entry — blocked when the attempts are used up"]
+  DR -->|"UNKNOWN_TO_BPMS, hinted<br/>(workflow operation)"| DW["give the entry back, due in<br/>workflowVisibilityDelay()<br/>(C8: 10 s window)"] --> DRE["repeat the entry — blocked when the attempts are used up"]
   DR -->|"UNKNOWN_TO_BPMS, no hint<br/>· or a task operation"| DS["consume the entry (stale)"]
   DR -->|BPMS_UNAVAILABLE| DU["retry 2× 500 ms apart"] --> DRE
 
@@ -353,7 +353,7 @@ Four pieces solve it, and the split matters:
 4. **The waiting happens at the dispatch and in a read, never in the caller's
    transaction.** Phase one asks once. Where the answer is "unknown" although a hint says
    the workflow exists, the operation is PLANNED - the aggregate is saved, the outbox entry is written, the caller
-   returns - and the dispatch asks again, waits out the window and repeats the entry while
+   returns - and the dispatch asks again and hands the entry back, due in the window, while
    the BPMS still says nothing. In everyday operation (Camunda 8 lags one to three
    seconds) that costs an attempt and nobody an error; while an exporter is broken it
    costs attempts until the entry is blocked, which is where it becomes visible. Where the
@@ -401,8 +401,8 @@ searchable yet.
 
 Correlating a message is the operation on which both patiences show up in one call, and the
 picture follows such a call from the caller's transaction to the BPMS: phase one asks the adapters
-once and lets the caller commit, the dispatch asks again, waits out the window and only then
-publishes the message.
+once and lets the caller commit, the dispatch asks again and publishes the message as soon as
+the BPMS reports the workflow, which may take an entry or two.
 
 ```mermaid
 sequenceDiagram
@@ -434,7 +434,7 @@ sequenceDiagram
   Note over OB: key = CORRELATE_MESSAGE|module|process|id|message|correlationId|activationId<br/>dedups WAITING entries only · multi-instance siblings get distinct keys
   App->>App: COMMIT
   OB-->>PS: dispatch
-  PS->>WL: locate again — Patience.WAIT_FOR_VISIBILITY (waits out the window here, and repeats the entry while the hinted BPMS stays silent)
+  PS->>WL: locate again — Patience.RETRY_UNAVAILABLE (no waiting on this thread: while the hinted BPMS stays silent the entry is given back, due in that adapter's window)
   PS->>AD: correlateMessagePhaseTwo(…, activationId)
   alt Camunda 7
     AD->>BPMS: correlate (tolerates a subscription gone meanwhile)
@@ -1314,6 +1314,19 @@ wiki page for what an application may rely on.
 dispatch, `PhaseTwoJpaContextTest` and `PhaseTwoMongoContextTest` what an application may touch
 there.
 
+**What phase two must not do: wait.** One thread dispatches the entries of a store, so whatever
+an entry spends there is spent by every other entry of that node too, whatever workflow it
+belongs to. The case which used to spend the most is a workflow its BPMS has not made searchable
+yet: the election waited out the adapter's `workflowVisibilityDelay`, ten seconds on Camunda 8,
+and a burst of "start, then correlate" pairs stalled in batches. Such an entry goes back to the
+store with that window as its due time (`PhaseTwoRetryLater`) and the thread takes the next one.
+The attempt is counted like any other, which is what ends a workflow that never becomes visible:
+after `vanillabp.outbox.block-after-attempts` attempts the entry is blocked. The gruelbox store
+on Spring Boot schedules the next attempt itself, from the `attemptFrequency` of the whole
+outbox, so there such an entry comes back later than it had to, never sooner.
+`NotVisibleWorkflowDoesNotStallDispatchTest` holds both halves: the entry of a findable workflow
+dispatched while the other one waits, and the bound which finally blocks it.
+
 A scheduled call is described by the immutable value type `PhaseTwoCall`
 (operation, workflow module, BPMN process, workflow-aggregate ID in serialized
 String form, elected adapter ID, operation-specific args). The dispatch chain is as
@@ -2034,7 +2047,7 @@ flowchart TB
     D1 --> D2{"runner handed in?"}
     D2 -->|"Quarkus: yes → requireTransaction + request context"| D3["MigrationProcessService.executePhaseTwo<br/>re-probe (the operations addressed to a running workflow) /<br/>redispatch probe (the operations which start one)"]
     D2 -->|"Spring Boot: no → gruelbox's own transaction"| D3
-    D3 --> D3a["this is where waiting is allowed:<br/>unavailable BPMS 2×500 ms · visibility window (C8: 10 s)"]
+    D3 --> D3a["what may take time here:<br/>unavailable BPMS 2×500 ms · a workflow which is not searchable<br/>yet costs the entry a due time, not this thread"]
     D3a --> D4["handler.phaseTwo(request)<br/>loads aggregate for the payload, acts on the BPMS"]
     D4 --> D5["entry DONE (or retry / BLOCKED)"]
   end

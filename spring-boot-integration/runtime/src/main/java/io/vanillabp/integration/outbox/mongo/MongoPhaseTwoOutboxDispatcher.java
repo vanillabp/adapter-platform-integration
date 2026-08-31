@@ -215,6 +215,30 @@ public class MongoPhaseTwoOutboxDispatcher {
             entry.getAttempts() + 1,
             entry.getId(),
             e);
+        return;
+      }
+      final var retryAfter = io.vanillabp.integration.spi.PhaseTwoRetryLater.retryAfter(e);
+      if (retryAfter != null) {
+        // the dispatch knows when asking again can help - a workflow the BPMS has not
+        // made searchable yet is the case - so the entry waits that long instead of the
+        // configured backoff. What ends a reason which never goes away is the attempts
+        // counted above, not this due time
+        mongoTemplate.updateFirst(
+            Query.query(Criteria.where("_id").is(entry.getId())),
+            new Update().set("nextAttemptAt", Instant.now().plus(retryAfter)),
+            collection);
+        log.info(
+            "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' cannot "
+                + "run yet - the outbox entry '{}' is dispatched again in {} ({} of {} attempts used): {}",
+            entry.getOperation(),
+            entry.getBpmnProcessId(),
+            entry.getWorkflowModuleId(),
+            entry.getAggregateId(),
+            entry.getId(),
+            retryAfter,
+            entry.getAttempts() + 1,
+            properties.getBlockAfterAttempts(),
+            e.getMessage());
       } else {
         log.warn(
             "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
