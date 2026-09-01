@@ -49,7 +49,7 @@ public final class AdapterPlatformVersion {
 
   /**
    * Version descriptor of the platform integration itself, part of the
-   * <code>migration-adapter-spi</code> JAR.
+   * <code>vanillabp-adapter-spi</code> JAR.
    */
   private static final String PLATFORM_DESCRIPTOR = "/META-INF/vanillabp/platform-version.properties";
 
@@ -133,7 +133,7 @@ public final class AdapterPlatformVersion {
         that is a downgrade.
         To fix this raise 'io.vanillabp:vanillabp-bom' to %s or newer. If you manage the VanillaBP \
         versions without that BOM, raise all of 'io.vanillabp:vanillabp-integration-spi', \
-        'io.vanillabp.adapter:migration-adapter-spi', 'io.vanillabp.adapter:migration-adapter' and \
+        'io.vanillabp:vanillabp-adapter-spi', 'io.vanillabp.adapter:migration-adapter' and \
         the platform integration ('io.vanillabp:vanillabp-spring-boot-integration' respectively \
         'io.vanillabp:vanillabp-quarkus-integration') to %s or newer."""
         .formatted(

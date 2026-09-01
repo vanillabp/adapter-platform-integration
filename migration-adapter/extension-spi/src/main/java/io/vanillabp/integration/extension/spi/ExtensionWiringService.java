@@ -1,14 +1,14 @@
 package io.vanillabp.integration.extension.spi;
 
-import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
-
 /**
  * An implementation is responsible for preparing the BPMN and wiring it with the business code.
  * The implementation may be provided by custom VanillaBP extensions or by platform integration adapters.
+ * <p>
+ * A BPMS adapter does not implement this interface directly: the adapter SPI extends it and adds
+ * everything reading and deploying a model takes.
  *
  * @param <BPMN> The BPMN model type
  * @param <PC> The context to store all information needed by the adapter for wiring and deploying BPMN
- * @see AdapterDeploymentService
  */
 public interface ExtensionWiringService<BPMN, PC> {
 

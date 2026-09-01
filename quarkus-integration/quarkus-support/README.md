@@ -14,7 +14,7 @@ for a great developer experience.
    for custom aggregate persistence. This interface is platform-independent: business
    code implements the very same interface regardless of running on Spring Boot or
    Quarkus. Adapter authors, in contrast, implement the interfaces of the adapter SPI
-   (`io.vanillabp.adapter:migration-adapter-spi`) which is intentionally not exposed
+   (`io.vanillabp:vanillabp-adapter-spi`) which is intentionally not exposed
    to business code.
 2. A producer for `ProcessService<A>` beans to avoid
    IDE warning `Unsatisfied dependency: no bean matches the injection point`.

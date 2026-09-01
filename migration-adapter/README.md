@@ -183,7 +183,7 @@ it holds, and not claiming a workflow of another workflow module of the same ada
 The shared-cluster setups of Camunda 8 and Camunda 7 are what happens without it.
 
 Successful elections populate a `WorkflowAdapterCache`
-(business SPI; key = workflow module, BPMN process, serialized aggregate ID →
+(integration SPI; key = workflow module, BPMN process, serialized aggregate ID →
 adapter ID). The next election probes the cached adapter first. Entries are HINTS,
 not truth: a stale hit (the adapter answers `UNKNOWN_TO_BPMS`) falls through to the
 full walk and repairs the entry; `BPMS_UNAVAILABLE` on a cached adapter follows the
@@ -898,7 +898,7 @@ remembers a processed delivery and answers a repeated one from the record:
   `vanillabp.task.redeliveries.deduplicated`. Both halves are held by
   `InboundIdempotencyTest#twoDeliveriesAtTheSameTimeAreNamedAndCounted`, on Spring Boot
   and on Quarkus.
-- `TaskDeliveryLog` and `TaskDeliveryLogAware` live in the business SPI next to
+- `TaskDeliveryLog` and `TaskDeliveryLogAware` live in the integration SPI next to
   `PhaseTwoOutbox`, with the same per-aggregate resolution
   (`TaskDeliveryLogResolver`, implemented per platform): a record has to ride the
   aggregate's own transaction. `JdbcTaskDeliveryStore` and
@@ -1359,7 +1359,7 @@ patience it asks with.
 
 #### An operation is defined once
 
-An operation is a `PhaseOperation` (business SPI) and nothing else. The record carries
+An operation is a `PhaseOperation` (integration SPI) and nothing else. The record carries
 everything about it which is not one BPMS' business:
 
 - its **name**, which the store persists and which is therefore a contract: never
@@ -1452,7 +1452,7 @@ classDiagram
     +phaseTwo(PhaseTwoRequest)  «act, after the commit, at-least-once»
   }
   class PhaseOperation {
-    <<business SPI, the whole definition of an operation>>
+    <<integration SPI, the whole definition of an operation>>
     name  «persisted — never rename»
     idempotencyKey(call)  «persisted rule»
     election  «STARTS_THE_WORKFLOW · HOLDS_THE_TASK · HOLDS_THE_USER_TASK · HOLDS_THE_WORKFLOW · EVERY_DEPLOYED_BPMS · OWN_DISPATCH»
@@ -1922,7 +1922,7 @@ The composite id and the read path are `ViewerApiTest` (`compositeIdSchemeRoundT
 ### Aggregate persistence
 
 The core does not know any persistence technology.
-`io.vanillabp.integration.spi.AggregatePersistenceAware` (module `business-spi`)
+`io.vanillabp.integration.spi.AggregatePersistenceAware` (module `integration-spi`)
 abstracts saving an aggregate and determining its ID. Implementations are provided by
 the platform integration (e.g. based on Spring Data) or by the business application
 itself; the implementation with the most specific generic type for the aggregate wins.
@@ -1968,7 +1968,7 @@ what its own extension contributes (its metrics).
 Where the collaborators come from differs per platform, which the picture puts side by side: the
 adapter's Spring Boot module registers one bean per configured id, its Quarkus modules produce the
 same per id through a build step and a producer, and both hand the adapter the one object. The
-business SPI at the bottom is the part an adapter never implements itself.
+integration SPI at the bottom is the part an adapter never implements itself.
 
 ```mermaid
 flowchart TB
@@ -2001,7 +2001,7 @@ flowchart TB
   SPRING --> PLATFORM
   QUARKUS --> PLATFORM
 
-  subgraph BSPI["Business SPI — implemented by the PLATFORM or the APPLICATION, never by an adapter"]
+  subgraph BSPI["Integration SPI — implemented by the PLATFORM or the APPLICATION, never by an adapter"]
     B1["PhaseTwoOutbox (+ Aware) — stores: gruelbox/JDBC/Mongo"]
     B2["TaskDeliveryLog (+ Aware) — JDBC/Mongo"]
     B3["TransactionRunner (+ Aware)"]
@@ -2024,7 +2024,7 @@ either all commit or none of them do. Which runner is chosen for an aggregate is
 `QuarkusTransactionRunnerResolverTest` per platform; that the six steps really share one
 transaction is proved per platform by the outbox and delivery integration tests rather than
 by a unit test. The core's abstraction for it is
-`io.vanillabp.integration.spi.TransactionRunner` (module `business-spi`, with `requireNew`,
+`io.vanillabp.integration.spi.TransactionRunner` (module `integration-spi`, with `requireNew`,
 `inCurrent` and `requireTransaction`), and every platform provides an implementation of it.
 
 Three transaction boundaries meet in the core, and the picture is about which work belongs to
@@ -2172,7 +2172,7 @@ Two consequences shape the guard:
   knows the platform version it was compiled against, and a too old platform integration
   cannot contain a check that was added later. The platform side only provides the
   mechanism.
-- **The version numbers have to travel in the JARs.** `migration-adapter-spi` carries
+- **The version numbers have to travel in the JARs.** `vanillabp-adapter-spi` carries
   `META-INF/vanillabp/platform-version.properties` (filled by resource filtering), each
   adapter core carries `META-INF/vanillabp/adapter-<adapter-type>.properties` with its own
   version and the platform version it was built against
@@ -2390,7 +2390,7 @@ The window, the serialized collectors and the failure which does not stay are
 
 ## Modules
 
-1. **business-spi:** (artifact `io.vanillabp:vanillabp-integration-spi`)<br>
+1. **integration-spi:** (artifact `io.vanillabp:vanillabp-integration-spi`)<br>
    Interfaces business code may implement, kept strictly separate from the adapter
    SPI so business code never sees adapter-implementation interfaces:
    `io.vanillabp.integration.spi.AggregatePersistenceAware` — the single canonical
@@ -2403,15 +2403,20 @@ The window, the serialized collectors and the failure which does not stay are
    moved here from the adapter SPI). It is provided to applications
    transitively through the platform support modules (`vanillabp-spring-boot-support`
    / `vanillabp-quarkus-support`).
-2. **spi:** (artifact `io.vanillabp.adapter:migration-adapter-spi`)<br>
+2. **extension-spi:** (artifact `io.vanillabp:vanillabp-extension-spi`)<br>
+   `ExtensionWiringService`, and nothing else: preparing a BPMN model and wiring it with
+   business code, which is all an extension of the deployment pipeline has to bring. The
+   module has no dependency at all, so an extension can be built against it without pulling
+   the adapter SPI it does not implement.
+3. **adapter-spi:** (artifact `io.vanillabp:vanillabp-adapter-spi`)<br>
    The adapter-facing SPI to be implemented by BPMS adapters and platform
-   integrations: `AdapterDeploymentService` (extends `ExtensionWiringService`),
-   `MigratableProcessService` (incl. `WorkflowAwareness`) and
-   `ExtensionWiringService`. Adapters report BPMN parsing errors using
-   `BpmnParseException` and guard themselves against a too old platform integration
-   using [`AdapterPlatformVersion`](#adapterplatform-version-guard-adapterplatformversion).
-   Depends on `business-spi` (uses `AggregatePersistenceAware` in signatures).
-3. **runtime:**<br>
+   integrations: `AdapterDeploymentService` (extends `ExtensionWiringService`) and
+   `MigratableProcessService` (incl. `WorkflowAwareness`). Adapters report BPMN parsing
+   errors using `BpmnParseException` and guard themselves against a too old platform
+   integration using [`AdapterPlatformVersion`](#adapterplatform-version-guard-adapterplatformversion).
+   Depends on `extension-spi` (the interface `AdapterDeploymentService` extends) and on
+   `integration-spi` (uses `AggregatePersistenceAware` in signatures).
+4. **runtime:**<br>
    This module implements the runtime behavior according to the
    features [listed above](#features), mainly `DeploymentService`
    (deployment pipeline incl. the shutdown pass and the deployment-failure policy),

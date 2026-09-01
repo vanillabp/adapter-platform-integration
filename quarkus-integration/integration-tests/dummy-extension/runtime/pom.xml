@@ -17,8 +17,8 @@
       <artifactId>quarkus-arc</artifactId>
     </dependency>
     <dependency>
-      <groupId>io.vanillabp.adapter</groupId>
-      <artifactId>migration-adapter-spi</artifactId>
+      <groupId>io.vanillabp</groupId>
+      <artifactId>vanillabp-extension-spi</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>

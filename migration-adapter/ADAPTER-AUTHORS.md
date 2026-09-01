@@ -82,7 +82,7 @@ a task, then its workflow, then its workflow module, then the adapter.
 You ship both platforms. A feature which exists only on Spring Boot does not exist, because
 VanillaBP promises the same behaviour on Quarkus and the next platform after it.
 
-You never implement the business SPI. `PhaseTwoOutbox`, `TaskDeliveryLog`, `TransactionRunner`,
+You never implement the integration SPI. `PhaseTwoOutbox`, `TaskDeliveryLog`, `TransactionRunner`,
 `AggregatePersistenceAware` and `WorkflowAdapterCache` are implemented by the platform or by the
 application. The core uses them on your behalf, and a type from the adapter SPI must never appear
 in a module business code compiles against.
@@ -98,7 +98,9 @@ credential. Nothing enforces this, and a review holds you to it anyway.
 ## 2. The two interfaces
 
 You implement `AdapterDeploymentService<BPMN, PC>` and `MigratableProcessService<A>`, one instance
-of each per configured adapter id. Both live in `io.vanillabp.integration.adapter.spi`.
+of each per configured adapter id. Both live in `io.vanillabp.integration.adapter.spi`, the package of
+the artifact `io.vanillabp:vanillabp-adapter-spi`, which is the one dependency your core needs from
+VanillaBP: the integration SPI and the extension SPI arrive with it.
 
 ### 2.1 The deployment pipeline
 

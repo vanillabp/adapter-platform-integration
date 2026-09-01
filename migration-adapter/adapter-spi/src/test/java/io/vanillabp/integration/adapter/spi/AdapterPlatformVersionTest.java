@@ -49,7 +49,7 @@ public class AdapterPlatformVersionTest {
     assertTrue(message.contains("99.0.0"), message);
     assertTrue(message.contains(AdapterPlatformVersion.platformVersion()), message);
     assertTrue(message.contains("io.vanillabp:vanillabp-bom"), message);
-    assertTrue(message.contains("io.vanillabp.adapter:migration-adapter-spi"), message);
+    assertTrue(message.contains("io.vanillabp:vanillabp-adapter-spi"), message);
     assertTrue(message.contains("io.vanillabp:vanillabp-spring-boot-integration"), message);
     assertTrue(message.contains("io.vanillabp:vanillabp-quarkus-integration"), message);
 

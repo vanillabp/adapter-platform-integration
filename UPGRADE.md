@@ -4,6 +4,37 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Three SPIs, three artifacts (2026-09-01)
+
+The SPI a BPMS adapter implements and the one an extension of the deployment pipeline
+implements used to share a module, and the module carrying the interfaces business code
+implements was called after the reader rather than after its artifact. Both are sorted out,
+and the coordinates change with it:
+
+| Before | Now |
+|---|---|
+| `io.vanillabp:vanillabp-integration-spi` (directory `business-spi`) | unchanged coordinate, directory `integration-spi` |
+| `io.vanillabp.adapter:migration-adapter-spi` | `io.vanillabp:vanillabp-adapter-spi` |
+| - | `io.vanillabp:vanillabp-extension-spi` (new) |
+
+**No package and no signature changed.** `io.vanillabp.integration.adapter.spi.*` and
+`io.vanillabp.integration.extension.spi.ExtensionWiringService` are where they were, so an
+adapter or an extension changes its dependency and nothing else. Both new artifacts are
+managed by `io.vanillabp:vanillabp-bom`, so a build importing the BOM drops the
+`<version>` as well.
+
+**What an adapter has to do:** replace the dependency on
+`io.vanillabp.adapter:migration-adapter-spi` with `io.vanillabp:vanillabp-adapter-spi`.
+`vanillabp-extension-spi` arrives with it transitively, because `AdapterDeploymentService`
+extends `ExtensionWiringService`.
+
+**What an extension has to do:** an extension which only implements
+`ExtensionWiringService` now depends on `io.vanillabp:vanillabp-extension-spi`, an artifact
+with no dependency at all, instead of pulling the whole adapter SPI it never implements.
+
+**Why the middle row is a rename and not a deprecation:** the adapter SPI has no released
+version yet, so nothing outside these repositories is compiled against the old coordinate.
+
 ## The delivery record answers which BPMS holds a task (2026-08-30)
 
 Completing or cancelling a task used to ask every configured BPMS which of them holds it, once per
@@ -1508,7 +1539,7 @@ election cache and the at-least-once mitigation for re-dispatched starts.
   workflow (in-memory, bounded to 10 000 entries / 1 h TTL) - repeated operations on
   the same workflow skip the probing walk. Entries are hints only: a stale entry
   costs one extra probe, never correctness.
-- **Cluster setups (optional):** define ONE bean implementing the new business SPI
+- **Cluster setups (optional):** define ONE bean implementing the new integration SPI
   `io.vanillabp.integration.spi.WorkflowAdapterCache` (`get`/`put`/`invalidate`) to
   replace the in-memory default with your own shared cache infrastructure -
   instances of a cluster then share elections. VanillaBP deliberately ships no
@@ -1687,16 +1718,16 @@ invoke - save, within one transaction). Application-facing:
 Two related consolidations, breaking for applications using their own
 `PhaseTwoOutbox` bean and behavior-changing for mixed-persistence classpaths:
 
-- **Outbox SPI relocated to the business SPI** (breaking for applications
+- **Outbox SPI relocated to the integration SPI** (breaking for applications
   implementing a custom outbox): `PhaseTwoOutbox`, `PhaseTwoCall`,
   `PhaseOperation` and the new `PhaseTwoOutboxAware` moved from the adapter SPI
-  (`io.vanillabp.integration.adapter.spi`, module `migration-adapter-spi`) to the
-  business SPI (`io.vanillabp.integration.spi`, module `vanillabp-integration-spi`,
+  (`io.vanillabp.integration.adapter.spi`, module `vanillabp-adapter-spi`) to the
+  integration SPI (`io.vanillabp.integration.spi`, module `vanillabp-integration-spi`,
   next to `AggregatePersistenceAware`). The split is deliberate: the adapter SPI is
-  for BPMS-adapter implementations, the business SPI for business-process
+  for BPMS-adapter implementations, the integration SPI for business-process
   applications - and custom outboxes are contributed by APPLICATIONS. No
   adapter-facing signature ever referenced these types; only the import changes.
-- **The phase-two outbox is selected PER AGGREGATE, not per JVM.** New business SPI
+- **The phase-two outbox is selected PER AGGREGATE, not per JVM.** New integration SPI
   `io.vanillabp.integration.spi.PhaseTwoOutboxAware<A>` (most-specific
   aggregate class wins - same selection as `AggregatePersistenceAware`, now shared
   via the core's `AwareSelection`). Both platform defaults (JDBC and MongoDB) may
@@ -1880,7 +1911,7 @@ key, whereas Camunda 8 stores the aggregate as process variables and therefore
 names the variable carrying the ID after the aggregate's ID property (the
 Process-Engine-API adapter follows the Camunda 8 model).
 
-- **`AggregatePersistenceAware.getAggregateIdName()` added** (business SPI,
+- **`AggregatePersistenceAware.getAggregateIdName()` added** (integration SPI,
   `default` method with a guiding message like the other methods). The
   Spring-Data-based support implements it via `SpringDataUtil.getIdName`.
 - **`startWorkflowPhaseTwo` signature changed** (adapter SPI, breaking for BPMS
@@ -1913,7 +1944,7 @@ Hardening changes relevant for adapters and early adopters:
 - **`WorkflowAwareness` constants renamed:** `TASK_ACTIVE` → `ACTIVE`,
   `TASK_COMPLETED` → `COMPLETED` (the enum answers for workflows AND tasks; both
   constants were unused so far, no adapter is affected).
-- **`AggregatePersistenceAware.loadById(Object)` added** (business SPI; needed by
+- **`AggregatePersistenceAware.loadById(Object)` added** (integration SPI; needed by
   the task-processing and sync stories). The platform-provided supports implement
   it (Spring Data: `findById`). Additionally ALL methods of the interface are now
   `default` methods throwing an `UnsupportedOperationException` with a guiding
@@ -2019,10 +2050,10 @@ Breaking changes of the outbox part of the adapter SPI, relevant for custom
 Breaking changes of the adapter SPI, relevant for the upcoming adapter repositories
 (there are no adapters built against the previous signatures yet):
 
-### New module `io.vanillabp:vanillabp-integration-spi` (business SPI)
+### New module `io.vanillabp:vanillabp-integration-spi` (integration SPI)
 
-The SPI was split into a *business SPI* (interfaces business code may implement) and
-the *adapter SPI* (`io.vanillabp.adapter:migration-adapter-spi`, implemented by BPMS
+The SPI was split into an *integration SPI* (interfaces business code may implement) and
+the *adapter SPI* (`io.vanillabp:vanillabp-adapter-spi`, implemented by BPMS
 adapters and platform integrations):
 
 - `AggregatePersistenceAware` now exists exactly once:

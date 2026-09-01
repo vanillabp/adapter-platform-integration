@@ -8,9 +8,10 @@
     <version>2.0.0-SNAPSHOT</version>
   </parent>
 
-  <artifactId>migration-adapter-spi</artifactId>
-  <name>Migration adapter SPI</name>
-  <description>SPI used by migratable adapters</description>
+  <groupId>io.vanillabp</groupId>
+  <artifactId>vanillabp-adapter-spi</artifactId>
+  <name>VanillaBP adapter SPI</name>
+  <description>SPI to be implemented by BPMS adapters (in contrast to the integration SPI implemented by business code).</description>
 
   <licenses>
     <license>
@@ -36,6 +37,11 @@
     <dependency>
       <groupId>io.vanillabp</groupId>
       <artifactId>vanillabp-integration-spi</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.vanillabp</groupId>
+      <artifactId>vanillabp-extension-spi</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
