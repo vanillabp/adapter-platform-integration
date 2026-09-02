@@ -36,14 +36,29 @@ fi
 rendered=$(mktemp -d)
 trap 'rm -rf "$rendered"' EXIT
 
+# The renderer's browser gets --no-sandbox because a GitHub runner offers it no usable
+# sandbox and it refuses to start without one. What it opens are the Markdown files of
+# this repository, so there is no untrusted content the sandbox would be protecting us
+# from. The file is written here rather than kept in the repository, so it cannot drift
+# away from the call using it.
+cat > "$rendered/puppeteer.json" <<'JSON'
+{ "args": ["--no-sandbox", "--disable-setuid-sandbox"] }
+JSON
+
 status=0
 for file in "${files[@]}"; do
   blocks=$(grep -c '```mermaid' "$file" || true)
   echo "--- $file ($blocks)"
-  if ! npx -y -p @mermaid-js/mermaid-cli mmdc \
+  if ! output=$(npx -y -p @mermaid-js/mermaid-cli mmdc \
+      -p "$rendered/puppeteer.json" \
       -i "$file" \
-      -o "$rendered/$(echo "${file#./}" | tr / _)"; then
-    echo "'$file' holds a Mermaid block which does not parse - see the traps in diagrams/README.md" >&2
+      -o "$rendered/$(echo "${file#./}" | tr / _)" 2>&1); then
+    printf '%s\n' "$output" >&2
+    if printf '%s' "$output" | grep -q 'Failed to launch the browser process'; then
+      echo "The renderer did not start, so no block of '$file' was checked" >&2
+    else
+      echo "'$file' holds a Mermaid block which does not parse - see the traps in diagrams/README.md" >&2
+    fi
     status=1
   fi
 done
