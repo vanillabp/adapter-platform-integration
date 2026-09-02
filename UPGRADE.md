@@ -11,11 +11,11 @@ implements used to share a module, and the module carrying the interfaces busine
 implements was called after the reader rather than after its artifact. Both are sorted out,
 and the coordinates change with it:
 
-| Before | Now |
-|---|---|
+|                               Before                                |                        Now                        |
+|---------------------------------------------------------------------|---------------------------------------------------|
 | `io.vanillabp:vanillabp-integration-spi` (directory `business-spi`) | unchanged coordinate, directory `integration-spi` |
-| `io.vanillabp.adapter:migration-adapter-spi` | `io.vanillabp:vanillabp-adapter-spi` |
-| - | `io.vanillabp:vanillabp-extension-spi` (new) |
+| `io.vanillabp.adapter:migration-adapter-spi`                        | `io.vanillabp:vanillabp-adapter-spi`              |
+| -                                                                   | `io.vanillabp:vanillabp-extension-spi` (new)      |
 
 **No package and no signature changed.** `io.vanillabp.integration.adapter.spi.*` and
 `io.vanillabp.integration.extension.spi.ExtensionWiringService` are where they were, so an
