@@ -136,8 +136,8 @@ public class WorkflowLocatorTest {
   }
 
   /**
-   * A walk which may take its time - the shape of the dispatch, which is where every
-   * waiting this class does belongs.
+   * A walk which may take its time - the shape of a read of the viewer API, which is the
+   * caller every waiting this class does belongs to.
    */
   private static WorkflowLocator.Location<Object> locate(
       final io.vanillabp.integration.spi.WorkflowAdapterCache cache,

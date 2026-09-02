@@ -311,7 +311,7 @@ public class VersionRange {
    * it, so without a resolver two of them are reported as NOT overlapping unless
    * they are written identically. The check runs a second time when the tags are
    * resolved after the deployment (see
-   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker#resolveProcessVersions}).
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#resolveProcessVersions}).
    *
    * @param other The other specification
    * @param resolver Resolves version tags of the BPMN process both belong to

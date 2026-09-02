@@ -135,18 +135,18 @@ is drawn there. The three patiences are held by
 `#withoutPatienceAnUnavailableBpmsFailsAtOnce` and
 `#retryingPatienceDoesNotWaitForVisibility`.
 
-At the dispatch the same walk gains the two loops the phase-one walk must not have, one for a BPMS
-which cannot be reached and one for a workflow which is not visible yet. Where the first picture
-ends in an exception, this one ends in an entry which is repeated and finally blocked.
+At the dispatch the same walk gains the loop the phase-one walk must not have, for a BPMS which
+cannot be reached. A workflow which is not visible yet gets no loop at all: the entry goes back to
+the store, due in the window, because this thread dispatches the entries of every other workflow
+too. Where the first picture ends in an exception, this one ends in an entry which is repeated and
+finally blocked.
 
 ```mermaid
 flowchart TB
   D["phase-two dispatch of the entry"] --> DR{"probe answers"}
   DR -->|ACTIVE| DO["run phase two"]
   DR -->|COMPLETED| DC["consume the entry (workflow ended)"]
-  DR -->|"UNKNOWN_TO_BPMS, hinted<br/>(workflow operation)"| DW["ask again until<br/>workflowVisibilityDelay() is used up<br/>(C8: 10 s window)"] --> DR2{"visible now?"}
-  DR2 -->|yes| DO
-  DR2 -->|no| DRE["repeat the entry — blocked when the attempts are used up"]
+  DR -->|"UNKNOWN_TO_BPMS, hinted<br/>(workflow operation)"| DW["give the entry back, due in<br/>workflowVisibilityDelay()<br/>(C8: 10 s window)"] --> DRE["repeat the entry — blocked when the attempts are used up"]
   DR -->|"UNKNOWN_TO_BPMS, no hint<br/>· or a task operation"| DS["consume the entry (stale)"]
   DR -->|BPMS_UNAVAILABLE| DU["retry 2× 500 ms apart"] --> DRE
 
@@ -183,7 +183,7 @@ it holds, and not claiming a workflow of another workflow module of the same ada
 The shared-cluster setups of Camunda 8 and Camunda 7 are what happens without it.
 
 Successful elections populate a `WorkflowAdapterCache`
-(business SPI; key = workflow module, BPMN process, serialized aggregate ID →
+(integration SPI; key = workflow module, BPMN process, serialized aggregate ID →
 adapter ID). The next election probes the cached adapter first. Entries are HINTS,
 not truth: a stale hit (the adapter answers `UNKNOWN_TO_BPMS`) falls through to the
 full walk and repairs the entry; `BPMS_UNAVAILABLE` on a cached adapter follows the
@@ -353,7 +353,7 @@ Four pieces solve it, and the split matters:
 4. **The waiting happens at the dispatch and in a read, never in the caller's
    transaction.** Phase one asks once. Where the answer is "unknown" although a hint says
    the workflow exists, the operation is PLANNED - the aggregate is saved, the outbox entry is written, the caller
-   returns - and the dispatch asks again, waits out the window and repeats the entry while
+   returns - and the dispatch asks again and hands the entry back, due in the window, while
    the BPMS still says nothing. In everyday operation (Camunda 8 lags one to three
    seconds) that costs an attempt and nobody an error; while an exporter is broken it
    costs attempts until the entry is blocked, which is where it becomes visible. Where the
@@ -401,8 +401,8 @@ searchable yet.
 
 Correlating a message is the operation on which both patiences show up in one call, and the
 picture follows such a call from the caller's transaction to the BPMS: phase one asks the adapters
-once and lets the caller commit, the dispatch asks again, waits out the window and only then
-publishes the message.
+once and lets the caller commit, the dispatch asks again and publishes the message as soon as
+the BPMS reports the workflow, which may take an entry or two.
 
 ```mermaid
 sequenceDiagram
@@ -434,7 +434,7 @@ sequenceDiagram
   Note over OB: key = CORRELATE_MESSAGE|module|process|id|message|correlationId|activationId<br/>dedups WAITING entries only · multi-instance siblings get distinct keys
   App->>App: COMMIT
   OB-->>PS: dispatch
-  PS->>WL: locate again — Patience.WAIT_FOR_VISIBILITY (waits out the window here, and repeats the entry while the hinted BPMS stays silent)
+  PS->>WL: locate again — Patience.RETRY_UNAVAILABLE (no waiting on this thread: while the hinted BPMS stays silent the entry is given back, due in that adapter's window)
   PS->>AD: correlateMessagePhaseTwo(…, activationId)
   alt Camunda 7
     AD->>BPMS: correlate (tolerates a subscription gone meanwhile)
@@ -898,7 +898,7 @@ remembers a processed delivery and answers a repeated one from the record:
   `vanillabp.task.redeliveries.deduplicated`. Both halves are held by
   `InboundIdempotencyTest#twoDeliveriesAtTheSameTimeAreNamedAndCounted`, on Spring Boot
   and on Quarkus.
-- `TaskDeliveryLog` and `TaskDeliveryLogAware` live in the business SPI next to
+- `TaskDeliveryLog` and `TaskDeliveryLogAware` live in the integration SPI next to
   `PhaseTwoOutbox`, with the same per-aggregate resolution
   (`TaskDeliveryLogResolver`, implemented per platform): a record has to ride the
   aggregate's own transaction. `JdbcTaskDeliveryStore` and
@@ -1272,12 +1272,12 @@ sequenceDiagram
   App->>PS: startWorkflow(aggregate)   [inside App's tx]
   PS->>PS: validate id round-trips through String, then save aggregate
   Note over PS: no election — new workflows always go to the FIRST adapter
-  PS->>AD: startWorkflowPhaseOne(module, process, aggregate)
-  PS->>OB: scheduleStartWorkflow(… adapterId)   [same tx]
+  PS->>AD: phaseOne(START_WORKFLOW request)
+  PS->>OB: schedule(START_WORKFLOW call, … adapterId)   [same tx]
   PS->>PS: remember adapter in WorkflowAdapterCache (hint)
   App->>App: COMMIT
   OB-->>PS: dispatch → startWorkflowPhaseTwo(id, adapterId)
-  PS->>AD: startWorkflowPhaseTwo
+  PS->>AD: phaseTwo(START_WORKFLOW request)
   alt Camunda 7
     AD->>BPMS: startProcessInstanceByKey(scoped id, businessKey=id, tenant?) unless instanceExists
     Note over AD,BPMS: shared values as process variables
@@ -1314,6 +1314,19 @@ wiki page for what an application may rely on.
 dispatch, `PhaseTwoJpaContextTest` and `PhaseTwoMongoContextTest` what an application may touch
 there.
 
+**What phase two must not do: wait.** One thread dispatches the entries of a store, so whatever
+an entry spends there is spent by every other entry of that node too, whatever workflow it
+belongs to. The case which used to spend the most is a workflow its BPMS has not made searchable
+yet: the election waited out the adapter's `workflowVisibilityDelay`, ten seconds on Camunda 8,
+and a burst of "start, then correlate" pairs stalled in batches. Such an entry goes back to the
+store with that window as its due time (`PhaseTwoRetryLater`) and the thread takes the next one.
+The attempt is counted like any other, which is what ends a workflow that never becomes visible:
+after `vanillabp.outbox.block-after-attempts` attempts the entry is blocked. The gruelbox store
+on Spring Boot schedules the next attempt itself, from the `attemptFrequency` of the whole
+outbox, so there such an entry comes back later than it had to, never sooner.
+`NotVisibleWorkflowDoesNotStallDispatchTest` holds both halves: the entry of a findable workflow
+dispatched while the other one waits, and the bound which finally blocks it.
+
 A scheduled call is described by the immutable value type `PhaseTwoCall`
 (operation, workflow module, BPMN process, workflow-aggregate ID in serialized
 String form, elected adapter ID, operation-specific args). The dispatch chain is as
@@ -1346,7 +1359,7 @@ patience it asks with.
 
 #### An operation is defined once
 
-An operation is a `PhaseOperation` (business SPI) and nothing else. The record carries
+An operation is a `PhaseOperation` (integration SPI) and nothing else. The record carries
 everything about it which is not one BPMS' business:
 
 - its **name**, which the store persists and which is therefore a contract: never
@@ -1439,7 +1452,7 @@ classDiagram
     +phaseTwo(PhaseTwoRequest)  «act, after the commit, at-least-once»
   }
   class PhaseOperation {
-    <<business SPI, the whole definition of an operation>>
+    <<integration SPI, the whole definition of an operation>>
     name  «persisted — never rename»
     idempotencyKey(call)  «persisted rule»
     election  «STARTS_THE_WORKFLOW · HOLDS_THE_TASK · HOLDS_THE_USER_TASK · HOLDS_THE_WORKFLOW · EVERY_DEPLOYED_BPMS · OWN_DISPATCH»
@@ -1522,7 +1535,10 @@ The core does not implement (or depend on) any outbox itself — it only defines
   A store which discards a schedule returns `false`, and
   `MigrationProcessService#reportDiscardedSchedule` turns that into a WARN naming
   what was dropped, because a discard against a pending entry is as likely to be a
-  lost operation as a redelivery. The key is bounded to 250 characters and hashed
+  lost operation as a redelivery. The same place counts it as
+  `vanillabp.outbox.discarded`, tagged by operation, so the case can be alarmed on
+  instead of being read: the count is taken in the core rather than in each store, which
+  is why gruelbox and the VanillaBP stores report the same number. The key is bounded to 250 characters and hashed
   beyond that (`StoredKey`, shared with the inbound delivery key) — gruelbox refuses a
   longer unique request ID, and an aggregate ID longer than the 1024 characters of the
   `AGGREGATE_ID` column is refused where the call is built, with a message naming the
@@ -1755,7 +1771,7 @@ flowchart LR
   end
 
   subgraph CORE["Core"]
-    SV["syncedWorkflowAggregateValues(…)<br/>computes the shared map,<br/>id attribute ALWAYS included"]
+    SV["syncedWorkflowAggregateValues(…)<br/>computes the shared map:<br/>what the sync model shares, and only that"]
     UP["unsharedWorkflowAggregateProperties<br/>→ startup WARN per expression reading an unshared attribute (C7)"]
     TPN["taskParameterNames(module, process, task)<br/>→ what a subscription must fetch"]
   end
@@ -1769,6 +1785,7 @@ flowchart LR
     W3["complete/cancel task, user task (phase two)"]
     W4["correlate message / start by message (phase two)<br/>(C8/PEA: no message content, values on the command)"]
     W5["aggregateChanged(aggregate[, taskId])<br/>C7: setVariables / setVariablesLocal at the scope the task runs in<br/>+ marker `vanillabpAggregateChanged` if nothing is shared<br/>C8: SetVariables (needs secondary storage)<br/>PEA: refused in phase ONE"]
+    WID["BESIDE the values, at every one of them: the variable named<br/>after the id attribute · not part of the map, added by whoever<br/>sends the command · written for @NoSyncWithBPMS too (decision 10)"]
     W0["NOT: user-task listener completion on C8 (decision 1)<br/>NOT: signals (no aggregate)"]
   end
 
@@ -1785,7 +1802,7 @@ flowchart LR
 
   classDef c7 fill:#f3e8ff,stroke:#1e1e1e;
   classDef note fill:#fff3cd,stroke:#1e1e1e;
-  class W0,R2 note;
+  class WID,W0,R2 note;
 ```
 
 ### Workflows the BPMS starts itself (`BpmsInitiatedStartInvoker`)
@@ -1905,7 +1922,7 @@ The composite id and the read path are `ViewerApiTest` (`compositeIdSchemeRoundT
 ### Aggregate persistence
 
 The core does not know any persistence technology.
-`io.vanillabp.integration.spi.AggregatePersistenceAware` (module `business-spi`)
+`io.vanillabp.integration.spi.AggregatePersistenceAware` (module `integration-spi`)
 abstracts saving an aggregate and determining its ID. Implementations are provided by
 the platform integration (e.g. based on Spring Data) or by the business application
 itself; the implementation with the most specific generic type for the aggregate wins.
@@ -1951,7 +1968,7 @@ what its own extension contributes (its metrics).
 Where the collaborators come from differs per platform, which the picture puts side by side: the
 adapter's Spring Boot module registers one bean per configured id, its Quarkus modules produce the
 same per id through a build step and a producer, and both hand the adapter the one object. The
-business SPI at the bottom is the part an adapter never implements itself.
+integration SPI at the bottom is the part an adapter never implements itself.
 
 ```mermaid
 flowchart TB
@@ -1984,7 +2001,7 @@ flowchart TB
   SPRING --> PLATFORM
   QUARKUS --> PLATFORM
 
-  subgraph BSPI["Business SPI — implemented by the PLATFORM or the APPLICATION, never by an adapter"]
+  subgraph BSPI["Integration SPI — implemented by the PLATFORM or the APPLICATION, never by an adapter"]
     B1["PhaseTwoOutbox (+ Aware) — stores: gruelbox/JDBC/Mongo"]
     B2["TaskDeliveryLog (+ Aware) — JDBC/Mongo"]
     B3["TransactionRunner (+ Aware)"]
@@ -2007,7 +2024,7 @@ either all commit or none of them do. Which runner is chosen for an aggregate is
 `QuarkusTransactionRunnerResolverTest` per platform; that the six steps really share one
 transaction is proved per platform by the outbox and delivery integration tests rather than
 by a unit test. The core's abstraction for it is
-`io.vanillabp.integration.spi.TransactionRunner` (module `business-spi`, with `requireNew`,
+`io.vanillabp.integration.spi.TransactionRunner` (module `integration-spi`, with `requireNew`,
 `inCurrent` and `requireTransaction`), and every platform provides an implementation of it.
 
 Three transaction boundaries meet in the core, and the picture is about which work belongs to
@@ -2033,7 +2050,7 @@ flowchart TB
     D1 --> D2{"runner handed in?"}
     D2 -->|"Quarkus: yes → requireTransaction + request context"| D3["MigrationProcessService.executePhaseTwo<br/>re-probe (the operations addressed to a running workflow) /<br/>redispatch probe (the operations which start one)"]
     D2 -->|"Spring Boot: no → gruelbox's own transaction"| D3
-    D3 --> D3a["this is where waiting is allowed:<br/>unavailable BPMS 2×500 ms · visibility window (C8: 10 s)"]
+    D3 --> D3a["what may take time here:<br/>unavailable BPMS 2×500 ms · a workflow which is not searchable<br/>yet costs the entry a due time, not this thread"]
     D3a --> D4["handler.phaseTwo(request)<br/>loads aggregate for the payload, acts on the BPMS"]
     D4 --> D5["entry DONE (or retry / BLOCKED)"]
   end
@@ -2155,7 +2172,7 @@ Two consequences shape the guard:
   knows the platform version it was compiled against, and a too old platform integration
   cannot contain a check that was added later. The platform side only provides the
   mechanism.
-- **The version numbers have to travel in the JARs.** `migration-adapter-spi` carries
+- **The version numbers have to travel in the JARs.** `vanillabp-adapter-spi` carries
   `META-INF/vanillabp/platform-version.properties` (filled by resource filtering), each
   adapter core carries `META-INF/vanillabp/adapter-<adapter-type>.properties` with its own
   version and the platform version it was built against
@@ -2301,7 +2318,15 @@ does is inside it, and nothing had to be repeated per BPMS.
   measurement, and the tag values are what a deployment fixes: adapter id, workflow module,
   BPMN process, task definition, operation. Never an aggregate id or a job key - those would grow
   one time series per workflow, and they belong in the log anyway.
-  One of the counters is not about a delivery at all: `vanillabp.task.elections.from.record` says
+  Two of the counters are not about a delivery at all. `vanillabp.outbox.discarded` says how
+  often an operation the application asked for was NOT planned, because the outbox found one
+  of the same idempotency key still waiting for its dispatch. Which of the two causes it was
+  cannot be told here: a redelivered dispatch of a recorded call loses nothing, a second,
+  legitimate operation of the same key loses everything and leaves a workflow waiting for a
+  message nobody sends again. That is why it is a counter and not a log line alone. Alert on
+  it, read the WARN it comes with, and where the cause is a repeating scope, vary the
+  correlation id per round or element (see [two-phase workflow start](#two-phase-workflow-start-phasetwooutbox-spi)).
+  And `vanillabp.task.elections.from.record` says
   how often a call naming a task was routed without asking any BPMS, which is the number the next
   step of that feature is decided on, see [the record answers which BPMS holds a
   task](#the-record-answers-which-bpms-holds-a-task).
@@ -2365,7 +2390,7 @@ The window, the serialized collectors and the failure which does not stay are
 
 ## Modules
 
-1. **business-spi:** (artifact `io.vanillabp:vanillabp-integration-spi`)<br>
+1. **integration-spi:** (artifact `io.vanillabp:vanillabp-integration-spi`)<br>
    Interfaces business code may implement, kept strictly separate from the adapter
    SPI so business code never sees adapter-implementation interfaces:
    `io.vanillabp.integration.spi.AggregatePersistenceAware` — the single canonical
@@ -2378,15 +2403,20 @@ The window, the serialized collectors and the failure which does not stay are
    moved here from the adapter SPI). It is provided to applications
    transitively through the platform support modules (`vanillabp-spring-boot-support`
    / `vanillabp-quarkus-support`).
-2. **spi:** (artifact `io.vanillabp.adapter:migration-adapter-spi`)<br>
+2. **extension-spi:** (artifact `io.vanillabp:vanillabp-extension-spi`)<br>
+   `ExtensionWiringService`, and nothing else: preparing a BPMN model and wiring it with
+   business code, which is all an extension of the deployment pipeline has to bring. The
+   module has no dependency at all, so an extension can be built against it without pulling
+   the adapter SPI it does not implement.
+3. **adapter-spi:** (artifact `io.vanillabp:vanillabp-adapter-spi`)<br>
    The adapter-facing SPI to be implemented by BPMS adapters and platform
-   integrations: `AdapterDeploymentService` (extends `ExtensionWiringService`),
-   `MigratableProcessService` (incl. `WorkflowAwareness`) and
-   `ExtensionWiringService`. Adapters report BPMN parsing errors using
-   `BpmnParseException` and guard themselves against a too old platform integration
-   using [`AdapterPlatformVersion`](#adapterplatform-version-guard-adapterplatformversion).
-   Depends on `business-spi` (uses `AggregatePersistenceAware` in signatures).
-3. **runtime:**<br>
+   integrations: `AdapterDeploymentService` (extends `ExtensionWiringService`) and
+   `MigratableProcessService` (incl. `WorkflowAwareness`). Adapters report BPMN parsing
+   errors using `BpmnParseException` and guard themselves against a too old platform
+   integration using [`AdapterPlatformVersion`](#adapterplatform-version-guard-adapterplatformversion).
+   Depends on `extension-spi` (the interface `AdapterDeploymentService` extends) and on
+   `integration-spi` (uses `AggregatePersistenceAware` in signatures).
+4. **runtime:**<br>
    This module implements the runtime behavior according to the
    features [listed above](#features), mainly `DeploymentService`
    (deployment pipeline incl. the shutdown pass and the deployment-failure policy),

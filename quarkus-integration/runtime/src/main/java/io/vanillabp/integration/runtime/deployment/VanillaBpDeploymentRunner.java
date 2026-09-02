@@ -119,7 +119,8 @@ public class VanillaBpDeploymentRunner {
 
   /**
    * The core's wiring interface - handed to the {@link DeploymentService} for the two
-   * module-level checks the core runs itself (story 158).
+   * module-level checks the core runs itself once the last adapter of a workflow module
+   * finished deploying, rather than leaving them to an adapter which can forget them.
    */
   @Inject
   io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry workflowTaskWiring;

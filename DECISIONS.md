@@ -510,7 +510,7 @@ the cache rather than the design: a shared `WorkflowAdapterCache` (Redis, Hazelc
 the application already runs) is written once when the workflow starts and read by every
 node, so the BPMS is asked once per workflow instead of once per node. That is the
 recommended answer to "the election is our bottleneck", and it is the reason the cache SPI
-is a business SPI rather than an internal class.
+is part of the integration SPI rather than an internal class.
 
 Two consequences the code carries visibly. The re-dispatch of a workflow start probes
 `awarenessOfWorkflowForRedispatch` instead of consulting a record, which is why that probe

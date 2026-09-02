@@ -78,7 +78,7 @@ public class WorkflowTaskHandler {
   /**
    * The process variables the method reads with <code>&#64;TaskParam</code>, sorted and
    * duplicate-free. The core reports them to the adapters through
-   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker#taskParameterNames},
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#taskParameterNames},
    * so a BPMS delivering a variable payload knows what to put into it.
    */
   private final List<String> taskParameters;

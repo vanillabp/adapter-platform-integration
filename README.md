@@ -140,9 +140,10 @@ They are not the citation targets of the code: what a comment points at is an en
 1. **Features are implemented in `migration-adapter`** (plain Java). A platform integration only does what only it
    can do: read configuration, scan/analyze business code, create beans, run transactions. If a feature needs
    platform-specific behavior, express it as an interface the core owns (e.g. `TransactionRunner`).
-2. **Two SPIs, deliberately separated.** The *business SPI* (`vanillabp-integration-spi`) is what applications
-   implement (aggregate persistence, custom outbox, election cache). The *adapter SPI* (`migration-adapter-spi`) is
-   what BPMS adapters implement. A type never lives in both.
+2. **Three SPIs, deliberately separated.** The *integration SPI* (`vanillabp-integration-spi`) is what applications
+   implement (aggregate persistence, custom outbox, election cache). The *adapter SPI* (`vanillabp-adapter-spi`) is
+   what BPMS adapters implement, and the *extension SPI* (`vanillabp-extension-spi`) carries the one interface an
+   extension needs to take part in deploying a workflow module. A type never lives in more than one of them.
 3. **One adapter instance per configured adapter id**, not per adapter type — that is the basis of the migration
    feature, and the reason process and deployment services exist per id.
 4. **Validate at startup, guide in the message.** A configuration defect surfaces when the application boots, and

@@ -97,15 +97,20 @@
         <artifactId>vanillabp-quarkus-support</artifactId>
         <version>${project.version}</version>
       </dependency>
-      <!-- Migration adapter: the runtime plus the SPI implemented by BPMS adapters. -->
+      <!-- Migration adapter: the runtime plus the SPIs implemented by BPMS adapters and by extensions. -->
       <dependency>
         <groupId>io.vanillabp.adapter</groupId>
         <artifactId>migration-adapter</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
-        <groupId>io.vanillabp.adapter</groupId>
-        <artifactId>migration-adapter-spi</artifactId>
+        <groupId>io.vanillabp</groupId>
+        <artifactId>vanillabp-extension-spi</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.vanillabp</groupId>
+        <artifactId>vanillabp-adapter-spi</artifactId>
         <version>${project.version}</version>
       </dependency>
       <!-- The tables VanillaBP needs, for an application creating its schema itself. -->

@@ -17,6 +17,15 @@ document is what a team building an adapter outside this workspace implements ag
 the one place where the SPI is described as a whole rather than method by method. A change to what
 an adapter implements, calls back or promises is not finished until it says the new thing.
 
+A changed picture is rendered before it is committed. `bin/render-diagrams.sh` draws every Mermaid
+block of the repository and fails where one does not parse, which is what a semicolon inside a note
+or a message does; [`diagrams/README.md`](./diagrams/README.md) has that trap written down together
+with the reason it is easy to walk into. A pull request touching a Markdown file runs the same
+script, because a block which does not parse is not a smaller picture but an error message where
+the picture was, and both times that happened here nobody saw it for weeks. The script is not part
+of the Maven build: it pulls a headless browser on first use, and a local build has to work without
+a network.
+
 Two of those rules are easy to lose sight of while writing code, so they are spelled out here as
 well.
 
@@ -41,6 +50,11 @@ What this asks for in practice:
 - say "assumption" where it is one, together with what would disprove it, rather than promising
   something nothing checks;
 - delete the sentence where it decorates and promises nothing;
+- keep a javadoc citation inside what its reader can reach. An adapter author outside this
+  workspace opens the published API and nothing else, so a story number, a prompt, a skill or a
+  roadmap entry is a dead end there; name the method, the type or the decision instead. Where a
+  javadoc names something in the source, `{@link}` it rather than writing it out, so the next
+  rename takes the sentence along;
 - answer the line `wiki pages re-read:` of the
   [pull request template](./.github/pull_request_template.md), with `none` where the change touched
   nothing a wiki page states. The wikis lag by up to two weeks whenever nobody is asked the
@@ -50,8 +64,12 @@ What this asks for in practice:
 Measurements are not claims: a number is a statement about a measured past, so it needs its context
 (version, setup, date) rather than a test.
 
-There is deliberately no tooling for this. A lint over words like "never" or "always" produces noise
-and a false sense of safety, and the habit is what does the work.
+One part of it is a machine's job after all: every module compiles with `-Xdoclint:reference`, so a
+`{@link}` pointing at a method which was renamed or removed fails the build and a parameter
+documented twice is warned about. What that check cannot see is the same name written as prose, and
+it says nothing about whether a sentence is true, so the rest stays deliberately without tooling. A
+lint over words like "never" or "always" produces noise and a false sense of safety, and the habit
+is what does the work.
 
 ## A decision is superseded, never edited away
 

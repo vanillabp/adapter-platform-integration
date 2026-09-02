@@ -1,0 +1,28 @@
+name: Checks
+"on":
+  pull_request:
+    paths:
+      - "**/*.md"
+      - "bin/render-diagrams.sh"
+      - ".github/workflows/checks.yaml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  # A Mermaid block which does not parse shows an error message where the picture should
+  # be, on GitHub and in the IntelliJ plugin alike, and both times that happened here it
+  # went unnoticed for weeks. This renders every block of every Markdown file with the
+  # renderer those two use.
+  #
+  # It is a job of its own rather than a step of the Maven build: mmdc pulls a headless
+  # browser on first use, and a local build has to work without a network. It runs only
+  # where a Markdown file changed, so a pull request which touches none pays nothing.
+  diagrams:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Every Mermaid block parses
+        run: bin/render-diagrams.sh

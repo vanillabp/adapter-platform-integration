@@ -1,5 +1,6 @@
 package io.vanillabp.integration.adapter.migration.processservice;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -13,6 +14,7 @@ import io.vanillabp.integration.adapter.spi.PhaseOneRequest;
 import io.vanillabp.integration.adapter.spi.PhaseOperationHandler;
 import io.vanillabp.integration.adapter.spi.PhaseTwoRequest;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
+import io.vanillabp.integration.adapter.spi.WorkflowVisibilityDelay;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
@@ -20,6 +22,7 @@ import io.vanillabp.integration.spi.Election;
 import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.PhaseTwoRetryLater;
 import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.spi.TaskDeliveryLog;
 import io.vanillabp.integration.spi.TransactionRunner;
@@ -1601,28 +1604,63 @@ public class MigrationProcessService<A> {
 
   /**
    * What phase two throws while the workflow is still not findable: the entry is worth
-   * repeating, because the hint says the workflow exists. The outbox backs off and
-   * blocks the entry when its attempts are used up, which is where an exporter nobody
-   * noticed becomes visible.
+   * repeating, because the hint says the workflow exists. Nobody waits for it here -
+   * the dispatching thread serves every other entry of the same store, and one workflow
+   * whose BPMS lags behind must not hold operations of workflows which are perfectly
+   * findable. So the entry goes back with the window of the adapter which should hold
+   * it, which is the time that adapter itself says its read model may need.
+   * <p>
+   * What ends this for a workflow which never becomes visible is the ATTEMPT COUNTER,
+   * not the due time: every repetition counts an attempt, and
+   * <code>vanillabp.outbox.block-after-attempts</code> of them leave the entry blocked,
+   * which is where an exporter nobody noticed becomes visible. The due time only
+   * decides how often the question is asked in between.
    *
    * @param hintedAdapterId The adapter which should hold the workflow
    * @param subject The workflow the operation is about
    * @param operationDescription What could not be dispatched
    * @return The failure to throw
    */
-  private IllegalStateException stillNotVisible(
+  private RuntimeException stillNotVisible(
       final String hintedAdapterId,
       final String subject,
       final String operationDescription) {
 
-    return new IllegalStateException(
-        """
-            Phase two of %s cannot run yet: adapter '%s' should hold the %s - VanillaBP started it \
-            there or was handed a delivery for it - but its BPMS still does not report the \
-            workflow. The entry is repeated. A workflow which really is gone ends up as a blocked \
-            entry; a read model which stopped catching up (a Camunda 8 exporter, for instance) is \
-            what to look at first."""
-            .formatted(operationDescription, hintedAdapterId, subject));
+    final var message = """
+        Phase two of %s cannot run yet: adapter '%s' should hold the %s - VanillaBP started it \
+        there or was handed a delivery for it - but its BPMS still does not report the \
+        workflow. The entry is repeated. A workflow which really is gone ends up as a blocked \
+        entry; a read model which stopped catching up (a Camunda 8 exporter, for instance) is \
+        what to look at first."""
+        .formatted(operationDescription, hintedAdapterId, subject);
+
+    final var window = visibilityWindowOf(hintedAdapterId);
+    return window == null
+        ? new IllegalStateException(message)
+        : new PhaseTwoRetryLater(message, window);
+
+  }
+
+  /**
+   * How long the given adapter says its BPMS may need until a workflow it holds becomes
+   * searchable, or <code>null</code> where it needs no time at all (an embedded BPMS) or
+   * is not configured any more. Both leave the store with its own backoff, which is the
+   * right answer for a failure nothing knows a better moment for.
+   *
+   * @param adapterId The adapter to ask
+   * @return The visibility window or <code>null</code>
+   */
+  private Duration visibilityWindowOf(
+      final String adapterId) {
+
+    return adapterProcessServices
+        .stream()
+        .filter(adapter -> adapter.getAdapterId().equals(adapterId))
+        .map(MigratableProcessService::workflowVisibilityDelay)
+        .filter(delay -> (delay != null) && delay.isWaiting())
+        .map(WorkflowVisibilityDelay::window)
+        .findFirst()
+        .orElse(null);
 
   }
 
@@ -2115,18 +2153,16 @@ public class MigrationProcessService<A> {
 
     final var subject = subjectOf(workflowAggregateId);
 
-    // a task probe is a command against the engine rather than a search, so its answer
-    // is exact and waiting for a read model would buy nothing - an unreachable BPMS is
-    // still worth a second question here, where no application transaction is open. A
-    // workflow is searched for, so there the visibility window is waited out
+    // an unreachable BPMS is worth a second question here, where no application
+    // transaction is open. A read model which has not caught up is not waited for: this
+    // thread dispatches the entries of every workflow of this store, and the entry of
+    // the one workflow nobody can find yet is given back with a due time instead
     final var location = workflowLocator.locate(
         adapterProcessServices,
         adapter -> probe(operation, adapter, workflowAggregateId, args),
         workflowAggregateId,
         subject,
-        addressesTheWorkflow(operation)
-            ? WorkflowLocator.Patience.WAIT_FOR_VISIBILITY
-            : WorkflowLocator.Patience.RETRY_UNAVAILABLE);
+        WorkflowLocator.Patience.RETRY_UNAVAILABLE);
 
     switch (location.awareness()) {
       case UNKNOWN_TO_BPMS -> {
@@ -2443,6 +2479,7 @@ public class MigrationProcessService<A> {
                     scheduledArgs));
     if (!scheduled) {
       reportDiscardedSchedule(
+          operation,
           "%s of %s".formatted(operation.describe(scheduledArgs), subjectOf(workflowAggregateId)));
     }
 
@@ -2988,10 +3025,18 @@ public class MigrationProcessService<A> {
    * repository's DECISIONS.md). Outside one - a REST endpoint, an adapter reporting no
    * activation - the correlation id is still the only thing left to vary.
    *
+   * Counted as well as logged, because a line in a log is found by somebody already
+   * looking. The counter carries the operation, so a discarded correlation and a
+   * discarded start can be alarmed on separately.
+   *
+   * @param operation The operation which was dropped
    * @param subject What was dropped, named the way the caller would recognise it
    */
   private void reportDiscardedSchedule(
+      final PhaseOperation operation,
       final String subject) {
+
+    metrics.outboxScheduleDiscarded(operation.name());
 
     final var activation = io.vanillabp.integration.spi.RunningActivation.current();
     if (activation == null) {

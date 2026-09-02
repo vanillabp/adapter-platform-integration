@@ -67,13 +67,14 @@ import lombok.extern.slf4j.Slf4j;
  * comparable. In phase one it runs INSIDE the caller's database transaction, holding
  * its connection and the locks on the workflow aggregate: a walk which sleeps there
  * drains the connection pool of every caller at once, which is why phase one asks
- * once and never sleeps. At dispatch time no application transaction is open, the
- * work belongs to the outbox anyway and a repetition costs an entry another attempt -
- * so that is where a BPMS gets a second chance and where a read model gets the
- * moment it needs (decision 27 in the repository's DECISIONS.md). A read of the
- * viewer/history API waits too, for the opposite reason: there is no outbox entry
- * behind it which could ask again later, so an answer it does not wait for is an
- * error the application sees.
+ * once and never sleeps. At dispatch time no application transaction is open and a
+ * repetition costs an entry another attempt rather than a connection, so that is where
+ * a BPMS gets a second chance and where a read model gets the moment it needs
+ * (decision 27 in the repository's DECISIONS.md) - the moment is taken by giving the
+ * entry back with a due time, because the dispatching thread carries the entries of
+ * every other workflow too. A read of the viewer/history API is the one caller which
+ * really sleeps: there is no outbox entry behind it which could ask again later, so an
+ * answer it does not wait for is an error the application sees.
  * <p>
  * The two rules this walk rests on are written down where the adapters can read them too: an
  * adapter answers only for its own scope and the walk never falls back (decision 4 in the
@@ -97,16 +98,19 @@ public final class WorkflowLocator {
 
     /**
      * Repeat an unavailable BPMS a few times, but never wait for a read model to
-     * catch up. What a task probe answers is exact - a task the BPMS does not know
-     * stays unknown however long anybody waits.
+     * catch up. Two callers ask for this, for different reasons. What a task probe
+     * answers is exact - a task the BPMS does not know stays unknown however long
+     * anybody waits. And the dispatch of a phase-two entry has somebody who asks
+     * again: it hands the entry back to the outbox with a short due time, which
+     * leaves its thread free for the entries of all the other workflows.
      */
     RETRY_UNAVAILABLE,
 
     /**
      * Additionally wait out the {@code workflowVisibilityDelay} of an adapter a hint
-     * points at: the workflow exists, its BPMS just has not made it findable yet. The
-     * dispatch of a phase-two entry and every read of the viewer/history API ask for
-     * this - the one because it may repeat itself, the other because nobody repeats it.
+     * points at: the workflow exists, its BPMS just has not made it findable yet. Only
+     * a read of the viewer/history API asks for this, because nobody repeats a read -
+     * an answer it does not wait for is an error the application sees.
      */
     WAIT_FOR_VISIBILITY
 
@@ -418,8 +422,8 @@ public final class WorkflowLocator {
    * just created shows up in the read model its probe searches - the ordinary "start a
    * workflow, then correlate the message which lets it continue" runs into it. Two
    * things have to hold before anybody waits: a hint has to claim the workflow exists,
-   * and the caller has to be one which may take the time
-   * ({@link Patience#WAIT_FOR_VISIBILITY} - the dispatch, never phase one).
+   * and the caller has to be one which has nobody to ask the question again for it
+   * ({@link Patience#WAIT_FOR_VISIBILITY} - a read of the viewer API).
    */
   private static <A> WorkflowAwareness probeUntilVisible(
       final MigratableProcessService<A> adapter,
