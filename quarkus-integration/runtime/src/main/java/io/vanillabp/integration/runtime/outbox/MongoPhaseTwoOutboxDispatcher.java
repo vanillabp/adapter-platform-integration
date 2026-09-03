@@ -46,10 +46,12 @@ import lombok.extern.slf4j.Slf4j;
  * </ul>
  * Due entries (status {@link MongoPhaseTwoOutbox#STATUS_OPEN}) are claimed
  * atomically (<code>findOneAndUpdate</code> incrementing the number of attempts and
- * setting the next attempt according to
- * <code>vanillabp.outbox.attempt-frequency</code>), so a failed dispatch is retried
- * with a backoff and multiple application instances (pods) may poll concurrently
- * without any distributed lock - exactly one instance wins each claim. On
+ * leasing the entry for one <code>vanillabp.outbox.attempt-frequency</code>), so
+ * multiple application instances (pods) may poll concurrently without any distributed
+ * lock - exactly one instance wins each claim. A dispatch which FAILS writes the next
+ * attempt itself, at the growing distance of
+ * {@link io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties#attemptDelay(int)}
+ * - doubling per attempt up to <code>vanillabp.outbox.max-attempt-frequency</code>. On
  * successful dispatch the entry is marked {@link MongoPhaseTwoOutbox#STATUS_DONE}
  * (kept until <code>vanillabp.outbox.retention</code> passed, for support to read);
  * after
@@ -298,7 +300,7 @@ public class MongoPhaseTwoOutboxDispatcher {
       if (io.vanillabp.integration.spi.PhaseTwoPermanentFailure.isPermanent(e)) {
         collection.updateOne(
             Filters.eq("_id", entryId),
-            Updates.set("status", MongoPhaseTwoOutbox.STATUS_BLOCKED));
+            blockEntry(entryId));
         log.error(
             "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
                 + "failed for a reason repeating cannot fix - the outbox entry '{}' is blocked and has "
@@ -314,7 +316,7 @@ public class MongoPhaseTwoOutboxDispatcher {
       if (entry.getInteger("attempts") + 1 >= properties.getBlockAfterAttempts()) {
         collection.updateOne(
             Filters.eq("_id", entryId),
-            Updates.set("status", MongoPhaseTwoOutbox.STATUS_BLOCKED));
+            blockEntry(entryId));
         log.error(
             "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
                 + "failed {} times - the outbox entry '{}' is now blocked and has to be cleaned up manually!",
@@ -349,16 +351,49 @@ public class MongoPhaseTwoOutboxDispatcher {
             properties.getBlockAfterAttempts(),
             e.getMessage());
       } else {
+        // the attempts of the entry are the count BEFORE this claim, so attemptDelay(0)
+        // is the distance after the first failure: close, because most failures are
+        // momentary
+        final var retryIn = properties.attemptDelay(entry.getInteger("attempts"));
+        collection.updateOne(
+            Filters.eq("_id", entryId),
+            Updates.set("nextAttemptAt", Date.from(Instant.now().plus(retryIn))));
         log.warn(
             "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
-                + "failed - will retry",
+                + "failed - the outbox entry '{}' is dispatched again in {} ({} of {} attempts used)",
             entry.getString("operation"),
             entry.getString("bpmnProcessId"),
             entry.getString("workflowModuleId"),
             entry.getString("aggregateId"),
+            entryId,
+            retryIn,
+            entry.getInteger("attempts") + 1,
+            properties.getBlockAfterAttempts(),
             e);
       }
     }
+
+  }
+
+  /**
+   * Blocks an entry and releases its <code>dedupKey</code> the way a dispatched entry
+   * releases it. Easy to miss and the reason a blocked entry used to be a dead end: the
+   * key is what refuses a second schedule of the same operation, so a blocked entry
+   * which kept it would silence the very repetition the application needs - it would
+   * ask, the outbox would answer no, and that answer looks exactly like a correct
+   * deduplication. The row stays for whoever repairs it, and the new attempt of the
+   * operation is a document of its own.
+   *
+   * @param entryId The id of the entry to block
+   * @return The update to apply
+   */
+  private static org.bson.conversions.Bson blockEntry(
+      final String entryId) {
+
+    return Updates
+        .combine(
+            Updates.set("status", MongoPhaseTwoOutbox.STATUS_BLOCKED),
+            Updates.set("dedupKey", entryId));
 
   }
 

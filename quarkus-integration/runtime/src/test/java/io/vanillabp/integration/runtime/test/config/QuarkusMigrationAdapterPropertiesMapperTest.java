@@ -182,6 +182,7 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
   private record OutboxProperties(
                                   Duration pollInterval,
                                   Duration attemptFrequency,
+                                  Duration maxAttemptFrequency,
                                   int blockAfterAttempts,
                                   boolean createSchema,
                                   Duration retention,
@@ -330,16 +331,18 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                                                                                                                 .ofSeconds(
                                                                                                                                     1), Duration
                                                                                                                                         .ofSeconds(
-                                                                                                                                            2), 3, false, Duration
-                                                                                                                                                .ofDays(
-                                                                                                                                                    1), new JdbcOutboxProperties(false, Optional
-                                                                                                                                                        .of("HOT_OUTBOX")), new MongoOutboxProperties(
-                                                                                                                                                            false, "hot-outbox")), new WorkflowAdapterCacheProperties(
-                                                                                                                                                                50_000, Duration
-                                                                                                                                                                    .ofMinutes(
-                                                                                                                                                                        30), Duration
+                                                                                                                                            2), Duration
+                                                                                                                                                .ofSeconds(
+                                                                                                                                                    20), 3, false, Duration
+                                                                                                                                                        .ofDays(
+                                                                                                                                                            1), new JdbcOutboxProperties(false, Optional
+                                                                                                                                                                .of("HOT_OUTBOX")), new MongoOutboxProperties(
+                                                                                                                                                                    false, "hot-outbox")), new WorkflowAdapterCacheProperties(
+                                                                                                                                                                        50_000, Duration
                                                                                                                                                                             .ofMinutes(
-                                                                                                                                                                                2), true));
+                                                                                                                                                                                30), Duration
+                                                                                                                                                                                    .ofMinutes(
+                                                                                                                                                                                        2), true));
 
     final var core = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(properties);
 
@@ -389,6 +392,7 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
 
     assertEquals(Duration.ofSeconds(1), core.getOutbox().getPollInterval());
     assertEquals(Duration.ofSeconds(2), core.getOutbox().getAttemptFrequency());
+    assertEquals(Duration.ofSeconds(20), core.getOutbox().getMaxAttemptFrequency());
     assertEquals(3, core.getOutbox().getBlockAfterAttempts());
     assertFalse(core.getOutbox().isCreateSchema());
     assertEquals(Duration.ofDays(1), core.getOutbox().getRetention());
@@ -474,6 +478,7 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     final var coreDefaults = new PhaseTwoOutboxProperties();
     assertEquals(coreDefaults.getPollInterval(), mappedDefaults.getPollInterval());
     assertEquals(coreDefaults.getAttemptFrequency(), mappedDefaults.getAttemptFrequency());
+    assertEquals(coreDefaults.getMaxAttemptFrequency(), mappedDefaults.getMaxAttemptFrequency());
     assertEquals(coreDefaults.getBlockAfterAttempts(), mappedDefaults.getBlockAfterAttempts());
     assertEquals(coreDefaults.isCreateSchema(), mappedDefaults.isCreateSchema());
     assertEquals(coreDefaults.getRetention(), mappedDefaults.getRetention());

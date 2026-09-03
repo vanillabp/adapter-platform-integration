@@ -51,6 +51,9 @@ public class PermanentPhaseTwoFailureTest {
   private static final String ATTEMPTS_OF_AGGREGATE = "SELECT MAX(ATTEMPTS) FROM VANILLABP_PHASE_TWO_OUTBOX "
       + "WHERE AGGREGATE_ID = '%s'";
 
+  private static final String COUNT_ENTRIES_OF_AGGREGATE = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX "
+      + "WHERE AGGREGATE_ID = '%s'";
+
   @Inject
   WorkflowService workflowService;
 
@@ -111,6 +114,49 @@ public class PermanentPhaseTwoFailureTest {
             .filter(attachedAggregate.getId()::equals)
             .count(),
         "the dispatch must not be repeated");
+
+  }
+
+  /**
+   * A blocked entry used to hold its deduplication key, and the store refuses an
+   * identical key for as long as an entry holds it - so the failed operation silenced
+   * its own repetition, with an answer indistinguishable from a correct deduplication.
+   * Blocking releases the key now, exactly as a dispatch releases it.
+   */
+  @Test
+  @DisplayName("A blocked entry does not swallow the next attempt of the same operation")
+  public void aBlockedEntryReleasesItsDeduplicationKey() throws Exception {
+
+    listener.failNextDispatchesPermanently(1);
+
+    userTransaction.begin();
+    final var attachedAggregate = workflowService.startWorkflow("blocked-releases-key");
+    userTransaction.commit();
+
+    listener.awaitInvocations(1, 30_000);
+    final var deadline = System.currentTimeMillis() + 30_000;
+    while (count(COUNT_BLOCKED_ENTRIES_OF_AGGREGATE.formatted(attachedAggregate.getId())) == 0) {
+      assertTrue(System.currentTimeMillis() < deadline, "the entry was not blocked");
+      Thread.sleep(50);
+    }
+
+    // the same operation, planned again while the blocked row still sits there
+    userTransaction.begin();
+    workflowService.startWorkflowAgain(attachedAggregate);
+    userTransaction.commit();
+
+    // it reaches the BPMS: a second entry was written and dispatched, and the blocked
+    // one stays where it is for whoever repairs it
+    assertEquals(
+        2,
+        listener
+            .awaitInvocations(2, 30_000)
+            .stream()
+            .filter(attachedAggregate.getId()::equals)
+            .count(),
+        "the repetition of a blocked operation was discarded");
+    assertEquals(1, count(COUNT_BLOCKED_ENTRIES_OF_AGGREGATE.formatted(attachedAggregate.getId())));
+    assertEquals(2, count(COUNT_ENTRIES_OF_AGGREGATE.formatted(attachedAggregate.getId())));
 
   }
 

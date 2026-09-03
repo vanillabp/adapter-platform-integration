@@ -4,6 +4,50 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## The outbox survives an outage longer than five minutes (2026-09-03)
+
+Two changes to how a failed dispatch is retried, one of them a changed default, both of them
+behaviour an application notices without configuring anything.
+
+**The retry distance grows instead of staying fixed**, and the attempt budget grew with it:
+
+|                 Property                 |                      Before                      |                                         Now                                         |
+|------------------------------------------|--------------------------------------------------|-------------------------------------------------------------------------------------|
+| `vanillabp.outbox.attempt-frequency`     | the distance between every two attempts, `PT30S` | the distance to the FIRST retry, unchanged at `PT30S`, doubled per attempt after it |
+| `vanillabp.outbox.max-attempt-frequency` | -                                                | new, `PT5M`, the cap the doubling stops at                                          |
+| `vanillabp.outbox.block-after-attempts`  | `10`                                             | `50`                                                                                |
+
+With the old values a BPMS which was away for six minutes - a cluster upgrade - turned every
+operation pending in that window into a blocked row somebody had to repair by hand. The new ones
+try for about four hours, and the cap means a BPMS which comes back is noticed within five
+minutes however long it was gone. Nothing is renamed and nothing is removed, so an application
+which configured the two old properties keeps a valid configuration; what it gets is the growing
+distance between its own attempts.
+
+**An application which wants the old behaviour** sets `max-attempt-frequency` to the same value
+as `attempt-frequency` - the doubling is then capped where it starts - and `block-after-attempts`
+back to `10`.
+
+**Gruelbox on Spring Boot keeps its fixed distance.** That store brings a retry policy of its own
+which knows one interval, so an application on the JPA default retries every `attempt-frequency`
+as before; with the new attempt budget it tries for twenty-five minutes rather than five. The
+per-store table of the platform wiki pages names this difference together with the other two it
+already carries.
+
+**A blocked entry no longer blocks its own repetition.** Blocking now releases the deduplication
+key on the stores VanillaBP owns (`DEDUP_KEY` respectively `dedupKey` is set to the entry's id,
+exactly as a dispatched entry sets it), so the application can plan that operation again. Before,
+the blocked row held the key and the store refused the identical operation for as long as the row
+sat there - an answer indistinguishable from a correct deduplication, which is why one failed
+operation silenced its own repetition until an operator deleted the row.
+
+Two consequences for operations. A repair of a blocked entry has to expect a second entry for the
+same operation, written after the block, and reopening the old one then carries the operation to
+the BPMS twice - which the idempotency key never protected against anyway (it is about scheduling
+once, not about arriving once). And the counter `vanillabp.outbox.discarded` stops rising for this
+case, because there is nothing left to discard; where it still rises, the cause is the one it
+always had.
+
 ## Three SPIs, three artifacts (2026-09-01)
 
 The SPI a BPMS adapter implements and the one an extension of the deployment pipeline

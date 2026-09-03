@@ -1327,6 +1327,35 @@ outbox, so there such an entry comes back later than it had to, never sooner.
 `NotVisibleWorkflowDoesNotStallDispatchTest` holds both halves: the entry of a findable workflow
 dispatched while the other one waits, and the bound which finally blocks it.
 
+**What a failed dispatch costs, and why the numbers are what they are.** The distance to the
+next attempt grows: `PhaseTwoOutboxProperties#attemptDelay` returns `attempt-frequency` for the
+first retry and doubles it per attempt until `max-attempt-frequency` caps it. Thirty seconds,
+one minute, two, four, then five minutes for the remaining attempts, fifty of them, which is
+close to four hours. The fixed distance it replaced was thirty seconds ten times, so an outage
+of six minutes - a cluster upgrade - converted every pending operation of every node into a row
+somebody had to repair by hand.
+The two ends of the curve answer two different questions: the cap decides how long after a BPMS
+comes back the first entry reaches it, the attempt budget decides which outage the store
+survives alone, and blocking then means "this entry is broken" rather than "the BPMS was away
+for a while". The stores VanillaBP owns compute the distance with that one method, so the curve
+does not drift apart between platforms; gruelbox knows a single fixed distance and keeps it,
+which the per-store table of the wiki pages owns.
+The distance is written where a dispatch FAILED, not when the entry is claimed: the claim leases
+the entry for one `attempt-frequency` so other pollers skip it, and a poller which dies
+mid-dispatch therefore does not leave the long distance of an attempt nobody made behind.
+`PhaseTwoOutboxPropertiesTest#theBackoffGrowsAndIsCapped` pins the sequence and
+`#theAttemptBudgetSpansHours` the four hours.
+
+**Blocking releases the deduplication key.** An entry which is blocked keeps everything else it
+has, but its `DEDUP_KEY` (MongoDB: `dedupKey`) is replaced by the entry's own id, exactly as a
+dispatched entry replaces it. Without that, a blocked entry silenced the repetition of the very
+operation it failed at: the key is what refuses a second schedule, so the application asked, the
+store said no, and that answer is indistinguishable from a correct deduplication - one failed
+operation muted itself until somebody deleted the row, and only the counter
+`vanillabp.outbox.discarded` made it visible at all. The blocked row stays for whoever repairs
+it, so a repair now has to expect a second row for the same operation. Gruelbox holds its
+`uniqueRequestId` until the row goes, so there the dead end remains.
+
 A scheduled call is described by the immutable value type `PhaseTwoCall`
 (operation, workflow module, BPMN process, workflow-aggregate ID in serialized
 String form, elected adapter ID, operation-specific args). The dispatch chain is as
