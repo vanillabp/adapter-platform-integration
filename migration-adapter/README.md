@@ -1923,7 +1923,9 @@ ID rules are `BpmsInitiatedStartIdTest`.
 
 `ProcessService#getProcessDefinitions`, `#getBpmnXml` and `#getWorkflowHistory` are
 read-only: no aggregate is saved, no transaction is required and no workflow is
-advanced. The BPMS answering is elected by the same probing/caching
+advanced. All three live in `WorkflowViewer`, which the process service holds and
+delegates to - the reading half has an election of its own and shares nothing with the
+writing half but the walk. The BPMS answering is elected by the same probing/caching
 `WorkflowLocator` walk as every other operation on an existing workflow — with one
 difference: `COMPLETED` is a REGULAR result (viewers show ended workflows), only a
 workflow unknown to EVERY adapter raises the SPI's `WorkflowNotFoundException`.

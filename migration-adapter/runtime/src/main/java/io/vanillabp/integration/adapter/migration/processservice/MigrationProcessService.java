@@ -123,6 +123,12 @@ public class MigrationProcessService<A> {
   private final MigrationAdapterProperties properties;
 
   /**
+   * The reading half - what a viewer shows about a workflow: the process definitions it
+   * uses, their BPMN XML, and its execution history.
+   */
+  private final WorkflowViewer<A> workflowViewer;
+
+  /**
    * What VanillaBP remembers about the task deliveries of this BPMN process - the
    * deduplication of a repeated delivery, the age of a task left open, and which adapter
    * delivered a task the application names later.
@@ -292,6 +298,9 @@ public class MigrationProcessService<A> {
 
     this.deliveryRecords = new DeliveryRecords(
         workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, taskDeliveryLogResolver);
+
+    this.workflowViewer = new WorkflowViewer<>(
+        workflowModuleId, bpmnProcessId, prioritizedAdapters, adapterProcessServices, aggregatePersistenceSupport, workflowLocator, this::workflowScope);
 
   }
 
@@ -2111,24 +2120,7 @@ public class MigrationProcessService<A> {
       final A workflowAggregate,
       final String historyContext) {
 
-    final var aggregateId = aggregatePersistenceSupport
-        .getAggregateId(workflowAggregate);
-    final var location = locateForReading(aggregateId, "process definitions");
-    final var adapter = location.adapter();
-
-    final var definitions = adapter.getProcessDefinitions(
-        workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, aggregateId, historyContext);
-    if ((definitions == null) || definitions.isEmpty()) {
-      throw new io.vanillabp.spi.process.WorkflowNotFoundException(
-          workflowUnknownMessage(aggregateId, adapter.getAdapterId(), "process definitions", historyContext));
-    }
-
-    return definitions
-        .stream()
-        .map(definition -> new io.vanillabp.spi.process.ProcessDefinition(
-            ProcessDefinitionIds.compose(adapter.getAdapterId(), definition.id()), definition
-                .bpmnProcessId(), definition.version(), definition.usedByElements()))
-        .toList();
+    return workflowViewer.getProcessDefinitions(workflowAggregate, historyContext);
 
   }
 
@@ -2144,50 +2136,7 @@ public class MigrationProcessService<A> {
   public java.io.InputStream getBpmnXml(
       final String processDefinitionId) {
 
-    final var parsed = ProcessDefinitionIds.parse(processDefinitionId);
-    if (parsed == null) {
-      throw new io.vanillabp.spi.process.ProcessDefinitionNotFoundException(
-          ("The process definition id '%s' does not follow VanillaBP's scheme "
-              + "'<adapter id>%s<BPMS specific id>'! Pass an id reported by getProcessDefinitions "
-              + "(or WorkflowHistory#processDefinitionId) of BPMN process '%s' of workflow module "
-              + "'%s' unchanged - it is opaque to the application.")
-              .formatted(
-                  processDefinitionId,
-                  ProcessDefinitionIds.SEPARATOR,
-                  bpmnProcessId,
-                  workflowModuleId));
-    }
-
-    final var adapter = adapterProcessServices
-        .stream()
-        .filter(processService -> processService.getAdapterId().equals(parsed.adapterId()))
-        .findFirst()
-        .orElseThrow(() -> new io.vanillabp.spi.process.ProcessDefinitionNotFoundException(
-            ("The process definition id '%s' addresses the adapter '%s' which is not (or no longer) "
-                + "configured for BPMN process '%s' of workflow module '%s' (configured adapters, "
-                + "in prioritized order: %s)! Either the id was kept from an earlier configuration "
-                + "or it belongs to another workflow.")
-                .formatted(
-                    processDefinitionId,
-                    parsed.adapterId(),
-                    bpmnProcessId,
-                    workflowModuleId,
-                    prioritizedAdapters)));
-
-    final var bpmnXml = adapter.getBpmnXml(
-        workflowModuleId, bpmnProcessId, parsed.nativeProcessDefinitionId());
-    if (bpmnXml == null) {
-      throw new io.vanillabp.spi.process.ProcessDefinitionNotFoundException(
-          ("The adapter '%s' does not know the process definition '%s' (of BPMN process '%s' of "
-              + "workflow module '%s')! Likely causes: the definition was deleted in the BPMS, or "
-              + "the id was kept from a previous deployment the BPMS no longer holds.")
-              .formatted(
-                  parsed.adapterId(),
-                  parsed.nativeProcessDefinitionId(),
-                  bpmnProcessId,
-                  workflowModuleId));
-    }
-    return bpmnXml;
+    return workflowViewer.getBpmnXml(processDefinitionId);
 
   }
 
@@ -2205,81 +2154,9 @@ public class MigrationProcessService<A> {
       final A workflowAggregate,
       final String historyContext) {
 
-    final var aggregateId = aggregatePersistenceSupport
-        .getAggregateId(workflowAggregate);
-    final var location = locateForReading(aggregateId, "the workflow history");
-    final var adapter = location.adapter();
-
-    final var history = adapter.getWorkflowHistory(
-        workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, aggregateId, historyContext);
-    if (history == null) {
-      throw new io.vanillabp.spi.process.WorkflowNotFoundException(
-          workflowUnknownMessage(aggregateId, adapter.getAdapterId(), "the workflow history", historyContext));
-    }
-
-    return new io.vanillabp.spi.process.WorkflowHistory(
-        ProcessDefinitionIds.compose(adapter.getAdapterId(), history.processDefinitionId()), history
-            .startTime(), history.endTime(), history.elementsHistory());
+    return workflowViewer.getWorkflowHistory(workflowAggregate, historyContext);
 
   }
-
-  /**
-   * Elects the adapter answering a READ operation of the viewer/history API.
-   * Unlike operations advancing a workflow, {@link WorkflowAwareness#COMPLETED} is
-   * a regular result here (an ended workflow still has definitions and a history);
-   * only a subject unknown to EVERY adapter raises the SPI's
-   * {@code WorkflowNotFoundException}.
-   * <p>
-   * A read is the caller which has to do its own waiting. An operation advancing a
-   * workflow is planned in phase one and waits for an eventually consistent read model
-   * in the dispatch, where no transaction is open (decision 27 in the repository's
-   * DECISIONS.md); a read has no second place to wait in - it answers the caller or it
-   * fails, and a failure is not repeated by anybody. So where a hint says which adapter
-   * holds the workflow, the read waits out that adapter's
-   * {@code workflowVisibilityDelay}: asking for the history of a workflow the same
-   * application started seconds ago is the ordinary case, and the one to three seconds
-   * Camunda 8's exporter lags behind must not turn it into an error. Without a hint
-   * nothing is waited for - a workflow nobody has ever seen fails at once.
-   */
-  private WorkflowLocator.Location<A> locateForReading(
-      final Object aggregateId,
-      final String subjectOfRead) {
-
-    final var subject = "workflow of aggregate '%s' (BPMN process '%s' of workflow module '%s')"
-        .formatted(aggregateId, bpmnProcessId, workflowModuleId);
-
-    // the hint is what buys the waiting: it says the workflow exists, so an adapter not
-    // reporting it yet is asked again until its visibility window is used up. Nothing
-    // repeats a read later, so this is the only place it can happen
-    final var location = workflowLocator.locate(
-        adapterProcessServices,
-        adapter -> adapter.awarenessOfWorkflow(workflowScope(), aggregatePersistenceSupport, aggregateId),
-        aggregateId,
-        subject,
-        WorkflowLocator.Patience.WAIT_FOR_VISIBILITY);
-
-    if (location.awareness() == WorkflowAwareness.UNKNOWN_TO_BPMS) {
-      throw new io.vanillabp.spi.process.WorkflowNotFoundException(
-          ("No configured BPMS knows the %s - %s cannot be determined (probed adapters, in "
-              + "prioritized order: %s)! Likely causes: the workflow was never started, was "
-              + "started through another system, or its history was already cleaned up in the "
-              + "BPMS.%s")
-              .formatted(
-                  subject,
-                  subjectOfRead,
-                  prioritizedAdapters,
-                  location.isUnknownButExpected()
-                      ? (" The adapter '%s' was expected to hold this workflow (VanillaBP started "
-                          + "it there or was handed a delivery for it) and still did not report it "
-                          + "after its workflowVisibilityDelay had passed - if that BPMS answers "
-                          + "from a read model, its exporter is behind or has stopped.")
-                          .formatted(location.hintedAdapterId())
-                      : ""));
-    }
-    return location;
-
-  }
-
 
   /**
    * The tail of a "no BPMS knows this workflow" message: the causes which really
@@ -2312,29 +2189,6 @@ public class MigrationProcessService<A> {
             + "what the last two causes need."
         : "the workflow was never started, was started through another system, or already ended "
             + "long ago.";
-
-  }
-
-  private String workflowUnknownMessage(
-      final Object aggregateId,
-      final String adapterId,
-      final String subjectOfRead,
-      final String historyContext) {
-
-    return ("The adapter '%s' cannot provide %s of the workflow of aggregate '%s' (BPMN process "
-        + "'%s' of workflow module '%s'%s)! The BPMS reported the workflow as known but has no "
-        + "data for it - for BPMS cleaning up history this means the retention period has "
-        + "passed; for eventually consistent BPMS it may also mean the data is not yet "
-        + "visible.")
-        .formatted(
-            adapterId,
-            subjectOfRead,
-            aggregateId,
-            bpmnProcessId,
-            workflowModuleId,
-            historyContext == null
-                ? ""
-                : ", history context '%s'".formatted(historyContext));
 
   }
 
