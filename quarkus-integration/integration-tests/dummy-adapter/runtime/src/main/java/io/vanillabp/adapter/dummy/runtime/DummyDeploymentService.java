@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.adapter.spi.BpmnParseException;
+import io.vanillabp.integration.adapter.spi.DmnDecisionIds;
 import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedContext;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartContext;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartResult;
@@ -265,6 +266,23 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
         ? filename.substring(0, filename.length() - ".bpmn".length())
         : filename;
     return List.of(Map.entry(bpmnProcessId, new Object()));
+
+  }
+
+  @Override
+  public Object readDmn(
+      final String workflowModuleId,
+      final Object existingContext,
+      final String filename,
+      final InputStream dmn) {
+
+    log.info("Dummy-Adapter[{}]: Reading DMN '{}' for {}", adapterId, filename, workflowModuleId);
+    notifyListeners("readDmn", workflowModuleId, filename);
+
+    // like a real adapter: the file is taken as bytes and travels in the context which
+    // the module's processes produced
+    DmnDecisionIds.bytesOf(dmn);
+    return existingContext;
 
   }
 

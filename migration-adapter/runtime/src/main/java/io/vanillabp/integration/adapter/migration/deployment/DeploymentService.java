@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
@@ -27,6 +27,19 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class DeploymentService {
+
+  /**
+   * What a BPMN file is called - the files which bring the executable processes of a
+   * workflow module.
+   */
+  public static final String BPMN_EXTENSION = ".bpmn";
+
+  /**
+   * What a DMN file is called - the decision tables a business rule task of the module
+   * calls. They are read AFTER the BPMN files, because the processing context they are
+   * added to is what reading a process produced.
+   */
+  public static final String DMN_EXTENSION = ".dmn";
 
   /**
    * @see DeploymentService#bpmsProcessingContexts
@@ -154,15 +167,16 @@ public class DeploymentService {
    * migration) naming the known BPMN process IDs.
    *
    * @param workflowModuleIds The workflow module IDs to deploy
-   * @param bpmnResourcesLoader A function that takes a resource location and loads the BPMN resources
-   *     for a given workflow module ID. It provides a
-   *     map having the filename as the key and the BPMN input stream as the value.
+   * @param resourcesLoader Loads the resources of one location: it is given the location
+   *     and a file extension ({@value #BPMN_EXTENSION} respectively
+   *     {@value #DMN_EXTENSION}) and provides a map having the filename as the key and
+   *     the file's input stream as the value.
    * @param <PC> The processing context, used to store all information needed by the adapter to deploy the process.
    */
   @SuppressWarnings("unchecked")
   public <PC> void deployResources(
       final List<String> workflowModuleIds,
-      final Function<String, Map<String, InputStream>> bpmnResourcesLoader) {
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader) {
 
     // several ids of one adapter type only make sense if they address DIFFERENT
     // systems - which the ADAPTER decides
@@ -197,7 +211,7 @@ public class DeploymentService {
             deployResourcesOfAdapter(
                 workflowModuleId,
                 deploymentService,
-                bpmnResourcesLoader,
+                resourcesLoader,
                 knownBpmnProcessIds.computeIfAbsent(workflowModuleId, id -> new HashSet<>()));
           } catch (final RuntimeException e) {
             final var adapterId = deploymentService.getAdapterId();
@@ -350,7 +364,7 @@ public class DeploymentService {
    * matching no executable BPMN process found in the module's resources. Only a
    * WARN, consistent with the handling of configured workflow modules missing in the
    * classpath: the BPMN may arrive later (e.g. during a BPMS migration), so booting
-   * must not be prevented. Runs after {@link #deployResources(List, Function)}
+   * must not be prevented. Runs after {@link #deployResources(List, BiFunction)}
    * processed all adapters because BPMN process IDs are known only after the
    * adapters' <code>readBpmn</code> - IDs found by ANY adapter count as known (the
    * resources location may differ per adapter).
@@ -408,7 +422,7 @@ public class DeploymentService {
    *
    * @param workflowModuleId The workflow module ID
    * @param deploymentService The deployment service to use
-   * @param bpmnResourcesLoader A function that takes a resource location and loads the BPMN resources
+   * @param resourcesLoader Loads the files of one location and extension
    * @param knownBpmnProcessIds Collects the executable BPMN process IDs found (used
    *     to validate configured workflow IDs after all adapters were processed)
    * @param <PC> The processing context, used to store all information needed by the adapter to deploy the process.
@@ -416,7 +430,7 @@ public class DeploymentService {
   private <PC> void deployResourcesOfAdapter(
       final String workflowModuleId,
       final AdapterDeploymentService<?, PC> deploymentService,
-      final Function<String, Map<String, InputStream>> bpmnResourcesLoader,
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader,
       final Set<String> knownBpmnProcessIds) {
 
     // a configured location is the only one; the convention may name two (the
@@ -430,7 +444,7 @@ public class DeploymentService {
     var searchedLocation = candidateLocations.getFirst();
     var foundFiles = Map.<String, InputStream>of();
     for (final var candidate : candidateLocations) {
-      final var filesOfCandidate = bpmnResourcesLoader.apply(candidate.location());
+      final var filesOfCandidate = resourcesLoader.apply(candidate.location(), BPMN_EXTENSION);
       if (!filesOfCandidate.isEmpty()) {
         searchedLocation = candidate;
         foundFiles = filesOfCandidate;
@@ -485,7 +499,9 @@ public class DeploymentService {
       log.warn(
           "No executable BPMN processes found for workflow module '{}' at location {}! "
               + "Adapter '{}' is skipped for this workflow module, so none of its workflows can be "
-              + "started by that adapter. If this is unintended, check property "
+              + "started by that adapter, and any DMN file at that location is not deployed either "
+              + "(a decision table travels with the processes calling it, never on its own). If "
+              + "this is unintended, check property "
               + "'{}.workflow-modules.{}.adapters.{}.resources-location' (or '{}.resources-location') "
               + "and the BPMN files at that location.",
           workflowModuleId,
@@ -503,6 +519,14 @@ public class DeploymentService {
       return;
     }
 
+    // the decision tables of the module, into the context its processes produced - a
+    // business rule task calls a decision of its own module, so both travel together
+    processDmnFiles(
+        workflowModuleId,
+        deploymentService,
+        resourcesLoader.apply(resourcesLocation.location(), DMN_EXTENSION),
+        bpmsProcessingContext);
+
     // ...and finally deploy all the resources together (BPMN, DMN) to the BPMS
     deploymentService.deployResources(workflowModuleId, bpmsProcessingContext.getBpmsProcessingContext());
     bpmsProcessingContexts
@@ -512,6 +536,63 @@ public class DeploymentService {
             .deploymentService(deploymentService)
             .bpmsProcessingContext(bpmsProcessingContext.getBpmsProcessingContext())
             .build());
+
+  }
+
+  /**
+   * Hands every DMN file of the workflow module to the adapter, which adds it to the
+   * processing context so {@link AdapterDeploymentService#deployResources} deploys it
+   * with the module's processes.
+   * <p>
+   * The streams are owned by this pipeline like the BPMN ones: they are closed here
+   * whatever the adapter did with them, the ones after a failing file included.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param deploymentService The adapter's deployment service
+   * @param dmnFiles The DMN files found at the module's resources location for this adapter
+   * @param bpmsProcessingContext The context the module's BPMN files produced
+   * @param <PC> The processing context
+   */
+  private <PC> void processDmnFiles(
+      final String workflowModuleId,
+      final AdapterDeploymentService<?, PC> deploymentService,
+      final Map<String, InputStream> dmnFiles,
+      final BpmsProcessingContextHolder<PC> bpmsProcessingContext) {
+
+    try {
+      dmnFiles
+          .forEach((
+              filename,
+              dmn) -> {
+            log.debug(
+                "Reading DMN file '{}' of workflow module '{}' for adapter '{}'",
+                filename,
+                workflowModuleId,
+                deploymentService.getAdapterId());
+            bpmsProcessingContext
+                .setBpmsProcessingContext(
+                    deploymentService
+                        .readDmn(
+                            workflowModuleId,
+                            bpmsProcessingContext.getBpmsProcessingContext(),
+                            filename,
+                            dmn));
+          });
+    } finally {
+      dmnFiles.forEach((
+          filename,
+          dmn) -> {
+        try {
+          dmn.close();
+        } catch (final java.io.IOException e) {
+          log.warn(
+              "Could not close the stream of DMN file '{}' of workflow module '{}'",
+              filename,
+              workflowModuleId,
+              e);
+        }
+      });
+    }
 
   }
 

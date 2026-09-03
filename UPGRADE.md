@@ -4,6 +4,38 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## Decision tables of a workflow module are deployed with it (2026-09-03)
+
+A workflow module may put `.dmn` files next to its BPMN files, and the boot deploys them to the
+same BPMS, in the same deployment, with the same tenant. Before, a decision table had to be
+deployed by hand or by a second mechanism.
+
+**What this changes for an existing application:** one which already keeps DMN files at its
+`resources-location` and deploys them by other means now deploys them twice. Both Camunda engines
+answer a redeployment of an unchanged file by keeping what they have, so this is usually invisible
+- but an application which deploys a DIFFERENT version of a decision by its own mechanism has two
+writers now and has to pick one. Nothing else changes: an application without DMN files there
+notices nothing.
+
+**Where the files are looked for** is the module's resources location of that adapter, exactly
+where its BPMN files are looked for (`vanillabp.workflow-modules.<module>.adapters.<id>.resources-location`
+and its fallbacks). A module with a decision table but without an executable process is skipped
+as it was before, and the warning about it now says that its decision tables are not deployed
+either.
+
+**Where a workflow module is scoped by prefixes** (`name-clash-avoidance: use-prefix`), the
+decision ids of those files are rewritten like the process ids, and the reference of a business
+rule task is rewritten with them. A business rule task pointing at a decision which this module
+does NOT deploy - one deployed by hand, or owned by another application - therefore breaks under
+that mode: the reference is rewritten and the decision in the BPMS is not. Deploy the decision
+with the module, or scope the module by tenant (`by-adapter`, the default), where nothing is
+rewritten at all.
+
+**For an adapter written before this:** `AdapterDeploymentService#readDmn` is a `default` which
+takes no file and warns once per file naming the adapter, the file and the workflow module. An
+adapter compiles and runs unchanged; an application bringing a decision table to that BPMS is
+told rather than left with a business rule task nobody deployed anything for.
+
 ## The outbox survives an outage longer than five minutes (2026-09-03)
 
 Two changes to how a failed dispatch is retried, one of them a changed default, both of them

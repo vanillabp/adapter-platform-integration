@@ -61,11 +61,11 @@ public class SpringBootDeploymentServiceTest {
 
   @Test
   @DisplayName("BPMN files in subdirectories keep their relative path")
-  public void bpmnResourcesLoaderKeepsSubdirectories() {
+  public void filesInSubdirectoriesKeepTheirRelativePath() {
 
     final var testee = new SpringBootDeploymentService(null, null, null);
 
-    final var resources = testee.bpmnResourcesLoader("classpath:deployment-test-processes");
+    final var resources = testee.resourcesLoader("classpath:deployment-test-processes", ".bpmn");
 
     // same-named BPMN files in different subdirectories must not overwrite each other
     assertEquals(
@@ -81,12 +81,26 @@ public class SpringBootDeploymentServiceTest {
   }
 
   @Test
-  @DisplayName("Resource location with trailing slash is treated the same")
-  public void bpmnResourcesLoaderWithTrailingSlash() {
+  @DisplayName("The extension asked for decides which files of the location are loaded")
+  public void theExtensionDecidesWhichFilesAreLoaded() {
 
     final var testee = new SpringBootDeploymentService(null, null, null);
 
-    final var resources = testee.bpmnResourcesLoader("classpath:deployment-test-processes/");
+    // the decision tables of a location are asked for separately, so a DMN file never
+    // reaches readBpmn and a BPMN file never reaches readDmn
+    assertEquals(
+        Set.of("rating.dmn"),
+        testee.resourcesLoader("classpath:deployment-test-processes", ".dmn").keySet());
+
+  }
+
+  @Test
+  @DisplayName("Resource location with trailing slash is treated the same")
+  public void aTrailingSlashIsTreatedTheSame() {
+
+    final var testee = new SpringBootDeploymentService(null, null, null);
+
+    final var resources = testee.resourcesLoader("classpath:deployment-test-processes/", ".bpmn");
 
     assertEquals(
         Set.of(

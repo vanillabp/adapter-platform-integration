@@ -66,6 +66,7 @@ public class DeploymentTest {
         .addResource("META-INF/workflow-module")
         .addResource("application.yaml")
         .addResource("test-module/processes/dummy/DummyProcess.bpmn")
+        .addResource("test-module/processes/dummy/DummyDecision.dmn")
         .hideResource("META-INF/workflow-module")
         .build(); var context = testApp.applicationBuilder(
             DummyAdapterConfiguration.class,
@@ -86,6 +87,7 @@ public class DeploymentTest {
       final var prepareBpmn = "Dummy-Adapter: Preparing BPMN for test-module";
       final var adapterWiring = "Dummy-Adapter: Wiring BPMN for test-module";
       final var extensionWiring = "Dummy-Extension: Wiring BPMN for test-module";
+      final var readDmn = "Dummy-Adapter[test]: Reading DMN 'DummyDecision.dmn' for test-module";
       final var deployResources = "Dummy-Adapter[test]: Deploying resources for test-module";
       final var appStarted = "seconds (process running for";
       final var adapterStartProcessing = "Dummy-Adapter: Starting workflow processing for test-module";
@@ -95,6 +97,7 @@ public class DeploymentTest {
       final var prepareBpmnPos = capturedOutput.indexOf(prepareBpmn);
       final var adapterWiringPos = capturedOutput.indexOf(adapterWiring);
       final var extensionWiringPos = capturedOutput.indexOf(extensionWiring);
+      final var readDmnPos = capturedOutput.indexOf(readDmn);
       final var deployResourcesPos = capturedOutput.indexOf(deployResources);
       final var appStartedPos = capturedOutput.indexOf(appStarted);
       final var adapterStartProcessingPos = capturedOutput.indexOf(adapterStartProcessing);
@@ -152,6 +155,15 @@ public class DeploymentTest {
               + capturedOutput);
       Assertions.assertTrue(extensionWiringPos < deployResourcesPos,
           "Expected extension wiring before deploying resources. Captured output: "
+              + capturedOutput);
+      // the decision a business rule task calls belongs to the module and is deployed
+      // with it - read after the processes, because the context it is added to is what
+      // reading a process produced
+      Assertions.assertTrue(extensionWiringPos < readDmnPos,
+          "Expected the DMN of the module to be read after its processes were wired. Captured output: "
+              + capturedOutput);
+      Assertions.assertTrue(readDmnPos < deployResourcesPos,
+          "Expected the DMN to be read before deploying resources. Captured output: "
               + capturedOutput);
       Assertions.assertTrue(deployResourcesPos < appStartedPos,
           "Expected deploying resources before app started. Captured output: "

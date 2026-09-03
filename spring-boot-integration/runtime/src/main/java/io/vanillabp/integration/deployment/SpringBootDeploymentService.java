@@ -72,14 +72,15 @@ public class SpringBootDeploymentService implements SmartLifecycle {
   private volatile boolean running = false;
 
   /**
-   * Triggers loading of all BPMN resources and deployment of them.
+   * Triggers loading of all resources of the workflow modules - their BPMN files and
+   * their decision tables - and deployment of them.
    */
   @Override
   public void start() {
 
     deploymentService.deployResources(
         getWorkflowModuleIds(),
-        this::bpmnResourcesLoader);
+        this::resourcesLoader);
 
     running = true;
 
@@ -159,13 +160,15 @@ public class SpringBootDeploymentService implements SmartLifecycle {
   }
 
   /**
-   * Recursively reads all BPMN resources from the given location.
+   * Recursively reads all resources of the given extension from the given location.
    *
    * @param resourceLocation The location to read from
-   * @return A map of relative paths to BPMN resources
+   * @param extension The file extension to read, e.g. <code>.bpmn</code>
+   * @return A map of relative paths to resources
    */
-  public Map<String, InputStream> bpmnResourcesLoader(
-      final String resourceLocation) {
+  public Map<String, InputStream> resourcesLoader(
+      final String resourceLocation,
+      final String extension) {
 
     final var resolver = new PathMatchingResourcePatternResolver();
 
@@ -175,16 +178,15 @@ public class SpringBootDeploymentService implements SmartLifecycle {
             + "/";
 
     final var resourcePattern = normalizedLocation
-        + "**/*.bpmn";
+        + "**/*"
+        + extension;
 
     final Resource[] resources;
     try {
       resources = resolver.getResources(resourcePattern);
     } catch (final IOException e) {
       throw new IllegalStateException(
-          "Failed to resolve BPMN resources from location: "
-              + resourceLocation, e
-      );
+          "Failed to resolve '%s' resources from location: %s".formatted(extension, resourceLocation), e);
     }
 
     final var result = new HashMap<String, InputStream>();

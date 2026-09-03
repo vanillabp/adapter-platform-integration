@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/" id="dummy-decision-definitions" name="dummy" namespace="http://vanillabp.io/test">
+  <decision id="dummyDecision" name="Dummy decision">
+    <decisionTable id="dummyDecisionTable" hitPolicy="UNIQUE"/>
+  </decision>
+</definitions>

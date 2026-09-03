@@ -15,10 +15,11 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
+import io.vanillabp.integration.adapter.migration.deployment.DeploymentService;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.deployment.workflowmodule.VanillaBpWorkflowModulesBuildItem;
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
-import io.vanillabp.integration.runtime.deployment.BpmnResourceIndex;
+import io.vanillabp.integration.runtime.deployment.BpmsResourceIndex;
 import io.vanillabp.integration.runtime.deployment.DeploymentRecorder;
 import io.vanillabp.integration.runtime.deployment.VanillaBpDeploymentRunner;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
@@ -99,14 +100,14 @@ public class DeploymentPipelineBuildStepProcessor {
   }
 
   /**
-   * Indexes all <code>.bpmn</code> resources of all application archives at build
-   * time and records them (as plain classpath-root-relative strings) together with
-   * the detected workflow module IDs as the synthetic {@link BpmnResourceIndex}
+   * Indexes the <code>.bpmn</code> and <code>.dmn</code> resources of all application
+   * archives at build time and records them (as plain classpath-root-relative strings) together with
+   * the detected workflow module IDs as the synthetic {@link BpmsResourceIndex}
    * bean. The runtime deployment runner filters the index by the configured
    * <code>resources-location</code> - RUN_TIME configuration cannot be
    * pattern-scanned in a Quarkus fast-jar at runtime. The indexed files are also
    * watched for dev-mode hot deployment (note: only files existing at build time
-   * are watched; adding a NEW BPMN file in dev mode requires touching a watched
+   * are watched; adding a NEW BPMN or DMN file in dev mode requires touching a watched
    * file or restarting).
    * <p>
    * The indexed files are registered for the native image as well. A native image only
@@ -116,14 +117,14 @@ public class DeploymentPipelineBuildStepProcessor {
    *
    * @param applicationArchives The archives of this Quarkus build
    * @param workflowModulesFound Information about all workflow modules found
-   * @param watchedFiles Producer registering the BPMN files for dev-mode hot deployment
-   * @param nativeImageResources Producer putting the BPMN files into the native image
+   * @param watchedFiles Producer registering the files for dev-mode hot deployment
+   * @param nativeImageResources Producer putting the files into the native image
    * @param syntheticBeans Producer used to register the recorded index as a bean
    * @param recorder The recorder building the runtime object
    */
   @Record(ExecutionTime.RUNTIME_INIT)
   @BuildStep
-  void indexBpmnResources(
+  void indexBpmsResources(
       final ApplicationArchivesBuildItem applicationArchives,
       final VanillaBpWorkflowModulesBuildItem workflowModulesFound,
       final BuildProducer<HotDeploymentWatchedFileBuildItem> watchedFiles,
@@ -132,17 +133,18 @@ public class DeploymentPipelineBuildStepProcessor {
       final DeploymentRecorder recorder) {
 
     // sorted + deduplicated: the same path may show up in more than one archive
-    final var bpmnResourcePaths = new TreeSet<String>();
+    final var resourcePaths = new TreeSet<String>();
     applicationArchives
         .getAllArchives()
         .forEach(archive -> archive
             .accept(openPathTree -> openPathTree
                 .walk(visit -> Optional
                     .ofNullable(visit.getRelativePath("/"))
-                    .filter(relativePath -> relativePath.endsWith(".bpmn"))
-                    .ifPresent(bpmnResourcePaths::add))));
+                    .filter(relativePath -> relativePath.endsWith(DeploymentService.BPMN_EXTENSION) || relativePath
+                        .endsWith(DeploymentService.DMN_EXTENSION))
+                    .ifPresent(resourcePaths::add))));
 
-    bpmnResourcePaths
+    resourcePaths
         .forEach(path -> {
           watchedFiles.produce(new HotDeploymentWatchedFileBuildItem(path));
           nativeImageResources.produce(new NativeImageResourceBuildItem(path));
@@ -158,13 +160,13 @@ public class DeploymentPipelineBuildStepProcessor {
         .sorted()
         .collect(java.util.stream.Collectors.toCollection(LinkedList::new));
 
-    final var index = recorder.recordBpmnResourceIndex(
+    final var index = recorder.recordBpmsResourceIndex(
         workflowModuleIds,
-        new LinkedList<>(bpmnResourcePaths));
+        new LinkedList<>(resourcePaths));
 
     syntheticBeans
         .produce(SyntheticBeanBuildItem
-            .configure(BpmnResourceIndex.class)
+            .configure(BpmsResourceIndex.class)
             .scope(ApplicationScoped.class)
             .runtimeValue(index)
             .setRuntimeInit()
