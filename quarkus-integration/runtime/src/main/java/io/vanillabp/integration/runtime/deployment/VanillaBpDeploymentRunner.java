@@ -75,7 +75,7 @@ public class VanillaBpDeploymentRunner {
   MigrationAdapterProperties properties;
 
   @Inject
-  BpmnResourceIndex bpmnResourceIndex;
+  BpmsResourceIndex bpmsResourceIndex;
 
   /**
    * Adapters' deployment services as <i>element</i> beans (one bean per adapter).
@@ -147,7 +147,7 @@ public class VanillaBpDeploymentRunner {
 
   synchronized void deployAndStart() {
 
-    workflowModuleIds = bpmnResourceIndex.getWorkflowModuleIds();
+    workflowModuleIds = bpmsResourceIndex.getWorkflowModuleIds();
 
     final List<AdapterDeploymentService<?, ?>> deploymentServices = Stream
         .concat(
@@ -169,7 +169,7 @@ public class VanillaBpDeploymentRunner {
     log.info("Deploying BPMN resources of workflow modules: {}", workflowModuleIds);
     deploymentService.deployResources(
         workflowModuleIds,
-        bpmnResourceIndex::loadBpmnResources);
+        bpmsResourceIndex::loadResources);
 
     // the election capability of the prioritized adapters is checked once the adapters
     // deployed - only then does an adapter know what its BPMS can do - and before

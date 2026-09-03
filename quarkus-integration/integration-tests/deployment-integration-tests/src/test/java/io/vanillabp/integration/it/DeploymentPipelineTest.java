@@ -30,6 +30,8 @@ import jakarta.inject.Inject;
  *   <li>all <code>.bpmn</code> files below the configured
  *       <code>resources-location</code> are found (incl. subdirectories, keys keep
  *       the relative path),</li>
+ *   <li>the <code>.dmn</code> files of the same location are read after them, into the
+ *       context the processes produced,</li>
  *   <li>extensions are wired after the adapter, ordered by
  *       <code>getOrder()</code>,</li>
  *   <li>extensions whose declared model/context types do not match the adapter are
@@ -52,6 +54,7 @@ public class DeploymentPipelineTest {
           .addClass(NonMatchingWiringService.class)
           .addAsResource("bpmn/first.bpmn", "processes/dummy/first.bpmn")
           .addAsResource("bpmn/second.bpmn", "processes/dummy/sub/second.bpmn")
+          .addAsResource("bpmn/rating.dmn", "processes/dummy/rating.dmn")
           .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"));
 
   @Inject
@@ -94,6 +97,26 @@ public class DeploymentPipelineTest {
     assertOrder(recorded, "adapter:demo:wireBpmn:test-module:sub/second", "adapter:demo:deployResources:test-module");
     assertOrder(recorded, "adapter:demo:deployResources:test-module",
         "adapter:demo:startWorkflowProcessing:test-module");
+
+  }
+
+  @Test
+  @DisplayName("A decision table is read after the processes and before the deployment")
+  public void aDecisionTableTravelsWithTheProcesses() {
+
+    final var recorded = events.getEvents();
+
+    // the decision a business rule task calls belongs to the module, so it is deployed
+    // with it - after the processes, because the context it is added to is what reading
+    // a process produced
+    assertOrder(
+        recorded,
+        "adapter:demo:wireBpmn:test-module:first",
+        "adapter:demo:readDmn:test-module:rating.dmn");
+    assertOrder(
+        recorded,
+        "adapter:demo:readDmn:test-module:rating.dmn",
+        "adapter:demo:deployResources:test-module");
 
   }
 

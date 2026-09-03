@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/" id="rating-definitions" name="rating" namespace="http://vanillabp.io/test">
+  <decision id="rating" name="Rating">
+    <decisionTable id="ratingTable" hitPolicy="UNIQUE"/>
+  </decision>
+</definitions>

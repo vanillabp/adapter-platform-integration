@@ -18,8 +18,10 @@ import io.vanillabp.integration.extension.spi.ExtensionWiringService;
  * <p>
  * <i>Hint:</i> The {@link PC} is an object holding all information needed by the adapter to deploy the resources.
  * <p>
- * <i>Note:</i> There is deliberately no DMN model type parameter (yet): DMN support will be
- * added to this interface once it is designed.
+ * <i>Note:</i> A DMN file travels as BYTES ({@link #readDmn}), not as a model type of its
+ * own: no adapter has to understand a decision table, and the one thing which has to be
+ * rewritten - the decision id, where a workflow module is scoped by prefixes - is the same
+ * for every BPMS and is done by {@link DmnDecisionIds}.
  *
  * @param <BPMN> The BPMN model type
  * @param <PC> The context to store all information needed by the adapter for wiring and deploying BPMN
@@ -103,6 +105,54 @@ public interface AdapterDeploymentService<BPMN, PC> extends ExtensionWiringServi
       String filename,
       String bpmnProcessId,
       BPMN model);
+
+  /**
+   * Takes one DMN file of the workflow module and adds it to the processing context, so
+   * that {@link #deployResources(String, Object)} deploys it together with the module's
+   * processes - a decision a business rule task calls is part of the module and travels
+   * with it.
+   * <p>
+   * The DMN files of a module are read AFTER its BPMN files, so the context this is given
+   * exists: a module without an executable process is skipped by the pipeline entirely.
+   * <p>
+   * Where the module is scoped by prefixes rather than by an isolation of the BPMS, the
+   * decision ids of the file have to be rewritten before it is deployed, and the
+   * reference from a business rule task rewritten with them - see {@link DmnDecisionIds}
+   * for both halves and for why only the second one is the adapter's business.
+   * <p>
+   * The default takes no file and says so once per file: an adapter written before this
+   * existed keeps working, and an application which brings a decision table to a BPMS
+   * which cannot hold one is told rather than left with a business rule task nobody
+   * deployed anything for.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param existingContext The context the module's BPMN files produced; never null
+   * @param filename The filename of the DMN file (used for logging and error messages)
+   * @param dmn The DMN input stream. It is owned and closed by the deployment pipeline -
+   *          implementations must NOT close it.
+   * @return The context the DMN was added to; must never be null
+   */
+  default PC readDmn(
+      final String workflowModuleId,
+      final PC existingContext,
+      final String filename,
+      final InputStream dmn) {
+
+    org.slf4j.LoggerFactory
+        .getLogger(AdapterDeploymentService.class)
+        .warn(
+            """
+                The adapter '{}' does not deploy DMN files, so the decision table '{}' of workflow \
+                module '{}' was NOT deployed to its BPMS - a business rule task calling it will fail \
+                at runtime. To solve this either deploy the decision to that BPMS by other means, or \
+                remove the file from the module's resources location if the BPMS of this adapter is \
+                not meant to serve those workflows.""",
+            getAdapterId(),
+            filename,
+            workflowModuleId);
+    return existingContext;
+
+  }
 
   /**
    * Deploys the resources (process, decision matrix) to the target BPMS.

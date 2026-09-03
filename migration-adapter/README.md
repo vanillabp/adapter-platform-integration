@@ -477,7 +477,8 @@ together with `#readFailsAfterTheVisibilityWindowPassed`.
    workflow starts are routed by the election, and during a BPMS migration having
    the module's complete model in both BPMS is even desirable).
 2. Load the BPMN resources (either from an adapter-specific `resources-location` or
-   the generic VanillaBP BPMN files).
+   the generic VanillaBP BPMN files). The loader is asked per file extension, so the
+   same location answers for `.bpmn` and for `.dmn`.
 3. For each file run the pipeline `readBpmn` → `prepareBpmn` (per process) →
    `wireBpmn` (adapter) → `wireBpmn` of all matching `ExtensionWiringService`s.
    The adapter-specific *processing context* (generic parameter `PC`) is accumulated
@@ -485,7 +486,16 @@ together with `#readFailsAfterTheVisibilityWindowPassed`.
    Extensions receive the same processing context as the adapter's `wireBpmn`;
    extensions are matched by assignability, so extensions may declare interfaces
    as model or processing-context type.
-4. `deployResources` pushes the result to the BPMS. A failing deployment aborts
+4. Read the module's `.dmn` files into the same processing context (`readDmn`), after
+   its processes: a decision a business rule task calls belongs to the module and is
+   deployed with it, and the context it is added to is what reading a process produced.
+   A module without an executable process is skipped as before — and the warning says
+   that its decision tables are not deployed either, because a decision travels with the
+   processes calling it and never on its own. The SPI method is a `default` which takes
+   no file and says so once per file, so an adapter written before this existed keeps
+   working and an application is told rather than left with a business rule task nobody
+   deployed anything for.
+5. `deployResources` pushes the result to the BPMS. A failing deployment aborts
    booting unless the adapter's `deployment-failure` policy is `warn` *and* the
    adapter is first priority neither for the module nor for any of its workflows.
    After all adapters were processed, configured workflow IDs
@@ -494,12 +504,12 @@ together with `#readFailsAfterTheVisibilityWindowPassed`.
    failure — the BPMN may arrive later, e.g. during a BPMS migration; process IDs
    are known only after `readBpmn`, which is why this check lives in the pipeline
    and not in the early properties validation).
-5. Once the application is ready, `startWorkflowProcessing` is called for adapters and
+6. Once the application is ready, `startWorkflowProcessing` is called for adapters and
    extensions — only then workflows are actually processed. It is called for *every*
    adapter resources were deployed to (not only the highest-priority one), since
    during a BPMS migration all configured BPMSs have to keep processing workflows.
-6. On graceful shutdown of the application, `stopWorkflowProcessing` is the
-   counterpart of step 5, executed in reverse order: extensions are stopped first (in
+7. On graceful shutdown of the application, `stopWorkflowProcessing` is the
+   counterpart of step 6, executed in reverse order: extensions are stopped first (in
    reverse wiring order), then the adapters. It is wired by the platform integrations
    (Spring Boot: `SmartLifecycle.stop()`; Quarkus: a `ShutdownEvent` observer) so no
    new workflow jobs are processed while web/messaging infrastructure is being torn
@@ -540,6 +550,10 @@ sequenceDiagram
       AD->>WE: workflowEndedHandlerExists(module, process)  — attach end listener only if true
       DS->>EXT: wireBpmn(…) for every extension whose model/PC types match
     end
+  end
+  loop per DMN file of the module
+    DS->>AD: readDmn(module, PC, filename, stream) → PC
+    Note over AD: default: takes no file and says so · scoped by prefixes: rewrite the decision ids (DmnDecisionIds) and the reference of the business rule task
   end
   DS->>AD: deployResources(module, PC)
   AD->>WT: registerDeployedVersion(module, process, version)  — per process, the adapter's own duty

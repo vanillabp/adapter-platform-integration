@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -139,8 +140,9 @@ public class DeploymentServiceTest {
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
       // Create resources loader that returns a test BPMN file
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("test-process.bpmn",
-          createDummyBpmnInputStream());
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("test-process.bpmn",
+              createDummyBpmnInputStream()));
 
       // readBpmn should return an executable process
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
@@ -177,7 +179,7 @@ public class DeploymentServiceTest {
           properties, List.of(), List.of());
 
       // Dummy loader that should not be called
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of();
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(location -> Map.of());
 
       // IllegalStateException is expected
       final var exception = assertThrows(
@@ -198,8 +200,9 @@ public class DeploymentServiceTest {
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
       // Create resources loader with a BPMN file
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("empty-process.bpmn",
-          createDummyBpmnInputStream());
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("empty-process.bpmn",
+              createDummyBpmnInputStream()));
 
       // readBpmn should return an empty list (no executable processes)
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
@@ -234,8 +237,9 @@ public class DeploymentServiceTest {
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
       // Create resources loader with BPMN file
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("my-process.bpmn",
-          createDummyBpmnInputStream());
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("my-process.bpmn",
+              createDummyBpmnInputStream()));
 
       // Configure mock behavior for complete pipeline
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
@@ -261,6 +265,88 @@ public class DeploymentServiceTest {
     }
 
     @Test
+    @DisplayName("A DMN file is read after the processes, into the context they produced")
+    public void aDecisionTableTravelsWithTheProcessesCallingIt() throws Exception {
+
+      final var properties = createPropertiesWithAdapter("adapter-test1");
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+
+      // a ByteArrayInputStream cannot say whether it was closed, so the test brings a
+      // stream which remembers it
+      final var closed = new java.util.concurrent.atomic.AtomicBoolean();
+      final var decisionTable = new java.io.FilterInputStream(createDummyBpmnInputStream()) {
+
+        @Override
+        public void close() throws java.io.IOException {
+
+          closed.set(true);
+          super.close();
+
+        }
+
+      };
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = (
+          location,
+          extension) -> DeploymentService.BPMN_EXTENSION.equals(extension)
+              ? Map.of("my-process.bpmn", createDummyBpmnInputStream())
+              : Map.of("rating.dmn", decisionTable);
+
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of(Map.entry("MyProcess", 42)));
+      when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
+          .thenReturn(100);
+      when(adapter1DeploymentService.readDmn(anyString(), any(), anyString(), any(InputStream.class)))
+          .thenReturn(200);
+
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService), List.of());
+
+      testee.deployResources(List.of("test-module"), resourcesLoader);
+
+      // the context the processes produced is what the decision table is added to, and
+      // what the adapter returned from it is what gets deployed
+      verify(adapter1DeploymentService).readDmn(
+          eq("test-module"), eq(100), eq("rating.dmn"), any(InputStream.class));
+      verify(adapter1DeploymentService).deployResources(eq("test-module"), eq(200));
+      assertTrue(
+          closed.get(),
+          "the pipeline owns the stream of a DMN file and closes it, like it does for BPMN");
+
+    }
+
+    @Test
+    @DisplayName("A module without an executable process is told that its DMN is not deployed either")
+    public void aModuleWithoutProcessesDeploysNoDecisionTableEither() {
+
+      final var properties = createPropertiesWithAdapter("adapter-test1");
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of());
+
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("empty-process.bpmn", createDummyBpmnInputStream()));
+
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService), List.of());
+
+      testee.deployResources(List.of("test-module"), resourcesLoader);
+
+      final var warnings = logWatcher.list
+          .stream()
+          .filter(event -> event.getLevel() == Level.WARN)
+          .map(ILoggingEvent::getFormattedMessage)
+          .toList();
+
+      assertTrue(
+          warnings.stream().anyMatch(message -> message.contains("DMN")),
+          "the message says that a decision table alone is not deployed, logged: "
+              + warnings);
+      verify(adapter1DeploymentService, never())
+          .readDmn(anyString(), any(), anyString(), any(InputStream.class));
+
+    }
+
+    @Test
     @DisplayName("Multiple BPMN files are processed sequentially with shared context")
     public void multipleBpmnFilesShareProcessingContext() {
 
@@ -271,12 +357,12 @@ public class DeploymentServiceTest {
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
       // Create resources loader with two BPMN files (LinkedHashMap to preserve insertion order)
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> {
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(location -> {
         final var resources = new LinkedHashMap<String, InputStream>();
         resources.put("process1.bpmn", createDummyBpmnInputStream());
         resources.put("process2.bpmn", createDummyBpmnInputStream());
         return resources;
-      };
+      });
 
       // Mock behavior: first BPMN creates context, second uses it
       when(adapter1DeploymentService.readBpmn(anyString(), eq("process1.bpmn"), any(InputStream.class), anyBoolean()))
@@ -313,8 +399,9 @@ public class DeploymentServiceTest {
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
       // Create resources loader with a single BPMN file containing two executable processes
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("multi-process.bpmn",
-          createDummyBpmnInputStream());
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("multi-process.bpmn",
+              createDummyBpmnInputStream()));
 
       // readBpmn returns TWO executable processes for the same file
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
@@ -359,8 +446,9 @@ public class DeploymentServiceTest {
       when(adapter1WiringService.getProcessContextType()).thenReturn(Integer.class);
 
       // Create resources loader
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
-          createDummyBpmnInputStream());
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("process.bpmn",
+              createDummyBpmnInputStream()));
 
       // Configure mock behavior
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
@@ -401,8 +489,9 @@ public class DeploymentServiceTest {
       doReturn(Comparable.class).when(interfaceTypeWiringService).getProcessContextType();
 
       // Create resources loader
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
-          createDummyBpmnInputStream());
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("process.bpmn",
+              createDummyBpmnInputStream()));
 
       // Configure mock behavior
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
@@ -439,8 +528,9 @@ public class DeploymentServiceTest {
       when(adapter2DeploymentService.getAdapterId()).thenReturn("adapter-test2");
 
       // Create resources loader
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
-          createDummyBpmnInputStream());
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("process.bpmn",
+              createDummyBpmnInputStream()));
 
       // Configure mock behavior of both adapters
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
@@ -489,8 +579,9 @@ public class DeploymentServiceTest {
       lenient().when(adapter2WiringService.getProcessContextType()).thenReturn(Long.class);
 
       // Create resources loader
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
-          createDummyBpmnInputStream());
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("process.bpmn",
+              createDummyBpmnInputStream()));
 
       // Configure mock behavior
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
@@ -536,8 +627,9 @@ public class DeploymentServiceTest {
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
       // Create resources loader
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
-          createDummyBpmnInputStream());
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("process.bpmn",
+              createDummyBpmnInputStream()));
 
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenReturn(List.of(Map.entry("TestProcess", 42)));
@@ -572,8 +664,9 @@ public class DeploymentServiceTest {
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
       // Create resources loader
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
-          createDummyBpmnInputStream());
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("process.bpmn",
+              createDummyBpmnInputStream()));
 
       // Configure mock behavior
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
@@ -633,8 +726,9 @@ public class DeploymentServiceTest {
       when(adapter1WiringService.getProcessContextType()).thenReturn(Integer.class);
 
       // Create resources loader
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
-          createDummyBpmnInputStream());
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("process.bpmn",
+              createDummyBpmnInputStream()));
 
       // Configure mock behavior
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
@@ -676,8 +770,9 @@ public class DeploymentServiceTest {
       lenient().when(adapter2WiringService.getProcessContextType()).thenReturn(Long.class);
 
       // Create resources loader
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
-          createDummyBpmnInputStream());
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("process.bpmn",
+              createDummyBpmnInputStream()));
 
       // Configure mock behavior
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
@@ -718,8 +813,9 @@ public class DeploymentServiceTest {
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
       // Create resources loader
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
-          createDummyBpmnInputStream());
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("process.bpmn",
+              createDummyBpmnInputStream()));
 
       // Configure mock behavior
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
@@ -781,8 +877,9 @@ public class DeploymentServiceTest {
       lenient().when(adapter2WiringService.getProcessContextType()).thenReturn(Long.class);
 
       // Create resources loader
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
-          createDummyBpmnInputStream());
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("process.bpmn",
+              createDummyBpmnInputStream()));
 
       // Configure mock behavior
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
@@ -828,8 +925,9 @@ public class DeploymentServiceTest {
       when(adapter2DeploymentService.getAdapterId()).thenReturn("adapter-test2");
 
       // Create resources loader
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
-          createDummyBpmnInputStream());
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("process.bpmn",
+              createDummyBpmnInputStream()));
 
       // First adapter deploys fine, second adapter fails (e.g. old BPMS unreachable)
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
@@ -880,8 +978,9 @@ public class DeploymentServiceTest {
           .thenThrow(new IllegalStateException("BPMS unreachable"));
 
       // Create resources loader
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
-          createDummyBpmnInputStream());
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("process.bpmn",
+              createDummyBpmnInputStream()));
 
       // Create DeploymentService with both adapters
       final var testee = new DeploymentService(
@@ -913,8 +1012,9 @@ public class DeploymentServiceTest {
           .thenThrow(new IllegalStateException("BPMS unreachable"));
 
       // Create resources loader
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
-          createDummyBpmnInputStream());
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("process.bpmn",
+              createDummyBpmnInputStream()));
 
       // Create DeploymentService with both adapters
       final var testee = new DeploymentService(
@@ -947,8 +1047,9 @@ public class DeploymentServiceTest {
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
       when(adapter2DeploymentService.getAdapterId()).thenReturn("adapter-test2");
 
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
-          createDummyBpmnInputStream());
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("process.bpmn",
+              createDummyBpmnInputStream()));
 
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenReturn(List.of(Map.entry("ProcessOnB", 42)));
@@ -992,8 +1093,9 @@ public class DeploymentServiceTest {
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
       when(adapter2DeploymentService.getAdapterId()).thenReturn("adapter-test2");
 
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
-          createDummyBpmnInputStream());
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("process.bpmn",
+              createDummyBpmnInputStream()));
 
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenReturn(List.of(Map.entry("ProcessOnB", 42)));
@@ -1025,8 +1127,9 @@ public class DeploymentServiceTest {
 
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
-          createDummyBpmnInputStream());
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("process.bpmn",
+              createDummyBpmnInputStream()));
 
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenReturn(List.of(Map.entry("TestProcess", 42)));
@@ -1061,8 +1164,9 @@ public class DeploymentServiceTest {
 
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
-          createDummyBpmnInputStream());
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("process.bpmn",
+              createDummyBpmnInputStream()));
 
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenReturn(List.of(Map.entry("TestProcess", 42)));
@@ -1099,8 +1203,9 @@ public class DeploymentServiceTest {
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
       // Create resources loader
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
-          createDummyBpmnInputStream());
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("process.bpmn",
+              createDummyBpmnInputStream()));
 
       // Configure mock behavior
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
@@ -1277,7 +1382,7 @@ public class DeploymentServiceTest {
       final var files = new java.util.LinkedHashMap<String, InputStream>();
       files.put("first.bpmn", stream1);
       files.put("second.bpmn", stream2);
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> files;
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(location -> files);
 
       // parsing the FIRST file fails - the second file is never processed
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
@@ -1303,8 +1408,9 @@ public class DeploymentServiceTest {
       final var properties = createPropertiesWithAdapter("adapter-test1");
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("collab.bpmn",
-          createDummyBpmnInputStream());
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("collab.bpmn",
+              createDummyBpmnInputStream()));
 
       // no executable processes in the file
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
@@ -1338,8 +1444,9 @@ public class DeploymentServiceTest {
       final var properties = createPropertiesWithAdapter("adapter-test1");
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
-          createDummyBpmnInputStream());
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("process.bpmn",
+              createDummyBpmnInputStream()));
 
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenReturn(List.of(Map.entry("TestProcess", 42)));
@@ -1383,8 +1490,9 @@ public class DeploymentServiceTest {
       lenient().when(adapter1WiringService.getModelType()).thenReturn(Integer.class);
       lenient().when(adapter1WiringService.getProcessContextType()).thenReturn(Integer.class);
 
-      final Function<String, Map<String, InputStream>> resourcesLoader = location -> Map.of("process.bpmn",
-          createDummyBpmnInputStream());
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
+          location -> Map.of("process.bpmn",
+              createDummyBpmnInputStream()));
 
       final var testee = new DeploymentService(
           properties, List.of(numberAdapter), List.of(adapter1WiringService));
@@ -1508,9 +1616,9 @@ public class DeploymentServiceTest {
 
     }
 
-    private Function<String, Map<String, InputStream>> oneBpmnFile() {
+    private BiFunction<String, String, Map<String, InputStream>> oneBpmnFile() {
 
-      return location -> Map.of("process.bpmn", createDummyBpmnInputStream());
+      return bpmnFilesOnly(location -> Map.of("process.bpmn", createDummyBpmnInputStream()));
 
     }
 
@@ -1551,6 +1659,24 @@ public class DeploymentServiceTest {
       return properties;
 
     }
+
+  }
+
+  /**
+   * A loader which hands out the given BPMN files and nothing else - the pipeline asks
+   * separately for the DMN files of a location, and most of these tests bring none.
+   *
+   * @param bpmnFiles What to answer where the BPMN extension is asked for
+   * @return The loader
+   */
+  private static BiFunction<String, String, Map<String, InputStream>> bpmnFilesOnly(
+      final Function<String, Map<String, InputStream>> bpmnFiles) {
+
+    return (
+        location,
+        extension) -> DeploymentService.BPMN_EXTENSION.equals(extension)
+            ? bpmnFiles.apply(location)
+            : Map.of();
 
   }
 
