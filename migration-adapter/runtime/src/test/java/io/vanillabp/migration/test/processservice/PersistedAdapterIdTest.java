@@ -15,6 +15,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.processservice.DeliveryRecords;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxResolver;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
@@ -288,13 +289,17 @@ public class PersistedAdapterIdTest {
 
     final var logWatcher = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
     logWatcher.start();
-    final var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory
-        .getLogger(MigrationProcessService.class);
-    logger.addAppender(logWatcher);
+    // the process service says some of this itself and lets its collaborator say the rest,
+    // so both are listened to - which class a message comes from is not what is under test
+    final var loggers = java.util.List
+        .of(
+            (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(MigrationProcessService.class),
+            (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(DeliveryRecords.class));
+    loggers.forEach(logger -> logger.addAppender(logWatcher));
     try {
       work.run();
     } finally {
-      logger.detachAndStopAllAppenders();
+      loggers.forEach(ch.qos.logback.classic.Logger::detachAndStopAllAppenders);
     }
     return logWatcher.list
         .stream()
@@ -326,26 +331,32 @@ public class PersistedAdapterIdTest {
       final TaskDeliveryLog deliveryLog,
       final MigratableProcessService<Object> adapter) {
 
-    final var service = new MigrationProcessService<Object>(
-        MODULE, PROCESS, Object.class, properties, persistence(), List
-            .of(adapter), new PhaseTwoOutboxResolver() {
+    final var service = MigrationProcessService
+        .<Object>forBpmnProcess(MODULE, PROCESS, Object.class)
+        .properties(properties)
+        .aggregatePersistence(persistence())
+        .processServices(List
+            .of(adapter))
+        .phaseTwoOutboxResolver(new PhaseTwoOutboxResolver() {
 
-              @Override
-              public PhaseTwoOutbox resolveFor(
-                  final Class<?> workflowAggregateClass) {
+          @Override
+          public PhaseTwoOutbox resolveFor(
+              final Class<?> workflowAggregateClass) {
 
-                return outbox;
+            return outbox;
 
-              }
+          }
 
-              @Override
-              public String remediesDescription() {
+          @Override
+          public String remediesDescription() {
 
-                return "";
+            return "";
 
-              }
+          }
 
-            }, null, new io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver() {
+        })
+        .taskDeliveryLogResolver(
+            new io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver() {
 
               @Override
               public TaskDeliveryLog resolveFor(
@@ -362,7 +373,8 @@ public class PersistedAdapterIdTest {
 
               }
 
-            });
+            })
+        .build();
     // resolves both stores the way the platform's own validations do before this check
     service.validatePhaseTwoOutboxAtStartup();
     service.validateTaskDeliveryLogAtStartup();

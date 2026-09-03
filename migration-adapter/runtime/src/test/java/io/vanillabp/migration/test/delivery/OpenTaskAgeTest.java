@@ -27,6 +27,7 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
 import io.vanillabp.integration.adapter.migration.config.TaskAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
+import io.vanillabp.integration.adapter.migration.processservice.DeliveryRecords;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
@@ -286,8 +287,13 @@ public class OpenTaskAgeTest {
 
     };
 
-    final var processService = new MigrationProcessService<>(
-        MODULE, PROCESS, Aggregate.class, properties, persistence, List.of(adapter), null, null, resolver);
+    final var processService = MigrationProcessService
+        .forBpmnProcess(MODULE, PROCESS, Aggregate.class)
+        .properties(properties)
+        .aggregatePersistence(persistence)
+        .processServices(List.of(adapter))
+        .taskDeliveryLogResolver(resolver)
+        .build();
 
     final var registry = new WorkflowTaskRegistry(new TransactionRunnerStub());
     registry.registerWorkflowService(
@@ -605,7 +611,7 @@ public class OpenTaskAgeTest {
     final var logWatcher = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
     logWatcher.start();
     final var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory
-        .getLogger(MigrationProcessService.class);
+        .getLogger(DeliveryRecords.class);
     logger.addAppender(logWatcher);
     try {
       return work.get();

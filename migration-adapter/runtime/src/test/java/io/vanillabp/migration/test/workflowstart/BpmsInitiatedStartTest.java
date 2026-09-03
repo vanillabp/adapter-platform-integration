@@ -364,8 +364,12 @@ public class BpmsInitiatedStartTest {
       }
 
     };
-    return new MigrationProcessService<>(
-        MODULE, PROCESS, aggregateClass, properties, persistence, List.of(adapterProcessService), null);
+    return MigrationProcessService
+        .forBpmnProcess(MODULE, PROCESS, aggregateClass)
+        .properties(properties)
+        .aggregatePersistence(persistence)
+        .processServices(List.of(adapterProcessService))
+        .build();
 
   }
 

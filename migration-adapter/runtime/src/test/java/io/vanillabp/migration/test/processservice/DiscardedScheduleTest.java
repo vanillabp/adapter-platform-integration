@@ -160,8 +160,13 @@ public class DiscardedScheduleTest {
 
     };
 
-    final var service = new MigrationProcessService<>(
-        MODULE, PROCESS, Object.class, properties(), persistence, List.of(adapter), resolver);
+    final var service = MigrationProcessService
+        .forBpmnProcess(MODULE, PROCESS, Object.class)
+        .properties(properties())
+        .aggregatePersistence(persistence)
+        .processServices(List.of(adapter))
+        .phaseTwoOutboxResolver(resolver)
+        .build();
     service
         .setMetrics(
             new io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics() {

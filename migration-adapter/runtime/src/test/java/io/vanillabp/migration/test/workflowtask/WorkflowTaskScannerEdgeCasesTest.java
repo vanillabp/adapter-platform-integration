@@ -143,8 +143,12 @@ public class WorkflowTaskScannerEdgeCasesTest {
       }
 
     };
-    return new MigrationProcessService<>(
-        "test-module", "TestProcess", Aggregate.class, properties, persistence, List.of(adapterProcessService), null);
+    return MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Aggregate.class)
+        .properties(properties)
+        .aggregatePersistence(persistence)
+        .processServices(List.of(adapterProcessService))
+        .build();
 
   }
 

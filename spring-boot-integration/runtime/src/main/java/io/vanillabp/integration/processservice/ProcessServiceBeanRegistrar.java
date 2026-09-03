@@ -403,8 +403,16 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                   final var processService = processServicesByKey.computeIfAbsent(
                       "%s|%s".formatted(declaringModuleId, declaredProcessId),
                       key -> {
-                        final var secondaryProcessService = new MigrationProcessService<A>(
-                            declaringModuleId, declaredProcessId, workflowAggregateType, properties, aggregatePersistenceAware, migratableProcessServices, phaseTwoOutboxResolver, workflowAdapterCache, taskDeliveryLogResolver, transactionRunnerResolver);
+                        final var secondaryProcessService = MigrationProcessService
+                            .<A>forBpmnProcess(declaringModuleId, declaredProcessId, workflowAggregateType)
+                            .properties(properties)
+                            .aggregatePersistence(aggregatePersistenceAware)
+                            .processServices(migratableProcessServices)
+                            .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+                            .workflowAdapterCache(workflowAdapterCache)
+                            .taskDeliveryLogResolver(taskDeliveryLogResolver)
+                            .transactionRunnerResolver(transactionRunnerResolver)
+                            .build();
                         secondaryProcessService.setMetrics(metrics);
                         if (phaseTwoRouter != null) {
                           phaseTwoRouter.register(secondaryProcessService);

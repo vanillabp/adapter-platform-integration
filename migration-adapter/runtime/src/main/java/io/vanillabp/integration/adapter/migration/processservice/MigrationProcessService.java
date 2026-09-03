@@ -1,19 +1,30 @@
 package io.vanillabp.integration.adapter.migration.processservice;
 
+import java.io.InputStream;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
-import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
-import io.vanillabp.integration.adapter.migration.workflowtask.TaskDeliveryKey;
+import io.vanillabp.integration.adapter.migration.observability.DeliveryMdc;
+import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
+import io.vanillabp.integration.adapter.migration.transaction.AggregateWrite;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskHandler;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.PhaseOneRequest;
 import io.vanillabp.integration.adapter.spi.PhaseOperationHandler;
+import io.vanillabp.integration.adapter.spi.PhaseOperationNotSupported;
 import io.vanillabp.integration.adapter.spi.PhaseTwoRequest;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
+import io.vanillabp.integration.adapter.spi.WorkflowScope;
 import io.vanillabp.integration.adapter.spi.WorkflowVisibilityDelay;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
@@ -22,11 +33,15 @@ import io.vanillabp.integration.spi.Election;
 import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.PhaseTwoPermanentFailure;
 import io.vanillabp.integration.spi.PhaseTwoRetryLater;
-import io.vanillabp.integration.spi.TaskDelivery;
-import io.vanillabp.integration.spi.TaskDeliveryLog;
+import io.vanillabp.integration.spi.RunningActivation;
 import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.spi.WorkflowAdapterCache;
+import io.vanillabp.spi.process.ProcessDefinition;
+import io.vanillabp.spi.process.TaskNotFoundException;
+import io.vanillabp.spi.process.WorkflowHistory;
+import io.vanillabp.spi.process.WorkflowNotFoundException;
 import io.vanillabp.spi.service.TaskException;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -127,24 +142,17 @@ public class MigrationProcessService<A> {
   private final MigrationAdapterProperties properties;
 
   /**
-   * Resolves the log of processed task deliveries used for this aggregate. Provided by
-   * the platform integration; may be <code>null</code> (tests) - deliveries are then
-   * not deduplicated, which is the behaviour of every VanillaBP before this existed.
+   * The reading half - what a viewer shows about a workflow: the process definitions it
+   * uses, their BPMN XML, and its execution history.
    */
-  private final TaskDeliveryLogResolver taskDeliveryLogResolver;
+  private final WorkflowViewer<A> workflowViewer;
 
   /**
-   * The delivery log resolved for this process service's aggregate,
-   * <code>null</code> until resolved (at startup via
-   * {@link #validateTaskDeliveryLogAtStartup()} or lazily as backstop).
+   * What VanillaBP remembers about the task deliveries of this BPMN process - the
+   * deduplication of a repeated delivery, the age of a task left open, and which adapter
+   * delivered a task the application names later.
    */
-  private volatile TaskDeliveryLog taskDeliveryLog;
-
-  /**
-   * Whether the "deliveries are not deduplicated" message was logged already - it
-   * names a configuration gap, and one line per delivery would bury it.
-   */
-  private final java.util.concurrent.atomic.AtomicBoolean missingDeliveryLogReported = new java.util.concurrent.atomic.AtomicBoolean();
+  private final DeliveryRecords deliveryRecords;
 
   /**
    * Resolves the transaction VanillaBP runs the work on this aggregate in.
@@ -165,96 +173,56 @@ public class MigrationProcessService<A> {
    * What the application counts about its deliveries. Handed in by the
    * platform integration after construction, because it exists once per application
    * while process services exist per BPMN process;
-   * {@link io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics#NONE}
+   * {@link VanillaBpMetrics#NONE}
    * until then and for an application without a metrics backend.
    */
-  private volatile io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics metrics = io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.NONE;
+  private volatile VanillaBpMetrics metrics = VanillaBpMetrics.NONE;
 
   /**
    * @param metrics What to count deliveries into, never <code>null</code>
    */
   public void setMetrics(
-      final io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics metrics) {
+      final VanillaBpMetrics metrics) {
 
     this.metrics = metrics == null
-        ? io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.NONE
+        ? VanillaBpMetrics.NONE
         : metrics;
+    deliveryRecords.setMetrics(this.metrics);
 
   }
 
   /**
-   * Creates a process service without an adapter cache (elections probe every
-   * time) - kept for tests; the platform integrations always pass the cache.
+   * Starts a process service for one BPMN process of one workflow module. What follows on
+   * the builder is what the platform integration knows about that process - see
+   * {@link Builder}, which refuses to build a service missing something no application can
+   * work without.
+   *
+   * @param workflowModuleId The workflow module the process belongs to
+   * @param bpmnProcessId The plain BPMN process id
+   * @param workflowAggregateClass The workflow aggregate of that process
+   * @return The builder
    */
-  public MigrationProcessService(
+  public static <A> Builder<A> forBpmnProcess(
       final String workflowModuleId,
       final String bpmnProcessId,
-      final Class<A> workflowAggregateClass,
-      final MigrationAdapterProperties properties,
-      final AggregatePersistenceAware<A> aggregatePersistenceSupport,
-      final List<MigratableProcessService<A>> processServices,
-      final PhaseTwoOutboxResolver phaseTwoOutboxResolver) {
+      final Class<A> workflowAggregateClass) {
 
-    this(
-        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, aggregatePersistenceSupport, processServices, phaseTwoOutboxResolver, null);
+    return new Builder<>(workflowModuleId, bpmnProcessId, workflowAggregateClass);
 
   }
 
-  /**
-   * Creates a process service without a delivery-log resolver (deliveries are not
-   * deduplicated) - kept for tests; the platform integrations always pass one.
-   */
-  public MigrationProcessService(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final Class<A> workflowAggregateClass,
-      final MigrationAdapterProperties properties,
-      final AggregatePersistenceAware<A> aggregatePersistenceSupport,
-      final List<MigratableProcessService<A>> processServices,
-      final PhaseTwoOutboxResolver phaseTwoOutboxResolver,
-      final WorkflowAdapterCache workflowAdapterCache) {
+  private MigrationProcessService(
+      final Builder<A> builder) {
 
-    this(
-        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, aggregatePersistenceSupport, processServices, phaseTwoOutboxResolver, workflowAdapterCache, null);
+    final var workflowModuleId = builder.workflowModuleId;
+    final var bpmnProcessId = builder.bpmnProcessId;
+    final var workflowAggregateClass = builder.workflowAggregateClass;
+    final var properties = builder.properties;
+    final var aggregatePersistenceSupport = builder.aggregatePersistence;
+    final var processServices = builder.processServices;
 
-  }
-
-  /**
-   * Creates a process service without a transaction-runner resolver - kept for tests
-   * and for callers handing the runner in directly; the platform integrations always
-   * pass one.
-   */
-  public MigrationProcessService(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final Class<A> workflowAggregateClass,
-      final MigrationAdapterProperties properties,
-      final AggregatePersistenceAware<A> aggregatePersistenceSupport,
-      final List<MigratableProcessService<A>> processServices,
-      final PhaseTwoOutboxResolver phaseTwoOutboxResolver,
-      final WorkflowAdapterCache workflowAdapterCache,
-      final TaskDeliveryLogResolver taskDeliveryLogResolver) {
-
-    this(
-        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, aggregatePersistenceSupport, processServices, phaseTwoOutboxResolver, workflowAdapterCache, taskDeliveryLogResolver, null);
-
-  }
-
-  public MigrationProcessService(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final Class<A> workflowAggregateClass,
-      final MigrationAdapterProperties properties,
-      final AggregatePersistenceAware<A> aggregatePersistenceSupport,
-      final List<MigratableProcessService<A>> processServices,
-      final PhaseTwoOutboxResolver phaseTwoOutboxResolver,
-      final WorkflowAdapterCache workflowAdapterCache,
-      final TaskDeliveryLogResolver taskDeliveryLogResolver,
-      final TransactionRunnerResolver transactionRunnerResolver) {
-
-    this.transactionRunnerResolver = transactionRunnerResolver;
+    this.transactionRunnerResolver = builder.transactionRunnerResolver;
     this.properties = properties;
-    this.taskDeliveryLogResolver = taskDeliveryLogResolver;
     this.workflowModuleId = workflowModuleId;
     this.bpmnProcessId = bpmnProcessId;
     this.workflowAggregateClass = workflowAggregateClass;
@@ -295,9 +263,9 @@ public class MigrationProcessService<A> {
             .filter(processService -> processService.getAdapterId().equals(adapterId))
             .findFirst()
             .orElse(null))
-        .filter(java.util.Objects::nonNull)
+        .filter(Objects::nonNull)
         .toList();
-    this.phaseTwoOutboxResolver = phaseTwoOutboxResolver;
+    this.phaseTwoOutboxResolver = builder.phaseTwoOutboxResolver;
 
     // startup check: the aggregate's ID has to round-trip losslessly through the
     // outbox's String serialization (fails with a guiding message otherwise); a
@@ -305,7 +273,13 @@ public class MigrationProcessService<A> {
     this.aggregateIdType = aggregatePersistenceSupport.getAggregateIdType();
     AggregateIdRoundTrip.validateIdTypeConvertible(workflowAggregateClass, aggregateIdType);
 
-    this.workflowLocator = new WorkflowLocator(workflowModuleId, bpmnProcessId, workflowAdapterCache);
+    this.workflowLocator = new WorkflowLocator(workflowModuleId, bpmnProcessId, builder.workflowAdapterCache);
+
+    this.deliveryRecords = new DeliveryRecords(
+        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, builder.taskDeliveryLogResolver);
+
+    this.workflowViewer = new WorkflowViewer<>(
+        workflowModuleId, bpmnProcessId, prioritizedAdapters, adapterProcessServices, aggregatePersistenceSupport, workflowLocator, this::workflowScope);
 
   }
 
@@ -644,7 +618,7 @@ public class MigrationProcessService<A> {
     // through
     final var startedAt = System.nanoTime();
     WorkflowTaskOutcome outcome = null;
-    try (var ignored = io.vanillabp.integration.adapter.migration.observability.DeliveryMdc
+    try (var ignored = DeliveryMdc
         .ofTaskDelivery(
             context.getAdapterId(),
             workflowModuleId,
@@ -654,7 +628,7 @@ public class MigrationProcessService<A> {
             context.getDeliveryId());
          // what the application plans from inside this handler is planned by THIS
          // activation, which is what tells multi-instance siblings apart
-         var activation = io.vanillabp.integration.spi.RunningActivation
+         var activation = RunningActivation
              .of(context.getActivationId())) {
       outcome = deliverWorkflowTask(handler, context, platformTransactionRunner, rollbackRuleRemedies);
       return outcome;
@@ -679,19 +653,19 @@ public class MigrationProcessService<A> {
    * @param outcome The outcome or <code>null</code> if the delivery threw
    * @return The outcome to count
    */
-  private static io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DeliveryOutcome deliveryOutcomeOf(
+  private static VanillaBpMetrics.DeliveryOutcome deliveryOutcomeOf(
       final WorkflowTaskOutcome outcome) {
 
     if (outcome == null) {
-      return io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DeliveryOutcome.FAILED;
+      return VanillaBpMetrics.DeliveryOutcome.FAILED;
     }
     return switch (outcome.kind()) {
       case COMPLETED ->
-        io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DeliveryOutcome.COMPLETED;
+        VanillaBpMetrics.DeliveryOutcome.COMPLETED;
       case COMPLETION_PENDING ->
-        io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DeliveryOutcome.PENDING;
+        VanillaBpMetrics.DeliveryOutcome.PENDING;
       case BPMN_ERROR ->
-        io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DeliveryOutcome.BPMN_ERROR;
+        VanillaBpMetrics.DeliveryOutcome.BPMN_ERROR;
     };
 
   }
@@ -727,37 +701,18 @@ public class MigrationProcessService<A> {
     // business code twice - what was processed is remembered, and a redelivery is
     // answered with the recorded outcome (leaving the task open instead would keep it
     // open forever)
-    final var deliveryKey = deduplicateDeliveries(context.getAdapterId(), context.getTaskDefinition())
-        ? TaskDeliveryKey.of(workflowModuleId, bpmnProcessId, context)
-        : null;
+    final var deliveryKey = deliveryRecords.keyFor(context);
     final var deliveryLog = deliveryKey == null
         ? null
-        : resolveTaskDeliveryLog();
+        : deliveryRecords.resolveLog();
     if ((deliveryKey != null) && (deliveryLog == null)) {
-      reportMissingDeliveryLog(context.getAdapterId());
+      deliveryRecords.reportMissingLog(context.getAdapterId());
     }
 
     final Supplier<WorkflowTaskOutcome> transactionalWork = () -> {
       if (deliveryLog != null) {
-        final var recorded = deliveryLog
-            .recordedDelivery(deliveryKey)
-            .flatMap(delivery -> recordedOutcomeOf(deliveryLog, delivery, context));
+        final var recorded = deliveryRecords.answerToARepeatedDelivery(deliveryLog, deliveryKey, context);
         if (recorded.isPresent()) {
-          log.info(
-              "Skipping the repeated delivery of task '{}' (BPMN process '{}' of workflow module "
-                  + "'{}', aggregate '{}'): it was processed before, reporting the recorded outcome "
-                  + "{} again",
-              context.getTaskDefinition(),
-              bpmnProcessId,
-              workflowModuleId,
-              context.getWorkflowAggregateId(),
-              recorded.get().kind());
-          metrics
-              .taskRedeliveryDeduplicated(
-                  context.getAdapterId(),
-                  workflowModuleId,
-                  bpmnProcessId,
-                  context.getTaskDefinition());
           return recorded.get();
         }
       }
@@ -781,7 +736,7 @@ public class MigrationProcessService<A> {
         final var outcome = handler.isAsynchronousTask()
             ? WorkflowTaskOutcome.completionPending()
             : WorkflowTaskOutcome.completed();
-        recordDelivery(deliveryLog, deliveryKey, context, outcome);
+        deliveryRecords.record(deliveryLog, deliveryKey, context, outcome);
         failIfRollbackOnly(handler, context, runner, rollbackRuleRemedies);
         return outcome;
       } catch (final TaskException taskException) {
@@ -792,13 +747,13 @@ public class MigrationProcessService<A> {
         aggregatePersistenceSupport.save(workflowAggregate);
         final var outcome = WorkflowTaskOutcome
             .bpmnError(taskException.getErrorCode(), taskException.getErrorName());
-        recordDelivery(deliveryLog, deliveryKey, context, outcome);
+        deliveryRecords.record(deliveryLog, deliveryKey, context, outcome);
         failIfRollbackOnly(handler, context, runner, rollbackRuleRemedies);
         return outcome;
       }
     };
 
-    return io.vanillabp.integration.adapter.migration.transaction.AggregateWrite
+    return AggregateWrite
         .inTransaction(
             runner,
             context.runInCurrentTransaction(),
@@ -807,35 +762,6 @@ public class MigrationProcessService<A> {
             context.getWorkflowAggregateId(),
             "processing task '%s'".formatted(context.getTaskDefinition()),
             transactionalWork);
-
-  }
-
-  /**
-   * Whether deliveries of the given adapter are deduplicated for the given task
-   * (<code>vanillabp.adapters.&lt;id&gt;.deduplicate-deliveries</code>, resolvable per
-   * workflow module, workflow and task). The default is <code>true</code>; an adapter
-   * reporting no ID at all is not deduplicated, since neither the configuration nor
-   * the delivery key could be attributed to a BPMS then.
-   *
-   * @param adapterId The ID of the adapter delivering the task or <code>null</code>
-   * @param taskDefinition The task definition delivered
-   * @return Whether to remember this delivery
-   */
-  private boolean deduplicateDeliveries(
-      final String adapterId,
-      final String taskDefinition) {
-
-    if ((adapterId == null) || (properties == null)) {
-      return false;
-    }
-    final var configured = properties
-        .resolveForAdapter(
-            workflowModuleId,
-            bpmnProcessId,
-            taskDefinition,
-            adapterId,
-            AdapterProperties::getDeduplicateDeliveries);
-    return (configured == null) || configured;
 
   }
 
@@ -850,7 +776,7 @@ public class MigrationProcessService<A> {
    */
   public boolean releasesDeliveryRecordsOnWorkflowEnd() {
 
-    return (properties != null) && properties.releasesDeliveryRecordsOnWorkflowEnd(workflowModuleId);
+    return deliveryRecords.releasesOnWorkflowEnd();
 
   }
 
@@ -869,95 +795,9 @@ public class MigrationProcessService<A> {
    */
   public int releaseDeliveryRecords(
       final String workflowAggregateId,
-      final java.time.Instant recordedBefore) {
+      final Instant recordedBefore) {
 
-    final var deliveryLog = resolveTaskDeliveryLog();
-    if (deliveryLog == null) {
-      return 0;
-    }
-    final var released = deliveryLog
-        .releaseRecordsOf(workflowModuleId, bpmnProcessId, workflowAggregateId, recordedBefore);
-    log.debug(
-        "Released {} task-delivery record(s) of the ended workflow '{}' (BPMN process '{}' of "
-            + "workflow module '{}')",
-        released,
-        workflowAggregateId,
-        bpmnProcessId,
-        workflowModuleId);
-    return released;
-
-  }
-
-  /**
-   * Validates AT STARTUP that the store resolved for this aggregate can do what
-   * <code>release-on-workflow-end</code> promises. A store which does not implement
-   * {@link TaskDeliveryLog#releaseRecordsOf(String, String, String, java.time.Instant)}
-   * keeps its records until the retention passed - which is not wrong, but it is not what
-   * the application configured, so it is said once at startup naming the store and the
-   * property.
-   * <p>
-   * Nothing happens where the release is switched off: an application which did not ask
-   * for it must not be told about a method its store does not have.
-   */
-  private void validateDeliveryRecordReleaseAtStartup() {
-
-    if (!releasesDeliveryRecordsOnWorkflowEnd()) {
-      return;
-    }
-    final var deliveryLog = resolveTaskDeliveryLog();
-    if (deliveryLog == null) {
-      // no store at all means no records at all - there is nothing to release, and the
-      // missing store is reported by the check for deduplication itself
-      return;
-    }
-    final var storeClass = taskDeliveryLogResolver != null
-        ? taskDeliveryLogResolver.storeClassOf(deliveryLog)
-        : deliveryLog.getClass();
-    if (implementsRelease(storeClass)) {
-      return;
-    }
-    log.warn(
-        """
-            The TaskDeliveryLog '{}' does not implement 'releaseRecordsOf', but '{}' is switched on \
-            for BPMN process '{}' of workflow module '{}' - the records of an ended workflow are \
-            NOT deleted when it ends but once 'vanillabp.delivery.retention' passed. To solve this \
-            either
-            - implement io.vanillabp.integration.spi.TaskDeliveryLog#releaseRecordsOf in '{}', or
-            - set '{}' to 'false' to state that the retention is what cleans up the records.""",
-        storeClass.getName(),
-        MigrationAdapterProperties.releaseOnWorkflowEndProperty(workflowModuleId),
-        bpmnProcessId,
-        workflowModuleId,
-        storeClass.getName(),
-        MigrationAdapterProperties.releaseOnWorkflowEndProperty(workflowModuleId));
-
-  }
-
-  /**
-   * Whether the given store implements the release itself instead of inheriting the
-   * default of {@link TaskDeliveryLog} which does nothing.
-   *
-   * @param storeClass The store's class, unwrapped by the platform integration
-   * @return Whether the store releases records
-   */
-  private static boolean implementsRelease(
-      final Class<?> storeClass) {
-
-    try {
-      // resolves to the override where there is one, and to the interface's default
-      // method otherwise - which is exactly the question asked here
-      final var method = storeClass
-          .getMethod(
-              "releaseRecordsOf",
-              String.class,
-              String.class,
-              String.class,
-              java.time.Instant.class);
-      return method.getDeclaringClass() != TaskDeliveryLog.class;
-    } catch (final NoSuchMethodException e) {
-      // a store compiled against an older SPI: it cannot release either
-      return false;
-    }
+    return deliveryRecords.release(workflowAggregateId, recordedBefore);
 
   }
 
@@ -996,93 +836,20 @@ public class MigrationProcessService<A> {
    */
   public void validatePersistedAdapterIdsAtStartup() {
 
-    reportOpenTasksNobodyRemembers();
+    deliveryRecords.reportOpenTasksNobodyRemembers(adapterProcessServices);
     reportUnconfiguredAdapterIds(
         phaseTwoOutbox == null
-            ? java.util.Set.<String>of()
+            ? Set.<String>of()
             : phaseTwoOutbox.adapterIdsOfPendingCalls(workflowModuleId, bpmnProcessId),
         "waiting phase-two outbox entries",
         "the workflow was persisted and never started");
     reportUnconfiguredAdapterIds(
-        taskDeliveryLog == null
-            ? java.util.Set.<String>of()
-            : taskDeliveryLog.adapterIdsOfOpenTasks(workflowModuleId, bpmnProcessId),
+        deliveryRecords.adapterIdsOfOpenTasks(),
         "records of tasks which are still open",
         "a redelivery runs the @WorkflowTask method a second time");
 
   }
 
-
-  /**
-   * Reports AT STARTUP that the BPMS holds tasks open which VanillaBP has no record of,
-   * so their next delivery will run the <code>&#64;WorkflowTask</code> method again.
-   *
-   * <h2>What this catches</h2>
-   *
-   * The wiki promises that a repeated delivery does not run the handler a second time,
-   * and that promise rests on a record written when the handler ran. A task which was
-   * already open before this application first ran has none - which is exactly what an
-   * upgrade from version 1 leaves behind, since version 1 kept no such records at all.
-   * The window is real, it closes as those tasks are delivered once each, and without
-   * this nobody can see it: no message is produced when it happens, because from the
-   * core's point of view a delivery it has never seen is simply a new one.
-   *
-   * <h2>Why counting is all that is done</h2>
-   *
-   * Nothing can be adopted. A record would have to claim that the handler ran and left
-   * the task open; a job which is activated and still there may equally be a handler
-   * which crashed halfway, no BPMS can tell the two apart, and the wrong guess skips
-   * business code which never ran. So the honest answer is the number plus the sentence
-   * that the guards in the handlers still carry the case, which is what version 1 needed
-   * anyway.
-   *
-   * <h2>When it stays silent</h2>
-   *
-   * Silent unless BOTH sides answer and both answers are interesting: a store which
-   * cannot say whether it holds open records, a BPMS which cannot count its open tasks,
-   * a store which DOES hold open records (an application which has been running), and a
-   * BPMS holding nothing open (a fresh installation) each end it. So a normal restart
-   * says nothing, a first start on an empty system says nothing, and the upgrade says
-   * something once per BPMN process.
-   */
-  private void reportOpenTasksNobodyRemembers() {
-
-    final var deliveryLog = taskDeliveryLog;
-    if (deliveryLog == null) {
-      return;
-    }
-    final var hasRecords = deliveryLog.hasOpenRecords(workflowModuleId, bpmnProcessId);
-    if ((hasRecords == null) || hasRecords.booleanValue()) {
-      return;
-    }
-    adapterProcessServices
-        .stream()
-        .filter(MigratableProcessService::deliversTasksAtLeastOnce)
-        .forEach(adapter -> {
-          final var open = adapter.openTaskCount(workflowModuleId, bpmnProcessId);
-          if ((open == null) || (open == 0)) {
-            return;
-          }
-          log
-              .info(
-                  """
-                      Adapter '{}' holds {} open task(s) of BPMN process '{}' (workflow module '{}') \
-                      which VanillaBP has no record of. It remembers a delivery from the moment your \
-                      handler ran, so tasks which were already open before this application first ran \
-                      are not in that memory: the next delivery of each of them runs the \
-                      @WorkflowTask method a SECOND time, which is what happens without the record \
-                      and what VanillaBP 1 did for every delivery. Nothing can be repaired here - a \
-                      record would have to claim your handler ran, and an activated job which is \
-                      still there may just as well be a handler which crashed halfway. So keep the \
-                      guards in your handlers until this number is zero, which it becomes as each of \
-                      those tasks is delivered once.""",
-                  adapter.getAdapterId(),
-                  open,
-                  bpmnProcessId,
-                  workflowModuleId);
-        });
-
-  }
 
   /**
    * Says once per adapter id and store what the persisted state names and the
@@ -1093,7 +860,7 @@ public class MigrationProcessService<A> {
    * @param whatItCosts What happens if nothing is done about it
    */
   private void reportUnconfiguredAdapterIds(
-      final java.util.Set<String> persistedAdapterIds,
+      final Set<String> persistedAdapterIds,
       final String whatIsLeftOver,
       final String whatItCosts) {
 
@@ -1103,7 +870,7 @@ public class MigrationProcessService<A> {
     final var configuredAdapterIds = properties.adapterTypes().keySet();
     persistedAdapterIds
         .stream()
-        .filter(java.util.Objects::nonNull)
+        .filter(Objects::nonNull)
         .filter(adapterId -> !configuredAdapterIds.contains(adapterId))
         .sorted()
         .forEach(adapterId -> {
@@ -1160,281 +927,7 @@ public class MigrationProcessService<A> {
    */
   public void validateTaskDeliveryLogAtStartup() {
 
-    validateDeliveryRecordReleaseAtStartup();
-
-    final var atLeastOnceAdapters = adapterProcessServices
-        .stream()
-        .filter(MigratableProcessService::deliversTasksAtLeastOnce)
-        .map(MigratableProcessService::getAdapterId)
-        .filter(adapterId -> deduplicateDeliveries(adapterId, null))
-        .toList();
-    if (atLeastOnceAdapters.isEmpty()) {
-      return;
-    }
-    if (resolveTaskDeliveryLog() == null) {
-      reportMissingDeliveryLog(atLeastOnceAdapters.getFirst());
-    }
-
-  }
-
-  private TaskDeliveryLog resolveTaskDeliveryLog() {
-
-    if ((taskDeliveryLog == null) && (taskDeliveryLogResolver != null)) {
-      taskDeliveryLog = taskDeliveryLogResolver.resolveFor(workflowAggregateClass);
-    }
-    return taskDeliveryLog;
-
-  }
-
-  /**
-   * States once that deliveries of this BPMN process are not deduplicated, and how to
-   * change that. Also the answer to "why did my handler run twice" - the message is
-   * the first thing to look for then.
-   *
-   * @param adapterId The ID of an adapter which may repeat a delivery
-   */
-  private void reportMissingDeliveryLog(
-      final String adapterId) {
-
-    if (!missingDeliveryLogReported.compareAndSet(false, true)) {
-      return;
-    }
-    log.warn(
-        """
-            Adapter '{}' may deliver a task of BPMN process '{}' of workflow module '{}' more than \
-            once, but no TaskDeliveryLog is available for aggregate '{}' - a repeated delivery will \
-            run the @WorkflowTask method again. To solve this either
-            {}
-            - define your own bean implementing io.vanillabp.integration.spi.TaskDeliveryLog \
-            (assign it to specific aggregates via a io.vanillabp.integration.spi.TaskDeliveryLogAware \
-            bean), or
-            - set 'vanillabp.adapters.{}.deduplicate-deliveries' to 'false' to state that the \
-            handlers of this application are idempotent themselves.""",
-        adapterId,
-        bpmnProcessId,
-        workflowModuleId,
-        workflowAggregateClass.getName(),
-        taskDeliveryLogResolver == null
-            ? "- provide a TaskDeliveryLogResolver (platform integration), or"
-            : taskDeliveryLogResolver.remediesDescription(),
-        adapterId);
-
-  }
-
-  /**
-   * Remembers a processed delivery within the transaction which also persists the
-   * aggregate - the two commit together or not at all.
-   */
-  private void recordDelivery(
-      final TaskDeliveryLog deliveryLog,
-      final String deliveryKey,
-      final TaskInvocationContext context,
-      final WorkflowTaskOutcome outcome) {
-
-    if (deliveryLog == null) {
-      return;
-    }
-    // the task travels with the record so the election of a later completion can read from
-    // it which adapter holds that task, instead of asking every configured BPMS
-    final var recordWasWritten = deliveryLog.record(
-        new TaskDelivery(
-            deliveryKey, context.getAdapterId(), workflowModuleId, bpmnProcessId, context
-                .getWorkflowAggregateId(), context.getTaskDefinition(), context
-                    .getTaskId(), outcome.kind().name(), outcome.errorCode(), outcome
-                        .errorName(), java.time.Instant.now(), null));
-    if (!recordWasWritten) {
-      reportHandlerRanTwiceAtTheSameTime(deliveryKey, context);
-    }
-
-  }
-
-  /**
-   * Says that the handler of this task ran twice at the same time, which is the one case
-   * a record written after the work cannot prevent: a delivery starting while another
-   * one is still running finds no record yet, so both run and only the one committing
-   * first gets its record written.
-   * <p>
-   * The delivery which lost is the only place where the overlap becomes visible at all,
-   * so it is where it is said out loud. Nothing is rolled back: the record which stands
-   * describes work which was really done, and this delivery's own work committed just as
-   * well.
-   */
-  private void reportHandlerRanTwiceAtTheSameTime(
-      final String deliveryKey,
-      final TaskInvocationContext context) {
-
-    log.warn(
-        """
-            Two deliveries of task '{}' (BPMN process '{}' of workflow module '{}', workflow \
-            aggregate '{}') were processed at the SAME time: adapter '{}' handed the task out \
-            again while the first handler was still running, so both found no record and the \
-            @WorkflowTask method ran twice. The record written by the delivery which committed \
-            first stands and this one added nothing to it (delivery key '{}'). Whatever the \
-            handler did beside writing the workflow aggregate, sending a mail for instance, \
-            happened twice. Key such decisions on the state of the workflow aggregate, and where \
-            the BPMS lets you say how long a task stays locked, a lock which outlasts the handler \
-            keeps the second delivery from being handed out at all.""",
-        context.getTaskDefinition(),
-        bpmnProcessId,
-        workflowModuleId,
-        context.getWorkflowAggregateId(),
-        context.getAdapterId(),
-        deliveryKey);
-    metrics
-        .taskRedeliveryRanConcurrently(
-            context.getAdapterId(),
-            workflowModuleId,
-            bpmnProcessId,
-            context.getTaskDefinition());
-
-  }
-
-  /**
-   * The outcome a recorded delivery is answered with. An outcome the core does not
-   * know (a record written by a newer version, or a store returning something of its
-   * own) yields an empty result: the handler runs again, which is the behaviour without
-   * any log at all, and the WARN says why.
-   */
-  private java.util.Optional<WorkflowTaskOutcome> recordedOutcomeOf(
-      final TaskDeliveryLog deliveryLog,
-      final TaskDelivery delivery,
-      final TaskInvocationContext context) {
-
-    try {
-      return java.util.Optional
-          .of(
-              switch (WorkflowTaskOutcome.Kind.valueOf(delivery.outcome())) {
-                case COMPLETED -> WorkflowTaskOutcome.completed();
-                case COMPLETION_PENDING -> stillOpen(deliveryLog, delivery, context);
-                case BPMN_ERROR -> WorkflowTaskOutcome
-                    .bpmnError(delivery.bpmnErrorCode(), delivery.bpmnErrorName());
-              });
-    } catch (final IllegalArgumentException e) {
-      log.warn(
-          "The recorded delivery '{}' of task '{}' (BPMN process '{}' of workflow module '{}') "
-              + "reports the unknown outcome '{}' - processing the delivery again",
-          delivery.deliveryKey(),
-          context.getTaskDefinition(),
-          bpmnProcessId,
-          workflowModuleId,
-          delivery.outcome());
-      return java.util.Optional.empty();
-    }
-
-  }
-
-  /**
-   * How long a task left open by a <code>&#64;TaskId</code> handler has been waiting,
-   * and whether that passed the maximum age configured for it
-   * (<code>vanillabp.delivery.max-task-age</code>, resolvable per workflow module,
-   * workflow and task).
-   * <p>
-   * This is the one place in VanillaBP which can answer the question at all. The record
-   * was written when the handler ran and it is what answers every redelivery of that
-   * task, so the distance between its timestamp and now IS the age of the open task -
-   * no clock, no scheduler and no second bookkeeping are involved, and the granularity
-   * follows whatever rhythm the BPMS redelivers in.
-   * <p>
-   * Reporting is one WARN per task, not one per redelivery: a task open for a year would
-   * otherwise fill the log with the same line every time its lock is renewed. The memory
-   * of what was already reported is bounded and lives in this process service - losing
-   * an entry costs one repeated WARN, which is why it needs nothing durable.
-   * <p>
-   * This is also the one place which knows that a record is still in use, whichever BPMS
-   * redelivered: the store is told so and keeps the record alive as long as
-   * redeliveries keep coming, while the timestamp this age is measured from stays where
-   * it is. The store collects the key rather than writing it here - the redelivery runs
-   * in the transaction of the workflow aggregate, and an UPDATE per renewal of every open
-   * task has no business in it.
-   *
-   * @param deliveryLog The store the record came from
-   * @param delivery The record answering this delivery
-   * @param context The invocation context of the repeated delivery
-   * @return The outcome, carrying the age and whether it passed the maximum
-   */
-  private WorkflowTaskOutcome stillOpen(
-      final TaskDeliveryLog deliveryLog,
-      final TaskDelivery delivery,
-      final TaskInvocationContext context) {
-
-    deliveryLog.stillOpen(delivery.deliveryKey());
-
-    if (delivery.recordedAt() == null) {
-      // a store written before the timestamp was part of the record - the task is
-      // open, its age is simply not known
-      return WorkflowTaskOutcome.completionPending();
-    }
-    final var openFor = java.time.Duration.between(delivery.recordedAt(), java.time.Instant.now());
-    final var maxTaskAge = properties == null
-        ? io.vanillabp.integration.adapter.migration.config.DeliveryProperties.DEFAULT_MAX_TASK_AGE
-        : properties.maxTaskAge(workflowModuleId, bpmnProcessId, context.getTaskDefinition());
-    final var exceeded = !maxTaskAge.isZero() && (openFor.compareTo(maxTaskAge) > 0);
-    // a workflow which was already running before this version was deployed was open
-    // before VanillaBP ever wrote a record for it, so the record's timestamp is the
-    // moment the task was first SEEN and not the moment it was created
-    final var lowerBound = context.predatesDeployedVersion();
-    if (exceeded && reportTaskAgeOnce(delivery.deliveryKey())) {
-      log.warn(
-          """
-              Task '{}' of BPMN process '{}' of workflow module '{}' has been waiting for its \
-              asynchronous completion for {}{}, which is longer than the {} configured by '{}' for it. \
-              Workflow aggregate: '{}'. Either the application still owes this task a \
-              'ProcessService#completeTask' respectively 'cancelTask', or nobody will ever send it \
-              and the workflow waits forever. Raise the maximum age where such a wait is legitimate \
-              (it may be set per workflow module, workflow and task), or set it to '0' to switch \
-              this report off.{}""",
-          context.getTaskDefinition(),
-          bpmnProcessId,
-          workflowModuleId,
-          lowerBound
-              ? "at least "
-              : "",
-          openFor,
-          maxTaskAge,
-          MigrationAdapterProperties.maxTaskAgeProperty(),
-          context.getWorkflowAggregateId(),
-          lowerBound
-              ? " This workflow was already running before the version deployed now, so it was open"
-                  + " before VanillaBP could write anything down about it: the age above counts from"
-                  + " the first delivery this application saw, and the real one is larger."
-              : "");
-    }
-    return WorkflowTaskOutcome.completionPending(openFor, exceeded);
-
-  }
-
-  /**
-   * How many open tasks this process service remembers having reported. A bound rather
-   * than a growing set: the entry is a hint, and forgetting one costs one repeated WARN.
-   */
-  private static final int REPORTED_TASK_AGES = 1000;
-
-  private final java.util.Map<String, Boolean> reportedTaskAges = java.util.Collections
-      .synchronizedMap(new java.util.LinkedHashMap<String, Boolean>(16, 0.75f, true) {
-
-        private static final long serialVersionUID = 1L;
-
-        @Override
-        protected boolean removeEldestEntry(
-            final java.util.Map.Entry<String, Boolean> eldest) {
-
-          return size() > REPORTED_TASK_AGES;
-
-        }
-
-      });
-
-  /**
-   * Whether the given task's age is reported now - <code>true</code> exactly once per
-   * delivery key, which is once per task.
-   *
-   * @param deliveryKey The identity of the delivery answering this task
-   * @return Whether to log the report
-   */
-  private boolean reportTaskAgeOnce(
-      final String deliveryKey) {
-
-    return reportedTaskAges.putIfAbsent(deliveryKey, Boolean.TRUE) == null;
+    deliveryRecords.validateAtStartup(adapterProcessServices);
 
   }
 
@@ -1838,7 +1331,7 @@ public class MigrationProcessService<A> {
       final String messageName,
       final String correlationId) {
 
-    final var args = new java.util.LinkedHashMap<String, String>();
+    final var args = new LinkedHashMap<String, String>();
     args.put(PhaseTwoCall.ARG_MESSAGE_NAME, messageName);
     if (correlationId != null) {
       args.put(PhaseTwoCall.ARG_CORRELATION_ID, correlationId);
@@ -2092,7 +1585,7 @@ public class MigrationProcessService<A> {
 
     final var subject = subjectOf(aggregateId);
 
-    final var recordedLocation = locateFromDeliveryRecord(operation, aggregateId, args);
+    final var recordedLocation = deliveryRecords.locate(operation, aggregateId, args, adapterProcessServices);
     final var location = recordedLocation != null
         ? recordedLocation
         : workflowLocator.locate(
@@ -2186,186 +1679,10 @@ public class MigrationProcessService<A> {
             "%s of %s".formatted(operation.describe(args), subject),
             () -> handlerOf(location.adapter(), operation, args)
                 .phaseTwo(phaseTwoRequest(workflowAggregateId, args)));
-        writeDownThatTheTaskIsClosed(operation, workflowAggregateId, args);
+        deliveryRecords
+            .writeDownThatTheTaskIsClosed(operation, workflowAggregateId, args, subject);
       }
     }
-
-  }
-
-  /**
-   * Answers from the delivery record of this aggregate which adapter holds the task THIS
-   * CALL names, so no BPMS has to be asked for it.
-   * <p>
-   * VanillaBP wrote that record while the handler of the task ran, in the database of the
-   * workflow aggregate: it names the adapter which delivered the task, and it says whether
-   * the application has closed that task since. Both answers are exactly what the walk over
-   * the adapters would ask a BPMS for, one round trip per operation - on Camunda 8 the very
-   * command the adapter's phase one sends again a moment later.
-   * <p>
-   * What decides whether the record can answer is the CALL rather than the operation: a call
-   * which names a task asks about that task, however the operation is elected. Pushing a
-   * changed aggregate into the scope of a task is the case where the two differ - the values
-   * land in the workflow, and the task the call names is what says where. As long as that task
-   * is open, the BPMS holding it is the BPMS holding the workflow around it, which is why the
-   * answer stays one about a task (see decision 30 in the repository's DECISIONS.md). A task
-   * which is over says nothing about the workflow around it, so a closed record answers only
-   * the operations which end the task themselves.
-   * <p>
-   * <code>null</code> means the record cannot answer, and then everything happens as it did
-   * before: no store, deliveries not deduplicated, the retention gone over the record, a BPMS
-   * which reports no delivery identity, a workflow started before this version was deployed,
-   * or an adapter which is not configured any more. That fallback is what keeps the record a
-   * hint rather than a registry.
-   *
-   * @param operation The operation being elected for
-   * @param workflowAggregateId The workflow aggregate the operation is about
-   * @param args The operation's arguments, which name the task
-   * @return The location, or <code>null</code> where the record cannot answer
-   */
-  private WorkflowLocator.Location<A> locateFromDeliveryRecord(
-      final PhaseOperation operation,
-      final Object workflowAggregateId,
-      final Map<String, String> args) {
-
-    if (workflowAggregateId == null) {
-      return null;
-    }
-    final var taskId = theTaskNamedBy(args);
-    if (taskId == null) {
-      return null;
-    }
-    final var deliveryLog = resolveTaskDeliveryLog();
-    if (deliveryLog == null) {
-      return null;
-    }
-    final var record = deliveryLog
-        .recordOfTask(workflowModuleId, bpmnProcessId, workflowAggregateId.toString(), taskId)
-        .orElse(null);
-    if ((record == null) || (record.adapterId() == null)) {
-      return null;
-    }
-    final var adapter = adapterProcessServices
-        .stream()
-        .filter(candidate -> candidate.getAdapterId().equals(record.adapterId()))
-        .findFirst()
-        .orElse(null);
-    if (adapter == null) {
-      // the adapter which delivered the task is not prioritized for this workflow any more -
-      // the walk elects from the configuration as it reads now
-      log.debug(
-          "Adapter '{}' recorded for task '{}' of aggregate '{}' is not a prioritized adapter - "
-              + "probing instead",
-          record.adapterId(),
-          taskId,
-          workflowAggregateId);
-      return null;
-    }
-    final var taskIsOpen = record.taskClosedAt() == null;
-    if (!taskIsOpen && !endsTheTaskItNames(operation)) {
-      // a task which is over is no statement about the workflow around it: the scope the
-      // push writes into outlives the task, and so may the workflow. Only an operation
-      // which ends the task itself may read a closed record as "there is nothing left to
-      // do here"
-      log.debug(
-          "Task '{}' of aggregate '{}' was closed at {}, which does not say whether its workflow "
-              + "still runs - probing instead",
-          taskId,
-          workflowAggregateId,
-          record.taskClosedAt());
-      return null;
-    }
-    metrics
-        .taskElectionAnsweredFromRecord(record.adapterId(), workflowModuleId, bpmnProcessId, operation.name());
-    log.debug(
-        "Adapter '{}' delivered task '{}' of aggregate '{}' and the task is {} - no BPMS is asked "
-            + "which of them holds it",
-        record.adapterId(),
-        taskId,
-        workflowAggregateId,
-        taskIsOpen
-            ? "still open"
-            : "closed since %s".formatted(record.taskClosedAt()));
-    return new WorkflowLocator.Location<>(
-        taskIsOpen
-            ? WorkflowAwareness.ACTIVE
-            : WorkflowAwareness.COMPLETED, adapter, null);
-
-  }
-
-  /**
-   * Writes into the delivery record that the application's completion or cancellation of a
-   * task reached the BPMS - here and not when the caller asked, because until this moment the
-   * task is still open and its redeliveries still renew the lock the BPMS holds on it.
-   * <p>
-   * A failure is reported and swallowed: the operation itself went through, the outbox entry
-   * is done, and repeating a dispatch which succeeded because a mark did not is the worse of
-   * the two. What is lost is one BPMS round trip on the next operation naming that task.
-   * <p>
-   * Asked of the OPERATION and not of the call, unlike the election in
-   * {@link #locateFromDeliveryRecord(PhaseOperation, Object, Map)}: a call which merely names
-   * a task leaves that task open - pushing a changed aggregate into its scope completes
-   * nothing - so writing the moment of a completion there would close a record while the BPMS
-   * still hands the task out.
-   *
-   * @param operation The operation which was dispatched
-   * @param workflowAggregateId The workflow aggregate it was about
-   * @param args The operation's arguments, which name the task
-   */
-  private void writeDownThatTheTaskIsClosed(
-      final PhaseOperation operation,
-      final Object workflowAggregateId,
-      final Map<String, String> args) {
-
-    if (!endsTheTaskItNames(operation) || (workflowAggregateId == null)) {
-      return;
-    }
-    final var taskId = theTaskNamedBy(args);
-    if (taskId == null) {
-      return;
-    }
-    final var deliveryLog = resolveTaskDeliveryLog();
-    if (deliveryLog == null) {
-      return;
-    }
-    try {
-      deliveryLog
-          .markTaskClosed(workflowModuleId, bpmnProcessId, workflowAggregateId.toString(), taskId);
-    } catch (final RuntimeException e) {
-      log.warn(
-          "Task '{}' of {} was closed in its BPMS, but the delivery record could not be marked "
-              + "accordingly - the next operation naming this task asks the configured BPMS again "
-              + "instead of being answered from the record",
-          taskId,
-          subjectOf(workflowAggregateId),
-          e);
-    }
-
-  }
-
-  /**
-   * Whether the operation ENDS the task it names, which is what an operation elected by
-   * whoever holds a task does: completing it or cancelling it. An operation elected by
-   * whoever holds the WORKFLOW may name a task as well, and then it says where its values
-   * go rather than that the task is finished.
-   */
-  private static boolean endsTheTaskItNames(
-      final PhaseOperation operation) {
-
-    return (operation.election() == Election.HOLDS_THE_TASK) || (operation.election() == Election.HOLDS_THE_USER_TASK);
-
-  }
-
-  /**
-   * The task a call names, or <code>null</code> where it names none - the question which
-   * decides whether the delivery record of a task can be asked at all.
-   */
-  private static String theTaskNamedBy(
-      final Map<String, String> args) {
-
-    final var taskId = args.get(PhaseTwoCall.ARG_TASK_ID);
-    return ((taskId == null) || taskId.isBlank())
-        ? null
-        : taskId;
 
   }
 
@@ -2501,11 +1818,11 @@ public class MigrationProcessService<A> {
     if (!operation.carriesActivation()) {
       return args;
     }
-    final var activationId = io.vanillabp.integration.spi.RunningActivation.current();
+    final var activationId = RunningActivation.current();
     if (activationId == null) {
       return args;
     }
-    final var withActivation = new java.util.LinkedHashMap<>(args);
+    final var withActivation = new LinkedHashMap<>(args);
     withActivation.put(PhaseTwoCall.ARG_ACTIVATION_ID, activationId);
     return withActivation;
 
@@ -2574,8 +1891,8 @@ public class MigrationProcessService<A> {
                 : " "
                     + hint);
     return addressesTheWorkflow(operation)
-        ? new io.vanillabp.spi.process.WorkflowNotFoundException(message)
-        : new io.vanillabp.spi.process.TaskNotFoundException(message);
+        ? new WorkflowNotFoundException(message)
+        : new TaskNotFoundException(message);
 
   }
 
@@ -2644,7 +1961,7 @@ public class MigrationProcessService<A> {
     final var handler = phaseOperationsOf(adapter)
         .get(operation);
     if (handler == null) {
-      throw new io.vanillabp.integration.adapter.spi.PhaseOperationNotSupported(
+      throw new PhaseOperationNotSupported(
           adapter.getAdapterId(), operation, workflowModuleId, bpmnProcessId, args);
     }
     return handler;
@@ -2666,7 +1983,7 @@ public class MigrationProcessService<A> {
   /**
    * The handlers of every adapter of this process service, by adapter id.
    */
-  private final Map<String, Map<PhaseOperation, PhaseOperationHandler<A>>> phaseOperations = new java.util.concurrent.ConcurrentHashMap<>();
+  private final Map<String, Map<PhaseOperation, PhaseOperationHandler<A>>> phaseOperations = new ConcurrentHashMap<>();
 
   /**
    * Refuses AT STARTUP an adapter which cannot serve an operation every adapter has to
@@ -2686,7 +2003,7 @@ public class MigrationProcessService<A> {
    */
   public void validateAdapterOperationsAtStartup() {
 
-    java.util.stream.Stream
+    Stream
         .concat(adapterProcessServices.stream(), deploymentAdapterProcessServices.stream())
         .distinct()
         .forEach(this::validateOperationsOf);
@@ -2731,14 +2048,14 @@ public class MigrationProcessService<A> {
    * is not set - a test constructing this service directly - the primary process is the
    * scope, which is the narrowest honest answer.
    */
-  private java.util.List<String> servedBpmnProcessIds;
+  private List<String> servedBpmnProcessIds;
 
   /**
    * @param servedBpmnProcessIds The plain BPMN process ids of this aggregate's workflow
    *          services, the primary one first
    */
   public void setServedBpmnProcessIds(
-      final java.util.List<String> servedBpmnProcessIds) {
+      final List<String> servedBpmnProcessIds) {
 
     this.servedBpmnProcessIds = (servedBpmnProcessIds == null) || servedBpmnProcessIds.isEmpty()
         ? null
@@ -2753,11 +2070,11 @@ public class MigrationProcessService<A> {
    *
    * @return The scope handed to every probe
    */
-  private io.vanillabp.integration.adapter.spi.WorkflowScope workflowScope() {
+  private WorkflowScope workflowScope() {
 
     return servedBpmnProcessIds == null
-        ? io.vanillabp.integration.adapter.spi.WorkflowScope.of(workflowModuleId, bpmnProcessId)
-        : new io.vanillabp.integration.adapter.spi.WorkflowScope(workflowModuleId, servedBpmnProcessIds);
+        ? WorkflowScope.of(workflowModuleId, bpmnProcessId)
+        : new WorkflowScope(workflowModuleId, servedBpmnProcessIds);
 
   }
 
@@ -2778,28 +2095,11 @@ public class MigrationProcessService<A> {
    *        secondary history context of a call activity
    * @return The process definitions
    */
-  public List<io.vanillabp.spi.process.ProcessDefinition> getProcessDefinitions(
+  public List<ProcessDefinition> getProcessDefinitions(
       final A workflowAggregate,
       final String historyContext) {
 
-    final var aggregateId = aggregatePersistenceSupport
-        .getAggregateId(workflowAggregate);
-    final var location = locateForReading(aggregateId, "process definitions");
-    final var adapter = location.adapter();
-
-    final var definitions = adapter.getProcessDefinitions(
-        workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, aggregateId, historyContext);
-    if ((definitions == null) || definitions.isEmpty()) {
-      throw new io.vanillabp.spi.process.WorkflowNotFoundException(
-          workflowUnknownMessage(aggregateId, adapter.getAdapterId(), "process definitions", historyContext));
-    }
-
-    return definitions
-        .stream()
-        .map(definition -> new io.vanillabp.spi.process.ProcessDefinition(
-            ProcessDefinitionIds.compose(adapter.getAdapterId(), definition.id()), definition
-                .bpmnProcessId(), definition.version(), definition.usedByElements()))
-        .toList();
+    return workflowViewer.getProcessDefinitions(workflowAggregate, historyContext);
 
   }
 
@@ -2812,53 +2112,10 @@ public class MigrationProcessService<A> {
    * @param processDefinitionId The composite process definition id
    * @return The BPMN XML
    */
-  public java.io.InputStream getBpmnXml(
+  public InputStream getBpmnXml(
       final String processDefinitionId) {
 
-    final var parsed = ProcessDefinitionIds.parse(processDefinitionId);
-    if (parsed == null) {
-      throw new io.vanillabp.spi.process.ProcessDefinitionNotFoundException(
-          ("The process definition id '%s' does not follow VanillaBP's scheme "
-              + "'<adapter id>%s<BPMS specific id>'! Pass an id reported by getProcessDefinitions "
-              + "(or WorkflowHistory#processDefinitionId) of BPMN process '%s' of workflow module "
-              + "'%s' unchanged - it is opaque to the application.")
-              .formatted(
-                  processDefinitionId,
-                  ProcessDefinitionIds.SEPARATOR,
-                  bpmnProcessId,
-                  workflowModuleId));
-    }
-
-    final var adapter = adapterProcessServices
-        .stream()
-        .filter(processService -> processService.getAdapterId().equals(parsed.adapterId()))
-        .findFirst()
-        .orElseThrow(() -> new io.vanillabp.spi.process.ProcessDefinitionNotFoundException(
-            ("The process definition id '%s' addresses the adapter '%s' which is not (or no longer) "
-                + "configured for BPMN process '%s' of workflow module '%s' (configured adapters, "
-                + "in prioritized order: %s)! Either the id was kept from an earlier configuration "
-                + "or it belongs to another workflow.")
-                .formatted(
-                    processDefinitionId,
-                    parsed.adapterId(),
-                    bpmnProcessId,
-                    workflowModuleId,
-                    prioritizedAdapters)));
-
-    final var bpmnXml = adapter.getBpmnXml(
-        workflowModuleId, bpmnProcessId, parsed.nativeProcessDefinitionId());
-    if (bpmnXml == null) {
-      throw new io.vanillabp.spi.process.ProcessDefinitionNotFoundException(
-          ("The adapter '%s' does not know the process definition '%s' (of BPMN process '%s' of "
-              + "workflow module '%s')! Likely causes: the definition was deleted in the BPMS, or "
-              + "the id was kept from a previous deployment the BPMS no longer holds.")
-              .formatted(
-                  parsed.adapterId(),
-                  parsed.nativeProcessDefinitionId(),
-                  bpmnProcessId,
-                  workflowModuleId));
-    }
-    return bpmnXml;
+    return workflowViewer.getBpmnXml(processDefinitionId);
 
   }
 
@@ -2872,85 +2129,13 @@ public class MigrationProcessService<A> {
    *        secondary history context of a call activity
    * @return The workflow history
    */
-  public io.vanillabp.spi.process.WorkflowHistory getWorkflowHistory(
+  public WorkflowHistory getWorkflowHistory(
       final A workflowAggregate,
       final String historyContext) {
 
-    final var aggregateId = aggregatePersistenceSupport
-        .getAggregateId(workflowAggregate);
-    final var location = locateForReading(aggregateId, "the workflow history");
-    final var adapter = location.adapter();
-
-    final var history = adapter.getWorkflowHistory(
-        workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, aggregateId, historyContext);
-    if (history == null) {
-      throw new io.vanillabp.spi.process.WorkflowNotFoundException(
-          workflowUnknownMessage(aggregateId, adapter.getAdapterId(), "the workflow history", historyContext));
-    }
-
-    return new io.vanillabp.spi.process.WorkflowHistory(
-        ProcessDefinitionIds.compose(adapter.getAdapterId(), history.processDefinitionId()), history
-            .startTime(), history.endTime(), history.elementsHistory());
+    return workflowViewer.getWorkflowHistory(workflowAggregate, historyContext);
 
   }
-
-  /**
-   * Elects the adapter answering a READ operation of the viewer/history API.
-   * Unlike operations advancing a workflow, {@link WorkflowAwareness#COMPLETED} is
-   * a regular result here (an ended workflow still has definitions and a history);
-   * only a subject unknown to EVERY adapter raises the SPI's
-   * {@code WorkflowNotFoundException}.
-   * <p>
-   * A read is the caller which has to do its own waiting. An operation advancing a
-   * workflow is planned in phase one and waits for an eventually consistent read model
-   * in the dispatch, where no transaction is open (decision 27 in the repository's
-   * DECISIONS.md); a read has no second place to wait in - it answers the caller or it
-   * fails, and a failure is not repeated by anybody. So where a hint says which adapter
-   * holds the workflow, the read waits out that adapter's
-   * {@code workflowVisibilityDelay}: asking for the history of a workflow the same
-   * application started seconds ago is the ordinary case, and the one to three seconds
-   * Camunda 8's exporter lags behind must not turn it into an error. Without a hint
-   * nothing is waited for - a workflow nobody has ever seen fails at once.
-   */
-  private WorkflowLocator.Location<A> locateForReading(
-      final Object aggregateId,
-      final String subjectOfRead) {
-
-    final var subject = "workflow of aggregate '%s' (BPMN process '%s' of workflow module '%s')"
-        .formatted(aggregateId, bpmnProcessId, workflowModuleId);
-
-    // the hint is what buys the waiting: it says the workflow exists, so an adapter not
-    // reporting it yet is asked again until its visibility window is used up. Nothing
-    // repeats a read later, so this is the only place it can happen
-    final var location = workflowLocator.locate(
-        adapterProcessServices,
-        adapter -> adapter.awarenessOfWorkflow(workflowScope(), aggregatePersistenceSupport, aggregateId),
-        aggregateId,
-        subject,
-        WorkflowLocator.Patience.WAIT_FOR_VISIBILITY);
-
-    if (location.awareness() == WorkflowAwareness.UNKNOWN_TO_BPMS) {
-      throw new io.vanillabp.spi.process.WorkflowNotFoundException(
-          ("No configured BPMS knows the %s - %s cannot be determined (probed adapters, in "
-              + "prioritized order: %s)! Likely causes: the workflow was never started, was "
-              + "started through another system, or its history was already cleaned up in the "
-              + "BPMS.%s")
-              .formatted(
-                  subject,
-                  subjectOfRead,
-                  prioritizedAdapters,
-                  location.isUnknownButExpected()
-                      ? (" The adapter '%s' was expected to hold this workflow (VanillaBP started "
-                          + "it there or was handed a delivery for it) and still did not report it "
-                          + "after its workflowVisibilityDelay had passed - if that BPMS answers "
-                          + "from a read model, its exporter is behind or has stopped.")
-                          .formatted(location.hintedAdapterId())
-                      : ""));
-    }
-    return location;
-
-  }
-
 
   /**
    * The tail of a "no BPMS knows this workflow" message: the causes which really
@@ -2986,29 +2171,6 @@ public class MigrationProcessService<A> {
 
   }
 
-  private String workflowUnknownMessage(
-      final Object aggregateId,
-      final String adapterId,
-      final String subjectOfRead,
-      final String historyContext) {
-
-    return ("The adapter '%s' cannot provide %s of the workflow of aggregate '%s' (BPMN process "
-        + "'%s' of workflow module '%s'%s)! The BPMS reported the workflow as known but has no "
-        + "data for it - for BPMS cleaning up history this means the retention period has "
-        + "passed; for eventually consistent BPMS it may also mean the data is not yet "
-        + "visible.")
-        .formatted(
-            adapterId,
-            subjectOfRead,
-            aggregateId,
-            bpmnProcessId,
-            workflowModuleId,
-            historyContext == null
-                ? ""
-                : ", history context '%s'".formatted(historyContext));
-
-  }
-
   /**
    * Says that an operation the application asked for will not happen: the store found
    * an identical one still waiting for its dispatch and discarded this one.
@@ -3038,7 +2200,7 @@ public class MigrationProcessService<A> {
 
     metrics.outboxScheduleDiscarded(operation.name());
 
-    final var activation = io.vanillabp.integration.spi.RunningActivation.current();
+    final var activation = RunningActivation.current();
     if (activation == null) {
       log.warn(
           """
@@ -3088,12 +2250,187 @@ public class MigrationProcessService<A> {
       if (adapter.isPhaseTwoFailureRepeatable(e)) {
         throw e;
       }
-      throw new io.vanillabp.integration.spi.PhaseTwoPermanentFailure(
+      throw new PhaseTwoPermanentFailure(
           """
               Phase two of %s failed, and adapter '%s' says that repeating it cannot help. The \
               outbox entry is blocked instead of being retried - look at the cause, fix what it \
               names, and remove the entry."""
               .formatted(operationDescription, adapter.getAdapterId()), e);
+    }
+
+  }
+
+
+  /**
+   * Collects what a process service is built from and refuses an incomplete set.
+   * <p>
+   * Three of them are mandatory, because a service without them cannot do anything an
+   * application would call it for: the configuration it reads its adapters from, the
+   * persistence of its workflow aggregate, and the adapters themselves. The rest are
+   * handed over by the platform integrations and left out by tests which do not need them
+   * - an adapter cache (elections probe every time without one), a store for the delivery
+   * records (deliveries are not deduplicated without one), a transaction runner resolver
+   * (the runner the caller passes is used), and the outbox resolver, whose absence
+   * {@link MigrationProcessService#validatePhaseTwoOutboxAtStartup()} reports.
+   *
+   * @param <A> The workflow aggregate
+   */
+  public static final class Builder<A> {
+
+    private final String workflowModuleId;
+
+    private final String bpmnProcessId;
+
+    private final Class<A> workflowAggregateClass;
+
+    private MigrationAdapterProperties properties;
+
+    private AggregatePersistenceAware<A> aggregatePersistence;
+
+    private List<MigratableProcessService<A>> processServices;
+
+    private PhaseTwoOutboxResolver phaseTwoOutboxResolver;
+
+    private WorkflowAdapterCache workflowAdapterCache;
+
+    private TaskDeliveryLogResolver taskDeliveryLogResolver;
+
+    private TransactionRunnerResolver transactionRunnerResolver;
+
+    private Builder(
+        final String workflowModuleId,
+        final String bpmnProcessId,
+        final Class<A> workflowAggregateClass) {
+
+      this.workflowModuleId = workflowModuleId;
+      this.bpmnProcessId = bpmnProcessId;
+      this.workflowAggregateClass = workflowAggregateClass;
+
+    }
+
+    /**
+     * @param properties The bound <code>vanillabp.*</code> tree
+     * @return This builder
+     */
+    public Builder<A> properties(
+        final MigrationAdapterProperties properties) {
+
+      this.properties = properties;
+      return this;
+
+    }
+
+    /**
+     * @param aggregatePersistence How the workflow aggregate is loaded and saved
+     * @return This builder
+     */
+    public Builder<A> aggregatePersistence(
+        final AggregatePersistenceAware<A> aggregatePersistence) {
+
+      this.aggregatePersistence = aggregatePersistence;
+      return this;
+
+    }
+
+    /**
+     * @param processServices The process service of every adapter of this application -
+     *          the prioritized ones of this BPMN process have to be among them
+     * @return This builder
+     */
+    public Builder<A> processServices(
+        final List<MigratableProcessService<A>> processServices) {
+
+      this.processServices = processServices;
+      return this;
+
+    }
+
+    /**
+     * @param phaseTwoOutboxResolver Resolves the outbox phase two of every outbound
+     *          operation is planned in
+     * @return This builder
+     */
+    public Builder<A> phaseTwoOutboxResolver(
+        final PhaseTwoOutboxResolver phaseTwoOutboxResolver) {
+
+      this.phaseTwoOutboxResolver = phaseTwoOutboxResolver;
+      return this;
+
+    }
+
+    /**
+     * @param workflowAdapterCache Where an elected adapter is remembered; without one
+     *          every election probes
+     * @return This builder
+     */
+    public Builder<A> workflowAdapterCache(
+        final WorkflowAdapterCache workflowAdapterCache) {
+
+      this.workflowAdapterCache = workflowAdapterCache;
+      return this;
+
+    }
+
+    /**
+     * @param taskDeliveryLogResolver Resolves the store of the delivery records; without
+     *          one deliveries are not deduplicated
+     * @return This builder
+     */
+    public Builder<A> taskDeliveryLogResolver(
+        final TaskDeliveryLogResolver taskDeliveryLogResolver) {
+
+      this.taskDeliveryLogResolver = taskDeliveryLogResolver;
+      return this;
+
+    }
+
+    /**
+     * @param transactionRunnerResolver Resolves the transaction the work on this
+     *          aggregate runs in; without one the runner the caller passes is used
+     * @return This builder
+     */
+    public Builder<A> transactionRunnerResolver(
+        final TransactionRunnerResolver transactionRunnerResolver) {
+
+      this.transactionRunnerResolver = transactionRunnerResolver;
+      return this;
+
+    }
+
+    /**
+     * @return The process service
+     * @throws IllegalStateException If something mandatory is missing - the message names
+     *           the BPMN process and every one of them
+     */
+    public MigrationProcessService<A> build() {
+
+      final var missing = new ArrayList<String>();
+      if (properties == null) {
+        missing.add("'properties'");
+      }
+      if (aggregatePersistence == null) {
+        missing.add("'aggregatePersistence'");
+      }
+      if (processServices == null) {
+        missing.add("'processServices'");
+      }
+      if (!missing.isEmpty()) {
+        throw new IllegalStateException(
+            ("The process service of BPMN process '%s' (workflow module '%s') cannot be built: %s "
+                + "%s missing. Every application needs these, so this is a defect of the code "
+                + "registering the process service and not something an application can configure "
+                + "away.")
+                .formatted(
+                    bpmnProcessId,
+                    workflowModuleId,
+                    String.join(", ", missing),
+                    missing.size() == 1
+                        ? "is"
+                        : "are"));
+      }
+
+      return new MigrationProcessService<>(this);
+
     }
 
   }

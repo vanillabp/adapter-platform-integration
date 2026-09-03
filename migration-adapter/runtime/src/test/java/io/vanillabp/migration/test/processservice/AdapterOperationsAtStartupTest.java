@@ -120,8 +120,12 @@ public class AdapterOperationsAtStartupTest {
         .build();
     properties.validateAndLink();
 
-    return new MigrationProcessService<Object>(
-        MODULE, PROCESS, Object.class, properties, new SendSignalTest.PersistenceStub(), List.of(adapter), null);
+    return MigrationProcessService
+        .<Object>forBpmnProcess(MODULE, PROCESS, Object.class)
+        .properties(properties)
+        .aggregatePersistence(new SendSignalTest.PersistenceStub())
+        .processServices(List.of(adapter))
+        .build();
 
   }
 

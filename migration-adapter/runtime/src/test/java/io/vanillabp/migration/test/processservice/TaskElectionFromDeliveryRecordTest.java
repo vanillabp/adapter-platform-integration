@@ -20,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
+import io.vanillabp.integration.adapter.migration.processservice.DeliveryRecords;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxResolver;
 import io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver;
@@ -345,8 +346,12 @@ public class TaskElectionFromDeliveryRecordTest {
       final ProbeAdapter adapter,
       final TaskDeliveryLog log) {
 
-    final var service = new MigrationProcessService<>(
-        MODULE, PROCESS, Object.class, properties(), persistence(), List.of(adapter), new PhaseTwoOutboxResolver() {
+    final var service = MigrationProcessService
+        .forBpmnProcess(MODULE, PROCESS, Object.class)
+        .properties(properties())
+        .aggregatePersistence(persistence())
+        .processServices(List.of(adapter))
+        .phaseTwoOutboxResolver(new PhaseTwoOutboxResolver() {
 
           @Override
           public PhaseTwoOutbox resolveFor(
@@ -363,7 +368,8 @@ public class TaskElectionFromDeliveryRecordTest {
 
           }
 
-        }, null, new TaskDeliveryLogResolver() {
+        })
+        .taskDeliveryLogResolver(new TaskDeliveryLogResolver() {
 
           @Override
           public TaskDeliveryLog resolveFor(
@@ -380,7 +386,8 @@ public class TaskElectionFromDeliveryRecordTest {
 
           }
 
-        });
+        })
+        .build();
     service.setMetrics(metrics);
     return service;
 
@@ -412,13 +419,17 @@ public class TaskElectionFromDeliveryRecordTest {
 
     final var logWatcher = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
     logWatcher.start();
-    final var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory
-        .getLogger(MigrationProcessService.class);
-    logger.addAppender(logWatcher);
+    // the process service says some of this itself and lets its collaborator say the rest,
+    // so both are listened to - which class a message comes from is not what is under test
+    final var loggers = java.util.List
+        .of(
+            (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(MigrationProcessService.class),
+            (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(DeliveryRecords.class));
+    loggers.forEach(logger -> logger.addAppender(logWatcher));
     try {
       work.run();
     } finally {
-      logger.detachAndStopAllAppenders();
+      loggers.forEach(ch.qos.logback.classic.Logger::detachAndStopAllAppenders);
     }
     return logWatcher.list
         .stream()

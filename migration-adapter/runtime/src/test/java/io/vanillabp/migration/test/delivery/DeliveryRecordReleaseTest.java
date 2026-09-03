@@ -24,6 +24,7 @@ import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties
 import io.vanillabp.integration.adapter.migration.config.DeliveryProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
+import io.vanillabp.integration.adapter.migration.processservice.DeliveryRecords;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
@@ -313,8 +314,13 @@ public class DeliveryRecordReleaseTest {
 
     };
 
-    return new MigrationProcessService<>(
-        MODULE, PROCESS, Aggregate.class, properties, persistence, List.of(adapter), null, null, resolver);
+    return MigrationProcessService
+        .forBpmnProcess(MODULE, PROCESS, Aggregate.class)
+        .properties(properties)
+        .aggregatePersistence(persistence)
+        .processServices(List.of(adapter))
+        .taskDeliveryLogResolver(resolver)
+        .build();
 
   }
 
@@ -506,7 +512,7 @@ public class DeliveryRecordReleaseTest {
     final var processService = processService(properties, new LegacyDeliveryLog());
 
     final var messages = warningsOf(
-        MigrationProcessService.class,
+        DeliveryRecords.class,
         processService::validateTaskDeliveryLogAtStartup);
 
     final var message = messages
@@ -527,7 +533,7 @@ public class DeliveryRecordReleaseTest {
     final var processService = processService(properties(false, null), new LegacyDeliveryLog());
 
     final var messages = warningsOf(
-        MigrationProcessService.class,
+        DeliveryRecords.class,
         processService::validateTaskDeliveryLogAtStartup);
 
     assertTrue(

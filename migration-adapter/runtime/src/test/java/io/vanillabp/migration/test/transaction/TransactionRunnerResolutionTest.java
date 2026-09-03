@@ -94,9 +94,14 @@ public class TransactionRunnerResolutionTest {
       final TransactionRunnerResolver resolver) {
 
     when(adapterProcessService.getAdapterId()).thenReturn("test-adapter");
-    return new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, properties, aggregatePersistence, List
-            .of(adapterProcessService), null, null, null, resolver);
+    return MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(properties)
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(adapterProcessService))
+        .transactionRunnerResolver(resolver)
+        .build();
 
   }
 
@@ -163,9 +168,13 @@ public class TransactionRunnerResolutionTest {
     assertSame(resolved, withResolver.getTransactionRunner(fallback));
 
     // no resolver at all (tests, adapters handing their runner in): the caller's runner
-    final var withoutResolver = new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, properties(null, null), aggregatePersistence, List
-            .of(adapterProcessService), null);
+    final var withoutResolver = MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(properties(null, null))
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(adapterProcessService))
+        .build();
     assertSame(fallback, withoutResolver.getTransactionRunner(fallback));
 
   }

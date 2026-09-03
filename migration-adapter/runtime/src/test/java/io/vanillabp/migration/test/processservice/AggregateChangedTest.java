@@ -159,8 +159,13 @@ public class AggregateChangedTest {
       };
     }
 
-    return new MigrationProcessService<Object>(
-        MODULE, PROCESS, Object.class, properties, persistence, adapters, resolver);
+    return MigrationProcessService
+        .<Object>forBpmnProcess(MODULE, PROCESS, Object.class)
+        .properties(properties)
+        .aggregatePersistence(persistence)
+        .processServices(adapters)
+        .phaseTwoOutboxResolver(resolver)
+        .build();
 
   }
 
