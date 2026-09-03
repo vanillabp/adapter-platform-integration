@@ -873,7 +873,13 @@ regardless of what any `@TaskParam` names. The union and its order are held by
 The inbound counterpart of the outbox. A remote BPMS reports the outcome AFTER the
 local transaction was committed, so a crash in between makes it deliver the same task
 again - which used to run the `@WorkflowTask` method a second time. The core now
-remembers a processed delivery and answers a repeated one from the record:
+remembers a processed delivery and answers a repeated one from the record.
+
+Everything about those records lives in `DeliveryRecords`, one per process service: it
+resolves the store, keys a delivery, answers a repeated one, measures how long a task has
+been open, and reads a record to tell which adapter holds a task. It takes the adapters as
+a parameter where it needs them, the way `WorkflowLocator` does - which adapters serve a
+BPMN process is the process service's business, not the records'.
 
 - The identity of a delivery comes from the adapter:
   `TaskInvocationContext.getDeliveryId()` (Camunda 8: the job key; Process-Engine-API:
@@ -892,7 +898,7 @@ remembers a processed delivery and answers a repeated one from the record:
   cannot catch: both read no record, both run the handler, and the second `record(...)`
   finds the key taken and returns `false`. Nothing is rolled back there, because both
   handlers really did their work. What the core does with that knowledge is say it out
-  loud: `MigrationProcessService#reportHandlerRanTwiceAtTheSameTime` writes one WARN
+  loud: `DeliveryRecords#reportHandlerRanTwiceAtTheSameTime` writes one WARN
   naming the task, the workflow, the adapter and the delivery key, and counts the case as
   `vanillabp.task.redeliveries.concurrent`, the counterpart of
   `vanillabp.task.redeliveries.deduplicated`. Both halves are held by
@@ -1003,7 +1009,7 @@ waiting legitimately.
   the SPI component and the mapping in the four stores. The core sets the value when it
   builds the record, so the timestamp is the processing moment and not whatever a store's
   clock says.
-- `MigrationProcessService.stillOpen` measures the distance to now on every redelivery
+- `DeliveryRecords.stillOpen` measures the distance to now on every redelivery
   answered with `COMPLETION_PENDING` and compares it to
   `MigrationAdapterProperties.maxTaskAge(module, process, task)`
   (`vanillabp.delivery.max-task-age`, default `P30D`, `0` switching it off). The property is
@@ -1077,7 +1083,7 @@ carries the moment the BPMS last redelivered that task. The retention cleanup de
 second one, so a task which is still being redelivered keeps the record answering it while
 the record of a task nobody hands out any more expires as it always did.
 
-- `MigrationProcessService.stillOpen` is the trigger, and it belongs to the core rather
+- `DeliveryRecords.stillOpen` is the trigger, and it belongs to the core rather
   than to any adapter: it runs on every redelivery whose recorded outcome is
   `COMPLETION_PENDING`, whichever BPMS redelivered. It reports the key to the store through
   `TaskDeliveryLog.stillOpen(deliveryKey)`, whose default implementation does nothing, so
@@ -1120,7 +1126,7 @@ which delivered - so every call naming a task reads it before it walks anybody. 
 the registry decision 25 rejected is decision 30.
 
 - The record carries `TASK_ID`, the BPMS' identity of the task, and `TASK_CLOSED_AT`, the moment
-  the application's completion of it reached the BPMS. `MigrationProcessService.recordDelivery`
+  the application's completion of it reached the BPMS. `DeliveryRecords.record`
   writes the first from `TaskInvocationContext.getTaskId()`, and both columns are nullable, so a
   record written before them is not part of any answer.
 - `TaskDeliveryLog.recordOfTask(module, process, aggregateId, taskId)` is the question, and it is
@@ -1128,7 +1134,7 @@ the registry decision 25 rejected is decision 30.
   application to complete later. `markTaskClosed` is the note. Both are `default` methods
   answering nothing respectively doing nothing, so a store an application wrote stays valid and
   its election walks as it always did.
-- `MigrationProcessService.locateFromDeliveryRecord` turns the record into the `Location` the
+- `DeliveryRecords.locate` turns the record into the `Location` the
   walk would have produced: an open record elects the adapter it names, a closed one is the warned
   no-op with the message it always had, and everything else answers `null` and lets
   `WorkflowLocator` decide. `null` is the answer to a missing store, `deduplicate-deliveries`

@@ -23,6 +23,7 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
 import io.vanillabp.integration.adapter.migration.config.TaskAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
+import io.vanillabp.integration.adapter.migration.processservice.DeliveryRecords;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
@@ -491,7 +492,7 @@ public class InboundIdempotencyTest {
 
     final var testee = processService(properties(null, null, null), null);
 
-    final var messages = loggedBy(MigrationProcessService.class, testee::validateTaskDeliveryLogAtStartup);
+    final var messages = loggedBy(DeliveryRecords.class, testee::validateTaskDeliveryLogAtStartup);
 
     assertEquals(1, messages.size());
     final var message = messages.getFirst();
@@ -504,7 +505,7 @@ public class InboundIdempotencyTest {
 
     // the message names a configuration gap - it must not be repeated per delivery
     assertTrue(
-        loggedBy(MigrationProcessService.class, testee::validateTaskDeliveryLogAtStartup).isEmpty());
+        loggedBy(DeliveryRecords.class, testee::validateTaskDeliveryLogAtStartup).isEmpty());
 
   }
 
@@ -521,7 +522,7 @@ public class InboundIdempotencyTest {
         MODULE, PROCESS, Aggregate.class, properties(null, null, null), persistence, List
             .of(embedded), null, null, null);
 
-    assertTrue(loggedBy(MigrationProcessService.class, testee::validateTaskDeliveryLogAtStartup).isEmpty());
+    assertTrue(loggedBy(DeliveryRecords.class, testee::validateTaskDeliveryLogAtStartup).isEmpty());
 
   }
 
@@ -543,7 +544,7 @@ public class InboundIdempotencyTest {
                     .recordedAt(), null));
 
     final var messages = loggedBy(
-        MigrationProcessService.class,
+        DeliveryRecords.class,
         () -> testee.invokeWorkflowTask(MODULE, PROCESS, delivery(TASK, "4717", "job-1")));
 
     assertEquals(2, persistence.aggregates.get("4717").invocations, "the handler ran again");
