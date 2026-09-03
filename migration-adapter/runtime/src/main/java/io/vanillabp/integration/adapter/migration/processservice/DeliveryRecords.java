@@ -251,7 +251,7 @@ public final class DeliveryRecords {
    * @param context The invocation context of the repeated delivery
    * @return The recorded outcome, empty where this delivery was not processed before
    */
-  public Optional<WorkflowTaskOutcome> answerFor(
+  public Optional<WorkflowTaskOutcome> answerToARepeatedDelivery(
       final TaskDeliveryLog deliveryLog,
       final String deliveryKey,
       final TaskInvocationContext context) {
@@ -541,14 +541,14 @@ public final class DeliveryRecords {
    * Nothing is resolved where no adapter can repeat a delivery: an application using an
    * embedded BPMS only must not be pushed towards a store it does not need.
    *
-   * @param adapters The prioritized adapters of this BPMN process
+   * @param adapterProcessServices The prioritized adapters of this BPMN process
    */
   public <A> void validateAtStartup(
-      final List<MigratableProcessService<A>> adapters) {
+      final List<MigratableProcessService<A>> adapterProcessServices) {
 
     validateReleaseAtStartup();
 
-    final var atLeastOnceAdapters = adapters
+    final var atLeastOnceAdapters = adapterProcessServices
         .stream()
         .filter(MigratableProcessService::deliversTasksAtLeastOnce)
         .map(MigratableProcessService::getAdapterId)
@@ -683,10 +683,10 @@ public final class DeliveryRecords {
    * says nothing, a first start on an empty system says nothing, and the upgrade says
    * something once per BPMN process.
    *
-   * @param adapters The prioritized adapters of this BPMN process
+   * @param adapterProcessServices The prioritized adapters of this BPMN process
    */
   public <A> void reportOpenTasksNobodyRemembers(
-      final List<MigratableProcessService<A>> adapters) {
+      final List<MigratableProcessService<A>> adapterProcessServices) {
 
     final var deliveryLog = taskDeliveryLog;
     if (deliveryLog == null) {
@@ -696,7 +696,7 @@ public final class DeliveryRecords {
     if ((hasRecords == null) || hasRecords.booleanValue()) {
       return;
     }
-    adapters
+    adapterProcessServices
         .stream()
         .filter(MigratableProcessService::deliversTasksAtLeastOnce)
         .forEach(adapter -> {
@@ -753,14 +753,14 @@ public final class DeliveryRecords {
    * @param operation The operation being elected for
    * @param workflowAggregateId The workflow aggregate the operation is about
    * @param args The operation's arguments, which name the task
-   * @param adapters The prioritized adapters of this BPMN process
+   * @param adapterProcessServices The prioritized adapters of this BPMN process
    * @return The location, or <code>null</code> where the record cannot answer
    */
   public <A> WorkflowLocator.Location<A> locate(
       final PhaseOperation operation,
       final Object workflowAggregateId,
       final Map<String, String> args,
-      final List<MigratableProcessService<A>> adapters) {
+      final List<MigratableProcessService<A>> adapterProcessServices) {
 
     if (workflowAggregateId == null) {
       return null;
@@ -779,7 +779,7 @@ public final class DeliveryRecords {
     if ((record == null) || (record.adapterId() == null)) {
       return null;
     }
-    final var adapter = adapters
+    final var adapter = adapterProcessServices
         .stream()
         .filter(candidate -> candidate.getAdapterId().equals(record.adapterId()))
         .findFirst()

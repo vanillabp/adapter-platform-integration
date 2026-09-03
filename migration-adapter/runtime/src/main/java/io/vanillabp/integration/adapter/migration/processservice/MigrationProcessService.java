@@ -711,7 +711,7 @@ public class MigrationProcessService<A> {
 
     final Supplier<WorkflowTaskOutcome> transactionalWork = () -> {
       if (deliveryLog != null) {
-        final var recorded = deliveryRecords.answerFor(deliveryLog, deliveryKey, context);
+        final var recorded = deliveryRecords.answerToARepeatedDelivery(deliveryLog, deliveryKey, context);
         if (recorded.isPresent()) {
           return recorded.get();
         }

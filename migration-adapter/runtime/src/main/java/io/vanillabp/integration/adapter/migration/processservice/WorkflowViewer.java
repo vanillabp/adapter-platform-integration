@@ -43,7 +43,7 @@ public final class WorkflowViewer<A> {
    */
   private final List<String> prioritizedAdapters;
 
-  private final List<MigratableProcessService<A>> adapters;
+  private final List<MigratableProcessService<A>> adapterProcessServices;
 
   private final AggregatePersistenceAware<A> aggregatePersistenceSupport;
 
@@ -59,7 +59,7 @@ public final class WorkflowViewer<A> {
       final String workflowModuleId,
       final String bpmnProcessId,
       final List<String> prioritizedAdapters,
-      final List<MigratableProcessService<A>> adapters,
+      final List<MigratableProcessService<A>> adapterProcessServices,
       final AggregatePersistenceAware<A> aggregatePersistenceSupport,
       final WorkflowLocator workflowLocator,
       final Supplier<WorkflowScope> scope) {
@@ -67,7 +67,7 @@ public final class WorkflowViewer<A> {
     this.workflowModuleId = workflowModuleId;
     this.bpmnProcessId = bpmnProcessId;
     this.prioritizedAdapters = prioritizedAdapters;
-    this.adapters = adapters;
+    this.adapterProcessServices = adapterProcessServices;
     this.aggregatePersistenceSupport = aggregatePersistenceSupport;
     this.workflowLocator = workflowLocator;
     this.scope = scope;
@@ -132,7 +132,7 @@ public final class WorkflowViewer<A> {
                   workflowModuleId));
     }
 
-    final var adapter = adapters
+    final var adapter = adapterProcessServices
         .stream()
         .filter(processService -> processService.getAdapterId().equals(parsed.adapterId()))
         .findFirst()
@@ -224,7 +224,7 @@ public final class WorkflowViewer<A> {
     // reporting it yet is asked again until its visibility window is used up. Nothing
     // repeats a read later, so this is the only place it can happen
     final var location = workflowLocator.locate(
-        adapters,
+        adapterProcessServices,
         adapter -> adapter.awarenessOfWorkflow(scope.get(), aggregatePersistenceSupport, aggregateId),
         aggregateId,
         subject,
