@@ -30,17 +30,62 @@ public class PhaseTwoOutboxProperties {
   private Duration pollInterval = Duration.ofSeconds(10);
 
   /**
-   * How long to wait after a failed dispatch until the entry is retried.
+   * The distance to the FIRST retry after a failed dispatch. Every further attempt
+   * doubles it until {@link #maxAttemptFrequency} is reached (see
+   * {@link #attemptDelay(int)}).
    */
   @Builder.Default
   private Duration attemptFrequency = Duration.ofSeconds(30);
 
   /**
-   * After how many failed attempts an entry is blocked (not retried any longer).
-   * Blocked entries have to be fixed manually (e.g. by cleaning up the outbox store).
+   * The longest distance the growing backoff reaches. Five minutes, so a BPMS which
+   * comes back is noticed within five minutes however long it was away.
    */
   @Builder.Default
-  private int blockAfterAttempts = 10;
+  private Duration maxAttemptFrequency = Duration.ofMinutes(5);
+
+  /**
+   * After how many failed attempts an entry is blocked (not retried any longer).
+   * Fifty of them, which with the two defaults above span an outage of about four
+   * hours - a cluster upgrade rather than an exotic event. What ends up blocked is
+   * then an entry which is broken rather than one whose BPMS was away for a while,
+   * and it is the case an operator has to look at.
+   */
+  @Builder.Default
+  private int blockAfterAttempts = 50;
+
+  /**
+   * The distance to the next attempt after a dispatch which failed, doubling per
+   * attempt and capped at {@link #maxAttemptFrequency}. The first retry keeps
+   * {@link #attemptFrequency}, because most failures are momentary and waiting
+   * longer buys nothing there.
+   * <p>
+   * The stores VanillaBP owns compute their next attempt with this method, so the
+   * curve is the same on every platform and on every persistence. Gruelbox brings a
+   * retry policy of its own which knows one fixed distance, so an application on that
+   * store keeps the behaviour it always had - the per-store table of the platform
+   * pages owns that difference.
+   *
+   * @param attemptsSoFar The number of attempts already made, zero before the first
+   *        retry
+   * @return The distance to the next attempt
+   */
+  public Duration attemptDelay(
+      final int attemptsSoFar) {
+
+    if (attemptsSoFar <= 0) {
+      return attemptFrequency;
+    }
+    // doubling in the exponent rather than in a loop, and bounded before it is
+    // computed: 2^attempts overflows a long at 63 attempts, and blockAfterAttempts is
+    // configurable
+    if (attemptsSoFar >= 62) {
+      return maxAttemptFrequency;
+    }
+    final var doubled = attemptFrequency.multipliedBy(1L << attemptsSoFar);
+    return doubled.compareTo(maxAttemptFrequency) > 0 ? maxAttemptFrequency : doubled;
+
+  }
 
   /**
    * Whether the schema (table/collection) used to store outbox entries is created

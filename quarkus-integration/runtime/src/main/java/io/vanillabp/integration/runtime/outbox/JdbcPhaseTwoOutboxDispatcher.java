@@ -43,10 +43,13 @@ import lombok.extern.slf4j.Slf4j;
  * </ul>
  * The poller uses a plain scheduled executor, so the <code>quarkus-scheduler</code>
  * extension is not required. Due entries (status {@link #STATUS_OPEN}) are claimed
- * atomically (optimistic update incrementing the number of attempts and setting the
- * next attempt according to <code>vanillabp.outbox.attempt-frequency</code>), so a
- * failed dispatch is automatically retried with a backoff and multiple instances do
- * not dispatch the same entry concurrently. On successful dispatch the entry is
+ * atomically (optimistic update incrementing the number of attempts and leasing the
+ * entry for one <code>vanillabp.outbox.attempt-frequency</code>), so multiple instances
+ * do not dispatch the same entry concurrently. A dispatch which FAILS writes the next
+ * attempt itself, at the growing distance of
+ * {@link io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties#attemptDelay(int)}
+ * - doubling per attempt up to <code>vanillabp.outbox.max-attempt-frequency</code>, so
+ * an outage of hours drains itself when the BPMS comes back. On successful dispatch the entry is
  * marked {@link #STATUS_DONE} - it stays in the table for support to read and is
  * deleted asynchronously once
  * <code>vanillabp.outbox.retention</code> passed. After
@@ -102,9 +105,17 @@ public class JdbcPhaseTwoOutboxDispatcher {
       SET STATUS = '%s', DONE_AT = ?, DEDUP_KEY = ID \
       WHERE ID = ?""";
 
+  /**
+   * Blocking releases DEDUP_KEY the way marking an entry DONE does, and for a reason
+   * which is easy to miss: the key is what refuses a second schedule of the same
+   * operation, so a blocked entry which kept it would silence the very repetition the
+   * application needs - it would ask, the outbox would answer no, and that answer looks
+   * exactly like a correct deduplication. The row stays for whoever repairs it, and the
+   * new attempt of the operation is a row of its own.
+   */
   private static final String MARK_ENTRY_BLOCKED = """
       UPDATE %s \
-      SET STATUS = '%s' \
+      SET STATUS = '%s', DEDUP_KEY = ID \
       WHERE ID = ?""";
 
   /**
@@ -446,6 +457,10 @@ public class JdbcPhaseTwoOutboxDispatcher {
       final Entry entry) throws SQLException {
 
     try (var statement = connection.prepareStatement(claimEntry)) {
+      // the claim leases the entry for one attempt-frequency, which is what keeps other
+      // pollers off it while this dispatch runs. The growing backoff belongs to a FAILED
+      // dispatch and is written there, so a poller which dies mid-dispatch does not
+      // inherit the long distance of an attempt nobody made
       statement.setTimestamp(1, Timestamp.from(Instant.now().plus(properties.getAttemptFrequency())));
       statement.setString(2, entry.id());
       statement.setInt(3, entry.attempts());
@@ -543,13 +558,25 @@ public class JdbcPhaseTwoOutboxDispatcher {
             properties.getBlockAfterAttempts(),
             e.getMessage());
       } else {
+        // attempts() is the count BEFORE this claim, so attemptDelay(0) is the distance
+        // after the first failure: close, because most failures are momentary
+        final var retryIn = properties.attemptDelay(entry.attempts());
+        try (var statement = connection.prepareStatement(rescheduleEntry)) {
+          statement.setTimestamp(1, Timestamp.from(Instant.now().plus(retryIn)));
+          statement.setString(2, entry.id());
+          statement.executeUpdate();
+        }
         log.warn(
             "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
-                + "failed - will retry",
+                + "failed - the outbox entry '{}' is dispatched again in {} ({} of {} attempts used)",
             entry.operation(),
             entry.bpmnProcessId(),
             entry.workflowModuleId(),
             entry.aggregateId(),
+            entry.id(),
+            retryIn,
+            entry.attempts() + 1,
+            properties.getBlockAfterAttempts(),
             e);
       }
       return;

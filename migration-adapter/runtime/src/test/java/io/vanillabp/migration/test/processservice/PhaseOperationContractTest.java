@@ -327,6 +327,55 @@ public class PhaseOperationContractTest {
   }
 
   @Test
+  @DisplayName("Args no store can hold are refused where the call is built")
+  public void unstorableArgsAreRefused() {
+
+    // 700 percent signs are 700 characters raw and 2100 encoded, so only the
+    // serialized form exceeds the column - a check against the raw value would let
+    // exactly this case through
+    final var correlationId = "%".repeat(700);
+
+    final var exception = org.junit.jupiter.api.Assertions
+        .assertThrows(
+            IllegalArgumentException.class,
+            () -> PhaseTwoCall
+                .of(PhaseOperation.CORRELATE_MESSAGE, "test-module", "TestProcess", "42", "test-adapter", Map
+                    .of(
+                        PhaseTwoCall.ARG_MESSAGE_NAME, "OrderReceived",
+                        PhaseTwoCall.ARG_CORRELATION_ID, correlationId)));
+
+    assertTrue(correlationId.length() < PhaseTwoCall.MAX_ARGS_LENGTH, "raw value fits, encoded does not");
+    // the message replaces a driver-level truncation in the middle of the caller's
+    // transaction, so it names the column, both lengths and the argument to change
+    assertTrue(exception.getMessage().contains("ARGS"), exception.getMessage());
+    assertTrue(exception.getMessage().contains("2048"), exception.getMessage());
+    assertTrue(exception.getMessage().contains(PhaseTwoCall.ARG_CORRELATION_ID), exception.getMessage());
+    assertTrue(exception.getMessage().contains("CORRELATE_MESSAGE"), exception.getMessage());
+
+  }
+
+  @Test
+  @DisplayName("Args up to the column's width are accepted")
+  public void theLongestStorableArgsAreAccepted() {
+
+    // "messageName=" plus the value is what is stored, so the value which just fits is
+    // shorter than the column by the length of the key and the separator
+    final var messageName = "m".repeat(PhaseTwoCall.MAX_ARGS_LENGTH - (PhaseTwoCall.ARG_MESSAGE_NAME.length() + 1));
+
+    // no correlation id, so this call carries no idempotency key by design - what is
+    // asserted here is that it is built at all, with its args intact
+    assertEquals(
+        messageName,
+        PhaseTwoCall
+            .of(
+                PhaseOperation.CORRELATE_MESSAGE, "test-module", "TestProcess", "42", "test-adapter", Map
+                    .of(PhaseTwoCall.ARG_MESSAGE_NAME, messageName))
+            .args()
+            .get(PhaseTwoCall.ARG_MESSAGE_NAME));
+
+  }
+
+  @Test
   @DisplayName("A call rebuilt from a persisted entry carries no key - the store persisted it")
   public void dispatchCallsCarryNoKey() {
 

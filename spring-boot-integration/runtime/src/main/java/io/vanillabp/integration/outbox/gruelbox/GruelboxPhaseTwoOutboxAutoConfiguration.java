@@ -63,7 +63,11 @@ import jakarta.persistence.EntityManagerFactory;
  * request ID (<code>vanillabp.outbox.retention</code> maps to gruelbox's retention
  * threshold; expired entries are deleted by the background flush), and blocking after
  * <code>vanillabp.outbox.block-after-attempts</code> failed attempts is gruelbox's
- * native blocklisting. The {@link PhaseTwoCall#args()} map travels in its serialized
+ * native blocklisting. Two things this store cannot do and the own stores can: its
+ * retry policy knows ONE fixed distance, so <code>max-attempt-frequency</code> and the
+ * doubling it caps have no effect here, and a blocklisted entry holds its
+ * <code>uniqueRequestId</code> until the row is removed, so the operation it failed at
+ * cannot be scheduled again in the meantime. The {@link PhaseTwoCall#args()} map travels in its serialized
  * form because gruelbox's invocation serializer only accepts scalar parameter types
  * (see {@link GruelboxPhaseTwoDispatch}).
  */

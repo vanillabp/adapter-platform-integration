@@ -289,7 +289,8 @@ public interface QuarkusMigrationAdapterProperties {
     Duration pollInterval();
 
     /**
-     * How long to wait after a failed dispatch until the entry is retried.
+     * The distance to the FIRST retry after a failed dispatch. Every further attempt
+     * doubles it until <code>max-attempt-frequency</code> is reached.
      *
      * @return The retry backoff
      */
@@ -297,13 +298,24 @@ public interface QuarkusMigrationAdapterProperties {
     Duration attemptFrequency();
 
     /**
+     * The longest distance the growing backoff reaches, so a BPMS which comes back is
+     * noticed within it however long it was away.
+     *
+     * @return The cap of the retry backoff
+     */
+    @WithDefault("PT5M")
+    Duration maxAttemptFrequency();
+
+    /**
      * After how many failed attempts an entry is blocked (not retried any longer).
-     * Blocked entries have to be fixed manually (e.g. by cleaning up the outbox
-     * table).
+     * With the two defaults above, fifty attempts span an outage of about four hours,
+     * so what ends up blocked is an entry which is broken rather than one whose BPMS
+     * was away for a while. Blocked entries have to be fixed manually (e.g. by
+     * cleaning up the outbox table).
      *
      * @return The maximum number of attempts
      */
-    @WithDefault("10")
+    @WithDefault("50")
     int blockAfterAttempts();
 
     /**

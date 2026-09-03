@@ -14,7 +14,9 @@ import java.time.Duration;
  * <p>
  * A store recognises it through {@link #retryAfter(Throwable)}, which walks the causes
  * the way {@link PhaseTwoPermanentFailure#isPermanent(Throwable)} does, and uses the
- * duration in place of its configured backoff for THIS attempt. It changes nothing
+ * duration in place of its configured backoff for THIS attempt - the growing backoff of
+ * a failed dispatch never stretches this window, because the two are written by
+ * different branches of the same failure handling. It changes nothing
  * else: the attempt is counted like any other, so an entry coming back again and again
  * is blocked after <code>vanillabp.outbox.block-after-attempts</code> attempts, which is
  * what stops a workflow which never becomes visible. A store which cannot express a

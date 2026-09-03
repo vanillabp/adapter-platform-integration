@@ -1,5 +1,6 @@
 package io.vanillabp.integration.spi;
 
+import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -70,6 +71,20 @@ public record PhaseTwoCall(
    * driver report a truncation in the middle of the application's transaction.
    */
   public static final int MAX_AGGREGATE_ID_LENGTH = 1024;
+
+  /**
+   * The number of characters the <code>ARGS</code> column of the VanillaBP JDBC store
+   * holds, measured against the SERIALIZED form ({@link #serializeArgs(Map)}), because
+   * that is what is persisted: a value well under the limit can exceed it once its
+   * characters are encoded.
+   * <p>
+   * Enforced for every store, although gruelbox serializes a call differently and may
+   * have no such bound. An application which moves from one store to the other must not
+   * discover this limit at that moment, which is the same reasoning that bounds the
+   * idempotency key at the smallest limit of the stores rather than at the one the store
+   * in use happens to have.
+   */
+  public static final int MAX_ARGS_LENGTH = 2048;
 
   /**
    * The {@link #args()} key carrying the task ID of
@@ -144,7 +159,8 @@ public record PhaseTwoCall(
    *        <code>null</code>)
    * @return The call, ready to be handed to {@link PhaseTwoOutbox#schedule}
    * @throws IllegalArgumentException If the aggregate ID is longer than
-   *         {@link #MAX_AGGREGATE_ID_LENGTH} characters (guiding message)
+   *         {@link #MAX_AGGREGATE_ID_LENGTH} characters, or if the serialized args are
+   *         longer than {@link #MAX_ARGS_LENGTH} characters (guiding message)
    */
   public static PhaseTwoCall of(
       final PhaseOperation operation,
@@ -155,6 +171,7 @@ public record PhaseTwoCall(
       final Map<String, String> args) {
 
     validateAggregateIdLength(operation, workflowModuleId, bpmnProcessId, workflowAggregateId);
+    validateArgsLength(operation, workflowModuleId, bpmnProcessId, args);
     // the key is derived from the call itself, so the call is built twice: once
     // to derive from, once carrying the result
     final var withoutKey = new PhaseTwoCall(
@@ -201,6 +218,51 @@ public record PhaseTwoCall(
                 MAX_AGGREGATE_ID_LENGTH,
                 operation.name(),
                 workflowAggregateId.substring(0, 64)));
+
+  }
+
+  /**
+   * Refuses args no store can hold, measured on the serialized form for the reason
+   * given at {@link #MAX_ARGS_LENGTH}. Sits next to the aggregate-ID guard and for the
+   * same reason: this is where the values are still at hand and where the stack trace
+   * still points at the business code which passed them.
+   */
+  private static void validateArgsLength(
+      final PhaseOperation operation,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Map<String, String> args) {
+
+    final var serialized = serializeArgs(args);
+    if ((serialized == null) || (serialized.length() <= MAX_ARGS_LENGTH)) {
+      return;
+    }
+    // the longest argument is the one worth naming: it is the value the caller has to
+    // change, and with several args the total says nothing about which one it is
+    final var longest = args
+        .entrySet()
+        .stream()
+        .max(Comparator.comparingInt(entry -> entry.getValue() == null ? 0 : entry.getValue().length()))
+        .orElseThrow();
+    final var longestValue = longest.getValue() == null ? "" : longest.getValue();
+    throw new IllegalArgumentException(
+        """
+            The arguments of operation '%s' of BPMN process '%s' of workflow module '%s' are %d \
+            characters long once encoded for the store, which the phase-two outbox cannot store: \
+            its ARGS column holds %d characters. The longest argument is '%s' with %d characters. \
+            Such a value identifies something, a message name or a correlation id, and is not a \
+            place to carry payload - what the workflow has to know belongs in the workflow \
+            aggregate, which your application persists itself and VanillaBP hands to every \
+            handler. The value begins with '%s'."""
+            .formatted(
+                operation.name(),
+                bpmnProcessId,
+                workflowModuleId,
+                serialized.length(),
+                MAX_ARGS_LENGTH,
+                longest.getKey(),
+                longestValue.length(),
+                longestValue.substring(0, Math.min(64, longestValue.length()))));
 
   }
 

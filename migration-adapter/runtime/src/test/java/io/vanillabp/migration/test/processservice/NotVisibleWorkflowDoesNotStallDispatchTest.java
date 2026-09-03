@@ -239,10 +239,14 @@ public class NotVisibleWorkflowDoesNotStallDispatchTest {
           + " asked for another due time");
     }
 
-    // said in numbers, for the defaults and a Camunda 8 window: ten attempts of ten
-    // seconds, so an entry nobody can dispatch is blocked after a hundred seconds
+    // said in numbers, for the defaults and a Camunda 8 window: fifty attempts of ten
+    // seconds, so an entry nobody can dispatch is blocked after eight and a half
+    // minutes. The attempt budget grew with the backoff of story 195, and this case
+    // grew with it - what it costs is a workflow which never becomes visible being
+    // asked about longer, which is cheap: the window is the adapter's and stays short,
+    // it is the growing backoff which is NOT applied here
     assertEquals(
-        Duration.ofSeconds(100),
+        Duration.ofSeconds(500),
         Duration.ofSeconds(10).multipliedBy(attemptsAllowed));
 
   }
