@@ -85,9 +85,13 @@ public class ViewerApiTest {
 
     when(firstAdapter.getAdapterId()).thenReturn("first-adapter");
     when(secondAdapter.getAdapterId()).thenReturn("second-adapter");
-    return new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(firstAdapter, secondAdapter), null);
+    return MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(firstAdapter, secondAdapter))
+        .build();
 
   }
 
@@ -101,9 +105,14 @@ public class ViewerApiTest {
 
     lenient().when(firstAdapter.getAdapterId()).thenReturn("first-adapter");
     lenient().when(secondAdapter.getAdapterId()).thenReturn("second-adapter");
-    return new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(firstAdapter, secondAdapter), null, cache);
+    return MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(firstAdapter, secondAdapter))
+        .workflowAdapterCache(cache)
+        .build();
 
   }
 

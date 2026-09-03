@@ -415,8 +415,12 @@ public class WorkflowTaskRegistryTest {
       }
 
     };
-    return new MigrationProcessService<>(
-        MODULE, PROCESS, Aggregate.class, properties, persistence, List.of(adapterProcessService), null);
+    return MigrationProcessService
+        .forBpmnProcess(MODULE, PROCESS, Aggregate.class)
+        .properties(properties)
+        .aggregatePersistence(persistence)
+        .processServices(List.of(adapterProcessService))
+        .build();
 
   }
 
@@ -1245,9 +1249,13 @@ public class WorkflowTaskRegistryTest {
         SharingAggregate.class,
         SharingAggregate::new,
         beans::get,
-        new MigrationProcessService<>(
-            MODULE, "SharingProcess", SharingAggregate.class, properties, sharingPersistence, List.of(
-                new NoOpProcessService<SharingAggregate>()), null));
+        MigrationProcessService
+            .forBpmnProcess(MODULE, "SharingProcess", SharingAggregate.class)
+            .properties(properties)
+            .aggregatePersistence(sharingPersistence)
+            .processServices(List.of(
+                new NoOpProcessService<SharingAggregate>()))
+            .build());
 
     // the attribute the application excluded is reported, the shared one is not, and a
     // name which is no attribute at all is none of this check's business (the model may
@@ -1446,9 +1454,13 @@ public class WorkflowTaskRegistryTest {
           GetterAggregate.class, // no @WorkflowTask methods - registration is fine
           GetterAggregate::new,
           beans::get,
-          new MigrationProcessService<>(
-              MODULE, bpmnProcessId, GetterAggregate.class, properties, persistenceOfOtherAggregate, List.of(
-                  new NoOpProcessService<GetterAggregate>()), null));
+          MigrationProcessService
+              .forBpmnProcess(MODULE, bpmnProcessId, GetterAggregate.class)
+              .properties(properties)
+              .aggregatePersistence(persistenceOfOtherAggregate)
+              .processServices(List.of(
+                  new NoOpProcessService<GetterAggregate>()))
+              .build());
 
     }
 

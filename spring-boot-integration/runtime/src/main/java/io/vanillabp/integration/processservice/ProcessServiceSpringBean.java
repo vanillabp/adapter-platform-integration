@@ -55,8 +55,16 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
       final io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver taskDeliveryLogResolver,
       final io.vanillabp.integration.adapter.migration.processservice.TransactionRunnerResolver transactionRunnerResolver) {
 
-    migrationProcessService = new MigrationProcessService<A>(
-        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, aggregatePersistenceAware, migratableProcessServices, phaseTwoOutboxResolver, workflowAdapterCache, taskDeliveryLogResolver, transactionRunnerResolver);
+    migrationProcessService = MigrationProcessService
+        .<A>forBpmnProcess(workflowModuleId, bpmnProcessId, workflowAggregateClass)
+        .properties(properties)
+        .aggregatePersistence(aggregatePersistenceAware)
+        .processServices(migratableProcessServices)
+        .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+        .workflowAdapterCache(workflowAdapterCache)
+        .taskDeliveryLogResolver(taskDeliveryLogResolver)
+        .transactionRunnerResolver(transactionRunnerResolver)
+        .build();
 
     // register as phase-two dispatch target: outbox entries for this workflow
     // module/BPMN process are routed here after the local transaction was committed

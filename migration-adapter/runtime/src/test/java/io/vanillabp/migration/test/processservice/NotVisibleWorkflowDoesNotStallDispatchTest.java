@@ -168,8 +168,14 @@ public class NotVisibleWorkflowDoesNotStallDispatchTest {
 
     };
 
-    return new MigrationProcessService<>(
-        MODULE, PROCESS, Object.class, properties(), persistence, List.of(adapter), resolver, cache);
+    return MigrationProcessService
+        .forBpmnProcess(MODULE, PROCESS, Object.class)
+        .properties(properties())
+        .aggregatePersistence(persistence)
+        .processServices(List.of(adapter))
+        .phaseTwoOutboxResolver(resolver)
+        .workflowAdapterCache(cache)
+        .build();
 
   }
 

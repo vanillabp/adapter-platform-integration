@@ -331,26 +331,32 @@ public class PersistedAdapterIdTest {
       final TaskDeliveryLog deliveryLog,
       final MigratableProcessService<Object> adapter) {
 
-    final var service = new MigrationProcessService<Object>(
-        MODULE, PROCESS, Object.class, properties, persistence(), List
-            .of(adapter), new PhaseTwoOutboxResolver() {
+    final var service = MigrationProcessService
+        .<Object>forBpmnProcess(MODULE, PROCESS, Object.class)
+        .properties(properties)
+        .aggregatePersistence(persistence())
+        .processServices(List
+            .of(adapter))
+        .phaseTwoOutboxResolver(new PhaseTwoOutboxResolver() {
 
-              @Override
-              public PhaseTwoOutbox resolveFor(
-                  final Class<?> workflowAggregateClass) {
+          @Override
+          public PhaseTwoOutbox resolveFor(
+              final Class<?> workflowAggregateClass) {
 
-                return outbox;
+            return outbox;
 
-              }
+          }
 
-              @Override
-              public String remediesDescription() {
+          @Override
+          public String remediesDescription() {
 
-                return "";
+            return "";
 
-              }
+          }
 
-            }, null, new io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver() {
+        })
+        .taskDeliveryLogResolver(
+            new io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver() {
 
               @Override
               public TaskDeliveryLog resolveFor(
@@ -367,7 +373,8 @@ public class PersistedAdapterIdTest {
 
               }
 
-            });
+            })
+        .build();
     // resolves both stores the way the platform's own validations do before this check
     service.validatePhaseTwoOutboxAtStartup();
     service.validateTaskDeliveryLogAtStartup();

@@ -194,8 +194,12 @@ public class ProcessVersionMatchingTest {
     final MigratableProcessService<Aggregate> adapter = mock(MigratableProcessService.class);
     lenient().when(adapter.getAdapterId()).thenReturn(ADAPTER);
 
-    return new MigrationProcessService<>(
-        MODULE, bpmnProcessId, Aggregate.class, properties, persistence, List.of(adapter), null);
+    return MigrationProcessService
+        .forBpmnProcess(MODULE, bpmnProcessId, Aggregate.class)
+        .properties(properties)
+        .aggregatePersistence(persistence)
+        .processServices(List.of(adapter))
+        .build();
 
   }
 

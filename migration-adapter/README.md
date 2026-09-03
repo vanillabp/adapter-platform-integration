@@ -1966,6 +1966,21 @@ itself; the implementation with the most specific generic type for the aggregate
 It is the single canonical interface used on all platforms — business code implements
 it regardless of running on Spring Boot or Quarkus.
 
+### What the platform hands a process service (`MigrationProcessService.Builder`)
+
+One process service exists per workflow module and BPMN process, and it is built rather
+than constructed: `MigrationProcessService.forBpmnProcess(module, process, aggregateClass)`
+opens a builder, and what follows names what it is given. Three of those are mandatory -
+the bound configuration, the persistence of the workflow aggregate, and the process
+services of the adapters - and `build()` refuses a set without one, naming the BPMN process
+and every missing name. The rest are what a platform integration always hands over and a
+test leaves out where it does not need it: `workflowAdapterCache` (without it every
+election probes), `taskDeliveryLogResolver` (without it deliveries are not deduplicated),
+`transactionRunnerResolver` (without it the runner the caller passes is used) and
+`phaseTwoOutboxResolver`, whose absence `validatePhaseTwoOutboxAtStartup` reports at
+startup. Before this there were four constructors of seven to ten parameters, and a call
+site said `null, null` where a reader had to count positions to learn what was left out.
+
 ### What the platform hands an adapter (`AdapterCollaborators`)
 
 An adapter takes ONE object in its constructor, built by the platform integration it runs

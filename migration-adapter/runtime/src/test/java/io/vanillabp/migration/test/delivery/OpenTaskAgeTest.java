@@ -287,8 +287,13 @@ public class OpenTaskAgeTest {
 
     };
 
-    final var processService = new MigrationProcessService<>(
-        MODULE, PROCESS, Aggregate.class, properties, persistence, List.of(adapter), null, null, resolver);
+    final var processService = MigrationProcessService
+        .forBpmnProcess(MODULE, PROCESS, Aggregate.class)
+        .properties(properties)
+        .aggregatePersistence(persistence)
+        .processServices(List.of(adapter))
+        .taskDeliveryLogResolver(resolver)
+        .build();
 
     final var registry = new WorkflowTaskRegistry(new TransactionRunnerStub());
     registry.registerWorkflowService(

@@ -88,8 +88,12 @@ public class MigrationProcessServiceTest {
 
     final var exception = assertThrowsExactly(
         IllegalStateException.class,
-        () -> new MigrationProcessService<>(
-            "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List.of(), null));
+        () -> MigrationProcessService
+            .forBpmnProcess("test-module", "TestProcess", Object.class)
+            .properties(createProperties())
+            .aggregatePersistence(aggregatePersistence)
+            .processServices(List.of())
+            .build());
 
     // the exception has to name the workflow module, the BPMN process ID and the prioritized adapters
     assertTrue(exception.getMessage().contains("test-module"));
@@ -106,9 +110,13 @@ public class MigrationProcessServiceTest {
 
     final var exception = assertThrowsExactly(
         IllegalStateException.class,
-        () -> new MigrationProcessService<>(
-            "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-                .of(processService), null));
+        () -> MigrationProcessService
+            .forBpmnProcess("test-module", "TestProcess", Object.class)
+            .properties(createProperties())
+            .aggregatePersistence(aggregatePersistence)
+            .processServices(List
+                .of(processService))
+            .build());
 
     assertTrue(exception.getMessage().contains("test-module"));
     assertTrue(exception.getMessage().contains("TestProcess"));
@@ -144,9 +152,13 @@ public class MigrationProcessServiceTest {
 
     final var exception = assertThrowsExactly(
         IllegalStateException.class,
-        () -> new MigrationProcessService<>(
-            "test-module", "TestProcess", Object.class, createTwoAdapterProperties(), aggregatePersistence, List
-                .of(processService), null));
+        () -> MigrationProcessService
+            .forBpmnProcess("test-module", "TestProcess", Object.class)
+            .properties(createTwoAdapterProperties())
+            .aggregatePersistence(aggregatePersistence)
+            .processServices(List
+                .of(processService))
+            .build());
 
     // the guiding message has to name the adapter id, module, process and the
     // likely causes (missing dependency, typo in the prioritized-adapters keys)
@@ -172,9 +184,14 @@ public class MigrationProcessServiceTest {
 
     // beans are passed in REVERSE priority order - the election must follow the
     // configured priorities nevertheless
-    final var testee = new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, createTwoAdapterProperties(), aggregatePersistence, List
-            .of(secondAdapter, processService), phaseTwoOutboxResolver);
+    final var testee = MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createTwoAdapterProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(secondAdapter, processService))
+        .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+        .build();
 
     final var aggregate = new Object();
     when(aggregatePersistence.save(aggregate)).thenReturn(aggregate);
@@ -200,9 +217,13 @@ public class MigrationProcessServiceTest {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
 
-    final var testee = new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), null);
+    final var testee = MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(processService))
+        .build();
 
     final var aggregate = new Object();
     when(aggregatePersistence.save(aggregate)).thenReturn(aggregate);
@@ -233,9 +254,14 @@ public class MigrationProcessServiceTest {
     when(processService.getAdapterId()).thenReturn("test-adapter");
     when(phaseTwoOutboxResolver.resolveFor(Object.class)).thenReturn(phaseTwoOutbox);
 
-    final var testee = new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), phaseTwoOutboxResolver);
+    final var testee = MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(processService))
+        .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+        .build();
 
     // with JPA and generated IDs the attached aggregate returned by save may
     // be another object than the detached one passed to startWorkflow
@@ -262,9 +288,14 @@ public class MigrationProcessServiceTest {
     when(processService.getAdapterId()).thenReturn("test-adapter");
     when(phaseTwoOutboxResolver.resolveFor(Object.class)).thenReturn(phaseTwoOutbox);
 
-    final var testee = new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), phaseTwoOutboxResolver);
+    final var testee = MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(processService))
+        .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+        .build();
 
     final var aggregate = new Object();
     when(aggregatePersistence.save(aggregate)).thenReturn(aggregate);
@@ -288,9 +319,14 @@ public class MigrationProcessServiceTest {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
 
-    final var testee = new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), phaseTwoOutboxResolver);
+    final var testee = MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(processService))
+        .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+        .build();
 
     testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), false);
 
@@ -306,9 +342,14 @@ public class MigrationProcessServiceTest {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
 
-    final var testee = new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), phaseTwoOutboxResolver);
+    final var testee = MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(processService))
+        .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+        .build();
 
     final var exception = assertThrowsExactly(
         IllegalStateException.class,
@@ -332,9 +373,14 @@ public class MigrationProcessServiceTest {
     when(processService.awarenessOfWorkflowForRedispatch(SCOPE, aggregatePersistence, 42L))
         .thenReturn(io.vanillabp.integration.adapter.spi.WorkflowAwareness.ACTIVE);
 
-    final var testee = new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), phaseTwoOutboxResolver);
+    final var testee = MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(processService))
+        .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+        .build();
 
     testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), true);
 
@@ -351,9 +397,14 @@ public class MigrationProcessServiceTest {
     when(processService.awarenessOfWorkflowForRedispatch(SCOPE, aggregatePersistence, 42L))
         .thenReturn(io.vanillabp.integration.adapter.spi.WorkflowAwareness.UNKNOWN_TO_BPMS);
 
-    final var testee = new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), phaseTwoOutboxResolver);
+    final var testee = MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(processService))
+        .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+        .build();
 
     testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), true);
 
@@ -371,9 +422,14 @@ public class MigrationProcessServiceTest {
     when(processService.awarenessOfWorkflowForRedispatch(SCOPE, aggregatePersistence, 42L))
         .thenReturn(io.vanillabp.integration.adapter.spi.WorkflowAwareness.BPMS_UNAVAILABLE);
 
-    final var testee = new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), phaseTwoOutboxResolver);
+    final var testee = MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(processService))
+        .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+        .build();
 
     final var exception = assertThrowsExactly(
         IllegalStateException.class,
@@ -391,9 +447,14 @@ public class MigrationProcessServiceTest {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
 
-    final var testee = new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), phaseTwoOutboxResolver);
+    final var testee = MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(processService))
+        .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+        .build();
 
     testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), false);
 
@@ -412,9 +473,14 @@ public class MigrationProcessServiceTest {
     when(processService.awarenessOfWorkflowForRedispatch(SCOPE, aggregatePersistence, 42L))
         .thenReturn(io.vanillabp.integration.adapter.spi.WorkflowAwareness.COMPLETED);
 
-    final var testee = new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), phaseTwoOutboxResolver);
+    final var testee = MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(processService))
+        .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+        .build();
 
     testee
         .executePhaseTwo(
@@ -434,9 +500,13 @@ public class MigrationProcessServiceTest {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
 
-    final var testee = new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), null);
+    final var testee = MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(processService))
+        .build();
 
     final var aggregate = new Object();
     when(aggregatePersistence.save(aggregate)).thenReturn(aggregate);
@@ -463,9 +533,14 @@ public class MigrationProcessServiceTest {
     when(phaseTwoOutboxResolver.resolveFor(Object.class)).thenReturn(null);
     when(phaseTwoOutboxResolver.remediesDescription()).thenReturn("- add the platform's outbox starter, or");
 
-    final var testee = new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), phaseTwoOutboxResolver);
+    final var testee = MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(processService))
+        .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+        .build();
 
     final var exception = assertThrowsExactly(
         IllegalStateException.class,
@@ -491,9 +566,14 @@ public class MigrationProcessServiceTest {
     when(processService.getAdapterId()).thenReturn("test-adapter");
     when(phaseTwoOutboxResolver.resolveFor(Object.class)).thenReturn(phaseTwoOutbox);
 
-    final var testee = new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), phaseTwoOutboxResolver);
+    final var testee = MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(processService))
+        .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+        .build();
 
     testee.validatePhaseTwoOutboxAtStartup();
 
@@ -520,9 +600,14 @@ public class MigrationProcessServiceTest {
 
     final var exception = assertThrowsExactly(
         IllegalStateException.class,
-        () -> new MigrationProcessService<>(
-            "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-                .of(processService), phaseTwoOutboxResolver));
+        () -> MigrationProcessService
+            .forBpmnProcess("test-module", "TestProcess", Object.class)
+            .properties(createProperties())
+            .aggregatePersistence(aggregatePersistence)
+            .processServices(List
+                .of(processService))
+            .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+            .build());
 
     assertTrue(exception.getMessage().contains(Object.class.getName()));
     assertTrue(exception.getMessage().contains("round-trip losslessly"));
@@ -536,9 +621,14 @@ public class MigrationProcessServiceTest {
     when(processService.getAdapterId()).thenReturn("test-adapter");
     when(aggregatePersistence.getAggregateIdType()).thenAnswer(invocation -> Long.class);
 
-    final var testee = new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), phaseTwoOutboxResolver);
+    final var testee = MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(processService))
+        .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+        .build();
 
     assertEquals(42L, testee.convertAggregateId("42"));
 
@@ -550,9 +640,14 @@ public class MigrationProcessServiceTest {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
 
-    final var testee = new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), phaseTwoOutboxResolver);
+    final var testee = MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(processService))
+        .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+        .build();
 
     assertEquals("custom-id-4711", testee.convertAggregateId("custom-id-4711"));
 
@@ -573,9 +668,14 @@ public class MigrationProcessServiceTest {
                 .failingInPhaseTwo(PhaseOperation.START_WORKFLOW, rejected));
     when(processService.isPhaseTwoFailureRepeatable(rejected)).thenReturn(false);
 
-    final var testee = new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), phaseTwoOutboxResolver);
+    final var testee = MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(processService))
+        .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+        .build();
 
     final var failure = assertThrowsExactly(
         io.vanillabp.integration.spi.PhaseTwoPermanentFailure.class,
@@ -603,9 +703,14 @@ public class MigrationProcessServiceTest {
                 .failingInPhaseTwo(PhaseOperation.START_WORKFLOW, conflict));
     when(processService.isPhaseTwoFailureRepeatable(conflict)).thenReturn(true);
 
-    final var testee = new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), phaseTwoOutboxResolver);
+    final var testee = MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(processService))
+        .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+        .build();
 
     assertEquals(
         conflict,
@@ -622,9 +727,15 @@ public class MigrationProcessServiceTest {
     when(processService.getAdapterId()).thenReturn("test-adapter");
     final var cache = new io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCache();
 
-    final var testee = new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), phaseTwoOutboxResolver, cache);
+    final var testee = MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(processService))
+        .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+        .workflowAdapterCache(cache)
+        .build();
     testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), false);
 
     // the next operation on that workflow probes this adapter first, which is what
@@ -640,9 +751,15 @@ public class MigrationProcessServiceTest {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
     final var cache = new io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCache();
-    final var testee = new MigrationProcessService<>(
-        "test-module", "TestProcess", Object.class, createProperties(), aggregatePersistence, List
-            .of(processService), phaseTwoOutboxResolver, cache);
+    final var testee = MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(processService))
+        .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+        .workflowAdapterCache(cache)
+        .build();
 
     // a handler which does not subscribe to the delivered event: the delivery still
     // proves where the workflow lives, which is why the recording happens first

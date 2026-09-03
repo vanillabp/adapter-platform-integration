@@ -346,8 +346,12 @@ public class TaskElectionFromDeliveryRecordTest {
       final ProbeAdapter adapter,
       final TaskDeliveryLog log) {
 
-    final var service = new MigrationProcessService<>(
-        MODULE, PROCESS, Object.class, properties(), persistence(), List.of(adapter), new PhaseTwoOutboxResolver() {
+    final var service = MigrationProcessService
+        .forBpmnProcess(MODULE, PROCESS, Object.class)
+        .properties(properties())
+        .aggregatePersistence(persistence())
+        .processServices(List.of(adapter))
+        .phaseTwoOutboxResolver(new PhaseTwoOutboxResolver() {
 
           @Override
           public PhaseTwoOutbox resolveFor(
@@ -364,7 +368,8 @@ public class TaskElectionFromDeliveryRecordTest {
 
           }
 
-        }, null, new TaskDeliveryLogResolver() {
+        })
+        .taskDeliveryLogResolver(new TaskDeliveryLogResolver() {
 
           @Override
           public TaskDeliveryLog resolveFor(
@@ -381,7 +386,8 @@ public class TaskElectionFromDeliveryRecordTest {
 
           }
 
-        });
+        })
+        .build();
     service.setMetrics(metrics);
     return service;
 

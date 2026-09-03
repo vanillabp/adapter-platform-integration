@@ -238,8 +238,16 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
             workflowAdapterCacheStatistics.isResolvable()
                 ? workflowAdapterCacheStatistics.get()
                 : null);
-    this.migrationProcessService = new MigrationProcessService<>(
-        getWorkflowModuleId(), getBpmnProcessId(), getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, phaseTwoOutboxResolver, electionCache, taskDeliveryLogResolver, transactionRunnerResolver);
+    this.migrationProcessService = MigrationProcessService
+        .forBpmnProcess(getWorkflowModuleId(), getBpmnProcessId(), getWorkflowAggregateClass())
+        .properties(properties)
+        .aggregatePersistence(getAggregatePersistence())
+        .processServices(processServices)
+        .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+        .workflowAdapterCache(electionCache)
+        .taskDeliveryLogResolver(taskDeliveryLogResolver)
+        .transactionRunnerResolver(transactionRunnerResolver)
+        .build();
     this.migrationProcessService
         .setMetrics(PhaseTwoRouterProducer.vanillaBpMetricsOf(vanillaBpMetrics));
 
@@ -306,8 +314,16 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
       final var processService = processServicesByKey.computeIfAbsent(
           "%s|%s".formatted(moduleId, bpmnProcessId),
           key -> {
-            final var secondaryProcessService = new MigrationProcessService<>(
-                moduleId, bpmnProcessId, getWorkflowAggregateClass(), properties, getAggregatePersistence(), processServices, phaseTwoOutboxResolver, electionCache, taskDeliveryLogResolver, transactionRunnerResolver);
+            final var secondaryProcessService = MigrationProcessService
+                .forBpmnProcess(moduleId, bpmnProcessId, getWorkflowAggregateClass())
+                .properties(properties)
+                .aggregatePersistence(getAggregatePersistence())
+                .processServices(processServices)
+                .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+                .workflowAdapterCache(electionCache)
+                .taskDeliveryLogResolver(taskDeliveryLogResolver)
+                .transactionRunnerResolver(transactionRunnerResolver)
+                .build();
             secondaryProcessService
                 .setMetrics(PhaseTwoRouterProducer.vanillaBpMetricsOf(vanillaBpMetrics));
             if (phaseTwoRouter.isResolvable()) {

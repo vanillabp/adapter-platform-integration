@@ -306,8 +306,13 @@ public class InboundIdempotencyTest {
 
     };
 
-    return new MigrationProcessService<>(
-        MODULE, bpmnProcessId, Aggregate.class, properties, persistence, List.of(adapter), null, null, resolver);
+    return MigrationProcessService
+        .forBpmnProcess(MODULE, bpmnProcessId, Aggregate.class)
+        .properties(properties)
+        .aggregatePersistence(persistence)
+        .processServices(List.of(adapter))
+        .taskDeliveryLogResolver(resolver)
+        .build();
 
   }
 
@@ -518,9 +523,13 @@ public class InboundIdempotencyTest {
     lenient().when(embedded.getAdapterId()).thenReturn(ADAPTER);
     lenient().when(embedded.deliversTasksAtLeastOnce()).thenReturn(false);
 
-    final var testee = new MigrationProcessService<>(
-        MODULE, PROCESS, Aggregate.class, properties(null, null, null), persistence, List
-            .of(embedded), null, null, null);
+    final var testee = MigrationProcessService
+        .forBpmnProcess(MODULE, PROCESS, Aggregate.class)
+        .properties(properties(null, null, null))
+        .aggregatePersistence(persistence)
+        .processServices(List
+            .of(embedded))
+        .build();
 
     assertTrue(loggedBy(DeliveryRecords.class, testee::validateTaskDeliveryLogAtStartup).isEmpty());
 

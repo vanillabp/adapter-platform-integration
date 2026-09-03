@@ -247,8 +247,13 @@ public class WorkflowEndedTest {
     final MigratableProcessService<Aggregate> adapter = mock(MigratableProcessService.class);
     lenient().when(adapter.getAdapterId()).thenReturn("test-adapter");
 
-    return new MigrationProcessService<>(
-        MODULE, PROCESS, Aggregate.class, properties, persistence, List.of(adapter), null, cache);
+    return MigrationProcessService
+        .forBpmnProcess(MODULE, PROCESS, Aggregate.class)
+        .properties(properties)
+        .aggregatePersistence(persistence)
+        .processServices(List.of(adapter))
+        .workflowAdapterCache(cache)
+        .build();
 
   }
 

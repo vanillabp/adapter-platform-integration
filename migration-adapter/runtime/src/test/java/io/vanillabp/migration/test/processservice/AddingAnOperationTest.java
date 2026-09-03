@@ -203,8 +203,13 @@ public class AddingAnOperationTest {
 
     };
 
-    return new MigrationProcessService<Object>(
-        MODULE, PROCESS, Object.class, properties, new PersistenceStub(), List.of(adapter), resolver);
+    return MigrationProcessService
+        .<Object>forBpmnProcess(MODULE, PROCESS, Object.class)
+        .properties(properties)
+        .aggregatePersistence(new PersistenceStub())
+        .processServices(List.of(adapter))
+        .phaseTwoOutboxResolver(resolver)
+        .build();
 
   }
 

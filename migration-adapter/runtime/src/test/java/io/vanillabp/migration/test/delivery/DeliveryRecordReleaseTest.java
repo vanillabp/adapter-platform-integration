@@ -314,8 +314,13 @@ public class DeliveryRecordReleaseTest {
 
     };
 
-    return new MigrationProcessService<>(
-        MODULE, PROCESS, Aggregate.class, properties, persistence, List.of(adapter), null, null, resolver);
+    return MigrationProcessService
+        .forBpmnProcess(MODULE, PROCESS, Aggregate.class)
+        .properties(properties)
+        .aggregatePersistence(persistence)
+        .processServices(List.of(adapter))
+        .taskDeliveryLogResolver(resolver)
+        .build();
 
   }
 

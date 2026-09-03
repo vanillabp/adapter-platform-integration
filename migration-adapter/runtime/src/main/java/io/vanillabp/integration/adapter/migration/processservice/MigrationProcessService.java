@@ -1,17 +1,30 @@
 package io.vanillabp.integration.adapter.migration.processservice;
 
+import java.io.InputStream;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.observability.DeliveryMdc;
+import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
+import io.vanillabp.integration.adapter.migration.transaction.AggregateWrite;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskHandler;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.PhaseOneRequest;
 import io.vanillabp.integration.adapter.spi.PhaseOperationHandler;
+import io.vanillabp.integration.adapter.spi.PhaseOperationNotSupported;
 import io.vanillabp.integration.adapter.spi.PhaseTwoRequest;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
+import io.vanillabp.integration.adapter.spi.WorkflowScope;
 import io.vanillabp.integration.adapter.spi.WorkflowVisibilityDelay;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
@@ -20,9 +33,15 @@ import io.vanillabp.integration.spi.Election;
 import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.PhaseTwoPermanentFailure;
 import io.vanillabp.integration.spi.PhaseTwoRetryLater;
+import io.vanillabp.integration.spi.RunningActivation;
 import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.spi.WorkflowAdapterCache;
+import io.vanillabp.spi.process.ProcessDefinition;
+import io.vanillabp.spi.process.TaskNotFoundException;
+import io.vanillabp.spi.process.WorkflowHistory;
+import io.vanillabp.spi.process.WorkflowNotFoundException;
 import io.vanillabp.spi.service.TaskException;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -154,95 +173,55 @@ public class MigrationProcessService<A> {
    * What the application counts about its deliveries. Handed in by the
    * platform integration after construction, because it exists once per application
    * while process services exist per BPMN process;
-   * {@link io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics#NONE}
+   * {@link VanillaBpMetrics#NONE}
    * until then and for an application without a metrics backend.
    */
-  private volatile io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics metrics = io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.NONE;
+  private volatile VanillaBpMetrics metrics = VanillaBpMetrics.NONE;
 
   /**
    * @param metrics What to count deliveries into, never <code>null</code>
    */
   public void setMetrics(
-      final io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics metrics) {
+      final VanillaBpMetrics metrics) {
 
     this.metrics = metrics == null
-        ? io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.NONE
+        ? VanillaBpMetrics.NONE
         : metrics;
     deliveryRecords.setMetrics(this.metrics);
 
   }
 
   /**
-   * Creates a process service without an adapter cache (elections probe every
-   * time) - kept for tests; the platform integrations always pass the cache.
+   * Starts a process service for one BPMN process of one workflow module. What follows on
+   * the builder is what the platform integration knows about that process - see
+   * {@link Builder}, which refuses to build a service missing something no application can
+   * work without.
+   *
+   * @param workflowModuleId The workflow module the process belongs to
+   * @param bpmnProcessId The plain BPMN process id
+   * @param workflowAggregateClass The workflow aggregate of that process
+   * @return The builder
    */
-  public MigrationProcessService(
+  public static <A> Builder<A> forBpmnProcess(
       final String workflowModuleId,
       final String bpmnProcessId,
-      final Class<A> workflowAggregateClass,
-      final MigrationAdapterProperties properties,
-      final AggregatePersistenceAware<A> aggregatePersistenceSupport,
-      final List<MigratableProcessService<A>> processServices,
-      final PhaseTwoOutboxResolver phaseTwoOutboxResolver) {
+      final Class<A> workflowAggregateClass) {
 
-    this(
-        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, aggregatePersistenceSupport, processServices, phaseTwoOutboxResolver, null);
+    return new Builder<>(workflowModuleId, bpmnProcessId, workflowAggregateClass);
 
   }
 
-  /**
-   * Creates a process service without a delivery-log resolver (deliveries are not
-   * deduplicated) - kept for tests; the platform integrations always pass one.
-   */
-  public MigrationProcessService(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final Class<A> workflowAggregateClass,
-      final MigrationAdapterProperties properties,
-      final AggregatePersistenceAware<A> aggregatePersistenceSupport,
-      final List<MigratableProcessService<A>> processServices,
-      final PhaseTwoOutboxResolver phaseTwoOutboxResolver,
-      final WorkflowAdapterCache workflowAdapterCache) {
+  private MigrationProcessService(
+      final Builder<A> builder) {
 
-    this(
-        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, aggregatePersistenceSupport, processServices, phaseTwoOutboxResolver, workflowAdapterCache, null);
+    final var workflowModuleId = builder.workflowModuleId;
+    final var bpmnProcessId = builder.bpmnProcessId;
+    final var workflowAggregateClass = builder.workflowAggregateClass;
+    final var properties = builder.properties;
+    final var aggregatePersistenceSupport = builder.aggregatePersistence;
+    final var processServices = builder.processServices;
 
-  }
-
-  /**
-   * Creates a process service without a transaction-runner resolver - kept for tests
-   * and for callers handing the runner in directly; the platform integrations always
-   * pass one.
-   */
-  public MigrationProcessService(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final Class<A> workflowAggregateClass,
-      final MigrationAdapterProperties properties,
-      final AggregatePersistenceAware<A> aggregatePersistenceSupport,
-      final List<MigratableProcessService<A>> processServices,
-      final PhaseTwoOutboxResolver phaseTwoOutboxResolver,
-      final WorkflowAdapterCache workflowAdapterCache,
-      final TaskDeliveryLogResolver taskDeliveryLogResolver) {
-
-    this(
-        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, aggregatePersistenceSupport, processServices, phaseTwoOutboxResolver, workflowAdapterCache, taskDeliveryLogResolver, null);
-
-  }
-
-  public MigrationProcessService(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final Class<A> workflowAggregateClass,
-      final MigrationAdapterProperties properties,
-      final AggregatePersistenceAware<A> aggregatePersistenceSupport,
-      final List<MigratableProcessService<A>> processServices,
-      final PhaseTwoOutboxResolver phaseTwoOutboxResolver,
-      final WorkflowAdapterCache workflowAdapterCache,
-      final TaskDeliveryLogResolver taskDeliveryLogResolver,
-      final TransactionRunnerResolver transactionRunnerResolver) {
-
-    this.transactionRunnerResolver = transactionRunnerResolver;
+    this.transactionRunnerResolver = builder.transactionRunnerResolver;
     this.properties = properties;
     this.workflowModuleId = workflowModuleId;
     this.bpmnProcessId = bpmnProcessId;
@@ -284,9 +263,9 @@ public class MigrationProcessService<A> {
             .filter(processService -> processService.getAdapterId().equals(adapterId))
             .findFirst()
             .orElse(null))
-        .filter(java.util.Objects::nonNull)
+        .filter(Objects::nonNull)
         .toList();
-    this.phaseTwoOutboxResolver = phaseTwoOutboxResolver;
+    this.phaseTwoOutboxResolver = builder.phaseTwoOutboxResolver;
 
     // startup check: the aggregate's ID has to round-trip losslessly through the
     // outbox's String serialization (fails with a guiding message otherwise); a
@@ -294,10 +273,10 @@ public class MigrationProcessService<A> {
     this.aggregateIdType = aggregatePersistenceSupport.getAggregateIdType();
     AggregateIdRoundTrip.validateIdTypeConvertible(workflowAggregateClass, aggregateIdType);
 
-    this.workflowLocator = new WorkflowLocator(workflowModuleId, bpmnProcessId, workflowAdapterCache);
+    this.workflowLocator = new WorkflowLocator(workflowModuleId, bpmnProcessId, builder.workflowAdapterCache);
 
     this.deliveryRecords = new DeliveryRecords(
-        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, taskDeliveryLogResolver);
+        workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, builder.taskDeliveryLogResolver);
 
     this.workflowViewer = new WorkflowViewer<>(
         workflowModuleId, bpmnProcessId, prioritizedAdapters, adapterProcessServices, aggregatePersistenceSupport, workflowLocator, this::workflowScope);
@@ -639,7 +618,7 @@ public class MigrationProcessService<A> {
     // through
     final var startedAt = System.nanoTime();
     WorkflowTaskOutcome outcome = null;
-    try (var ignored = io.vanillabp.integration.adapter.migration.observability.DeliveryMdc
+    try (var ignored = DeliveryMdc
         .ofTaskDelivery(
             context.getAdapterId(),
             workflowModuleId,
@@ -649,7 +628,7 @@ public class MigrationProcessService<A> {
             context.getDeliveryId());
          // what the application plans from inside this handler is planned by THIS
          // activation, which is what tells multi-instance siblings apart
-         var activation = io.vanillabp.integration.spi.RunningActivation
+         var activation = RunningActivation
              .of(context.getActivationId())) {
       outcome = deliverWorkflowTask(handler, context, platformTransactionRunner, rollbackRuleRemedies);
       return outcome;
@@ -674,19 +653,19 @@ public class MigrationProcessService<A> {
    * @param outcome The outcome or <code>null</code> if the delivery threw
    * @return The outcome to count
    */
-  private static io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DeliveryOutcome deliveryOutcomeOf(
+  private static VanillaBpMetrics.DeliveryOutcome deliveryOutcomeOf(
       final WorkflowTaskOutcome outcome) {
 
     if (outcome == null) {
-      return io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DeliveryOutcome.FAILED;
+      return VanillaBpMetrics.DeliveryOutcome.FAILED;
     }
     return switch (outcome.kind()) {
       case COMPLETED ->
-        io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DeliveryOutcome.COMPLETED;
+        VanillaBpMetrics.DeliveryOutcome.COMPLETED;
       case COMPLETION_PENDING ->
-        io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DeliveryOutcome.PENDING;
+        VanillaBpMetrics.DeliveryOutcome.PENDING;
       case BPMN_ERROR ->
-        io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DeliveryOutcome.BPMN_ERROR;
+        VanillaBpMetrics.DeliveryOutcome.BPMN_ERROR;
     };
 
   }
@@ -774,7 +753,7 @@ public class MigrationProcessService<A> {
       }
     };
 
-    return io.vanillabp.integration.adapter.migration.transaction.AggregateWrite
+    return AggregateWrite
         .inTransaction(
             runner,
             context.runInCurrentTransaction(),
@@ -816,7 +795,7 @@ public class MigrationProcessService<A> {
    */
   public int releaseDeliveryRecords(
       final String workflowAggregateId,
-      final java.time.Instant recordedBefore) {
+      final Instant recordedBefore) {
 
     return deliveryRecords.release(workflowAggregateId, recordedBefore);
 
@@ -860,7 +839,7 @@ public class MigrationProcessService<A> {
     deliveryRecords.reportOpenTasksNobodyRemembers(adapterProcessServices);
     reportUnconfiguredAdapterIds(
         phaseTwoOutbox == null
-            ? java.util.Set.<String>of()
+            ? Set.<String>of()
             : phaseTwoOutbox.adapterIdsOfPendingCalls(workflowModuleId, bpmnProcessId),
         "waiting phase-two outbox entries",
         "the workflow was persisted and never started");
@@ -881,7 +860,7 @@ public class MigrationProcessService<A> {
    * @param whatItCosts What happens if nothing is done about it
    */
   private void reportUnconfiguredAdapterIds(
-      final java.util.Set<String> persistedAdapterIds,
+      final Set<String> persistedAdapterIds,
       final String whatIsLeftOver,
       final String whatItCosts) {
 
@@ -891,7 +870,7 @@ public class MigrationProcessService<A> {
     final var configuredAdapterIds = properties.adapterTypes().keySet();
     persistedAdapterIds
         .stream()
-        .filter(java.util.Objects::nonNull)
+        .filter(Objects::nonNull)
         .filter(adapterId -> !configuredAdapterIds.contains(adapterId))
         .sorted()
         .forEach(adapterId -> {
@@ -1352,7 +1331,7 @@ public class MigrationProcessService<A> {
       final String messageName,
       final String correlationId) {
 
-    final var args = new java.util.LinkedHashMap<String, String>();
+    final var args = new LinkedHashMap<String, String>();
     args.put(PhaseTwoCall.ARG_MESSAGE_NAME, messageName);
     if (correlationId != null) {
       args.put(PhaseTwoCall.ARG_CORRELATION_ID, correlationId);
@@ -1839,11 +1818,11 @@ public class MigrationProcessService<A> {
     if (!operation.carriesActivation()) {
       return args;
     }
-    final var activationId = io.vanillabp.integration.spi.RunningActivation.current();
+    final var activationId = RunningActivation.current();
     if (activationId == null) {
       return args;
     }
-    final var withActivation = new java.util.LinkedHashMap<>(args);
+    final var withActivation = new LinkedHashMap<>(args);
     withActivation.put(PhaseTwoCall.ARG_ACTIVATION_ID, activationId);
     return withActivation;
 
@@ -1912,8 +1891,8 @@ public class MigrationProcessService<A> {
                 : " "
                     + hint);
     return addressesTheWorkflow(operation)
-        ? new io.vanillabp.spi.process.WorkflowNotFoundException(message)
-        : new io.vanillabp.spi.process.TaskNotFoundException(message);
+        ? new WorkflowNotFoundException(message)
+        : new TaskNotFoundException(message);
 
   }
 
@@ -1982,7 +1961,7 @@ public class MigrationProcessService<A> {
     final var handler = phaseOperationsOf(adapter)
         .get(operation);
     if (handler == null) {
-      throw new io.vanillabp.integration.adapter.spi.PhaseOperationNotSupported(
+      throw new PhaseOperationNotSupported(
           adapter.getAdapterId(), operation, workflowModuleId, bpmnProcessId, args);
     }
     return handler;
@@ -2004,7 +1983,7 @@ public class MigrationProcessService<A> {
   /**
    * The handlers of every adapter of this process service, by adapter id.
    */
-  private final Map<String, Map<PhaseOperation, PhaseOperationHandler<A>>> phaseOperations = new java.util.concurrent.ConcurrentHashMap<>();
+  private final Map<String, Map<PhaseOperation, PhaseOperationHandler<A>>> phaseOperations = new ConcurrentHashMap<>();
 
   /**
    * Refuses AT STARTUP an adapter which cannot serve an operation every adapter has to
@@ -2024,7 +2003,7 @@ public class MigrationProcessService<A> {
    */
   public void validateAdapterOperationsAtStartup() {
 
-    java.util.stream.Stream
+    Stream
         .concat(adapterProcessServices.stream(), deploymentAdapterProcessServices.stream())
         .distinct()
         .forEach(this::validateOperationsOf);
@@ -2069,14 +2048,14 @@ public class MigrationProcessService<A> {
    * is not set - a test constructing this service directly - the primary process is the
    * scope, which is the narrowest honest answer.
    */
-  private java.util.List<String> servedBpmnProcessIds;
+  private List<String> servedBpmnProcessIds;
 
   /**
    * @param servedBpmnProcessIds The plain BPMN process ids of this aggregate's workflow
    *          services, the primary one first
    */
   public void setServedBpmnProcessIds(
-      final java.util.List<String> servedBpmnProcessIds) {
+      final List<String> servedBpmnProcessIds) {
 
     this.servedBpmnProcessIds = (servedBpmnProcessIds == null) || servedBpmnProcessIds.isEmpty()
         ? null
@@ -2091,11 +2070,11 @@ public class MigrationProcessService<A> {
    *
    * @return The scope handed to every probe
    */
-  private io.vanillabp.integration.adapter.spi.WorkflowScope workflowScope() {
+  private WorkflowScope workflowScope() {
 
     return servedBpmnProcessIds == null
-        ? io.vanillabp.integration.adapter.spi.WorkflowScope.of(workflowModuleId, bpmnProcessId)
-        : new io.vanillabp.integration.adapter.spi.WorkflowScope(workflowModuleId, servedBpmnProcessIds);
+        ? WorkflowScope.of(workflowModuleId, bpmnProcessId)
+        : new WorkflowScope(workflowModuleId, servedBpmnProcessIds);
 
   }
 
@@ -2116,7 +2095,7 @@ public class MigrationProcessService<A> {
    *        secondary history context of a call activity
    * @return The process definitions
    */
-  public List<io.vanillabp.spi.process.ProcessDefinition> getProcessDefinitions(
+  public List<ProcessDefinition> getProcessDefinitions(
       final A workflowAggregate,
       final String historyContext) {
 
@@ -2133,7 +2112,7 @@ public class MigrationProcessService<A> {
    * @param processDefinitionId The composite process definition id
    * @return The BPMN XML
    */
-  public java.io.InputStream getBpmnXml(
+  public InputStream getBpmnXml(
       final String processDefinitionId) {
 
     return workflowViewer.getBpmnXml(processDefinitionId);
@@ -2150,7 +2129,7 @@ public class MigrationProcessService<A> {
    *        secondary history context of a call activity
    * @return The workflow history
    */
-  public io.vanillabp.spi.process.WorkflowHistory getWorkflowHistory(
+  public WorkflowHistory getWorkflowHistory(
       final A workflowAggregate,
       final String historyContext) {
 
@@ -2221,7 +2200,7 @@ public class MigrationProcessService<A> {
 
     metrics.outboxScheduleDiscarded(operation.name());
 
-    final var activation = io.vanillabp.integration.spi.RunningActivation.current();
+    final var activation = RunningActivation.current();
     if (activation == null) {
       log.warn(
           """
@@ -2271,12 +2250,187 @@ public class MigrationProcessService<A> {
       if (adapter.isPhaseTwoFailureRepeatable(e)) {
         throw e;
       }
-      throw new io.vanillabp.integration.spi.PhaseTwoPermanentFailure(
+      throw new PhaseTwoPermanentFailure(
           """
               Phase two of %s failed, and adapter '%s' says that repeating it cannot help. The \
               outbox entry is blocked instead of being retried - look at the cause, fix what it \
               names, and remove the entry."""
               .formatted(operationDescription, adapter.getAdapterId()), e);
+    }
+
+  }
+
+
+  /**
+   * Collects what a process service is built from and refuses an incomplete set.
+   * <p>
+   * Three of them are mandatory, because a service without them cannot do anything an
+   * application would call it for: the configuration it reads its adapters from, the
+   * persistence of its workflow aggregate, and the adapters themselves. The rest are
+   * handed over by the platform integrations and left out by tests which do not need them
+   * - an adapter cache (elections probe every time without one), a store for the delivery
+   * records (deliveries are not deduplicated without one), a transaction runner resolver
+   * (the runner the caller passes is used), and the outbox resolver, whose absence
+   * {@link MigrationProcessService#validatePhaseTwoOutboxAtStartup()} reports.
+   *
+   * @param <A> The workflow aggregate
+   */
+  public static final class Builder<A> {
+
+    private final String workflowModuleId;
+
+    private final String bpmnProcessId;
+
+    private final Class<A> workflowAggregateClass;
+
+    private MigrationAdapterProperties properties;
+
+    private AggregatePersistenceAware<A> aggregatePersistence;
+
+    private List<MigratableProcessService<A>> processServices;
+
+    private PhaseTwoOutboxResolver phaseTwoOutboxResolver;
+
+    private WorkflowAdapterCache workflowAdapterCache;
+
+    private TaskDeliveryLogResolver taskDeliveryLogResolver;
+
+    private TransactionRunnerResolver transactionRunnerResolver;
+
+    private Builder(
+        final String workflowModuleId,
+        final String bpmnProcessId,
+        final Class<A> workflowAggregateClass) {
+
+      this.workflowModuleId = workflowModuleId;
+      this.bpmnProcessId = bpmnProcessId;
+      this.workflowAggregateClass = workflowAggregateClass;
+
+    }
+
+    /**
+     * @param properties The bound <code>vanillabp.*</code> tree
+     * @return This builder
+     */
+    public Builder<A> properties(
+        final MigrationAdapterProperties properties) {
+
+      this.properties = properties;
+      return this;
+
+    }
+
+    /**
+     * @param aggregatePersistence How the workflow aggregate is loaded and saved
+     * @return This builder
+     */
+    public Builder<A> aggregatePersistence(
+        final AggregatePersistenceAware<A> aggregatePersistence) {
+
+      this.aggregatePersistence = aggregatePersistence;
+      return this;
+
+    }
+
+    /**
+     * @param processServices The process service of every adapter of this application -
+     *          the prioritized ones of this BPMN process have to be among them
+     * @return This builder
+     */
+    public Builder<A> processServices(
+        final List<MigratableProcessService<A>> processServices) {
+
+      this.processServices = processServices;
+      return this;
+
+    }
+
+    /**
+     * @param phaseTwoOutboxResolver Resolves the outbox phase two of every outbound
+     *          operation is planned in
+     * @return This builder
+     */
+    public Builder<A> phaseTwoOutboxResolver(
+        final PhaseTwoOutboxResolver phaseTwoOutboxResolver) {
+
+      this.phaseTwoOutboxResolver = phaseTwoOutboxResolver;
+      return this;
+
+    }
+
+    /**
+     * @param workflowAdapterCache Where an elected adapter is remembered; without one
+     *          every election probes
+     * @return This builder
+     */
+    public Builder<A> workflowAdapterCache(
+        final WorkflowAdapterCache workflowAdapterCache) {
+
+      this.workflowAdapterCache = workflowAdapterCache;
+      return this;
+
+    }
+
+    /**
+     * @param taskDeliveryLogResolver Resolves the store of the delivery records; without
+     *          one deliveries are not deduplicated
+     * @return This builder
+     */
+    public Builder<A> taskDeliveryLogResolver(
+        final TaskDeliveryLogResolver taskDeliveryLogResolver) {
+
+      this.taskDeliveryLogResolver = taskDeliveryLogResolver;
+      return this;
+
+    }
+
+    /**
+     * @param transactionRunnerResolver Resolves the transaction the work on this
+     *          aggregate runs in; without one the runner the caller passes is used
+     * @return This builder
+     */
+    public Builder<A> transactionRunnerResolver(
+        final TransactionRunnerResolver transactionRunnerResolver) {
+
+      this.transactionRunnerResolver = transactionRunnerResolver;
+      return this;
+
+    }
+
+    /**
+     * @return The process service
+     * @throws IllegalStateException If something mandatory is missing - the message names
+     *           the BPMN process and every one of them
+     */
+    public MigrationProcessService<A> build() {
+
+      final var missing = new ArrayList<String>();
+      if (properties == null) {
+        missing.add("'properties'");
+      }
+      if (aggregatePersistence == null) {
+        missing.add("'aggregatePersistence'");
+      }
+      if (processServices == null) {
+        missing.add("'processServices'");
+      }
+      if (!missing.isEmpty()) {
+        throw new IllegalStateException(
+            ("The process service of BPMN process '%s' (workflow module '%s') cannot be built: %s "
+                + "%s missing. Every application needs these, so this is a defect of the code "
+                + "registering the process service and not something an application can configure "
+                + "away.")
+                .formatted(
+                    bpmnProcessId,
+                    workflowModuleId,
+                    String.join(", ", missing),
+                    missing.size() == 1
+                        ? "is"
+                        : "are"));
+      }
+
+      return new MigrationProcessService<>(this);
+
     }
 
   }
