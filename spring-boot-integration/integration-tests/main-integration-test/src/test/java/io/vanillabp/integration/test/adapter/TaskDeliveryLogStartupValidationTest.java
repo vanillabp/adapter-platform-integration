@@ -11,6 +11,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import io.vanillabp.adapter.dummy.springboot.DummyAdapterConfiguration;
 import io.vanillabp.adapter.dummy.springboot.processservice.DummyAdapterProcessServiceConfiguration;
+import io.vanillabp.integration.adapter.migration.processservice.DeliveryRecords;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.test.TestPersistenceConfiguration;
@@ -115,13 +116,17 @@ public class TaskDeliveryLogStartupValidationTest {
 
     final var logWatcher = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
     logWatcher.start();
-    final var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory
-        .getLogger(MigrationProcessService.class);
-    logger.addAppender(logWatcher);
+    // the core says some of this in the process service and the rest in its delivery
+    // records, so both are listened to - which class a message comes from is not the test
+    final var loggers = List
+        .of(
+            (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(MigrationProcessService.class),
+            (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(DeliveryRecords.class));
+    loggers.forEach(logger -> logger.addAppender(logWatcher));
     try {
       work.run();
     } finally {
-      logger.detachAppender(logWatcher);
+      loggers.forEach(logger -> logger.detachAppender(logWatcher));
       logWatcher.stop();
     }
     return logWatcher.list
