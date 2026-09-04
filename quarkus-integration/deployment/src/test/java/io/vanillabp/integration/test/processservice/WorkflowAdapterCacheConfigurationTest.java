@@ -73,7 +73,9 @@ public class WorkflowAdapterCacheConfigurationTest {
         properties.getWorkflowAdapterCache().isReleaseOnWorkflowEnd(),
         "an application asking for the release has the end of every workflow reported");
 
-    Assertions.assertInstanceOf(InMemoryWorkflowAdapterCache.class, cache);
+    final var inMemoryCache = Assertions.assertInstanceOf(InMemoryWorkflowAdapterCache.class, cache);
+    // what the cache knows about itself is the cache's, not the election's
+    final var ownStatistics = inMemoryCache.getStatistics();
 
     cache.put(MODULE, PROCESS, "1", "test");
     cache.put(MODULE, PROCESS, "2", "test");
@@ -81,9 +83,9 @@ public class WorkflowAdapterCacheConfigurationTest {
 
     Assertions.assertEquals(
         2,
-        statistics.getSize().orElseThrow(),
+        ownStatistics.getSize(),
         "the configured bound has to be the cache's bound");
-    Assertions.assertEquals(1, statistics.getEvictions());
+    Assertions.assertEquals(1, ownStatistics.getEvictions());
 
     // the workflow of the entry last written ended
     cache.putEnded(MODULE, PROCESS, "3", "test");
@@ -94,7 +96,7 @@ public class WorkflowAdapterCacheConfigurationTest {
         "an operation arriving after the end still finds the adapter which held the workflow");
     Assertions.assertEquals(
         1,
-        statistics.getEndedSize().orElseThrow(),
+        ownStatistics.getEndedSize(),
         "and the entry is counted apart from the living ones");
 
   }

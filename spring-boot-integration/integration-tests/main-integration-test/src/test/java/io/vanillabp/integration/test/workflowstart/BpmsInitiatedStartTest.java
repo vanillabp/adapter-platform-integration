@@ -407,7 +407,13 @@ public class BpmsInitiatedStartTest {
       final var statistics = context
           .getBean(io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics.class);
       Assertions.assertEquals(1, statistics.getEndedMarks());
-      Assertions.assertEquals(1, statistics.getEndedSize().orElseThrow());
+      Assertions
+          .assertEquals(
+              1,
+              ((io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCache) context
+                  .getBean(io.vanillabp.integration.spi.WorkflowAdapterCache.class))
+                  .getStatistics()
+                  .getEndedSize());
 
     }
 

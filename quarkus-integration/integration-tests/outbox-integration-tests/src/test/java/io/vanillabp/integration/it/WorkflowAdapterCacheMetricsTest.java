@@ -16,6 +16,8 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCache;
+import io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCacheStatistics;
 import io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics;
 import io.vanillabp.integration.spi.WorkflowAdapterCache;
 import io.vanillabp.integration.test.Aggregate;
@@ -81,23 +83,34 @@ public class WorkflowAdapterCacheMetricsTest {
     assertTrue(cache.get(MODULE, PROCESS, "2").isPresent());
     cache.put(MODULE, PROCESS, "3", "test");
 
-    assertEquals(2, statistics.getSize().orElseThrow(), "the configured bound is the cache's bound");
-    assertEquals(1, statistics.getEvictions());
+    final var ownStatistics = ((InMemoryWorkflowAdapterCache) cache).getStatistics();
+    assertEquals(2, ownStatistics.getSize(), "the configured bound is the cache's bound");
+    assertEquals(1, ownStatistics.getEvictions());
 
-    assertEquals(
-        2.0,
-        meterRegistry.get(WorkflowAdapterCacheStatistics.METER_SIZE).gauge().value());
-    assertEquals(
-        1.0,
-        meterRegistry.get(WorkflowAdapterCacheStatistics.METER_EVICTIONS).functionCounter().count());
+    // what the election asked, under the prefix which holds for every cache
     assertNotNull(
         meterRegistry.get(WorkflowAdapterCacheStatistics.METER_HITS).functionCounter());
     assertNotNull(
         meterRegistry.get(WorkflowAdapterCacheStatistics.METER_MISSES).functionCounter());
     assertNotNull(
-        meterRegistry.get(WorkflowAdapterCacheStatistics.METER_EVICTIONS_UNUSED).functionCounter());
+        meterRegistry.get(WorkflowAdapterCacheStatistics.METER_ENDED_MARKS).functionCounter());
+
+    // and what this implementation knows about itself, under its own
+    assertEquals(
+        2.0,
+        meterRegistry.get(InMemoryWorkflowAdapterCacheStatistics.METER_SIZE).gauge().value());
+    assertEquals(
+        1.0,
+        meterRegistry
+            .get(InMemoryWorkflowAdapterCacheStatistics.METER_EVICTIONS)
+            .functionCounter()
+            .count());
     assertNotNull(
-        meterRegistry.get(WorkflowAdapterCacheStatistics.METER_LOST_HINTS).functionCounter());
+        meterRegistry
+            .get(InMemoryWorkflowAdapterCacheStatistics.METER_EVICTIONS_UNUSED)
+            .functionCounter());
+    assertNotNull(
+        meterRegistry.get(InMemoryWorkflowAdapterCacheStatistics.METER_LOST_HINTS).functionCounter());
 
   }
 

@@ -17,16 +17,18 @@ import jakarta.inject.Singleton;
 /**
  * Produces the default {@link WorkflowAdapterCache} consulted by the BPMS election
  * for operations on existing workflows: a bounded, expiring in-memory cache sized by
- * <code>vanillabp.workflow-adapter-cache.*</code>. Cluster setups wanting instances
- * to share elections define their own bean implementing {@link WorkflowAdapterCache}
- * backed by their own cache infrastructure - it replaces this default
- * ({@link DefaultBean}; entries are hints: a stale entry costs an extra probe, never
- * correctness).
+ * <code>vanillabp.workflow-adapter-cache.*</code>. Cluster setups share their
+ * elections instead, either with the implementation VanillaBP ships for Hazelcast or
+ * with a bean of their own implementing {@link WorkflowAdapterCache} - either
+ * replaces this default ({@link DefaultBean}; entries are hints: a stale entry costs
+ * an extra probe, never correctness).
  * <p>
- * The cache's statistics are produced here as well and belong to the application,
- * not to a cache: the process services count the lookups of WHATEVER cache is in use
- * into this one instance (see
+ * The statistics produced here belong to the application rather than to a cache: the
+ * process services count what the election asked of WHATEVER cache is in use into
+ * this one instance (see
  * {@code io.vanillabp.integration.adapter.migration.processservice.InstrumentedWorkflowAdapterCache}).
+ * What an implementation knows about itself is its own, and the in-memory cache
+ * reports it under a prefix of its own.
  * <p>
  * The configuration is READ, not injected: injecting the config mapping would make
  * it a static-init mapping, and SmallRye would then validate the shared
@@ -40,17 +42,16 @@ public class WorkflowAdapterCacheProducer {
   @Singleton
   public WorkflowAdapterCacheStatistics workflowAdapterCacheStatistics() {
 
-    return new WorkflowAdapterCacheStatistics(cacheProperties());
+    return new WorkflowAdapterCacheStatistics();
 
   }
 
   @Produces
   @Singleton
   @DefaultBean
-  public WorkflowAdapterCache workflowAdapterCache(
-      final WorkflowAdapterCacheStatistics statistics) {
+  public WorkflowAdapterCache workflowAdapterCache() {
 
-    return new InMemoryWorkflowAdapterCache(cacheProperties(), statistics);
+    return new InMemoryWorkflowAdapterCache(cacheProperties());
 
   }
 

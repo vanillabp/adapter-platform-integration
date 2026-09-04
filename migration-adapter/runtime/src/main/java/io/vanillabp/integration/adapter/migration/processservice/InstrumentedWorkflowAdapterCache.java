@@ -10,9 +10,10 @@ import io.vanillabp.integration.spi.WorkflowAdapterCache;
  * as an application-provided bean, so hits and misses are reported whatever cache is
  * in use - a metric which disappears once an application plugs in its own cache
  * would surprise exactly the operator who needs it. Size and evictions are a
- * different matter: only the implementation itself knows them, so the in-memory
- * default reports them directly to the same {@link WorkflowAdapterCacheStatistics}
- * and an application-provided cache reports none.
+ * different matter: only the implementation itself knows them, so it reports them
+ * under a name of its own (the in-memory default:
+ * {@link InMemoryWorkflowAdapterCacheStatistics}) rather than into the numbers of the
+ * election.
  * <p>
  * The decorator is created per process service while the statistics are one per
  * application - the numbers are of the cache, not of a workflow.
@@ -62,7 +63,7 @@ public class InstrumentedWorkflowAdapterCache implements WorkflowAdapterCache {
     if (adapterId.isPresent()) {
       statistics.recordHit();
     } else {
-      statistics.recordMiss(workflowModuleId, bpmnProcessId, workflowAggregateId);
+      statistics.recordMiss();
     }
     return adapterId;
 

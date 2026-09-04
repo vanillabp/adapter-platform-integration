@@ -69,6 +69,9 @@ public class BpmsInitiatedStartTest {
   @Inject
   WorkflowAdapterCacheStatistics statistics;
 
+  @Inject
+  io.vanillabp.integration.spi.WorkflowAdapterCache cache;
+
   private DummyDeploymentService dummyAdapter() {
 
     return deploymentServices
@@ -231,7 +234,11 @@ public class BpmsInitiatedStartTest {
     // hint is marked rather than refreshed, so it leaves the cache long before a
     // living one would
     assertEquals(1, statistics.getEndedMarks());
-    assertEquals(1, statistics.getEndedSize().orElseThrow());
+    assertEquals(
+        1,
+        ((io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCache) cache)
+            .getStatistics()
+            .getEndedSize());
 
   }
 

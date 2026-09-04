@@ -16,9 +16,9 @@ import io.vanillabp.integration.spi.WorkflowAdapterCache;
  * are HARD - entries are hints, so an eviction or expiry only costs an extra probe,
  * never correctness, which is why the bound is a number and not a soft reference
  * (the reasoning is written down in <code>migration-adapter/README.md</code>).
- * Cluster setups wanting instances to share elections define their own bean
- * implementing {@link WorkflowAdapterCache} backed by their cache infrastructure
- * instead.
+ * Cluster setups share their elections instead: VanillaBP ships an implementation
+ * for Hazelcast, and any other cache infrastructure is a bean implementing
+ * {@link WorkflowAdapterCache}.
  * <p>
  * One instance is shared by all process services of the application (the key
  * includes workflow module and BPMN process, the size bound applies globally).
@@ -29,9 +29,11 @@ import io.vanillabp.integration.spi.WorkflowAdapterCache;
  * but it can never become useful again, so it leaves early instead of occupying a place
  * for an hour.
  * <p>
- * The cache reports its size and its evictions to the application's
- * {@link WorkflowAdapterCacheStatistics}, including whether an evicted entry had
- * ever been read - that is what the eviction-pressure warning is made of.
+ * The cache owns the statistics of what only it can know - its size, its evictions
+ * and whether an evicted entry had ever been read, which is what the
+ * eviction-pressure warning is made of. They are published under a prefix of this
+ * implementation ({@link InMemoryWorkflowAdapterCacheStatistics}); what the election
+ * asks of ANY cache is counted elsewhere, by the decorator around it.
  * <p>
  * Why a stale entry repairs itself instead of being prevented is decision 5 in the repository's
  * DECISIONS.md.
@@ -81,7 +83,7 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
 
   private final long endedTimeToLiveMillis;
 
-  private final WorkflowAdapterCacheStatistics statistics;
+  private final InMemoryWorkflowAdapterCacheStatistics statistics;
 
   private final Map<Key, Entry> entries;
 
@@ -95,54 +97,20 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
 
   public InMemoryWorkflowAdapterCache() {
 
-    this(new WorkflowAdapterCacheProperties(), null);
+    this(new WorkflowAdapterCacheProperties());
 
   }
 
   public InMemoryWorkflowAdapterCache(
-      final WorkflowAdapterCacheProperties properties,
-      final WorkflowAdapterCacheStatistics statistics) {
+      final WorkflowAdapterCacheProperties properties) {
 
-    this(
-        properties.getMaxEntries(), properties.getTimeToLive(), properties.getEndedTimeToLive(), statistics);
-
-  }
-
-  /**
-   * Visible for tests - production code passes the configured
-   * {@link WorkflowAdapterCacheProperties}.
-   */
-  public InMemoryWorkflowAdapterCache(
-      final int maxEntries,
-      final Duration timeToLive) {
-
-    this(maxEntries, timeToLive, WorkflowAdapterCacheProperties.DEFAULT_ENDED_TIME_TO_LIVE, null);
-
-  }
-
-  /**
-   * Visible for tests - production code passes the configured
-   * {@link WorkflowAdapterCacheProperties}.
-   */
-  public InMemoryWorkflowAdapterCache(
-      final int maxEntries,
-      final Duration timeToLive,
-      final Duration endedTimeToLive) {
-
-    this(maxEntries, timeToLive, endedTimeToLive, null);
-
-  }
-
-  public InMemoryWorkflowAdapterCache(
-      final int maxEntries,
-      final Duration timeToLive,
-      final Duration endedTimeToLive,
-      final WorkflowAdapterCacheStatistics statistics) {
-
-    this.maxEntries = maxEntries;
-    this.timeToLiveMillis = timeToLive.toMillis();
-    this.endedTimeToLiveMillis = endedTimeToLive.toMillis();
-    this.statistics = statistics;
+    this.maxEntries = properties.getMaxEntries();
+    this.timeToLiveMillis = properties.getTimeToLive().toMillis();
+    this.endedTimeToLiveMillis = properties.getEndedTimeToLive().toMillis();
+    // the cache creates its own statistics and is the only thing writing to them: a
+    // size nobody but this class can report is not a number the platform can be handed
+    this.statistics = new InMemoryWorkflowAdapterCacheStatistics(
+        properties, this::size, this::endedSize);
     // access-ordered LinkedHashMap = LRU; all access synchronized on it
     this.entries = new LinkedHashMap<>(16, 0.75f, true) {
       @Override
@@ -155,10 +123,47 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
         return true;
       }
     };
-    if (statistics != null) {
-      statistics.registerSize(this::size);
-      statistics.registerEndedSize(this::endedSize);
-    }
+
+  }
+
+  /**
+   * Visible for tests - production code passes the configured
+   * {@link WorkflowAdapterCacheProperties}.
+   */
+  public InMemoryWorkflowAdapterCache(
+      final int maxEntries,
+      final Duration timeToLive) {
+
+    this(maxEntries, timeToLive, WorkflowAdapterCacheProperties.DEFAULT_ENDED_TIME_TO_LIVE);
+
+  }
+
+  /**
+   * Visible for tests - production code passes the configured
+   * {@link WorkflowAdapterCacheProperties}.
+   */
+  public InMemoryWorkflowAdapterCache(
+      final int maxEntries,
+      final Duration timeToLive,
+      final Duration endedTimeToLive) {
+
+    this(WorkflowAdapterCacheProperties
+        .builder()
+        .maxEntries(maxEntries)
+        .timeToLive(timeToLive)
+        .endedTimeToLive(endedTimeToLive)
+        .build());
+
+  }
+
+  /**
+   * What only this cache can know about itself, for whoever publishes it as metrics.
+   *
+   * @return The statistics of this cache
+   */
+  public InMemoryWorkflowAdapterCacheStatistics getStatistics() {
+
+    return statistics;
 
   }
 
@@ -198,9 +203,6 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
     if (entry.ended) {
       --endedEntries;
     }
-    if (statistics == null) {
-      return;
-    }
     statistics.recordEviction(
         key.workflowModuleId(),
         key.bpmnProcessId(),
@@ -216,22 +218,32 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
       final String workflowAggregateId) {
 
     final var key = new Key(workflowModuleId, bpmnProcessId, workflowAggregateId);
+    final String adapterId;
     synchronized (entries) {
       final var entry = entries.get(key);
-      if (entry == null) {
-        return Optional.empty();
-      }
-      if (entry.expiresAtMillis < System.currentTimeMillis()) {
-        // expiry is not eviction pressure: the entry lived its full time-to-live
-        entries.remove(key);
-        if (entry.ended) {
-          --endedEntries;
+      if ((entry == null) || (entry.expiresAtMillis < System.currentTimeMillis())) {
+        if (entry != null) {
+          // expiry is not eviction pressure: the entry lived its full time-to-live
+          entries.remove(key);
+          if (entry.ended) {
+            --endedEntries;
+          }
         }
-        return Optional.empty();
+        adapterId = null;
+      } else {
+        entry.used = true;
+        adapterId = entry.adapterId;
       }
-      entry.used = true;
-      return Optional.of(entry.adapterId);
     }
+
+    if (adapterId == null) {
+      // outside the lock: judging a miss takes a lock of its own and may log, and the
+      // election is waiting for this map
+      statistics.recordLookupMiss(workflowModuleId, bpmnProcessId, workflowAggregateId);
+      return Optional.empty();
+    }
+
+    return Optional.of(adapterId);
 
   }
 

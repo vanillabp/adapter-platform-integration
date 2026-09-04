@@ -451,42 +451,17 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
   }
 
   /**
-   * Selects the election cache: an application-provided bean wins over the
-   * platform's in-memory default (which is auto-configured conditionally, but may
-   * coexist with the application's bean depending on configuration-class ordering).
+   * Selects the election cache, by the rule which is asked in two places (see
+   * {@link WorkflowAdapterCacheSelection}).
    *
    * @param candidates All {@code WorkflowAdapterCache} beans
    * @return The cache to use or <code>null</code> if none exists (elections then
    *         probe every time)
-   * @throws IllegalStateException If several application-provided beans exist
    */
   private static io.vanillabp.integration.spi.WorkflowAdapterCache selectWorkflowAdapterCache(
       final List<io.vanillabp.integration.spi.WorkflowAdapterCache> candidates) {
 
-    if (candidates.isEmpty()) {
-      return null;
-    }
-    if (candidates.size() == 1) {
-      return candidates.getFirst();
-    }
-    final var applicationProvided = candidates
-        .stream()
-        .filter(candidate -> candidate
-            .getClass() != io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCache.class)
-        .toList();
-    if (applicationProvided.size() == 1) {
-      return applicationProvided.getFirst();
-    }
-    throw new IllegalStateException(
-        """
-            Several beans implementing io.vanillabp.integration.spi.WorkflowAdapterCache were \
-            found (%s)! Define exactly ONE application-provided bean - it replaces VanillaBP's \
-            in-memory default."""
-            .formatted(
-                candidates
-                    .stream()
-                    .map(candidate -> candidate.getClass().getName())
-                    .toList()));
+    return WorkflowAdapterCacheSelection.theCacheInUse(candidates);
 
   }
 
