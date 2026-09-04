@@ -11,11 +11,15 @@ import java.util.Optional;
  * entry - a wrong or missing entry never produces a wrong result, only an extra
  * probe.
  * <p>
- * VanillaBP provides a bounded, expiring in-memory default. An application may
- * override it by defining its own bean implementing this interface - e.g. backed
- * by the application's own distributed cache infrastructure, so that instances of
- * a cluster share elections. VanillaBP deliberately does NOT ship a distributed
- * implementation (the cache infrastructure is the application's concern).
+ * VanillaBP provides a bounded, expiring in-memory default, which lives in one
+ * application instance. An application whose instances should share their elections
+ * has two ways to get there: the implementation VanillaBP ships for Hazelcast, where
+ * the nodes of the application form the cluster themselves
+ * (<a href="https://github.com/vanillabp/hazelcast-shared-election-cache">hazelcast-shared-election-cache</a>,
+ * a dependency and the settings which say where the other nodes are), or a bean of its
+ * own implementing this interface on whatever cache infrastructure it already runs.
+ * The second way is not the lesser one: this interface is the contract, and an
+ * application on Redis or on a table of its own is a case it was written for.
  * <p>
  * Implementations must be thread-safe. All keys travel in serialized (String)
  * form - the workflow-aggregate ID is the same serialized form used by the

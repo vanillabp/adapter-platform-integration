@@ -737,3 +737,27 @@ What this does not touch: phase two elects by probing, as it always did, so a wo
 changed its BPMS between the call and the dispatch is still found. And the adapters keep their
 phase one, so a task which disappeared between the delivery and the call still fails synchronously
 where it always failed.
+
+### 31. A cache VanillaBP ships lives in a repository of its own
+
+The election cache is an interface an application implements for a reason which has nothing to do
+with its domain: a second node starts with an empty cache, and everything that follows is
+infrastructure work. That work is the same in every project, so VanillaBP ships one implementation
+of it, for Hazelcast, in
+[hazelcast-shared-election-cache](https://github.com/vanillabp/hazelcast-shared-election-cache)
+with a release line of its own. The platform integrations stay free of any Hazelcast dependency.
+
+Three things follow, and each of them is the reason for the split rather than a consequence of it.
+The SPI stays the contract: an application whose infrastructure is Redis, a table of its own or
+anything else is not a second-class case, and nothing about the shipped implementation may make it
+one. A cache which needs a new Hazelcast version must not drag the platform's release with it,
+which it would as soon as a platform module depended on it. And a member of a Hazelcast cluster is
+a component with its own operational story, its own compatibility table and its own failure modes,
+which belong next to the code that has them and not in the documentation of the platform.
+
+What stays as it was is entry 25: a shared cache is the answer where the election becomes a
+bottleneck, on Redis, Hazelcast or whatever the application already runs. That reasoning does not
+change because one such cache now exists ready-made. No entry of this log ever promised that
+VanillaBP ships none; the sentences which said so lived in the javadoc of `WorkflowAdapterCache`
+and in the texts which followed it, and they now point at the implementation while still saying
+that an application with different infrastructure writes its own.

@@ -190,9 +190,12 @@ full walk and repairs the entry; `BPMS_UNAVAILABLE` on a cached adapter follows 
 retry-never-fallback contract. The platform integrations provide a bounded,
 expiring in-memory default (`InMemoryWorkflowAdapterCache`, 10&nbsp;000 entries /
 1&nbsp;h TTL by default, both configurable — see below); an application bean
-implementing `WorkflowAdapterCache` replaces it — cluster setups plug their own
-shared cache infrastructure this way (VanillaBP deliberately ships no distributed
-implementation). What a hint is worth is held by
+implementing `WorkflowAdapterCache` replaces it, which is how a cluster shares its
+elections. For Hazelcast that bean is shipped, in
+[hazelcast-shared-election-cache](https://github.com/vanillabp/hazelcast-shared-election-cache),
+where the nodes of the application form the cluster themselves; on any other cache
+infrastructure the application writes the bean, which is the case this SPI was written
+for. What a hint is worth is held by
 `WorkflowLocatorTest#staleCacheHitIsRepaired` and
 `#unavailableCachedAdapterNeverFallsThrough`, the bounded default by
 `InMemoryWorkflowAdapterCacheTest`, and the replacement by an application bean by
