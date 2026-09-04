@@ -67,7 +67,10 @@ import jakarta.persistence.EntityManagerFactory;
  * retry policy knows ONE fixed distance, so <code>max-attempt-frequency</code> and the
  * doubling it caps have no effect here, and a blocklisted entry holds its
  * <code>uniqueRequestId</code> until the row is removed, so the operation it failed at
- * cannot be scheduled again in the meantime. The {@link PhaseTwoCall#args()} map travels in its serialized
+ * cannot be scheduled again in the meantime. What it also cannot express is the short
+ * due time of a workflow which is not searchable yet, and that one is answered rather
+ * than accepted: {@link GruelboxPhaseTwoDispatchBean} waits the window out on the
+ * dispatching thread. The {@link PhaseTwoCall#args()} map travels in its serialized
  * form because gruelbox's invocation serializer only accepts scalar parameter types
  * (see {@link GruelboxPhaseTwoDispatch}).
  */
@@ -209,16 +212,9 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
         bpmnProcessId,
         workflowAggregateId,
         adapterId,
-        serializedArgs) -> phaseTwoRouter
-            .getObject()
+        serializedArgs) -> new GruelboxPhaseTwoDispatchBean(phaseTwoRouter.getObject())
             .dispatch(
-                PhaseTwoCall
-                    .forDispatch(
-                        operation, workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, PhaseTwoCall
-                            .deserializeArgs(serializedArgs)),
-                // set by the submitter wrapper on this thread - a retried entry
-                // runs the START re-dispatch mitigation
-                GruelboxRedispatchAwareSubmitter.isPreviouslyAttempted());
+                operation, workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, serializedArgs);
 
   }
 
