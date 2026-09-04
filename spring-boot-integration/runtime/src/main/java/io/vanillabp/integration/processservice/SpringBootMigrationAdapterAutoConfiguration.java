@@ -288,46 +288,45 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    * The cache of workflow&rarr;adapter associations consulted by the BPMS election
    * for operations on existing workflows (complete/cancel task, user task, message
    * correlation): a bounded, expiring in-memory default, sized by
-   * <code>vanillabp.workflow-adapter-cache.*</code>. Cluster setups wanting
-   * instances to share elections define their own bean implementing
-   * {@link io.vanillabp.integration.spi.WorkflowAdapterCache} backed by their own
-   * cache infrastructure - it replaces this default (entries are hints: a stale
-   * entry costs an extra probe, never correctness).
+   * <code>vanillabp.workflow-adapter-cache.*</code>. Cluster setups share their
+   * elections instead, either with the implementation VanillaBP ships for Hazelcast
+   * or with a bean of their own implementing
+   * {@link io.vanillabp.integration.spi.WorkflowAdapterCache} - either replaces this
+   * default (entries are hints: a stale entry costs an extra probe, never
+   * correctness).
+   * <p>
+   * What this cache knows about itself - its size, its evictions - it reports itself,
+   * under a prefix of this implementation. It is not handed the application's
+   * election statistics for that: a number only one implementation can produce does
+   * not belong among the numbers of the election.
    *
    * @param properties The VanillaBP configuration (the cache's bounds)
-   * @param statistics The application's cache statistics (evictions and size are
-   *          reported by the cache itself)
    * @return The default in-memory cache
    */
   @Bean
   @ConditionalOnMissingBean(io.vanillabp.integration.spi.WorkflowAdapterCache.class)
   public io.vanillabp.integration.spi.WorkflowAdapterCache vanillaBpWorkflowAdapterCache(
-      final MigrationAdapterProperties properties,
-      final io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics statistics) {
+      final MigrationAdapterProperties properties) {
 
     return new io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCache(
-        properties.getWorkflowAdapterCache(), statistics);
+        properties.getWorkflowAdapterCache());
 
   }
 
   /**
-   * The numbers of the election cache - hits and misses of every implementation,
-   * plus size and evictions of the in-memory default. One instance per application:
-   * the process services wrap whatever cache is in use into an
+   * What the election asked of the cache: hits, misses and how often the end of a
+   * workflow reached it. One instance per application, and the same three numbers for
+   * every implementation - the process services wrap whatever cache is in use into an
    * {@code InstrumentedWorkflowAdapterCache} reporting here, so the numbers stay
    * comparable when an application plugs in its own cache.
    *
-   * @param properties The VanillaBP configuration (the bound named by the
-   *          eviction-pressure warning)
    * @return The statistics
    */
   @Bean
   @ConditionalOnMissingBean
-  public io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics vanillaBpWorkflowAdapterCacheStatistics(
-      final MigrationAdapterProperties properties) {
+  public io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics vanillaBpWorkflowAdapterCacheStatistics() {
 
-    return new io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics(
-        properties.getWorkflowAdapterCache());
+    return new io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics();
 
   }
 
@@ -357,6 +356,32 @@ public class SpringBootMigrationAdapterAutoConfiguration {
 
       return new io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheMeters(
           statistics);
+
+    }
+
+    /**
+     * What the in-memory cache knows about itself, published under the prefix of that
+     * implementation. The binder takes the cache the application ended up with and
+     * registers nothing where that is a shared cache or one of the application's own:
+     * a size which cannot be read is a meter which is not published, rather than one
+     * reporting NaN for the rest of the application's life.
+     *
+     * @param caches The election caches of this application - the platform's default
+     *          and the bean an application defines can coexist, and which of them the
+     *          elections use is decided by
+     *          {@link WorkflowAdapterCacheSelection} rather than by an injection
+     * @return The meter binder of the in-memory cache
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCacheMeters vanillaBpInMemoryWorkflowAdapterCacheMeters(
+        final ObjectProvider<io.vanillabp.integration.spi.WorkflowAdapterCache> caches) {
+
+      return new io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCacheMeters(
+          WorkflowAdapterCacheSelection
+              .theCacheInUse(caches
+                  .orderedStream()
+                  .toList()));
 
     }
 

@@ -99,13 +99,13 @@ public class CacheOverrideTest {
     assertTrue(
         (statistics.getHits() + statistics.getMisses()) > 0,
         "the lookups of an application-provided cache are counted, too");
+    // a size and an eviction are properties of an implementation, so they are not
+    // among the numbers of the election at all - see InMemoryWorkflowAdapterCacheStatistics
     assertTrue(
-        statistics.getSize().isEmpty(),
-        "but only VanillaBP's in-memory default knows its size");
-    assertEquals(
-        0,
-        statistics.getEvictions(),
-        "and an application's cache manages its own bounds");
+        java.util.Arrays
+            .stream(WorkflowAdapterCacheStatistics.class.getMethods())
+            .noneMatch(method -> method.getName().contains("Size") || method.getName().contains("Eviction")),
+        "the numbers of the election must not promise what only an implementation can know");
 
   }
 

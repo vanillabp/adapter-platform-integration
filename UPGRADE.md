@@ -4,6 +4,36 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## The election cache's own numbers moved to a prefix of their own (2026-09-04)
+
+Five meters were renamed, and if you built a dashboard on a 2.0 snapshot this is the one
+change in it:
+
+|                       before                        |                         now                          |
+|-----------------------------------------------------|------------------------------------------------------|
+| `vanillabp.workflow.adapter.cache.size`             | `vanillabp.inmemory.election.cache.size`             |
+| `vanillabp.workflow.adapter.cache.size.ended`       | `vanillabp.inmemory.election.cache.size.ended`       |
+| `vanillabp.workflow.adapter.cache.evictions`        | `vanillabp.inmemory.election.cache.evictions`        |
+| `vanillabp.workflow.adapter.cache.evictions.unused` | `vanillabp.inmemory.election.cache.evictions.unused` |
+| `vanillabp.workflow.adapter.cache.lost.hints`       | `vanillabp.inmemory.election.cache.lost.hints`       |
+
+`vanillabp.workflow.adapter.cache.hits`, `.misses` and `.ended.marks` stay where they
+are. The line between the two is who can produce the number: the three which stay are
+counted by VanillaBP around whatever cache is in use, the five which moved can only come
+from the in-memory cache itself.
+
+Which is why they moved. With a shared cache in use the two sizes reported NaN and the
+three counters reported a zero which could never become anything else, and a dashboard
+built on them showed a cache which looked broken while it worked. Now every
+implementation publishes what it knows under a name which says which implementation it
+is, so `vanillabp.*.election.cache.*` finds them all and none of them lies.
+
+An application which reads the statistics from Java sees the same split:
+`WorkflowAdapterCacheStatistics` has lost `getSize`, `getEndedSize`, `getEvictions`,
+`getEvictionsBeforeFirstUse` and `getLostHints`, and
+`InMemoryWorkflowAdapterCache#getStatistics()` is where those live now, without the
+`OptionalInt` which only existed because a foreign cache could not answer.
+
 ## Decision tables of a workflow module are deployed with it (2026-09-03)
 
 A workflow module may put `.dmn` files next to its BPMN files, and the boot deploys them to the

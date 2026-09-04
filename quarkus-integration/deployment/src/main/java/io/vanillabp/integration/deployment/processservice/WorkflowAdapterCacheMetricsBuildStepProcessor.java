@@ -34,8 +34,11 @@ public class WorkflowAdapterCacheMetricsBuildStepProcessor {
     }
 
     log.debug(
-        "Micrometer found: the election cache reports its statistics as meters '{}.*'",
-        io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics.METER_PREFIX);
+        "Micrometer found: the election reports its numbers as meters '{}.*', and the in-memory cache "
+            + "reports what it knows about itself as '{}.*' (a cache which is not the in-memory one "
+            + "publishes its own under a prefix of its own)",
+        io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics.METER_PREFIX,
+        io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCacheStatistics.METER_PREFIX);
 
     additionalBeans
         .produce(AdditionalBeanBuildItem

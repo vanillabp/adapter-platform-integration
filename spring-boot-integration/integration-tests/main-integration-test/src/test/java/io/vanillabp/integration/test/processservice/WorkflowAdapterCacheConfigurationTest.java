@@ -86,8 +86,10 @@ public class WorkflowAdapterCacheConfigurationTest {
               properties.getWorkflowAdapterCache().getTimeToLive());
 
           final var cache = context.getBean(WorkflowAdapterCache.class);
-          Assertions.assertInstanceOf(InMemoryWorkflowAdapterCache.class, cache);
-          final var statistics = context.getBean(WorkflowAdapterCacheStatistics.class);
+          final var inMemoryCache = Assertions
+              .assertInstanceOf(InMemoryWorkflowAdapterCache.class, cache);
+          // what the cache knows about itself is the cache's own, not the election's
+          final var ownStatistics = inMemoryCache.getStatistics();
 
           cache.put(MODULE, PROCESS, "1", "test");
           cache.put(MODULE, PROCESS, "2", "test");
@@ -95,9 +97,9 @@ public class WorkflowAdapterCacheConfigurationTest {
 
           Assertions.assertEquals(
               2,
-              statistics.getSize().orElseThrow(),
+              ownStatistics.getSize(),
               "the configured bound has to be the cache's bound");
-          Assertions.assertEquals(1, statistics.getEvictions());
+          Assertions.assertEquals(1, ownStatistics.getEvictions());
 
         });
 
@@ -122,7 +124,7 @@ public class WorkflowAdapterCacheConfigurationTest {
               "an application asking for the release has the end of every workflow reported");
 
           final var cache = context.getBean(WorkflowAdapterCache.class);
-          final var statistics = context.getBean(WorkflowAdapterCacheStatistics.class);
+          final var ownStatistics = ((InMemoryWorkflowAdapterCache) cache).getStatistics();
 
           cache.put(MODULE, PROCESS, "42", "test");
           cache.putEnded(MODULE, PROCESS, "42", "test");
@@ -133,7 +135,7 @@ public class WorkflowAdapterCacheConfigurationTest {
               "an operation arriving after the end still finds the adapter which held the workflow");
           Assertions.assertEquals(
               1,
-              statistics.getEndedSize().orElseThrow(),
+              ownStatistics.getEndedSize(),
               "and the entry is counted apart from the living ones");
 
         });
@@ -221,13 +223,29 @@ public class WorkflowAdapterCacheConfigurationTest {
           Assertions.assertNotNull(processService, "the process service uses the same statistics");
           cache.put(MODULE, PROCESS, "42", "test");
 
-          Assertions.assertEquals(
-              1.0,
-              registry.get(WorkflowAdapterCacheStatistics.METER_SIZE).gauge().value());
           Assertions.assertNotNull(
               registry.get(WorkflowAdapterCacheStatistics.METER_HITS).functionCounter());
           Assertions.assertNotNull(
-              registry.get(WorkflowAdapterCacheStatistics.METER_LOST_HINTS).functionCounter());
+              registry.get(WorkflowAdapterCacheStatistics.METER_MISSES).functionCounter());
+
+          // and the in-memory cache's own numbers, under the prefix of that
+          // implementation, from the binder the platform contributes beside the first
+          context
+              .getBean(
+                  io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCacheMeters.class)
+              .bindTo(registry);
+          Assertions.assertEquals(
+              1.0,
+              registry
+                  .get(
+                      io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCacheStatistics.METER_SIZE)
+                  .gauge()
+                  .value());
+          Assertions.assertNotNull(
+              registry
+                  .get(
+                      io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCacheStatistics.METER_LOST_HINTS)
+                  .functionCounter());
 
         });
 
@@ -289,9 +307,17 @@ public class WorkflowAdapterCacheConfigurationTest {
 
           Assertions.assertFalse(cache.gets.isEmpty(), "the election consults the application's cache");
           Assertions.assertTrue(statistics.getMisses() > 0, "its lookups are counted like any other");
+          // and the meters of the in-memory cache are not published at all: a size
+          // which cannot be read is a meter which is absent, not one reporting NaN
+          final var registry = new SimpleMeterRegistry();
+          context
+              .getBean(
+                  io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCacheMeters.class)
+              .bindTo(registry);
           Assertions.assertTrue(
-              statistics.getSize().isEmpty(),
-              "an application's cache reports no size");
+              registry.getMeters().isEmpty(),
+              "an application's own cache has no size and no evictions to report but got: "
+                  + registry.getMeters());
 
           // a cache written before ended workflows were marked keeps working: the mark
           // falls back to an ordinary hint
@@ -300,9 +326,10 @@ public class WorkflowAdapterCacheConfigurationTest {
               "test",
               cache.get(MODULE, PROCESS, "4711").orElseThrow(),
               "the default of putEnded stores the hint like put does");
-          Assertions.assertTrue(
-              statistics.getEndedSize().isEmpty(),
-              "and it does not tell ended workflows apart");
+          // the mark of an ended workflow is counted for every cache as well, but the
+          // call above went straight to the application's bean rather than through the
+          // decorator around it - that counting is held where it happens, in
+          // WorkflowAdapterCacheStatisticsTest
 
         });
 

@@ -1,7 +1,6 @@
 package io.vanillabp.integration.adapter.migration.processservice;
 
 import io.micrometer.core.instrument.FunctionCounter;
-import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.MeterBinder;
 
@@ -15,11 +14,11 @@ import io.micrometer.core.instrument.binder.MeterBinder;
  * found Micrometer in the classpath - an application without it runs unchanged and
  * simply reports no metrics.
  * <p>
- * The two size gauges report NaN as long as the cache in use does not know its size,
- * which is every implementation but VanillaBP's in-memory default (Micrometer
- * treats NaN as "no measurement" and most backends skip it). The eviction counters
- * stay at zero for the same reason - an application-provided cache manages its own
- * bounds.
+ * Every meter here holds for every implementation, because the numbers come from the
+ * decorator around the cache rather than from the cache. What an implementation knows
+ * about itself is published under a prefix of its own, so that no meter of this class
+ * can ever report a NaN or a zero which cannot become anything else (the in-memory
+ * default: {@link InMemoryWorkflowAdapterCacheMeters}).
  */
 public class WorkflowAdapterCacheMeters implements MeterBinder {
 
@@ -36,32 +35,6 @@ public class WorkflowAdapterCacheMeters implements MeterBinder {
   public void bindTo(
       final MeterRegistry registry) {
 
-    Gauge
-        .builder(
-            WorkflowAdapterCacheStatistics.METER_SIZE,
-            statistics,
-            currentStatistics -> currentStatistics
-                .getSize()
-                .stream()
-                .mapToDouble(size -> size)
-                .findFirst()
-                .orElse(Double.NaN))
-        .description("Number of BPMS elections currently cached")
-        .register(registry);
-
-    Gauge
-        .builder(
-            WorkflowAdapterCacheStatistics.METER_SIZE_ENDED,
-            statistics,
-            currentStatistics -> currentStatistics
-                .getEndedSize()
-                .stream()
-                .mapToDouble(size -> size)
-                .findFirst()
-                .orElse(Double.NaN))
-        .description("Number of cached elections whose workflow ended")
-        .register(registry);
-
     FunctionCounter
         .builder(
             WorkflowAdapterCacheStatistics.METER_HITS,
@@ -76,30 +49,6 @@ public class WorkflowAdapterCacheMeters implements MeterBinder {
             statistics,
             WorkflowAdapterCacheStatistics::getMisses)
         .description("Elections which had to probe the prioritized adapters")
-        .register(registry);
-
-    FunctionCounter
-        .builder(
-            WorkflowAdapterCacheStatistics.METER_EVICTIONS,
-            statistics,
-            WorkflowAdapterCacheStatistics::getEvictions)
-        .description("Entries dropped because the size bound was reached")
-        .register(registry);
-
-    FunctionCounter
-        .builder(
-            WorkflowAdapterCacheStatistics.METER_EVICTIONS_UNUSED,
-            statistics,
-            WorkflowAdapterCacheStatistics::getEvictionsBeforeFirstUse)
-        .description("Entries dropped for lack of space before they were ever read")
-        .register(registry);
-
-    FunctionCounter
-        .builder(
-            WorkflowAdapterCacheStatistics.METER_LOST_HINTS,
-            statistics,
-            WorkflowAdapterCacheStatistics::getLostHints)
-        .description("Lookups which would have been a hit with a bigger cache")
         .register(registry);
 
     FunctionCounter

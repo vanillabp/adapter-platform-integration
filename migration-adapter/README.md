@@ -272,22 +272,34 @@ entry rather than something measured, and a heap dump of an application running 
 cache is what would correct them. An application which really wants soft or off-heap
 semantics has the SPI bean for it.
 
-**What is measured.** `WorkflowAdapterCacheStatistics` (one per application) counts
-hits, misses, evictions, evictions before an entry was ever read, LOST HINTS, and what the
-end of a workflow does: how often a hint was marked, and how many of the entries held are
-marks. The second number is what tells an operator whether the release works, since it
-rises while workflows end and falls again as the shorter lifetime takes those entries
-away. The
-process services wrap WHATEVER cache is in use into an
-`InstrumentedWorkflowAdapterCache` reporting there, so hits and misses exist for an
-application-provided cache as well. A number which disappears once somebody plugs in
-their own cache would surprise exactly the operator who needs it. Size and evictions
-are different: only the implementation knows them, so the in-memory default reports
-them itself and an application's cache reports none (the size gauge is NaN, not a
-wrong zero). `WorkflowAdapterCacheMeters` publishes all of it as Micrometer meters
-under `vanillabp.workflow.adapter.cache.*`; Micrometer is OPTIONAL and both platforms
-apply `MeterBinder` beans to their registries by themselves, so an application without
-it boots unchanged and reports nothing.
+**What is measured, and who owns which number.** There are two sets of them, and the
+split is deliberate.
+
+`WorkflowAdapterCacheStatistics` (one per application) counts what the ELECTION asked:
+hits, misses, and how often the end of a workflow was marked. The process services wrap
+WHATEVER cache is in use into an `InstrumentedWorkflowAdapterCache` reporting there, so
+these three exist for the in-memory default, for the shared cache VanillaBP ships for
+Hazelcast and for a cache an application wrote itself. A number which disappears once
+somebody plugs in their own cache would surprise exactly the operator who needs it. They
+are published under `vanillabp.workflow.adapter.cache.*` by `WorkflowAdapterCacheMeters`.
+
+What an implementation knows about ITSELF belongs to that implementation and is published
+under a prefix which says which one it is. The in-memory default owns an
+`InMemoryWorkflowAdapterCacheStatistics` (created in its constructor, written by nobody
+else) with its size, the size of the marks it holds, its evictions, the evictions before
+an entry was ever read and the LOST HINTS;
+`InMemoryWorkflowAdapterCacheMeters` publishes them under
+`vanillabp.inmemory.election.cache.*` and registers NOTHING where the cache in use is
+another one. That is the point: a size which cannot be read is a meter which is absent
+rather than one reporting NaN forever, and an eviction counter which can never leave zero
+(the Hazelcast cache has no size bound at all) is not published either. A cache which
+lives somewhere else reports what it knows the same way, under a prefix of its own.
+
+The size of the marks is what tells an operator whether the release works, since it rises
+while workflows end and falls again as the shorter lifetime takes those entries away.
+Micrometer is OPTIONAL for all of it, and both platforms apply `MeterBinder` beans to
+their registries by themselves, so an application without it boots unchanged and reports
+nothing.
 
 **The warning is about lost hints, not about a full cache.** A cache which is merely
 full is healthy, and an entry evicted unread is not by itself a defect (a workflow
@@ -298,10 +310,17 @@ workflow, decided the outcome. The keys of unused evictions are therefore rememb
 Ten of them within an hour produce ONE guiding WARN naming the observed number, the
 observation period and the property to raise. Heap pressure is deliberately not the
 trigger, because the cache cannot see the old generation and the JVM does not tell it.
-`WorkflowAdapterCacheStatisticsTest` holds the counting and the rule the warning follows:
-`lookupOfAnEvictedEntryIsALostHint`, `onlyUnusedEvictionsCountTowardsThePressure`,
-`evictionPressureIsWarnedAboutOncePerHour` and
-`sizeIsUnknownForAnApplicationProvidedCache`.
+`InMemoryWorkflowAdapterCacheStatisticsTest` holds the counting and the rule the warning
+follows: `lookupOfAnEvictedEntryIsALostHint`,
+`onlyUnusedEvictionsCountTowardsThePressure` and
+`evictionPressureIsWarnedAboutOncePerHour`. That the numbers of the election hold for
+every cache is `WorkflowAdapterCacheStatisticsTest#theElectionsNumbersHoldForEveryCache`,
+and that no meter of the in-memory cache exists while another cache is in use is
+`WorkflowAdapterCacheMetersTest#aForeignCachePublishesNothingItCannotKnow`.
+
+The lost hint is detected by the cache rather than by the decorator around it, because
+only the cache knows that this key was one it dropped. The miss itself is still counted
+where every miss is counted.
 
 The workflow probe takes the aggregate's persistence because a BPMS without a business
 key finds the workflow by the process variable carrying the aggregate's ID, and that
