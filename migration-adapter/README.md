@@ -2302,6 +2302,10 @@ it means is not.
   boot failure. Watch out for the case where the BPMS deploys NOTHING because the resources
   did not change - the version has to be reported anyway, otherwise the check would only
   ever run on a boot which changed a model (Camunda 7 queries the latest version for that).
+- The adapter answers one more question, and not while it deploys:
+  `AdapterDeploymentService#processVersionCatalogOf` says what its BPMS holds for a BPMN process
+  the application declares without deploying a model under it. See below, "A BPMN process nothing
+  was deployed under".
 - `DeployedProcessVersionsCheck` owns the decisions and every message: which versions are
   older, which are faded out (`OutfadedProcessVersions`, the `outfaded-versions` property in
   the grammar of `VersionRange`), which task definitions of a version nobody serves
@@ -2321,6 +2325,48 @@ Every verdict the check can reach is a case of `OldProcessVersionsTest`, from
 `anUnservedVersionWithInstancesIsAnError` and `anUnservedVersionWithoutInstancesWarns` to
 `outfadingTheDeployedVersionFailsTheBoot` and `aMethodServingNoHeldVersionIsReported`.
 
+### A BPMN process nothing was deployed under
+
+Renaming a BPMN process is the one refactoring which reaches into the BPMS: the old
+`bpmnProcessId` stays there with every version ever deployed under it and with the workflows
+still running on them, while the application brings only the new name.
+`@WorkflowService(secondaryBpmnProcesses = @BpmnProcess(bpmnProcessId = "<old id>", version =
+"<the old versions>"))` is where the application says that it answers for both, and the registry
+follows the DECLARED ids, so a task of an old workflow finds its handler.
+
+What the declaration could not do by itself was reach the check. An adapter registers the versions
+of the processes it just deployed, and nothing was deployed under the old id - so the versions the
+running workflows are on were the only ones nobody ever looked at, and the first news of a method
+somebody dropped was an incident. The core closes that gap because it is the only side which knows
+the declarations: once every adapter of a workflow module deployed, `DeploymentService` asks each
+of them `processVersionCatalogOf(module, process)` for every declared id `wiringValidated` is
+false for, and registers the answer like any other catalog. An adapter answering `null` - the
+default - keeps working exactly as before.
+
+Three consequences run through the check from there:
+
+- `deployedVersion` is `null` for such an id, and that now has two readings: a BPMS which counts
+  no versions (nothing to check, as before) and an id nothing was deployed under, where EVERY
+  version the BPMS holds is an older one. `DeclaredBpmnProcesses` is what tells the two apart.
+- the verdict "this method never runs" became a statement about the whole workflow module.
+  Each method is registered once per declared BPMN process, with the range of that declaration,
+  so a method kept for the old id serves none of the new id's versions on purpose. The check
+  collects what every process of the module can be served with and draws the verdict once, in
+  `reportDeadHandlers(module)`; `HandlerVersions` is the per-registration answer the three handler
+  kinds give it.
+- the reverse wiring check exempts a method registered for a declared-only id the same way it
+  exempts one serving only older versions: no model of this boot carries the task it is wired to.
+  This is why the core asks the adapters BEFORE `validateNoUnwiredWorkflowTaskMethods`.
+
+Watch the numbering when you configure anything for such an id: each BPMN process id is counted
+from 1 by its BPMS, so the versions of the old id and of the new one are different things with the
+same names. `outfaded-versions` therefore belongs at the workflow level
+(`vanillabp.workflow-modules.<module>.workflows.<old id>.adapters.<adapter>.outfaded-versions`);
+the same specification at adapter level would cover the version the application just deployed
+under the new id and end the boot for that reason. `RenamedBpmnProcessTest` holds all of it, and
+the recipe for a rename is the wiki page
+[Renaming a BPMN process](https://github.com/vanillabp/adapter-platform-integration/wiki/Renaming-a-BPMN-process).
+
 ### What the check costs, and what it may cost in two years
 
 One question for the versions the BPMS holds, then two per version older than the one this boot
@@ -2337,7 +2383,9 @@ just read rather than out of a query of its own, which is what both adapters do 
 `ProcessVersionCatalog` implementations.
 
 What is allowed to grow is the number of versions, one per deployment which changed a model, and
-`outfaded-versions` is the operator's way to cut it off. The guards count questions rather than
+`outfaded-versions` is the operator's way to cut it off. A BPMN process the application declares
+without deploying it counts as one process more, asked about like any other; that number follows
+the declarations in the code, which change when somebody edits them. The guards count questions rather than
 measure time: `OldProcessVersionsTest#theQuestionsDoNotDependOnHowManyWorkflowsRun` here,
 `Camunda7StartupQuestionCostTest` and `Camunda8StartupQuestionCostTest` in the adapters.
 

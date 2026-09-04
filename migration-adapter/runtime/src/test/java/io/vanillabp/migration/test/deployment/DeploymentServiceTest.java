@@ -1662,6 +1662,89 @@ public class DeploymentServiceTest {
 
   }
 
+  @Nested
+  @DisplayName("The BPMN processes an application declares without deploying them")
+  class ProcessesNobodyDeployedTests {
+
+    /**
+     * A renamed BPMN process leaves its old id in the BPMS, and only the core knows that the
+     * application still declares it. So the core asks each adapter of the module once the
+     * module is deployed - and before the reverse wiring check, which needs the answer to
+     * tell a method kept for the old id from one wired to nothing.
+     */
+    @Test
+    @DisplayName("Every adapter of the workflow module is asked, before the module is judged")
+    public void everyAdapterIsAskedBeforeTheChecks() {
+
+      final var properties = createPropertiesWithAdapters("adapter-test1", "adapter-test2");
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+      when(adapter2DeploymentService.getAdapterId()).thenReturn("adapter-test2");
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of());
+      when(adapter2DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of());
+      final var wiring = org.mockito.Mockito
+          .mock(io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring.class);
+
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService, adapter2DeploymentService), List.of(), wiring);
+      testee
+          .deployResources(
+              List.of("test-module"),
+              bpmnFilesOnly(location -> Map.of("process.bpmn", createDummyBpmnInputStream())));
+
+      final var order = org.mockito.Mockito.inOrder(wiring);
+      order
+          .verify(wiring)
+          .registerVersionsOfProcessesNobodyDeployed(
+              org.mockito.ArgumentMatchers.eq("test-module"),
+              org.mockito.ArgumentMatchers.eq("adapter-test1"),
+              org.mockito.ArgumentMatchers.any());
+      order
+          .verify(wiring)
+          .registerVersionsOfProcessesNobodyDeployed(
+              org.mockito.ArgumentMatchers.eq("test-module"),
+              org.mockito.ArgumentMatchers.eq("adapter-test2"),
+              org.mockito.ArgumentMatchers.any());
+      order.verify(wiring).validateNoUnwiredWorkflowTaskMethods("test-module");
+      order.verify(wiring).resolveProcessVersions("test-module");
+
+    }
+
+    @Test
+    @DisplayName("What the core is handed asks the adapter of that very id")
+    public void theAnswerComesFromTheAdapterItself() {
+
+      final var properties = createPropertiesWithAdapters("adapter-test1");
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of());
+      final var wiring = org.mockito.Mockito
+          .mock(io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring.class);
+
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService), List.of(), wiring);
+      testee
+          .deployResources(
+              List.of("test-module"),
+              bpmnFilesOnly(location -> Map.of("process.bpmn", createDummyBpmnInputStream())));
+
+      @SuppressWarnings("unchecked")
+      final var catalogOfProcess = org.mockito.ArgumentCaptor
+          .forClass(java.util.function.BiFunction.class);
+      verify(wiring)
+          .registerVersionsOfProcessesNobodyDeployed(
+              org.mockito.ArgumentMatchers.eq("test-module"),
+              org.mockito.ArgumentMatchers.eq("adapter-test1"),
+              catalogOfProcess.capture());
+      catalogOfProcess.getValue().apply("test-module", "RenamedProcess");
+
+      verify(adapter1DeploymentService).processVersionCatalogOf("test-module", "RenamedProcess");
+
+    }
+
+  }
+
   /**
    * A loader which hands out the given BPMN files and nothing else - the pipeline asks
    * separately for the DMN files of a location, and most of these tests bring none.

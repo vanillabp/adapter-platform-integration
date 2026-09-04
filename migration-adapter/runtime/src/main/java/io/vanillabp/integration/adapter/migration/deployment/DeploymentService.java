@@ -90,9 +90,9 @@ public class DeploymentService {
    * @param deploymentServices All adapters deployment services.
    */
   /**
-   * The core's own wiring interface, used for the two checks no adapter has to remember
-   * (see {@link #runModuleLevelChecks(String)}). May be <code>null</code> in tests which
-   * only exercise the pipeline itself.
+   * The core's own wiring interface, used for what belongs to a whole workflow module and
+   * no adapter has to remember (see {@link #runModuleLevelChecks(String)}). May be
+   * <code>null</code> in tests which only exercise the pipeline itself.
    */
   private final io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring workflowTaskWiring;
 
@@ -245,8 +245,9 @@ public class DeploymentService {
   }
 
   /**
-   * The two checks which belong to a workflow module as a whole, run once every adapter
-   * of the module deployed.
+   * What belongs to a workflow module as a whole, run once every adapter of the module
+   * deployed: the versions the BPMS still holds for a BPMN process the application only
+   * DECLARES, and the two checks the module is judged by.
    * <p>
    * They used to be the adapter's duty, written in the javadoc of the SPI and nowhere
    * else, and Camunda 7 forgot one of them for a year: a typo in a
@@ -267,10 +268,43 @@ public class DeploymentService {
     if (workflowTaskWiring == null) {
       return;
     }
-    // first the reverse wiring check, because a method serving no task at all is the
+    // the versions of a declared-only id come first: the reverse wiring check needs
+    // them to tell a method kept for a renamed process from one wired to nothing
+    askAdaptersAboutProcessesNobodyDeployed(workflowModuleId);
+    // then the reverse wiring check, because a method serving no task at all is the
     // more basic defect, then the version resolution, which only warns
     workflowTaskWiring.validateNoUnwiredWorkflowTaskMethods(workflowModuleId);
     workflowTaskWiring.resolveProcessVersions(workflowModuleId);
+
+  }
+
+  /**
+   * Asks every adapter of the workflow module what its BPMS holds for the BPMN processes
+   * the application DECLARED without deploying anything under them - the id a renamed
+   * BPMN process left behind, which the BPMS still holds with the workflows running on
+   * it.
+   * <p>
+   * The two ends of this could not meet before: an adapter registers the versions of the
+   * processes it just deployed and cannot know which further ids an application declared,
+   * while the core knows the declarations and cannot ask a BPMS. So the core asks, here,
+   * where the module is deployed and every id it brought is known.
+   *
+   * @param workflowModuleId The workflow module which finished deploying
+   */
+  private void askAdaptersAboutProcessesNobodyDeployed(
+      final String workflowModuleId) {
+
+    properties
+        .getDeploymentAdaptersFor(workflowModuleId)
+        .forEach(adapterId -> deploymentServices
+            .stream()
+            .filter(deploymentService -> deploymentService.getAdapterId().equals(adapterId))
+            .findFirst()
+            .ifPresent(deploymentService -> workflowTaskWiring
+                .registerVersionsOfProcessesNobodyDeployed(
+                    workflowModuleId,
+                    adapterId,
+                    deploymentService::processVersionCatalogOf)));
 
   }
 
@@ -400,10 +434,12 @@ public class DeploymentService {
           """
               Found properties for BPMN processes
                 {}.workflow-modules.{}.workflows.{}
-              which were not found in any BPMN resource of workflow module '{}'! These properties are
-              never used - fix the BPMN process ID or add the BPMN file. This may be intended if the
-              BPMN arrives later (e.g. during a BPMS migration). Executable BPMN process IDs known for
-              this workflow module are: {}.""",
+              which were not found in any BPMN resource of workflow module '{}'! Fix the BPMN process ID
+              or add the BPMN file. Two cases are intended: the BPMN arrives later (e.g. during a BPMS
+              migration), and the id belongs to a BPMN process this application declares without
+              deploying one - a renamed process, whose old id keeps the versions of it a BPMS still
+              holds and which 'outfaded-versions' is configured for right here. Executable BPMN process
+              IDs known for this workflow module are: {}.""",
           MigrationAdapterProperties.PREFIX,
           workflowModuleId,
           String.join(propPrefix, unknownConfiguredWorkflows),

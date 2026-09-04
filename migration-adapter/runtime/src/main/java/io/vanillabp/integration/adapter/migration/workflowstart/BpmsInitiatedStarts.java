@@ -188,17 +188,19 @@ public class BpmsInitiatedStarts {
   }
 
   /**
-   * The @WorkflowStartedByBpms methods of that BPMN process whose version specification matches
-   * NONE of the given versions: the versions the BPMS holds, minus the ones
-   * the configuration faded out. Such a method never runs, and the start says so.
+   * The @WorkflowStartedByBpms methods registered for that BPMN process, each with the
+   * verdict whether it serves one of the given versions: the versions the BPMS holds, minus
+   * the ones the configuration faded out. A method serving none of them anywhere in its
+   * workflow module never runs, and the start says so - which of the two the registry
+   * decides, since a method is registered once per BPMN process its class declares.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
    * @param servableVersions The versions worth serving
    * @param resolver Resolves version tags of that process
-   * @return One description per dead method
+   * @return One verdict per registered method
    */
-  public java.util.List<String> handlersNotServing(
+  public java.util.List<io.vanillabp.integration.adapter.migration.workflowtask.HandlerVersions> handlerVersions(
       final String workflowModuleId,
       final String bpmnProcessId,
       final java.util.Collection<String> servableVersions,
@@ -210,11 +212,10 @@ public class BpmsInitiatedStarts {
     }
     return entry.handlers
         .stream()
-        .filter(handler -> servableVersions
-            .stream()
-            .noneMatch(version -> handler.matchesVersion(version, resolver)))
-        .map(handler -> "@WorkflowStartedByBpms method '%s' (version %s)"
-            .formatted(handler.describe(), handler.describeVersionsWithOrigin()))
+        .map(handler -> new io.vanillabp.integration.adapter.migration.workflowtask.HandlerVersions(
+            handler.describe(), "@WorkflowStartedByBpms method '%s' (version %s)"
+                .formatted(handler.describe(), handler.describeVersionsWithOrigin()), servableVersions.stream()
+                    .anyMatch(version -> handler.matchesVersion(version, resolver))))
         .toList();
 
   }

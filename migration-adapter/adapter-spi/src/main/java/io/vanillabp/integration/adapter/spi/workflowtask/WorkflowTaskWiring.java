@@ -39,10 +39,11 @@ import java.util.Collection;
  * ended up with, which is why this one stays here.
  * <p>
  * <b>What the core does on its own</b>, once the last adapter of a workflow module
- * finished deploying: {@link #validateNoUnwiredWorkflowTaskMethods(String)} and
- * {@link #resolveProcessVersions(String)}. Both are module-level and need nothing from an
- * adapter, so the core knows the moment and takes the duty - an adapter must NOT call
- * them.
+ * finished deploying: {@link #validateNoUnwiredWorkflowTaskMethods(String)},
+ * {@link #registerVersionsOfProcessesNobodyDeployed(String, String, java.util.function.BiFunction)}
+ * and {@link #resolveProcessVersions(String)}. All three are module-level and driven by
+ * what the application declared rather than by what an adapter saw, so the core knows the
+ * moment and takes the duty - an adapter must NOT call them.
  */
 public interface WorkflowTaskWiring {
 
@@ -290,6 +291,34 @@ public interface WorkflowTaskWiring {
    */
   default void resolveProcessVersions(
       final String workflowModuleId) {
+
+  }
+
+  /**
+   * Registers what one BPMS holds for the BPMN processes of a workflow module which the
+   * application DECLARES but deployed nothing under - what a renamed BPMN process leaves
+   * behind, where the old id lives on in the BPMS with the workflows still running on it.
+   * <p>
+   * Called by the core once per adapter of a workflow module, right after the module
+   * finished deploying: only the core knows which ids an application declared, and only
+   * the adapter can ask its BPMS about them, which is what
+   * {@link io.vanillabp.integration.adapter.spi.AdapterDeploymentService#processVersionCatalogOf}
+   * is handed in here for. An adapter must NOT call this.
+   * <p>
+   * Which ids those are is the core's decision, and it asks about fewer than it could: an
+   * id is asked about where the workflow service declaring it ALSO serves a BPMN process
+   * this boot deployed. A workflow service whose processes were none of them deployed is
+   * waiting for a model which has not arrived yet, which says nothing about a rename.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param adapterId The adapter ID (the catalogs answer for THIS BPMS)
+   * @param catalogOfProcess Answers what that BPMS holds for one (workflow module, plain
+   *          BPMN process ID), or <code>null</code> where it cannot say
+   */
+  default void registerVersionsOfProcessesNobodyDeployed(
+      final String workflowModuleId,
+      final String adapterId,
+      final java.util.function.BiFunction<String, String, io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog> catalogOfProcess) {
 
   }
 
