@@ -286,7 +286,7 @@ arrives here.
 | `workflowTaskCompletesAsynchronously(module, process, taskDefinition)`        | refuse a wiring which cannot keep a task open, while the application boots rather than as an incident                                                                                                      |
 | `workflowsShareTheWorkflowAggregate(module, process, otherProcess)`           | a called process running on the same aggregate has to be handed the caller's identity, and one running on its own aggregate must not                                                                       |
 | `reportConcurrentTokenElements(module, process, elementIds)`                  | the elements which can put a second token into a running workflow; the core warns where the aggregate has no version attribute                                                                             |
-| `registerProcessVersions(adapterId, module, process, catalog)`                | only where your BPMS can place version tags                                                                                                                                                                |
+| `registerProcessVersions(adapterId, module, process, catalog)`                | only where your BPMS can place version tags. The core asks you again after the deployment, for the ids the application declared without a model - see below                                                |
 | `unsharedWorkflowAggregateProperties(module, process, names, adapterDefault)` | the identifiers your models read which the aggregate does not share, so the developer hears about it at startup                                                                                            |
 | `resolveWorkflowAggregateIdName(module, process)`                             | the variable name a BPMS without a business key stores the aggregate's id under                                                                                                                            |
 
@@ -302,6 +302,17 @@ ended up with, and the core needs that border between the model of this boot and
 Two module-level checks used to be the adapter's duty and are not any more.
 `validateNoUnwiredWorkflowTaskMethods` and `resolveProcessVersions` are run by the core once the
 last adapter of a workflow module finished deploying. Do not call them.
+
+The core calls one thing on you at that same moment, and it is the only call which comes back to
+your deployment service after everything was deployed: `processVersionCatalogOf(module, process)`.
+It asks what your BPMS holds for a BPMN process the application declares without bringing a model
+for it, which is what renaming a BPMN process leaves behind - the old id stays in the BPMS with
+every version ever deployed under it and with the workflows still running on them, and
+`@WorkflowService(secondaryBpmnProcesses = ...)` is how the application says that it keeps serving
+them. Answer with the same catalog you would have registered while wiring, searching by the id you
+would have deployed it under (your prefix, your tenant), or `null` where your BPMS cannot be asked
+about the versions of a process - the default. Where you answer `null`, nothing changes for your
+adapter.
 
 ### 3.3 What you call at runtime
 
@@ -651,7 +662,9 @@ number is good for.
 2. The pipeline in order: `readBpmn`, then `prepareBpmn` rewriting once per file, then `wireBpmn`
    with the wiring calls, then `deployResources` ending with `registerDeployedVersion` per process,
    then `startWorkflowProcessing` and `stopWorkflowProcessing`. Every name-clash mode either served
-   or refused with a message. The two module-level checks are the core's and you do not call them.
+   or refused with a message. The two module-level checks are the core's and you do not call them,
+   and `processVersionCatalogOf` answers for an id the application declares without deploying it,
+   scoped the way you scope every other id.
 3. A handler per operation your BPMS can serve, and only the operations which allow it left out.
    Phase one asks, phase two acts, idempotently, throwing on anything but "already gone".
 4. Probes scoped, never advancing, `UNKNOWN_TO_BPMS` and `BPMS_UNAVAILABLE` mapped honestly, the

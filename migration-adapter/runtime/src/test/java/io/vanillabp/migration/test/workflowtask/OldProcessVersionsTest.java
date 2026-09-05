@@ -203,7 +203,7 @@ public class OldProcessVersionsTest {
     processVersions = new ProcessVersions();
     processVersions.recordDeployedVersion(ADAPTER, MODULE, PROCESS, "3");
     deployedVersionsCheck = new DeployedProcessVersionsCheck(
-        processVersions, new OutfadedProcessVersions(properties), registry::tasksNotServedInVersion, registry::handlersNotServingAnyVersion);
+        processVersions, new OutfadedProcessVersions(properties), registry::tasksNotServedInVersion, registry::handlersNotServingAnyVersion, registry);
 
     catalog = new CatalogStub();
     catalog.versions = List
@@ -580,6 +580,9 @@ public class OldProcessVersionsTest {
   private void runCheck() {
 
     deployedVersionsCheck.check(MODULE, checkedProcess, ADAPTER, catalog, VersionRange.NO_RESOLVER);
+    // a method which never runs is a statement about the whole workflow module, so the
+    // check draws it once the versions of every process of the module were read
+    deployedVersionsCheck.reportDeadHandlers(MODULE);
 
   }
 

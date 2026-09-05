@@ -46,7 +46,7 @@ import io.vanillabp.integration.spi.TransactionRunner;
  * them into ONE pluggable handler contract is the subject of the extension-enablement
  * story.
  */
-public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInvoker, BpmsInitiatedStartInvoker, WorkflowEndedInvoker {
+public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInvoker, BpmsInitiatedStartInvoker, WorkflowEndedInvoker, DeclaredBpmnProcesses {
 
   private static final Logger log = LoggerFactory.getLogger(WorkflowTaskRegistry.class);
 
@@ -179,7 +179,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     this.properties = properties;
     this.outfadedVersions = new OutfadedProcessVersions(properties);
     this.deployedVersionsCheck = new DeployedProcessVersionsCheck(
-        processVersions, outfadedVersions, this::tasksNotServedInVersion, this::handlersNotServingAnyVersion);
+        processVersions, outfadedVersions, this::tasksNotServedInVersion, this::handlersNotServingAnyVersion, this);
     this.rollbackRuleRemedies = transactionAnnotations
         .stream()
         .filter(TransactionAnnotationSpec::honored)
@@ -523,11 +523,38 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
    * impossible: the reverse direction would demand that the deployed model still
    * carries the task the newer model dropped, so an application could only serve an
    * old version by keeping a dead task in its current BPMN.
+   * <p>
+   * A BPMN process id the application declares WITHOUT bringing a model for it - the id
+   * a renamed process left behind - is the same situation with a different boundary:
+   * this boot deployed no version of it at all, so the versions the BPMS holds under it
+   * are what its methods are kept for.
    */
   private boolean servesOnlyOlderVersions(
       final RegistryKey key,
       final WorkflowTaskHandler handler) {
 
+    if (isDeclaredWithoutDeployment(key.workflowModuleId(), key.bpmnProcessId())) {
+      // nothing was deployed under this id, so no model of this boot carries the task
+      // this method is wired to - which is what declaring the id says: the method
+      // serves what the BPMS still holds under it. A method serving none of those
+      // versions is reported, and where the BPMS holds nothing at all the check for old
+      // versions says so about the id itself rather than about every method kept for it
+      final var heldVersions = processVersions
+          .registeredCatalogs(key.workflowModuleId(), key.bpmnProcessId())
+          .stream()
+          .map(registered -> registered
+              .catalog()
+              .deployedVersionsOf(key.workflowModuleId(), key.bpmnProcessId()))
+          .filter(java.util.Objects::nonNull)
+          .flatMap(List::stream)
+          .map(io.vanillabp.integration.adapter.spi.version.DeployedProcessVersion::version)
+          .filter(java.util.Objects::nonNull)
+          .distinct()
+          .toList();
+      final var resolver = processVersions.resolverFor(key.workflowModuleId(), key.bpmnProcessId());
+      return heldVersions.isEmpty() || heldVersions.stream()
+          .anyMatch(version -> handler.matchesVersion(version, resolver));
+    }
     final var deployedVersions = processVersions
         .registeredCatalogs(key.workflowModuleId(), key.bpmnProcessId())
         .stream()
@@ -674,6 +701,10 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
           }
           deployedVersionsCheck.check(workflowModuleId, bpmnProcessId);
         });
+
+    // a method which never runs is a statement about the whole workflow module, so it
+    // is made once every BPMN process of the module was asked about its versions
+    deployedVersionsCheck.reportDeadHandlers(workflowModuleId);
 
     bpmsInitiatedStarts.resolveProcessVersions(workflowModuleId);
     workflowEndedHandlers.resolveProcessVersions(workflowModuleId);
@@ -876,10 +907,20 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * The methods of that BPMN process which serve NO version worth serving - the
-   * versions the BPMS holds, minus the ones the configuration faded out.
+   * The methods registered for that BPMN process which serve NO version worth serving -
+   * the versions the BPMS holds, minus the ones the configuration faded out.
    * All three annotations carry a <code>version</code> attribute, so all three are
    * asked.
+   * <p>
+   * The verdict is reached for the WHOLE workflow module, not for the given process
+   * alone: a class declares one <code>bpmnProcess</code> plus any number of
+   * <code>secondaryBpmnProcesses</code>, so each of its methods is registered several
+   * times, once per declared BPMN process and with the version range of that
+   * declaration. A method which serves the versions of ANY of them runs, which is why
+   * the versions worth serving arrive here per BPMN process of the module. The case
+   * this is for is a renamed BPMN process: the methods kept for the old id serve the
+   * versions the BPMS holds under it and none of the new id's, and calling them dead
+   * would be the opposite of what the declaration says.
    * <p>
    * Such a method never runs. It is a warning rather than a boot failure, because a
    * version which does not exist YET is a normal state: an application may be rolled
@@ -887,36 +928,152 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
    * may still be deploying it.
    *
    * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The plain BPMN process ID
-   * @param servableVersions The versions worth serving
-   * @param resolver Resolves version tags of that process
+   * @param bpmnProcessId The plain BPMN process ID the methods are reported for
+   * @param servableVersionsByProcess The versions worth serving, per BPMN process of
+   *          that workflow module
    * @return One description per dead method
    */
   public List<String> handlersNotServingAnyVersion(
       final String workflowModuleId,
       final String bpmnProcessId,
-      final Collection<String> servableVersions,
-      final VersionRange.ProcessVersionResolver resolver) {
+      final Map<String, Collection<String>> servableVersionsByProcess) {
+
+    return java.util.stream.Stream.<java.util.function.BiFunction<String, Collection<String>, List<HandlerVersions>>>of(
+        (
+            process,
+            versions) -> workflowTaskHandlerVersions(workflowModuleId, process, versions),
+        (
+            process,
+            versions) -> bpmsInitiatedStarts.handlerVersions(workflowModuleId, process, versions,
+                processVersions.resolverFor(workflowModuleId, process)),
+        (
+            process,
+            versions) -> workflowEndedHandlers.handlerVersions(workflowModuleId, process, versions,
+                processVersions.resolverFor(workflowModuleId, process)))
+        .flatMap(handlersOf -> deadIn(bpmnProcessId, servableVersionsByProcess, handlersOf).stream())
+        .toList();
+
+  }
+
+  /**
+   * Which methods of one kind of handler are dead in the given BPMN process - dead
+   * meaning that they serve no version worth serving there AND none in any other BPMN
+   * process of the workflow module they are registered for.
+   *
+   * @param bpmnProcessId The BPMN process the methods are reported for
+   * @param servableVersionsByProcess The versions worth serving, per BPMN process
+   * @param handlersOf The handlers of one (BPMN process, versions worth serving)
+   * @return One description per dead method
+   */
+  private static List<String> deadIn(
+      final String bpmnProcessId,
+      final Map<String, Collection<String>> servableVersionsByProcess,
+      final java.util.function.BiFunction<String, Collection<String>, List<HandlerVersions>> handlersOf) {
+
+    final var candidates = handlersOf
+        .apply(bpmnProcessId, servableVersionsByProcess.getOrDefault(bpmnProcessId, List.of()))
+        .stream()
+        .filter(handler -> !handler.servesAVersion())
+        .toList();
+    if (candidates.isEmpty()) {
+      return List.of();
+    }
+    final var servingElsewhere = servableVersionsByProcess
+        .entrySet()
+        .stream()
+        .filter(process -> !process.getKey().equals(bpmnProcessId))
+        .flatMap(process -> handlersOf.apply(process.getKey(), process.getValue()).stream())
+        .filter(HandlerVersions::servesAVersion)
+        .map(HandlerVersions::method)
+        .collect(Collectors.toSet());
+    return candidates
+        .stream()
+        .filter(handler -> !servingElsewhere.contains(handler.method()))
+        .map(HandlerVersions::description)
+        .toList();
+
+  }
+
+  /**
+   * The <code>&#64;WorkflowTask</code> methods registered for one BPMN process and
+   * whether each of them serves one of the given versions.
+   */
+  private List<HandlerVersions> workflowTaskHandlerVersions(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Collection<String> servableVersions) {
 
     final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
-    final var tasks = entry == null
-        ? List.<String>of()
-        : List
-            .copyOf(entry.handlers)
-            .stream()
-            .filter(handler -> servableVersions
-                .stream()
-                .noneMatch(version -> handler.matchesVersion(version, resolver)))
-            .map(handler -> "@WorkflowTask method '%s' (version %s)"
-                .formatted(handler.describe(), handler.describeVersionsWithOrigin()))
-            .toList();
-    return java.util.stream.Stream
-        .of(
-            tasks,
-            bpmsInitiatedStarts.handlersNotServing(workflowModuleId, bpmnProcessId, servableVersions, resolver),
-            workflowEndedHandlers.handlersNotServing(workflowModuleId, bpmnProcessId, servableVersions, resolver))
-        .flatMap(List::stream)
+    if (entry == null) {
+      return List.of();
+    }
+    final var resolver = processVersions.resolverFor(workflowModuleId, bpmnProcessId);
+    return List
+        .copyOf(entry.handlers)
+        .stream()
+        .map(handler -> new HandlerVersions(
+            handler.describe(), "@WorkflowTask method '%s' (version %s)"
+                .formatted(handler.describe(), handler.describeVersionsWithOrigin()), servableVersions.stream()
+                    .anyMatch(version -> handler.matchesVersion(version, resolver))))
         .toList();
+
+  }
+
+  @Override
+  public boolean isDeclaredWithoutDeployment(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    return (entry != null) && !entry.wiringValidated;
+
+  }
+
+  @Override
+  public Collection<String> deployedProcessesOf(
+      final String workflowModuleId) {
+
+    return entries
+        .entrySet()
+        .stream()
+        .filter(entry -> entry.getKey().workflowModuleId().equals(workflowModuleId))
+        .filter(entry -> entry.getValue().wiringValidated)
+        .map(entry -> entry.getKey().bpmnProcessId())
+        .toList();
+
+  }
+
+  @Override
+  public void registerVersionsOfProcessesNobodyDeployed(
+      final String workflowModuleId,
+      final String adapterId,
+      final java.util.function.BiFunction<String, String, io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog> catalogOfProcess) {
+
+    final var entriesOfTheModule = entries
+        .entrySet()
+        .stream()
+        .filter(entry -> entry.getKey().workflowModuleId().equals(workflowModuleId))
+        .toList();
+    // a class serving a BPMN process this boot deployed is a class in play, and a further
+    // id IT declares is the renamed process this is about. A class whose processes were
+    // NONE of them deployed says nothing about a rename: it is a workflow service waiting
+    // for a model which has not arrived yet, and asking a BPMS about every id of it would
+    // bury the one case worth reporting
+    final var classesInPlay = entriesOfTheModule
+        .stream()
+        .filter(entry -> entry.getValue().wiringValidated)
+        .flatMap(entry -> entry.getValue().workflowServiceClasses.stream())
+        .collect(Collectors.toSet());
+    entriesOfTheModule
+        .stream()
+        .filter(entry -> !entry.getValue().wiringValidated)
+        .filter(entry -> entry.getValue().workflowServiceClasses.stream().anyMatch(classesInPlay::contains))
+        .forEach(entry -> processVersions
+            .register(
+                adapterId,
+                workflowModuleId,
+                entry.getKey().bpmnProcessId(),
+                catalogOfProcess.apply(workflowModuleId, entry.getKey().bpmnProcessId())));
 
   }
 

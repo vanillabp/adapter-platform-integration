@@ -4,6 +4,65 @@ Documents changes that were necessary when upgrading major dependency versions,
 so the reasoning can be looked up later (e.g. when upgrading BPMS adapters or
 applications built on VanillaBP).
 
+## A renamed BPMN process is checked like every other one (2026-09-04)
+
+A workflow module may rename a BPMN process and keep serving the workflows which still run under
+the old name. The declaration for it has existed since version 1 and it worked at runtime, since
+the handler registry follows the ids a `@WorkflowService` DECLARES rather than the ids a BPMN file
+carries:
+
+```java
+@WorkflowService(
+        workflowAggregateClass = OrderApproval.class,
+        bpmnProcess = @BpmnProcess(bpmnProcessId = "OrderApproval"),
+        secondaryBpmnProcesses = @BpmnProcess(bpmnProcessId = "order_approval", version = "1-3"))
+```
+
+What did not happen was the startup check for old process versions. It asks the BPMS about the
+versions of a process the application just deployed, and nothing is deployed under the old id, so
+the versions the running workflows are on were the ones nobody looked at. That is the gap this
+closes: the core asks each adapter of the workflow module what its BPMS holds for a declared id
+nothing arrived under, and every verdict of the check applies to it.
+
+**The first boot after this upgrade says more than before** where an application already renamed a
+process. A task of an old version which no `@WorkflowTask` method serves is a WARN, and an ERROR
+where workflows still run on that version - the same reports the check writes about the older
+versions of any process. A count of the workflows still running under the old id arrives as an
+INFO which says that they keep being served and when the declaration can go. And where the BPMS
+holds no version at all under the declared id, one WARN says so and names the ids the module
+deploys: after a rename that is what the old id looks like once its last workflow has ended, and
+it is also what a typo looks like.
+
+**Mind the numbering when you fade those versions out.** Every BPMN process id is counted from 1
+by the BPMS, so version 2 of the old id and version 2 of the new one are different models.
+`outfaded-versions` for the old versions belongs at the workflow level, under the OLD id
+(`vanillabp.workflow-modules.<module>.workflows.<old id>.adapters.<adapter>.outfaded-versions`).
+Written at adapter level the same specification covers the version the application just deployed
+under the new id, and the boot ends with the message about fading out the deployed version.
+Configuring properties for a BPMN process no resource of the module carries is still only a WARN,
+and it now names the declared id as one of the two cases where that is intended.
+
+**The warning about a method which never runs is one per workflow module now**, where it used to
+be one per BPMN process and adapter. A method is registered once per process its class declares,
+each with the version range of that declaration, so a method kept for the old id serves none of
+the new id's versions - and the old wording called exactly that method dead and asked for it to be
+removed. An application whose log carried such a warning for a method serving several processes
+will not find it any more; a method which serves no version of any of its processes is reported as
+before.
+
+For an adapter nothing is mandatory: `AdapterDeploymentService#processVersionCatalogOf` answers
+`null` by default, and the check stays as silent about a renamed id as it was before for a BPMS
+whose adapter does not implement it.
+
+**Whether the workflows under the old id are SERVED is the adapter's business**, and it is not the
+same everywhere: a Camunda 8 worker asks for a task definition and serves those workflows as long as
+that name does not carry the process id, while the Camunda 7 adapter wires the tasks of the models it
+deploys and does not reach the old id yet. Both say which of the two you are in while the application
+starts. The way which asks nothing of a BPMS is to keep deploying the old model under its old id until
+its workflows have ended, and the wiki page
+[Renaming a BPMN process](https://github.com/vanillabp/adapter-platform-integration/wiki/Renaming-a-BPMN-process)
+walks through both.
+
 ## The election cache's own numbers moved to a prefix of their own (2026-09-04)
 
 Five meters were renamed, and if you built a dashboard on a 2.0 snapshot this is the one

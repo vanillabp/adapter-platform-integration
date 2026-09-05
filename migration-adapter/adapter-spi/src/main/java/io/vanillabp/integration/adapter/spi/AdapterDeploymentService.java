@@ -155,6 +155,42 @@ public interface AdapterDeploymentService<BPMN, PC> extends ExtensionWiringServi
   }
 
   /**
+   * What this BPMS knows about the versions of a BPMN process this application DECLARES
+   * but deployed nothing under - the case a renamed BPMN process leaves behind. The old
+   * id stays in the BPMS with every version ever deployed under it and with the workflows
+   * still running on them, while the application brings only the new name and says so
+   * with <code>&#64;WorkflowService(secondaryBpmnProcesses = ...)</code>.
+   * <p>
+   * The core asks once per such id after the workflow module finished deploying, because
+   * only it knows which ids an application declared, and it registers what comes back
+   * like a catalog handed over by
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#registerProcessVersions}
+   * during <code>wireBpmn</code>. So the startup check for old process versions reaches
+   * the versions of the old id as well, instead of learning about a method nobody kept as
+   * an incident on a live workflow.
+   * <p>
+   * An adapter answering <code>null</code> - the default, and the honest answer of a BPMS
+   * which cannot be asked about the versions of a process - keeps working unchanged: the
+   * check stays silent about that id, exactly as before this method existed.
+   * <p>
+   * The id is the PLAIN one, so an adapter scopes it the way it scopes every other id (a
+   * prefix, a tenant) before it asks its BPMS. Costs one query per declared-only id and
+   * per boot, which is the shape decision 19 in the repository's DECISIONS.md asks for:
+   * it follows the declarations of the application, not its history.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The PLAIN BPMN process ID nothing was deployed under
+   * @return The versions of that process, or <code>null</code> where this BPMS cannot say
+   */
+  default io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog processVersionCatalogOf(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return null;
+
+  }
+
+  /**
    * Deploys the resources (process, decision matrix) to the target BPMS.
    *
    * @param workflowModuleId The workflow module ID

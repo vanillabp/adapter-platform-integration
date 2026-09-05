@@ -24,6 +24,12 @@ import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
  * an old model belongs to the adapter ({@link ProcessVersionCatalogAccess}), deciding
  * whether a method serves it belongs to the core, and the two ends meet here.
  * <p>
+ * "Older than what this boot deployed" has two readings, and both are ordinary. Where a
+ * model was deployed under that id, the version the BPMS assigned to it is the border.
+ * Where the application DECLARES the id without bringing a model for it - what renaming a
+ * BPMN process leaves behind, the old id living on in the BPMS with the workflows still
+ * running on it - there is no border and every version the BPMS holds is an older one.
+ * <p>
  * How loud a finding is depends on whether workflows still run on that version: a
  * version nobody runs is a warning, a version with running workflows is FATAL and,
  * where the operator asked for it, the end of the boot.
@@ -38,6 +44,10 @@ import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
  * follows the number of versions, which grows when somebody deploys a changed model and which
  * <code>outfaded-versions</code> is the operator's way to bound. It does not follow the number of
  * workflows, and it must not start to - decision 19.
+ * <p>
+ * A BPMN process id the application declares without deploying a model under it is one such
+ * process more, asked about like any other. That number follows the declarations of the
+ * application, which change when somebody edits them.
  */
 public class DeployedProcessVersionsCheck {
 
@@ -60,9 +70,10 @@ public class DeployedProcessVersionsCheck {
   }
 
   /**
-   * Which methods serve none of the versions worth serving - answered by the
-   * {@link WorkflowTaskRegistry} for all three annotations carrying a
-   * <code>version</code> attribute.
+   * Which methods registered for one BPMN process serve none of the versions worth
+   * serving, in that process and in every other BPMN process of the workflow module they
+   * are registered for - answered by the {@link WorkflowTaskRegistry} for all three
+   * annotations carrying a <code>version</code> attribute.
    */
   @FunctionalInterface
   public interface DeadHandlers {
@@ -70,8 +81,7 @@ public class DeployedProcessVersionsCheck {
     List<String> of(
         String workflowModuleId,
         String bpmnProcessId,
-        Collection<String> servableVersions,
-        VersionRange.ProcessVersionResolver resolver);
+        java.util.Map<String, Collection<String>> servableVersionsByProcess);
 
   }
 
@@ -114,21 +124,54 @@ public class DeployedProcessVersionsCheck {
   private final DeadHandlers deadHandlers;
 
   /**
+   * What the application declared and what was really deployed - the second reading of
+   * "older version" depends on it.
+   */
+  private final DeclaredBpmnProcesses declaredProcesses;
+
+  /**
    * The adapters already reported as unable to answer, so a BPMS which cannot read old
    * models says so once per process instead of once per version.
    */
   private final Set<String> reportedAsUnableToTell = ConcurrentHashMap.newKeySet();
 
+  /**
+   * What every BPMN process of a workflow module can be served with, collected while the
+   * processes are checked one by one - see {@link #reportDeadHandlers(String)}, whose
+   * verdict belongs to the whole module.
+   */
+  private final java.util.Map<String, List<HeldVersions>> heldVersionsPerModule = new ConcurrentHashMap<>();
+
+  /**
+   * What one BPMS holds for one BPMN process: everything, what of it is worth serving,
+   * and what the configuration faded out.
+   *
+   * @param adapterId The adapter ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @param all Every version that BPMS holds, the one this boot deployed included
+   * @param servable Those of them the configuration does not fade out
+   * @param outfaded The rest
+   */
+  private record HeldVersions(
+                              String adapterId,
+                              String bpmnProcessId,
+                              List<String> all,
+                              List<String> servable,
+                              List<String> outfaded) {
+  }
+
   public DeployedProcessVersionsCheck(
       final ProcessVersions processVersions,
       final OutfadedProcessVersions outfadedVersions,
       final UnservedTasks unservedTasks,
-      final DeadHandlers deadHandlers) {
+      final DeadHandlers deadHandlers,
+      final DeclaredBpmnProcesses declaredProcesses) {
 
     this.processVersions = processVersions;
     this.outfadedVersions = outfadedVersions;
     this.unservedTasks = unservedTasks;
     this.deadHandlers = deadHandlers;
+    this.declaredProcesses = declaredProcesses;
 
   }
 
@@ -159,7 +202,9 @@ public class DeployedProcessVersionsCheck {
 
   /**
    * The check for ONE adapter - the entry point of the tests, which hand in their own
-   * {@link ProcessVersionCatalogAccess}.
+   * {@link ProcessVersionCatalogAccess}. What it finds about methods which never run is
+   * remembered rather than reported: that verdict belongs to the whole workflow module
+   * and is drawn by {@link #reportDeadHandlers(String)}.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
@@ -175,24 +220,35 @@ public class DeployedProcessVersionsCheck {
       final VersionRange.ProcessVersionResolver resolver) {
 
     final var deployed = processVersions.deployedVersion(adapterId, workflowModuleId, bpmnProcessId);
-    if (deployed == null) {
+    // an id the application declares without bringing a model for it has no newer
+    // version to compare against, so everything the BPMS holds under it is older
+    final var everyHeldVersionIsOlder = (deployed == null) && (declaredProcesses != null) && declaredProcesses
+        .isDeclaredWithoutDeployment(workflowModuleId, bpmnProcessId);
+    if ((deployed == null) && !everyHeldVersionIsOlder) {
       // a BPMS counting no versions: there is no "older version" to speak of
       return;
     }
-    failIfDeployedVersionIsOutfaded(workflowModuleId, bpmnProcessId, adapterId, deployed, resolver);
+    if (deployed != null) {
+      failIfDeployedVersionIsOutfaded(workflowModuleId, bpmnProcessId, adapterId, deployed, resolver);
+    }
 
     final var known = catalog.deployedVersionsOf(workflowModuleId, bpmnProcessId);
     if ((known == null) || known.isEmpty()) {
+      if (everyHeldVersionIsOlder) {
+        reportDeclaredProcessNobodyHolds(workflowModuleId, bpmnProcessId, adapterId);
+      }
       return;
     }
-    reportDeadHandlers(workflowModuleId, bpmnProcessId, adapterId, known, deployed, resolver);
+    rememberHeldVersions(workflowModuleId, bpmnProcessId, adapterId, known, deployed, resolver);
     // asking the BPMS how many workflows run on a version is a QUERY, and three of the
     // reports below want the same answer for the same version. Asked once per version
     // and per run of this check, and only for a version somebody actually asks about
     final var instanceCounts = new InstanceCounts(workflowModuleId, bpmnProcessId, catalog);
-    final var olderVersions = olderThan(known, deployed);
+    final var olderVersions = everyHeldVersionIsOlder
+        ? identifiersOf(known)
+        : olderThan(known, deployed);
     reportWorkflowsOnOlderVersions(
-        workflowModuleId, bpmnProcessId, adapterId, olderVersions, instanceCounts, catalog);
+        workflowModuleId, bpmnProcessId, adapterId, olderVersions, instanceCounts, catalog, everyHeldVersionIsOlder);
     for (final var version : olderVersions) {
       if (outfadedVersions.isOutfaded(workflowModuleId, bpmnProcessId, adapterId, version, resolver)) {
         reportOutfadedVersionInUse(workflowModuleId, bpmnProcessId, adapterId, version, instanceCounts);
@@ -247,6 +303,8 @@ public class DeployedProcessVersionsCheck {
    * @param olderVersions The versions older than the deployed one
    * @param instanceCounts How many workflows run on a version, asked once per version
    * @param catalog What that BPMS can tell about the process
+   * @param nothingDeployedUnderThatId Whether the application declares this BPMN process
+   *          without bringing a model for it, which is what a rename leaves behind
    */
   private void reportWorkflowsOnOlderVersions(
       final String workflowModuleId,
@@ -254,7 +312,8 @@ public class DeployedProcessVersionsCheck {
       final String adapterId,
       final List<String> olderVersions,
       final InstanceCounts instanceCounts,
-      final ProcessVersionCatalogAccess catalog) {
+      final ProcessVersionCatalogAccess catalog,
+      final boolean nothingDeployedUnderThatId) {
 
     if (olderVersions.isEmpty()) {
       return;
@@ -282,6 +341,28 @@ public class DeployedProcessVersionsCheck {
       return;
     }
     final var missing = catalog.whatOlderVersionsMiss(workflowModuleId, bpmnProcessId);
+    final var whatThoseWorkflowsMiss = (missing == null) || missing.isBlank()
+        ? ""
+        : ": ".concat(missing);
+    if (nothingDeployedUnderThatId) {
+      log.info(
+          """
+              {} workflow(s) still run on BPMN process '{}' (workflow module '{}'), which this \
+              application does not deploy any more - adapter '{}' holds {} version(s) of it: {}. They \
+              keep being served because a @WorkflowService declares that id (secondaryBpmnProcesses), \
+              which is how a renamed BPMN process stays served, so this is not a defect. Whatever a \
+              newer model added reaches the version it was deployed as and no earlier one, so those \
+              workflows never get it{}. The number falls to zero as they end, and it is what tells \
+              you when the declaration and the methods serving it can go.""",
+          total,
+          bpmnProcessId,
+          workflowModuleId,
+          adapterId,
+          olderVersions.size(),
+          String.join(", ", olderVersions),
+          whatThoseWorkflowsMiss);
+      return;
+    }
     log.info(
         """
             {} workflow(s) of BPMN process '{}' (workflow module '{}') still run on {} version(s) \
@@ -295,20 +376,80 @@ public class DeployedProcessVersionsCheck {
         olderVersions.size(),
         adapterId,
         String.join(", ", olderVersions),
-        (missing == null) || missing.isBlank()
-            ? ""
-            : ": ".concat(missing));
+        whatThoseWorkflowsMiss);
 
   }
 
   /**
-   * Reports the methods which serve no version worth serving. "Worth
-   * serving" is what the BPMS holds minus what the configuration faded out, so fading
-   * out a version also tells the developer which methods just became pointless - the
-   * code-side counterpart of <code>outfaded-versions-in-use</code>, which speaks about
-   * running workflows only.
+   * Reports a BPMN process id the application declares although the BPMS holds nothing
+   * under it - not a failure: it is what an old id looks like once its last workflow
+   * ended, and it is also what a typo looks like.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID nothing was deployed under
+   * @param adapterId The adapter ID
    */
-  private void reportDeadHandlers(
+  private void reportDeclaredProcessNobodyHolds(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String adapterId) {
+
+    if (!reportedAsUnableToTell.add(adapterId
+        + "|nothing-held|"
+        + workflowModuleId
+        + "|"
+        + bpmnProcessId)) {
+      return;
+    }
+    log.warn(
+        """
+            A @WorkflowService of workflow module '{}' declares BPMN process '{}' \
+            (secondaryBpmnProcesses), but this application deploys no model under that id and \
+            adapter '{}' holds no version of it either - nothing this application does reaches that \
+            id. Where the process was renamed, this is what the old id looks like once its last \
+            workflow has ended: the declaration and the methods kept for it can go. Otherwise check \
+            the spelling against the BPMN process ids this workflow module deploys: {}.""",
+        workflowModuleId,
+        bpmnProcessId,
+        adapterId,
+        deployedProcessIdsOf(workflowModuleId));
+
+  }
+
+  /**
+   * The BPMN process ids of that workflow module a model WAS deployed under during this
+   * boot - what a developer compares a declared id which reaches nothing against.
+   */
+  private String deployedProcessIdsOf(
+      final String workflowModuleId) {
+
+    final var deployed = declaredProcesses
+        .deployedProcessesOf(workflowModuleId)
+        .stream()
+        .map("'%s'"::formatted)
+        .collect(Collectors.joining(", "));
+    return deployed.isEmpty()
+        ? "none"
+        : deployed;
+
+  }
+
+  /**
+   * Remembers what one BPMS holds for one BPMN process, for the dead-handler report of the
+   * whole workflow module. "Worth serving" is what the BPMS holds minus what the
+   * configuration faded out, so fading out a version also tells the developer which methods
+   * just became pointless - the code-side counterpart of
+   * <code>outfaded-versions-in-use</code>, which speaks about running workflows only.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @param adapterId The adapter ID
+   * @param known The versions that BPMS holds
+   * @param deployed The version this boot deployed, or <code>null</code> where nothing was
+   *          deployed under that id
+   * @param resolver Resolves version tags of that process
+   */
+  private void rememberHeldVersions(
       final String workflowModuleId,
       final String bpmnProcessId,
       final String adapterId,
@@ -327,7 +468,7 @@ public class DeployedProcessVersionsCheck {
             .filter(java.util.Objects::nonNull)
             .toList();
     // the version this boot deployed is held even where the BPMS did not list it
-    final var allHeld = heldVersions.contains(deployed)
+    final var allHeld = (deployed == null) || heldVersions.contains(deployed)
         ? heldVersions
         : java.util.stream.Stream.concat(heldVersions.stream(), java.util.stream.Stream.of(deployed)).toList();
     final var servable = allHeld
@@ -338,30 +479,85 @@ public class DeployedProcessVersionsCheck {
         .stream()
         .filter(version -> !servable.contains(version))
         .toList();
-    deadHandlers
-        .of(workflowModuleId, bpmnProcessId, servable, resolver)
+    heldVersionsPerModule
+        .computeIfAbsent(workflowModuleId, module -> new java.util.concurrent.CopyOnWriteArrayList<>())
+        .add(new HeldVersions(adapterId, bpmnProcessId, allHeld, servable, outfaded));
+
+  }
+
+  /**
+   * Reports the methods of a workflow module which serve no version worth serving - once
+   * the versions of every BPMN process of that module were read, because that is what the
+   * verdict needs.
+   * <p>
+   * A method is registered once per BPMN process its class declares, so a method which
+   * serves no version of one process may well be the one kept for another. That is the
+   * whole point of a declaration a renamed process leaves behind: the versions under the
+   * old id are what those methods exist for, and calling them dead would send a developer
+   * to remove exactly the code which keeps the running workflows alive. Which is why this
+   * is one statement per module rather than one per process, and why the registry gets the
+   * versions of all of them ({@link DeadHandlers}).
+   *
+   * @param workflowModuleId The workflow module whose processes were checked
+   */
+  public void reportDeadHandlers(
+      final String workflowModuleId) {
+
+    final var held = heldVersionsPerModule.remove(workflowModuleId);
+    if ((held == null) || (deadHandlers == null)) {
+      return;
+    }
+    final var servableVersionsByProcess = new java.util.LinkedHashMap<String, Collection<String>>();
+    held
+        .forEach(versions -> servableVersionsByProcess
+            .merge(
+                versions.bpmnProcessId(),
+                versions.servable(),
+                (
+                    alreadyKnown,
+                    ofAnotherAdapter) -> java.util.stream.Stream
+                        .concat(alreadyKnown.stream(), ofAnotherAdapter.stream())
+                        .distinct()
+                        .toList()));
+    held
+        .forEach(versions -> deadHandlers
+            .of(workflowModuleId, versions.bpmnProcessId(), servableVersionsByProcess)
+            .stream()
+            .filter(handler -> reportedAsUnableToTell.add(versions.adapterId()
+                + "|dead|"
+                + handler))
+            .forEach(handler -> log.warn(
+                """
+                    The {} of BPMN process '{}' (workflow module '{}') matches no version adapter '{}' \
+                    holds{} - the method never runs. Widen its version range, remove the method, or deploy \
+                    a version it serves.""",
+                handler,
+                versions.bpmnProcessId(),
+                workflowModuleId,
+                versions.adapterId(),
+                versions.outfaded().isEmpty()
+                    ? " (held: %s)".formatted(String.join(", ", versions.all()))
+                    : " (held: %s, of which %s %s faded out by '%s')".formatted(
+                        String.join(", ", versions.all()),
+                        String.join(", ", versions.outfaded()),
+                        versions.outfaded().size() == 1
+                            ? "is"
+                            : "are",
+                        OutfadedProcessVersions.propertyName(versions.adapterId())))));
+
+  }
+
+  /**
+   * The version identifiers of what a BPMS holds, in deployment order.
+   */
+  private static List<String> identifiersOf(
+      final List<DeployedProcessVersion> known) {
+
+    return known
         .stream()
-        .filter(handler -> reportedAsUnableToTell.add(adapterId
-            + "|dead|"
-            + handler))
-        .forEach(handler -> log.warn(
-            """
-                The {} of BPMN process '{}' (workflow module '{}') matches no version adapter '{}' \
-                holds{} - the method never runs. Widen its version range, remove the method, or deploy \
-                a version it serves.""",
-            handler,
-            bpmnProcessId,
-            workflowModuleId,
-            adapterId,
-            outfaded.isEmpty()
-                ? " (held: %s)".formatted(String.join(", ", allHeld))
-                : " (held: %s, of which %s %s faded out by '%s')".formatted(
-                    String.join(", ", allHeld),
-                    String.join(", ", outfaded),
-                    outfaded.size() == 1
-                        ? "is"
-                        : "are",
-                    OutfadedProcessVersions.propertyName(adapterId))));
+        .map(DeployedProcessVersion::version)
+        .filter(java.util.Objects::nonNull)
+        .toList();
 
   }
 
