@@ -800,6 +800,72 @@ public class DeploymentServiceTest {
   }
 
   @Nested
+  @DisplayName("An adapter runs before every extension")
+  class AdapterBeforeExtensionsTests {
+
+    /**
+     * The promise every extension builds on: the adapter of the BPMS has wired a BPMN
+     * process before an extension sees it, and it is processing workflows before an
+     * extension is started. That is what lets an extension hook its own listeners in
+     * relative to what the adapter put there instead of at a position it has to guess.
+     * The way down is the mirror image and is held by
+     * {@code extensionWiringServicesAreStoppedBeforeAdapter}.
+     */
+    @Test
+    @DisplayName("The adapter wires and starts a process before any extension does")
+    public void theAdapterIsFirstOnTheWayUp() {
+
+      final var properties = createPropertiesWithAdapter("adapter-test1");
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+      when(adapter1WiringService.getModelType()).thenReturn(Integer.class);
+      when(adapter1WiringService.getProcessContextType()).thenReturn(Integer.class);
+      when(extension1WiringService.getModelType()).thenReturn(Integer.class);
+      when(extension1WiringService.getProcessContextType()).thenReturn(Integer.class);
+      // the two extensions among themselves are ordered by what they ask for, and they
+      // are handed in the other order to show that the list they arrive in decides
+      // nothing
+      when(adapter1WiringService.getOrder()).thenReturn(1);
+      when(extension1WiringService.getOrder()).thenReturn(2);
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of(Map.entry("TestProcess", 42)));
+      when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
+          .thenReturn(100);
+
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService), List.of(extension1WiringService, adapter1WiringService));
+
+      testee
+          .deployResources(
+              List.of("test-module"),
+              bpmnFilesOnly(location -> Map.of("process.bpmn", createDummyBpmnInputStream())));
+      testee.startWorkflowProcessing(List.of("test-module"));
+
+      final var order = Mockito
+          .inOrder(adapter1DeploymentService, adapter1WiringService, extension1WiringService);
+      order
+          .verify(adapter1DeploymentService)
+          .wireBpmn(eq("test-module"), eq("process.bpmn"), eq("TestProcess"), eq(42), eq(100));
+      order
+          .verify(adapter1WiringService)
+          .wireBpmn(eq("test-module"), eq("process.bpmn"), eq("TestProcess"), eq(42), eq(100));
+      order
+          .verify(extension1WiringService)
+          .wireBpmn(eq("test-module"), eq("process.bpmn"), eq("TestProcess"), eq(42), eq(100));
+      order
+          .verify(adapter1DeploymentService)
+          .startWorkflowProcessing(eq("test-module"), eq(100));
+      order
+          .verify(adapter1WiringService)
+          .startWorkflowProcessing(eq("test-module"), eq(100));
+      order
+          .verify(extension1WiringService)
+          .startWorkflowProcessing(eq("test-module"), eq(100));
+
+    }
+
+  }
+
+  @Nested
   @DisplayName("stopWorkflowProcessing Tests")
   class StopWorkflowProcessingTests {
 
@@ -1847,6 +1913,8 @@ public class DeploymentServiceTest {
               org.mockito.ArgumentMatchers.any());
       order.verify(wiring).validateNoUnwiredWorkflowTaskMethods("test-module");
       order.verify(wiring).resolveProcessVersions("test-module");
+      // and last the report which judges nothing
+      order.verify(wiring).reportExtensionHandlerWiring("test-module");
 
     }
 

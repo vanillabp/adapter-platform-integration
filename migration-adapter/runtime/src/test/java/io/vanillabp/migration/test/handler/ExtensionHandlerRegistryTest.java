@@ -207,6 +207,38 @@ public class ExtensionHandlerRegistryTest {
 
   }
 
+  /**
+   * Two methods for one element of the model: one naming its BPMN element id, one naming
+   * its task definition. Which of them runs is what the order of the offered keys decides.
+   */
+  public static class TwoKeysOfOneElementService {
+
+    @Note(element = "Activity_Review")
+    public String byElementId(
+        final Payload payload) {
+
+      return "by-element-id";
+
+    }
+
+    @Note(element = "reviewTheNote")
+    public String byTaskDefinition(
+        final Payload payload) {
+
+      return "by-task-definition";
+
+    }
+
+    @Note(element = HandlerContract.EVERY_KEY)
+    public String everything(
+        final Payload payload) {
+
+      return "every";
+
+    }
+
+  }
+
   public static class MultiInstanceService {
 
     @Note(element = "TheTask")
@@ -480,6 +512,21 @@ public class ExtensionHandlerRegistryTest {
 
   }
 
+  /**
+   * A call offering several keys, in the order the extension prefers them.
+   */
+  private static HandlerCall callWithKeys(
+      final List<String> lookupKeys) {
+
+    return HandlerCall
+        .of(Note.class, MODULE, PROCESS)
+        .lookupKeys(lookupKeys)
+        .workflowAggregateId("4711")
+        .payload(new Payload("hello"))
+        .build();
+
+  }
+
   private record Fixture(
                          WorkflowTaskRegistry registry,
                          InMemoryPersistence persistence,
@@ -588,6 +635,61 @@ public class ExtensionHandlerRegistryTest {
   }
 
   @Test
+  @DisplayName("Of the keys offered, the first one a method serves wins")
+  public void theFirstKeyServedWins() {
+
+    final var fixture = fixture(TwoKeysOfOneElementService.class, TwoKeysOfOneElementService::new, true);
+    final var handlers = fixture
+        .registry()
+        .getExtensionHandlers();
+
+    assertEquals(
+        "by-element-id",
+        handlers
+            .invoke(callWithKeys(List.of("Activity_Review", "reviewTheNote")))
+            .orElseThrow());
+    // the same two methods, the same two keys, the other order
+    assertEquals(
+        "by-task-definition",
+        handlers
+            .invoke(callWithKeys(List.of("reviewTheNote", "Activity_Review")))
+            .orElseThrow());
+
+  }
+
+  @Test
+  @DisplayName("A key served later in the list beats the method serving every element")
+  public void aNamedKeyAlwaysBeatsTheCatchAll() {
+
+    final var fixture = fixture(TwoKeysOfOneElementService.class, TwoKeysOfOneElementService::new, true);
+
+    assertEquals(
+        "by-element-id",
+        fixture
+            .registry()
+            .getExtensionHandlers()
+            .invoke(callWithKeys(List.of("NobodyServesThis", "Activity_Review")))
+            .orElseThrow());
+
+  }
+
+  @Test
+  @DisplayName("An extension offering one key is matched as it always was")
+  public void oneKeyBehavesAsBefore() {
+
+    final var fixture = fixture(TwoKeysOfOneElementService.class, TwoKeysOfOneElementService::new, true);
+    final var handlers = fixture
+        .registry()
+        .getExtensionHandlers();
+
+    assertEquals("by-task-definition", handlers.invoke(callWithKeys(List.of("reviewTheNote"))).orElseThrow());
+    assertTrue(handlers.hasHandler(Note.class, MODULE, PROCESS, List.of("reviewTheNote")));
+    // and a key nobody names still ends at the method serving every element
+    assertEquals("every", handlers.invoke(callWithKeys(List.of("NobodyServesThis"))).orElseThrow());
+
+  }
+
+  @Test
   @DisplayName("A BPMN process no workflow service of this extension serves is answered with nothing")
   public void anUnservedProcessIsNoError() {
 
@@ -622,6 +724,48 @@ public class ExtensionHandlerRegistryTest {
         .invoke(call("TheTask").variable("kind", "CREATED").withoutSavingTheWorkflowAggregate().build());
 
     assertEquals(null, fixture.persistence().aggregates.get("4711").getTouched());
+
+  }
+
+  @Test
+  @DisplayName("A contract which never writes leaves the aggregate alone although the call asked for nothing")
+  public void aReadingContractDoesNotSaveTheAggregate() {
+
+    final var transactionRunner = new TransactionRunnerStub();
+    final var registry = new WorkflowTaskRegistry(transactionRunner);
+    final var persistence = new InMemoryPersistence();
+    final var aggregate = new Aggregate();
+    aggregate.id = "4711";
+    persistence.save(aggregate);
+    registry
+        .getExtensionHandlers()
+        .register(
+            HandlerContract
+                .of(EXTENSION, Note.class)
+                .lookupKeys(annotation -> ((Note) annotation).element().isEmpty()
+                    ? List.of()
+                    : List.of(((Note) annotation).element()))
+                .coreParameters(
+                    CoreHandlerParameter.WORKFLOW_AGGREGATE,
+                    CoreHandlerParameter.TASK_PARAM,
+                    CoreHandlerParameter.MULTI_INSTANCE)
+                .parameterBinder(parameter -> parameter.getType().equals(Payload.class)
+                    ? Optional.of(HandlerContext::getPayload)
+                    : Optional.empty())
+                .deliversReturnValue()
+                .neverSavesTheWorkflowAggregate()
+                .build());
+    registry
+        .registerWorkflowService(
+            MODULE, PROCESS, NotingService.class, NotingService::new, type -> null, processService(persistence));
+
+    // the call says nothing about saving, which normally means "save"
+    final var returned = registry
+        .getExtensionHandlers()
+        .invoke(call("TheTask").variable("kind", "CREATED").build());
+
+    assertEquals("4711/hello/CREATED", returned.orElseThrow());
+    assertNull(persistence.aggregates.get("4711").getTouched());
 
   }
 
@@ -953,6 +1097,91 @@ public class ExtensionHandlerRegistryTest {
     assertNull(
         HandlerMethodsNobodySees
             .reportFor(HiddenNoteService.class, HandlerMethodsNobodySees.CORE_HANDLER_ANNOTATIONS));
+
+  }
+
+  @Test
+  @DisplayName("The boot says which method of an extension serves which key")
+  public void theBootSaysWhatWasWired() {
+
+    final var fixture = fixture(TwoKeysOfOneElementService.class, TwoKeysOfOneElementService::new, true);
+
+    final var said = whatWasReported(() -> fixture.registry().reportExtensionHandlerWiring(MODULE));
+
+    assertEquals(1, said.size(), said.toString());
+    final var line = said.getFirst();
+    assertTrue(line.contains(EXTENSION), line);
+    assertTrue(line.contains("@Note"), line);
+    assertTrue(line.contains(MODULE), line);
+    assertTrue(line.contains(PROCESS), line);
+    assertTrue(line.contains(TwoKeysOfOneElementService.class.getName()), line);
+    assertTrue(line.contains("byElementId"), line);
+    assertTrue(line.contains("'Activity_Review'"), line);
+    assertTrue(line.contains("byTaskDefinition"), line);
+    assertTrue(line.contains("'reviewTheNote'"), line);
+    // and which of them is the one running where no key is served
+    assertTrue(line.contains("everything"), line);
+    assertTrue(line.contains("every element of the BPMN process"), line);
+
+  }
+
+  @Test
+  @DisplayName("A contract registered after its module was deployed still gets its line")
+  public void aLateContractIsReportedToo() {
+
+    final var registry = new WorkflowTaskRegistry(new TransactionRunnerStub());
+    registry
+        .registerWorkflowService(
+            MODULE,
+            PROCESS,
+            NotingService.class,
+            NotingService::new,
+            type -> null,
+            processService(new InMemoryPersistence()));
+
+    final var whileNothingWasWired = whatWasReported(() -> registry.reportExtensionHandlerWiring(MODULE));
+    final var whenTheContractArrived = whatWasReported(
+        () -> registry.getExtensionHandlers().register(noteContract()));
+
+    assertEquals(List.of(), whileNothingWasWired);
+    assertEquals(1, whenTheContractArrived.size(), whenTheContractArrived.toString());
+    assertTrue(whenTheContractArrived.getFirst().contains("noteOfTheTask"), whenTheContractArrived.toString());
+
+  }
+
+  @Test
+  @DisplayName("A workflow module without handler methods of an extension says nothing")
+  public void aModuleWithoutSuchMethodsSaysNothing() {
+
+    final var fixture = fixture(NotingService.class, NotingService::new, true);
+
+    assertEquals(
+        List.of(),
+        whatWasReported(() -> fixture.registry().reportExtensionHandlerWiring("another-module")));
+
+  }
+
+  /**
+   * What the registry wrote while the given work ran.
+   */
+  private static List<String> whatWasReported(
+      final Runnable work) {
+
+    final var logWatcher = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    logWatcher.start();
+    final var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory
+        .getLogger(io.vanillabp.integration.adapter.migration.handler.ExtensionHandlerRegistry.class);
+    logger.addAppender(logWatcher);
+    try {
+      work.run();
+      return logWatcher.list
+          .stream()
+          .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
+          .filter(message -> message.contains("serves BPMN process"))
+          .toList();
+    } finally {
+      logger.detachAppender(logWatcher);
+    }
 
   }
 

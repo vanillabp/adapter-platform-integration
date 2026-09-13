@@ -46,8 +46,9 @@ import java.util.Collection;
  * <b>What the core does on its own</b>, once the last adapter of a workflow module
  * finished deploying: {@link #validateNoUnwiredWorkflowTaskMethods(String)},
  * {@link #registerVersionsOfProcessesNobodyDeployed(String, String, java.util.function.BiFunction)},
- * {@link #resolveProcessVersions(String)} and the report about the processes
- * {@link #bpmnProcessesWithoutWorkflowService(String)} names. All four are module-level
+ * {@link #resolveProcessVersions(String)}, {@link #reportExtensionHandlerWiring(String)}
+ * and the report about the processes
+ * {@link #bpmnProcessesWithoutWorkflowService(String)} names. All of them are module-level
  * and answered from what the application declared next to what the adapters wired, so the
  * core knows the moment and takes the duty - an adapter must NOT call them.
  */
@@ -149,6 +150,22 @@ public interface WorkflowTaskWiring {
    */
   void validateNoUnwiredWorkflowTaskMethods(
       String workflowModuleId);
+
+  /**
+   * Writes what the handler methods of the extensions were wired to in this workflow
+   * module, the way the <code>&#64;WorkflowTask</code> side of a module is reported.
+   * Called by the CORE once the module is deployed; an adapter must not call it.
+   * <p>
+   * The default does nothing, which keeps a test double of this SPI compiling.
+   *
+   * @param workflowModuleId The workflow module ID
+   */
+  default void reportExtensionHandlerWiring(
+      final String workflowModuleId) {
+
+    // the core answers this
+
+  }
 
   /**
    * Which of the given names are attributes of the workflow aggregate that are NOT

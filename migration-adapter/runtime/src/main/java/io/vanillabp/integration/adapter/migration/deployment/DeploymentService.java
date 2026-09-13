@@ -283,6 +283,10 @@ public class DeploymentService {
    * What stays with the adapter is
    * {@code WorkflowTaskWiring#registerDeployedVersion}: only the adapter knows which
    * version its BPMS ended up with.
+   * <p>
+   * The report about the handler methods of the extensions runs here as well. It judges
+   * nothing, it says what was wired, and this is the moment everything it names is
+   * known.
    *
    * @param workflowModuleId The workflow module which finished deploying
    */
@@ -301,6 +305,9 @@ public class DeploymentService {
     // are placed
     workflowTaskWiring.validateNoUnwiredWorkflowTaskMethods(workflowModuleId);
     workflowTaskWiring.resolveProcessVersions(workflowModuleId);
+    // and last what nothing is judged by: which method of an extension serves which key
+    // of which process, so a developer whose method is not called has something to read
+    workflowTaskWiring.reportExtensionHandlerWiring(workflowModuleId);
 
   }
 

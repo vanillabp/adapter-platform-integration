@@ -26,6 +26,22 @@ public interface SampleNoteService<A> {
       SampleNoteDetails.Kind kind);
 
   /**
+   * The same, for an element this extension can name in more than one way: its BPMN
+   * element id and the task definition of the same element, say. The keys are offered in
+   * the order this extension prefers them, and the first one a method of the application
+   * serves wins.
+   *
+   * @param workflowAggregate The workflow aggregate of the workflow
+   * @param lookupKeys The keys naming the element, most wanted first
+   * @param kind What happened to it
+   * @return The note, or empty where no method serves any of the keys
+   */
+  Optional<SampleNoteDetails> noteOfKeys(
+      A workflowAggregate,
+      java.util.List<String> lookupKeys,
+      SampleNoteDetails.Kind kind);
+
+  /**
    * The same, for an event which is more than a read: what the method changed on the
    * workflow aggregate is saved.
    *

@@ -93,6 +93,38 @@ public class NotedWorkflowService {
   }
 
   /**
+   * One of two methods for the same user task, this one naming its BPMN element id. Which
+   * of the two runs is decided by the order the extension offers its keys in, and the
+   * element id is the one VanillaBP asks for first.
+   *
+   * @param prefilled The note this extension prefilled
+   * @return The note the extension publishes
+   */
+  @SampleNote(element = TestApplication.USER_TASK_ID)
+  public SampleNoteDetails noteOfTheUserTaskByElementId(
+      final SampleNoteDetails prefilled) {
+
+    prefilled.setTitle("by-element-id");
+    return prefilled;
+
+  }
+
+  /**
+   * The other one, naming the task definition of the same user task.
+   *
+   * @param prefilled The note this extension prefilled
+   * @return The note the extension publishes
+   */
+  @SampleNote(taskDefinition = TestApplication.USER_TASK_DEFINITION)
+  public SampleNoteDetails noteOfTheUserTaskByTaskDefinition(
+      final SampleNoteDetails prefilled) {
+
+    prefilled.setTitle("by-task-definition");
+    return prefilled;
+
+  }
+
+  /**
    * A method of the extension which VanillaBP never sees, because the scan of a handler
    * contract reads the PUBLIC methods of a workflow service class the way the scan of
    * <code>&#64;WorkflowTask</code> does. Nothing about the wiring gives that away for an

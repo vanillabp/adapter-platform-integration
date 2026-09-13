@@ -54,6 +54,16 @@ public class SampleNoteServiceFactory implements AggregateServiceFactory<SampleN
       }
 
       @Override
+      public Optional<SampleNoteDetails> noteOfKeys(
+          final Object workflowAggregate,
+          final List<String> lookupKeys,
+          final SampleNoteDetails.Kind kind) {
+
+        return invoke(workflowAggregate, lookupKeys, kind, false);
+
+      }
+
+      @Override
       public Optional<SampleNoteDetails> recordNoteOf(
           final Object workflowAggregate,
           final String elementId,
@@ -69,11 +79,24 @@ public class SampleNoteServiceFactory implements AggregateServiceFactory<SampleN
           final SampleNoteDetails.Kind kind,
           final boolean saving) {
 
+        return invoke(workflowAggregate, List.of(elementId), kind, saving);
+
+      }
+
+      private Optional<SampleNoteDetails> invoke(
+          final Object workflowAggregate,
+          final List<String> lookupKeys,
+          final SampleNoteDetails.Kind kind,
+          final boolean saving) {
+
+        final var elementId = lookupKeys.getFirst();
         final var prefilled = new SampleNoteDetails(
             elementId, kind, "%s %s".formatted(configuredGreeting(), elementId));
         final var call = HandlerCall
             .of(SampleNote.class, context.getWorkflowModuleId(), context.getBpmnProcessId())
-            .lookupKeys(List.of(elementId))
+            // the element id first and the task definition after it, which is the order
+            // VanillaBP asks an extension to offer
+            .lookupKeys(lookupKeys)
             .workflowAggregateId(context.getWorkflowAggregateId(workflowAggregate))
             .payload(prefilled)
             .variable("kind", kind.name());

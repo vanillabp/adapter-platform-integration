@@ -1332,9 +1332,10 @@ to be told which one.
 
 A boot can only say that the handler MAY save. Whether a single call saves is the extension's choice
 per call, and an extension asking for a reading handler says so at the call. The message is worded
-accordingly. Warning about what is allowed says something where nothing happened; saying nothing
-until a write is lost says nothing where it mattered, and of the two only the first can be read and
-dismissed.
+accordingly. An extension whose handlers never write at all says that on its contract instead, and
+then there is nothing to report; entry 50 says why that statement belongs there. Warning about what
+is allowed says something where nothing happened; saying nothing until a write is lost says nothing
+where it mattered, and of the two only the first can be read and dismissed.
 
 The question goes to the persistence of the aggregate, not to an annotation of the class.
 `AggregatePersistenceAware.detectsConcurrentModification` answers it, its default looks for the
@@ -1462,3 +1463,90 @@ a connection pool survives.
 `ARejectedDispatchIsPlannedAgainTest` holds both ends: the call reaches the consumer once and the
 entry is ticked off, and the workflow which is searchable is served first while the other one waits.
 `GruelboxWritesTheDueTimeADispatchAskedForTest` holds the due time in the row.
+
+### 50. An extension may say while it is wired that a handler never writes
+
+Entry 45 warns about a handler an extension may have VanillaBP save. That warning is about what is
+allowed rather than about what happened, so it also reaches an extension whose handlers only read.
+The Business Cockpit is that case: its details providers read the aggregate to build what is shown,
+and they never write. Every application using the cockpit would read the warning at every start about
+something which cannot happen, and a warning nobody can act on is one people learn to skip.
+
+A call can already say that the aggregate is not to be saved, but it says it too late. The check runs
+while the methods are wired, and at that moment nobody has called anything. So the same statement is
+made on the handler contract, once, and it is there when the methods are found.
+
+It belongs to the contract and not to the extension, because one extension can have both kinds: a
+provider which reads and a notification which writes. Two kinds are two contracts, which such an
+extension writes anyway, since the two carry different annotations.
+
+The contract outranks the call. A call of a reading contract does not save whatever it asks for, and
+asking is not refused: saving is what a call does unless it says otherwise, so refusing the
+contradiction would refuse a caller for a sentence they never wrote. What is switched off is the save
+VanillaBP performs. A persistence layer which writes a managed object by itself still writes it when
+the transaction commits, which is the boundary a reading call has as well.
+
+### 51. The keys an invocation offers are ranked, and the element id comes first
+
+An extension names the element its event is about in more than one way: the BPMN element id and the
+task definition of the same element. It offers those keys and VanillaBP picks a method for one of
+them. The pick used to walk the METHODS and ask each of them whether it serves any offered key, so
+the winner was decided by the order the class scan had found the methods in, which is the order a
+platform's reflection happens to return. Two methods of an application, one per key, therefore won
+against each other by chance.
+
+So the walk is turned around. The keys are walked in the order the caller offered them, and all
+methods are asked about one key before the next key is tried. The first key somebody serves wins,
+which makes the order of the offered list the rank, and the method serving every element of the
+process stays the fallback for the case that no offered key is served at all.
+
+The rank itself is a direction of the platform rather than a choice of each extension: the element id
+first, the task definition after it. The element id is the identity everything moves to, the
+`taskDefinition` attribute of the annotations goes away later, and a VanillaBP BPMN of our own names
+element ids while the adapter adds what its BPMS needs. An extension built on that order keeps
+working unchanged through the removal, because the list then simply loses its second entry.
+
+`ExtensionHandlers.hasHandler` takes a `List` for it. A `Collection` has no order anybody promised,
+and the same question answered from an unordered argument would be half the promise. It is the one
+place this is not additive, and it is narrower on purpose.
+
+The keys a METHOD declares carry no rank of their own. A method says what it answers to, and that is
+a set; the rank belongs to the question, not to the answer. Nor does the platform check that an
+extension really offers the element id first, because a string does not say what it is, and a check
+which guesses would be one more thing to be wrong.
+
+Next to the pick there is now a line per extension, workflow module and BPMN process which says what
+was wired: the methods, the keys each of them serves, and which of them serves every element.
+Everything it names was in the registry already, so no hook was added to the handler contract for it.
+The report is written once the workflow module is deployed, which is the moment the `@WorkflowTask`
+side of a module is judged at, and a contract registered after that writes its own line when it
+arrives. A BPMN process an extension has no method for is not named: most pairs of extension and
+process have nothing to say, and the method nobody can see has its own report.
+
+### 52. The adapter runs before every extension, and two extensions are not ordered against each other
+
+An adapter and an extension work on the same BPMN model, so one of them is first. VanillaBP promises
+which: the adapter has wired a BPMN process before any extension sees that process, and it is
+processing workflows before any extension is started. Going down, extensions stop first and the
+adapters last, so nothing is stopped while something else still feeds it.
+
+What an extension builds on is therefore a relative position, not a number. It adds its listener
+behind the last one of a kind the adapter put there, which keeps working when the adapter changes
+what it writes. On Camunda 8 the Business Cockpit adds its `creating` listener behind the last
+`creating` one and the rest behind everything; on Camunda 7 the adapter offers
+`parseListenersAfter` and `parseListenersBefore` for the rare case of an element which has to be
+seen untouched.
+
+The order of two extensions among themselves is deliberately not promised. They are sorted by the
+order each asks for, and two extensions which do not know each other cannot agree on a number, so
+two of the same order run in the order the platform collected their beans in. Giving out a first and
+a last position instead would only move the problem: the second extension wanting to be last is
+where such a scheme ends, while a relative hook needs no agreement at all.
+
+The promise used to live as javadoc in three repositories and nowhere as a statement about
+VanillaBP, so an extension author found it by opening the right one by chance. It is now on the wiki
+page `Extensions`, in `ADAPTER-AUTHORS.md` for the other side, and in the javadoc of
+`ExtensionWiringService`. `DeploymentServiceTest#theAdapterIsFirstOnTheWayUp` holds the way up and
+`#extensionWiringServicesAreStoppedBeforeAdapters` the way down, in the platform rather than in the
+repository of one extension: a promise of VanillaBP which only an extension tests goes away with
+that extension.

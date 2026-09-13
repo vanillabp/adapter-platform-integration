@@ -23,11 +23,17 @@ import java.util.function.Function;
  * {@link Builder#lookupKeys(Function)} reads from it. A method whose annotation names
  * none serves its own METHOD NAME, which is the convention
  * <code>&#64;WorkflowTask</code> follows too; {@link #EVERY_KEY} makes it serve every
- * key of its BPMN process. An invocation hands in the keys it accepts (a task definition
- * and an element id, say), and the method NAMING one of them runs; where none does, the
+ * key of its BPMN process. An invocation hands in the keys it accepts (an element id and
+ * a task definition, say), and the method NAMING one of them runs; where none does, the
  * method serving every key runs. So a catch-all may stand next to methods for single
  * elements, and the specific one wins - the rule
  * <code>&#64;WorkflowStartedByBpms</code> follows for its start events too.
+ * <p>
+ * <b>Which key wins is the order of the invocation's list.</b> Where two methods serve
+ * one element under two keys, the key offered first decides, so an extension says with
+ * that order which identity of an element it prefers. The keys a METHOD declares carry no
+ * such rank: a method says what it answers to, and that is a set (see decision 51 in the
+ * repository's DECISIONS.md).
  * <p>
  * <b>Zero matches are legal.</b> Nothing is registered for a BPMN process whose
  * workflow service carries no such method, and an invocation for it answers
@@ -36,6 +42,11 @@ import java.util.function.Function;
  * Cockpit passes its prefilled details through unchanged). Two methods naming the same
  * key of one BPMN process, on the other hand, end the boot, and so do two catch-alls:
  * which of them was meant cannot be guessed.
+ * <p>
+ * <b>Saving the workflow aggregate is the normal case</b> and a call may switch it off
+ * ({@link HandlerCall.Builder#withoutSavingTheWorkflowAggregate()}). An extension whose
+ * methods never write says it here instead
+ * ({@link Builder#neverSavesTheWorkflowAggregate()}), once, for all of them.
  */
 public final class HandlerContract {
 
@@ -61,6 +72,8 @@ public final class HandlerContract {
 
   private final boolean deliversReturnValue;
 
+  private final boolean savesWorkflowAggregate;
+
   private HandlerContract(
       final Builder builder) {
 
@@ -71,6 +84,7 @@ public final class HandlerContract {
     this.parameterBinders = List.copyOf(builder.parameterBinders);
     this.annotationCheck = builder.annotationCheck;
     this.deliversReturnValue = builder.deliversReturnValue;
+    this.savesWorkflowAggregate = builder.savesWorkflowAggregate;
 
   }
 
@@ -158,6 +172,19 @@ public final class HandlerContract {
   }
 
   /**
+   * Whether VanillaBP saves the workflow aggregate after a method of this contract ran.
+   * <code>false</code> is the extension's statement that none of its methods writes, and
+   * then no call of this contract saves either.
+   *
+   * @return Whether the aggregate is saved where the call asks for it
+   */
+  public boolean savesWorkflowAggregate() {
+
+    return savesWorkflowAggregate;
+
+  }
+
+  /**
    * Builds a {@link HandlerContract}.
    */
   public static final class Builder {
@@ -175,6 +202,8 @@ public final class HandlerContract {
     private HandlerAnnotationCheck annotationCheck;
 
     private boolean deliversReturnValue = false;
+
+    private boolean savesWorkflowAggregate = true;
 
     private Builder(
         final String extensionId,
@@ -269,6 +298,31 @@ public final class HandlerContract {
     public Builder deliversReturnValue() {
 
       this.deliversReturnValue = true;
+      return this;
+
+    }
+
+    /**
+     * Declares that no method of this contract ever writes the workflow aggregate, so
+     * VanillaBP never saves it after one of them ran - whatever a single call asks for.
+     * <p>
+     * It is the same statement a call makes with
+     * {@link HandlerCall.Builder#withoutSavingTheWorkflowAggregate()}, made once and for
+     * all methods the annotation carries. The difference is who can read it: at the call
+     * only the caller knows, while this is known while the methods are wired, which is
+     * where VanillaBP warns about a handler which may write an aggregate nothing would
+     * notice a second writer on (see decision 50 in the repository's DECISIONS.md).
+     * Such a contract is not warned about, because there is nothing to warn about.
+     * <p>
+     * Say it only if it holds for every method of the annotation. An extension with
+     * reading providers and writing notifications describes them as two contracts, and
+     * that is the more precise application anyway.
+     *
+     * @return This builder
+     */
+    public Builder neverSavesTheWorkflowAggregate() {
+
+      this.savesWorkflowAggregate = false;
       return this;
 
     }

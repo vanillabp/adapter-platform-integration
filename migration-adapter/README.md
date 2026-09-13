@@ -597,6 +597,7 @@ sequenceDiagram
   DS->>AD: processVersionCatalogOf(module, process)  [per id declared but not deployed, null = cannot say]
   DS->>WT: validateNoUnwiredWorkflowTaskMethods(module)
   DS->>WT: resolveProcessVersions(module)
+  DS->>WT: reportExtensionHandlerWiring(module)  [INFO naming the handler methods of every extension]
   Note over DS: failure → deployment-failure policy: fail | warn (non-first-priority only)
   P->>DS: application ready
   DS->>AD: startWorkflowProcessing(module, PC)  — every adapter of the union
@@ -2445,13 +2446,20 @@ that wants to CONTRIBUTE to the adapter's processing context has to declare that
 context type and thereby becomes BPMS-specific, whereas an extension that only reads the
 model can stay generic.
 
-**Ordering.** All wiring services of a module — adapters and extensions — are sorted by
-`getOrder()` ascending, once at startup. Order matters whenever two of them touch the same
-model: VanillaBP's own wiring decides which BPMN elements are served by `@WorkflowTask`
-methods, so an extension reacting to that result has to run afterwards (the Business
-Cockpit's listeners are consistently ordered last). Shutdown is the mirror image:
-`stopWorkflowProcessing` runs on the extensions first (in reverse wiring order), then on
-the adapters, so nothing is stopped while something else still feeds it.
+**Ordering.** The adapter of the BPMS runs before every extension: it has wired a BPMN process
+before any extension sees that process, and it is processing workflows before any extension is
+started. Shutdown is the mirror image, extensions first and adapters last, so nothing is stopped
+while something else still feeds it. That promise is what lets an extension hook what it adds to a
+model in relative to what the adapter put there, for example behind the last listener of a kind,
+and it is written for extension authors on the wiki page
+[Extensions](https://github.com/vanillabp/adapter-platform-integration/wiki/Extensions) rather
+than only in a javadoc.
+
+The extensions among themselves are sorted by `getOrder()` ascending, once at startup, and that
+order is NOT promised: two extensions which do not know each other cannot agree on a number, and two
+of the same order run in the order the platform collected their beans in.
+`DeploymentServiceTest#theAdapterIsFirstOnTheWayUp` holds the promise for the way up and
+`#extensionWiringServicesAreStoppedBeforeAdapters` for the way down.
 
 **An extension may define its own SPI.** `wireBpmn` is where an extension's own
 annotations become alive — the Business Cockpit finds `@UserTaskDetailsProvider` methods
@@ -2516,17 +2524,18 @@ HandlerContract
     .build();
 ```
 
-|   Part of the contract    |                                                      What it decides                                                      |
-|---------------------------|---------------------------------------------------------------------------------------------------------------------------|
-| annotation type           | which methods belong to the extension; repeatable annotations are supported                                               |
-| `lookupKeys(…)`           | the keys one occurrence names — an EMPTY list means the method's own name, `EVERY_KEY` means every element of the process |
-| `coreParameters(…)`       | which of the parameters VanillaBP binds itself may stand there (`@TaskId`/`@TaskEvent` are deliberately not among them)   |
-| `parameterBinder(…)`      | the parameters of the extension's own SPI, recognized by type or by annotation                                            |
-| `deliversReturnValue()`   | whether what a method returns reaches the caller; without it a method has to be `void`                                    |
-| `validatingAnnotation(…)` | what the extension checks about one occurrence of its annotation, while the scan holds the method carrying it             |
+|        Part of the contract        |                                                      What it decides                                                      |
+|------------------------------------|---------------------------------------------------------------------------------------------------------------------------|
+| annotation type                    | which methods belong to the extension; repeatable annotations are supported                                               |
+| `lookupKeys(…)`                    | the keys one occurrence names — an EMPTY list means the method's own name, `EVERY_KEY` means every element of the process |
+| `coreParameters(…)`                | which of the parameters VanillaBP binds itself may stand there (`@TaskId`/`@TaskEvent` are deliberately not among them)   |
+| `parameterBinder(…)`               | the parameters of the extension's own SPI, recognized by type or by annotation                                            |
+| `deliversReturnValue()`            | whether what a method returns reaches the caller; without it a method has to be `void`                                    |
+| `validatingAnnotation(…)`          | what the extension checks about one occurrence of its annotation, while the scan holds the method carrying it             |
+| `neverSavesTheWorkflowAggregate()` | that no method of this annotation ever writes the aggregate, so nothing is saved and nothing is warned about              |
 
-An invocation (`ExtensionHandlers#invoke`) names the keys it accepts — a task definition
-and an element id, say — and the method NAMING any of them runs; where none does, the
+An invocation (`ExtensionHandlers#invoke`) names the keys it accepts — an element id and
+a task definition, say — and the method NAMING any of them runs; where none does, the
 method serving `EVERY_KEY` does, so a catch-all may stand next to methods for single
 elements (the rule `@WorkflowStartedByBpms` follows for its start events too). **Zero matches are
 legal** and answered with an empty result: what to do instead is the extension's business
@@ -2535,6 +2544,37 @@ one key of one BPMN process end the boot naming both. A call may hand IN an aggr
 instead of naming its ID, may say that the aggregate is not to be saved, and may say that
 it runs in the transaction the caller is already in — which is what an embedded BPMS needs,
 since Camunda 7 delivers its task events inside the engine's own transaction.
+
+**An extension whose handlers only read says so while it is wired.** A call can already ask for a
+handler to run without the aggregate being saved afterwards, but a call says it too late for the
+warning about a second writer: that warning is written while the methods are found, and at that
+moment nobody has called anything. `neverSavesTheWorkflowAggregate()` is the same statement made on
+the contract, once, and a contract carrying it is not warned about at all. It outranks the call,
+so a call of such a contract saves nothing whatever it asks for, and asking is not refused, because
+saving is what a call does unless it says otherwise. The statement sits on the contract rather than
+on the extension because one extension can have both kinds, a provider which reads and a
+notification which writes, and those are two annotations and therefore two contracts anyway
+(decision 50 in the repository's `DECISIONS.md`).
+
+**Which key wins is the order of the offered list.** The keys are walked in the order the caller
+offered them and every method is asked about one key before the next is tried, so the first key some
+method serves wins and the rank is the caller's list. The platform asks every extension for the same
+order, the BPMN element id first and the task definition after it, because the element id is the
+identity everything moves to and an extension built on that order survives the removal of
+`taskDefinition` unchanged. `hasHandler` therefore takes a `List` rather than a `Collection`: an
+order the caller does not have to promise is none. The keys a METHOD declares have no rank, the
+method serving `EVERY_KEY` stays the fallback where no offered key is served at all, and nothing
+checks that the element id really comes first, since a string does not say what it is (decision 51 in
+the repository's `DECISIONS.md`).
+
+**The start says what was wired.** Once a workflow module is deployed, the registry writes one line
+per extension, workflow module and BPMN process naming the methods and the keys each of them serves,
+with the catch-all marked as the one serving every element. It is what a developer reads whose method
+is never called, and everything it names sits in the registry already, so the handler contract needed
+no hook for it. A contract registered after the module was deployed writes its own line when it
+arrives, and a BPMN process an extension has no method for is not named at all.
+`ExtensionHandlerRegistryTest#theBootSaysWhatWasWired` holds the line in the core, and each platform
+reads it out of a booted application (`ExtensionHandlerWiringReportTest`).
 
 **Registration order does not matter.** Whether the extension's bean or the scan of the
 workflow services comes first depends on what else the application does, so a contract
@@ -2897,6 +2937,12 @@ The core answers the part it owns, and only that part:
   of the annotation so JPA and Spring Data are covered without a dependency on either, and
   warns once per BPMN process where there is none. An aggregate with a version attribute stays
   quiet, because then the collision is the exception above instead of a lost write.
+- The second writer a dependency brings is hinted at the same way. `SavingHandlerCheck` warns once
+  per BPMN process where an extension has handler methods VanillaBP may save afterwards and the
+  aggregate has no version attribute, naming the extension and its annotation. An extension whose
+  contract says that none of its methods ever writes is not reported, because then the save does not
+  happen (see [handler contracts](#the-extensions-own-annotation-handler-contracts) and decisions 45
+  and 50).
 - The hint reads the versions the BPMS still HOLDS as well. An older version with a parallel
   gateway the newest model dropped keeps forking every workflow started before it, and those
   are the workflows which run longest, so a hint drawn from this boot's model alone misses the

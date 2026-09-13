@@ -29,6 +29,12 @@ public class NoteTaskWiringSource implements DummyTaskWiringSource {
    */
   public static final String NAME = "Review the note";
 
+  /**
+   * The task definition of the same element - the second name the element has, and the one
+   * the extension offers after its id.
+   */
+  public static final String TASK_DEFINITION = "reviewTheNote";
+
   @Override
   public Collection<BpmnTaskSpec> tasksOf(
       final String adapterId,
@@ -36,7 +42,7 @@ public class NoteTaskWiringSource implements DummyTaskWiringSource {
       final String bpmnProcessId) {
 
     return "NoteProcess".equals(bpmnProcessId)
-        ? List.of(BpmnTaskSpec.userTask(ACTIVITY_ID, "reviewTheNote", NAME))
+        ? List.of(BpmnTaskSpec.userTask(ACTIVITY_ID, TASK_DEFINITION, NAME))
         : List.of();
 
   }

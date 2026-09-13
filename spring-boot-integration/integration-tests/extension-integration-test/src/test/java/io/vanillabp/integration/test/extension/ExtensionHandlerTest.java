@@ -90,6 +90,35 @@ public class ExtensionHandlerTest {
   }
 
   @Test
+  @DisplayName("Of the keys the extension offers, the first one a method serves wins")
+  public void theFirstKeyOfferedWins() {
+
+    final var aggregate = startWorkflow("two-names-for-one-element");
+    final var notes = workflowService.getNoteService();
+
+    assertEquals(
+        "by-element-id",
+        notes
+            .noteOfKeys(
+                aggregate,
+                java.util.List.of(TestApplication.USER_TASK_ID, TestApplication.USER_TASK_DEFINITION),
+                SampleNoteDetails.Kind.CREATED)
+            .orElseThrow()
+            .getTitle());
+    // the same element, the same two methods, the other order
+    assertEquals(
+        "by-task-definition",
+        notes
+            .noteOfKeys(
+                aggregate,
+                java.util.List.of(TestApplication.USER_TASK_DEFINITION, TestApplication.USER_TASK_ID),
+                SampleNoteDetails.Kind.CREATED)
+            .orElseThrow()
+            .getTitle());
+
+  }
+
+  @Test
   @DisplayName("An element no method serves is answered with nothing, and that is not an error")
   public void anUnservedElementIsNoError() {
 

@@ -126,6 +126,34 @@ public class ExtensionEnablementTest {
   }
 
   @Test
+  @DisplayName("Of the keys the extension offers, the first one a method serves wins")
+  public void theFirstKeyOfferedWins() {
+
+    final var aggregate = aggregate("9", "two-names-for-one-element");
+
+    assertEquals(
+        "by-element-id",
+        noteService
+            .noteOfKeys(
+                aggregate,
+                List.of(NoteTaskWiringSource.ACTIVITY_ID, NoteTaskWiringSource.TASK_DEFINITION),
+                SampleNoteDetails.Kind.CREATED)
+            .orElseThrow()
+            .getTitle());
+    // the same element, the same two methods, the other order
+    assertEquals(
+        "by-task-definition",
+        noteService
+            .noteOfKeys(
+                aggregate,
+                List.of(NoteTaskWiringSource.TASK_DEFINITION, NoteTaskWiringSource.ACTIVITY_ID),
+                SampleNoteDetails.Kind.CREATED)
+            .orElseThrow()
+            .getTitle());
+
+  }
+
+  @Test
   @DisplayName("An element no method serves is answered with nothing, and that is not an error")
   public void anUnservedElementIsNoError() {
 

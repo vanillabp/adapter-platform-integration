@@ -232,6 +232,22 @@ public class AHandlerWhichMaySaveIsWarnedAboutTest {
   }
 
   /**
+   * The same contract, with the sentence an extension whose handlers only read says while
+   * it is wired.
+   */
+  private static HandlerContract readingNoteContract() {
+
+    return HandlerContract
+        .of(EXTENSION, Note.class)
+        .lookupKeys(annotation -> List.of())
+        .coreParameters(CoreHandlerParameter.WORKFLOW_AGGREGATE)
+        .deliversReturnValue()
+        .neverSavesTheWorkflowAggregate()
+        .build();
+
+  }
+
+  /**
    * What both platforms do while they boot: a workflow service is registered and an
    * extension registers what its annotation means.
    *
@@ -240,6 +256,15 @@ public class AHandlerWhichMaySaveIsWarnedAboutTest {
   private <A extends Aggregate> List<String> whatTheBootSaid(
       final Class<A> workflowAggregateClass,
       final List<Class<?>> workflowServiceClasses) {
+
+    return whatTheBootSaid(workflowAggregateClass, workflowServiceClasses, noteContract());
+
+  }
+
+  private <A extends Aggregate> List<String> whatTheBootSaid(
+      final Class<A> workflowAggregateClass,
+      final List<Class<?>> workflowServiceClasses,
+      final HandlerContract contract) {
 
     final var registry = new WorkflowTaskRegistry(new TransactionRunnerStub());
     final var logWatcher = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
@@ -250,7 +275,7 @@ public class AHandlerWhichMaySaveIsWarnedAboutTest {
     try {
       registry
           .getExtensionHandlers()
-          .register(noteContract());
+          .register(contract);
       workflowServiceClasses
           .forEach(workflowServiceClass -> registry
               .registerWorkflowService(
@@ -320,6 +345,30 @@ public class AHandlerWhichMaySaveIsWarnedAboutTest {
   public void aServiceWithoutSuchMethodsStaysQuiet() {
 
     assertEquals(List.of(), whatTheBootSaid(Aggregate.class, List.of(SilentService.class)));
+
+  }
+
+  @Test
+  @DisplayName("An extension whose contract says its handlers never write is not warned about")
+  public void aReadingContractStaysQuiet() {
+
+    assertEquals(
+        List.of(),
+        whatTheBootSaid(Aggregate.class, List.of(NotingService.class), readingNoteContract()));
+
+  }
+
+  @Test
+  @DisplayName("A contract which may save is warned about with the text it always had")
+  public void aSavingContractIsStillWarnedAbout() {
+
+    final var said = whatTheBootSaid(Aggregate.class, List.of(NotingService.class), noteContract());
+
+    assertEquals(1, said.size(), said.toString());
+    final var message = said.getFirst();
+    assertTrue(message.contains("may change the workflow aggregate"), message);
+    assertTrue(message.contains(EXTENSION), message);
+    assertTrue(message.contains(Aggregate.class.getName()), message);
 
   }
 

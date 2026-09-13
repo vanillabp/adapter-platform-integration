@@ -2,7 +2,6 @@ package io.vanillabp.integration.adapter.migration.handler;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.Collection;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -60,16 +59,24 @@ final class ExtensionHandlerMethod {
   }
 
   /**
-   * @param candidates The keys the caller accepts
-   * @return Whether this method NAMES any of them - the catch-all does not count here,
-   *         which is what lets a method for one element stand next to it
+   * @param lookupKey One key the caller offered
+   * @return Whether this method NAMES it - the catch-all does not count here, which is
+   *         what lets a method for one element stand next to it
    */
-  boolean matches(
-      final Collection<String> candidates) {
+  boolean serves(
+      final String lookupKey) {
 
-    return candidates
-        .stream()
-        .anyMatch(lookupKeys::contains);
+    return lookupKeys.contains(lookupKey);
+
+  }
+
+  /**
+   * @return The keys this method names, in the order the annotations were read - for the
+   *         report about what was wired
+   */
+  List<String> getLookupKeys() {
+
+    return lookupKeys;
 
   }
 
@@ -92,6 +99,15 @@ final class ExtensionHandlerMethod {
     return lookupKeys
         .stream()
         .anyMatch(other.lookupKeys::contains);
+
+  }
+
+  /**
+   * @return The id of the extension this method belongs to
+   */
+  String getExtensionId() {
+
+    return contract.getExtensionId();
 
   }
 
