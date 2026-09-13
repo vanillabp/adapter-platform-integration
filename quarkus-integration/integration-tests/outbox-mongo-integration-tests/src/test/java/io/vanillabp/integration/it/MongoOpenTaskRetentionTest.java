@@ -33,9 +33,11 @@ import jakarta.transaction.UserTransaction;
  * the record of a task nobody hands out any more expires as it always did. The moment the
  * handler ran stays where it is, because the age of the open task is measured from it.
  * <p>
- * An hour of retention with records backdated by two, so nothing here waits for a clock -
- * unlike {@link MongoTaskDeliveryLogTest}, whose retention of zero cannot tell a record
- * kept from one deleted.
+ * An hour of retention with records backdated by two, so nothing here waits for a clock.
+ * What the cleanup of this test deleted is read back as state rather than counted: the
+ * cleanup running in the background of this application deletes the same records, and
+ * a count says who was first rather than what is left (decision 46 in the repository's
+ * DECISIONS.md).
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MongoOpenTaskRetentionTest {
@@ -113,9 +115,8 @@ public class MongoOpenTaskRetentionTest {
     // the BPMS redelivered the open task, which is what the core reports to the store
     deliveryLog.stillOpen("job-open");
 
-    final var deleted = deliveryLog.cleanUpExpiredRecords();
+    deliveryLog.cleanUpExpiredRecords();
 
-    assertEquals(1, deleted);
     assertTrue(
         deliveryLog.recordedDelivery("job-open").isPresent(),
         "a task which is still being redelivered keeps the record answering it");
@@ -150,7 +151,15 @@ public class MongoOpenTaskRetentionTest {
           + i);
     }
 
-    assertEquals(0, deliveryLog.cleanUpExpiredRecords(), "every one of them survives");
+    deliveryLog.cleanUpExpiredRecords();
+
+    assertEquals(
+        tasks,
+        mongoClient
+            .getDatabase(DATABASE)
+            .getCollection(COLLECTION)
+            .countDocuments(),
+        "every one of them survives");
     assertTrue(
         documentOf("block-"
             + (tasks - 1)).getDate("lastSeenAt")

@@ -38,6 +38,10 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * <p>
  * That the CORE skips a handler for a recorded delivery is pinned by the platform's
  * acceptance test; what is tested here is the store.
+ * <p>
+ * What a cleanup deleted is read back as state rather than counted, because the cleanup
+ * running in the background of this application deletes the same records - see decision 46
+ * in the repository's DECISIONS.md.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
@@ -45,9 +49,10 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
     classes = {
         TestApplication.class, MongoTaskDeliveryLogTest.MongoDeliveryLogTestConfiguration.class
     },
-    // a retention of zero makes every record expired right away, so the cleanup can be
-    // observed without waiting days for it
-    properties = "vanillabp.outbox.retention=PT0S")
+    // a retention longer than anything these tests write, so the cleanup running in the
+    // background of this application never deletes a record a test is looking at. A test
+    // which needs an expired record brings a log of its own with the retention it needs
+    properties = "vanillabp.outbox.retention=PT24H")
 @Testcontainers
 public class MongoTaskDeliveryLogTest {
 
@@ -240,17 +245,40 @@ public class MongoTaskDeliveryLogTest {
   }
 
   @Test
-  @DisplayName("Records are deleted once the retention period passed")
-  public void expiredRecordsAreDeleted() {
+  @DisplayName("No expired record is left once the retention period passed")
+  public void noExpiredRecordIsLeft() {
 
+    // two hours old, which is past the hour the log below keeps a record for. The age is
+    // written into the record rather than waited for, and it is two hours rather than a
+    // moment because the bound of the cleanup is strict while a store's timestamp has
+    // millisecond resolution
     transactionTemplate.executeWithoutResult(
-        status -> deliveryLog.record(delivery("job-4", "COMPLETED")));
+        status -> deliveryLog.record(backdated("job-4", java.time.Duration.ofHours(2))));
 
-    // this context runs with a retention of zero, so the record is expired right away
-    final var deleted = deliveryLog.cleanUpExpiredRecords();
+    // twice on purpose: the second run meets a store the first one already emptied, which
+    // is the position a second deleter is in when it gets there first. What is asserted is
+    // the state, so the answer holds whoever deleted the record
+    final var anHourOfRetention = anHourOfRetention();
+    anHourOfRetention.cleanUpExpiredRecords();
+    anHourOfRetention.cleanUpExpiredRecords();
 
-    assertEquals(1, deleted);
     assertTrue(deliveryLog.recordedDelivery("job-4").isEmpty());
+    assertEquals(
+        0,
+        mongoTemplate.getCollection(COLLECTION).countDocuments(),
+        "no record past its retention is left");
+
+  }
+
+  /**
+   * A log on the collection of this application, with an hour of retention instead of the
+   * day the application runs with. It is what lets a test delete a record whose age it
+   * chose, while the cleanup running in the background of the application reaches none of
+   * them.
+   */
+  private MongoTaskDeliveryLog anHourOfRetention() {
+
+    return new MongoTaskDeliveryLog(mongoTemplate, COLLECTION, java.time.Duration.ofHours(1));
 
   }
 
@@ -273,10 +301,7 @@ public class MongoTaskDeliveryLogTest {
   @DisplayName("The record of a task which is still redelivered survives the retention")
   public void theRecordOfAnOpenTaskSurvivesTheRetention() {
 
-    // this context runs with a retention of zero, which cannot tell a record kept from one
-    // deleted - a log of its own on the same collection brings the hour this needs
-    final var anHourOfRetention = new MongoTaskDeliveryLog(
-        mongoTemplate, COLLECTION, java.time.Duration.ofHours(1));
+    final var anHourOfRetention = anHourOfRetention();
 
     transactionTemplate.executeWithoutResult(status -> {
       deliveryLog.record(backdated("job-open", java.time.Duration.ofHours(2)));
@@ -285,9 +310,8 @@ public class MongoTaskDeliveryLogTest {
 
     // the BPMS redelivered the open task, which is what the core reports to the store
     anHourOfRetention.stillOpen("job-open");
-    final var deleted = anHourOfRetention.cleanUpExpiredRecords();
+    anHourOfRetention.cleanUpExpiredRecords();
 
-    assertEquals(1, deleted);
     assertTrue(
         deliveryLog.recordedDelivery("job-open").isPresent(),
         "a task which is still being redelivered keeps the record answering it");
@@ -310,8 +334,7 @@ public class MongoTaskDeliveryLogTest {
   @DisplayName("More open tasks than one block are refreshed in blocks")
   public void moreOpenTasksThanOneBlockAreRefreshed() {
 
-    final var anHourOfRetention = new MongoTaskDeliveryLog(
-        mongoTemplate, COLLECTION, java.time.Duration.ofHours(1));
+    final var anHourOfRetention = anHourOfRetention();
     final var tasks = io.vanillabp.integration.adapter.migration.delivery.OpenTaskTouches.BLOCK_SIZE + 100;
 
     transactionTemplate.executeWithoutResult(status -> {
@@ -325,8 +348,12 @@ public class MongoTaskDeliveryLogTest {
           + i);
     }
 
-    assertEquals(0, anHourOfRetention.cleanUpExpiredRecords(), "every one of them survives");
-    assertEquals(tasks, mongoTemplate.getCollection(COLLECTION).countDocuments());
+    anHourOfRetention.cleanUpExpiredRecords();
+
+    assertEquals(
+        tasks,
+        mongoTemplate.getCollection(COLLECTION).countDocuments(),
+        "every one of them survives");
 
   }
 

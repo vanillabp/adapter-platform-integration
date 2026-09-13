@@ -1345,3 +1345,26 @@ know.
 
 Nothing is asked of a database for it. The answer comes from the aggregate's class, and the question
 is put once per BPMN process, which is the shape entry 19 asks of everything a start does.
+
+### 46. A test about housekeeping asserts what is left, not what it deleted
+
+`MongoTaskDeliveryLogTest` counted the records its own call to the retention cleanup had deleted, and
+failed once with one expected and none found. Since entry 43 that cleanup runs at startup and again
+wherever a delivery was recorded, so the test and the application's own housekeeping point at the
+same record, and whichever gets there second deletes nothing. A count then reports who was first.
+What the test wants to know is whether anything past its retention is left.
+
+So a test of this kind reads the state back instead: the record is gone, and the store holds nothing
+older than its retention. That answer is true whoever deleted it, and it is still true when the
+cleanup runs once more afterwards, which is why the test runs the cleanup twice. The tests of all
+four stores are written that way now. The number a delete returns keeps its own test in
+`OpenTaskRecordRetentionTest`, against a store nobody else writes to, so the promise of the return
+value is still held somewhere.
+
+The clock is out of it as well. A retention of zero made every record expired the moment it was
+written, and a store whose timestamps have millisecond resolution cannot tell a record written in
+that millisecond from one older than a bound which is strict. The stores of these tests keep an hour
+now, and a record which has to expire is written two hours old.
+
+Raising a timeout or repeating the test was rejected. Both hide that two deleters point at one
+record, and the second run is green for the same reason the first one was red.
