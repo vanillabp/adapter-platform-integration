@@ -26,6 +26,35 @@ public record DeployedProcessVersion(
                                      Instant deployedAt) {
 
   /**
+   * The separator between the version tag and the version the BPMS counted, which is how
+   * version 1 of VanillaBP wrote a tagged version down.
+   */
+  public static final String VERSION_TAG_SEPARATOR = ":";
+
+  /**
+   * How an operator reads this version.
+   * <p>
+   * With a version tag the tag comes first and the version the BPMS counted follows it,
+   * separated by a colon: a process tagged <code>release-7</code> and counted as the
+   * fourth deployment reads <code>release-7:4</code>. Without a tag, and with a tag which
+   * is blank, the counted version stands alone: <code>4</code>. There is no trailing
+   * separator, so the two forms never look like one another.
+   * <p>
+   * Every caller showing a version to a person uses this, so a cockpit, a log line and a
+   * support tool spell the same deployment the same way. See
+   * <code>DeployedProcessVersionTest</code>.
+   *
+   * @return The version as an operator reads it
+   */
+  public String displayVersion() {
+
+    return (versionTag == null) || versionTag.isBlank()
+        ? version
+        : versionTag + VERSION_TAG_SEPARATOR + version;
+
+  }
+
+  /**
    * A version of a BPMS counting versions upwards, without a version tag.
    *
    * @param version The version identifier

@@ -1,6 +1,7 @@
 package io.vanillabp.integration.spi;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -254,6 +255,62 @@ public interface TaskDeliveryLog {
       final String taskId) {
 
     return 0;
+
+  }
+
+  /**
+   * The open tasks of ONE workflow aggregate - the durable answer to the question an
+   * extension asks before it shows what is waiting for somebody.
+   *
+   * <h2>What "open" means</h2>
+   *
+   * A record whose outcome is <code>COMPLETION_PENDING</code>, so the handler left the task
+   * to the application, AND which {@link #markTaskClosed} has not stamped: the completion
+   * or cancellation the application asked for has not reached the BPMS yet, or it was never
+   * asked for. The moment {@link #markTaskClosed} writes is what takes a task out of this
+   * answer, so a task completed in the same second is gone from it as soon as phase two
+   * succeeded, not when the caller asked. A record the retention deleted is gone as well,
+   * which is why this answers what the store still knows rather than what the BPMS holds.
+   * <p>
+   * The BPMN process is the one which DELIVERED the task, which for a task a called process
+   * handed out is the secondary id and not the id the application completes it on. A caller
+   * which wants everything a workflow aggregate waits for therefore asks once per BPMN
+   * process the workflow service serves, the way the core's own read does.
+   *
+   * <h2>Ordering and size</h2>
+   *
+   * Oldest first, by {@link TaskDelivery#recordedAt()} - the order the tasks were handed to
+   * the application in, which is the order a list of open work reads in. Records sharing a
+   * moment may come in any order.
+   * <p>
+   * There is no paging and no limit, because the answer is bounded by the MODEL and not by
+   * the age of the application: a workflow has as many open tasks as its BPMN process has
+   * tokens waiting at user tasks, which is a handful, and a multi-instance element bounds it
+   * by its collection. An aggregate which carried a SECOND workflow, under another BPMN
+   * process, contributes nothing here: the process is part of the question.
+   *
+   * <h2>What it costs</h2>
+   *
+   * This is asked once per screen an extension builds, on the caller's thread. A store
+   * answers it from an index over the open records rather than by walking everything it ever
+   * recorded; the stores VanillaBP ships say in their own documentation which index that is.
+   * <p>
+   * The default answers an empty list, which is what a store written before this existed
+   * answers: a caller which needs the open tasks and gets none has to be able to live with
+   * it, the same way {@link #recordOfTask} lets the election fall back to probing.
+   *
+   * @param workflowModuleId The workflow module of the workflow
+   * @param bpmnProcessId The BPMN process of the workflow
+   * @param workflowAggregateId The workflow aggregate's ID in serialized form
+   * @return The open records, oldest first, empty where there are none or this store cannot
+   *         say
+   */
+  default List<TaskDelivery> openTasksOfAggregate(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId) {
+
+    return List.of();
 
   }
 

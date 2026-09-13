@@ -33,7 +33,7 @@ import io.vanillabp.integration.spi.PhaseTwoRetryLater;
  * <code>vanillabp.outbox.block-after-attempts</code> of them still block the entry, which
  * is what ends a workflow which never becomes visible.
  * <p>
- * Why the attempt ends here instead of being repeated is decision 48 in the repository's
+ * Why the attempt ends here instead of being repeated is decision 49 in the repository's
  * DECISIONS.md.
  */
 public class GruelboxPhaseTwoDispatchBean implements GruelboxPhaseTwoDispatch {

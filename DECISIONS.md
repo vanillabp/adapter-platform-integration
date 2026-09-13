@@ -1399,7 +1399,32 @@ the one setup which was chosen because it brings no table of VanillaBP's at all.
 check absent for this store leaves the gap where it is, in the setup most applications run, which is
 the state this entry replaces.
 
-### 48. A dispatch which cannot run yet ends, and nothing waits inside a transaction
+### 48. An extension is configured by the core's resolution, not by a parser of its own
+
+An extension is told things about a workflow module, about one BPMN process, and sometimes about
+one task. The core already resolves such a setting for an adapter, over four levels, most specific
+first, merged key by key (entry 7). An extension which cannot reach those levels writes the
+resolution a second time: it reads the flat keys of the configuration, matches the suffixes by hand
+and decides on its own what "most specific wins" means. The Business Cockpit had that, once per
+platform, and the two spellings were already drifting apart before anybody noticed.
+
+So the `extensions` map sits at all four levels rather than at two, and
+`MigrationAdapterProperties.resolveForExtension` is the same walk `resolveForAdapter` is. The core
+owns the LOCATION and the resolution; what a key MEANS stays the extension's business, which is why
+the values stay strings and the extension binds and validates its own, typed, the way an adapter
+binds the keys below its adapter id.
+
+The extension id is a parameter of the call rather than something bound to an extension-scoped view
+of these properties. The properties are one bean of the platform, an extension is not a bean of the
+platform at all, and an extension asking with its own id is the same shape an adapter asking with
+its adapter id has.
+
+The Quarkus half is not a duplication but a wall. SmallRye refuses a key it does not know below the
+mapping root, so before the workflow and the task level were part of the mapping, an application
+writing `vanillabp.workflow-modules.<m>.workflows.<p>.extensions.<ext>.*` did not merely go unread,
+it did not start.
+
+### 49. A dispatch which cannot run yet ends, and nothing waits inside a transaction
 
 Phase two of an operation may be rejected rather than fail: on Camunda 8 the exporter of the cluster
 has not written the workflow yet, the adapter says so and names how long that usually takes

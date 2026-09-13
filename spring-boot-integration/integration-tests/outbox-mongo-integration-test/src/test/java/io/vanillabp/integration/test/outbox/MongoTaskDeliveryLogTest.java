@@ -152,6 +152,53 @@ public class MongoTaskDeliveryLogTest {
   }
 
   @Test
+  @DisplayName("The open tasks of one aggregate come oldest first, and a closed one is gone")
+  public void theOpenTasksOfAnAggregateAreAnswered() {
+
+    final var now = java.time.Instant.now();
+    transactionTemplate.executeWithoutResult(status -> {
+      deliveryLog
+          .record(
+              new TaskDelivery(
+                  "open-2", "test-adapter", "test-module", "TestProcess", "4711", "awaitCompletion", "task-2", "COMPLETION_PENDING", null, null, now, null));
+      deliveryLog
+          .record(
+              new TaskDelivery(
+                  "open-1", "test-adapter", "test-module", "TestProcess", "4711", "awaitCompletion", "task-1", "COMPLETION_PENDING", null, null, now
+                      .minusSeconds(600), null));
+      // another aggregate, and a delivery which left no task open
+      deliveryLog
+          .record(
+              new TaskDelivery(
+                  "other", "test-adapter", "test-module", "TestProcess", "4712", "awaitCompletion", "task-3", "COMPLETION_PENDING", null, null, now, null));
+      deliveryLog
+          .record(
+              new TaskDelivery(
+                  "done", "test-adapter", "test-module", "TestProcess", "4711", "awaitCompletion", "task-4", "COMPLETED", null, null, now, null));
+    });
+
+    assertEquals(
+        java.util.List.of("task-1", "task-2"),
+        deliveryLog
+            .openTasksOfAggregate("test-module", "TestProcess", "4711")
+            .stream()
+            .map(TaskDelivery::taskId)
+            .toList());
+
+    deliveryLog.markTaskClosed("test-module", "TestProcess", "4711", "task-1");
+
+    assertEquals(
+        java.util.List.of("task-2"),
+        deliveryLog
+            .openTasksOfAggregate("test-module", "TestProcess", "4711")
+            .stream()
+            .map(TaskDelivery::taskId)
+            .toList());
+    assertTrue(deliveryLog.openTasksOfAggregate("test-module", "TestProcess", "no-such-aggregate").isEmpty());
+
+  }
+
+  @Test
   @DisplayName("A rolled-back transaction leaves no record")
   public void aRolledBackTransactionLeavesNoRecord() {
 

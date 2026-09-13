@@ -26,6 +26,10 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 @ExtendWith(SuppressOutputExtension.class)
 public class ExtensionElectionAndConfigurationTest {
 
+  private static final String MODULE = "extension-module";
+
+  private static final String PROCESS = "DummyProcess";
+
   @Autowired
   private NotedWorkflowService workflowService;
 
@@ -104,6 +108,34 @@ public class ExtensionElectionAndConfigurationTest {
         properties.extensionProperty("extension-module", SampleNoteContract.EXTENSION_ID, "unused"));
     assertNull(
         properties.extensionProperty("extension-module", "another-extension", SampleNoteServiceFactory.GREETING));
+
+  }
+
+  @Test
+  @DisplayName("An extension setting is resolved from the most specific level which writes it")
+  public void extensionSettingsResolveOverFourLevels() {
+
+    final var greeting = SampleNoteServiceFactory.GREETING;
+
+    assertEquals(
+        "Hello",
+        properties.resolveForExtension(null, null, null, SampleNoteContract.EXTENSION_ID, greeting));
+    assertEquals(
+        "Servus",
+        properties.resolveForExtension(MODULE, "OtherProcess", null, SampleNoteContract.EXTENSION_ID, greeting));
+    assertEquals(
+        "Gruess Gott",
+        properties.resolveForExtension(MODULE, PROCESS, "otherTask", SampleNoteContract.EXTENSION_ID, greeting));
+    assertEquals(
+        "Moin",
+        properties.resolveForExtension(MODULE, PROCESS, "theTask", SampleNoteContract.EXTENSION_ID, greeting));
+
+    // what the more specific levels say nothing about stays what the global section says
+    assertEquals(
+        "whatever",
+        properties.resolveForExtension(MODULE, PROCESS, "theTask", SampleNoteContract.EXTENSION_ID, "unused"));
+    assertNull(
+        properties.resolveForExtension(MODULE, PROCESS, "theTask", SampleNoteContract.EXTENSION_ID, "no-such-key"));
 
   }
 

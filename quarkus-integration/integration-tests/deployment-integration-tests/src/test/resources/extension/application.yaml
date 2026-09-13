@@ -20,3 +20,13 @@ vanillabp:
       extensions:
         sample:
           greeting: Servus
+      workflows:
+        NoteProcess:
+          extensions:
+            sample:
+              greeting: Gruess Gott
+          tasks:
+            theTask:
+              extensions:
+                sample:
+                  greeting: Moin

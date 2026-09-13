@@ -3,6 +3,7 @@ package io.vanillabp.integration.it;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -281,6 +282,40 @@ public class ExtensionEnablementTest {
     assertEquals("Hello", properties.extensionProperty(null, "sample", "greeting"));
     // what the module says nothing about stays what the global section says
     assertEquals("whatever", properties.extensionProperty(MODULE, "sample", "unused"));
+
+  }
+
+  @Test
+  @DisplayName("An extension setting is resolved from the most specific level which writes it")
+  public void extensionSettingsResolveOverFourLevels() {
+
+    // this application starting at all is half the assertion: SmallRye refuses a key it
+    // does not know below the mapping root, so the workflow and the task section of
+    // 'extensions' have to be part of the mapping or nothing here boots
+    assertEquals("Hello", properties.resolveForExtension(null, null, null, "sample", "greeting"));
+    assertEquals("Servus", properties.resolveForExtension(MODULE, "OtherProcess", null, "sample", "greeting"));
+    assertEquals("Gruess Gott", properties.resolveForExtension(MODULE, PROCESS, "otherTask", "sample", "greeting"));
+    assertEquals("Moin", properties.resolveForExtension(MODULE, PROCESS, "theTask", "sample", "greeting"));
+
+  }
+
+  @Test
+  @DisplayName("A level which says nothing about a key keeps what a less specific one says")
+  public void extensionSettingsMergeKeyByKey() {
+
+    assertEquals("whatever", properties.resolveForExtension(MODULE, PROCESS, "theTask", "sample", "unused"));
+    assertEquals(
+        java.util.Map.of("greeting", "Moin", "unused", "whatever"),
+        properties.extensionProperties(MODULE, PROCESS, "theTask", "sample"));
+
+  }
+
+  @Test
+  @DisplayName("A key nobody wrote is null rather than a failure")
+  public void anUnknownKeyIsNull() {
+
+    assertNull(properties.resolveForExtension(MODULE, PROCESS, "theTask", "sample", "no-such-key"));
+    assertNull(properties.resolveForExtension(MODULE, PROCESS, "theTask", "no-such-extension", "greeting"));
 
   }
 

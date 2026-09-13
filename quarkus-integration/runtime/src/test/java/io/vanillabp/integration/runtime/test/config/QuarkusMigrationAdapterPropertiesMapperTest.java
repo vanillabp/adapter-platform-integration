@@ -55,7 +55,19 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
 
   private record TaskProperties(
                                 Map<String, QuarkusMigrationAdapterProperties.AdapterProperties> adapters,
-                                QuarkusMigrationAdapterProperties.DeliveryProperties delivery) implements QuarkusMigrationAdapterProperties.TaskProperties {
+                                QuarkusMigrationAdapterProperties.DeliveryProperties delivery,
+                                Map<String, Map<String, String>> extensions) implements QuarkusMigrationAdapterProperties.TaskProperties {
+
+    /**
+     * Without extension settings, which is what most of these fixtures need.
+     */
+    private TaskProperties(
+        final Map<String, QuarkusMigrationAdapterProperties.AdapterProperties> adapters,
+        final QuarkusMigrationAdapterProperties.DeliveryProperties delivery) {
+
+      this(adapters, delivery, Map.of());
+
+    }
 
     /**
      * Without a delivery section, which is what most of these fixtures need.
@@ -73,7 +85,21 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                     Optional<List<String>> prioritizedAdapters,
                                     Map<String, QuarkusMigrationAdapterProperties.AdapterProperties> adapters,
                                     Map<String, QuarkusMigrationAdapterProperties.TaskProperties> tasks,
-                                    QuarkusMigrationAdapterProperties.DeliveryProperties delivery) implements QuarkusMigrationAdapterProperties.WorkflowProperties {
+                                    QuarkusMigrationAdapterProperties.DeliveryProperties delivery,
+                                    Map<String, Map<String, String>> extensions) implements QuarkusMigrationAdapterProperties.WorkflowProperties {
+
+    /**
+     * Without extension settings, which is what most of these fixtures need.
+     */
+    private WorkflowProperties(
+        final Optional<List<String>> prioritizedAdapters,
+        final Map<String, QuarkusMigrationAdapterProperties.AdapterProperties> adapters,
+        final Map<String, QuarkusMigrationAdapterProperties.TaskProperties> tasks,
+        final QuarkusMigrationAdapterProperties.DeliveryProperties delivery) {
+
+      this(prioritizedAdapters, adapters, tasks, delivery, Map.of());
+
+    }
 
     /**
      * Without a delivery section, which is what most of these fixtures need.

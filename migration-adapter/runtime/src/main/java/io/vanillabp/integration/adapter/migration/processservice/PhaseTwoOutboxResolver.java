@@ -1,5 +1,7 @@
 package io.vanillabp.integration.adapter.migration.processservice;
 
+import java.util.Collection;
+
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.PhaseTwoOutboxAware;
 
@@ -31,6 +33,31 @@ public interface PhaseTwoOutboxResolver {
    */
   PhaseTwoOutbox resolveFor(
       Class<?> workflowAggregateClass);
+
+  /**
+   * Every store this application holds, the ones named for a single workflow aggregate by
+   * a {@link PhaseTwoOutboxAware} bean included. An application which provides all of its
+   * stores that way has no plain store bean at all, so asking for the store beans alone
+   * would say "none" about an application which has several.
+   * <p>
+   * <strong>What the order means:</strong> nothing a caller may build on. The stores come
+   * in the order the platform enumerates its beans, the ones a
+   * {@link PhaseTwoOutboxAware} bean names after the plain store beans, and the order is
+   * stable within one boot of one application. It says nothing about priority: which store
+   * serves a workflow aggregate is {@link #resolveFor(Class)} and only that.
+   * <p>
+   * <strong>The collection is read-only</strong> and a store appears in it once, however
+   * many beans point at it. Callers use it to count the stores an application has and to
+   * recognise the one store all of its aggregates share; a caller which wants a store for
+   * an aggregate asks {@link #resolveFor(Class)}.
+   * <p>
+   * A store the platform would never select is not in here - on Quarkus that is a platform
+   * default switched off by <code>vanillabp.outbox.jdbc.enabled</code> /
+   * <code>vanillabp.outbox.mongo.enabled</code> or left without a datasource.
+   *
+   * @return The stores, read-only and possibly empty
+   */
+  Collection<PhaseTwoOutbox> allStores();
 
   /**
    * Platform-specific remedy lines appended to the core's guiding message when no

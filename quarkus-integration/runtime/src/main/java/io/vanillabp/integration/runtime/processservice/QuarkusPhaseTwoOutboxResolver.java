@@ -1,6 +1,10 @@
 package io.vanillabp.integration.runtime.processservice;
 
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Stream;
 
 import io.vanillabp.integration.adapter.migration.processservice.AwareSelection;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxResolver;
@@ -110,6 +114,34 @@ public class QuarkusPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
         .findFirst()
         .orElseThrow(() -> new IllegalStateException(
             buildAttributionErrorMessage(workflowAggregateClass, technology, outboxes)));
+
+  }
+
+  /**
+   * Every store this application holds: the active {@link PhaseTwoOutbox} beans first,
+   * then the stores a {@link PhaseTwoOutboxAware} bean names for one aggregate. A store
+   * reached both ways appears once, and a platform default which is switched off or has
+   * nothing to write to is left out, because it is a store the resolver would never hand
+   * out either.
+   */
+  @Override
+  public Collection<PhaseTwoOutbox> allStores() {
+
+    return Stream
+        .concat(
+            phaseTwoOutboxes
+                .stream()
+                .filter(this::isActive),
+            phaseTwoOutboxAwares
+                .stream()
+                .map(PhaseTwoOutboxAware::getPhaseTwoOutbox))
+        .filter(Objects::nonNull)
+        .collect(
+            LinkedHashSet<PhaseTwoOutbox>::new,
+            LinkedHashSet::add,
+            LinkedHashSet::addAll)
+        .stream()
+        .toList();
 
   }
 

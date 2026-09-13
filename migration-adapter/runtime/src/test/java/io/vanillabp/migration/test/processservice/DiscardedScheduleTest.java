@@ -158,6 +158,11 @@ public class DiscardedScheduleTest {
         return "- add a store, or";
       }
 
+      @Override
+      public java.util.Collection<PhaseTwoOutbox> allStores() {
+        return java.util.List.of(outbox);
+      }
+
     };
 
     final var service = MigrationProcessService

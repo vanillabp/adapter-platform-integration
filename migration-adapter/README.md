@@ -1384,6 +1384,32 @@ the registry decision 25 rejected is decision 30.
   fallback would report a defect where there is none - the counter is read against how many task
   operations the application makes.
 
+##### The open tasks of one workflow aggregate
+
+`TaskDeliveryLog.openTasksOfAggregate(module, process, aggregateId)` answers the records of that
+aggregate which reported `COMPLETION_PENDING` and which `markTaskClosed` has not stamped - the
+tasks the application still owes an answer for. An extension showing what a workflow is waiting
+for reads that instead of keeping a memory of its own, which is what the Process-Engine-API half
+of the Business Cockpit did and lost on every restart.
+
+- Oldest first, by the moment the handler ran, which is the order the tasks were handed out in.
+- No paging and no limit: a workflow has as many open tasks as its BPMN process has tokens
+  waiting, which is bounded by the model rather than by the age of the application.
+- The default answers an empty list, so a store an application wrote stays valid and its caller
+  falls back the way it falls back for `recordOfTask`.
+- The index: the MongoDB stores index `aggregateId`, which is the selective column and costs
+  nothing there. The SQL tables cannot - `AGGREGATE_ID` holds up to 1024 characters and an index
+  over it exceeds the key-length limit of MySQL with utf8mb4 and of a DB2 database using 4K
+  pages, the same wall `deleteRecordsOf` ran into. So they index what "open" means instead,
+  `<table>_OPEN` over `OUTCOME` and `TASK_CLOSED_AT`, which narrows the read to the tasks the
+  BPMS hands out right now rather than to everything ever recorded. An application with very many
+  concurrently open tasks adds an index over `AGGREGATE_ID` itself, prefixed the way its database
+  spells it.
+
+`OpenTasksOfAggregateTest` holds the SQL, `OpenTaskRetentionTest` holds it through a booted
+application on both platforms, and the two `MongoTaskDeliveryLogTest` classes hold the MongoDB
+stores.
+
 `TaskElectionFromDeliveryRecordTest` holds the routing
 (`anOpenRecordElectsTheAdapterWithoutAnyProbe`,
 `aClosedTaskIsTheWarnedNoOpWithoutAnyProbe`, `withoutARecordTheAdaptersAreProbed`,
@@ -1545,7 +1571,7 @@ due there when it is due on the other stores, and the next poll picks it up.
 `NotVisibleWorkflowDoesNotStallDispatchTest` holds both halves: the entry of a findable workflow
 dispatched while the other one waits, and the bound which finally blocks it.
 `ARejectedDispatchIsPlannedAgainTest` holds the same for the gruelbox store, which used to ask again
-on the dispatching thread instead - what that cost is decision 48.
+on the dispatching thread instead - what that cost is decision 49.
 
 **What a failed dispatch costs, and why the numbers are what they are.** The distance to the
 next attempt grows: `PhaseTwoOutboxProperties#attemptDelay` returns `attempt-frequency` for the
@@ -2579,13 +2605,29 @@ serve, are guiding errors naming what was asked.
 
 #### The extension's own configuration
 
-`vanillabp.extensions.<extension>.*` for the application, and
-`vanillabp.workflow-modules.<id>.extensions.<extension>.*` where one workflow module needs
-something else; the module's value wins per key.
-`MigrationAdapterProperties#extensionProperties` resolves the two levels,
-`#extensionProperty` reads one value. What the keys MEAN stays the extension's business —
-the core keeps them as they were written, the extension binds and validates its own, typed,
-the way an adapter binds the keys below its adapter id.
+An extension setting is written at four levels, and the most specific one which writes a key
+wins:
+
+```
+vanillabp.workflow-modules.<module>.workflows.<workflow>.tasks.<task>.extensions.<extension>.<key>  (most specific)
+vanillabp.workflow-modules.<module>.workflows.<workflow>.extensions.<extension>.<key>
+vanillabp.workflow-modules.<module>.extensions.<extension>.<key>
+vanillabp.extensions.<extension>.<key>                                                              (least specific)
+```
+
+The levels are merged KEY BY KEY, so a workflow may change one value and keep what the
+application said about the rest. `MigrationAdapterProperties#resolveForExtension` reads one
+value, `#extensionProperties` reads the whole section; both take the extension id as a
+parameter, because the properties are one bean of the platform while an extension is not a
+bean of the platform at all. The two-argument `#extensionProperties(module, extension)` and
+`#extensionProperty` are the same resolution asked about the module alone.
+
+This is the rule and the implementation an adapter setting uses (see
+`#resolveForAdapter` and decision 7), so a change to "most specific wins" reaches both or
+neither. What the keys MEAN stays the extension's business — the core keeps them as they were
+written, the extension binds and validates its own, typed, the way an adapter binds the keys
+below its adapter id. Why an extension does not parse these keys itself is decision 48 in this
+repository's `DECISIONS.md`.
 
 #### Operations of its own in the outbox
 
@@ -2603,6 +2645,14 @@ An aggregate nothing can serve is an `IllegalStateException` naming the beans fo
 remedy, and `null` means the application has no outbox at all — `#remediesDescription()` says
 what to add for the platform in use, so the extension ends its own boot with a message a
 developer can act on.
+
+`#allStores()` answers every store the application holds, the ones a `PhaseTwoOutboxAware` bean
+names for a single aggregate included. An extension which has to know whether all of its
+workflow aggregates share one store asks that instead of enumerating the beans itself, which
+would miss an application whose stores are all contributed through aware beans. The collection
+is read-only, holds each store once, and its order is the platform's bean order and nothing a
+caller may build on; a store the resolver would never hand out — a Quarkus platform default
+switched off or without a datasource — is not in it.
 
 The same holds for the transaction such an entry is written in. `TransactionRunnerResolver` is a
 bean on both platforms, and `#resolveFor(workflowAggregateClass)` answers the runner the workflow's
@@ -2701,6 +2751,12 @@ and the same exemption applies to a `@WorkflowStartedByBpms` method naming a sta
 new model dropped. What used to be caught by those checks is caught by the dead-method
 warning instead, which reports rather than fails: a version which does not exist YET is
 normal during a rolling deployment.
+
+`DeployedProcessVersion#displayVersion()` is how such a version is written down for a person:
+the version tag, a colon and the version the BPMS counted (`release-7:4`), or the counted
+version alone where there is no tag (`4`). One spelling for every caller, so a cockpit, a log
+line and a support tool name the same deployment the same way. `DeployedProcessVersionTest`
+holds both forms.
 
 Every verdict the check can reach is a case of `OldProcessVersionsTest`, from
 `anUnservedVersionWithInstancesIsAnError` and `anUnservedVersionWithoutInstancesWarns` to

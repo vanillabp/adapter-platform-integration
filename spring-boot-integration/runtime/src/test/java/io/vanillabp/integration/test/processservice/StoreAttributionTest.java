@@ -180,6 +180,87 @@ public class StoreAttributionTest {
   }
 
   @Test
+  @DisplayName("Every store is listed once, the ones named for a single aggregate included")
+  public void everyStoreIsListedOnce() {
+
+    final PhaseTwoOutbox applicationOutbox = call -> true;
+    final var aware = new PhaseTwoOutboxAware<CustomlyPersistedAggregate>() {
+
+      @Override
+      public Class<CustomlyPersistedAggregate> getAggregateClass() {
+        return CustomlyPersistedAggregate.class;
+      }
+
+      @Override
+      public PhaseTwoOutbox getPhaseTwoOutbox() {
+        return applicationOutbox;
+      }
+
+    };
+
+    try (var context = new AnnotationConfigApplicationContext()) {
+      context
+          .registerBean(
+              GruelboxPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME,
+              PhaseTwoOutbox.class,
+              () -> SCHEDULING_OUTBOX);
+      context.registerBean("applicationOutboxAware", PhaseTwoOutboxAware.class, () -> aware);
+      context.refresh();
+
+      final var stores = new SpringPhaseTwoOutboxResolver(context).allStores();
+
+      assertEquals(2, stores.size(), stores::toString);
+      assertTrue(stores.contains(SCHEDULING_OUTBOX), stores::toString);
+      assertTrue(stores.contains(applicationOutbox), stores::toString);
+    }
+
+  }
+
+  @Test
+  @DisplayName("A store reachable both as a bean and through an aware bean is listed once")
+  public void oneStoreReachedTwiceIsListedOnce() {
+
+    final var aware = new PhaseTwoOutboxAware<CustomlyPersistedAggregate>() {
+
+      @Override
+      public Class<CustomlyPersistedAggregate> getAggregateClass() {
+        return CustomlyPersistedAggregate.class;
+      }
+
+      @Override
+      public PhaseTwoOutbox getPhaseTwoOutbox() {
+        return SCHEDULING_OUTBOX;
+      }
+
+    };
+
+    try (var context = new AnnotationConfigApplicationContext()) {
+      context
+          .registerBean(
+              GruelboxPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME,
+              PhaseTwoOutbox.class,
+              () -> SCHEDULING_OUTBOX);
+      context.registerBean("applicationOutboxAware", PhaseTwoOutboxAware.class, () -> aware);
+      context.refresh();
+
+      assertEquals(1, new SpringPhaseTwoOutboxResolver(context).allStores().size());
+    }
+
+  }
+
+  @Test
+  @DisplayName("An application without any store gets an empty list, not a failure")
+  public void withoutAStoreTheListIsEmpty() {
+
+    try (var context = new AnnotationConfigApplicationContext()) {
+      context.refresh();
+
+      assertTrue(new SpringPhaseTwoOutboxResolver(context).allStores().isEmpty());
+    }
+
+  }
+
+  @Test
   @DisplayName("Two delivery-log defaults and an aggregate without repository fail naming both beans and the way out")
   public void twoDeliveryLogDefaultsAndAnUndetectableAggregateFailGuiding() {
 
