@@ -201,6 +201,11 @@ public class AddingAnOperationTest {
         return "test";
       }
 
+      @Override
+      public java.util.Collection<PhaseTwoOutbox> allStores() {
+        return java.util.List.of(outbox);
+      }
+
     };
 
     return MigrationProcessService

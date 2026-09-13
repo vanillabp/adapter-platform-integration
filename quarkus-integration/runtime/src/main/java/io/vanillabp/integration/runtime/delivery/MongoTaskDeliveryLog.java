@@ -180,6 +180,10 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
       // once per operation - without this index that read is a collection scan and costs
       // more than the BPMS round trip it saves
       deliveryCollection().createIndex(Indexes.ascending("taskId"));
+      // an extension asks for the open tasks of one workflow aggregate once per screen it
+      // builds, and MongoDB knows no key-length limit, so the aggregate id itself is the
+      // index here - unlike in the SQL table, whose column is too wide for one
+      deliveryCollection().createIndex(Indexes.ascending("aggregateId"));
     }
     retentionCleanup = new TaskDeliveryRetentionCleanup(
         DEFAULT_COLLECTION_NAME, getDeliveryRetention(), this::cleanUpExpiredRecords);
@@ -422,6 +426,38 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
                     .sort(newestFirst)
                     .first())
         .map(MongoTaskDeliveryLog::recordOf);
+
+  }
+
+  /**
+   * The open tasks of one workflow aggregate (see
+   * {@link TaskDeliveryLog#openTasksOfAggregate}), oldest first: the outcome which left the
+   * task to the application, and no moment saying its completion reached the BPMS. Read
+   * through the session of the running transaction where there is one, and served by the
+   * index over <code>aggregateId</code> the startup creates.
+   */
+  @Override
+  public java.util.List<TaskDelivery> openTasksOfAggregate(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId) {
+
+    final var session = io.vanillabp.integration.runtime.mongo.MongoSessions
+        .activeSession(txRegistry);
+    final var collection = deliveryCollection();
+    final var filter = new Document("workflowModuleId", workflowModuleId)
+        .append("bpmnProcessId", bpmnProcessId)
+        .append("aggregateId", workflowAggregateId)
+        .append("outcome", COMPLETION_PENDING)
+        .append("taskClosedAt", null);
+    final var oldestFirst = new Document("recordedAt", 1);
+    final var records = new java.util.ArrayList<TaskDelivery>();
+    (session != null
+        ? collection.find(session, filter)
+        : collection.find(filter))
+        .sort(oldestFirst)
+        .forEach(document -> records.add(recordOf(document)));
+    return java.util.List.copyOf(records);
 
   }
 

@@ -164,6 +164,20 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
 
   }
 
+  /**
+   * The open tasks of one workflow aggregate - read within the caller's transaction,
+   * through the connection bound to it.
+   */
+  @Override
+  public java.util.List<TaskDelivery> openTasksOfAggregate(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId) {
+
+    return store.openTasksOfAggregate(workflowModuleId, bpmnProcessId, workflowAggregateId);
+
+  }
+
   @Override
   public int markTaskClosed(
       final String workflowModuleId,

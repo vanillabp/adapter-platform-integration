@@ -326,6 +326,44 @@ public class VanillaBpConfigurationBindingTest {
   }
 
   @Test
+  @DisplayName("The settings of an extension bind at all four levels and merge key by key")
+  public void extensionSettingsBindAtEveryLevel() {
+
+    contextRunner
+        .withPropertyValues(
+            "vanillabp.resources-location=classpath*:vanillabp-processes",
+            "vanillabp.adapters.test.type=dummy",
+            "vanillabp.workflow-modules.test-module.prioritized-adapters=test",
+            "vanillabp.extensions.cockpit.title=of the application",
+            "vanillabp.extensions.cockpit.base-url=http://cockpit",
+            "vanillabp.workflow-modules.test-module.extensions.cockpit.title=of the module",
+            "vanillabp.workflow-modules.test-module.workflows.TestProcess.extensions.cockpit.title=of the workflow",
+            "vanillabp.workflow-modules.test-module.workflows.TestProcess.tasks.awaitSignature.extensions.cockpit.title=of the task")
+        .run(context -> {
+
+          final var properties = context.getBean(MigrationAdapterProperties.class);
+          assertEquals(
+              "of the application",
+              properties.resolveForExtension(null, null, null, "cockpit", "title"));
+          assertEquals(
+              "of the module",
+              properties.resolveForExtension("test-module", "OtherProcess", null, "cockpit", "title"));
+          assertEquals(
+              "of the workflow",
+              properties.resolveForExtension("test-module", "TestProcess", "otherTask", "cockpit", "title"));
+          assertEquals(
+              "of the task",
+              properties.resolveForExtension("test-module", "TestProcess", "awaitSignature", "cockpit", "title"));
+          // what the more specific levels say nothing about stays what the root says
+          assertEquals(
+              "http://cockpit",
+              properties.resolveForExtension("test-module", "TestProcess", "awaitSignature", "cockpit", "base-url"));
+
+        });
+
+  }
+
+  @Test
   @DisplayName("An adapter-owned overlay of the same prefix coexists with the platform binding")
   public void adapterOverlayCoexistsWithPlatformBinding() {
 

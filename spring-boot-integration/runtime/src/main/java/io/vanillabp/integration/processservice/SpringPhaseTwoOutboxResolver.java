@@ -1,8 +1,12 @@
 package io.vanillabp.integration.processservice;
 
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import org.springframework.context.ApplicationContext;
 
@@ -107,6 +111,33 @@ public class SpringPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
         .map(outboxes::get)
         .orElseThrow(() -> new IllegalStateException(
             buildAttributionErrorMessage(workflowAggregateClass, technology, outboxes.keySet())));
+
+  }
+
+  /**
+   * Every store this context holds: the {@link PhaseTwoOutbox} beans first, then the
+   * stores a {@link PhaseTwoOutboxAware} bean names for one aggregate. A store reached
+   * both ways appears once.
+   */
+  @Override
+  public Collection<PhaseTwoOutbox> allStores() {
+
+    return Stream
+        .concat(
+            applicationContext
+                .getBeanProvider(PhaseTwoOutbox.class)
+                .stream(),
+            applicationContext
+                .getBeanProvider(PhaseTwoOutboxAware.class)
+                .stream()
+                .map(aware -> ((PhaseTwoOutboxAware<?>) aware).getPhaseTwoOutbox()))
+        .filter(Objects::nonNull)
+        .collect(
+            LinkedHashSet<PhaseTwoOutbox>::new,
+            LinkedHashSet::add,
+            LinkedHashSet::addAll)
+        .stream()
+        .toList();
 
   }
 

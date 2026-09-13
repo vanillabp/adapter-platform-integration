@@ -162,6 +162,11 @@ public class ChangelogAppliesTest {
           delivery.get("VANILLABP_TASK_DELIVERY_AGE"),
           "the retention deletes by the moment a delivery was last seen: "
               + delivery);
+      assertEquals(
+          java.util.List.of("OUTCOME", "TASK_CLOSED_AT"),
+          delivery.get("VANILLABP_TASK_DELIVERY_OPEN"),
+          "an extension reads the open tasks of one workflow aggregate per screen it builds: "
+              + delivery);
     }
 
   }

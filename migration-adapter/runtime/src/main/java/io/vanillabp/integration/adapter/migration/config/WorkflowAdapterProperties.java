@@ -36,6 +36,16 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   private Map<String, TaskAdapterProperties> tasks = Map.of();
 
   /**
+   * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this workflow -
+   * what an extension is told about ONE BPMN process, which is the level below the
+   * workflow module. Keys are the extension ids, and a key the workflow says nothing
+   * about keeps what the workflow module or the global section says (see
+   * {@link MigrationAdapterProperties#resolveForExtension}).
+   */
+  @Builder.Default
+  private Map<String, Map<String, String>> extensions = Map.of();
+
+  /**
    * Overrides <code>vanillabp.delivery</code> for this workflow. Only the settings which
    * belong to a single workflow are read here - the maximum age of an open task, since
    * one process may wait for a partner for weeks while every other one is done in

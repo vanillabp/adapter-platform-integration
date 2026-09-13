@@ -21,5 +21,15 @@ vanillabp:
       extensions:
         sample:
           greeting: Servus
+      workflows:
+        DummyProcess:
+          extensions:
+            sample:
+              greeting: Gruess Gott
+          tasks:
+            theTask:
+              extensions:
+                sample:
+                  greeting: Moin
 extension-module:
   nothing: there
