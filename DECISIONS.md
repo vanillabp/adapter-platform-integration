@@ -1368,3 +1368,33 @@ now, and a record which has to expire is written two hours old.
 
 Raising a timeout or repeating the test was rejected. Both hide that two deleters point at one
 record, and the second run is green for the same reason the first one was red.
+
+### 47. A store which cannot name its waiting adapter ids at a start names them at the first dispatch
+
+A boot names the adapter ids which outbox entries are still waiting for, because an id the
+configuration no longer has means a workflow was persisted and never started (entry 17). Three of the
+four stores keep that id in a column of their own and answer with one `DISTINCT` over it. The
+gruelbox store, which is what Spring Boot with JPA uses and therefore what most applications run,
+keeps a call as one serialized invocation: the only way to answer there is to read every row and
+deserialize it. Entry 19 rules that out. A start asks for numbers, and a question answered from
+everything an application ever scheduled gets slower for every year it is in production.
+
+So the question is put where the invocation is deserialized anyway, at the dispatch of the entry.
+The id is at hand there, an id which is gone from the configuration is reported in the words the boot
+of the other stores uses, and it costs nothing which was not already being paid. The report is said
+once per adapter id and BPMN process, and the memory is shared with the boot, so a store which
+answered the boot adds nothing at its dispatches. What a reader loses is time: the answer arrives
+with the first flush after the start rather than during it, which is the poll interval of the outbox.
+What a reader gains is that it arrives at all, in a setup where the check used to be silent.
+
+The blind spot is the same one the three answering stores have. They ask about open entries, so an
+entry which used up its attempts and was blocked is in nobody's answer, and gruelbox never reads a
+blocked entry again either. A blocked entry has an ERROR of its own naming the workflow it lost.
+
+Three other ways were weighed. A column next to gruelbox' invocation means adding one to a table
+which belongs to gruelbox, and entry 16 says which tables are VanillaBP's and that nothing else is
+touched. A table of VanillaBP's own, holding the adapter id and a count, answers the boot in one row
+per adapter id, but it costs a second write on every workflow start, and it would be a third table in
+the one setup which was chosen because it brings no table of VanillaBP's at all. And declaring the
+check absent for this store leaves the gap where it is, in the setup most applications run, which is
+the state this entry replaces.

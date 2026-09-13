@@ -2,6 +2,7 @@ package io.vanillabp.migration.test.processservice;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -515,6 +516,116 @@ public class PersistedAdapterIdTest {
     final var output = String.join("\n", loggedBy(service::validatePersistedAdapterIdsAtStartup));
 
     assertFalse(output.contains("new-bpms"), output);
+
+  }
+
+  /**
+   * A store which answers nothing but the schedule, which is the SPI default and what the
+   * gruelbox-based outbox of the Spring Boot integration does with this question.
+   */
+  private static PhaseTwoOutbox aStoreWhichCannotSay() {
+
+    return new PhaseTwoOutbox() {
+
+      @Override
+      public boolean schedule(
+          final PhaseTwoCall call) {
+
+        return true;
+
+      }
+
+    };
+
+  }
+
+  /**
+   * Dispatches phase two of a START entry naming the given adapter, which is what a store
+   * does with one of the entries it was waiting for. The dispatch fails because the adapter
+   * is gone, and that failure is the entry going back to the store rather than the subject
+   * here.
+   */
+  private static void dispatchAnEntryWaitingFor(
+      final MigrationProcessService<Object> service,
+      final String adapterId,
+      final String workflowAggregateId) {
+
+    assertThrows(
+        IllegalStateException.class,
+        () -> service
+            .executePhaseTwo(
+                io.vanillabp.integration.spi.PhaseOperation.START_WORKFLOW,
+                workflowAggregateId,
+                adapterId,
+                Map.of(),
+                false));
+
+  }
+
+  @Test
+  @DisplayName("A store which cannot answer the start answers when its entry is dispatched")
+  public void aStaleIdIsNamedWhenItsEntryIsDispatched() {
+
+    final var service = serviceWith(properties(List.of()), aStoreWhichCannotSay(), logWithOpenTasksOf(Set.of()));
+    assertTrue(
+        loggedBy(service::validatePersistedAdapterIdsAtStartup).isEmpty(),
+        "nothing is invented while booting");
+
+    final var output = String
+        .join("\n", loggedBy(() -> dispatchAnEntryWaitingFor(service, "old-bpms", "4711")));
+
+    assertTrue(output.contains("old-bpms"), output);
+    assertTrue(output.contains("RENAMED"), output);
+    assertTrue(output.contains("waiting phase-two outbox entries"), output);
+    assertTrue(output.contains("retired-adapters"), output);
+    assertTrue(output.contains(MODULE), output);
+    assertTrue(output.contains(PROCESS), output);
+
+  }
+
+  @Test
+  @DisplayName("An id the start named is not named again at the dispatch of its entries")
+  public void anIdTheStartNamedIsNotNamedTwice() {
+
+    final var service = serviceWith(
+        properties(List.of()), outboxWaitingFor(Set.of("old-bpms")), logWithOpenTasksOf(Set.of()));
+
+    assertFalse(loggedBy(service::validatePersistedAdapterIdsAtStartup).isEmpty(), "the start names it");
+    assertTrue(
+        loggedBy(() -> dispatchAnEntryWaitingFor(service, "old-bpms", "4711")).isEmpty(),
+        "a store which answered the start leaves nothing for its dispatches to add");
+
+  }
+
+  /**
+   * How many messages the dispatch of the given number of stale entries wrote. They all name
+   * one adapter id, which is the backlog a BPMS unreachable for an hour leaves behind.
+   */
+  private static int messagesWhileDispatchingStaleEntries(
+      final int entries) {
+
+    final var service = serviceWith(properties(List.of()), aStoreWhichCannotSay(), logWithOpenTasksOf(Set.of()));
+
+    return loggedBy(() -> {
+      for (var entry = 0; entry < entries; entry++) {
+        dispatchAnEntryWaitingFor(service, "old-bpms", "aggregate-%d".formatted(entry));
+      }
+    }).size();
+
+  }
+
+  @Test
+  @DisplayName("A backlog of stale entries is worth one message, not one per entry")
+  public void aBacklogOfStaleEntriesIsWorthOneMessage() {
+
+    final var oneEntry = messagesWhileDispatchingStaleEntries(1);
+    final var aBacklog = messagesWhileDispatchingStaleEntries(500);
+
+    assertEquals(1, oneEntry, "the id an entry waits for is reported once");
+    assertEquals(
+        oneEntry,
+        aBacklog,
+        "what this costs belongs to the number of adapter ids, never to the number of entries");
 
   }
 

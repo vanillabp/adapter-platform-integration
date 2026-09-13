@@ -122,9 +122,15 @@ public interface PhaseTwoOutbox {
    * the entry fails, is repeated and finally blocked, while the workflow it would have
    * started was persisted long ago.
    * <p>
-   * The default answers an empty set, which means "this store cannot say": the check is
-   * then skipped rather than invented. A store implementing it answers a cheap query;
-   * it is called once per BPMN process at startup and never at runtime.
+   * The default answers an empty set, which means "this store cannot say": nothing is
+   * invented at the start then, and the same finding is reported when one of those entries
+   * is read for its dispatch instead - the adapter id is at hand there, the read was going
+   * to happen anyway, and the answer arrives one dispatch later rather than never. A store
+   * whose entries keep the adapter id in a column of its own answers here and is quiet at
+   * the dispatch, because the start already said it.
+   * <p>
+   * A store implementing it answers a cheap query; it is called once per BPMN process at
+   * startup and never at runtime.
    *
    * @param workflowModuleId The workflow module to ask about
    * @param bpmnProcessId The BPMN process to ask about
