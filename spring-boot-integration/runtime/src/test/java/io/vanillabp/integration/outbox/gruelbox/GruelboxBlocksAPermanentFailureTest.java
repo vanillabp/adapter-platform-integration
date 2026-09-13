@@ -116,7 +116,7 @@ public class GruelboxBlocksAPermanentFailureTest {
 
   private GruelboxPhaseTwoFailureListener listener() {
 
-    return new GruelboxPhaseTwoFailureListener(persistor, transactionManager, () -> blocked);
+    return new GruelboxPhaseTwoFailureListener(persistor, transactionManager, () -> blocked, 50);
 
   }
 

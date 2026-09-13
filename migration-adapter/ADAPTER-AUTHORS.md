@@ -690,6 +690,26 @@ orders are held by `DeploymentServiceTest#extensionWiringServicesAreStoppedBefor
 `MultiAdapterDeploymentTest#bothAdaptersDeployAndStart`, with `ShutdownReverseOrderTest` for the
 way down against a booted application.
 
+### About time
+
+Phase two is never waited for. A call you reject because your BPMS has not made the workflow
+searchable yet (`PhaseTwoRetryLater`, with the window your BPMS may need) does not park the
+dispatching thread for that window. The attempt ends and the entry is planned again, and the calls
+of every other workflow go out while it waits.
+
+So the window you name is a due time, and here is how soon the entry comes back. On the stores
+VanillaBP wrote itself it is the window you named. On the gruelbox store of a Spring Boot
+application with JPA it is the window as well, written onto the entry after the failed attempt, plus
+the poll it takes to pick the entry up - `vanillabp.outbox.poll-interval`, ten seconds by default.
+Name a window your BPMS really needs, because the entry sits for it: a window of ten seconds for a
+read model which is a second behind costs nine seconds per call.
+
+A failure which says nothing about a moment is retried at a growing distance instead, starting at
+`vanillabp.outbox.attempt-frequency` (the gruelbox store keeps that one distance). Either way the
+attempt is counted, and `vanillabp.outbox.block-after-attempts` of them block the entry, which is what
+ends a workflow which never becomes searchable. `ARejectedDispatchIsPlannedAgainTest` holds it for the
+gruelbox store and `NotVisibleWorkflowDoesNotStallDispatchTest` for the core.
+
 ## 6. Registering your adapter per platform
 
 The dummy adapters of this repository are the templates, one per platform. They are small, they

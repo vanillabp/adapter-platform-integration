@@ -40,15 +40,17 @@ import lombok.extern.slf4j.Slf4j;
  * an application's own scheduling setup (e.g. <code>&#64;EnableScheduling</code>)
  * stays unaffected.
  * <p>
- * One thing the stores VanillaBP wrote itself can do and this one cannot: shorten the
- * wait of a single entry. A dispatch which knows that repeating helps in a moment says
- * so ({@link io.vanillabp.integration.spi.PhaseTwoRetryLater} - a workflow its BPMS has
- * not made searchable yet), and gruelbox schedules the next attempt itself, from the
- * <code>attemptFrequency</code> configured for the whole outbox. So here such an entry
- * comes back with the ordinary backoff, later than it had to be but never sooner. What
- * matters for the workflows around it is the same either way: nothing waits on this
- * thread, so the entries of every other workflow are dispatched while that one is due
- * again.
+ * A dispatch which knows that repeating helps in a moment says so
+ * ({@link io.vanillabp.integration.spi.PhaseTwoRetryLater} - a workflow its BPMS has not
+ * made searchable yet), and gruelbox would schedule the next attempt from the
+ * <code>attemptFrequency</code> of the whole outbox. The window the dispatch named is
+ * written over it by {@link GruelboxPhaseTwoFailureListener}, so such an entry is due here
+ * when it is due on the stores VanillaBP wrote itself. It is dispatched at the poll after
+ * that moment, and the poller above sleeps until the earliest due moment or the configured
+ * cap, whichever comes first ({@link DueEntryPoller}), so the delay this store adds to the
+ * window is at most <code>vanillabp.outbox.poll-interval</code>. Nothing waits on any
+ * thread for it, so the entries of every other workflow are dispatched while that one is
+ * due again.
  */
 @Slf4j
 public class GruelboxPhaseTwoOutboxDispatcher {

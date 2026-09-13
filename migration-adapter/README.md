@@ -1539,10 +1539,13 @@ and a burst of "start, then correlate" pairs stalled in batches. Such an entry g
 store with that window as its due time (`PhaseTwoRetryLater`) and the thread takes the next one.
 The attempt is counted like any other, which is what ends a workflow that never becomes visible:
 after `vanillabp.outbox.block-after-attempts` attempts the entry is blocked. The gruelbox store
-on Spring Boot schedules the next attempt itself, from the `attemptFrequency` of the whole
-outbox, so there such an entry comes back later than it had to, never sooner.
+on Spring Boot schedules every failed attempt from the one distance it knows, so the window is
+written onto its row afterwards, by the listener which also blocks a permanent failure: the entry is
+due there when it is due on the other stores, and the next poll picks it up.
 `NotVisibleWorkflowDoesNotStallDispatchTest` holds both halves: the entry of a findable workflow
 dispatched while the other one waits, and the bound which finally blocks it.
+`ARejectedDispatchIsPlannedAgainTest` holds the same for the gruelbox store, which used to ask again
+on the dispatching thread instead - what that cost is decision 48.
 
 **What a failed dispatch costs, and why the numbers are what they are.** The distance to the
 next attempt grows: `PhaseTwoOutboxProperties#attemptDelay` returns `attempt-frequency` for the
