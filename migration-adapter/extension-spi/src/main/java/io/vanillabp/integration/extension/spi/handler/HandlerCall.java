@@ -330,6 +330,11 @@ public final class HandlerCall {
      * Runs the method WITHOUT saving the aggregate afterwards - for an event which only
      * reads (the Business Cockpit building the details of a user task somebody opened).
      * <p>
+     * A contract which says that none of its methods ever writes
+     * ({@link HandlerContract.Builder#neverSavesTheWorkflowAggregate()}) makes every call
+     * of it a reading one, so this is only needed where some calls write and others do
+     * not.
+     * <p>
      * What it switches off is the save VanillaBP performs. A persistence layer which
      * writes what changed on a managed object by itself - JPA's dirty checking - still
      * writes it when the transaction commits, so a handler meant to change nothing has to

@@ -1332,9 +1332,10 @@ to be told which one.
 
 A boot can only say that the handler MAY save. Whether a single call saves is the extension's choice
 per call, and an extension asking for a reading handler says so at the call. The message is worded
-accordingly. Warning about what is allowed says something where nothing happened; saying nothing
-until a write is lost says nothing where it mattered, and of the two only the first can be read and
-dismissed.
+accordingly. An extension whose handlers never write at all says that on its contract instead, and
+then there is nothing to report; entry 50 says why that statement belongs there. Warning about what
+is allowed says something where nothing happened; saying nothing until a write is lost says nothing
+where it mattered, and of the two only the first can be read and dismissed.
 
 The question goes to the persistence of the aggregate, not to an annotation of the class.
 `AggregatePersistenceAware.detectsConcurrentModification` answers it, its default looks for the
@@ -1462,3 +1463,25 @@ a connection pool survives.
 `ARejectedDispatchIsPlannedAgainTest` holds both ends: the call reaches the consumer once and the
 entry is ticked off, and the workflow which is searchable is served first while the other one waits.
 `GruelboxWritesTheDueTimeADispatchAskedForTest` holds the due time in the row.
+
+### 50. An extension may say while it is wired that a handler never writes
+
+Entry 45 warns about a handler an extension may have VanillaBP save. That warning is about what is
+allowed rather than about what happened, so it also reaches an extension whose handlers only read.
+The Business Cockpit is that case: its details providers read the aggregate to build what is shown,
+and they never write. Every application using the cockpit would read the warning at every start about
+something which cannot happen, and a warning nobody can act on is one people learn to skip.
+
+A call can already say that the aggregate is not to be saved, but it says it too late. The check runs
+while the methods are wired, and at that moment nobody has called anything. So the same statement is
+made on the handler contract, once, and it is there when the methods are found.
+
+It belongs to the contract and not to the extension, because one extension can have both kinds: a
+provider which reads and a notification which writes. Two kinds are two contracts, which such an
+extension writes anyway, since the two carry different annotations.
+
+The contract outranks the call. A call of a reading contract does not save whatever it asks for, and
+asking is not refused: saving is what a call does unless it says otherwise, so refusing the
+contradiction would refuse a caller for a sentence they never wrote. What is switched off is the save
+VanillaBP performs. A persistence layer which writes a managed object by itself still writes it when
+the transaction commits, which is the boundary a reading call has as well.

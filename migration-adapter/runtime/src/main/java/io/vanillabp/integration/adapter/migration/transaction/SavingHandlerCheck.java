@@ -20,10 +20,15 @@ import org.slf4j.LoggerFactory;
  * cannot.
  * <p>
  * Whether a single call really saves is the caller's decision and is made per call, so a
- * boot can only say that the handler MAY save. An extension asking for a handler which
- * reads says so at the call, and the message would then be about something which never
- * happens - the price of warning about what is allowed rather than about what was observed,
- * and the alternative is to say nothing until a write is already lost.
+ * boot can only say that the handler MAY save - the price of warning about what is allowed
+ * rather than about what was observed, and the alternative is to say nothing until a write
+ * is already lost.
+ * <p>
+ * An extension whose handlers never write says so on its contract
+ * ({@code HandlerContract.Builder#neverSavesTheWorkflowAggregate}), and those handlers are
+ * not reported at all: the statement is there while they are wired, which is exactly when
+ * this check runs, so the warning would be about something which cannot happen. Why the
+ * contract carries it rather than the call is decision 50 in the repository's DECISIONS.md.
  * <p>
  * Nothing is asked of a database here, which is what makes this cheap enough for a start:
  * the question goes to the persistence of the aggregate and is answered from the class.

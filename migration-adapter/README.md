@@ -2516,14 +2516,15 @@ HandlerContract
     .build();
 ```
 
-|   Part of the contract    |                                                      What it decides                                                      |
-|---------------------------|---------------------------------------------------------------------------------------------------------------------------|
-| annotation type           | which methods belong to the extension; repeatable annotations are supported                                               |
-| `lookupKeys(…)`           | the keys one occurrence names — an EMPTY list means the method's own name, `EVERY_KEY` means every element of the process |
-| `coreParameters(…)`       | which of the parameters VanillaBP binds itself may stand there (`@TaskId`/`@TaskEvent` are deliberately not among them)   |
-| `parameterBinder(…)`      | the parameters of the extension's own SPI, recognized by type or by annotation                                            |
-| `deliversReturnValue()`   | whether what a method returns reaches the caller; without it a method has to be `void`                                    |
-| `validatingAnnotation(…)` | what the extension checks about one occurrence of its annotation, while the scan holds the method carrying it             |
+|        Part of the contract        |                                                      What it decides                                                      |
+|------------------------------------|---------------------------------------------------------------------------------------------------------------------------|
+| annotation type                    | which methods belong to the extension; repeatable annotations are supported                                               |
+| `lookupKeys(…)`                    | the keys one occurrence names — an EMPTY list means the method's own name, `EVERY_KEY` means every element of the process |
+| `coreParameters(…)`                | which of the parameters VanillaBP binds itself may stand there (`@TaskId`/`@TaskEvent` are deliberately not among them)   |
+| `parameterBinder(…)`               | the parameters of the extension's own SPI, recognized by type or by annotation                                            |
+| `deliversReturnValue()`            | whether what a method returns reaches the caller; without it a method has to be `void`                                    |
+| `validatingAnnotation(…)`          | what the extension checks about one occurrence of its annotation, while the scan holds the method carrying it             |
+| `neverSavesTheWorkflowAggregate()` | that no method of this annotation ever writes the aggregate, so nothing is saved and nothing is warned about              |
 
 An invocation (`ExtensionHandlers#invoke`) names the keys it accepts — a task definition
 and an element id, say — and the method NAMING any of them runs; where none does, the
@@ -2535,6 +2536,17 @@ one key of one BPMN process end the boot naming both. A call may hand IN an aggr
 instead of naming its ID, may say that the aggregate is not to be saved, and may say that
 it runs in the transaction the caller is already in — which is what an embedded BPMS needs,
 since Camunda 7 delivers its task events inside the engine's own transaction.
+
+**An extension whose handlers only read says so while it is wired.** A call can already ask for a
+handler to run without the aggregate being saved afterwards, but a call says it too late for the
+warning about a second writer: that warning is written while the methods are found, and at that
+moment nobody has called anything. `neverSavesTheWorkflowAggregate()` is the same statement made on
+the contract, once, and a contract carrying it is not warned about at all. It outranks the call,
+so a call of such a contract saves nothing whatever it asks for, and asking is not refused, because
+saving is what a call does unless it says otherwise. The statement sits on the contract rather than
+on the extension because one extension can have both kinds, a provider which reads and a
+notification which writes, and those are two annotations and therefore two contracts anyway
+(decision 50 in the repository's `DECISIONS.md`).
 
 **Registration order does not matter.** Whether the extension's bean or the scan of the
 workflow services comes first depends on what else the application does, so a contract
@@ -2897,6 +2909,12 @@ The core answers the part it owns, and only that part:
   of the annotation so JPA and Spring Data are covered without a dependency on either, and
   warns once per BPMN process where there is none. An aggregate with a version attribute stays
   quiet, because then the collision is the exception above instead of a lost write.
+- The second writer a dependency brings is hinted at the same way. `SavingHandlerCheck` warns once
+  per BPMN process where an extension has handler methods VanillaBP may save afterwards and the
+  aggregate has no version attribute, naming the extension and its annotation. An extension whose
+  contract says that none of its methods ever writes is not reported, because then the save does not
+  happen (see [handler contracts](#the-extensions-own-annotation-handler-contracts) and decisions 45
+  and 50).
 - The hint reads the versions the BPMS still HOLDS as well. An older version with a parallel
   gateway the newest model dropped keeps forking every workflow started before it, and those
   are the workflows which run longest, so a hint drawn from this boot's model alone misses the

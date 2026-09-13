@@ -626,6 +626,48 @@ public class ExtensionHandlerRegistryTest {
   }
 
   @Test
+  @DisplayName("A contract which never writes leaves the aggregate alone although the call asked for nothing")
+  public void aReadingContractDoesNotSaveTheAggregate() {
+
+    final var transactionRunner = new TransactionRunnerStub();
+    final var registry = new WorkflowTaskRegistry(transactionRunner);
+    final var persistence = new InMemoryPersistence();
+    final var aggregate = new Aggregate();
+    aggregate.id = "4711";
+    persistence.save(aggregate);
+    registry
+        .getExtensionHandlers()
+        .register(
+            HandlerContract
+                .of(EXTENSION, Note.class)
+                .lookupKeys(annotation -> ((Note) annotation).element().isEmpty()
+                    ? List.of()
+                    : List.of(((Note) annotation).element()))
+                .coreParameters(
+                    CoreHandlerParameter.WORKFLOW_AGGREGATE,
+                    CoreHandlerParameter.TASK_PARAM,
+                    CoreHandlerParameter.MULTI_INSTANCE)
+                .parameterBinder(parameter -> parameter.getType().equals(Payload.class)
+                    ? Optional.of(HandlerContext::getPayload)
+                    : Optional.empty())
+                .deliversReturnValue()
+                .neverSavesTheWorkflowAggregate()
+                .build());
+    registry
+        .registerWorkflowService(
+            MODULE, PROCESS, NotingService.class, NotingService::new, type -> null, processService(persistence));
+
+    // the call says nothing about saving, which normally means "save"
+    final var returned = registry
+        .getExtensionHandlers()
+        .invoke(call("TheTask").variable("kind", "CREATED").build());
+
+    assertEquals("4711/hello/CREATED", returned.orElseThrow());
+    assertNull(persistence.aggregates.get("4711").getTouched());
+
+  }
+
+  @Test
   @DisplayName("No call of an extension demands a transaction which is already open")
   public void noCallDemandsARunningTransaction() {
 

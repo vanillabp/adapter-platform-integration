@@ -200,6 +200,11 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
             registered.add(method);
           });
     }
+    if (!contract.savesWorkflowAggregate()) {
+      // the extension said while wiring that none of its methods writes, so there is no
+      // second writer to warn about (see decision 50 in the repository's DECISIONS.md)
+      return;
+    }
     savingHandlerCheck
         .reportHandlersWhichMaySave(
             service.workflowModuleId(),
@@ -402,7 +407,10 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
             call::getMultiInstances);
     final var returned = method.invoke(context);
 
-    if (call.savesWorkflowAggregate() && (workflowAggregate != null)) {
+    // a contract which says it never writes outranks the call: the call's default is to
+    // save, so a caller of such a contract cannot say anything else and nothing is
+    // refused here
+    if (call.savesWorkflowAggregate() && contract.savesWorkflowAggregate() && (workflowAggregate != null)) {
       saveWorkflowAggregate(processService, workflowAggregate);
     }
     return returned;
