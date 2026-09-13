@@ -1423,3 +1423,42 @@ The Quarkus half is not a duplication but a wall. SmallRye refuses a key it does
 mapping root, so before the workflow and the task level were part of the mapping, an application
 writing `vanillabp.workflow-modules.<m>.workflows.<p>.extensions.<ext>.*` did not merely go unread,
 it did not start.
+
+### 49. A dispatch which cannot run yet ends, and nothing waits inside a transaction
+
+Phase two of an operation may be rejected rather than fail: on Camunda 8 the exporter of the cluster
+has not written the workflow yet, the adapter says so and names how long that usually takes
+(`PhaseTwoRetryLater`). This is the ordinary case there, not an exception.
+
+Two answers are possible, and only one of them works. A store may end the attempt and plan the entry
+again, which is what the three stores VanillaBP wrote itself do. Or the dispatch may ask again on the
+spot, which is what the gruelbox store did, in slices of half a second, so that a message correlated
+right after a start went through in the second the cluster needed instead of in the next
+`attempt-frequency`.
+
+Asking again on the spot cannot work, because the attempt is not alone in its transaction. Gruelbox
+opens one around the dispatch and ticks the entry off in it, and the dispatch joins that transaction
+so that everything a handler writes stands or falls with the entry (entry 11). A rejected attempt
+rolls that transaction back, and a transaction somebody joined and rolled back is marked
+rollback-only for good, in Spring as in JTA. The attempt behind it therefore reached the BPMS and then
+lost its commit. What happened next depended on a race with the flushing thread: either the entry
+stayed open and the consumer got the same call a second time, or the update which counts the attempt
+wrote the processed flag of the rolled-back attempt and the operation was recorded as done although
+its effects were gone. Both cost what a handler had written, and neither said so. Gruelbox said what
+it could see: `Failed to update attempt count`.
+
+So a rejected attempt ends. The entry goes back to the store, and the window the adapter named is
+written onto its row afterwards, in the listener which also blocks a permanent failure, because that
+is the one moment at which the failed attempt is committed and the row can be touched again. The
+short due time is therefore kept, which is what the waiting was for, and no thread and no database
+connection is held while a cluster catches up. The attempt is counted like any other, so
+`block-after-attempts` still ends a workflow which never becomes visible.
+
+What this costs is the poll after the due moment, so an entry is dispatched at most
+`vanillabp.outbox.poll-interval` later than the window it asked for. What it ends is a dispatch which
+slept while it held the transaction of the store, and with it the question of how many such sleepers
+a connection pool survives.
+
+`ARejectedDispatchIsPlannedAgainTest` holds both ends: the call reaches the consumer once and the
+entry is ticked off, and the workflow which is searchable is served first while the other one waits.
+`GruelboxWritesTheDueTimeADispatchAskedForTest` holds the due time in the row.

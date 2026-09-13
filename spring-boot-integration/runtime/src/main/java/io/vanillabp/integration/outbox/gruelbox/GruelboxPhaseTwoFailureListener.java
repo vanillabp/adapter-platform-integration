@@ -1,6 +1,8 @@
 package io.vanillabp.integration.outbox.gruelbox;
 
 import java.lang.reflect.Method;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.function.Supplier;
 
@@ -11,12 +13,14 @@ import com.gruelbox.transactionoutbox.TransactionOutboxListener;
 
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.spi.PhaseTwoPermanentFailure;
+import io.vanillabp.integration.spi.PhaseTwoRetryLater;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Makes the gruelbox store keep the two promises the stores VanillaBP writes itself keep:
- * an entry whose failure the adapter called permanent is blocked after the first attempt,
- * and the ERROR which reports a blocked entry says which workflow was lost.
+ * Makes the gruelbox store keep the three promises the stores VanillaBP writes itself
+ * keep: an entry whose failure the adapter called permanent is blocked after the first
+ * attempt, the ERROR which reports a blocked entry says which workflow was lost, and an
+ * entry which cannot run YET is due when the adapter said it would be.
  * <p>
  * Gruelbox counts attempts and blocks an entry once
  * <code>vanillabp.outbox.block-after-attempts</code> of them are used up, and it knows
@@ -31,6 +35,16 @@ import lombok.extern.slf4j.Slf4j;
  * That case is only reported, never blocked again, so an entry ends in exactly one ERROR
  * of VanillaBP's however it got there. Gruelbox writes a line of its own next to it,
  * which names the entry id and not the workflow.
+ * <p>
+ * The due time is written the same way, and it is the answer to the one thing gruelbox
+ * cannot express: a dispatch which says that asking again in a moment helps
+ * ({@link PhaseTwoRetryLater} - a workflow the BPMS has not
+ * made searchable yet) would otherwise wait for
+ * <code>vanillabp.outbox.attempt-frequency</code>, thirty seconds by default, where the ten
+ * of a Camunda 8 cluster were asked for. Gruelbox has just written its own distance onto the
+ * row, and this listener writes the shorter one over it. Nothing waits on the dispatching
+ * thread for it, which is the whole difference to how this store used to answer that case
+ * (see {@link GruelboxPhaseTwoDispatchBean}).
  * <p>
  * An entry which is not a phase-two dispatch is left alone. The outbox bean belongs to
  * VanillaBP, but an application may schedule work of its own on it, and blocking
@@ -63,20 +77,30 @@ public class GruelboxPhaseTwoFailureListener implements TransactionOutboxListene
   private final Supplier<VanillaBpMetrics> metrics;
 
   /**
+   * How many attempts an entry has, for the line which says how many of them a repeated
+   * entry has used.
+   */
+  private final int blockAfterAttempts;
+
+  /**
    * @param persistor The persistor of the outbox this listener belongs to, used to write
    *          the blocked flag
    * @param transactionManager The transaction manager of that outbox, giving the
    *          transaction the write runs in
    * @param metrics What a blocked entry is counted into
+   * @param blockAfterAttempts The attempt budget of this outbox
+   *          (<code>vanillabp.outbox.block-after-attempts</code>)
    */
   public GruelboxPhaseTwoFailureListener(
       final Persistor persistor,
       final TransactionManager transactionManager,
-      final Supplier<VanillaBpMetrics> metrics) {
+      final Supplier<VanillaBpMetrics> metrics,
+      final int blockAfterAttempts) {
 
     this.persistor = persistor;
     this.transactionManager = transactionManager;
     this.metrics = metrics;
+    this.blockAfterAttempts = blockAfterAttempts;
 
   }
 
@@ -99,12 +123,68 @@ public class GruelboxPhaseTwoFailureListener implements TransactionOutboxListene
     }
 
     if (!permanent) {
+      dueWhenTheDispatchAskedFor(entry, cause);
       return;
     }
 
     if (blockNow(entry)) {
       reportPermanentFailure(entry, cause);
     }
+
+  }
+
+  /**
+   * Writes the due time a dispatch asked for. Gruelbox has one distance for the whole
+   * outbox and has just written it onto the row, so the shorter one of the two is what
+   * stays: the dispatch says when asking again can help, and no store may ask sooner than
+   * its own backoff would.
+   *
+   * @param entry The entry whose attempt was rejected
+   * @param cause What the dispatch was rejected with
+   */
+  private void dueWhenTheDispatchAskedFor(
+      final TransactionOutboxEntry entry,
+      final Throwable cause) {
+
+    final var retryAfter = PhaseTwoRetryLater.retryAfter(cause);
+    if (retryAfter == null) {
+      return;
+    }
+    // truncated the way gruelbox truncates its own distances, so the moment in the row and
+    // the moment in the entry are the same one whatever the database stores
+    final var askedFor = Instant
+        .now()
+        .plus(retryAfter)
+        .truncatedTo(ChronoUnit.MILLIS);
+    if (!askedFor.isBefore(entry.getNextAttemptTime())) {
+      return;
+    }
+    final var gruelboxWrote = entry.getNextAttemptTime();
+    try {
+      entry.setNextAttemptTime(askedFor);
+      transactionManager.inTransactionThrows(transaction -> persistor.update(transaction, entry));
+    } catch (final Exception e) {
+      entry.setNextAttemptTime(gruelboxWrote);
+      log.debug(
+          "Could not write the due time the dispatch of the outbox entry '{}' asked for - it is "
+              + "dispatched again after 'vanillabp.outbox.attempt-frequency' instead",
+          entry.getId(),
+          e);
+      return;
+    }
+    final var call = argumentsOf(entry);
+    log.info(
+        "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' cannot run "
+            + "yet - the outbox entry '{}' is dispatched again in {} ({} of {} attempts used): {}",
+        call[0],
+        call[2],
+        call[1],
+        call[3],
+        entry.getId(),
+        retryAfter,
+        entry.getAttempts(),
+        blockAfterAttempts,
+        cause.getMessage());
 
   }
 

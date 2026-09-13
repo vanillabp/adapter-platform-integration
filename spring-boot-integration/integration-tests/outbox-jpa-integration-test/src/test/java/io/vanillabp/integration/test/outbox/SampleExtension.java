@@ -1,5 +1,6 @@
 package io.vanillabp.integration.test.outbox;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -12,6 +13,7 @@ import io.vanillabp.integration.extension.spi.handler.HandlerCall;
 import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.spi.PhaseOperationRegistry;
 import io.vanillabp.integration.spi.PhaseTwoCall;
+import io.vanillabp.integration.spi.PhaseTwoRetryLater;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 
@@ -43,6 +45,23 @@ public class SampleExtension {
 
   private volatile int reportAndFailNextDispatches;
 
+  /**
+   * How many of the next dispatches are rejected the way an adapter rejects a workflow its
+   * BPMS has not made searchable yet.
+   */
+  private volatile int rejectNextDispatches;
+
+  /**
+   * The window such a rejection names.
+   */
+  private volatile Duration rejectionWindow = Duration.ofSeconds(1);
+
+  /**
+   * Whether a dispatch which goes through writes into the workflow aggregate first, the way
+   * a provider notes down what it reported.
+   */
+  private volatile boolean writeWhileDispatching;
+
   private final java.util.concurrent.atomic.AtomicInteger attempts = new java.util.concurrent.atomic.AtomicInteger();
 
   /**
@@ -73,6 +92,11 @@ public class SampleExtension {
                 call,
                 previouslyAttempted) -> {
               attempts.incrementAndGet();
+              if (rejectNextDispatches > 0) {
+                rejectNextDispatches--;
+                throw new PhaseTwoRetryLater(
+                    "test rejection: the workflow is not searchable yet", rejectionWindow);
+              }
               if (reportAndFailNextDispatches > 0) {
                 reportAndFailNextDispatches--;
                 runTheReportingHandler(
@@ -84,6 +108,12 @@ public class SampleExtension {
               if (failNextDispatches > 0) {
                 failNextDispatches--;
                 throw new RuntimeException("test dispatch failure");
+              }
+              if (writeWhileDispatching) {
+                runTheReportingHandler(
+                    call.workflowModuleId(),
+                    call.bpmnProcessId(),
+                    call.workflowAggregateId());
               }
               dispatched.add(call);
             });
@@ -162,6 +192,8 @@ public class SampleExtension {
     dispatched.clear();
     failNextDispatches = 0;
     reportAndFailNextDispatches = 0;
+    rejectNextDispatches = 0;
+    writeWhileDispatching = false;
     attempts.set(0);
 
   }
@@ -183,6 +215,32 @@ public class SampleExtension {
       final int count) {
 
     reportAndFailNextDispatches = count;
+
+  }
+
+  /**
+   * Lets the next dispatches be rejected with the window an adapter names while its BPMS has
+   * not made the workflow searchable yet - the ordinary case on Camunda 8.
+   *
+   * @param count The number of dispatches to reject that way
+   * @param window The window the rejection names
+   */
+  public void rejectNextDispatches(
+      final int count,
+      final Duration window) {
+
+    rejectionWindow = window;
+    rejectNextDispatches = count;
+
+  }
+
+  /**
+   * Lets a dispatch which goes through write into the workflow aggregate before it records
+   * the call, the way a provider notes down what it reported.
+   */
+  public void writeWhileDispatching() {
+
+    writeWhileDispatching = true;
 
   }
 

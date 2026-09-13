@@ -68,15 +68,14 @@ import jakarta.persistence.EntityManagerFactory;
  * native blocklisting. What gruelbox has no idea of is VanillaBP's classification of a
  * failure, so a failure the adapter calls permanent is blocked by a listener of
  * VanillaBP's ({@link GruelboxPhaseTwoFailureListener}), which also gives a blocked entry
- * an ERROR naming the workflow instead of only the entry id. Two things this store cannot
- * do and the own stores can: its
- * retry policy knows ONE fixed distance, so <code>max-attempt-frequency</code> and the
- * doubling it caps have no effect here, and a blocklisted entry holds its
- * <code>uniqueRequestId</code> until the row is removed, so the operation it failed at
- * cannot be scheduled again in the meantime. What it also cannot express is the short
- * due time of a workflow which is not searchable yet, and that one is answered rather
- * than accepted: {@link GruelboxPhaseTwoDispatchBean} waits the window out on the
- * dispatching thread. The {@link PhaseTwoCall#args()} map travels in its serialized
+ * an ERROR naming the workflow instead of only the entry id. That same listener writes the
+ * short due time of a workflow which is not searchable yet, because gruelbox schedules
+ * every failed attempt from the one distance it knows. Two things this store cannot do and
+ * the own stores can: its retry policy knows ONE fixed distance, so
+ * <code>max-attempt-frequency</code> and the doubling it caps have no effect here, and a
+ * blocklisted entry holds its <code>uniqueRequestId</code> until the row is removed, so the
+ * operation it failed at cannot be scheduled again in the meantime. The
+ * {@link PhaseTwoCall#args()} map travels in its serialized
  * form because gruelbox's invocation serializer only accepts scalar parameter types
  * (see {@link GruelboxPhaseTwoDispatch}). What this store does like the own ones is
  * wait for VanillaBP: its {@link GruelboxRedispatchAwareSubmitter} keeps an entry
@@ -200,7 +199,9 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
         .transactionManager(transactionManager)
         .instantiator(new SpringInstantiator(applicationContext))
         .persistor(persistor)
-        .listener(outboxListener(persistor, transactionManager, metrics, applicationListeners))
+        .listener(
+            outboxListener(
+                persistor, transactionManager, metrics, applicationListeners, properties.getBlockAfterAttempts()))
         // carries "this entry was attempted before" to the dispatch bean and keeps
         // entries until VanillaBP dispatches (see the submitter's javadoc)
         .submitter(submitter)
@@ -222,17 +223,20 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
    * @param transactionManager The transaction manager of this outbox
    * @param metrics Provider of what a blocked entry is counted into
    * @param applicationListeners The listeners the application brings
+   * @param blockAfterAttempts The attempt budget of this outbox, which the listener names
+   *          when it says how soon a rejected entry comes back
    * @return The listener to hand to the outbox
    */
   private static TransactionOutboxListener outboxListener(
       final Persistor persistor,
       final SpringTransactionManager transactionManager,
       final ObjectProvider<io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics> metrics,
-      final ObjectProvider<TransactionOutboxListener> applicationListeners) {
+      final ObjectProvider<TransactionOutboxListener> applicationListeners,
+      final int blockAfterAttempts) {
 
     TransactionOutboxListener listener = new GruelboxPhaseTwoFailureListener(
         persistor, transactionManager, () -> io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration
-            .vanillaBpMetricsOf(metrics));
+            .vanillaBpMetricsOf(metrics), blockAfterAttempts);
     for (final var applicationListener : applicationListeners) {
       listener = listener.andThen(applicationListener);
     }
