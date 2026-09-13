@@ -1522,3 +1522,31 @@ The report is written once the workflow module is deployed, which is the moment 
 side of a module is judged at, and a contract registered after that writes its own line when it
 arrives. A BPMN process an extension has no method for is not named: most pairs of extension and
 process have nothing to say, and the method nobody can see has its own report.
+
+### 52. The adapter runs before every extension, and two extensions are not ordered against each other
+
+An adapter and an extension work on the same BPMN model, so one of them is first. VanillaBP promises
+which: the adapter has wired a BPMN process before any extension sees that process, and it is
+processing workflows before any extension is started. Going down, extensions stop first and the
+adapters last, so nothing is stopped while something else still feeds it.
+
+What an extension builds on is therefore a relative position, not a number. It adds its listener
+behind the last one of a kind the adapter put there, which keeps working when the adapter changes
+what it writes. On Camunda 8 the Business Cockpit adds its `creating` listener behind the last
+`creating` one and the rest behind everything; on Camunda 7 the adapter offers
+`parseListenersAfter` and `parseListenersBefore` for the rare case of an element which has to be
+seen untouched.
+
+The order of two extensions among themselves is deliberately not promised. They are sorted by the
+order each asks for, and two extensions which do not know each other cannot agree on a number, so
+two of the same order run in the order the platform collected their beans in. Giving out a first and
+a last position instead would only move the problem: the second extension wanting to be last is
+where such a scheme ends, while a relative hook needs no agreement at all.
+
+The promise used to live as javadoc in three repositories and nowhere as a statement about
+VanillaBP, so an extension author found it by opening the right one by chance. It is now on the wiki
+page `Extensions`, in `ADAPTER-AUTHORS.md` for the other side, and in the javadoc of
+`ExtensionWiringService`. `DeploymentServiceTest#theAdapterIsFirstOnTheWayUp` holds the way up and
+`#extensionWiringServicesAreStoppedBeforeAdapters` the way down, in the platform rather than in the
+repository of one extension: a promise of VanillaBP which only an extension tests goes away with
+that extension.

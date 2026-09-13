@@ -6,6 +6,22 @@ package io.vanillabp.integration.extension.spi;
  * <p>
  * A BPMS adapter does not implement this interface directly: the adapter SPI extends it and adds
  * everything reading and deploying a model takes.
+ * <p>
+ * <b>The adapter of the BPMS runs before every extension.</b> It has wired a BPMN process before
+ * any extension sees that process, and it is processing workflows before any extension is started.
+ * On the way down the order is mirrored: extensions are stopped first and the adapters last. So an
+ * extension hooks what it adds to a model in RELATIVE to what the adapter already put there, for
+ * example behind the last listener of a kind, rather than at a position it has to guess. Something
+ * which has to see an element before the adapter touched it needs an entry point of its own and has
+ * to ask for one.
+ * <p>
+ * <b>What is not promised is the order of two extensions among themselves.</b> They are sorted by
+ * {@link #getOrder()}, and two extensions which do not know each other cannot agree on a number, so
+ * two of the same order run in the order the platform happened to collect their beans in. Nothing
+ * promises that this order stays. An extension which only depends on running after the adapter is
+ * unaffected by all of it, which is why VanillaBP has no <code>MIN_VALUE</code> and
+ * <code>MAX_VALUE</code> for anybody to claim. Both halves are decision 52 in the repository's
+ * DECISIONS.md, and the wiki page <code>Extensions</code> is where an extension author reads them.
  *
  * @param <BPMN> The BPMN model type
  * @param <PC> The context to store all information needed by the adapter for wiring and deploying BPMN
@@ -23,9 +39,12 @@ public interface ExtensionWiringService<BPMN, PC> {
   Class<PC> getProcessContextType();
 
   /**
-   * @return The order of this service. To be used to define the order of wiring the model by multiple extensions
-   *        using the same model type. Defaults to <code>0</code>, so implementations (especially adapters)
-   *        only need to implement this method if a specific order is required.
+   * The order among the EXTENSIONS of one model type, ascending. It says nothing about the adapter,
+   * which runs before all of them either way (see the type javadoc), and two extensions of the same
+   * order run in the order the platform collected them in, which nobody promises.
+   *
+   * @return The order of this service. Defaults to <code>0</code>, so implementations (especially
+   *         adapters) only need to implement this method if a specific order is required.
    */
   default int getOrder() {
 

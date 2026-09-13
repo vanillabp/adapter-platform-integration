@@ -694,6 +694,15 @@ orders are held by `DeploymentServiceTest#extensionWiringServicesAreStoppedBefor
 `MultiAdapterDeploymentTest#bothAdaptersDeployAndStart`, with `ShutdownReverseOrderTest` for the
 way down against a booted application.
 
+You are the first one at a model. Your `wireBpmn` runs before any extension sees that process and
+your `startWorkflowProcessing` before any extension is started, which is the promise the extensions
+build on: they hook in relative to what you put there. So an extension may add a listener behind the
+last one of yours, and moving your own listeners around moves theirs with them. What their order
+among themselves is stays their business and is not promised.
+`DeploymentServiceTest#theAdapterIsFirstOnTheWayUp` holds it, and the wiki page
+[Extensions](https://github.com/vanillabp/adapter-platform-integration/wiki/Extensions) is where an
+extension author reads it.
+
 ### About time
 
 Phase two is never waited for. A call you reject because your BPMS has not made the workflow

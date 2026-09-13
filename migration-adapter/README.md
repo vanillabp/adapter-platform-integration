@@ -2446,13 +2446,20 @@ that wants to CONTRIBUTE to the adapter's processing context has to declare that
 context type and thereby becomes BPMS-specific, whereas an extension that only reads the
 model can stay generic.
 
-**Ordering.** All wiring services of a module — adapters and extensions — are sorted by
-`getOrder()` ascending, once at startup. Order matters whenever two of them touch the same
-model: VanillaBP's own wiring decides which BPMN elements are served by `@WorkflowTask`
-methods, so an extension reacting to that result has to run afterwards (the Business
-Cockpit's listeners are consistently ordered last). Shutdown is the mirror image:
-`stopWorkflowProcessing` runs on the extensions first (in reverse wiring order), then on
-the adapters, so nothing is stopped while something else still feeds it.
+**Ordering.** The adapter of the BPMS runs before every extension: it has wired a BPMN process
+before any extension sees that process, and it is processing workflows before any extension is
+started. Shutdown is the mirror image, extensions first and adapters last, so nothing is stopped
+while something else still feeds it. That promise is what lets an extension hook what it adds to a
+model in relative to what the adapter put there, for example behind the last listener of a kind,
+and it is written for extension authors on the wiki page
+[Extensions](https://github.com/vanillabp/adapter-platform-integration/wiki/Extensions) rather
+than only in a javadoc.
+
+The extensions among themselves are sorted by `getOrder()` ascending, once at startup, and that
+order is NOT promised: two extensions which do not know each other cannot agree on a number, and two
+of the same order run in the order the platform collected their beans in.
+`DeploymentServiceTest#theAdapterIsFirstOnTheWayUp` holds the promise for the way up and
+`#extensionWiringServicesAreStoppedBeforeAdapters` for the way down.
 
 **An extension may define its own SPI.** `wireBpmn` is where an extension's own
 annotations become alive — the Business Cockpit finds `@UserTaskDetailsProvider` methods
