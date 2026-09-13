@@ -23,11 +23,17 @@ import java.util.function.Function;
  * {@link Builder#lookupKeys(Function)} reads from it. A method whose annotation names
  * none serves its own METHOD NAME, which is the convention
  * <code>&#64;WorkflowTask</code> follows too; {@link #EVERY_KEY} makes it serve every
- * key of its BPMN process. An invocation hands in the keys it accepts (a task definition
- * and an element id, say), and the method NAMING one of them runs; where none does, the
+ * key of its BPMN process. An invocation hands in the keys it accepts (an element id and
+ * a task definition, say), and the method NAMING one of them runs; where none does, the
  * method serving every key runs. So a catch-all may stand next to methods for single
  * elements, and the specific one wins - the rule
  * <code>&#64;WorkflowStartedByBpms</code> follows for its start events too.
+ * <p>
+ * <b>Which key wins is the order of the invocation's list.</b> Where two methods serve
+ * one element under two keys, the key offered first decides, so an extension says with
+ * that order which identity of an element it prefers. The keys a METHOD declares carry no
+ * such rank: a method says what it answers to, and that is a set (see decision 51 in the
+ * repository's DECISIONS.md).
  * <p>
  * <b>Zero matches are legal.</b> Nothing is registered for a BPMN process whose
  * workflow service carries no such method, and an invocation for it answers

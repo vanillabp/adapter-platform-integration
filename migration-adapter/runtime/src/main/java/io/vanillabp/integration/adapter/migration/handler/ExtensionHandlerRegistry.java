@@ -95,6 +95,13 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
   private final Set<LookedOver> classesLookedOverPerContract = ConcurrentHashMap.newKeySet();
 
   /**
+   * The workflow modules the report about what was wired was already written for. A
+   * contract registered after its module was deployed writes its own line right away, so
+   * an extension whose bean is created late is not left out of the report.
+   */
+  private final Set<String> workflowModulesReported = ConcurrentHashMap.newKeySet();
+
+  /**
    * One element of one BPMN process of one workflow module.
    */
   private record BpmnElement(
@@ -200,6 +207,11 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
             registered.add(method);
           });
     }
+    if (workflowModulesReported.contains(service.workflowModuleId())) {
+      // this workflow module was deployed before the contract arrived, so its line was
+      // written without these methods
+      reportWiringOf(key, registered);
+    }
     if (!contract.savesWorkflowAggregate()) {
       // the extension said while wiring that none of its methods writes, so there is no
       // second writer to warn about (see decision 50 in the repository's DECISIONS.md)
@@ -267,6 +279,72 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
                       service.bpmnProcessId(),
                       service.workflowModuleId()));
         });
+
+  }
+
+  /**
+   * Writes what was wired for every BPMN process of a workflow module, one line per
+   * extension, process and annotation, naming each method and the keys it serves. The core
+   * calls it once a workflow module is deployed, which is the moment the
+   * <code>&#64;WorkflowTask</code> side is judged at as well.
+   * <p>
+   * Everything the line names is in the registry already, so an extension is asked for
+   * nothing: the contract knows the extension and the annotation, the registry key knows
+   * the workflow module and the BPMN process, and the method knows the keys it was wired
+   * to. A BPMN process no method of an extension was found for is not named, because a
+   * line for every pair of extension and process would be a line about nothing for most of
+   * them; a method nobody can see is reported by {@link HandlerMethodsNobodySees} instead.
+   *
+   * @param workflowModuleId The workflow module which finished deploying
+   */
+  public void reportWiring(
+      final String workflowModuleId) {
+
+    workflowModulesReported.add(workflowModuleId);
+    methods
+        .keySet()
+        .stream()
+        .filter(key -> key.workflowModuleId().equals(workflowModuleId))
+        .sorted(
+            java.util.Comparator
+                .comparing(RegistryKey::bpmnProcessId)
+                .thenComparing(key -> key.annotationType().getSimpleName()))
+        .forEach(key -> reportWiringOf(key, methods.get(key)));
+
+  }
+
+  private void reportWiringOf(
+      final RegistryKey key,
+      final List<ExtensionHandlerMethod> registered) {
+
+    final String extensionId;
+    final String wiring;
+    synchronized (registered) {
+      if (registered.isEmpty()) {
+        return;
+      }
+      extensionId = registered
+          .getFirst()
+          .getExtensionId();
+      wiring = registered
+          .stream()
+          .map(method -> "'%s' serves %s".formatted(method.describe(), method.describeWiring()))
+          .collect(java.util.stream.Collectors.joining("; "));
+    }
+    // one formatted message rather than placeholders, so a test on either platform reads
+    // the line the way a developer does
+    log
+        .info(
+            """
+                Extension '%s' serves BPMN process '%s' of workflow module '%s' with these @%s \
+                methods: %s. Of the keys an invocation offers, the first one a method serves wins; a \
+                method serving every element runs where none of them is served."""
+                .formatted(
+                    extensionId,
+                    key.bpmnProcessId(),
+                    key.workflowModuleId(),
+                    key.annotationType().getSimpleName(),
+                    wiring));
 
   }
 
@@ -345,7 +423,7 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
       final Class<? extends Annotation> annotationType,
       final String workflowModuleId,
       final String bpmnProcessId,
-      final Collection<String> lookupKeys) {
+      final List<String> lookupKeys) {
 
     requireContract(annotationType);
     return find(annotationType, workflowModuleId, bpmnProcessId, lookupKeys) != null;
@@ -486,27 +564,41 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
 
   }
 
+  /**
+   * The method serving this call, or <code>null</code>.
+   * <p>
+   * The keys are walked in the order the caller offered them, and the methods are asked
+   * about one key before the next key is tried. So the first key somebody serves decides,
+   * which is what lets an extension say that the element id outranks the task definition;
+   * walking the methods first would let the order of the class scan decide instead (see
+   * decision 51 in the repository's DECISIONS.md). Only where no key is named at all does
+   * the method serving every key of the process run.
+   */
   private ExtensionHandlerMethod find(
       final Class<? extends Annotation> annotationType,
       final String workflowModuleId,
       final String bpmnProcessId,
-      final Collection<String> lookupKeys) {
+      final List<String> lookupKeys) {
 
     final var registered = methods.get(new RegistryKey(workflowModuleId, bpmnProcessId, annotationType));
     if (registered == null) {
       return null;
     }
     synchronized (registered) {
-      // the method NAMING one of the keys wins over the one serving every element of
-      // the process - a catch-all is what runs where nothing more specific exists
+      for (final var lookupKey : lookupKeys) {
+        final var serving = registered
+            .stream()
+            .filter(method -> method.serves(lookupKey))
+            .findFirst();
+        if (serving.isPresent()) {
+          return serving.get();
+        }
+      }
+      // the catch-all is what runs where nothing more specific exists
       return registered
           .stream()
-          .filter(method -> method.matches(lookupKeys))
+          .filter(ExtensionHandlerMethod::servesEveryKey)
           .findFirst()
-          .or(() -> registered
-              .stream()
-              .filter(ExtensionHandlerMethod::servesEveryKey)
-              .findFirst())
           .orElse(null);
     }
 

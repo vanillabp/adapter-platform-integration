@@ -597,6 +597,7 @@ sequenceDiagram
   DS->>AD: processVersionCatalogOf(module, process)  [per id declared but not deployed, null = cannot say]
   DS->>WT: validateNoUnwiredWorkflowTaskMethods(module)
   DS->>WT: resolveProcessVersions(module)
+  DS->>WT: reportExtensionHandlerWiring(module)  [INFO naming the handler methods of every extension]
   Note over DS: failure → deployment-failure policy: fail | warn (non-first-priority only)
   P->>DS: application ready
   DS->>AD: startWorkflowProcessing(module, PC)  — every adapter of the union
@@ -2526,8 +2527,8 @@ HandlerContract
 | `validatingAnnotation(…)`          | what the extension checks about one occurrence of its annotation, while the scan holds the method carrying it             |
 | `neverSavesTheWorkflowAggregate()` | that no method of this annotation ever writes the aggregate, so nothing is saved and nothing is warned about              |
 
-An invocation (`ExtensionHandlers#invoke`) names the keys it accepts — a task definition
-and an element id, say — and the method NAMING any of them runs; where none does, the
+An invocation (`ExtensionHandlers#invoke`) names the keys it accepts — an element id and
+a task definition, say — and the method NAMING any of them runs; where none does, the
 method serving `EVERY_KEY` does, so a catch-all may stand next to methods for single
 elements (the rule `@WorkflowStartedByBpms` follows for its start events too). **Zero matches are
 legal** and answered with an empty result: what to do instead is the extension's business
@@ -2547,6 +2548,26 @@ saving is what a call does unless it says otherwise. The statement sits on the c
 on the extension because one extension can have both kinds, a provider which reads and a
 notification which writes, and those are two annotations and therefore two contracts anyway
 (decision 50 in the repository's `DECISIONS.md`).
+
+**Which key wins is the order of the offered list.** The keys are walked in the order the caller
+offered them and every method is asked about one key before the next is tried, so the first key some
+method serves wins and the rank is the caller's list. The platform asks every extension for the same
+order, the BPMN element id first and the task definition after it, because the element id is the
+identity everything moves to and an extension built on that order survives the removal of
+`taskDefinition` unchanged. `hasHandler` therefore takes a `List` rather than a `Collection`: an
+order the caller does not have to promise is none. The keys a METHOD declares have no rank, the
+method serving `EVERY_KEY` stays the fallback where no offered key is served at all, and nothing
+checks that the element id really comes first, since a string does not say what it is (decision 51 in
+the repository's `DECISIONS.md`).
+
+**The start says what was wired.** Once a workflow module is deployed, the registry writes one line
+per extension, workflow module and BPMN process naming the methods and the keys each of them serves,
+with the catch-all marked as the one serving every element. It is what a developer reads whose method
+is never called, and everything it names sits in the registry already, so the handler contract needed
+no hook for it. A contract registered after the module was deployed writes its own line when it
+arrives, and a BPMN process an extension has no method for is not named at all.
+`ExtensionHandlerRegistryTest#theBootSaysWhatWasWired` holds the line in the core, and each platform
+reads it out of a booted application (`ExtensionHandlerWiringReportTest`).
 
 **Registration order does not matter.** Whether the extension's bean or the scan of the
 workflow services comes first depends on what else the application does, so a contract

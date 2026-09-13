@@ -54,6 +54,12 @@ public class TestApplication {
   public static final String USER_TASK_NAME = "Review the note";
 
   /**
+   * The task definition of the same element - the second name the element has, and the
+   * one the extension offers after its id.
+   */
+  public static final String USER_TASK_DEFINITION = "reviewTheNote";
+
+  /**
    * Stands in for what an adapter reads out of the models of this scenario: which BPMN
    * process each file declares, and the tasks of it. Without the first half the double
    * names a process after its file, and the processes the workflow services claim would
@@ -92,7 +98,7 @@ public class TestApplication {
           final String bpmnProcessId) {
 
         return "DummyProcess".equals(bpmnProcessId)
-            ? List.of(BpmnTaskSpec.userTask(USER_TASK_ID, "reviewTheNote", USER_TASK_NAME))
+            ? List.of(BpmnTaskSpec.userTask(USER_TASK_ID, USER_TASK_DEFINITION, USER_TASK_NAME))
             : List.of();
 
       }

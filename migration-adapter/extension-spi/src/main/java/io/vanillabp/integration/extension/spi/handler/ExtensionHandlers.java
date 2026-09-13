@@ -1,7 +1,6 @@
 package io.vanillabp.integration.extension.spi.handler;
 
 import java.lang.annotation.Annotation;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -40,18 +39,26 @@ public interface ExtensionHandlers {
    * Whether the application has a method for that key - what an extension asks before
    * building an event nobody would receive, and what tells it to fall back to its own
    * default (the Business Cockpit passing prefilled details through unchanged).
+   * <p>
+   * <b>The order of the keys decides.</b> Where an extension offers several keys for one
+   * element, the first key some method serves wins, so the list says which key outranks
+   * which. VanillaBP is moving to the BPMN element id as the identity of an element, so
+   * offer the element id first and the task definition after it (see decision 51 in the
+   * repository's DECISIONS.md). A method serving every key of the process answers
+   * <code>true</code> as well, and it is the answer only where no key of the list is
+   * named by anybody.
    *
    * @param annotationType The annotation of a registered contract
    * @param workflowModuleId The workflow module
    * @param bpmnProcessId The BPMN process
-   * @param lookupKeys The keys a method may be matched by
+   * @param lookupKeys The keys a method may be matched by, most wanted first
    * @return Whether a method serves any of those keys
    */
   boolean hasHandler(
       Class<? extends Annotation> annotationType,
       String workflowModuleId,
       String bpmnProcessId,
-      Collection<String> lookupKeys);
+      List<String> lookupKeys);
 
   /**
    * Runs the method the call addresses: load the workflow aggregate (or take the one

@@ -612,6 +612,14 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   @Override
+  public void reportExtensionHandlerWiring(
+      final String workflowModuleId) {
+
+    extensionHandlers.reportWiring(workflowModuleId);
+
+  }
+
+  @Override
   public void validateNoUnwiredWorkflowTaskMethods(
       final String workflowModuleId) {
 

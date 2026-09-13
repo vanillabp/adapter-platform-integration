@@ -221,11 +221,19 @@ public final class HandlerCall {
     }
 
     /**
-     * The keys the method may be matched by - typically the task definition and the
-     * BPMN element id of the element the event belongs to. A method serving any of them
-     * runs; a method serving {@link HandlerContract#EVERY_KEY} always does.
+     * The keys the method may be matched by - typically the BPMN element id and the task
+     * definition of the element the event belongs to. A method serving any of them runs;
+     * a method serving {@link HandlerContract#EVERY_KEY} runs where no key is served at
+     * all.
+     * <p>
+     * <b>The order decides.</b> The first key some method serves wins, so hand in a list
+     * whose order says which key you prefer, and put the BPMN element id first: it is the
+     * identity VanillaBP is moving to, and a list which starts with it keeps working
+     * unchanged when the task definition goes away (see decision 51 in the repository's
+     * DECISIONS.md).
      *
-     * @param lookupKeys The keys, <code>null</code> entries are ignored
+     * @param lookupKeys The keys, most wanted first; <code>null</code> entries are
+     *          ignored
      * @return This builder
      */
     public Builder lookupKeys(

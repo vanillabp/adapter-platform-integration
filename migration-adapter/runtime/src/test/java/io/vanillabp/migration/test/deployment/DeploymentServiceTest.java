@@ -1847,6 +1847,8 @@ public class DeploymentServiceTest {
               org.mockito.ArgumentMatchers.any());
       order.verify(wiring).validateNoUnwiredWorkflowTaskMethods("test-module");
       order.verify(wiring).resolveProcessVersions("test-module");
+      // and last the report which judges nothing
+      order.verify(wiring).reportExtensionHandlerWiring("test-module");
 
     }
 

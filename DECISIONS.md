@@ -1485,3 +1485,40 @@ asking is not refused: saving is what a call does unless it says otherwise, so r
 contradiction would refuse a caller for a sentence they never wrote. What is switched off is the save
 VanillaBP performs. A persistence layer which writes a managed object by itself still writes it when
 the transaction commits, which is the boundary a reading call has as well.
+
+### 51. The keys an invocation offers are ranked, and the element id comes first
+
+An extension names the element its event is about in more than one way: the BPMN element id and the
+task definition of the same element. It offers those keys and VanillaBP picks a method for one of
+them. The pick used to walk the METHODS and ask each of them whether it serves any offered key, so
+the winner was decided by the order the class scan had found the methods in, which is the order a
+platform's reflection happens to return. Two methods of an application, one per key, therefore won
+against each other by chance.
+
+So the walk is turned around. The keys are walked in the order the caller offered them, and all
+methods are asked about one key before the next key is tried. The first key somebody serves wins,
+which makes the order of the offered list the rank, and the method serving every element of the
+process stays the fallback for the case that no offered key is served at all.
+
+The rank itself is a direction of the platform rather than a choice of each extension: the element id
+first, the task definition after it. The element id is the identity everything moves to, the
+`taskDefinition` attribute of the annotations goes away later, and a VanillaBP BPMN of our own names
+element ids while the adapter adds what its BPMS needs. An extension built on that order keeps
+working unchanged through the removal, because the list then simply loses its second entry.
+
+`ExtensionHandlers.hasHandler` takes a `List` for it. A `Collection` has no order anybody promised,
+and the same question answered from an unordered argument would be half the promise. It is the one
+place this is not additive, and it is narrower on purpose.
+
+The keys a METHOD declares carry no rank of their own. A method says what it answers to, and that is
+a set; the rank belongs to the question, not to the answer. Nor does the platform check that an
+extension really offers the element id first, because a string does not say what it is, and a check
+which guesses would be one more thing to be wrong.
+
+Next to the pick there is now a line per extension, workflow module and BPMN process which says what
+was wired: the methods, the keys each of them serves, and which of them serves every element.
+Everything it names was in the registry already, so no hook was added to the handler contract for it.
+The report is written once the workflow module is deployed, which is the moment the `@WorkflowTask`
+side of a module is judged at, and a contract registered after that writes its own line when it
+arrives. A BPMN process an extension has no method for is not named: most pairs of extension and
+process have nothing to say, and the method nobody can see has its own report.

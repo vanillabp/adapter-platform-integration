@@ -401,7 +401,7 @@ BPMS deployed nothing because nothing had changed, because only you can find out
 ended up with, and the core needs that border between the model of this boot and the older ones.
 
 The module-level checks are the core's, not yours. Once the last adapter of a workflow module
-finished deploying, the core makes four calls on `WorkflowTaskWiring`, and an adapter makes none
+finished deploying, the core makes five calls on `WorkflowTaskWiring`, and an adapter makes none
 of them.
 
 It begins by reporting the BPMN processes of the module which no `@WorkflowService` class claims,
@@ -410,7 +410,7 @@ reports. You never call it, but whether its report is complete is up to you: it 
 process you called `validateTaskWiring` for, so one you skipped because nothing claimed it stays
 unmentioned.
 
-The other three run per workflow module, in an order which matters.
+The other four run per workflow module, in an order which matters.
 `registerVersionsOfProcessesNobodyDeployed` comes first, once per adapter of the module, and it is
 what brings the core back to your deployment service after everything was deployed:
 `processVersionCatalogOf(module, process)`. It asks what your BPMS holds for a BPMN process the
@@ -472,9 +472,13 @@ method kept for a renamed process is indistinguishable from a method wired to no
 core knows what the BPMS still holds. What it judges is what your `validateTaskWiring` calls marked
 as wired, which is the second reason to make that call for every executable process of a file.
 
-`resolveProcessVersions` runs last, placing the version ranges which name a tag against the
+`resolveProcessVersions` places the version ranges which name a tag against the
 catalogs you registered while wiring and the version you reported for this boot. It comes after the
 reverse check because a method serving no task at all is the more basic defect.
+
+`reportExtensionHandlerWiring` runs last and judges nothing. It writes what the handler methods of
+the extensions were wired to in this module, which is the line a developer reads whose method of an
+extension is never called.
 
 ### 3.3 What you call at runtime
 
