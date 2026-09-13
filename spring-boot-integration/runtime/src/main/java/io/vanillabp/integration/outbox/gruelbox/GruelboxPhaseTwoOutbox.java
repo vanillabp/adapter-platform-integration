@@ -49,12 +49,15 @@ import lombok.extern.slf4j.Slf4j;
  * well - kept for tests, and named here so nobody mistakes it for the contract.
  * <p>
  * {@link PhaseTwoOutbox#adapterIdsOfPendingCalls(String, String)} is the one question of
- * the contract this store leaves unanswered, so the startup check which names the adapter
- * ids still waiting is skipped wherever this store is the one in use. gruelbox keeps a
- * call as a serialized invocation rather than in columns, so there is no adapter id to
- * ask about without reading and deserializing the whole table, which is the cost
- * decision 19 in the repository's DECISIONS.md rules out for a start. The stores
- * VanillaBP owns its tables in answer it.
+ * the contract this store does not answer AT A START. gruelbox keeps a call as a
+ * serialized invocation rather than in columns, so there is no adapter id to ask about
+ * without reading and deserializing the whole table, which is the cost decision 19 in the
+ * repository's DECISIONS.md rules out for a start, and a table of gruelbox' is not one
+ * VanillaBP adds a column to. What the start would have said is said at the first dispatch
+ * instead: the entry is deserialized there anyway, so the id it waits for is known, and an
+ * id which is gone from the configuration is reported in the words the start uses - once
+ * per adapter id, whatever the backlog. Decision 47 in the repository's DECISIONS.md says
+ * why that is the answer and what the alternatives would have cost.
  */
 @Slf4j
 public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {

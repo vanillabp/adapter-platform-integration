@@ -208,10 +208,12 @@ public class OpenTaskRetentionTest {
         redelivered.maxAgeExceeded(),
         "so a task open longer than 'vanillabp.delivery.max-task-age' is still reported");
 
-    // the cleanup writes what the redelivery collected and then deletes what nobody saw
-    final var deleted = deliveryLog.cleanUpExpiredRecords();
+    // the cleanup writes what the redelivery collected and then deletes what nobody saw.
+    // What it left behind is read back from the table rather than counted: the cleanup
+    // running in the background deletes the same records, and a count would say who got
+    // there first rather than what is left
+    deliveryLog.cleanUpExpiredRecords();
 
-    assertEquals(1, deleted);
     assertEquals(
         1,
         recordCount("4711"),

@@ -180,6 +180,14 @@ public class MigrationProcessService<A> {
   private volatile VanillaBpMetrics metrics = VanillaBpMetrics.NONE;
 
   /**
+   * The leftovers of an adapter id which is gone from the configuration, as far as they
+   * were named already: what a start found, and what a dispatch found afterwards. An
+   * application with a backlog of stale entries is owed one message per adapter id and
+   * store, not one per entry.
+   */
+  private final Set<String> leftoversAlreadyNamed = ConcurrentHashMap.newKeySet();
+
+  /**
    * @param metrics What to count deliveries into, never <code>null</code>
    */
   public void setMetrics(
@@ -842,7 +850,9 @@ public class MigrationProcessService<A> {
    * Only stores which are already resolved are asked - this runs after the outbox and the
    * delivery-log validations, so an application which needs neither is not made to
    * materialize one for a question about it. A store which cannot answer (the SPI default,
-   * an empty set) is not asked twice and nothing is invented.
+   * an empty set) is not asked twice and nothing is invented: what it would have said is
+   * said when one of its entries is read for its dispatch, see
+   * {@link #reportUnconfiguredAdapterIdOfADispatch(String)}.
    * <p>
    * Three questions per BPMN process, whatever the stores hold: each of them is a number or
    * a set of adapter ids the database reduced to, never the entries themselves. Decision 19
@@ -867,6 +877,34 @@ public class MigrationProcessService<A> {
 
 
   /**
+   * Reports an adapter id which an outbox entry named although the configuration does not,
+   * found at the moment that entry was read for its dispatch.
+   * <p>
+   * It is the same finding {@link #validatePersistedAdapterIdsAtStartup()} reports, and it
+   * is said in the same words. A store which cannot name the adapter ids of its waiting
+   * entries at a start - gruelbox keeps a call as a serialized invocation, so naming them
+   * would mean reading the table the start may not read (decision 47 in the repository's
+   * DECISIONS.md) - answers the question here instead, where the entry is read anyway and
+   * the id is at hand. The answer then arrives one dispatch later rather than never, and it
+   * costs nothing: what is read was going to be read.
+   * <p>
+   * Said once per adapter id, however many entries name it, which is what keeps a backlog
+   * of a thousand stale entries from writing a thousand messages. The memory is shared with
+   * the start, so the three stores which do answer a start do not say it twice.
+   */
+  private void reportUnconfiguredAdapterIdOfADispatch(
+      final String adapterId) {
+
+    reportUnconfiguredAdapterIds(
+        adapterId == null
+            ? Set.<String>of()
+            : Set.of(adapterId),
+        "waiting phase-two outbox entries",
+        "the workflow was persisted and never started");
+
+  }
+
+  /**
    * Says once per adapter id and store what the persisted state names and the
    * configuration does not.
    *
@@ -887,6 +925,11 @@ public class MigrationProcessService<A> {
         .stream()
         .filter(Objects::nonNull)
         .filter(adapterId -> !configuredAdapterIds.contains(adapterId))
+        // the add answers whether nobody has named this leftover yet, which is what turns a
+        // backlog of entries naming one adapter id into a single message
+        .filter(adapterId -> leftoversAlreadyNamed.add(whatIsLeftOver
+            + " of "
+            + adapterId))
         .sorted()
         .forEach(adapterId -> {
           if (properties.getRetiredAdapters().contains(adapterId)) {
@@ -1511,14 +1554,20 @@ public class MigrationProcessService<A> {
         .stream()
         .filter(processService -> processService.getAdapterId().equals(adapterId))
         .findFirst()
-        .orElseThrow(() -> new IllegalStateException(
-            """
-                Cannot execute phase two of %s of %s: adapter '%s' is not (or no longer) configured! \
-                The outbox entry is stale - the adapter was probably removed from the configuration \
-                (property 'vanillabp.prioritized-adapters' or its module-/workflow-level overrides) \
-                after the entry was scheduled. Restore the adapter's configuration or remove the \
-                entry from the outbox store."""
-                .formatted(operation.describe(args), subject, adapterId)));
+        .orElseThrow(() -> {
+          // the entry has just been read, so the id it waits for is known now even where a
+          // start could not ask for it - which is the whole answer a store like gruelbox
+          // gives to that question
+          reportUnconfiguredAdapterIdOfADispatch(adapterId);
+          return new IllegalStateException(
+              """
+                  Cannot execute phase two of %s of %s: adapter '%s' is not (or no longer) configured! \
+                  The outbox entry is stale - the adapter was probably removed from the configuration \
+                  (property 'vanillabp.prioritized-adapters' or its module-/workflow-level overrides) \
+                  after the entry was scheduled. Restore the adapter's configuration or remove the \
+                  entry from the outbox store."""
+                  .formatted(operation.describe(args), subject, adapterId));
+        });
 
     if (previouslyAttempted && skipRedispatchedStart(adapter, workflowAggregateId, operation.describe(args))) {
       return;
@@ -1754,12 +1803,17 @@ public class MigrationProcessService<A> {
         .stream()
         .filter(candidate -> candidate.getAdapterId().equals(adapterId))
         .findFirst()
-        .orElseThrow(() -> new IllegalStateException(
-            """
-                Cannot execute phase two of %s of BPMN process '%s' (workflow module '%s'): the \
-                adapter '%s' the outbox entry was written for is not configured (any more)! Either \
-                restore the adapter's configuration or remove the entry from the outbox store."""
-                .formatted(operation.describe(args), bpmnProcessId, workflowModuleId, adapterId)));
+        .orElseThrow(() -> {
+          // an entry carrying an adapter id is part of what a start asks the store about,
+          // so the dispatch of this one answers that question too where the start could not
+          reportUnconfiguredAdapterIdOfADispatch(adapterId);
+          return new IllegalStateException(
+              """
+                  Cannot execute phase two of %s of BPMN process '%s' (workflow module '%s'): the \
+                  adapter '%s' the outbox entry was written for is not configured (any more)! Either \
+                  restore the adapter's configuration or remove the entry from the outbox store."""
+                  .formatted(operation.describe(args), bpmnProcessId, workflowModuleId, adapterId));
+        });
 
     runPhaseTwo(
         adapter,

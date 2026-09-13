@@ -31,6 +31,10 @@ import jakarta.transaction.UserTransaction;
  * transaction does not commit - that best-effort compensation is what makes a rolled-back
  * delivery reach its handler again, and it is pinned here together with reading a record
  * back, the uniqueness of a delivery key and the retention cleanup.
+ * <p>
+ * What a cleanup deleted is read back as state rather than counted, because the cleanup
+ * running in the background of this application deletes the same records - see decision 46
+ * in the repository's DECISIONS.md.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MongoTaskDeliveryLogTest {
@@ -49,9 +53,10 @@ public class MongoTaskDeliveryLogTest {
           .addClass(RecordingPhaseTwoListener.class)
           .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
       .overrideConfigKey("quarkus.mongodb.database", DATABASE)
-      // a retention of zero makes every record expired right away, so the cleanup can be
-      // observed without waiting days for it
-      .overrideConfigKey("vanillabp.outbox.retention", "PT0S");
+      // an hour of retention, and the one record which has to expire is written two hours
+      // old: nothing here waits for a clock, and the cleanup running in the background of
+      // this application cannot reach a fresh record a test is still looking at
+      .overrideConfigKey("vanillabp.outbox.retention", "PT1H");
 
   @Inject
   MongoTaskDeliveryLog deliveryLog;
@@ -236,16 +241,44 @@ public class MongoTaskDeliveryLogTest {
 
   }
 
+  /**
+   * A record written two hours ago, which is past the hour this application keeps one for.
+   * The age is written into the record rather than waited for, and it is two hours rather
+   * than a moment because the bound of the cleanup is strict while a store's timestamp has
+   * millisecond resolution.
+   */
+  private TaskDelivery twoHoursOld(
+      final String deliveryKey) {
+
+    return new TaskDelivery(
+        deliveryKey, "test-adapter", "test-module", "TestProcess", "4711", "processTask", null, "COMPLETED", null, null, java.time.Instant
+            .now()
+            .minus(java.time.Duration.ofHours(2)), null);
+
+  }
+
   @Test
-  @DisplayName("Records are deleted once the retention period passed")
-  public void expiredRecordsAreDeleted() throws Exception {
+  @DisplayName("No expired record is left once the retention period passed")
+  public void noExpiredRecordIsLeft() throws Exception {
 
     userTransaction.begin();
-    deliveryLog.record(delivery("job-4", "COMPLETED"));
+    deliveryLog.record(twoHoursOld("job-4"));
     userTransaction.commit();
 
-    assertEquals(1, deliveryLog.cleanUpExpiredRecords());
+    // twice on purpose: the second run meets a store the first one already emptied, which
+    // is the position the cleanup running in the background is in when it gets there first.
+    // What is asserted is the state, so the answer holds whoever deleted the record
+    deliveryLog.cleanUpExpiredRecords();
+    deliveryLog.cleanUpExpiredRecords();
+
     assertTrue(deliveryLog.recordedDelivery("job-4").isEmpty());
+    assertEquals(
+        0,
+        mongoClient
+            .getDatabase(DATABASE)
+            .getCollection(COLLECTION)
+            .countDocuments(),
+        "no record past its retention is left");
 
   }
 

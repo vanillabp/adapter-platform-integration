@@ -942,10 +942,12 @@ respectively the next redelivery said so, hours later.
   A MongoDB store writes the field without any migration;
 - two `default` methods on the store SPIs, `PhaseTwoOutbox#adapterIdsOfPendingCalls` and
   `TaskDeliveryLog#adapterIdsOfOpenTasks`, both asked once per BPMN process at startup and
-  never at runtime. The default answers an empty set, which means "this store cannot say" and
-  keeps the check silent - which is what the gruelbox-based outbox of the Spring Boot
-  integration answers, because it keeps its entries as a serialized invocation with no adapter
-  id to query. The shipped JDBC and MongoDB stores answer;
+  never at runtime. The default answers an empty set, which means "this store cannot say", and
+  nothing is invented at the startup then. The shipped JDBC and MongoDB stores answer. The
+  gruelbox-based outbox of the Spring Boot integration does not, because it keeps its entries as
+  a serialized invocation with no adapter id to query: it reports the same finding at the first
+  dispatch of such an entry instead, where the invocation is read anyway, so on Spring Boot with
+  JPA the message arrives one poll interval of the outbox after the start;
 - **`vanillabp.retired-adapters`** names the adapter ids an application USED to have. The last
   step of a migration is removing an id, and where something is still left in the stores the
   startup would name it: this property says that the leftovers are known and turns the WARN
