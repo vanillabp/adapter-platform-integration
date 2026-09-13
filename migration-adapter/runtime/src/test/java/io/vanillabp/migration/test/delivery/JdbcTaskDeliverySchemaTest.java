@@ -1,6 +1,7 @@
 package io.vanillabp.migration.test.delivery;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -70,6 +71,38 @@ public class JdbcTaskDeliverySchemaTest {
     store.createSchemaIfNotExists();
 
     assertDoesNotThrow(store::validateSchemaExists);
+
+  }
+
+  @Test
+  @DisplayName("The runtime creates the indexes its three repeated reads need")
+  public void theRuntimeCreatesItsIndexes() throws SQLException {
+
+    final var connections = h2("created-indexes");
+    new JdbcTaskDeliveryStore(connections, "VANILLABP_TASK_DELIVERY").createSchemaIfNotExists();
+
+    final var indexes = new java.util.LinkedHashMap<String, java.util.List<String>>();
+    try (var connection = connections.acquire(); var resultSet = connection
+        .getMetaData()
+        .getIndexInfo(null, null, "VANILLABP_TASK_DELIVERY", false, true)) {
+      while (resultSet.next()) {
+        final var name = resultSet.getString("INDEX_NAME");
+        if (name == null) {
+          continue;
+        }
+        indexes
+            .computeIfAbsent(name.toUpperCase(), index -> new java.util.ArrayList<>())
+            .add(resultSet.getString("COLUMN_NAME"));
+      }
+    }
+
+    assertEquals(java.util.List.of("LAST_SEEN_AT"), indexes.get("VANILLABP_TASK_DELIVERY_AGE"), indexes::toString);
+    assertEquals(java.util.List.of("TASK_ID"), indexes.get("VANILLABP_TASK_DELIVERY_TASK"), indexes::toString);
+    assertEquals(
+        java.util.List.of("OUTCOME", "TASK_CLOSED_AT"),
+        indexes.get("VANILLABP_TASK_DELIVERY_OPEN"),
+        "an extension reads the open tasks of one workflow aggregate per screen it builds: "
+            + indexes);
 
   }
 

@@ -179,4 +179,23 @@
     </createIndex>
   </changeSet>
 
+  <changeSet author="VanillaBP" id="vanillabp-task-delivery-open-2.0.0" labels="2.0.0">
+    <comment>
+      The index the open tasks of one workflow aggregate are read through. An extension showing what
+      a workflow is waiting for asks that once per screen, and without an index the read walks
+      everything the table ever recorded. Over OUTCOME and TASK_CLOSED_AT, which is what "open"
+      means here: the handler left the task to the application, and no completion of it has reached
+      the BPMS yet. AGGREGATE_ID is not part of it, for the reason the release of an ended workflow
+      ships without an index either - the column holds 1024 characters and an index over it exceeds
+      the key-length limit of MySQL with utf8mb4 and of a DB2 database using 4K pages. An
+      application with very many concurrently open tasks adds one over AGGREGATE_ID itself,
+      prefixed the way its database spells it. A changeset of its own rather than an index added to
+      the one above, because that one was applied already.
+    </comment>
+    <createIndex tableName="${vanillabp.delivery.table}" indexName="${vanillabp.delivery.table}_OPEN">
+      <column name="OUTCOME" />
+      <column name="TASK_CLOSED_AT" />
+    </createIndex>
+  </changeSet>
+
 </databaseChangeLog>

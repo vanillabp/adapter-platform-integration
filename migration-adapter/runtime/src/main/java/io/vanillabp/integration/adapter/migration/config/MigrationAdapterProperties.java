@@ -33,7 +33,9 @@ import lombok.experimental.SuperBuilder;
  * repository's DECISIONS.md). {@code resolveForAdapter} is the single implementation of the
  * four-level lookup, task before workflow before workflow module before adapter, which is why a
  * new adapter-specific setting costs a key and nothing else
- * (decision 7 in the repository's DECISIONS.md).
+ * (decision 7 in the repository's DECISIONS.md). An EXTENSION setting is resolved over the same
+ * four levels by {@code resolveForExtension}, so both follow one rule rather than two spellings of
+ * it.
  */
 @Getter
 @Setter
@@ -80,9 +82,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   /**
    * The settings of the extensions (properties section
    * <code>vanillabp.extensions.&lt;extension&gt;.*</code>), overridable per workflow
-   * module. Keys are the extension ids, values what the application wrote below them,
-   * keyed by the rest of the path - what the keys MEAN is the extension's own business
-   * (see {@link ExtensionProperties}).
+   * module, per workflow and per task. Keys are the extension ids, values what the
+   * application wrote below them, keyed by the rest of the path - what the keys MEAN is
+   * the extension's own business (see {@link ExtensionProperties}).
    */
   @Builder.Default
   private Map<String, Map<String, String>> extensions = Map.of();
@@ -740,12 +742,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The settings of an extension as they apply to a workflow module: what
-   * <code>vanillabp.extensions.&lt;extension&gt;.*</code> configures, with whatever
-   * <code>vanillabp.workflow-modules.&lt;module&gt;.extensions.&lt;extension&gt;.*</code>
-   * says on top of it - the same most-specific-wins rule an adapter setting follows,
-   * with two levels instead of four. Deeper levels are the extension's own business; the
-   * core owns the location and this resolution.
+   * The settings of an extension as they apply to a workflow module - what
+   * {@link #extensionProperties(String, String, String, String)} answers for the module
+   * alone, without a workflow and without a task.
    *
    * @param workflowModuleId The workflow module, or <code>null</code> for the global
    *          settings alone
@@ -756,17 +755,61 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       final String workflowModuleId,
       final String extension) {
 
+    return extensionProperties(workflowModuleId, null, null, extension);
+
+  }
+
+  /**
+   * The settings of an extension as they apply to one task of one workflow of one
+   * workflow module: what <code>vanillabp.extensions.&lt;extension&gt;.*</code>
+   * configures, with what the workflow module, the workflow and the task say on top of
+   * it, KEY BY KEY. So a workflow may change one value without repeating the rest, which
+   * is the same rule and the same four levels an adapter setting follows (see decision 7
+   * in the repository's DECISIONS.md and {@link #resolveForAdapter}).
+   *
+   * <pre>
+   * vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;workflow&gt;.tasks.&lt;task&gt;.extensions.&lt;extension&gt;.&lt;key&gt;  (most specific)
+   * vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;workflow&gt;.extensions.&lt;extension&gt;.&lt;key&gt;
+   * vanillabp.workflow-modules.&lt;module&gt;.extensions.&lt;extension&gt;.&lt;key&gt;
+   * vanillabp.extensions.&lt;extension&gt;.&lt;key&gt;                                                              (least specific)
+   * </pre>
+   *
+   * A level whose id is <code>null</code> or which is not configured is skipped, so the
+   * same method answers the global, the module, the workflow and the task question. What
+   * the keys below an extension MEAN is the extension's own business; the core owns the
+   * location and this resolution.
+   *
+   * @param workflowModuleId The workflow module, or <code>null</code> for the global
+   *          settings alone
+   * @param bpmnProcessId The BPMN process, or <code>null</code>
+   * @param taskId The task ID (task definition), or <code>null</code>
+   * @param extension The extension's id
+   * @return The settings, never <code>null</code>
+   */
+  public Map<String, String> extensionProperties(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String taskId,
+      final String extension) {
+
     final var workflowModule = workflowModuleId != null
         ? workflowModules.get(workflowModuleId)
         : null;
+    final var workflow = (workflowModule != null) && (bpmnProcessId != null)
+        ? workflowModule.getWorkflows().get(bpmnProcessId)
+        : null;
+    final var task = (workflow != null) && (taskId != null)
+        ? workflow.getTasks().get(taskId)
+        : null;
+
     return ExtensionProperties
         .merge(
-            extensions.get(extension),
-            workflowModule == null
-                ? null
-                : workflowModule
-                    .getExtensions()
-                    .get(extension));
+            java.util.Arrays
+                .asList(
+                    extensions.get(extension),
+                    workflowModule == null ? null : workflowModule.getExtensions().get(extension),
+                    workflow == null ? null : workflow.getExtensions().get(extension),
+                    task == null ? null : task.getExtensions().get(extension)));
 
   }
 
@@ -785,6 +828,34 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       final String key) {
 
     return extensionProperties(workflowModuleId, extension).get(key);
+
+  }
+
+  /**
+   * One value of an extension's settings, resolved over the four levels
+   * {@link #extensionProperties(String, String, String, String)} describes - the
+   * counterpart of {@link #resolveForAdapter} for an extension.
+   * <p>
+   * The extension id is a parameter rather than something bound to a view of these
+   * properties, because this object is one bean of the platform while an extension is not
+   * a bean of the platform at all: it asks with its own id, the way an adapter asks with
+   * its adapter id.
+   *
+   * @param workflowModuleId The workflow module, or <code>null</code>
+   * @param bpmnProcessId The BPMN process, or <code>null</code>
+   * @param taskId The task ID (task definition), or <code>null</code>
+   * @param extension The extension's id
+   * @param key The key below the extension's section, e.g. <code>rest.base-url</code>
+   * @return The most specific value configured, or <code>null</code>
+   */
+  public String resolveForExtension(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String taskId,
+      final String extension,
+      final String key) {
+
+    return extensionProperties(workflowModuleId, bpmnProcessId, taskId, extension).get(key);
 
   }
 

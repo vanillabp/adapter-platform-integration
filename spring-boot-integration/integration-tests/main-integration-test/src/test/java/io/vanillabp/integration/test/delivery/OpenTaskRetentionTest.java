@@ -317,6 +317,17 @@ public class OpenTaskRetentionTest {
       Assertions.assertEquals(1, recordCount(context, "4711"));
       Assertions.assertEquals(1, recordCount(context, "4712"));
 
+      // what an extension reads before it shows what a workflow is waiting for: the task
+      // the application has not completed, and only that one
+      final var openTasks = deliveryLog.openTasksOfAggregate(MODULE, PROCESS, "4711");
+      Assertions.assertEquals(1, openTasks.size(), openTasks::toString);
+      Assertions.assertEquals("job-1", openTasks.getFirst().taskId());
+      Assertions.assertEquals("awaitCompletion", openTasks.getFirst().taskDefinition());
+      Assertions
+          .assertTrue(
+              deliveryLog.openTasksOfAggregate(MODULE, PROCESS, "4712").isEmpty(),
+              "a task whose handler finished it was never open");
+
       // two hours later, an hour past the retention and past the maximum age
       backdateEveryRecordBy(context, Duration.ofHours(2));
       final var backdated = lastSeenAt(context, "4711");

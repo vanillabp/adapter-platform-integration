@@ -375,6 +375,13 @@ public class TaskElectionFromDeliveryRecordTest {
 
           }
 
+          @Override
+          public java.util.Collection<PhaseTwoOutbox> allStores() {
+
+            return java.util.List.of(outbox);
+
+          }
+
         })
         .taskDeliveryLogResolver(new TaskDeliveryLogResolver() {
 

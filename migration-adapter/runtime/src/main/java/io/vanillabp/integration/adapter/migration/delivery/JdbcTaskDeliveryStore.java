@@ -89,6 +89,35 @@ public class JdbcTaskDeliveryStore {
   private static final int ROWS_OF_THE_NEWEST_RECORD = 1;
 
   /**
+   * The OPEN records of one workflow aggregate: the outcome which left a task to the
+   * application, and no moment saying the completion reached the BPMS. Ordered oldest first,
+   * which is the order the tasks were handed out in.
+   * <p>
+   * The index this reads is {@link #INDEX_OF_OPEN_RECORDS}, over the two columns which say
+   * "open". AGGREGATE_ID is not part of it: the column holds up to 1024 characters, and an
+   * index over it exceeds the key-length limit of MySQL (3072 bytes with utf8mb4) and of a
+   * DB2 database using 4K pages - the same reason the release of an ended workflow ships
+   * without one. So the index narrows the read to the tasks which are open right now, whose
+   * number follows what the BPMS hands out rather than everything ever recorded, and the
+   * three equality columns are matched on those rows. An application with very many
+   * concurrently open tasks adds an index over AGGREGATE_ID itself, prefixed the way its
+   * database spells it, which this module's README says as well.
+   */
+  private static final String SELECT_OPEN_TASKS_OF_AGGREGATE = """
+      SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, \
+      TASK_DEFINITION, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, TASK_CLOSED_AT \
+      FROM %s \
+      WHERE WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND AGGREGATE_ID = ? \
+      AND OUTCOME = ? AND TASK_CLOSED_AT IS NULL \
+      ORDER BY RECORDED_AT ASC""";
+
+  /**
+   * The statement creating the index the open tasks of an aggregate are read through. Two
+   * placeholders for the table name, like every other DDL of this class.
+   */
+  private static final String INDEX_OF_OPEN_RECORDS = "CREATE INDEX %s_OPEN ON %s (OUTCOME, TASK_CLOSED_AT)";
+
+  /**
    * The adapter ids the OPEN records of one BPMN process belong to. Asked once
    * per BPMN process at startup, never at runtime, and answered from the same index the
    * cleanup uses; a record written before ADAPTER_ID existed carries none and is skipped.
@@ -187,6 +216,8 @@ public class JdbcTaskDeliveryStore {
 
   private final String selectAnyOpenRecord;
 
+  private final String selectOpenTasksOfAggregate;
+
   private final OpenTaskTouches touches;
 
   public JdbcTaskDeliveryStore(
@@ -204,6 +235,7 @@ public class JdbcTaskDeliveryStore {
     this.deleteDeliveriesOfWorkflow = DELETE_DELIVERIES_OF_WORKFLOW.formatted(tableName);
     this.selectAdapterIdsOfOpenTasks = SELECT_ADAPTER_IDS_OF_OPEN_TASKS.formatted(tableName);
     this.selectAnyOpenRecord = SELECT_ANY_OPEN_RECORD.formatted(tableName);
+    this.selectOpenTasksOfAggregate = SELECT_OPEN_TASKS_OF_AGGREGATE.formatted(tableName);
     this.touches = new OpenTaskTouches(tableName, this::refreshLastSeen);
 
   }
@@ -292,6 +324,53 @@ public class JdbcTaskDeliveryStore {
               Could not read the record of task '%s' of workflow '%s' (BPMN process '%s' of \
               workflow module '%s') from table '%s'!"""
               .formatted(taskId, workflowAggregateId, bpmnProcessId, workflowModuleId, tableName), e);
+    } finally {
+      release(connection);
+    }
+
+  }
+
+  /**
+   * The open tasks of one workflow aggregate (see
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLog#openTasksOfAggregate}), oldest
+   * first.
+   * <p>
+   * A failure is NOT swallowed: a caller building a list of open work from an empty answer
+   * would show an empty screen instead of an error, and nobody would notice the table is
+   * broken.
+   *
+   * @param workflowModuleId The workflow module of the workflow
+   * @param bpmnProcessId The BPMN process of the workflow
+   * @param workflowAggregateId The workflow aggregate's ID in serialized form
+   * @return The open records, oldest first
+   */
+  public List<TaskDelivery> openTasksOfAggregate(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId) {
+
+    Connection connection = null;
+    try {
+      connection = connectionAccess.acquire();
+      try (var statement = connection.prepareStatement(selectOpenTasksOfAggregate)) {
+        statement.setString(1, workflowModuleId);
+        statement.setString(2, bpmnProcessId);
+        statement.setString(3, workflowAggregateId);
+        statement.setString(4, COMPLETION_PENDING);
+        try (var resultSet = statement.executeQuery()) {
+          final var records = new java.util.ArrayList<TaskDelivery>();
+          while (resultSet.next()) {
+            records.add(readRecord(resultSet));
+          }
+          return List.copyOf(records);
+        }
+      }
+    } catch (final SQLException e) {
+      throw new RuntimeException(
+          """
+              Could not read the open tasks of workflow '%s' (BPMN process '%s' of workflow \
+              module '%s') from table '%s'!"""
+              .formatted(workflowAggregateId, bpmnProcessId, workflowModuleId, tableName), e);
     } finally {
       release(connection);
     }
@@ -676,6 +755,12 @@ public class JdbcTaskDeliveryStore {
         // spanning AGGREGATE_ID would not
         statement.executeUpdate(
             "CREATE INDEX %s_TASK ON %s (TASK_ID)".formatted(tableName, tableName));
+        // the open tasks of one workflow aggregate are asked for once per screen an
+        // extension builds, so that read must not walk everything ever recorded. Over
+        // OUTCOME and TASK_CLOSED_AT rather than over AGGREGATE_ID, which is 1024
+        // characters wide and would exceed the key-length limit of MySQL and of DB2 with
+        // 4K pages - see SELECT_OPEN_TASKS_OF_AGGREGATE
+        statement.executeUpdate(INDEX_OF_OPEN_RECORDS.formatted(tableName, tableName));
       }
     } catch (final SQLException e) {
       if (createdConcurrently()) {

@@ -75,8 +75,10 @@ public interface QuarkusMigrationAdapterProperties {
   /**
    * The settings of the extensions of this application, keyed by extension id. What the
    * keys below an extension mean is that extension's own business - VanillaBP owns the
-   * location and the resolution against the per-workflow-module overrides
-   * ({@link WorkflowModuleProperties#extensions()}).
+   * location and the resolution against the overrides per workflow module
+   * ({@link WorkflowModuleProperties#extensions()}), per workflow
+   * ({@link WorkflowProperties#extensions()}) and per task
+   * ({@link TaskProperties#extensions()}).
    *
    * @return The settings per extension
    */
@@ -642,6 +644,16 @@ public interface QuarkusMigrationAdapterProperties {
      */
     DeliveryProperties delivery();
 
+    /**
+     * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this workflow,
+     * keyed by extension id - what an extension is told about ONE BPMN process. A key the
+     * workflow says nothing about keeps what the workflow module or the global section
+     * says.
+     *
+     * @return The extension settings of this workflow
+     */
+    Map<String, Map<String, String>> extensions();
+
   }
 
   /**
@@ -662,6 +674,15 @@ public interface QuarkusMigrationAdapterProperties {
      * @return The delivery configuration of this task
      */
     DeliveryProperties delivery();
+
+    /**
+     * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this task, keyed
+     * by extension id - the most specific level an extension setting may be written at. A
+     * key the task says nothing about keeps what the three less specific levels say.
+     *
+     * @return The extension settings of this task
+     */
+    Map<String, Map<String, String>> extensions();
 
   }
 

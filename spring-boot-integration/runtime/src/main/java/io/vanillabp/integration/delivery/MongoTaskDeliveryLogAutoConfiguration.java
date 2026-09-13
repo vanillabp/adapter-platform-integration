@@ -97,6 +97,13 @@ public class MongoTaskDeliveryLogAutoConfiguration {
             .indexOps(MongoTaskDeliveryLog.DEFAULT_COLLECTION_NAME)
             .createIndex(new Index()
                 .on("taskId", Sort.Direction.ASC));
+        // an extension asks for the open tasks of one workflow aggregate once per screen
+        // it builds, and MongoDB knows no key-length limit, so the aggregate id itself is
+        // the index here - unlike in the SQL table, whose column is too wide for one
+        mongoTemplate
+            .indexOps(MongoTaskDeliveryLog.DEFAULT_COLLECTION_NAME)
+            .createIndex(new Index()
+                .on("aggregateId", Sort.Direction.ASC));
       }
       deliveryLog.start();
     };

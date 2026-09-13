@@ -355,6 +355,13 @@ public class PersistedAdapterIdTest {
 
           }
 
+          @Override
+          public java.util.Collection<PhaseTwoOutbox> allStores() {
+
+            return java.util.List.of(outbox);
+
+          }
+
         })
         .taskDeliveryLogResolver(
             new io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver() {

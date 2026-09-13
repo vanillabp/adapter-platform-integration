@@ -1,5 +1,6 @@
 package io.vanillabp.integration.runtime.test.processservice;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -218,6 +219,60 @@ public class QuarkusStoreAttributionTest {
     assertSame(
         JDBC_OUTBOX,
         outboxResolver(List.of(), List.of(JDBC_OUTBOX)).resolveFor(LedgerAggregate.class));
+
+  }
+
+  @Test
+  @DisplayName("Every store is listed once, the ones named for a single aggregate included")
+  public void everyStoreIsListedOnce() {
+
+    final var dedicated = new PhaseTwoOutbox() {
+
+      @Override
+      public boolean schedule(
+          final io.vanillabp.integration.spi.PhaseTwoCall call) {
+        return true;
+      }
+
+    };
+    final var aware = new PhaseTwoOutboxAware<OrderAggregate>() {
+
+      @Override
+      public Class<OrderAggregate> getAggregateClass() {
+        return OrderAggregate.class;
+      }
+
+      @Override
+      public PhaseTwoOutbox getPhaseTwoOutbox() {
+        return dedicated;
+      }
+
+    };
+
+    final var stores = outboxResolver(List.of(aware), List.of(JDBC_OUTBOX, MONGO_OUTBOX)).allStores();
+
+    assertEquals(3, stores.size(), stores::toString);
+    assertTrue(stores.contains(JDBC_OUTBOX), stores::toString);
+    assertTrue(stores.contains(MONGO_OUTBOX), stores::toString);
+    assertTrue(stores.contains(dedicated), stores::toString);
+
+    // an application without any store gets an empty list rather than a failure
+    assertTrue(outboxResolver(List.of(), List.of()).allStores().isEmpty());
+
+  }
+
+  @Test
+  @DisplayName("A platform default which is switched off is no store an extension may see")
+  public void aDeactivatedDefaultIsNotListed() {
+
+    final var withoutTheJdbcDefault = new QuarkusPhaseTwoOutboxResolver(
+        InstanceDouble.of(List.of()), InstanceDouble
+            .of(List.of(JDBC_OUTBOX, MONGO_OUTBOX)), mixedPersistences(), false, true);
+
+    final var stores = withoutTheJdbcDefault.allStores();
+
+    assertEquals(1, stores.size(), stores::toString);
+    assertTrue(stores.contains(MONGO_OUTBOX), stores::toString);
 
   }
 

@@ -35,6 +35,15 @@ public class TaskAdapterProperties {
   private Map<String, AdapterProperties> adapters = Map.of();
 
   /**
+   * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this task - the
+   * most specific level an extension setting may be written at. Keys are the extension
+   * ids, and a key the task says nothing about keeps what the three less specific levels
+   * say (see {@link MigrationAdapterProperties#resolveForExtension}).
+   */
+  @Builder.Default
+  private Map<String, Map<String, String>> extensions = Map.of();
+
+  /**
    * Overrides <code>vanillabp.delivery</code> for this task - the most specific level
    * the maximum age of an open task may be set at, which is where it belongs: the one
    * task waiting for a signature is the reason the whole application does not get a

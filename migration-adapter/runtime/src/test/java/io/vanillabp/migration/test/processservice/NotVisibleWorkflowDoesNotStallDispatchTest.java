@@ -166,6 +166,11 @@ public class NotVisibleWorkflowDoesNotStallDispatchTest {
         return "- add a store, or";
       }
 
+      @Override
+      public java.util.Collection<PhaseTwoOutbox> allStores() {
+        return java.util.List.of();
+      }
+
     };
 
     return MigrationProcessService
