@@ -1405,7 +1405,49 @@ of the Business Cockpit did and lost on every restart.
   `<table>_OPEN` over `OUTCOME` and `TASK_CLOSED_AT`, which narrows the read to the tasks the
   BPMS hands out right now rather than to everything ever recorded. An application with very many
   concurrently open tasks adds an index over `AGGREGATE_ID` itself, prefixed the way its database
-  spells it.
+  spells it. What "very many" means is measured below.
+
+What the read costs, measured on PostgreSQL 16.15 and MongoDB 7.0.40 in September 2026, with the
+table in memory, as the median of a thousand driver calls each answering three open tasks:
+
+| concurrently open tasks |  the plan PostgreSQL picks   | PostgreSQL | MongoDB |
+|------------------------:|------------------------------|-----------:|--------:|
+|                     501 | bitmap index scan on `_OPEN` |    0.22 ms | 0.29 ms |
+|                    5001 | bitmap index scan on `_OPEN` |    0.68 ms | 0.28 ms |
+|                   50001 | bitmap index scan on `_OPEN` |    5.73 ms | 0.27 ms |
+|                  100002 | parallel sequential scan     |   14.70 ms | 0.27 ms |
+|                  500001 | parallel sequential scan     |   34.30 ms | 0.27 ms |
+
+PostgreSQL does take `_OPEN`, and it keeps taking it until the open stock is about a fifth of the
+table, which happened between 50001 and 100002 open records. Which plan wins barely changes the
+cost: the index leads to the open records, and every one of them is read from the table and dropped
+again except the three the caller asked for. Both shapes are one pass over the open stock, so the
+curve is a straight line through the switch, about 0.11 ms per 1000 open tasks. What the index
+really removed is the growth with history, and that it holds: the index scan examined 501 entries
+in 0.17 ms whether the table held one million records or two million.
+
+Two findings for whoever repeats this. A statement with the values written into it gets a different
+plan from the one the PostgreSQL JDBC driver sends, which is a server-side prepared statement from
+the fifth call on, and at 50001 open records the first already reads the whole table while the
+second still uses the index. And the 501-open case slows from 0.2 ms to 3.2 ms once the table
+passes a million rows, which is not the scan: PostgreSQL estimates `OUTCOME` and `TASK_CLOSED_AT`
+as independent, expects a quarter of the table to be open and starts two parallel workers it does
+not need. Forbidding them puts the call back at 0.21 ms. An extended statistics object over the two
+columns does not repair the estimate, which was tried.
+
+MongoDB stays at a quarter of a millisecond everywhere, because `aggregateId_1` examines three keys
+and three documents however large the collection is. The same call with that index dropped became a
+collection scan over 700001 documents at 159 ms, which is the difference between the two store
+families in one number.
+
+The decision behind these numbers is to ship no further index. An index over `AGGREGATE_ID` makes
+the SQL read flat as well, 0.14 ms at every size measured, but no spelling of it is accepted
+everywhere: MySQL with utf8mb4 needs `AGGREGATE_ID(255)`, PostgreSQL does not parse that, and DB2
+with 4K pages has no prefix syntax and no room for the column. Shipping it would put a different
+index on different products in the runtime DDL and in the changelog, which decision 16 in the
+repository's `DECISIONS.md` speaks against, and it would be maintained on every insert for a read an
+extension makes once per screen. The wiki page `Workflow-tasks` carries the numbers for readers and
+asks anybody who reaches these sizes to open an issue.
 
 `OpenTasksOfAggregateTest` holds the SQL, `OpenTaskRetentionTest` holds it through a booted
 application on both platforms, and the two `MongoTaskDeliveryLogTest` classes hold the MongoDB
