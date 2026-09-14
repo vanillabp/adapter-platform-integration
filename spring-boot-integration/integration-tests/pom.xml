@@ -23,6 +23,7 @@
     <module>outbox-mongo-integration-test</module>
     <module>outbox-mixed-integration-test</module>
     <module>extension-integration-test</module>
+    <module>election-cost-integration-test</module>
     <module>workflowmodule-integration-tests</module>
     <module>fatjar-integration-test</module>
   </modules>

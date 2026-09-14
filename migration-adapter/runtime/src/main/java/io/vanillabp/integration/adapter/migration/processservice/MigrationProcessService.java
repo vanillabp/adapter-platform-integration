@@ -1982,6 +1982,14 @@ public class MigrationProcessService<A> {
    * workflow which ended, the way the viewer API reads its history. And like a read it
    * waits out the visibility window of an adapter a hint points at - nobody repeats the
    * question for an extension either.
+   * <p>
+   * What a read does not pay and this caller may: an extension which REPORTS something
+   * asks this while the transaction which wrote what it reports is still open, so the
+   * wait holds that transaction, its database connection and the locks on the workflow
+   * aggregate. With the ten-second window of a Camunda 8 cluster whose exporter is behind,
+   * as few concurrent reports as the connection pool is wide empty it for everybody. The
+   * measurement is in {@code migration-adapter/README.md}, under "What an election costs a
+   * caller which holds a transaction".
    *
    * @param workflowAggregateId The ID of the workflow aggregate
    * @return The id of the adapter holding the workflow
