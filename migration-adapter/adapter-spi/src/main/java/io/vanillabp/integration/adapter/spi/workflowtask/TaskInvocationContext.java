@@ -229,7 +229,7 @@ public interface TaskInvocationContext {
    * version this boot deployed, so anything measured from the moment VanillaBP first
    * saw the task is a LOWER BOUND rather than the truth.
    *
-   * <h2>What it is for</h2>
+   * <h4>What it is for</h4>
    *
    * The core writes down a task delivery when the handler runs, and the age of a task
    * left open by a {@code @TaskId} handler is measured from that moment
@@ -239,7 +239,7 @@ public interface TaskInvocationContext {
    * from the upgrade. The tasks with the largest real age are exactly the ones whose age
    * would be under-reported, which is the opposite of useful.
    *
-   * <h2>Why the adapter answers it and not the core</h2>
+   * <h4>Why the adapter answers it and not the core</h4>
    *
    * Only the adapter knows both halves without asking anybody: the version the
    * delivery's workflow runs on, and the version it deployed itself. The core would have
@@ -251,7 +251,7 @@ public interface TaskInvocationContext {
    * the wrong trade, and a lower bound is worth more than an exact number nobody pays
    * for.
    *
-   * <h2>What a wrong answer costs</h2>
+   * <h4>What a wrong answer costs</h4>
    *
    * Nothing but precision, in one direction. Answering <code>false</code> for a workflow
    * which IS older leaves today's behaviour; answering <code>true</code> makes a message

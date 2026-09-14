@@ -691,7 +691,7 @@ public final class DeliveryRecords {
    * Reports AT STARTUP that the BPMS holds tasks open which VanillaBP has no record of,
    * so their next delivery will run the <code>&#64;WorkflowTask</code> method again.
    *
-   * <h2>What this catches</h2>
+   * <h4>What this catches</h4>
    *
    * The wiki promises that a repeated delivery does not run the handler a second time,
    * and that promise rests on a record written when the handler ran. A task which was
@@ -701,7 +701,7 @@ public final class DeliveryRecords {
    * this nobody can see it: no message is produced when it happens, because from the
    * core's point of view a delivery it has never seen is simply a new one.
    *
-   * <h2>Why counting is all that is done</h2>
+   * <h4>Why counting is all that is done</h4>
    *
    * Nothing can be adopted. A record would have to claim that the handler ran and left
    * the task open; a job which is activated and still there may equally be a handler
@@ -710,7 +710,7 @@ public final class DeliveryRecords {
    * that the guards in the handlers still carry the case, which is what version 1 needed
    * anyway.
    *
-   * <h2>When it stays silent</h2>
+   * <h4>When it stays silent</h4>
    *
    * Silent unless BOTH sides answer and both answers are interesting: a store which
    * cannot say whether it holds open records, a BPMS which cannot count its open tasks,

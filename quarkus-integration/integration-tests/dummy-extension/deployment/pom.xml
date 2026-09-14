@@ -31,6 +31,16 @@
   <build>
     <plugins>
       <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <configuration>
+          <!-- the only class here is package-private, and javadoc treats a module with
+               nothing to document as an error. So this module is documented down to
+               package level instead of being left out of the check -->
+          <show>package</show>
+        </configuration>
+      </plugin>
+      <plugin>
         <artifactId>maven-compiler-plugin</artifactId>
         <executions>
           <execution>

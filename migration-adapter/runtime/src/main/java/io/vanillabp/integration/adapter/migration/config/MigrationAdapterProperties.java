@@ -154,9 +154,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   private List<String> retiredAdapters = List.of();
 
   /**
-   * Derived view of {@link #getAdapters()}: adapter ID mapped to the adapter's type.
-   * An adapter entry without an explicit {@link AdapterConfigProperties#getType()
-   * type} defaults to its ID being the type.
+   * Derived view of {@code getAdapters()}: adapter ID mapped to the adapter's type.
+   * An adapter entry without an explicit type (<code>AdapterConfigProperties.getType()</code>)
+   * defaults to its ID being the type.
    *
    * @return Map of all adapters available (key = adapter ID, value = adapter type)
    */
@@ -181,7 +181,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * <p>
    * Three things decide it, and leaving one out loses adapters silently:
    * <ol>
-   * <li>every section of {@link #getAdapters()} whose (defaulted) type is this one -
+   * <li>every section of {@code getAdapters()} whose (defaulted) type is this one -
    * {@link #adapterTypes()};</li>
    * <li>every id in {@code prioritized-adapters} which IS this type and carries no
    * section, or a section not contradicting it: convention over configuration says such
@@ -1128,7 +1128,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * Whether the election cache is told about workflows which ended
    * (<code>vanillabp.workflow-adapter-cache.release-on-workflow-end</code>), so their
    * hints leave it after
-   * {@link WorkflowAdapterCacheProperties#getEndedTimeToLive()} instead of after a full
+   * <code>WorkflowAdapterCacheProperties.getEndedTimeToLive()</code> instead of after a full
    * time-to-live. Global rather than per workflow module: there is one cache per
    * application, and what it costs is one listener per deployed process either way.
    * <p>

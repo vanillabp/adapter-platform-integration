@@ -149,10 +149,11 @@ public class DeploymentService {
    *       and all workflow-level prioritized adapters)</li>
    *   <li>reading the BPMN/DMN files</li>
    *   <li>prepare the BPMN by the adapter (setting default behavior etc.)</li>
-   *   <li>for each adapter and extension having the same model type and process context type (e.g. all for Camunda 8)</li>
-   *   <ol>
-   *     <li>wire the business code to the BPMN's tasks</li>
-   *   </ol>
+   *   <li>for each adapter and extension having the same model type and process context type (e.g. all for Camunda 8)
+   *     <ol>
+   *       <li>wire the business code to the BPMN's tasks</li>
+   *     </ol>
+   *   </li>
    *   <li>deploy the result to the BPMS</li>
    * </ol>
    * <p>
