@@ -102,6 +102,16 @@ public class JdbcTaskDeliveryStore {
    * three equality columns are matched on those rows. An application with very many
    * concurrently open tasks adds an index over AGGREGATE_ID itself, prefixed the way its
    * database spells it, which this module's README says as well.
+   * <p>
+   * What that costs was measured on PostgreSQL 16.15 in September 2026, with the table in
+   * memory: 0.22 ms at 501 concurrently open records, 0.68 ms at 5001, 5.73 ms at 50001 and
+   * 34.30 ms at 500001, against 0.27 ms at every one of those sizes on MongoDB, which indexes
+   * the aggregate id itself. PostgreSQL uses this index until the open records are about a
+   * fifth of the table and reads the table itself beyond that, and the cost is a straight line
+   * through that switch, because either way one pass covers the open records. The history is
+   * out of it: the index scan examined the same 501 entries in 0.17 ms whether the table held
+   * one million records or two million. The numbers and the reasoning for shipping no index
+   * over AGGREGATE_ID are in this module's README.
    */
   private static final String SELECT_OPEN_TASKS_OF_AGGREGATE = """
       SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, \
