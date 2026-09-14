@@ -321,7 +321,7 @@ public interface MigratableProcessService<A> {
    * How many tasks of one BPMN process this BPMS is holding open right now - asked once
    * at startup and never at runtime.
    *
-   * <h2>What it is for</h2>
+   * <h4>What it is for</h4>
    *
    * VanillaBP answers a repeated delivery from what it wrote down when the handler ran.
    * A task which was already open before this application ever ran has no such record,
@@ -334,7 +334,7 @@ public interface MigratableProcessService<A> {
    * crashed halfway, no BPMS can tell the two apart, and a record written for the second
    * case would skip business code which never ran.
    *
-   * <h2>Who answers</h2>
+   * <h4>Who answers</h4>
    *
    * A BPMS delivering INSIDE the application's transaction has no delivery identity, so
    * VanillaBP keeps no records for it and the question is meaningless - it answers

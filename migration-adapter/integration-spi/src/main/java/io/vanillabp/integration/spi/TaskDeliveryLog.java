@@ -188,7 +188,7 @@ public interface TaskDeliveryLog {
    * since - the one question the BPMS election of a task operation would otherwise have to
    * ask every configured BPMS.
    *
-   * <h2>What the core does with it</h2>
+   * <h4>What the core does with it</h4>
    *
    * A record whose {@link TaskDelivery#taskClosedAt()} is <code>null</code> names the
    * adapter which delivered that task, and that adapter is the one which holds it: no BPMS
@@ -199,7 +199,7 @@ public interface TaskDeliveryLog {
    * adapters exactly as before. That fallback is what keeps the answer a hint rather than a
    * registry (see decision 30 in the repository's DECISIONS.md).
    *
-   * <h2>What a store has to answer</h2>
+   * <h4>What a store has to answer</h4>
    *
    * The record of the delivery which reported <code>COMPLETION_PENDING</code> for this task,
    * the most recently written one where a task was delivered more than once. A store which
@@ -262,7 +262,7 @@ public interface TaskDeliveryLog {
    * The open tasks of ONE workflow aggregate - the durable answer to the question an
    * extension asks before it shows what is waiting for somebody.
    *
-   * <h2>What "open" means</h2>
+   * <h4>What "open" means</h4>
    *
    * A record whose outcome is <code>COMPLETION_PENDING</code>, so the handler left the task
    * to the application, AND which {@link #markTaskClosed} has not stamped: the completion
@@ -277,7 +277,7 @@ public interface TaskDeliveryLog {
    * which wants everything a workflow aggregate waits for therefore asks once per BPMN
    * process the workflow service serves, the way the core's own read does.
    *
-   * <h2>Ordering and size</h2>
+   * <h4>Ordering and size</h4>
    *
    * Oldest first, by {@link TaskDelivery#recordedAt()} - the order the tasks were handed to
    * the application in, which is the order a list of open work reads in. Records sharing a
@@ -289,7 +289,7 @@ public interface TaskDeliveryLog {
    * by its collection. An aggregate which carried a SECOND workflow, under another BPMN
    * process, contributes nothing here: the process is part of the question.
    *
-   * <h2>What it costs</h2>
+   * <h4>What it costs</h4>
    *
    * This is asked once per screen an extension builds, on the caller's thread. A store
    * answers it from an index over the open records rather than by walking everything it ever
@@ -318,7 +318,7 @@ public interface TaskDeliveryLog {
    * Whether this store holds an OPEN record for the given BPMN process at all - a record
    * whose outcome is <code>COMPLETION_PENDING</code>.
    *
-   * <h2>Why this is not {@link #adapterIdsOfOpenTasks}</h2>
+   * <h4>Why this is not {@link #adapterIdsOfOpenTasks}</h4>
    *
    * That question answers an empty set both for "there are none" and for "I cannot say",
    * which is right for what it is used for: an adapter id nobody configured is worth
@@ -326,7 +326,7 @@ public interface TaskDeliveryLog {
    * one, so the two have to be told apart, and this returns <code>null</code> for "I
    * cannot say" instead.
    *
-   * <h2>What the emptiness means</h2>
+   * <h4>What the emptiness means</h4>
    *
    * VanillaBP writes a record when a handler runs, and the record of a task which stays
    * open is kept alive by every redelivery it answers. So a store which holds NO open
