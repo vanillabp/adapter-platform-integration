@@ -19,6 +19,7 @@ import io.vanillabp.extension.sample.SampleNote;
 import io.vanillabp.extension.sample.SampleNoteDetails;
 import io.vanillabp.extension.sample.SampleNoteService;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.extension.spi.election.ElectionPatience;
 import io.vanillabp.integration.extension.spi.election.WorkflowElection;
 import io.vanillabp.integration.extension.spi.handler.ExtensionHandlers;
 import io.vanillabp.integration.test.extension.EveryWorkflowRunsHere;
@@ -236,6 +237,12 @@ public class ExtensionEnablementTest {
 
     assertEquals("demo1", noteService.bpmsHolding(aggregate));
     assertEquals("demo1", election.adapterIdOfWorkflow(MODULE, PROCESS, "6"));
+    // the same question with the patience said out loud - what the two patiences cost is
+    // measured on Spring Boot, where a real connection pool can be emptied; what this
+    // asserts is that the overload reaches the bean on Quarkus too
+    assertEquals(
+        "demo1",
+        election.adapterIdOfWorkflow(MODULE, PROCESS, "6", ElectionPatience.ASK_ONCE));
 
   }
 

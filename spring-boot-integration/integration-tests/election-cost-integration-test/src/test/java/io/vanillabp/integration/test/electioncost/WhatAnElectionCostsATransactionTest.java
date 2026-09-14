@@ -22,6 +22,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.zaxxer.hikari.HikariDataSource;
 
+import io.vanillabp.integration.extension.spi.election.ElectionPatience;
 import io.vanillabp.integration.extension.spi.election.WorkflowElection;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
@@ -41,6 +42,9 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * the adapter plus the probes, and what a handful of such callers leaves for everybody
  * else, which is nothing: each of them holds a connection while it sleeps, and the pool
  * is the pool of the whole application.
+ * <p>
+ * The third test is the way out of both: a caller which says it holds a transaction is
+ * answered after one question instead of after the window.
  * <p>
  * The tests use a short window so that a build does not pay for the measurement. The
  * numbers for the window a Camunda 8 adapter really reports are in
@@ -149,6 +153,38 @@ public class WhatAnElectionCostsATransactionTest {
         readModel.probes() >= expectedProbes,
         "the adapter was asked %d times, fewer than the %d the window and the interval say"
             .formatted(readModel.probes(), expectedProbes));
+
+  }
+
+  @Test
+  @DisplayName("A caller which says it holds a transaction is answered without any waiting")
+  public void askingOnceDoesNotWaitAtAll() {
+
+    final var workflowAggregateId = aWorkflowTheElectionKnows();
+    readModel.forgetTheWorkflow(WINDOW);
+
+    final var startedAt = System.nanoTime();
+    assertThrows(
+        IllegalStateException.class,
+        () -> transactionTemplate.execute(status -> {
+          repository.findById(workflowAggregateId);
+          return election
+              .adapterIdOfWorkflow(
+                  MODULE,
+                  PROCESS,
+                  workflowAggregateId,
+                  ElectionPatience.ASK_ONCE);
+        }));
+    final var held = Duration.ofNanos(System.nanoTime() - startedAt);
+
+    assertTrue(
+        held.compareTo(WINDOW) < 0,
+        "the transaction was open for %s, so something waited although nothing should have"
+            .formatted(held));
+    assertEquals(
+        1,
+        readModel.probes(),
+        "the adapter was asked more than once, so the walk waited after all");
 
   }
 

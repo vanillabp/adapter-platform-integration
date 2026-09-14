@@ -1990,6 +1990,10 @@ public class MigrationProcessService<A> {
    * as few concurrent reports as the connection pool is wide empty it for everybody. The
    * measurement is in {@code migration-adapter/README.md}, under "What an election costs a
    * caller which holds a transaction".
+   * <p>
+   * Which of the two an extension is doing is the extension's to say, so the patience is
+   * a parameter. This method asks with {@link WorkflowLocator.Patience#WAIT_FOR_VISIBILITY},
+   * which is what every caller got before it could be said.
    *
    * @param workflowAggregateId The ID of the workflow aggregate
    * @return The id of the adapter holding the workflow
@@ -1999,6 +2003,26 @@ public class MigrationProcessService<A> {
   public String adapterIdOfWorkflow(
       final Object workflowAggregateId) {
 
+    return adapterIdOfWorkflow(
+        workflowAggregateId,
+        WorkflowLocator.Patience.WAIT_FOR_VISIBILITY);
+
+  }
+
+  /**
+   * The same election, asked with the patience the caller can afford - see the method
+   * above for what the two cost.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param patience How long the walk may take
+   * @return The id of the adapter holding the workflow
+   * @throws IllegalStateException If no configured BPMS knows the workflow, or if the
+   *           BPMS which should hold it is unreachable
+   */
+  public String adapterIdOfWorkflow(
+      final Object workflowAggregateId,
+      final WorkflowLocator.Patience patience) {
+
     final var subject = subjectOf(workflowAggregateId);
     final var location = workflowLocator
         .locate(
@@ -2007,7 +2031,7 @@ public class MigrationProcessService<A> {
                 .awarenessOfWorkflow(workflowScope(), aggregatePersistenceSupport, workflowAggregateId),
             workflowAggregateId,
             subject,
-            WorkflowLocator.Patience.WAIT_FOR_VISIBILITY);
+            patience);
 
     if (location.awareness() == WorkflowAwareness.UNKNOWN_TO_BPMS) {
       throw new IllegalStateException(
@@ -2019,15 +2043,39 @@ public class MigrationProcessService<A> {
                   subject,
                   prioritizedAdapters,
                   location.isUnknownButExpected()
-                      ? (" The adapter '%s' was expected to hold it and still did not report it "
-                          + "after its workflowVisibilityDelay had passed - if that BPMS answers "
-                          + "from a read model, its exporter is behind or has stopped.")
-                          .formatted(location.hintedAdapterId())
+                      ? hintedAdapterStayedSilent(location, patience)
                       : ""));
     }
     return location
         .adapter()
         .getAdapterId();
+
+  }
+
+  /**
+   * What to add to the message where a hint said which adapter holds the workflow and
+   * that adapter did not report it. The two patiences leave the caller in different
+   * places: one has waited the window out and learned something, the other has not waited
+   * and can try again later.
+   *
+   * @param location What the walk answered
+   * @param patience What the caller allowed
+   * @return The sentence to append, starting with a blank
+   */
+  private static String hintedAdapterStayedSilent(
+      final WorkflowLocator.Location<?> location,
+      final WorkflowLocator.Patience patience) {
+
+    return patience == WorkflowLocator.Patience.WAIT_FOR_VISIBILITY
+        ? (" The adapter '%s' was expected to hold it and still did not report it "
+            + "after its workflowVisibilityDelay had passed - if that BPMS answers "
+            + "from a read model, its exporter is behind or has stopped.")
+            .formatted(location.hintedAdapterId())
+        : (" The adapter '%s' was expected to hold it and did not report it, and this "
+            + "caller asked without waiting for a read model to catch up - if that BPMS "
+            + "answers from one, the workflow may well be running and simply not "
+            + "findable yet.")
+            .formatted(location.hintedAdapterId());
 
   }
 

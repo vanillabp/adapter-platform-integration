@@ -2743,6 +2743,20 @@ change. The wait then holds that transaction open, with the connection and the l
 come with it. The section "What an election costs a caller which holds a transaction"
 above has the numbers.
 
+So the extension says which of the two it is, with `ElectionPatience`:
+
+- `WAIT_FOR_VISIBILITY` waits the adapter's window out, which is right for a read and is
+  what the three-argument method asks with, so nothing changes for a caller which says
+  nothing;
+- `ASK_ONCE` asks every BPMS once and never sleeps, which is what a caller inside a
+  transaction needs. The price is the answer: a workflow the BPMS has not made findable
+  yet is reported as unknown although it is running, and the extension has to be able to
+  live with that.
+
+The enum is the extension's own. `WorkflowLocator.Patience` stays inside the core and
+`ExtensionWorkflowElection` translates between the two, the same way `WorkflowElection`
+answers with an adapter id rather than with an adapter.
+
 #### The extension's own configuration
 
 An extension setting is written at four levels, and the most specific one which writes a key

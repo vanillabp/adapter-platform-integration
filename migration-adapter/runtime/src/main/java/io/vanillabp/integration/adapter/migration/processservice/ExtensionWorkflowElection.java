@@ -1,5 +1,6 @@
 package io.vanillabp.integration.adapter.migration.processservice;
 
+import io.vanillabp.integration.extension.spi.election.ElectionPatience;
 import io.vanillabp.integration.extension.spi.election.WorkflowElection;
 
 /**
@@ -10,6 +11,10 @@ import io.vanillabp.integration.extension.spi.election.WorkflowElection;
  * The process services are looked up in the {@link PhaseTwoRouter}, where both platforms
  * register them while their beans are created - so the election works for every BPMN
  * process the application serves, without a registry of its own.
+ * <p>
+ * What an extension says about its patience is translated here into the core's own
+ * {@link WorkflowLocator.Patience}, so that neither {@code WorkflowLocator} nor its enum
+ * has to appear in the contract an extension compiles against.
  */
 public final class ExtensionWorkflowElection implements WorkflowElection {
 
@@ -29,7 +34,8 @@ public final class ExtensionWorkflowElection implements WorkflowElection {
   public String adapterIdOfWorkflow(
       final String workflowModuleId,
       final String bpmnProcessId,
-      final Object workflowAggregateId) {
+      final Object workflowAggregateId,
+      final ElectionPatience patience) {
 
     final var processService = router.processServiceOf(workflowModuleId, bpmnProcessId);
     if (processService == null) {
@@ -43,7 +49,12 @@ public final class ExtensionWorkflowElection implements WorkflowElection {
                   workflowModuleId,
                   String.join(", ", router.registeredWorkflows())));
     }
-    return processService.adapterIdOfWorkflow(workflowAggregateId);
+    return processService
+        .adapterIdOfWorkflow(
+            workflowAggregateId,
+            patience == ElectionPatience.ASK_ONCE
+                ? WorkflowLocator.Patience.NONE
+                : WorkflowLocator.Patience.WAIT_FOR_VISIBILITY);
 
   }
 
