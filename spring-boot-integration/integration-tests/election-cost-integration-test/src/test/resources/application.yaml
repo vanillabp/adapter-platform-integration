@@ -1,0 +1,22 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:election-cost-it;DB_CLOSE_DELAY=-1
+    hikari:
+      maximum-pool-size: 4
+      minimum-idle: 4
+      connection-timeout: 1000
+  jpa:
+    hibernate:
+      ddl-auto: create
+vanillabp:
+  adapters:
+    the-bpms:
+      type: dummy
+      test: 1
+  workflow-modules:
+    election-cost-module:
+      adapters:
+        the-bpms:
+          resources-location: classpath*:election-cost-module/processes/dummy
+election-cost-module:
+  nothing: there

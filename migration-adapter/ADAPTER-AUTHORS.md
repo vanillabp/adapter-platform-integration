@@ -614,11 +614,15 @@ explains what your answers cost:
 | `BPMS_UNAVAILABLE`                            | an exception naming your adapter, at once       | retried twice, then the entry is repeated | retried twice, then the exception                      |
 
 Phase one never sleeps, because it runs inside the caller's transaction and holds a database
-connection and the locks on the aggregate. The waiting happens where no application transaction is
-open. A read has no second place to go, so it waits itself, bounded by the same hint and the same
-window. A hint exists only where VanillaBP knew the answer without asking anybody, because it
-started the workflow itself or because a delivery for that workflow arrived from that BPMS. Every
-row of that table is a case of `WorkflowLocatorTest`, and the read column additionally of
+connection and the locks on the aggregate. For everything in the table above, the waiting happens
+where no application transaction is open. A read has no second place to go, so it waits itself,
+bounded by the same hint and the same window. One caller outside that table waits on an application
+thread as well: the election an extension asks for, which a reporting extension calls with its own
+transaction still open. What that costs is measured in this module's `README.md`, and your window is
+the number it is measured against. A hint exists only where VanillaBP knew the answer without
+asking anybody, because it started the workflow itself or because a delivery for that workflow
+arrived from that BPMS. Every row of that table is a case of `WorkflowLocatorTest`, and the read
+column additionally of
 `ViewerApiTest#readWaitsForAnEventuallyConsistentAdapterToCatchUp`.
 
 One question about a task may not reach you at all. Where the CALL names a task and the delivery of

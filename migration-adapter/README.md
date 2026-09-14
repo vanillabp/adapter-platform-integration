@@ -129,8 +129,10 @@ application transaction is open, so an unreachable BPMS is worth two more questi
 (500&nbsp;ms apart, fixed — "optimize late") and a read model which has not caught up is
 worth its window. A **read** of the viewer/history API waits for the same window, for the
 opposite reason: there is no outbox entry behind it which could ask again later, so what
-it does not wait for becomes an error in the application. Decision 27 says why the split
-is drawn there. The three patiences are held by
+it does not wait for becomes an error in the application. The **election an extension
+asks for** waits for that reason too, and it is the one caller which may be doing so
+inside a transaction of the application, which is measured below. Decision 27 says why
+the split is drawn there. The three patiences are held by
 `WorkflowLocatorTest#withoutPatienceAHintedAdapterIsAskedOnce`,
 `#withoutPatienceAnUnavailableBpmsFailsAtOnce` and
 `#retryingPatienceDoesNotWaitForVisibility`.
@@ -383,8 +385,8 @@ Four pieces solve it, and the split matters:
    leaves an entry behind, and the next operation on that aggregate ID is planned and
    dispatched until the outbox blocks it, instead of failing at the call.
 
-4. **The waiting happens at the dispatch and in a read, never in the caller's
-   transaction.** Phase one asks once. Where the answer is "unknown" although a hint says
+4. **The waiting happens at the dispatch and in a read, and phase one never waits at
+   all.** Phase one asks once. Where the answer is "unknown" although a hint says
    the workflow exists, the operation is PLANNED - the aggregate is saved, the outbox entry is written, the caller
    returns - and the dispatch asks again and hands the entry back, due in the window, while
    the BPMS still says nothing. In everyday operation (Camunda 8 lags one to three
@@ -396,13 +398,21 @@ Four pieces solve it, and the split matters:
    its counter are that place. Decision 27 carries this, including what it costs.
 
    A read of the viewer/history API (`getProcessDefinitions`, `getWorkflowHistory`) is the
-   one caller which waits for itself. It has no phase two to plan and nothing repeats it
-   later, so it waits where a hint says which adapter holds the workflow. Asking for the
-   history of a workflow the application started seconds ago is what a viewer does all day,
-   and the seconds Camunda 8's exporter lags behind must not answer it with
+   first of the two callers which wait for themselves. It has no phase two to plan and
+   nothing repeats it later, so it waits where a hint says which adapter holds the
+   workflow. Asking for the history of a workflow the application started seconds ago is
+   what a viewer does all day, and the seconds Camunda 8's exporter lags behind must not
+   answer it with
    `WorkflowNotFoundException`. Without a hint the read still fails at once, and a hint
    which never comes true costs the window before the failure names the adapter which was
    expected to answer.
+
+   The election an extension asks for (`WorkflowElection#adapterIdOfWorkflow`) waits the
+   same way, for the same reason: nobody repeats an extension's question either. Unlike a
+   read it is not free, because an extension which REPORTS something calls it while the
+   transaction which wrote what it reports is still open. The Business Cockpit does
+   exactly that on every `aggregateChanged`, which is how a report out of a service task
+   ends up holding a connection for ten seconds. What that costs is measured below.
 
 **What was deliberately NOT built: an outbox query.** A `START_WORKFLOW` entry still
 `OPEN` would prove "too early rather than unknown", and one `DONE` a moment ago would
@@ -431,6 +441,46 @@ gone (ended long ago and cleaned out of the read model) is planned instead of re
 entry is repeated and finally blocked, and the counter of blocked entries is where it
 shows. That is the price of never refusing an operation on a workflow which merely is not
 searchable yet.
+
+### What an election costs a caller which holds a transaction
+
+Measured on 2026-09-14 against the BPMS double, Spring Boot, H2 and a HikariCP pool of
+four connections, with the double reporting the window and the probe interval the Camunda
+8 adapter reports out of the box (ten seconds, 250 ms). The caller opens a transaction,
+reads the workflow aggregate through it and then asks the election, which is the shape a
+`@WorkflowTask` reporting a change runs in.
+
+|          what the caller meets          | the transaction is open for | the adapter is asked |
+|-----------------------------------------|----------------------------:|---------------------:|
+| the read model has caught up            |                      3.9 ms |               1 time |
+| the read model is behind, a hint exists |                   10 076 ms |             41 times |
+| no hint, so nothing is waited for       |                       <1 ms |               1 time |
+
+The wait is the window, near enough: the 41 questions are the first one plus one every
+250 ms, and they add 76 ms to the ten seconds. Once the window is used up the walk asks
+the other adapters, and it skips the one it already asked, so a second window is never
+paid.
+
+What a few such callers do to the rest of the application, measured in the same run with
+four of them at once:
+
+|            four reports at once             |                              what was measured                               |
+|---------------------------------------------|------------------------------------------------------------------------------|
+| each transaction was open for               | 10 046 to 10 072 ms                                                          |
+| the pool while they waited                  | 4 active, 0 idle                                                             |
+| an unrelated caller asking for a connection | refused after 1 003 ms with `Connection is not available, request timed out` |
+
+The last row is the point. The four reports have nothing to do with each other and
+nothing to do with the caller they lock out: four threads sleeping on a BPMS emptied the
+pool of the whole application, and everything else it does stopped with them. Four is the
+pool size here, so read it as a ratio rather than as a number. A pool of twenty needs
+twenty concurrent reports, which one lagging exporter and a handful of busy service tasks
+produce without any of them being unusual.
+
+`WhatAnElectionCostsATransactionTest` in
+`spring-boot-integration/integration-tests/election-cost-integration-test` holds both
+shapes. It runs with a window of 1.5 seconds, because a build should not pay ten seconds
+twice for a number which is already written down here.
 
 Correlating a message is the operation on which both patiences show up in one call, and the
 picture follows such a call from the caller's transaction to the BPMS: phase one asks the adapters
@@ -2681,9 +2731,17 @@ addressing the first-priority adapter would be wrong for every workflow already 
 
 It is the election every operation uses, in its READING shape: a workflow which ended is a
 regular answer, the way the viewer API reads its history, and a hint pointing at an adapter
-whose read model has not caught up is waited out — nobody repeats the question for an
+whose read model has not caught up is waited out, because nobody repeats the question for an
 extension either. A workflow no BPMS knows, and a BPMN process this application does not
 serve, are guiding errors naming what was asked.
+
+The waiting is what an extension has to know about before it calls this. A read of the
+viewer API waits on a thread which is doing nothing else, while an extension often asks
+this from inside a transaction of the application: the Business Cockpit reports a change
+out of a service task, and the entry it writes belongs to the transaction which wrote the
+change. The wait then holds that transaction open, with the connection and the locks that
+come with it. The section "What an election costs a caller which holds a transaction"
+above has the numbers.
 
 #### The extension's own configuration
 

@@ -83,9 +83,15 @@ import lombok.extern.slf4j.Slf4j;
  * a BPMS gets a second chance and where a read model gets the moment it needs
  * (decision 27 in the repository's DECISIONS.md) - the moment is taken by giving the
  * entry back with a due time, because the dispatching thread carries the entries of
- * every other workflow too. A read of the viewer/history API is the one caller which
- * really sleeps: there is no outbox entry behind it which could ask again later, so an
- * answer it does not wait for is an error the application sees.
+ * every other workflow too. Two callers really sleep, and both for the same reason:
+ * there is no outbox entry behind them which could ask again later, so an answer they
+ * do not wait for is an error the application sees. One is a read of the
+ * viewer/history API. The other is the election an extension asks for
+ * ({@code MigrationProcessService#adapterIdOfWorkflow}), and that one is not free the
+ * way a read is: it runs on an application thread, and an extension reporting a change
+ * calls it with the transaction of that change still open. The measurement of what
+ * that costs is in {@code migration-adapter/README.md}, under "What an election costs
+ * a caller which holds a transaction".
  * <p>
  * The two rules this walk rests on are written down where the adapters can read them too: an
  * adapter answers only for its own scope and the walk never falls back (decision 4 in the
@@ -119,9 +125,15 @@ public final class WorkflowLocator {
 
     /**
      * Additionally wait out the {@code workflowVisibilityDelay} of an adapter a hint
-     * points at: the workflow exists, its BPMS just has not made it findable yet. Only
-     * a read of the viewer/history API asks for this, because nobody repeats a read -
-     * an answer it does not wait for is an error the application sees.
+     * points at: the workflow exists, its BPMS just has not made it findable yet. Two
+     * callers ask for this, both because nobody repeats what they do and an answer they
+     * do not wait for is an error the application sees: a read of the viewer/history
+     * API, and the election an extension asks for.
+     * <p>
+     * The second one is the expensive one. It runs on an application thread, and an
+     * extension which reports a change calls it while the transaction of that change is
+     * open, so the connection and the locks on the workflow aggregate are held for as
+     * long as the wait lasts. See the type javadoc and the measurement it names.
      */
     WAIT_FOR_VISIBILITY
 
@@ -506,7 +518,8 @@ public final class WorkflowLocator {
    * workflow, then correlate the message which lets it continue" runs into it. Two
    * things have to hold before anybody waits: a hint has to claim the workflow exists,
    * and the caller has to be one which has nobody to ask the question again for it
-   * ({@link Patience#WAIT_FOR_VISIBILITY} - a read of the viewer API).
+   * ({@link Patience#WAIT_FOR_VISIBILITY} - a read of the viewer API, or the election
+   * an extension asks for).
    */
   private static <A> WorkflowAwareness probeUntilVisible(
       final MigratableProcessService<A> adapter,
@@ -569,7 +582,7 @@ public final class WorkflowLocator {
     while ((awareness == WorkflowAwareness.BPMS_UNAVAILABLE) && (retries > 0)) {
       log.warn(
           "The BPMS of adapter '{}' is unavailable while locating {} - retrying in {}ms ({} "
-              + "retries left; no application transaction is open here)",
+              + "retries left; a caller which allows this keeps its thread meanwhile)",
           adapter.getAdapterId(),
           subject,
           UNAVAILABLE_RETRY_DELAY_MILLIS,
