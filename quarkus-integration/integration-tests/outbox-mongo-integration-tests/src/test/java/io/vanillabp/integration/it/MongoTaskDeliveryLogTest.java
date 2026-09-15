@@ -81,9 +81,8 @@ public class MongoTaskDeliveryLogTest {
       final String deliveryKey,
       final String outcome) {
 
-    return new TaskDelivery(
-        deliveryKey, "test-adapter", "test-module", "TestProcess", "4711", "processTask", null, outcome, "PAYMENT_FAILED", "PaymentFailed", java.time.Instant
-            .now(), null);
+    return new TaskDelivery(deliveryKey, "test-adapter", "test-module", "TestProcess", "4711", "workflow-4711", "processTask", "Activity_processTask", null, outcome, "PAYMENT_FAILED", "PaymentFailed", java.time.Instant
+        .now(), null);
 
   }
 
@@ -104,6 +103,10 @@ public class MongoTaskDeliveryLogTest {
     assertEquals("BPMN_ERROR", recorded.get().outcome());
     assertEquals("PAYMENT_FAILED", recorded.get().bpmnErrorCode());
     assertEquals("PaymentFailed", recorded.get().bpmnErrorName());
+    // the element of the model and the workflow of the BPMS: written into the document and
+    // read back out of it, which is all this store owes them
+    assertEquals("Activity_processTask", recorded.get().bpmnElementId());
+    assertEquals("workflow-4711", recorded.get().workflowId());
 
   }
 
@@ -114,15 +117,16 @@ public class MongoTaskDeliveryLogTest {
     userTransaction.begin();
     deliveryLog
         .record(
-            new TaskDelivery(
-                "job-open", "test-adapter", "test-module", "TestProcess", "4711", "awaitCompletion", "task-77", "COMPLETION_PENDING", null, null, java.time.Instant
-                    .now(), null));
+            new TaskDelivery("job-open", "test-adapter", "test-module", "TestProcess", "4711", "workflow-4711", "awaitCompletion", "Activity_awaitCompletion", "task-77", "COMPLETION_PENDING", null, null, java.time.Instant
+                .now(), null));
     userTransaction.commit();
 
     final var open = deliveryLog.recordOfTask("test-module", "TestProcess", "4711", "task-77");
     assertTrue(open.isPresent(), "this is what a completeTask reads instead of asking a BPMS");
     assertEquals("test-adapter", open.get().adapterId());
     assertNull(open.get().taskClosedAt(), "a record is born open");
+    assertEquals("Activity_awaitCompletion", open.get().bpmnElementId());
+    assertEquals("workflow-4711", open.get().workflowId());
     assertTrue(
         deliveryLog.recordOfTask("test-module", "TestProcess", "4711", "another-task").isEmpty(),
         "another task is another question");
@@ -146,22 +150,18 @@ public class MongoTaskDeliveryLogTest {
     userTransaction.begin();
     deliveryLog
         .record(
-            new TaskDelivery(
-                "open-2", "test-adapter", "test-module", "TestProcess", "4711", "awaitCompletion", "task-2", "COMPLETION_PENDING", null, null, now, null));
+            new TaskDelivery("open-2", "test-adapter", "test-module", "TestProcess", "4711", null, "awaitCompletion", null, "task-2", "COMPLETION_PENDING", null, null, now, null));
     deliveryLog
         .record(
-            new TaskDelivery(
-                "open-1", "test-adapter", "test-module", "TestProcess", "4711", "awaitCompletion", "task-1", "COMPLETION_PENDING", null, null, now
-                    .minusSeconds(600), null));
+            new TaskDelivery("open-1", "test-adapter", "test-module", "TestProcess", "4711", null, "awaitCompletion", null, "task-1", "COMPLETION_PENDING", null, null, now
+                .minusSeconds(600), null));
     // another aggregate, and a delivery which left no task open
     deliveryLog
         .record(
-            new TaskDelivery(
-                "other", "test-adapter", "test-module", "TestProcess", "4712", "awaitCompletion", "task-3", "COMPLETION_PENDING", null, null, now, null));
+            new TaskDelivery("other", "test-adapter", "test-module", "TestProcess", "4712", null, "awaitCompletion", null, "task-3", "COMPLETION_PENDING", null, null, now, null));
     deliveryLog
         .record(
-            new TaskDelivery(
-                "done", "test-adapter", "test-module", "TestProcess", "4711", "awaitCompletion", "task-4", "COMPLETED", null, null, now, null));
+            new TaskDelivery("done", "test-adapter", "test-module", "TestProcess", "4711", null, "awaitCompletion", null, "task-4", "COMPLETED", null, null, now, null));
     userTransaction.commit();
 
     assertEquals(
@@ -232,9 +232,8 @@ public class MongoTaskDeliveryLogTest {
       final String bpmnProcessId,
       final String workflowAggregateId) {
 
-    return new TaskDelivery(
-        deliveryKey, "test-adapter", workflowModuleId, bpmnProcessId, workflowAggregateId, "processTask", null, "COMPLETED", null, null, java.time.Instant
-            .now(), null);
+    return new TaskDelivery(deliveryKey, "test-adapter", workflowModuleId, bpmnProcessId, workflowAggregateId, null, "processTask", null, null, "COMPLETED", null, null, java.time.Instant
+        .now(), null);
 
   }
 
@@ -297,10 +296,9 @@ public class MongoTaskDeliveryLogTest {
   private TaskDelivery twoHoursOld(
       final String deliveryKey) {
 
-    return new TaskDelivery(
-        deliveryKey, "test-adapter", "test-module", "TestProcess", "4711", "processTask", null, "COMPLETED", null, null, java.time.Instant
-            .now()
-            .minus(java.time.Duration.ofHours(2)), null);
+    return new TaskDelivery(deliveryKey, "test-adapter", "test-module", "TestProcess", "4711", null, "processTask", null, null, "COMPLETED", null, null, java.time.Instant
+        .now()
+        .minus(java.time.Duration.ofHours(2)), null);
 
   }
 

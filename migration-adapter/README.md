@@ -1022,6 +1022,8 @@ classDiagram
     +getAdapterId() String  «default null — fills the election cache»
     +getDeliveryId() String  «default null → no record · C8 job key, PEA task id, C7 the engine's job id on an own datasource and none otherwise, never for a user task»
     +getActivationId() String  «default null · C7 activityInstanceId, C8 elementInstanceKey, PEA task id»
+    +getBpmnElementId() String  «default null · the id a modeller wrote, travels into the record»
+    +getWorkflowId() String  «default null · the BPMS' own id of the running instance»
     +predatesDeployedVersion() boolean
   }
   class WorkflowTaskOutcome {
@@ -1516,6 +1518,44 @@ stores.
 `theRecordOfACalledProcessIsClosedAfterPhaseTwo`) and the counter
 (`anAnswerFromTheRecordIsCounted`); `TaskRecordLookupTest` holds the store side of it and
 `MicrometerVanillaBpMetricsTest#electionsAnsweredFromTheRecordAreCounted` the meter.
+
+##### What a record says about the element and the workflow
+
+Two more fields travel with every record, and VanillaBP reads neither of them. They are there for
+whoever looks at the task from outside: `bpmnElementId`, the `id` attribute a modeller wrote on the
+element, and `workflowId`, the BPMS' own id of the running instance.
+
+- `TaskInvocationContext.getBpmnElementId()` and `getWorkflowId()` are where they come from, both
+  `default null`, so an adapter which names neither keeps working and its records carry nothing
+  there. Camunda 7 knows both from the execution, Camunda 8 from the activated job, and the
+  Process-Engine-API reports them as task meta.
+- `taskDefinition` is not the same question. A handler is registered under the task definition AND
+  under the element id, so the two carry the same text only where the model names no task
+  definition - a Camunda 8 job type or a Camunda 7 topic stands there otherwise. An extension
+  which wants the element of the model reads `bpmnElementId`.
+- The SQL tables get `BPMN_ELEMENT_ID` and `WORKFLOW_ID`, both `VARCHAR(255)` and nullable, the
+  MongoDB documents two fields of the same names. Neither is indexed: nothing reads a record by
+  them, and an index maintained on every insert for a column nobody filters by is a cost without
+  a reader.
+- A record written before the columns existed carries neither, the same way it carries no
+  `TASK_ID`. The startup check names them with what a reader of the log loses
+  (`JdbcTaskDeliverySchemaTest#aTableWithoutTheElementColumnsIsReported`), and the changeset
+  `vanillabp-task-delivery-element-2.0.0` of `io.vanillabp:vanillabp-schema` adds them.
+
+##### What the log does not hold
+
+The records are the work the APPLICATION was handed. A user task the application has no
+`@WorkflowTask` method for leaves none, and `openTasksOfAggregate` does not name it. Not because
+the delivery is missing: the adapters put their lifecycle listeners on every user task of the
+model, so such a task reaches VanillaBP like any other and the adapter finishes the notification
+itself once `workflowTaskHandlerExists` answers no. What is missing is the outcome a record
+carries, so there is nothing to write down. That makes this answer the open work of the
+application, and the open work of the workflow a question for the BPMS. Why the
+log stays that way rather than growing a record without an outcome is decision 54 in the
+repository's `DECISIONS.md`. The two extension scenarios measure it: their models hold one user
+task nobody wrote a method for, and the log answers nothing for it
+(`ExtensionElectionAndConfigurationTest#anExtensionResolvesTheDeliveryLogOfTheAggregate`,
+`ExtensionEnablementTest#anExtensionResolvesTheDeliveryLogOfTheAggregate`).
 
 #### Two instances creating the schema at once
 

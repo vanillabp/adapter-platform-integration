@@ -85,10 +85,9 @@ public class MongoOpenTaskRetentionTest {
       final String deliveryKey,
       final Duration age) {
 
-    return new TaskDelivery(
-        deliveryKey, "test-adapter", "test-module", "TestProcess", "4711", "awaitCompletion", null, "COMPLETION_PENDING", null, null, Instant
-            .now()
-            .minus(age), null);
+    return new TaskDelivery(deliveryKey, "test-adapter", "test-module", "TestProcess", "4711", null, "awaitCompletion", null, null, "COMPLETION_PENDING", null, null, Instant
+        .now()
+        .minus(age), null);
 
   }
 

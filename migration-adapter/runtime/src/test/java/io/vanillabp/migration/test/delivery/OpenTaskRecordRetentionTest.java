@@ -61,10 +61,9 @@ public class OpenTaskRecordRetentionTest {
       final Duration age) {
 
     testee.record(
-        new TaskDelivery(
-            deliveryKey, "adapter", "test-module", "TestProcess", "4711", "awaitCompletion", null, outcome, null, null, Instant
-                .now()
-                .minus(age), null));
+        new TaskDelivery(deliveryKey, "adapter", "test-module", "TestProcess", "4711", null, "awaitCompletion", null, null, outcome, null, null, Instant
+            .now()
+            .minus(age), null));
 
   }
 
@@ -78,9 +77,8 @@ public class OpenTaskRecordRetentionTest {
 
     testee
         .record(
-            new TaskDelivery(
-                deliveryKey, adapterId, "test-module", "TestProcess", "4711", "awaitCompletion", null, outcome, null, null, Instant
-                    .now(), null));
+            new TaskDelivery(deliveryKey, adapterId, "test-module", "TestProcess", "4711", null, "awaitCompletion", null, null, outcome, null, null, Instant
+                .now(), null));
 
   }
 
@@ -95,9 +93,8 @@ public class OpenTaskRecordRetentionTest {
     // a record written before the column existed has no adapter id and is no answer
     testee
         .record(
-            new TaskDelivery(
-                "open-without-adapter", null, "test-module", "TestProcess", "4711", "awaitCompletion", null, "COMPLETION_PENDING", null, null, Instant
-                    .now(), null));
+            new TaskDelivery("open-without-adapter", null, "test-module", "TestProcess", "4711", null, "awaitCompletion", null, null, "COMPLETION_PENDING", null, null, Instant
+                .now(), null));
 
     assertEquals(
         java.util.Set.of("old-bpms", "new-bpms"),

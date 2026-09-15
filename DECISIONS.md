@@ -1611,3 +1611,43 @@ reads which one won. On Quarkus the boot is half the measurement, because SmallR
 over a key no mapping knows - `UnknownExtensionSettingsKeyTest` writes such a key on purpose. A
 position the resolution offers and the mapping does not declare would not be a position quietly
 read by nobody, it would be an application which does not start.
+
+### 54. The delivery log holds the work the application was handed, and nothing else
+
+A record is written where a `@WorkflowTask` method ran. A user task the application has no method
+for is therefore missing from the log, and `openTasksOfAggregate` does not name it either. That is
+a gap somebody will run into, so it is written down here rather than left to be discovered.
+
+The delivery does arrive, which is worth saying because it sounds as if it would not. An adapter
+puts its lifecycle listeners on every user task of the model, not only on the served ones, so such
+a task is handed out like any other. What the adapter does with it is the contract
+`WorkflowTaskInvoker#workflowTaskHandlerExists` exists for: it asks before it delivers, and where
+no method serves the task it finishes the notification itself and says so at TRACE
+(`ADAPTER-AUTHORS.md`). VanillaBP stands next to that task and keeps no note of it. So this is a
+decision, not a limit.
+
+The gap it leaves is real. An extension showing what a case is waiting for reads the log, and a
+workflow whose user tasks are all served by forms of the BPMS reads as a workflow waiting for
+nothing. What speaks for closing it is exactly that: an answer with holes nobody sees is worse than
+no answer.
+
+It stays open, because a record needs an outcome and there is none. Every field of `TaskDelivery`
+describes a delivery which was processed: the outcome reported back, the BPMN error it carried, the
+moment the handler ran and the moment the completion reached the BPMS. A task no handler saw has
+none of them. Such a record would also need a delivery key, and the core would have to invent one,
+because the key it builds is the key a redelivery is recognised by. The first time that task really
+is delivered to a method - the model gained one, or a second workflow of the same aggregate serves
+it - the invented key answers the deduplication question wrongly. Writing down less than a delivery
+is not a smaller record, it is a wrong one.
+
+And a user task without a method is a design rather than an oversight. A task may be modelled
+without touching the workflow aggregate at all: "set the machine to value x" can be ordered and not
+checked, and what it leaves behind is that somebody did it. The process carries that, and the
+Business Cockpit makes it visible. The wiring validation lets such a task pass on purpose, and the
+log has nothing to say about it because the application was never asked anything.
+
+So the log is what its name says, and the promise is written where a caller reads it: the javadoc
+of `TaskDeliveryLog#openTasksOfAggregate` says that the answer is the open work of the application
+and that the open work of the workflow is a question for the BPMS. An extension which needs the
+second one asks the BPMS through its own adapter half, which is where the knowledge about querying
+that BPMS lives anyway.

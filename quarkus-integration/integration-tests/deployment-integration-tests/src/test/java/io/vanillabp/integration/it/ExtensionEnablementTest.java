@@ -2,6 +2,7 @@ package io.vanillabp.integration.it;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -21,6 +22,8 @@ import io.vanillabp.extension.sample.SampleNoteService;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.extension.spi.election.WorkflowElection;
 import io.vanillabp.integration.extension.spi.handler.ExtensionHandlers;
+import io.vanillabp.integration.runtime.delivery.JdbcTaskDeliveryLog;
+import io.vanillabp.integration.test.extension.DeliveryLogUsingExtension;
 import io.vanillabp.integration.test.extension.EveryWorkflowRunsHere;
 import io.vanillabp.integration.test.extension.NoteAggregate;
 import io.vanillabp.integration.test.extension.NoteAggregatePersistence;
@@ -56,6 +59,7 @@ public class ExtensionEnablementTest {
           .addClass(NoteWorkflowService.class)
           .addClass(EveryWorkflowRunsHere.class)
           .addClass(TransactionUsingExtension.class)
+          .addClass(DeliveryLogUsingExtension.class)
           .addClass(NoteTaskWiringSource.class)
           .addAsResource("bpmn/first.bpmn", "processes/dummy/NoteProcess.bpmn")
           .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"));
@@ -77,6 +81,9 @@ public class ExtensionEnablementTest {
 
   @Inject
   TransactionUsingExtension transactions;
+
+  @Inject
+  DeliveryLogUsingExtension deliveryLog;
 
   @Inject
   jakarta.transaction.UserTransaction userTransaction;
@@ -284,6 +291,24 @@ public class ExtensionEnablementTest {
     // one built next to it
     assertEquals("the JTA transaction of Quarkus", transactions.describeResolutionFor(NoteAggregate.class));
     assertNotNull(transactions.runnerOf(NoteAggregate.class));
+
+  }
+
+  @Test
+  @DisplayName("An extension is told which delivery log holds the records of the workflow")
+  public void anExtensionResolvesTheDeliveryLogOfTheAggregate() {
+
+    // the same shape as the outbox and the transaction: the resolver is the bean, because
+    // which store serves an aggregate follows the persistence VanillaBP resolved for it -
+    // this application has a datasource, so the answer is the platform's JDBC store and not
+    // merely something non-null
+    assertInstanceOf(JdbcTaskDeliveryLog.class, deliveryLog.logOf(NoteAggregate.class));
+
+    // and it answers what an extension would show. Nothing is waiting here: the one user
+    // task of this model has no @WorkflowTask method, so the adapter finishes its
+    // notification itself and no record is written (see decision 54 in the repository's
+    // DECISIONS.md)
+    assertTrue(deliveryLog.openTasksOf(NoteAggregate.class, MODULE, PROCESS, "1").isEmpty());
 
   }
 

@@ -54,8 +54,7 @@ public class OpenTasksOfAggregateTest {
 
     testee
         .record(
-            new TaskDelivery(
-                deliveryKey, "c8", MODULE, bpmnProcessId, aggregateId, "awaitSignature", taskId, outcome, null, null, recordedAt, null));
+            new TaskDelivery(deliveryKey, "c8", MODULE, bpmnProcessId, aggregateId, null, "awaitSignature", null, taskId, outcome, null, null, recordedAt, null));
 
   }
 

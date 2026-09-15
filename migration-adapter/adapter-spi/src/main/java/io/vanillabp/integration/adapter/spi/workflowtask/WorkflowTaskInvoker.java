@@ -129,6 +129,10 @@ public interface WorkflowTaskInvoker {
    * (user-task lifecycle events): the adapter checks before invoking so
    * a user task without a handler is silently skipped instead of raising the
    * guiding no-handler error meant for mandatory service tasks.
+   * <p>
+   * A task skipped here is finished by the ADAPTER and leaves no delivery record, which is
+   * why the delivery log answers the open work of the application rather than the open work
+   * of the workflow (see decision 54 in the repository's DECISIONS.md).
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID

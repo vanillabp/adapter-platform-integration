@@ -127,9 +127,8 @@ public class MongoOneTransactionTest {
       final var started = processService.startWorkflow(aggregate);
       deliveryLog
           .record(
-              new TaskDelivery(
-                  "test-module|SampleWorkflowService|one-transaction|job-1", "test-adapter", "test-module", "SampleWorkflowService", started
-                      .getId(), "someTask", null, "COMPLETED", null, null, java.time.Instant.now(), null));
+              new TaskDelivery("test-module|SampleWorkflowService|one-transaction|job-1", "test-adapter", "test-module", "SampleWorkflowService", started
+                  .getId(), null, "someTask", null, null, "COMPLETED", null, null, java.time.Instant.now(), null));
 
       // still inside the transaction: nothing of this is visible to anybody else
       assertEquals(0, visibleOutside("outbox-test-aggregate"), "the aggregate was written before the commit");
@@ -157,9 +156,9 @@ public class MongoOneTransactionTest {
           final var started = processService.startWorkflow(aggregate);
           deliveryLog
               .record(
-                  new TaskDelivery(
-                      "test-module|SampleWorkflowService|rolled-back|job-1", "test-adapter", "test-module", "SampleWorkflowService", started
-                          .getId(), "someTask", null, "COMPLETED", null, null, java.time.Instant.now(), null));
+                  new TaskDelivery("test-module|SampleWorkflowService|rolled-back|job-1", "test-adapter", "test-module", "SampleWorkflowService", started
+                      .getId(), null, "someTask", null, null, "COMPLETED", null, null, java.time.Instant
+                          .now(), null));
           throw new RuntimeException("no commit for this one");
         }));
 

@@ -55,8 +55,9 @@ public class JdbcTaskDeliveryStore {
   public static final String DEFAULT_TABLE_NAME = "VANILLABP_TASK_DELIVERY";
 
   private static final String SELECT_DELIVERY = """
-      SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, \
-      TASK_DEFINITION, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, TASK_CLOSED_AT \
+      SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
+      TASK_DEFINITION, BPMN_ELEMENT_ID, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, \
+      TASK_CLOSED_AT \
       FROM %s \
       WHERE DELIVERY_KEY = ?""";
 
@@ -74,8 +75,9 @@ public class JdbcTaskDeliveryStore {
    * and created again does).
    */
   private static final String SELECT_RECORD_OF_TASK = """
-      SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, \
-      TASK_DEFINITION, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, TASK_CLOSED_AT \
+      SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
+      TASK_DEFINITION, BPMN_ELEMENT_ID, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, \
+      TASK_CLOSED_AT \
       FROM %s \
       WHERE TASK_ID = ? AND WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND AGGREGATE_ID = ? \
       AND OUTCOME = ? \
@@ -114,8 +116,9 @@ public class JdbcTaskDeliveryStore {
    * over AGGREGATE_ID are in this module's README.
    */
   private static final String SELECT_OPEN_TASKS_OF_AGGREGATE = """
-      SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, \
-      TASK_DEFINITION, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, TASK_CLOSED_AT \
+      SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
+      TASK_DEFINITION, BPMN_ELEMENT_ID, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, \
+      TASK_CLOSED_AT \
       FROM %s \
       WHERE WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND AGGREGATE_ID = ? \
       AND OUTCOME = ? AND TASK_CLOSED_AT IS NULL \
@@ -175,9 +178,10 @@ public class JdbcTaskDeliveryStore {
 
   private static final String INSERT_DELIVERY = """
       INSERT INTO %s \
-      (DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, TASK_DEFINITION, \
-      TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, LAST_SEEN_AT) \
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""";
+      (DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
+      TASK_DEFINITION, BPMN_ELEMENT_ID, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, \
+      LAST_SEEN_AT) \
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""";
 
   // TASK_CLOSED_AT is not written here: a record is born open, and the moment the
   // application's completion reached the BPMS is the one thing about a task which is known
@@ -432,8 +436,9 @@ public class JdbcTaskDeliveryStore {
   }
 
   /**
-   * Reads one row into a record. Both statements selecting a whole record list their columns
-   * in the same order, which is what lets them share this.
+   * Reads one row into a record. Every statement selecting a whole record lists its columns
+   * in the order of the record's components, which is what lets them share this and what
+   * keeps the indexes below readable.
    *
    * @param resultSet The result set positioned on the row
    * @return The record it holds
@@ -441,17 +446,18 @@ public class JdbcTaskDeliveryStore {
   private static TaskDelivery readRecord(
       final java.sql.ResultSet resultSet) throws SQLException {
 
-    final var recordedAt = resultSet.getTimestamp(11);
-    final var taskClosedAt = resultSet.getTimestamp(12);
+    final var recordedAt = resultSet.getTimestamp(13);
+    final var taskClosedAt = resultSet.getTimestamp(14);
     return new TaskDelivery(
         resultSet.getString(1), resultSet.getString(2), resultSet.getString(3), resultSet
             .getString(4), resultSet.getString(5), resultSet.getString(6), resultSet
                 .getString(7), resultSet.getString(8), resultSet.getString(9), resultSet
-                    .getString(10), recordedAt == null
-                        ? null
-                        : recordedAt.toInstant(), taskClosedAt == null
+                    .getString(10), resultSet.getString(11), resultSet
+                        .getString(12), recordedAt == null
                             ? null
-                            : taskClosedAt.toInstant());
+                            : recordedAt.toInstant(), taskClosedAt == null
+                                ? null
+                                : taskClosedAt.toInstant());
 
   }
 
@@ -522,18 +528,20 @@ public class JdbcTaskDeliveryStore {
         statement.setString(3, delivery.workflowModuleId());
         statement.setString(4, delivery.bpmnProcessId());
         statement.setString(5, delivery.workflowAggregateId());
-        statement.setString(6, delivery.taskDefinition());
-        statement.setString(7, delivery.taskId());
-        statement.setString(8, delivery.outcome());
-        statement.setString(9, delivery.bpmnErrorCode());
-        statement.setString(10, delivery.bpmnErrorName());
+        statement.setString(6, delivery.workflowId());
+        statement.setString(7, delivery.taskDefinition());
+        statement.setString(8, delivery.bpmnElementId());
+        statement.setString(9, delivery.taskId());
+        statement.setString(10, delivery.outcome());
+        statement.setString(11, delivery.bpmnErrorCode());
+        statement.setString(12, delivery.bpmnErrorName());
         final var recordedAt = Timestamp.from(delivery.recordedAt() == null
             ? Instant.now()
             : delivery.recordedAt());
-        statement.setTimestamp(11, recordedAt);
+        statement.setTimestamp(13, recordedAt);
         // the record was seen the moment it was written; a redelivery of a task which
         // stays open moves this one and leaves RECORDED_AT where it is
-        statement.setTimestamp(12, recordedAt);
+        statement.setTimestamp(14, recordedAt);
         statement.executeUpdate();
       }
       return true;
@@ -716,7 +724,11 @@ public class JdbcTaskDeliveryStore {
           new AddedColumn(
               "TASK_ID", "VARCHAR(255) (nullable: a record written before the column existed names no task)", "every completion or cancellation of a task has to ask the configured BPMS which of them holds it, although the record of that task already knows", "CREATE INDEX %s_TASK ON %s (TASK_ID)"),
           new AddedColumn(
-              "TASK_CLOSED_AT", "TIMESTAMP (the type your database uses for the existing column RECORDED_AT), nullable", "a task which was completed already cannot be recognised from the record, so a repeated completion asks the BPMS before it becomes the no-op it always was", null));
+              "TASK_CLOSED_AT", "TIMESTAMP (the type your database uses for the existing column RECORDED_AT), nullable", "a task which was completed already cannot be recognised from the record, so a repeated completion asks the BPMS before it becomes the no-op it always was", null),
+          new AddedColumn(
+              "BPMN_ELEMENT_ID", "VARCHAR(255) (nullable: a record written before the column existed names no element)", "a record does not say which element of the model it belongs to, so an extension listing the open tasks of a workflow cannot find the part of the model each of them stands for", null),
+          new AddedColumn(
+              "WORKFLOW_ID", "VARCHAR(255) (nullable: a record written before the column existed names no workflow)", "a record does not say which workflow of the BPMS it belongs to, so nobody can follow a task into the tooling of that BPMS", null));
 
   /**
    * A column a later version of VanillaBP added: its name, the statement which adds it and
@@ -966,7 +978,9 @@ public class JdbcTaskDeliveryStore {
         BPMN_ERROR_NAME VARCHAR(255), \
         RECORDED_AT %s NOT NULL, \
         LAST_SEEN_AT %s NOT NULL, \
-        TASK_CLOSED_AT %s)"""
+        TASK_CLOSED_AT %s, \
+        BPMN_ELEMENT_ID VARCHAR(255), \
+        WORKFLOW_ID VARCHAR(255))"""
         .formatted(tableName, timestampType, timestampType, timestampType);
 
   }

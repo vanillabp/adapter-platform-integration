@@ -162,9 +162,9 @@ public class StartupQuestionCostTest {
     for (var record = 0; record < openRecords; record++) {
       store
           .record(
-              new TaskDelivery(
-                  "delivery-%d".formatted(record), "c7", MODULE, PROCESS, "aggregate-%d".formatted(
-                      record), "aTask", null, WorkflowTaskOutcome.Kind.COMPLETION_PENDING.name(), null, null, Instant
+              new TaskDelivery("delivery-%d".formatted(record), "c7", MODULE, PROCESS, "aggregate-%d".formatted(
+                  record), null, "aTask", null, null, WorkflowTaskOutcome.Kind.COMPLETION_PENDING
+                      .name(), null, null, Instant
                           .now(), null));
     }
     statements.clear();

@@ -184,8 +184,7 @@ public class DeliveryRecordReleaseTest {
       records
           .put(
               key,
-              new TaskDelivery(
-                  key, "adapter", workflowModuleId, bpmnProcessId, aggregateId, "task", null, "COMPLETED", null, null, when, null));
+              new TaskDelivery(key, "adapter", workflowModuleId, bpmnProcessId, aggregateId, null, "task", null, null, "COMPLETED", null, null, when, null));
       recordedAt.put(key, when);
 
     }

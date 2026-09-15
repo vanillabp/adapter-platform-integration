@@ -274,6 +274,14 @@ outbox a mixed-persistence application has to attribute aggregates itself
 (`TaskDeliveryLogAware`): Quarkus has no platform-side knowledge of which persistence
 manages an aggregate.
 
+The resolver is a bean of its own, produced by `TaskDeliveryLogResolverProducer` and
+registered by the build step `buildTaskDeliveryLogResolver`. The process services inject
+it rather than building one each, and an extension reading what a workflow is waiting for
+injects the same bean - the shape `PhaseTwoOutboxResolverProducer` and
+`TransactionRunnerProducer` already have, and for the same reason: two constructions are
+two answers as soon as one of them changes. `ExtensionEnablementTest` injects it through
+`DeliveryLogUsingExtension`.
+
 - `JdbcTaskDeliveryLog` acquires its Agroal connection within the running JTA
   transaction, so it is enlisted there. The SQL and the portable DDL of table
   `VANILLABP_TASK_DELIVERY` live in the core (`JdbcTaskDeliveryStore`), shared with

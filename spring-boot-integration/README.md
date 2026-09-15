@@ -103,6 +103,9 @@ inbound counterpart of the outbox) twice, and `SpringTaskDeliveryLogResolver` pi
 one per workflow aggregate - the same resolution the phase-two outbox uses, since a
 record has to ride the aggregate's own transaction. The persistence technology behind an
 aggregate is detected once in `SpringPersistenceTechnology`, shared by both resolvers.
+The resolver is the bean `vanillaBpTaskDeliveryLogResolver`, so an extension reading what
+a workflow is waiting for asks the same object the process services write through
+(`ExtensionElectionAndConfigurationTest` injects it through `DeliveryLogUsingExtension`).
 
 - `JdbcTaskDeliveryLog` writes through `DataSourceUtils.getConnection(dataSource)`, so
   the connection belongs to the Spring-managed transaction. The SQL and the portable DDL

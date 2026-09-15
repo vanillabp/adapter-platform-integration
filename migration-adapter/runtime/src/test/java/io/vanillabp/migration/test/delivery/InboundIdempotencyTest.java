@@ -547,9 +547,9 @@ public class InboundIdempotencyTest {
     final var recorded = deliveryLog.records.get(key);
     deliveryLog.records.put(
         key,
-        new TaskDelivery(
-            key, recorded.adapterId(), recorded.workflowModuleId(), recorded.bpmnProcessId(), recorded
-                .workflowAggregateId(), recorded.taskDefinition(), recorded.taskId(), "WHATEVER", null, null, recorded
+        new TaskDelivery(key, recorded.adapterId(), recorded.workflowModuleId(), recorded.bpmnProcessId(), recorded
+            .workflowAggregateId(), null, recorded.taskDefinition(), null, recorded
+                .taskId(), "WHATEVER", null, null, recorded
                     .recordedAt(), null));
 
     final var messages = loggedBy(

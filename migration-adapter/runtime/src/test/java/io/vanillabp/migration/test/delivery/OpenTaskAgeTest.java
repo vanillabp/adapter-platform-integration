@@ -181,13 +181,14 @@ public class OpenTaskAgeTest {
           .replaceAll(
               (
                   key,
-                  delivery) -> new TaskDelivery(
-                      delivery.deliveryKey(), delivery.adapterId(), delivery.workflowModuleId(), delivery
+                  delivery) -> new TaskDelivery(delivery.deliveryKey(), delivery.adapterId(), delivery
+                      .workflowModuleId(), delivery
                           .bpmnProcessId(), delivery
-                              .workflowAggregateId(), delivery.taskDefinition(), delivery.taskId(), delivery
-                                  .outcome(), delivery.bpmnErrorCode(), delivery.bpmnErrorName(), Instant
-                                      .now()
-                                      .minus(age), delivery.taskClosedAt()));
+                              .workflowAggregateId(), delivery.workflowId(), delivery.taskDefinition(), delivery
+                                  .bpmnElementId(), delivery.taskId(), delivery
+                                      .outcome(), delivery.bpmnErrorCode(), delivery.bpmnErrorName(), Instant
+                                          .now()
+                                          .minus(age), delivery.taskClosedAt()));
 
     }
 
@@ -568,12 +569,13 @@ public class OpenTaskAgeTest {
         .replaceAll(
             (
                 key,
-                delivery) -> new TaskDelivery(
-                    delivery.deliveryKey(), delivery.adapterId(), delivery.workflowModuleId(), delivery
+                delivery) -> new TaskDelivery(delivery.deliveryKey(), delivery.adapterId(), delivery
+                    .workflowModuleId(), delivery
                         .bpmnProcessId(), delivery
-                            .workflowAggregateId(), delivery.taskDefinition(), delivery.taskId(), delivery
-                                .outcome(), delivery.bpmnErrorCode(), delivery
-                                    .bpmnErrorName(), null, delivery.taskClosedAt()));
+                            .workflowAggregateId(), delivery.workflowId(), delivery.taskDefinition(), delivery
+                                .bpmnElementId(), delivery.taskId(), delivery
+                                    .outcome(), delivery.bpmnErrorCode(), delivery
+                                        .bpmnErrorName(), null, delivery.taskClosedAt()));
 
     final var second = testee.invokeWorkflowTask(MODULE, PROCESS, delivery("4714", "job-1"));
 

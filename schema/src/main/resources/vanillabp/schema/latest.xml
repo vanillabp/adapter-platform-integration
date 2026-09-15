@@ -203,4 +203,23 @@
     </createIndex>
   </changeSet>
 
+  <changeSet author="VanillaBP" id="vanillabp-task-delivery-element-2.0.0" labels="2.0.0">
+    <comment>
+      What the record says about the place the task came from. BPMN_ELEMENT_ID is the id attribute
+      of the element a modeller wrote, which is what an extension listing the open tasks of a
+      workflow addresses the model by - TASK_DEFINITION carries a job type or a topic instead
+      wherever the model names one, so the two are not the same question. WORKFLOW_ID is the BPMS'
+      own id of the running instance, carried for whoever follows a task into the tooling of that
+      engine; VanillaBP itself addresses a workflow by its aggregate and needs neither column to
+      work. Both are nullable: an adapter which names neither writes nothing there, and so does a
+      record written before the columns existed. Neither is indexed, because nothing reads a record
+      by them. A changeset of its own rather than columns added to the ones above, because those
+      were applied already.
+    </comment>
+    <addColumn tableName="${vanillabp.delivery.table}">
+      <column name="BPMN_ELEMENT_ID" type="VARCHAR(255)" />
+      <column name="WORKFLOW_ID" type="VARCHAR(255)" />
+    </addColumn>
+  </changeSet>
+
 </databaseChangeLog>

@@ -131,6 +131,8 @@ public class JdbcTaskDeliverySchemaTest {
                   LAST_SEEN_AT TIMESTAMP NOT NULL, \
                   TASK_ID VARCHAR(255), \
                   TASK_CLOSED_AT TIMESTAMP, \
+                  BPMN_ELEMENT_ID VARCHAR(255), \
+                  WORKFLOW_ID VARCHAR(255), \
                   CONSTRAINT PK_VANILLABP_TASK_DELIVERY PRIMARY KEY (DELIVERY_KEY))""");
     }
 
@@ -256,6 +258,94 @@ public class JdbcTaskDeliverySchemaTest {
             .contains("CREATE INDEX VANILLABP_TASK_DELIVERY_TASK ON VANILLABP_TASK_DELIVERY (TASK_ID)"),
         failure.getMessage());
     assertTrue(failure.getMessage().contains("ask the configured BPMS"), failure.getMessage());
+
+  }
+
+  /**
+   * The table of an earlier version: everything the election needs, but nothing about the
+   * element of the model and the workflow of the BPMS.
+   */
+  private static void createTableWithoutTheElementColumns(
+      final String database) throws SQLException {
+
+    try (Connection connection = h2(database).acquire(); var statement = connection.createStatement()) {
+      statement
+          .executeUpdate(
+              """
+                  CREATE TABLE VANILLABP_TASK_DELIVERY (\
+                  DELIVERY_KEY VARCHAR(512) PRIMARY KEY, \
+                  ADAPTER_ID VARCHAR(255), \
+                  WORKFLOW_MODULE_ID VARCHAR(255) NOT NULL, \
+                  BPMN_PROCESS_ID VARCHAR(255) NOT NULL, \
+                  AGGREGATE_ID VARCHAR(1024), \
+                  TASK_DEFINITION VARCHAR(255), \
+                  TASK_ID VARCHAR(255), \
+                  OUTCOME VARCHAR(32) NOT NULL, \
+                  BPMN_ERROR_CODE VARCHAR(255), \
+                  BPMN_ERROR_NAME VARCHAR(255), \
+                  RECORDED_AT TIMESTAMP NOT NULL, \
+                  LAST_SEEN_AT TIMESTAMP NOT NULL, \
+                  TASK_CLOSED_AT TIMESTAMP)""");
+    }
+
+  }
+
+  /**
+   * The same table one column further: with BPMN_ELEMENT_ID, without WORKFLOW_ID. The check
+   * names one missing column at a time, so the second one needs a table of its own.
+   */
+  private static void createTableWithoutTheWorkflowId(
+      final String database) throws SQLException {
+
+    try (Connection connection = h2(database).acquire(); var statement = connection.createStatement()) {
+      statement
+          .executeUpdate(
+              """
+                  CREATE TABLE VANILLABP_TASK_DELIVERY (\
+                  DELIVERY_KEY VARCHAR(512) PRIMARY KEY, \
+                  ADAPTER_ID VARCHAR(255), \
+                  WORKFLOW_MODULE_ID VARCHAR(255) NOT NULL, \
+                  BPMN_PROCESS_ID VARCHAR(255) NOT NULL, \
+                  AGGREGATE_ID VARCHAR(1024), \
+                  TASK_DEFINITION VARCHAR(255), \
+                  TASK_ID VARCHAR(255), \
+                  OUTCOME VARCHAR(32) NOT NULL, \
+                  BPMN_ERROR_CODE VARCHAR(255), \
+                  BPMN_ERROR_NAME VARCHAR(255), \
+                  RECORDED_AT TIMESTAMP NOT NULL, \
+                  LAST_SEEN_AT TIMESTAMP NOT NULL, \
+                  TASK_CLOSED_AT TIMESTAMP, \
+                  BPMN_ELEMENT_ID VARCHAR(255))""");
+    }
+
+  }
+
+  @Test
+  @DisplayName("A table without BPMN_ELEMENT_ID names the column and what a reader of the log loses")
+  public void aTableWithoutTheElementColumnsIsReported() throws SQLException {
+
+    createTableWithoutTheElementColumns("without-element-id");
+
+    final var failure = assertThrows(
+        IllegalStateException.class,
+        () -> storeOn("without-element-id").validateSchemaExists());
+
+    assertTrue(failure.getMessage().contains("BPMN_ELEMENT_ID"), failure.getMessage());
+    assertTrue(
+        failure.getMessage().contains("ALTER TABLE VANILLABP_TASK_DELIVERY ADD BPMN_ELEMENT_ID VARCHAR(255)"),
+        failure.getMessage());
+    // the second column is named by the boot which follows, once the first one is there
+    createTableWithoutTheWorkflowId("without-workflow-id");
+    final var second = assertThrows(
+        IllegalStateException.class,
+        () -> storeOn("without-workflow-id").validateSchemaExists());
+    assertTrue(second.getMessage().contains("WORKFLOW_ID"), second.getMessage());
+    assertTrue(
+        second.getMessage().contains("ALTER TABLE VANILLABP_TASK_DELIVERY ADD WORKFLOW_ID VARCHAR(255)"),
+        second.getMessage());
+    // nothing reads a record by these two, so no index is asked for
+    assertFalse(failure.getMessage().contains("CREATE INDEX"), failure.getMessage());
+    assertTrue(failure.getMessage().contains("which element of the model"), failure.getMessage());
 
   }
 

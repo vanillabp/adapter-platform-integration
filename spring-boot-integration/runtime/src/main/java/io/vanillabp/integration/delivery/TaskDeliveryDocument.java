@@ -41,7 +41,21 @@ public class TaskDeliveryDocument {
 
   private String aggregateId;
 
+  /**
+   * The BPMS' own id of the workflow this task belongs to, for whoever follows a task into
+   * the tooling of that engine. Absent where the adapter names no workflow and in a document
+   * written before this existed.
+   */
+  private String workflowId;
+
   private String taskDefinition;
+
+  /**
+   * The id a modeller wrote on the BPMN element which was delivered - what an extension
+   * addresses a task in the model by. Absent where the adapter names no element and in a
+   * document written before this existed.
+   */
+  private String bpmnElementId;
 
   /**
    * The BPMS' identity of the task this delivery was about - what the application passes

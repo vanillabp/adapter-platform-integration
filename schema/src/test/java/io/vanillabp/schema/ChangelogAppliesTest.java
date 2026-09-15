@@ -104,7 +104,8 @@ public class ChangelogAppliesTest {
               .of(
                   "DELIVERY_KEY", "ADAPTER_ID", "WORKFLOW_MODULE_ID", "BPMN_PROCESS_ID",
                   "AGGREGATE_ID", "TASK_DEFINITION", "OUTCOME", "BPMN_ERROR_CODE", "BPMN_ERROR_NAME",
-                  "RECORDED_AT", "LAST_SEEN_AT", "TASK_ID", "TASK_CLOSED_AT"),
+                  "RECORDED_AT", "LAST_SEEN_AT", "TASK_ID", "TASK_CLOSED_AT", "BPMN_ELEMENT_ID",
+                  "WORKFLOW_ID"),
           java.util.List.copyOf(delivery.keySet()));
 
     }

@@ -409,6 +409,43 @@ that runner.
 `PhaseOperationRegistryTest` holds what the registry enforces, and `ExtensionOperationDispatchTest`
 runs an extension operation through both platforms.
 
+### What a workflow is waiting for
+
+VanillaBP writes down every task delivery it processed, in the transaction which saves the workflow
+aggregate, and the store behind that is a `TaskDeliveryLog`. You may READ it.
+`TaskDeliveryLogResolver#resolveFor(workflowAggregateClass)` answers the log that aggregate's
+records were written into, and `TaskDeliveryLog#openTasksOfAggregate(module, process, aggregateId)`
+answers the tasks the application has not finished yet, oldest first. That is the durable answer to
+the question an extension asks before it shows what a case is waiting for, and you get it without
+keeping a memory of your own: the Process-Engine-API half of the Business Cockpit kept one and lost
+it on every restart, and on every task which arrived at another node.
+
+Each record names the task by `taskId`, the element of the model by `bpmnElementId`, the BPMS'
+workflow by `workflowId`, and the adapter which delivered it by `adapterId`. `taskDefinition` is a
+different question from `bpmnElementId` - it carries a Camunda 8 job type or a Camunda 7 topic
+wherever the model names one.
+
+Two limits, and both matter before you build a screen on this. The records are the work the
+APPLICATION was handed: a user task nobody wrote a `@WorkflowTask` method for leaves no record and
+is in no answer here. The delivery is not what is missing - the adapter hands such a task to
+VanillaBP and finishes the notification itself when no method serves it - it is the outcome a
+record carries, and a task the application was never asked about has none (decision 54). And a
+record is deleted once `vanillabp.delivery.retention` passed without the task being handed out
+again, so this says what the store still knows rather than what the BPMS holds. An empty list is
+therefore "nothing recorded", never "nothing open".
+
+Inject the RESOLVER rather than a `TaskDeliveryLog` bean, for the reason the outbox names above: an
+application may run two persistences, and which store serves an aggregate is not a question you can
+answer from outside. The resolver is a bean on Spring Boot
+(`vanillaBpTaskDeliveryLogResolver`) and on Quarkus (`TaskDeliveryLogResolverProducer`), and a
+`null` answer means the application configured no store at all, which is a state your own boot may
+report. `DeliveryLogUsingExtension` is a miniature of exactly this, injected by
+`ExtensionEnablementTest` on Quarkus and by `ExtensionElectionAndConfigurationTest` on Spring
+Boot.
+
+Do not write into the log. The records are the core's bookkeeping of what really ran, and an entry
+put there by somebody else would answer a redelivery with work which never happened.
+
 ### What the boot says about you
 
 Once a workflow module is deployed, the registry writes one line per extension, workflow module and
@@ -493,22 +530,23 @@ item of its own.
 
 ## 8. What the core promises you
 
-|                                               Promise                                                |                                                                              What holds it                                                                               |
-|------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| The adapter wired a process before you see it, and is started before you are                         | decision 52, `DeploymentServiceTest#theAdapterIsFirstOnTheWayUp`, `DeploymentPipelineTest#extensionsWiredInOrder`                                                        |
-| You are stopped before the adapter is                                                                | `DeploymentServiceTest#extensionWiringServicesAreStoppedBeforeAdapters`, `ShutdownReverseOrderTest`                                                                      |
-| An extension whose types do not match is neither wired nor started                                   | `DeploymentServiceTest#extensionWiringServicesAreFilteredAndCalled`, `#subtypeExtensionIsNeitherWiredNorStarted`, `DeploymentPipelineTest#nonMatchingExtensionUntouched` |
-| Extensions are sorted by `getOrder()`, and nothing beyond that is promised                           | decision 52, `DeploymentServiceTest#wiringServicesAreSortedByOrder`                                                                                                      |
-| Eight positions, most specific wins, adapter section beats its own level                             | decisions 48 and 53, `SettingsResolutionTest`, `ExtensionSettingsResolutionTest`, `ExtensionSettingsPositionsTest` per platform                                          |
-| A value of one adapter never reaches another one                                                     | `SettingsResolutionTest#anotherAdapterReadsTheGeneralSections`, `ExtensionSettingsPositionsTest#theSecondAdapterReadsItsOwnValues`                                       |
-| A key below `vanillabp` which no mapping declares ends a Quarkus start, naming the key               | `UnknownExtensionSettingsKeyTest`                                                                                                                                        |
-| Your annotation is run with the mechanics of `@WorkflowTask`                                         | `ExtensionHandlerRegistryTest`, `ExtensionHandlerTest` (Spring Boot), `ExtensionEnablementTest` (Quarkus)                                                                |
-| A contract registered after the scan finds the same methods                                          | decision 36, `ExtensionHandlerRegistryTest#aContractMayArriveAfterTheScan`                                                                                               |
-| The first offered key some method serves wins, and the catch-all stays the fallback                  | decision 51, `ExtensionHandlerRegistryTest#theFirstKeyServedWins`, `#aNamedKeyAlwaysBeatsTheCatchAll`                                                                    |
-| A contract which never writes is not warned about                                                    | decision 50, `ExtensionHandlerRegistryTest#aReadingContractDoesNotSaveTheAggregate`                                                                                      |
-| The boot says which method serves which key, and names a method the scan cannot see                  | `ExtensionHandlerRegistryTest#theBootSaysWhatWasWired`, `#anInvisibleExtensionHandlerIsReported`, `ExtensionHandlerWiringReportTest` per platform                        |
-| The election answers which BPMS holds a workflow, and refuses with a guiding message where it cannot | `ExtensionElectionAndConfigurationTest`, `ExtensionEnablementTest`                                                                                                       |
-| An operation of yours reaches your own handler                                                       | `PhaseOperationRegistryTest`, `ExtensionOperationDispatchTest` per platform                                                                                              |
+|                                                          Promise                                                          |                                                                              What holds it                                                                               |
+|---------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| The adapter wired a process before you see it, and is started before you are                                              | decision 52, `DeploymentServiceTest#theAdapterIsFirstOnTheWayUp`, `DeploymentPipelineTest#extensionsWiredInOrder`                                                        |
+| You are stopped before the adapter is                                                                                     | `DeploymentServiceTest#extensionWiringServicesAreStoppedBeforeAdapters`, `ShutdownReverseOrderTest`                                                                      |
+| An extension whose types do not match is neither wired nor started                                                        | `DeploymentServiceTest#extensionWiringServicesAreFilteredAndCalled`, `#subtypeExtensionIsNeitherWiredNorStarted`, `DeploymentPipelineTest#nonMatchingExtensionUntouched` |
+| Extensions are sorted by `getOrder()`, and nothing beyond that is promised                                                | decision 52, `DeploymentServiceTest#wiringServicesAreSortedByOrder`                                                                                                      |
+| Eight positions, most specific wins, adapter section beats its own level                                                  | decisions 48 and 53, `SettingsResolutionTest`, `ExtensionSettingsResolutionTest`, `ExtensionSettingsPositionsTest` per platform                                          |
+| A value of one adapter never reaches another one                                                                          | `SettingsResolutionTest#anotherAdapterReadsTheGeneralSections`, `ExtensionSettingsPositionsTest#theSecondAdapterReadsItsOwnValues`                                       |
+| A key below `vanillabp` which no mapping declares ends a Quarkus start, naming the key                                    | `UnknownExtensionSettingsKeyTest`                                                                                                                                        |
+| Your annotation is run with the mechanics of `@WorkflowTask`                                                              | `ExtensionHandlerRegistryTest`, `ExtensionHandlerTest` (Spring Boot), `ExtensionEnablementTest` (Quarkus)                                                                |
+| A contract registered after the scan finds the same methods                                                               | decision 36, `ExtensionHandlerRegistryTest#aContractMayArriveAfterTheScan`                                                                                               |
+| The first offered key some method serves wins, and the catch-all stays the fallback                                       | decision 51, `ExtensionHandlerRegistryTest#theFirstKeyServedWins`, `#aNamedKeyAlwaysBeatsTheCatchAll`                                                                    |
+| A contract which never writes is not warned about                                                                         | decision 50, `ExtensionHandlerRegistryTest#aReadingContractDoesNotSaveTheAggregate`                                                                                      |
+| The boot says which method serves which key, and names a method the scan cannot see                                       | `ExtensionHandlerRegistryTest#theBootSaysWhatWasWired`, `#anInvisibleExtensionHandlerIsReported`, `ExtensionHandlerWiringReportTest` per platform                        |
+| The election answers which BPMS holds a workflow, and refuses with a guiding message where it cannot                      | `ExtensionElectionAndConfigurationTest`, `ExtensionEnablementTest`                                                                                                       |
+| An operation of yours reaches your own handler                                                                            | `PhaseOperationRegistryTest`, `ExtensionOperationDispatchTest` per platform                                                                                              |
+| The log of processed task deliveries is resolvable per workflow aggregate, and holds the tasks the application was handed | decision 54, `ExtensionElectionAndConfigurationTest`, `ExtensionEnablementTest`, `OpenTaskRetentionTest` per platform                                                    |
 
 One statement of this document is an assumption rather than something a test holds. Telling two
 adapters apart by the identity of the processing context works because the core builds one context

@@ -2,17 +2,14 @@ package io.vanillabp.integration.runtime.processservice;
 
 import java.util.List;
 
-import org.eclipse.microprofile.config.ConfigProvider;
-
 import io.quarkus.runtime.StartupEvent;
-import io.smallrye.config.SmallRyeConfig;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxResolver;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.adapter.migration.processservice.ProcessServiceBase;
+import io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver;
 import io.vanillabp.integration.adapter.migration.processservice.TransactionRunnerResolver;
-import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.event.Observes;
@@ -74,22 +71,14 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
   PhaseTwoOutboxResolver phaseTwoOutboxResolver;
 
   /**
-   * The logs of processed task deliveries available at runtime, resolved per aggregate
-   * (mixed persistence) via {@link QuarkusTaskDeliveryLogResolver}. Unsatisfied if no
-   * implementation is available (e.g. no datasource configured) - a BPMS repeating a
-   * delivery then runs the handler again, which the startup validation reports.
+   * Which log of processed task deliveries an aggregate's transaction reaches (mixed
+   * persistence, own stores). The bean of {@link TaskDeliveryLogResolverProducer} rather
+   * than a resolver of this process service's own: an extension reading what a workflow is
+   * waiting for has to reach the same answer, and two constructions would be two answers as
+   * soon as one of them changes.
    */
   @Inject
-  @Any
-  Instance<io.vanillabp.integration.spi.TaskDeliveryLog> taskDeliveryLogs;
-
-  /**
-   * Application-provided attributions of aggregates to delivery logs (required in
-   * mixed-persistence setups, optional otherwise).
-   */
-  @Inject
-  @Any
-  Instance<io.vanillabp.integration.spi.TaskDeliveryLogAware<?>> taskDeliveryLogAwares;
+  TaskDeliveryLogResolver taskDeliveryLogResolver;
 
   /**
    * Answers whether a transaction is open where no runner of an aggregate can be asked -
@@ -107,15 +96,6 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
    */
   @Inject
   TransactionRunnerResolver transactionRunnerResolver;
-
-  /**
-   * The aggregate persistences of the application, used by the startup check to tell
-   * whether the transaction VanillaBP opens covers the store of an aggregate (a MongoDB
-   * Panache one takes part in it, a persistence of the application cannot be judged).
-   */
-  @Inject
-  @Any
-  Instance<AggregatePersistenceAware<?>> aggregatePersistences;
 
   /**
    * The core-owned router dispatching committed phase-two outbox entries. This bean
@@ -194,20 +174,6 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
         .map(processService -> (io.vanillabp.integration.adapter.spi.MigratableProcessService<A>) processService)
         .toList();
 
-    final var outboxProperties = ConfigProvider
-        .getConfig()
-        .unwrap(SmallRyeConfig.class)
-        .getConfigMapping(QuarkusMigrationAdapterProperties.class)
-        .outbox();
-    // which store an aggregate's transaction reaches: read off the persistence VanillaBP
-    // resolved for it, so an application with two persistences attributes nothing itself
-    final var persistenceTechnology = new QuarkusPersistenceTechnology(aggregatePersistences);
-    final var taskDeliveryLogResolver = new QuarkusTaskDeliveryLogResolver(
-        taskDeliveryLogAwares, taskDeliveryLogs, persistenceTechnology, outboxProperties
-            .jdbc()
-            .enabled(), outboxProperties
-                .mongo()
-                .enabled());
     final var electionCache = io.vanillabp.integration.adapter.migration.processservice.InstrumentedWorkflowAdapterCache
         .instrument(
             workflowAdapterCache.isResolvable()
@@ -253,7 +219,7 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
       final List<io.vanillabp.integration.adapter.spi.MigratableProcessService<A>> processServices,
       final PhaseTwoOutboxResolver phaseTwoOutboxResolver,
       final io.vanillabp.integration.spi.WorkflowAdapterCache electionCache,
-      final QuarkusTaskDeliveryLogResolver taskDeliveryLogResolver,
+      final TaskDeliveryLogResolver taskDeliveryLogResolver,
       final TransactionRunnerResolver transactionRunnerResolver) {
 
     if (!workflowTaskRegistry.isResolvable()) {

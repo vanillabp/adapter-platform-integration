@@ -271,6 +271,18 @@ public interface TaskDeliveryLog {
    * answer, so a task completed in the same second is gone from it as soon as phase two
    * succeeded, not when the caller asked. A record the retention deleted is gone as well,
    * which is why this answers what the store still knows rather than what the BPMS holds.
+   *
+   * <h4>Which tasks are in it at all</h4>
+   *
+   * The tasks the APPLICATION was handed. A record is written where a
+   * <code>&#64;WorkflowTask</code> method ran, so a user task the application has no method
+   * for is not in this answer and never was. The adapter DOES hand such a task to VanillaBP
+   * - the lifecycle listeners sit on every user task of the model - and finishes the
+   * notification itself once it sees that no method serves it, which leaves nothing to write
+   * down: a record carries the outcome of a delivery, and a delivery nobody processed has
+   * none. This answer is therefore the open work of the application, not the open work of
+   * the workflow, and a caller which needs the second one asks the BPMS. Why the log stays
+   * what it is is decision 54 in the repository's DECISIONS.md.
    * <p>
    * The BPMN process is the one which DELIVERED the task, which for a task a called process
    * handed out is the secondary id and not the id the application completes it on. A caller
