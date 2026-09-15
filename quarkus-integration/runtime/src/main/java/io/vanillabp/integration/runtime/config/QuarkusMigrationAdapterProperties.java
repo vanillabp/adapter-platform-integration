@@ -78,7 +78,10 @@ public interface QuarkusMigrationAdapterProperties {
    * location and the resolution against the overrides per workflow module
    * ({@link WorkflowModuleProperties#extensions()}), per workflow
    * ({@link WorkflowProperties#extensions()}) and per task
-   * ({@link TaskProperties#extensions()}).
+   * ({@link TaskProperties#extensions()}), each of which may be written for one adapter
+   * as well ({@link AdapterConfiguration#extensions()} and
+   * {@link AdapterProperties#extensions()}). That makes the eight positions of decision 53
+   * in the repository's DECISIONS.md.
    *
    * @return The settings per extension
    */
@@ -215,6 +218,16 @@ public interface QuarkusMigrationAdapterProperties {
      */
     Optional<OutfadedVersionsInUsePolicy> outfadedVersionsInUse();
 
+    /**
+     * What an extension is configured with FOR THIS ADAPTER, keyed by extension id. An
+     * extension hangs on every configured adapter separately, so two adapters of the same
+     * BPMS type may be told different things, and what an adapter is told beats what the
+     * same level says in general.
+     *
+     * @return The extension settings of this adapter
+     */
+    Map<String, Map<String, String>> extensions();
+
   }
 
   /**
@@ -282,6 +295,16 @@ public interface QuarkusMigrationAdapterProperties {
      * @return The policy
      */
     Optional<OutfadedVersionsInUsePolicy> outfadedVersionsInUse();
+
+    /**
+     * What an extension is configured with FOR THIS ADAPTER, keyed by extension id. An
+     * extension hangs on every configured adapter separately, so two adapters of the same
+     * BPMS type may be told different things, and what an adapter is told beats what the
+     * same level says in general.
+     *
+     * @return The extension settings of this adapter
+     */
+    Map<String, Map<String, String>> extensions();
 
   }
 

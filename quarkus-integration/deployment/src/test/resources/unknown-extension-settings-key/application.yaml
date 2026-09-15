@@ -1,0 +1,12 @@
+vanillabp:
+  adapters:
+    test:
+      type: dummy
+      extension:
+        sample:
+          greeting: Hello
+  workflow-modules:
+    test-module:
+      adapters:
+        test:
+          resources-location: classpath:test-module/processes/dummy

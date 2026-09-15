@@ -41,7 +41,28 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                       Optional<Boolean> prefixTaskDefinitionsPerProcess,
                                       Optional<Boolean> deduplicateDeliveries,
                                       Optional<List<String>> outfadedVersions,
-                                      Optional<OutfadedVersionsInUsePolicy> outfadedVersionsInUse) implements QuarkusMigrationAdapterProperties.AdapterConfiguration {
+                                      Optional<OutfadedVersionsInUsePolicy> outfadedVersionsInUse,
+                                      Map<String, Map<String, String>> extensions) implements QuarkusMigrationAdapterProperties.AdapterConfiguration {
+
+    /**
+     * Without extension settings, which is what most of these fixtures need.
+     */
+    private AdapterConfiguration(
+        final Optional<String> type,
+        final Optional<DeploymentFailurePolicy> deploymentFailure,
+        final Optional<String> resourcesLocation,
+        final Optional<io.vanillabp.integration.adapter.spi.NameClashAvoidance> nameClashAvoidance,
+        final Optional<Boolean> prefixTaskDefinitionsPerProcess,
+        final Optional<Boolean> deduplicateDeliveries,
+        final Optional<List<String>> outfadedVersions,
+        final Optional<OutfadedVersionsInUsePolicy> outfadedVersionsInUse) {
+
+      this(
+          type, deploymentFailure, resourcesLocation, nameClashAvoidance, prefixTaskDefinitionsPerProcess, deduplicateDeliveries, outfadedVersions, outfadedVersionsInUse, Map
+              .of());
+
+    }
+
   }
 
   private record AdapterProperties(
@@ -50,7 +71,26 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                    Optional<Boolean> prefixTaskDefinitionsPerProcess,
                                    Optional<Boolean> deduplicateDeliveries,
                                    Optional<List<String>> outfadedVersions,
-                                   Optional<OutfadedVersionsInUsePolicy> outfadedVersionsInUse) implements QuarkusMigrationAdapterProperties.AdapterProperties {
+                                   Optional<OutfadedVersionsInUsePolicy> outfadedVersionsInUse,
+                                   Map<String, Map<String, String>> extensions) implements QuarkusMigrationAdapterProperties.AdapterProperties {
+
+    /**
+     * Without extension settings, which is what most of these fixtures need.
+     */
+    private AdapterProperties(
+        final Optional<String> resourcesLocation,
+        final Optional<io.vanillabp.integration.adapter.spi.NameClashAvoidance> nameClashAvoidance,
+        final Optional<Boolean> prefixTaskDefinitionsPerProcess,
+        final Optional<Boolean> deduplicateDeliveries,
+        final Optional<List<String>> outfadedVersions,
+        final Optional<OutfadedVersionsInUsePolicy> outfadedVersionsInUse) {
+
+      this(
+          resourcesLocation, nameClashAvoidance, prefixTaskDefinitionsPerProcess, deduplicateDeliveries, outfadedVersions, outfadedVersionsInUse, Map
+              .of());
+
+    }
+
   }
 
   private record TaskProperties(
@@ -347,48 +387,49 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                 .of(OutfadedVersionsInUsePolicy.FAIL)),
             "c7", new AdapterConfiguration(
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional
-                    .empty(), Optional.empty(), Optional.empty())), Map.of(
-                        "loan-approval", new WorkflowModuleProperties(
-                            Optional.of(List.of("c7")), Map.of("c7",
-                                new AdapterProperties(Optional.of("classpath:c7-bpmn"), Optional
-                                    .of(io.vanillabp.integration.adapter.spi.NameClashAvoidance.NONE), Optional
-                                        .empty(), Optional.empty(), Optional.empty(), Optional
-                                            .empty())), Map
-                                                .of("LoanApproval",
-                                                    new WorkflowProperties(
-                                                        Optional.of(List.of("c8-cloud")), Map
-                                                            .of("c8-cloud", new AdapterProperties(Optional
-                                                                .of("workflow-level"), Optional
-                                                                    .empty(), Optional.of(true), Optional
-                                                                        .of(true), Optional
-                                                                            .of(List.of("1-2", "legacy")), Optional
-                                                                                .empty())), Map
-                                                                                    .of("assessRisk",
-                                                                                        new TaskProperties(Map
-                                                                                            .of("c8-cloud",
-                                                                                                new AdapterProperties(Optional
-                                                                                                    .of("task-level"), Optional
-                                                                                                        .empty(), Optional
+                    .empty(), Optional.empty(), Optional.empty(), Map
+                        .of("cockpit", Map.of("title", "what c7 is called")))), Map.of(
+                            "loan-approval", new WorkflowModuleProperties(
+                                Optional.of(List.of("c7")), Map.of("c7",
+                                    new AdapterProperties(Optional.of("classpath:c7-bpmn"), Optional
+                                        .of(io.vanillabp.integration.adapter.spi.NameClashAvoidance.NONE), Optional
+                                            .empty(), Optional.empty(), Optional.empty(), Optional
+                                                .empty())), Map
+                                                    .of("LoanApproval",
+                                                        new WorkflowProperties(
+                                                            Optional.of(List.of("c8-cloud")), Map
+                                                                .of("c8-cloud", new AdapterProperties(Optional
+                                                                    .of("workflow-level"), Optional
+                                                                        .empty(), Optional.of(true), Optional
+                                                                            .of(true), Optional
+                                                                                .of(List.of("1-2", "legacy")), Optional
+                                                                                    .empty())), Map
+                                                                                        .of("assessRisk",
+                                                                                            new TaskProperties(Map
+                                                                                                .of("c8-cloud",
+                                                                                                    new AdapterProperties(Optional
+                                                                                                        .of("task-level"), Optional
                                                                                                             .empty(), Optional
-                                                                                                                .of(false), Optional
-                                                                                                                    .empty(), Optional
-                                                                                                                        .empty())))))))), new OutboxProperties(
-                                                                                                                            Duration
-                                                                                                                                .ofSeconds(
-                                                                                                                                    1), Duration
-                                                                                                                                        .ofSeconds(
-                                                                                                                                            2), Duration
-                                                                                                                                                .ofSeconds(
-                                                                                                                                                    20), 3, false, Duration
-                                                                                                                                                        .ofDays(
-                                                                                                                                                            1), new JdbcOutboxProperties(false, Optional
-                                                                                                                                                                .of("HOT_OUTBOX")), new MongoOutboxProperties(
-                                                                                                                                                                    false, "hot-outbox")), new WorkflowAdapterCacheProperties(
-                                                                                                                                                                        50_000, Duration
-                                                                                                                                                                            .ofMinutes(
-                                                                                                                                                                                30), Duration
-                                                                                                                                                                                    .ofMinutes(
-                                                                                                                                                                                        2), true));
+                                                                                                                .empty(), Optional
+                                                                                                                    .of(false), Optional
+                                                                                                                        .empty(), Optional
+                                                                                                                            .empty())))))))), new OutboxProperties(
+                                                                                                                                Duration
+                                                                                                                                    .ofSeconds(
+                                                                                                                                        1), Duration
+                                                                                                                                            .ofSeconds(
+                                                                                                                                                2), Duration
+                                                                                                                                                    .ofSeconds(
+                                                                                                                                                        20), 3, false, Duration
+                                                                                                                                                            .ofDays(
+                                                                                                                                                                1), new JdbcOutboxProperties(false, Optional
+                                                                                                                                                                    .of("HOT_OUTBOX")), new MongoOutboxProperties(
+                                                                                                                                                                        false, "hot-outbox")), new WorkflowAdapterCacheProperties(
+                                                                                                                                                                            50_000, Duration
+                                                                                                                                                                                .ofMinutes(
+                                                                                                                                                                                    30), Duration
+                                                                                                                                                                                        .ofMinutes(
+                                                                                                                                                                                            2), true));
 
     final var core = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(properties);
 
@@ -412,6 +453,11 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
         "task-level",
         workflow.getTasks().get("assessRisk").getAdapters().get("c8-cloud").getResourcesLocation());
     assertEquals("adapter-level", core.getAdapters().get("c8-cloud").getResourcesLocation());
+    // what an extension is told about ONE adapter is bound too, or the resolution would
+    // offer a position nothing ever fills
+    assertEquals(
+        Map.of("cockpit", Map.of("title", "what c7 is called")),
+        core.getAdapters().get("c7").getExtensions());
     // the switch travels the same four levels as every adapter-scoped key
     assertEquals(
         Boolean.FALSE,

@@ -364,6 +364,55 @@ public class VanillaBpConfigurationBindingTest {
   }
 
   @Test
+  @DisplayName("The settings of an extension bind at the adapter section of every level")
+  public void extensionSettingsBindAtEveryAdapterSection() {
+
+    contextRunner
+        .withPropertyValues(
+            "vanillabp.resources-location=classpath*:vanillabp-processes",
+            "vanillabp.adapters.saas.type=dummy",
+            "vanillabp.adapters.on-premise.type=dummy",
+            "vanillabp.prioritized-adapters=saas,on-premise",
+            "vanillabp.workflow-modules.test-module.prioritized-adapters=saas,on-premise",
+            "vanillabp.extensions.cockpit.title=of the application",
+            "vanillabp.adapters.saas.extensions.cockpit.title=of the application, on saas",
+            "vanillabp.workflow-modules.test-module.adapters.saas.extensions.cockpit.title=of the module, on saas",
+            "vanillabp.workflow-modules.test-module.workflows.TestProcess.adapters.saas.extensions.cockpit.title=of the workflow, on saas",
+            "vanillabp.workflow-modules.test-module.workflows.TestProcess.tasks.awaitSignature.adapters.saas.extensions.cockpit.title=of the task, on saas")
+        .run(context -> {
+
+          final var properties = context.getBean(MigrationAdapterProperties.class);
+          assertEquals(
+              "of the application, on saas",
+              properties.resolveForExtension(null, null, null, "saas", "cockpit", "title"));
+          assertEquals(
+              "of the module, on saas",
+              properties.resolveForExtension("test-module", "OtherProcess", null, "saas", "cockpit", "title"));
+          assertEquals(
+              "of the workflow, on saas",
+              properties
+                  .resolveForExtension("test-module", "TestProcess", "otherTask", "saas", "cockpit", "title"));
+          assertEquals(
+              "of the task, on saas",
+              properties
+                  .resolveForExtension("test-module", "TestProcess", "awaitSignature", "saas", "cockpit", "title"));
+          // the second adapter of the same type was told none of this
+          assertEquals(
+              "of the application",
+              properties
+                  .resolveForExtension(
+                      "test-module",
+                      "TestProcess",
+                      "awaitSignature",
+                      "on-premise",
+                      "cockpit",
+                      "title"));
+
+        });
+
+  }
+
+  @Test
   @DisplayName("An adapter-owned overlay of the same prefix coexists with the platform binding")
   public void adapterOverlayCoexistsWithPlatformBinding() {
 

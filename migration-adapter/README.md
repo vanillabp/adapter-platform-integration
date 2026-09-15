@@ -2745,21 +2745,31 @@ above has the numbers.
 
 #### The extension's own configuration
 
-An extension setting is written at four levels, and the most specific one which writes a key
-wins:
+An extension setting is written at four levels, each of which has two positions: what the
+level says, and what it says for one adapter. That makes eight, and the most specific
+position which writes a key wins:
 
 ```
-vanillabp.workflow-modules.<module>.workflows.<workflow>.tasks.<task>.extensions.<extension>.<key>  (most specific)
+vanillabp.workflow-modules.<module>.workflows.<workflow>.tasks.<task>.adapters.<adapter>.extensions.<extension>.<key>  (most specific)
+vanillabp.workflow-modules.<module>.workflows.<workflow>.tasks.<task>.extensions.<extension>.<key>
+vanillabp.workflow-modules.<module>.workflows.<workflow>.adapters.<adapter>.extensions.<extension>.<key>
 vanillabp.workflow-modules.<module>.workflows.<workflow>.extensions.<extension>.<key>
+vanillabp.workflow-modules.<module>.adapters.<adapter>.extensions.<extension>.<key>
 vanillabp.workflow-modules.<module>.extensions.<extension>.<key>
-vanillabp.extensions.<extension>.<key>                                                              (least specific)
+vanillabp.adapters.<adapter>.extensions.<extension>.<key>
+vanillabp.extensions.<extension>.<key>                                                                                 (least specific)
 ```
 
-The levels are merged KEY BY KEY, so a workflow may change one value and keep what the
+The adapter positions are there because an extension hangs on every configured adapter
+separately. An application migrating from one BPMS to another runs two adapters of one type,
+and a value which has to differ between them has a place now.
+
+The positions are merged KEY BY KEY, so a workflow may change one value and keep what the
 application said about the rest. `MigrationAdapterProperties#resolveForExtension` reads one
 value, `#extensionProperties` reads the whole section; both take the extension id as a
 parameter, because the properties are one bean of the platform while an extension is not a
-bean of the platform at all. The two-argument `#extensionProperties(module, extension)` and
+bean of the platform at all. Both come in a shape without the adapter id, which reads the four
+general positions alone. The two-argument `#extensionProperties(module, extension)` and
 `#extensionProperty` are the same resolution asked about the module alone.
 
 This is the rule and the implementation an adapter setting uses (see
@@ -2768,6 +2778,13 @@ neither. What the keys MEAN stays the extension's business — the core keeps th
 written, the extension binds and validates its own, typed, the way an adapter binds the keys
 below its adapter id. Why an extension does not parse these keys itself is decision 48 in this
 repository's `DECISIONS.md`.
+
+`vanillabp.extensions.<extension>` is the section VanillaBP binds itself, as flat text. An
+extension may have a section of its own instead — the Business Cockpit is configured below
+`vanillabp.cockpit`, where version 1 configured it — and then it binds its own typed tree and
+hands one `SettingsLevel` per level to `SettingsResolution` of the extension SPI. That is the
+same walk `#resolveForExtension` uses; the order of the eight positions lives there and
+nowhere else. Who owns the name of the section is decision 53.
 
 #### Operations of its own in the outbox
 
