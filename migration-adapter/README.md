@@ -12,7 +12,8 @@ different platforms.
 This file explains the core to whoever changes it. If you are BUILDING an adapter rather than
 changing the core, read [`ADAPTER-AUTHORS.md`](./ADAPTER-AUTHORS.md) instead: it collects the
 duties spread across the sections below into one document a team without access to this workspace
-can read from top to bottom.
+can read from top to bottom. If you are building an EXTENSION instead, the same document for that
+side is [`EXTENSION-AUTHORS.md`](./EXTENSION-AUTHORS.md).
 
 ## Two kinds of plug-ins: adapters and extensions
 
@@ -2516,6 +2517,10 @@ on. `MigrationProcessService.validateTransactionRunnerAtStartup()` turns those v
 messages and logs one line per aggregate naming the runner serving it.
 
 ### Extensions
+
+This section explains extensions to whoever changes the core. What an extension AUTHOR has to know,
+collected into one document written from outside this repository, is
+[`EXTENSION-AUTHORS.md`](./EXTENSION-AUTHORS.md).
 
 An extension participates in two steps of the [deployment pipeline](#deployment-pipeline)
 through `ExtensionWiringService<BPMN, PC>`:

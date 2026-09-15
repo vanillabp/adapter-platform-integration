@@ -54,6 +54,12 @@ Writing an adapter for another BPMS, in a repository of your own? Read
 access to this workspace and describes the two interfaces to implement, the calls the core expects back, what your
 answers promise and what a wrong one costs.
 
+Building something which plugs into the deployment without being a BPMS adapter, the way the
+Business Cockpit does? Read
+[`migration-adapter/EXTENSION-AUTHORS.md`](./migration-adapter/EXTENSION-AUTHORS.md). It is written
+for the same kind of team and describes the six calls of the wiring service, the order they run in,
+where the settings of such an extension live and what it must not do.
+
 ### Where a snapshot comes from
 
 Snapshots in GitHub Packages are published from `main`, and from nowhere else. There is one
