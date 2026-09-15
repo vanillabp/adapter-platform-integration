@@ -314,7 +314,12 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
         .append("workflowModuleId", delivery.workflowModuleId())
         .append("bpmnProcessId", delivery.bpmnProcessId())
         .append("aggregateId", delivery.workflowAggregateId())
+        // the workflow of the BPMS: nothing VanillaBP reads, and what an operator addresses
+        // this instance by in the engine's own tooling
+        .append("workflowId", delivery.workflowId())
         .append("taskDefinition", delivery.taskDefinition())
+        // the element of the model, which is what an extension addresses this task by
+        .append("bpmnElementId", delivery.bpmnElementId())
         // the task the delivery was about: what lets the election answer from this record
         // which adapter holds that task instead of asking every configured BPMS
         .append("taskId", delivery.taskId())
@@ -498,13 +503,14 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   private static TaskDelivery recordOf(
       final Document document) {
 
-    return new TaskDelivery(
-        document.getString("_id"), document.getString("adapterId"), document
-            .getString("workflowModuleId"), document.getString("bpmnProcessId"), document
-                .getString("aggregateId"), document.getString("taskDefinition"), document
+    return new TaskDelivery(document.getString("_id"), document.getString("adapterId"), document
+        .getString("workflowModuleId"), document.getString("bpmnProcessId"), document
+            .getString("aggregateId"), document.getString("workflowId"), document.getString("taskDefinition"), document
+                .getString("bpmnElementId"), document
                     .getString("taskId"), document.getString("outcome"), document
                         .getString("bpmnErrorCode"), document.getString("bpmnErrorName"), instantOf(
-                            document.getDate("recordedAt")), instantOf(document.getDate("taskClosedAt")));
+                            document.getDate("recordedAt")), instantOf(
+                                document.getDate("taskClosedAt")));
 
   }
 

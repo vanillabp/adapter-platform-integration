@@ -22,6 +22,7 @@ import io.vanillabp.integration.runtime.outbox.MongoPhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.runtime.processservice.PhaseTwoOutboxResolverProducer;
 import io.vanillabp.integration.runtime.processservice.PhaseTwoRouterProducer;
 import io.vanillabp.integration.runtime.processservice.QuarkusPreCommitRegistrar;
+import io.vanillabp.integration.runtime.processservice.TaskDeliveryLogResolverProducer;
 import io.vanillabp.integration.runtime.processservice.TransactionRunnerProducer;
 import io.vanillabp.integration.runtime.processservice.WorkflowAdapterCacheProducer;
 import io.vanillabp.integration.runtime.util.UriSubstitute;
@@ -179,6 +180,25 @@ public class VanillaBpBuildStepProcessor {
     return AdditionalBeanBuildItem
         .builder()
         .addBeanClass(PhaseTwoOutboxResolverProducer.class)
+        .setUnremovable() // an extension may be the only one injecting it
+        .build();
+
+  }
+
+  /**
+   * Registers the resolver telling which log of processed task deliveries an aggregate's
+   * transaction reaches (via {@link TaskDeliveryLogResolverProducer}): the process services
+   * resolve their own log through it, and an extension reading what a workflow is waiting
+   * for injects it instead of picking a log bean, which it cannot judge.
+   *
+   * @return The additional {@link TaskDeliveryLogResolverProducer} bean
+   */
+  @BuildStep
+  AdditionalBeanBuildItem buildTaskDeliveryLogResolver() {
+
+    return AdditionalBeanBuildItem
+        .builder()
+        .addBeanClass(TaskDeliveryLogResolverProducer.class)
         .setUnremovable() // an extension may be the only one injecting it
         .build();
 

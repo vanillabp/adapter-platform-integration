@@ -35,7 +35,22 @@ import java.time.Instant;
  * @param workflowModuleId The ID of the workflow module the workflow belongs to
  * @param bpmnProcessId The BPMN process ID of the workflow
  * @param workflowAggregateId The workflow aggregate's ID in serialized form
+ * @param workflowId The BPMS' own id of the workflow the task belongs to - the running
+ *          instance as the engine counts it, not the workflow aggregate's id. VanillaBP
+ *          addresses a workflow by its aggregate, so nothing here depends on this value.
+ *          It is carried for whoever looks at the task outside VanillaBP: an operator in
+ *          the engine's own cockpit, or an extension linking into it. May be
+ *          <code>null</code> where the adapter names no workflow or the record predates
+ *          this field
  * @param taskDefinition The task definition (or BPMN activity ID) delivered
+ * @param bpmnElementId The <code>id</code> attribute of the BPMN element which was
+ *          delivered, what a modeller wrote on it. {@link #taskDefinition()} carries the
+ *          same text only where the BPMN task names no task definition, because a handler
+ *          is resolved by either of the two; a Camunda 8 job type or a Camunda 7 topic
+ *          stands there otherwise. So this is the field which always names the element,
+ *          and it is what an extension addresses a task in the model by. May be
+ *          <code>null</code> where the adapter names no element or the record predates
+ *          this field
  * @param taskId The BPMS' identity of the task this delivery was about - what the
  *          application receives in a <code>&#64;TaskId</code> parameter and passes back to
  *          <code>ProcessService#completeTask</code>. It is what lets VanillaBP answer from
@@ -71,7 +86,9 @@ public record TaskDelivery(
                            String workflowModuleId,
                            String bpmnProcessId,
                            String workflowAggregateId,
+                           String workflowId,
                            String taskDefinition,
+                           String bpmnElementId,
                            String taskId,
                            String outcome,
                            String bpmnErrorCode,

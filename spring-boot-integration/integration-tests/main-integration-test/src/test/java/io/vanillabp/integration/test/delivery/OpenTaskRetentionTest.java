@@ -232,6 +232,18 @@ public class OpenTaskRetentionTest {
         return deliveryId;
       }
 
+      @Override
+      public String getBpmnElementId() {
+        return "Activity_"
+            + taskDefinition;
+      }
+
+      @Override
+      public String getWorkflowId() {
+        return "workflow-of-"
+            + aggregateId;
+      }
+
     };
 
   }
@@ -323,6 +335,10 @@ public class OpenTaskRetentionTest {
       Assertions.assertEquals(1, openTasks.size(), openTasks::toString);
       Assertions.assertEquals("job-1", openTasks.getFirst().taskId());
       Assertions.assertEquals("awaitCompletion", openTasks.getFirst().taskDefinition());
+      // the element of the model and the workflow of the BPMS come back out of the table
+      // the way the adapter named them - what an extension addresses this task by
+      Assertions.assertEquals("Activity_awaitCompletion", openTasks.getFirst().bpmnElementId());
+      Assertions.assertEquals("workflow-of-4711", openTasks.getFirst().workflowId());
       Assertions
           .assertTrue(
               deliveryLog.openTasksOfAggregate(MODULE, PROCESS, "4712").isEmpty(),

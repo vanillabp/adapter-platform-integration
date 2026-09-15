@@ -336,11 +336,14 @@ public final class DeliveryRecords {
       return;
     }
     // the task travels with the record so the election of a later completion can read from
-    // it which adapter holds that task, instead of asking every configured BPMS
+    // it which adapter holds that task, instead of asking every configured BPMS. The
+    // element of the model and the BPMS' own id of the workflow travel with it for a
+    // reader: they are what an extension and an operator address this task by outside
+    // VanillaBP, and an adapter which names neither leaves both empty
     final var recordWasWritten = deliveryLog.record(
-        new TaskDelivery(
-            deliveryKey, context.getAdapterId(), workflowModuleId, bpmnProcessId, context
-                .getWorkflowAggregateId(), context.getTaskDefinition(), context
+        new TaskDelivery(deliveryKey, context.getAdapterId(), workflowModuleId, bpmnProcessId, context
+            .getWorkflowAggregateId(), context
+                .getWorkflowId(), context.getTaskDefinition(), context.getBpmnElementId(), context
                     .getTaskId(), outcome.kind().name(), outcome.errorCode(), outcome
                         .errorName(), Instant.now(), null));
     if (!recordWasWritten) {

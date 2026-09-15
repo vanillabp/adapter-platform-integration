@@ -136,8 +136,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
           // application's completion reached the BPMS is known long after the handler ran
           new TaskDeliveryDocument(
               delivery.deliveryKey(), delivery.adapterId(), delivery.workflowModuleId(), delivery
-                  .bpmnProcessId(), delivery
-                      .workflowAggregateId(), delivery.taskDefinition(), delivery.taskId(), delivery
+                  .bpmnProcessId(), delivery.workflowAggregateId(), delivery.workflowId(), delivery
+                      .taskDefinition(), delivery.bpmnElementId(), delivery.taskId(), delivery
                           .outcome(), delivery.bpmnErrorCode(), delivery
                               .bpmnErrorName(), recordedAt, recordedAt, null),
           collection);
@@ -292,11 +292,12 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
   private static TaskDelivery recordOf(
       final TaskDeliveryDocument document) {
 
-    return new TaskDelivery(
-        document.getId(), document.getAdapterId(), document.getWorkflowModuleId(), document
-            .getBpmnProcessId(), document.getAggregateId(), document.getTaskDefinition(), document
+    return new TaskDelivery(document.getId(), document.getAdapterId(), document.getWorkflowModuleId(), document
+        .getBpmnProcessId(), document.getAggregateId(), document.getWorkflowId(), document.getTaskDefinition(), document
+            .getBpmnElementId(), document
                 .getTaskId(), document.getOutcome(), document.getBpmnErrorCode(), document
-                    .getBpmnErrorName(), document.getRecordedAt(), document.getTaskClosedAt());
+                    .getBpmnErrorName(), document.getRecordedAt(), document
+                        .getTaskClosedAt());
 
   }
 

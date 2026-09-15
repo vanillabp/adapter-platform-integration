@@ -209,11 +209,10 @@ public class TaskElectionFromDeliveryRecordTest {
       records
           .put(
               open.deliveryKey(),
-              new TaskDelivery(
-                  open.deliveryKey(), open.adapterId(), open.workflowModuleId(), open
-                      .bpmnProcessId(), open.workflowAggregateId(), open.taskDefinition(), open
-                          .taskId(), open.outcome(), open.bpmnErrorCode(), open
-                              .bpmnErrorName(), open.recordedAt(), Instant.now()));
+              new TaskDelivery(open.deliveryKey(), open.adapterId(), open.workflowModuleId(), open
+                  .bpmnProcessId(), open.workflowAggregateId(), null, open.taskDefinition(), null, open
+                      .taskId(), open.outcome(), open.bpmnErrorCode(), open
+                          .bpmnErrorName(), open.recordedAt(), Instant.now()));
       return 1;
 
     }
@@ -453,10 +452,9 @@ public class TaskElectionFromDeliveryRecordTest {
 
     deliveryLog
         .record(
-            new TaskDelivery(
-                "%s|%s|%s|CREATED|%s".formatted(adapterId, MODULE, bpmnProcessId,
-                    taskId), adapterId, MODULE, bpmnProcessId, AGGREGATE, "awaitCompletion", taskId, "COMPLETION_PENDING", null, null, Instant
-                        .now(), null));
+            new TaskDelivery("%s|%s|%s|CREATED|%s".formatted(adapterId, MODULE, bpmnProcessId,
+                taskId), adapterId, MODULE, bpmnProcessId, AGGREGATE, null, "awaitCompletion", null, taskId, "COMPLETION_PENDING", null, null, Instant
+                    .now(), null));
 
   }
 
@@ -634,9 +632,8 @@ public class TaskElectionFromDeliveryRecordTest {
     final var service = serviceWith(adapter, failingToMark);
     failingToMark
         .record(
-            new TaskDelivery(
-                "key", ADAPTER, MODULE, PROCESS, AGGREGATE, "awaitCompletion", TASK, "COMPLETION_PENDING", null, null, Instant
-                    .now(), null));
+            new TaskDelivery("key", ADAPTER, MODULE, PROCESS, AGGREGATE, null, "awaitCompletion", null, TASK, "COMPLETION_PENDING", null, null, Instant
+                .now(), null));
 
     service.completeTask(new Object(), TASK);
     final var planned = outbox.scheduled.get(0);

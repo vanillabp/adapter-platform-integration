@@ -36,6 +36,53 @@ public interface TaskInvocationContext {
   String getWorkflowAggregateId();
 
   /**
+   * The <code>id</code> attribute of the BPMN element being delivered, what a modeller
+   * wrote on it. The Camunda 7 activity id, the Camunda 8 element id, whatever the BPMS
+   * calls the element of the model.
+   * <p>
+   * {@link #getTaskDefinition()} carries the same text only where the BPMN task names no
+   * task definition, because a handler is resolved by either of the two; a Camunda 8 job
+   * type or a Camunda 7 topic is reported there otherwise. So this is the answer to "which
+   * element of the model is this", and that one is the answer to "which method serves it".
+   * <p>
+   * The core writes it into the delivery record
+   * ({@link io.vanillabp.integration.spi.TaskDelivery#bpmnElementId()}), where it is what an
+   * extension addresses a task in the model by. Nothing VanillaBP decides depends on it.
+   * <p>
+   * The default is <code>null</code>, which means "this adapter does not name one": the
+   * record then carries no element id, exactly as every record written before this existed.
+   *
+   * @return The BPMN element's id or <code>null</code>
+   */
+  default String getBpmnElementId() {
+
+    return null;
+
+  }
+
+  /**
+   * The BPMS' own id of the workflow this task belongs to: the process instance key of
+   * Camunda 8, the process instance id of an embedded engine, whatever the BPMS talks about
+   * a running instance in.
+   * <p>
+   * VanillaBP addresses a workflow by its workflow aggregate and never by this value, so
+   * nothing here depends on it. It travels into the delivery record
+   * ({@link io.vanillabp.integration.spi.TaskDelivery#workflowId()}) for whoever looks at the
+   * BPMS beside VanillaBP: an operator searching the engine's own cockpit, or an extension
+   * linking a task to the tooling of that BPMS.
+   * <p>
+   * The default is <code>null</code>, which means "this adapter does not name one". A BPMS
+   * whose instances have no id of their own answers nothing and loses nothing.
+   *
+   * @return The workflow's id in the BPMS or <code>null</code>
+   */
+  default String getWorkflowId() {
+
+    return null;
+
+  }
+
+  /**
    * The BPMS-side ID of this task instance, passed to parameters annotated with
    * <code>&#64;TaskId</code> and used to complete the task asynchronously.
    * <code>null</code> if the BPMS does not support asynchronous completion.

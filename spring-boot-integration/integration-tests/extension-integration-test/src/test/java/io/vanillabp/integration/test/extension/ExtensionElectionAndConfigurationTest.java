@@ -1,6 +1,7 @@
 package io.vanillabp.integration.test.extension;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -15,12 +16,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 import io.vanillabp.extension.sample.SampleNoteContract;
 import io.vanillabp.extension.sample.SampleNoteServiceFactory;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.delivery.JdbcTaskDeliveryLog;
 import io.vanillabp.integration.extension.spi.election.WorkflowElection;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The other two things an extension gets: which BPMS holds a workflow right now, and a
- * place of its own in the configuration.
+ * The other things an extension gets: which BPMS holds a workflow right now, a place of
+ * its own in the configuration, and the log it reads what a workflow is waiting for from.
  */
 @SpringBootTest(classes = TestApplication.class)
 @ExtendWith(SuppressOutputExtension.class)
@@ -41,6 +43,9 @@ public class ExtensionElectionAndConfigurationTest {
 
   @Autowired
   private TransactionTemplate transactionTemplate;
+
+  @Autowired
+  private DeliveryLogUsingExtension deliveryLog;
 
   @Test
   @DisplayName("The extension learns which BPMS holds the workflow")
@@ -87,6 +92,24 @@ public class ExtensionElectionAndConfigurationTest {
         IllegalStateException.class,
         () -> election.adapterIdOfWorkflow("extension-module", "NoSuchProcess", 1L));
     assertTrue(failure.getMessage().contains("extension-module/DummyProcess"));
+
+  }
+
+  @Test
+  @DisplayName("An extension is told which delivery log holds the records of the workflow")
+  public void anExtensionResolvesTheDeliveryLogOfTheAggregate() {
+
+    // the same shape as the outbox and the transaction: the resolver is the bean, because
+    // which store serves an aggregate follows the persistence VanillaBP resolved for it -
+    // this application persists with JPA, so the answer is the platform's JDBC store and
+    // not merely something non-null
+    assertInstanceOf(JdbcTaskDeliveryLog.class, deliveryLog.logOf(NotedAggregate.class));
+
+    // and it answers what an extension would show. Nothing is waiting here: the one user
+    // task of this model has no @WorkflowTask method, so the adapter finishes its
+    // notification itself and no record is written (see decision 54 in the repository's
+    // DECISIONS.md)
+    assertTrue(deliveryLog.openTasksOf(NotedAggregate.class, MODULE, PROCESS, "1").isEmpty());
 
   }
 

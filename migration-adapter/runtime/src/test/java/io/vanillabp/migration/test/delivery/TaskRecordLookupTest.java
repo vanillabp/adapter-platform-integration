@@ -62,8 +62,7 @@ public class TaskRecordLookupTest {
 
     testee
         .record(
-            new TaskDelivery(
-                deliveryKey, "c8", MODULE, PROCESS, AGGREGATE, "awaitCompletion", taskId, outcome, null, null, recordedAt, null));
+            new TaskDelivery(deliveryKey, "c8", MODULE, PROCESS, AGGREGATE, "workflow-4711", "awaitCompletion", "Activity_awaitSignature", taskId, outcome, null, null, recordedAt, null));
 
   }
 
@@ -79,6 +78,18 @@ public class TaskRecordLookupTest {
     assertEquals("c8", found.adapterId(), "the adapter which delivered is what the election is after");
     assertEquals("job-1", found.taskId());
     assertNull(found.taskClosedAt(), "a record is born open");
+    // the element of the model and the workflow of the BPMS ride along, through the INSERT
+    // and back out of every statement which reads a whole record
+    assertEquals("Activity_awaitSignature", found.bpmnElementId());
+    assertEquals("workflow-4711", found.workflowId());
+    assertEquals("Activity_awaitSignature", testee.recordedDelivery("open").orElseThrow().bpmnElementId());
+    assertEquals("workflow-4711", testee.recordedDelivery("open").orElseThrow().workflowId());
+    assertEquals(
+        "Activity_awaitSignature",
+        testee.openTasksOfAggregate(MODULE, PROCESS, AGGREGATE).getFirst().bpmnElementId());
+    assertEquals(
+        "workflow-4711",
+        testee.openTasksOfAggregate(MODULE, PROCESS, AGGREGATE).getFirst().workflowId());
 
   }
 
