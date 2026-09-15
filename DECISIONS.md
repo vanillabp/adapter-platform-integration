@@ -1550,3 +1550,64 @@ page `Extensions`, in `ADAPTER-AUTHORS.md` for the other side, and in the javado
 `#extensionWiringServicesAreStoppedBeforeAdapters` the way down, in the platform rather than in the
 repository of one extension: a promise of VanillaBP which only an extension tests goes away with
 that extension.
+
+### 53. The section name belongs to the plug-in, and the walk over its levels to the core
+
+A plug-in setting is written at four levels, and each level has two positions: what the level says,
+and what it says for one adapter. That makes eight, from the least specific one to the most
+specific:
+
+```yaml
+vanillabp:
+  cockpit: …                                     # 1. the application
+  adapters:
+    saas:
+      cockpit: …                                 # 2. the application, on this adapter
+  workflow-modules:
+    loan-approval:
+      cockpit: …                                 # 3. the workflow module
+      adapters:
+        saas:
+          cockpit: …                             # 4. the workflow module, on this adapter
+      workflows:
+        LoanApproval:
+          cockpit: …                             # 5. the workflow
+          adapters:
+            saas:
+              cockpit: …                         # 6. the workflow, on this adapter
+          tasks:
+            approve:
+              cockpit: …                         # 7. the task
+              adapters:
+                saas:
+                  cockpit: …                     # 8. the task, on this adapter
+```
+
+The most specific position which writes a setting wins, and what one adapter is told beats what the
+same level says in general. The adapter positions exist because a plug-in hangs on every configured
+adapter separately: an application migrating from `on-premise` to `saas` runs two adapters of one
+BPMS type, and until now there was no place to tell them different things. Entry 48 put the
+resolution into the core; this entry adds the adapter positions to it and says who owns the name of
+the section.
+
+The name is the plug-in's. `extensions` is a word of the contributors - a user knows adapters,
+VanillaBP adapters and Business Cockpit adapters - and the Business Cockpit is configured below
+`vanillabp.cockpit` because that is where version 1 configured it, so an application moving to
+version 2 swaps a dependency and nothing else (entry 14 of the Business Cockpit's own log,
+confirmed 2026-09-15). A plug-in without such a past is configured below
+`vanillabp.extensions.<id>`, which VanillaBP binds itself as flat text. The mechanism does not know
+the difference: it knows one section per level, and the plug-in binding its own typed tree hands in
+one accessor per level, because lists and group hierarchies cannot be assembled out of flat strings.
+
+So the walk lives once, in `SettingsResolution` of the extension SPI, and
+`MigrationAdapterProperties.resolveForExtension` is one of its callers rather than a second
+spelling of it. Before this the walk existed twice, in the platform for `extensions.<id>` and in
+the Business Cockpit for its own tree, and two spellings of one rule drift.
+
+The Business Cockpit needs positions 2 and 4 for nothing today, so the promise stands and falls
+with the platform's own tests: `ExtensionSettingsPositionsTest` boots an application with two
+adapters of one type on Spring Boot and on Quarkus, writes each of the eight positions once and
+reads which one won. On Quarkus the boot is half the measurement, because SmallRye ends a startup
+over a key no mapping knows - `UnknownExtensionSettingsKeyTest` writes such a key on purpose. A
+position the resolution offers and the mapping does not declare would not be a position quietly
+read by nobody, it would be an application which does not start.

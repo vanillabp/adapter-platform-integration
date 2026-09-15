@@ -1,5 +1,8 @@
 package io.vanillabp.integration.adapter.migration.config;
 
+import java.util.Map;
+
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -76,5 +79,19 @@ public class AdapterProperties {
    * at this level".
    */
   private OutfadedVersionsInUsePolicy outfadedVersionsInUse;
+
+  /**
+   * What an extension is configured with FOR THIS ADAPTER at this level (properties
+   * section <code>...adapters.&lt;id&gt;.extensions.&lt;extension&gt;.*</code>). Keys are
+   * the extension ids, values what the application wrote below them.
+   * <p>
+   * An extension hangs on every configured adapter separately, so an application running
+   * two adapters of the same BPMS type may tell them different things. What an adapter is
+   * told beats what the same level says in general, and a more specific level beats a less
+   * specific one (see decision 53 in the repository's DECISIONS.md and
+   * {@link MigrationAdapterProperties#resolveForExtension}).
+   */
+  @Builder.Default
+  private Map<String, Map<String, String>> extensions = Map.of();
 
 }

@@ -5,31 +5,74 @@ spring:
     hibernate:
       ddl-auto: create
 vanillabp:
+  prioritized-adapters:
+    - the-bpms
+    - the-other-bpms
   adapters:
     the-bpms:
       type: dummy
       test: 1
+      extensions:
+        sample:
+          position: application/the-bpms
+    the-other-bpms:
+      type: dummy
+      test: 2
+      extensions:
+        sample:
+          position: application/the-other-bpms
   extensions:
     sample:
       greeting: Hello
       unused: whatever
+      position: application
+      only-at-the-application: nobody else writes this
   workflow-modules:
     extension-module:
       adapters:
         the-bpms:
           resources-location: classpath*:extension-module/processes/dummy
+          extensions:
+            sample:
+              position: workflow-module/the-bpms
+        the-other-bpms:
+          resources-location: classpath*:extension-module/processes/dummy
+          extensions:
+            sample:
+              position: workflow-module/the-other-bpms
       extensions:
         sample:
           greeting: Servus
+          position: workflow-module
       workflows:
         DummyProcess:
+          adapters:
+            the-bpms:
+              extensions:
+                sample:
+                  position: workflow/the-bpms
+            the-other-bpms:
+              extensions:
+                sample:
+                  position: workflow/the-other-bpms
           extensions:
             sample:
               greeting: Gruess Gott
+              position: workflow
           tasks:
             theTask:
+              adapters:
+                the-bpms:
+                  extensions:
+                    sample:
+                      position: task/the-bpms
+                the-other-bpms:
+                  extensions:
+                    sample:
+                      position: task/the-other-bpms
               extensions:
                 sample:
                   greeting: Moin
+                  position: task
 extension-module:
   nothing: there

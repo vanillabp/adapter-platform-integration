@@ -1,0 +1,68 @@
+quarkus:
+  datasource:
+    db-kind: h2
+    jdbc:
+      url: jdbc:h2:mem:extension-settings;DB_CLOSE_DELAY=-1
+vanillabp:
+  prioritized-adapters:
+    - saas
+    - on-premise
+  adapters:
+    saas:
+      type: dummy
+      extensions:
+        sample:
+          position: application/saas
+    on-premise:
+      type: dummy
+      extensions:
+        sample:
+          position: application/on-premise
+  extensions:
+    sample:
+      position: application
+      only-at-the-application: nobody else writes this
+  workflow-modules:
+    test-module:
+      adapters:
+        saas:
+          resources-location: classpath:processes/dummy
+          extensions:
+            sample:
+              position: workflow-module/saas
+        on-premise:
+          resources-location: classpath:processes/dummy
+          extensions:
+            sample:
+              position: workflow-module/on-premise
+      extensions:
+        sample:
+          position: workflow-module
+      workflows:
+        NoteProcess:
+          adapters:
+            saas:
+              extensions:
+                sample:
+                  position: workflow/saas
+            on-premise:
+              extensions:
+                sample:
+                  position: workflow/on-premise
+          extensions:
+            sample:
+              position: workflow
+          tasks:
+            theTask:
+              adapters:
+                saas:
+                  extensions:
+                    sample:
+                      position: task/saas
+                on-premise:
+                  extensions:
+                    sample:
+                      position: task/on-premise
+              extensions:
+                sample:
+                  position: task
