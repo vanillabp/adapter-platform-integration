@@ -87,13 +87,19 @@ as possible at **build time**, following Quarkus' extension philosophy:
    against 250 and 255), because a workflow module ships defaults and the application
    always wins. The gap to 250 absorbs the ordinal SmallRye adds per active profile, so
    a module's `-prod` file cannot climb above the application's files. The reasoning and
-   the full ordinal table live in the javadoc of `WorkflowModuleBuildStepProcessor`. The
-   files are collected once, by their path relative to the archive holding them, and that
-   one list is handed to dev-mode hot reload and to the native image alike
-   (`watchAndEmbedWorkflowModuleSpecificConfigFiles`). A native image carries only the
-   resources it was told about, so a file missing from that list is a workflow module
-   silently running on its defaults, and building the list twice is how the two would
-   drift apart. Profile-specific variants are part of it, which is what lets
+   the full ordinal table live in the javadoc of `WorkflowModuleBuildStepProcessor`. Dev
+   mode and the native image are told about those files by one rule, each in the shape it
+   needs (`watchAndEmbedWorkflowModuleSpecificConfigFiles`): dev mode gets the rule as a
+   predicate, the native image gets the files which match it in the archives of that
+   build, by their path relative to the archive holding them. A build writes a list of
+   names once, so a configuration file added afterwards is in none of those lists, and
+   watching the names of the last build would leave the application running against the
+   configuration of that build (`ConfigFileAddedInDevModeTest`). The predicate is as
+   narrow as the names the config sources read, so a YAML file of the application
+   restarts nothing. A native image carries only the resources it was told about, so a
+   file missing from its list is a workflow module silently running on its defaults, and
+   one rule for both is what keeps them from drifting apart. Profile-specific variants
+   are part of it, which is what lets
    `-Dquarkus.profile=<name>` on a binary pick among a module's files as it does on the
    JVM (`native-image-tests`, whose `WorkflowModuleConfigurationCheck` asserts every
    location and both formats while the application boots, in its own archive and in a
