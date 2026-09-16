@@ -28,6 +28,14 @@ public class AggregatePropertyWriterTest {
 
     private double rate;
 
+    private java.util.UUID reference;
+
+    private java.time.LocalDate due;
+
+    private Decision decision;
+
+    private java.util.Date signedAt;
+
     String withoutSetter;
 
     private final String readOnly = "fixed";
@@ -47,10 +55,35 @@ public class AggregatePropertyWriterTest {
       this.rate = rate;
     }
 
+    public void setReference(
+        final java.util.UUID reference) {
+      this.reference = reference;
+    }
+
+    public void setDue(
+        final java.time.LocalDate due) {
+      this.due = due;
+    }
+
+    public void setDecision(
+        final Decision decision) {
+      this.decision = decision;
+    }
+
+    public void setSignedAt(
+        final java.util.Date signedAt) {
+      this.signedAt = signedAt;
+    }
+
     public String getReadOnly() {
       return readOnly;
     }
 
+  }
+
+  public enum Decision {
+    APPROVED,
+    REJECTED
   }
 
   public static class Child extends Aggregate {
@@ -126,6 +159,53 @@ public class AggregatePropertyWriterTest {
 
     assertTrue(exception.getMessage().contains("The value '120.50'"));
     assertTrue(exception.getMessage().contains("which would hold '120'"));
+
+  }
+
+  @Test
+  @DisplayName("A value the BPMS carries as text is written as the type the attribute declares")
+  public void textValuesAreWrittenAsTheirType() {
+
+    final var aggregate = new Aggregate();
+
+    assertTrue(
+        AggregatePropertyWriter
+            .write(aggregate, "reference", "f81d4fae-7dec-11d0-a765-00a0c91e6bf6", "the reference"));
+    assertEquals(java.util.UUID.fromString("f81d4fae-7dec-11d0-a765-00a0c91e6bf6"), aggregate.reference);
+
+    assertTrue(AggregatePropertyWriter.write(aggregate, "due", "2026-09-16", "the due date"));
+    assertEquals(java.time.LocalDate.parse("2026-09-16"), aggregate.due);
+
+    assertTrue(AggregatePropertyWriter.write(aggregate, "decision", "APPROVED", "the decision"));
+    assertEquals(Decision.APPROVED, aggregate.decision);
+
+  }
+
+  @Test
+  @DisplayName("A constant name the model invented does not reach the aggregate")
+  public void anInventedEnumConstantIsNotWritten() {
+
+    final var exception = assertThrows(
+        IllegalStateException.class,
+        () -> AggregatePropertyWriter.write(new Aggregate(), "decision", "ESCALATED", "the decision"));
+
+    assertTrue(exception.getMessage().contains("'ESCALATED'"));
+    assertTrue(exception.getMessage().contains("'APPROVED', 'REJECTED'"));
+    assertTrue(exception.getMessage().contains("the decision"));
+
+  }
+
+  @Test
+  @DisplayName("A java.util.Date attribute is refused with the type to declare instead")
+  public void aDateAttributeIsRefused() {
+
+    final var exception = assertThrows(
+        IllegalStateException.class,
+        () -> AggregatePropertyWriter
+            .write(new Aggregate(), "signedAt", "Wed Sep 16 21:55:30 CEST 2026", "the signing date"));
+
+    assertTrue(exception.getMessage().contains("Declare an Instant"));
+    assertTrue(exception.getMessage().contains("the signing date"));
 
   }
 

@@ -1731,3 +1731,53 @@ calls to one generation of a model, and the events of an extension are not those
 version even reaches them is the extension's answer, not the class', so a class range would switch
 off methods which work today in applications which never asked for that. Naming nothing therefore
 means every version here, and an extension method which is to be restricted says so itself.
+
+### 57. The way back reads what the way out wrote, and refuses the forms which do not carry a value
+
+A workflow aggregate shares an enum as the name of its constant and a value type like a `UUID`, a
+`LocalDate` or a `Duration` as the string form that type writes itself (`AggregateSyncSupport`).
+Reading such a value back was not possible: `ValueConversion` converted text into the eight
+wrappers, `BigDecimal` and `BigInteger`, and refused everything else, so a `@TaskParam UUID` failed
+against the very text the platform had written for it. An application could only declare a `String`
+and parse it again in every handler.
+
+The way back now reads exactly the forms the way out writes: an enum from the name of its constant,
+and `UUID`, `Instant`, `LocalDate`, `LocalTime`, `LocalDateTime`, `OffsetDateTime`, `OffsetTime`,
+`ZonedDateTime`, `Year`, `YearMonth`, `MonthDay`, `Duration`, `Period`, `ZoneId` and `ZoneOffset`
+from the text each of them writes. Nothing else was added. A form the platform never writes is a
+form nothing can promise anything about, so a text in another shape is refused with an example of
+the shape the type does write. `TextValueRoundTripTest` asserts both halves against each other, so
+a change to either one is a failing test rather than a handler which stops being served.
+
+An unknown enum constant is refused, naming the constants the enum has. This is the case decision 55
+exists for, in its other half: a handler which took a name the model invented would act on a value
+nobody declared.
+
+`java.util.Date`, `java.util.Calendar` and `java.util.Locale` stay refused although the way out
+writes them out as text, and this is the part which was measured first, on 2026-09-16. A `Date` is
+written as `Wed Sep 16 21:55:30 CEST 2026`. That text carries no milliseconds, so the point in time
+is already up to a second off before anything reads it back, and it names the zone by an
+abbreviation several zones share. The same text written in `Asia/Kolkata` and
+read in `Europe/Dublin` parses to an instant four and a half hours away and prints as the same text
+again, so the round-trip check this repository uses everywhere else would pass a wrong value. A
+`Calendar` is written as its debug form, and a `Locale` as `de_DE`, which no `Locale` method reads
+back, while `Locale.ROOT` is written as an empty text. Each of the three is refused with the type to
+declare instead, because the text in the BPMS looks readable and somebody has to say why it is not
+read.
+
+Why the way out was not changed to write something better for a `Date`: the text in the BPMS is what
+an operator reads and what a BPMN expression works on, so changing it changes the model side for
+every application already sharing such an attribute. That is worth its own decision rather than a
+side effect of teaching the way back to read. Refusing costs an upgrading application nothing,
+because the same declaration fails today.
+
+One consequence worth naming, because a model reads these texts back. Camunda takes a date, a
+duration or a cycle in a timer event. A `Duration` carries days down to seconds and a `Period` years
+down to days, neither of them carries the combined `P3Y6M4DT12H30M5S`, and a cycle like `R5/PT10S`
+is no `java.time` value at all and belongs in a `String`. `java.time` also writes a duration of a
+day or more in hours, so `Duration.ofDays(14)` reaches the model as `PT336H`. The timer fires at the
+same moment, because the engine reads both forms, and the difference is the wording an operator
+sees, which the documentation says rather than the conversion repairing it.
+
+`AggregatePropertyWriter` hangs on the same method, so an aggregate a BPMS-initiated start builds
+gets its `UUID`, its dates and its enum attributes the same way, and refuses the same texts.

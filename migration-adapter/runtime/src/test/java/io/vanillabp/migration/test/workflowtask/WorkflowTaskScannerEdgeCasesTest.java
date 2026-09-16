@@ -50,6 +50,11 @@ public class WorkflowTaskScannerEdgeCasesTest {
 
   }
 
+  public enum Decision {
+    APPROVED,
+    REJECTED
+  }
+
   private WorkflowTaskRegistry registry;
 
   private final Map<String, Aggregate> aggregates = new HashMap<>();
@@ -355,6 +360,34 @@ public class WorkflowTaskScannerEdgeCasesTest {
         aggregates.get("4711").value = value;
       }
 
+      @WorkflowTask
+      public void uuidParam(
+          final Aggregate aggregate,
+          @TaskParam("value") final java.util.UUID value) {
+        aggregates.get("4711").value = value;
+      }
+
+      @WorkflowTask
+      public void dayParam(
+          final Aggregate aggregate,
+          @TaskParam("value") final java.time.LocalDate value) {
+        aggregates.get("4711").value = value;
+      }
+
+      @WorkflowTask
+      public void decisionParam(
+          final Aggregate aggregate,
+          @TaskParam("value") final Decision value) {
+        aggregates.get("4711").value = value;
+      }
+
+      @WorkflowTask
+      public void dateParam(
+          final Aggregate aggregate,
+          @TaskParam("value") final java.util.Date value) {
+        aggregates.get("4711").value = value;
+      }
+
     }
 
     @BeforeEach
@@ -541,6 +574,55 @@ public class WorkflowTaskScannerEdgeCasesTest {
       aggregates.get("4711").value = "sentinel";
       registry.invokeWorkflowTask("test-module", "TestProcess", context("longParam", null));
       assertEquals(null, aggregates.get("4711").value);
+
+    }
+
+    @Test
+    @DisplayName("The text the way out wrote becomes the value the parameter declares")
+    public void textValuesComeBackAsTheirType() {
+
+      assertEquals(
+          java.util.UUID.fromString("f81d4fae-7dec-11d0-a765-00a0c91e6bf6"),
+          invoke("uuidParam", "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"));
+      assertEquals(java.time.LocalDate.parse("2026-09-16"), invoke("dayParam", "2026-09-16"));
+      assertEquals(Decision.APPROVED, invoke("decisionParam", "APPROVED"));
+
+    }
+
+    @Test
+    @DisplayName("A constant name the model invented fails instead of reaching the handler")
+    public void anInventedEnumConstantFails() {
+
+      final var e = assertThrows(
+          IllegalStateException.class,
+          () -> invoke("decisionParam", "ESCALATED"));
+      assertTrue(e.getMessage().contains("'ESCALATED'"));
+      assertTrue(e.getMessage().contains(Decision.class.getName()));
+      assertTrue(e.getMessage().contains("'APPROVED', 'REJECTED'"));
+      assertTrue(e.getMessage().contains("decisionParam"));
+
+    }
+
+    @Test
+    @DisplayName("A date in a form java.time does not write fails, with a form it does write")
+    public void aDateInAnotherFormFails() {
+
+      final var e = assertThrows(
+          IllegalStateException.class,
+          () -> invoke("dayParam", "16.09.2026"));
+      assertTrue(e.getMessage().contains("'16.09.2026'"));
+      assertTrue(e.getMessage().contains("'2026-09-16'"));
+
+    }
+
+    @Test
+    @DisplayName("A java.util.Date parameter fails, naming the types to declare instead")
+    public void aDateParameterFails() {
+
+      final var e = assertThrows(
+          IllegalStateException.class,
+          () -> invoke("dateParam", "Wed Sep 16 21:55:30 CEST 2026"));
+      assertTrue(e.getMessage().contains("Declare an Instant"));
 
     }
 
