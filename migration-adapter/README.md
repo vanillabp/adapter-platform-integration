@@ -629,7 +629,7 @@ sequenceDiagram
       AD->>WT: validateTaskWiring(module, process, tasks)  — MANDATORY
       AD->>WT: reportConcurrentTokenElements(…)  — optional
       AD->>WT: registerProcessVersions(module, process, ProcessVersionCatalog)  — optional
-      AD->>WT: workflowTaskCompletesAsynchronously / taskParameterNames / workflowsShareTheWorkflowAggregate  — as needed
+      AD->>WT: workflowTaskCompletesAsynchronously / taskParameterNames / multiInstanceElementNames / workflowsShareTheWorkflowAggregate  — as needed
       AD->>BS: validateBpmsInitiatedStarts(module, process, start events)  — if the BPMS can report starts
       AD->>WE: workflowEndedHandlerExists(module, process)  — attach end listener only if true
       DS->>EXT: wireBpmn(…) for every extension whose model/PC types match
@@ -1124,6 +1124,46 @@ core copies EVERY variable such a start carries into the workflow aggregate it b
 regardless of what any `@TaskParam` names. The union and its order are held by
 `WorkflowTaskRegistryTest#theUnionOfEveryMethodServingTheElement`,
 `#theDeclaredNamesAreReported` and `#theDefaultAnswersNothing`.
+
+#### The iterations a handler wants the item of (`multiInstanceElementNames`)
+
+A multi-instance element hands three things to a handler: which round it is in, how many
+rounds there are, and the item of the round. The first two every model answers. The item is
+the one a model may never name: a Camunda 7 element without `camunda:elementVariable` and a
+Camunda 8 one without `inputElement` iterate without saying what the current value is
+called. A handler asking for it then receives `null`, and nothing says why.
+
+Both of those are legitimate on their own. An element which iterates a fixed number of times
+is a model somebody meant to write, and so is a handler which reads the index and the total
+only. What nobody means is the two together, and neither side can see it alone: only the
+adapter reads the BPMN, only the core scans the handlers.
+
+So the core answers what it sees.
+`WorkflowTaskRegistry#multiInstanceElementNames(module, process, taskDefinitionOrActivityId)`
+reports the element ids the methods serving that element ask an item for - the value of
+`@MultiInstanceElement`, and where the parameter names a resolver bean instead, what
+`MultiInstanceElementResolver#getNames()` reports. The answer is the union over every method
+serving the element, for the reason `taskParameterNames` unions its answer: methods serving
+different process versions share one BPMN element and all of them read their item out of the
+model the adapter is asking about. Sorted and duplicate-free.
+
+The resolver bean is looked up when the answer is first needed, not while the workflow
+service is scanned: the beans of an application are not all built at that point. A resolver
+bean nobody defined answers nothing here, because the parameter binder built for the same
+parameter already says what is missing and how to define it.
+
+An id which is no element of the model being asked about is no finding. The multi-instance
+chain crosses a call activity, so a task of a called process asks for an element of its
+caller, and the model at hand is the wrong place to look for it. An adapter therefore
+refuses only what it can see: an element of ITS model, multi-instance, with no item, and a
+handler asking for that item.
+
+The method is a `default` returning an empty collection, so an adapter which never heard of
+it keeps the behaviour it had. The other two multi-instance annotations have no counterpart
+and need none: every multi-instance element answers an index and a total, so there is
+nothing to check. Held by `WorkflowTaskRegistryTest#theNamedElementIsReported`,
+`#countingAsksForNoItem`, `#theResolverBeanIsAsked`, `#aMissingResolverBeanReportsNothing`,
+`#theUnionOfEveryMethodServingTheElement` and `#theDefaultAnswersNothing`.
 
 #### What a `@TaskParam` may be declared as (`ValueConversion`)
 

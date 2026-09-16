@@ -21,6 +21,9 @@ import java.util.Collection;
  * <code>deployment-failure</code> policy;</li>
  * <li>{@link #taskParameterNames(String, String, String)} - if your BPMS ships a variable
  * payload with a delivery, you have to know the names BEFORE you subscribe;</li>
+ * <li>{@link #multiInstanceElementNames(String, String, String)} - which iterations a
+ * handler wants the item of, so a model handing over none is refused while it is
+ * deployed;</li>
  * <li>{@link #workflowTaskCompletesAsynchronously(String, String, String)} - refuse a
  * wiring which cannot keep a task open;</li>
  * <li>{@link #workflowTaskCompletesAsynchronously(String, String, String)} and
@@ -302,6 +305,51 @@ public interface WorkflowTaskWiring {
    *         or none of them declares a <code>&#64;TaskParam</code>
    */
   default Collection<String> taskParameterNames(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String taskDefinitionOrActivityId) {
+
+    return java.util.List.of();
+
+  }
+
+  /**
+   * The BPMN elements the <code>&#64;WorkflowTask</code> method(s) serving the given
+   * task definition (or BPMN activity ID) want the ITEM of an iteration for - the ids
+   * <code>&#64;MultiInstanceElement</code> names, and where a resolver bean answers
+   * instead, the ids
+   * {@link io.vanillabp.spi.service.MultiInstanceElementResolver#getNames()} reports.
+   * <p>
+   * Of what a multi-instance element hands to a handler, the item is the part a model
+   * may not carry at all: a Camunda 7 element without <code>camunda:elementVariable</code>
+   * and a Camunda 8 one without <code>inputElement</code> iterate without ever naming
+   * the value of the round. Such a model is legitimate, and so is a handler which reads
+   * the index and the total only. The two together are not: the parameter receives
+   * <code>null</code> and nothing says why.
+   * <p>
+   * Neither side sees both halves. Only the adapter reads the BPMN, and only the core
+   * scans the handlers, so an adapter asks this while it deploys and refuses the pairing
+   * its model cannot serve. The index and the total need no such question, which is why
+   * this method is about the item alone.
+   * <p>
+   * An id which is no element of the model being deployed is NO finding. The
+   * multi-instance chain crosses a call activity, so a task of a called process asks for
+   * an element of its caller, and the model at hand is the wrong place to look for it.
+   * <p>
+   * Several methods may serve one element (different process versions), so the answer is
+   * the UNION of what they ask for: they read their item out of the same model, whichever
+   * of them runs. The ids are sorted and duplicate-free.
+   * <p>
+   * The default answers nothing, which switches such a check off rather than letting an
+   * adapter judge a model against half the question.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param taskDefinitionOrActivityId The task definition or BPMN activity ID
+   * @return The BPMN element ids an item is asked for, sorted; empty if no method is
+   *         registered or none of them declares a <code>&#64;MultiInstanceElement</code>
+   */
+  default Collection<String> multiInstanceElementNames(
       final String workflowModuleId,
       final String bpmnProcessId,
       final String taskDefinitionOrActivityId) {
