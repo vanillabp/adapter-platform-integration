@@ -47,6 +47,10 @@ public interface ExtensionHandlers {
    * repository's DECISIONS.md). A method serving every key of the process answers
    * <code>true</code> as well, and it is the answer only where no key of the list is
    * named by anybody.
+   * <p>
+   * This asks about a call which names no version, so a method naming one answers
+   * <code>false</code>. Where your event knows the version of its BPMN process, ask
+   * {@link #hasHandler(Class, String, String, List, String)} instead.
    *
    * @param annotationType The annotation of a registered contract
    * @param workflowModuleId The workflow module
@@ -54,19 +58,49 @@ public interface ExtensionHandlers {
    * @param lookupKeys The keys a method may be matched by, most wanted first
    * @return Whether a method serves any of those keys
    */
+  default boolean hasHandler(
+      final Class<? extends Annotation> annotationType,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final List<String> lookupKeys) {
+
+    return hasHandler(annotationType, workflowModuleId, bpmnProcessId, lookupKeys, null);
+
+  }
+
+  /**
+   * Whether the application has a method for that key and that version of the BPMN
+   * process - the question above, asked for the version an event came from.
+   * <p>
+   * Ask it this way wherever your event names a version, and pass the version the BPMS
+   * reports, spelled the way it reports it. A method naming versions answers
+   * <code>true</code> for the versions it names and <code>false</code> for the rest, so
+   * an extension learns that the version at hand is served by nobody before it builds
+   * the event. A version of <code>null</code> is answered by the methods naming no
+   * version, which is every method of a contract which says nothing about versions.
+   *
+   * @param annotationType The annotation of a registered contract
+   * @param workflowModuleId The workflow module
+   * @param bpmnProcessId The BPMN process
+   * @param lookupKeys The keys a method may be matched by, most wanted first
+   * @param processVersion The version the BPMS reports, or <code>null</code> where it
+   *          reports none
+   * @return Whether a method serves any of those keys for that version
+   */
   boolean hasHandler(
       Class<? extends Annotation> annotationType,
       String workflowModuleId,
       String bpmnProcessId,
-      List<String> lookupKeys);
+      List<String> lookupKeys,
+      String processVersion);
 
   /**
    * Runs the method the call addresses: load the workflow aggregate (or take the one
    * handed in), bind the parameters, invoke, save - in one transaction of the platform.
    *
    * @param call What to invoke and what to bind it from
-   * @return What the method returned, empty where no method serves the call's keys or
-   *         where the contract does not deliver return values
+   * @return What the method returned, empty where no method serves the call's keys in
+   *         the call's version or where the contract does not deliver return values
    * @throws IllegalStateException If no contract is registered for the call's
    *           annotation
    */

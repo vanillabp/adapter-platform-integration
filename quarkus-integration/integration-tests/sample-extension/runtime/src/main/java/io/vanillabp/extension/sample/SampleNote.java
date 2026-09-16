@@ -39,4 +39,14 @@ public @interface SampleNote {
    */
   String taskDefinition() default USE_METHOD_NAME;
 
+  /**
+   * The versions of the BPMN process this method builds the note of, written the way
+   * <code>&#64;WorkflowTask(version = ...)</code> writes them. Naming none means every
+   * version, and that is what an application which knows one generation of its model
+   * writes.
+   *
+   * @return The version specifications
+   */
+  String[] version() default {};
+
 }

@@ -42,6 +42,23 @@ public interface SampleNoteService<A> {
       SampleNoteDetails.Kind kind);
 
   /**
+   * The same, for an event which knows the version of the BPMN process it happened in.
+   * The method serving that version answers; where no method serves it, the answer is
+   * empty and the extension falls back to what it prefilled.
+   *
+   * @param workflowAggregate The workflow aggregate of the workflow
+   * @param elementId The BPMN element the note is about
+   * @param kind What happened to it
+   * @param processVersion The version of the BPMN process, as the BPMS reports it
+   * @return The note, or empty where no method serves that element in that version
+   */
+  Optional<SampleNoteDetails> noteOfVersion(
+      A workflowAggregate,
+      String elementId,
+      SampleNoteDetails.Kind kind,
+      String processVersion);
+
+  /**
    * The same, for an event which is more than a read: what the method changed on the
    * workflow aggregate is saved.
    *

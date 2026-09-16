@@ -19,6 +19,9 @@ import io.vanillabp.integration.adapter.migration.transaction.AggregateWrite;
 import io.vanillabp.integration.adapter.migration.transaction.SavingHandlerCheck;
 import io.vanillabp.integration.adapter.migration.transaction.TransactionForm;
 import io.vanillabp.integration.adapter.migration.workflowtask.HandlerMethodsNobodySees;
+import io.vanillabp.integration.adapter.migration.workflowtask.HandlerVersions;
+import io.vanillabp.integration.adapter.migration.workflowtask.ProcessVersions;
+import io.vanillabp.integration.adapter.migration.workflowtask.VersionRange;
 import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import io.vanillabp.integration.extension.spi.handler.ExtensionHandlers;
 import io.vanillabp.integration.extension.spi.handler.HandlerCall;
@@ -64,6 +67,14 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
 
   private final TransactionRunner transactionRunner;
 
+  /**
+   * What the BPMS know about the deployed versions of the BPMN processes - owned by the
+   * {@link io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry}
+   * and shared, because the methods of an extension are selected by version exactly like
+   * VanillaBP's own.
+   */
+  private final ProcessVersions processVersions;
+
   private final Map<Class<? extends Annotation>, HandlerContract> contracts = new ConcurrentHashMap<>();
 
   private final List<RegisteredWorkflowService> workflowServices = new LinkedList<>();
@@ -102,6 +113,12 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
   private final Set<String> workflowModulesReported = ConcurrentHashMap.newKeySet();
 
   /**
+   * The methods already reported as naming a version which never arrives - said once per
+   * method, however often the versions of a workflow module are resolved.
+   */
+  private final Set<String> methodsReportedAsUnreachable = ConcurrentHashMap.newKeySet();
+
+  /**
    * One element of one BPMN process of one workflow module.
    */
   private record BpmnElement(
@@ -120,11 +137,14 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
   /**
    * @param transactionRunner The platform's transaction runner, which wraps every
    *          invocation the way it wraps a workflow task
+   * @param processVersions What the BPMS know about the versions of the BPMN processes
    */
   public ExtensionHandlerRegistry(
-      final TransactionRunner transactionRunner) {
+      final TransactionRunner transactionRunner,
+      final ProcessVersions processVersions) {
 
     this.transactionRunner = transactionRunner;
+    this.processVersions = processVersions;
 
   }
 
@@ -203,14 +223,22 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
     synchronized (registered) {
       found
           .forEach(method -> {
-            failOnDuplicateWiring(contract, service, registered, method);
+            failOnDuplicateWiring(
+                contract,
+                service.workflowModuleId(),
+                service.bpmnProcessId(),
+                registered,
+                method,
+                VersionRange.NO_RESOLVER);
             registered.add(method);
           });
     }
     if (workflowModulesReported.contains(service.workflowModuleId())) {
       // this workflow module was deployed before the contract arrived, so its line was
-      // written without these methods
+      // written without these methods, and the versions of the module were resolved
+      // without them too
       reportWiringOf(key, registered);
+      reportVersionsNobodyReports(key, registered, contract);
     }
     if (!contract.savesWorkflowAggregate()) {
       // the extension said while wiring that none of its methods writes, so there is no
@@ -255,29 +283,38 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
 
   private static void failOnDuplicateWiring(
       final HandlerContract contract,
-      final RegisteredWorkflowService service,
+      final String workflowModuleId,
+      final String bpmnProcessId,
       final List<ExtensionHandlerMethod> registered,
-      final ExtensionHandlerMethod method) {
+      final ExtensionHandlerMethod method,
+      final VersionRange.ProcessVersionResolver resolver) {
 
     registered
         .stream()
+        .filter(existing -> existing != method)
         .filter(existing -> existing.overlaps(method))
+        // overlapping version ranges are ambiguous; disjoint ones are a legitimate way
+        // to serve several generations of a model, exactly as for @WorkflowTask
+        .filter(existing -> existing.overlapsVersions(method, resolver))
         .findFirst()
         .ifPresent(existing -> {
           throw new IllegalStateException(
               """
-                  The @%s methods '%s' (%s) and '%s' (%s) of extension '%s' both serve BPMN process \
-                  '%s' of workflow module '%s'! Which of them is meant cannot be guessed - remove one \
-                  of them or name what each of them serves."""
+                  The @%s methods '%s' (%s, version %s) and '%s' (%s, version %s) of extension '%s' \
+                  both serve BPMN process '%s' of workflow module '%s'! Which of them is meant cannot \
+                  be guessed - remove one of them, name what each of them serves, or distinguish them \
+                  by the versions they serve."""
                   .formatted(
                       contract.getAnnotationType().getSimpleName(),
                       existing.describe(),
                       existing.describeWiring(),
+                      existing.describeVersions(),
                       method.describe(),
                       method.describeWiring(),
+                      method.describeVersions(),
                       contract.getExtensionId(),
-                      service.bpmnProcessId(),
-                      service.workflowModuleId()));
+                      bpmnProcessId,
+                      workflowModuleId));
         });
 
   }
@@ -328,7 +365,13 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
           .getExtensionId();
       wiring = registered
           .stream()
-          .map(method -> "'%s' serves %s".formatted(method.describe(), method.describeWiring()))
+          .map(method -> "'%s' serves %s%s"
+              .formatted(
+                  method.describe(),
+                  method.describeWiring(),
+                  method.servesEveryVersion()
+                      ? ""
+                      : " of version %s".formatted(method.describeVersions())))
           .collect(java.util.stream.Collectors.joining("; "));
     }
     // one formatted message rather than placeholders, so a test on either platform reads
@@ -345,6 +388,154 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
                     key.workflowModuleId(),
                     key.annotationType().getSimpleName(),
                     wiring));
+
+  }
+
+  /**
+   * Resolves the version tags the methods of a workflow module name and checks the
+   * version ranges naming a tag for overlaps - those could not be placed while
+   * registering, since no BPMS had been asked about its versions at that point. The same
+   * second pass VanillaBP's own handler methods go through, run from the same place.
+   *
+   * @param workflowModuleId The workflow module ID
+   */
+  public void resolveProcessVersions(
+      final String workflowModuleId) {
+
+    methods
+        .entrySet()
+        .stream()
+        .filter(entry -> entry.getKey().workflowModuleId().equals(workflowModuleId))
+        .forEach(entry -> {
+          final var key = entry.getKey();
+          final var registered = entry.getValue();
+          final var contract = contracts.get(key.annotationType());
+          if (contract == null) {
+            return;
+          }
+          reportVersionsNobodyReports(key, registered, contract);
+          synchronized (registered) {
+            if (registered.stream().allMatch(method -> method.versionTags().isEmpty())) {
+              return;
+            }
+            processVersions.warmUp(workflowModuleId, key.bpmnProcessId());
+            final var resolver = processVersions.resolverFor(workflowModuleId, key.bpmnProcessId());
+            registered
+                .forEach(method -> method
+                    .versionTags()
+                    .forEach(tag -> processVersions
+                        .reportUnknownVersionTag(
+                            workflowModuleId,
+                            key.bpmnProcessId(),
+                            tag,
+                            "method '%s' of extension '%s'".formatted(method.describe(), contract.getExtensionId()))));
+            registered
+                .forEach(method -> failOnDuplicateWiring(
+                    contract,
+                    workflowModuleId,
+                    key.bpmnProcessId(),
+                    registered,
+                    method,
+                    resolver));
+          }
+        });
+
+  }
+
+  /**
+   * Says at startup that a method naming versions can never run, because the extension
+   * owning the annotation reports no version with its calls
+   * ({@link HandlerContract.Builder#callsCarryTheProcessVersion()}). Without this the
+   * application learns it at the first event which does not arrive, and an event which
+   * does not arrive looks like nothing at all.
+   * <p>
+   * A warning rather than the end of the boot: what the method does is an addition of an
+   * extension, and an application whose other methods serve their events has to keep
+   * running. The same reading VanillaBP applies to its own methods which serve no
+   * deployed version.
+   */
+  private void reportVersionsNobodyReports(
+      final RegistryKey key,
+      final List<ExtensionHandlerMethod> registered,
+      final HandlerContract contract) {
+
+    if (contract.callsCarryTheProcessVersion()) {
+      return;
+    }
+    final List<ExtensionHandlerMethod> naming;
+    synchronized (registered) {
+      naming = registered
+          .stream()
+          .filter(method -> !method.servesEveryVersion())
+          .toList();
+    }
+    naming
+        .stream()
+        .filter(method -> methodsReportedAsUnreachable
+            .add("%s|%s|%s|%s"
+                .formatted(
+                    key.workflowModuleId(),
+                    key.bpmnProcessId(),
+                    key.annotationType().getName(),
+                    method.describe())))
+        .forEach(method -> log
+            .warn(
+                """
+                    The {} method '{}' of BPMN process '{}' (workflow module '{}') serves version {}, \
+                    but extension '{}' reports no process version with its calls - the method never \
+                    runs. Drop the version from the annotation, or ask the extension to report the \
+                    version of the process its events are about.""",
+                method.describeAnnotation(),
+                method.describe(),
+                key.bpmnProcessId(),
+                key.workflowModuleId(),
+                method.describeVersions(),
+                contract.getExtensionId()));
+
+  }
+
+  /**
+   * The methods of the extensions registered for one BPMN process, each with the verdict
+   * whether it serves one of the given versions - the same answer the three registries of
+   * the core give about their own methods, so a method of an extension which serves no
+   * version the BPMS holds is reported by the same startup check.
+   * <p>
+   * A contract which reports no process version with its calls is left out: its methods
+   * are judged by {@link #reportVersionsNobodyReports}, and saying the same thing twice
+   * in two voices helps nobody.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @param servableVersions The versions worth serving
+   * @param resolver Resolves version tags of that process
+   * @return One verdict per registered method
+   */
+  public List<HandlerVersions> handlerVersions(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Collection<String> servableVersions,
+      final VersionRange.ProcessVersionResolver resolver) {
+
+    return methods
+        .entrySet()
+        .stream()
+        .filter(entry -> entry.getKey().workflowModuleId().equals(workflowModuleId))
+        .filter(entry -> entry.getKey().bpmnProcessId().equals(bpmnProcessId))
+        .filter(entry -> {
+          final var contract = contracts.get(entry.getKey().annotationType());
+          return (contract != null) && contract.callsCarryTheProcessVersion();
+        })
+        .flatMap(entry -> List.copyOf(entry.getValue()).stream())
+        .map(method -> new HandlerVersions(
+            method.describe(), "%s method '%s' of extension '%s' (version %s)"
+                .formatted(
+                    method.describeAnnotation(),
+                    method.describe(),
+                    method.getExtensionId(),
+                    method.describeVersions()), servableVersions
+                        .stream()
+                        .anyMatch(version -> method.matchesVersion(version, resolver))))
+        .toList();
 
   }
 
@@ -423,10 +614,11 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
       final Class<? extends Annotation> annotationType,
       final String workflowModuleId,
       final String bpmnProcessId,
-      final List<String> lookupKeys) {
+      final List<String> lookupKeys,
+      final String processVersion) {
 
     requireContract(annotationType);
-    return find(annotationType, workflowModuleId, bpmnProcessId, lookupKeys) != null;
+    return find(annotationType, workflowModuleId, bpmnProcessId, lookupKeys, processVersion) != null;
 
   }
 
@@ -439,7 +631,8 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
         call.getAnnotationType(),
         call.getWorkflowModuleId(),
         call.getBpmnProcessId(),
-        call.getLookupKeys());
+        call.getLookupKeys(),
+        call.getProcessVersion());
     if (method == null) {
       return Optional.empty();
     }
@@ -573,22 +766,30 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
    * walking the methods first would let the order of the class scan decide instead (see
    * decision 51 in the repository's DECISIONS.md). Only where no key is named at all does
    * the method serving every key of the process run.
+   * <p>
+   * A method whose versions do not cover the version of the call is passed over as if it
+   * did not serve the key, so two methods for two generations of a model stand next to
+   * each other. A call naming no version reaches the methods naming none, which is every
+   * method of a contract saying nothing about versions.
    */
   private ExtensionHandlerMethod find(
       final Class<? extends Annotation> annotationType,
       final String workflowModuleId,
       final String bpmnProcessId,
-      final List<String> lookupKeys) {
+      final List<String> lookupKeys,
+      final String processVersion) {
 
     final var registered = methods.get(new RegistryKey(workflowModuleId, bpmnProcessId, annotationType));
     if (registered == null) {
       return null;
     }
+    final var resolver = processVersions.resolverFor(workflowModuleId, bpmnProcessId);
     synchronized (registered) {
       for (final var lookupKey : lookupKeys) {
         final var serving = registered
             .stream()
             .filter(method -> method.serves(lookupKey))
+            .filter(method -> method.matchesVersion(processVersion, resolver))
             .findFirst();
         if (serving.isPresent()) {
           return serving.get();
@@ -598,6 +799,7 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
       return registered
           .stream()
           .filter(ExtensionHandlerMethod::servesEveryKey)
+          .filter(method -> method.matchesVersion(processVersion, resolver))
           .findFirst()
           .orElse(null);
     }

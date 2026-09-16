@@ -219,7 +219,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
     this.transactionRunner = transactionRunner;
     this.extensionHandlers = new io.vanillabp.integration.adapter.migration.handler.ExtensionHandlerRegistry(
-        transactionRunner);
+        transactionRunner, processVersions);
     this.aggregateSync = aggregateSync;
     this.transactionAnnotations = transactionAnnotations;
     this.properties = properties;
@@ -863,6 +863,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
     bpmsInitiatedStarts.resolveProcessVersions(workflowModuleId);
     workflowEndedHandlers.resolveProcessVersions(workflowModuleId);
+    extensionHandlers.resolveProcessVersions(workflowModuleId);
 
     // last, because it compares version ranges: an id nothing was deployed under is
     // wired by no adapter, so the start events its methods serve are judged here or
@@ -1135,6 +1136,10 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
         (
             process,
             versions) -> workflowEndedHandlers.handlerVersions(workflowModuleId, process, versions,
+                processVersions.resolverFor(workflowModuleId, process)),
+        (
+            process,
+            versions) -> extensionHandlers.handlerVersions(workflowModuleId, process, versions,
                 processVersions.resolverFor(workflowModuleId, process)))
         .flatMap(handlersOf -> deadIn(bpmnProcessId, servableVersionsByProcess, handlersOf).stream())
         .toList();

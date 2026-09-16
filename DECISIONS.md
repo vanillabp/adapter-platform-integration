@@ -1692,3 +1692,42 @@ application sees it.
 The same method writes the attributes of a workflow aggregate the BPMS started
 (`AggregatePropertyWriter`), so one rule serves both. A wrong number in an aggregate outlives the
 handler which received it, which makes the refusal worth more there, not less.
+
+### 56. One version selection serves VanillaBP's own handlers and an extension's
+
+`@WorkflowTask`, `@WorkflowStartedByBpms` and `@WorkflowEnded` let a method name the process
+versions it serves, and the three registries behind them each carried their own copy of the same
+code: a list of ranges, a match against the version a delivery reported, an overlap check against
+the next method, a list of the version tags named. An extension bringing an annotation of its own
+had nothing of this, so the Business Cockpit would have written a fourth copy in its own artifact
+and every later extension a fifth.
+
+The copies are gone. `ServedVersions` holds what one method serves and answers the three questions
+about it, and all four kinds of handler hold one of them: the three of the core and the method an
+extension's `HandlerContract` describes. An extension gets the ranges and the version tags
+without writing any of it, tags resolved through the `ProcessVersionCatalog` of the adapters
+included, and a change to the rules now reaches the core and the extensions at once. The
+proof that this is one implementation and not a fourth copy is that the tests of the three
+registries did not change.
+
+An extension names the attribute its versions stand in, the way it already names the attribute its
+lookup keys stand in, and the call names the version it is about. A method naming no version serves
+every version, which is what every extension written before this gets, so nothing an extension does
+today changes meaning.
+
+Whether a version arrives at all is the contract's statement, made once
+(`callsCarryTheProcessVersion`): the calls name the version wherever the BPMS reports one. It has to be the contract's, because the extension is the only one
+who knows: a Camunda 8 job carries the version of its process, a Camunda 7 process definition knows
+it, and an engine behind the Process-Engine-API fills a version tag only where it wants to. Where a
+contract does not say it, a method naming a version can never run, and the start says so for every
+such method rather than leaving the application to notice at the first event which does not arrive.
+It is a warning and not the end of the boot, for the reason decision 20 gives about a method serving
+no deployed version: what such a method does is an addition, and an application whose other methods
+serve their events keeps running.
+
+A method of an extension does NOT inherit the range of the `@BpmnProcess` of its class, although a
+`@WorkflowTask` method does (decision 20). The class declaration binds the methods VanillaBP itself
+calls to one generation of a model, and the events of an extension are not those methods: whether a
+version even reaches them is the extension's answer, not the class', so a class range would switch
+off methods which work today in applications which never asked for that. Naming nothing therefore
+means every version here, and an extension method which is to be restricted says so itself.

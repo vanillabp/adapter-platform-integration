@@ -49,7 +49,7 @@ public class SampleNoteServiceFactory implements AggregateServiceFactory<SampleN
           final SampleNoteDetails.Kind kind) {
 
         // a note somebody reads is a read: VanillaBP is told not to save the aggregate
-        return invoke(workflowAggregate, elementId, kind, false);
+        return invoke(workflowAggregate, List.of(elementId), kind, false, null);
 
       }
 
@@ -59,7 +59,18 @@ public class SampleNoteServiceFactory implements AggregateServiceFactory<SampleN
           final List<String> lookupKeys,
           final SampleNoteDetails.Kind kind) {
 
-        return invoke(workflowAggregate, lookupKeys, kind, false);
+        return invoke(workflowAggregate, lookupKeys, kind, false, null);
+
+      }
+
+      @Override
+      public Optional<SampleNoteDetails> noteOfVersion(
+          final Object workflowAggregate,
+          final String elementId,
+          final SampleNoteDetails.Kind kind,
+          final String processVersion) {
+
+        return invoke(workflowAggregate, List.of(elementId), kind, false, processVersion);
 
       }
 
@@ -69,17 +80,7 @@ public class SampleNoteServiceFactory implements AggregateServiceFactory<SampleN
           final String elementId,
           final SampleNoteDetails.Kind kind) {
 
-        return invoke(workflowAggregate, elementId, kind, true);
-
-      }
-
-      private Optional<SampleNoteDetails> invoke(
-          final Object workflowAggregate,
-          final String elementId,
-          final SampleNoteDetails.Kind kind,
-          final boolean saving) {
-
-        return invoke(workflowAggregate, List.of(elementId), kind, saving);
+        return invoke(workflowAggregate, List.of(elementId), kind, true, null);
 
       }
 
@@ -87,7 +88,8 @@ public class SampleNoteServiceFactory implements AggregateServiceFactory<SampleN
           final Object workflowAggregate,
           final List<String> lookupKeys,
           final SampleNoteDetails.Kind kind,
-          final boolean saving) {
+          final boolean saving,
+          final String processVersion) {
 
         final var elementId = lookupKeys.getFirst();
         final var prefilled = new SampleNoteDetails(
@@ -97,6 +99,7 @@ public class SampleNoteServiceFactory implements AggregateServiceFactory<SampleN
             // the element id first and the task definition after it, which is the order
             // VanillaBP asks an extension to offer
             .lookupKeys(lookupKeys)
+            .processVersion(processVersion)
             .workflowAggregateId(context.getWorkflowAggregateId(workflowAggregate))
             .payload(prefilled)
             .variable("kind", kind.name());

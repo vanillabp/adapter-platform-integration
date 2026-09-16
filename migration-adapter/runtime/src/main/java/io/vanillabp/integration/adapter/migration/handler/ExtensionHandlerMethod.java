@@ -5,6 +5,8 @@ import java.lang.reflect.Method;
 import java.util.List;
 import java.util.function.Supplier;
 
+import io.vanillabp.integration.adapter.migration.workflowtask.ServedVersions;
+import io.vanillabp.integration.adapter.migration.workflowtask.VersionRange;
 import io.vanillabp.integration.extension.spi.handler.HandlerContext;
 import io.vanillabp.integration.extension.spi.handler.HandlerContract;
 import io.vanillabp.integration.extension.spi.handler.HandlerValueSource;
@@ -32,13 +34,20 @@ final class ExtensionHandlerMethod {
    */
   private final List<String> lookupKeys;
 
+  /**
+   * The process versions this method serves - the same mechanics VanillaBP's own handler
+   * methods are selected by.
+   */
+  private final ServedVersions versions;
+
   ExtensionHandlerMethod(
       final HandlerContract contract,
       final Class<?> workflowServiceClass,
       final Method method,
       final Supplier<Object> workflowServiceBean,
       final List<HandlerValueSource> parameterBinders,
-      final List<String> lookupKeys) {
+      final List<String> lookupKeys,
+      final ServedVersions versions) {
 
     this.contract = contract;
     this.workflowServiceClass = workflowServiceClass;
@@ -46,6 +55,7 @@ final class ExtensionHandlerMethod {
     this.workflowServiceBean = workflowServiceBean;
     this.parameterBinders = parameterBinders;
     this.lookupKeys = lookupKeys;
+    this.versions = versions;
 
   }
 
@@ -99,6 +109,73 @@ final class ExtensionHandlerMethod {
     return lookupKeys
         .stream()
         .anyMatch(other.lookupKeys::contains);
+
+  }
+
+  /**
+   * @param processVersion The version the call names
+   * @param resolver Resolves version tags of the BPMN process the method belongs to
+   * @return Whether this method serves that version
+   */
+  boolean matchesVersion(
+      final String processVersion,
+      final VersionRange.ProcessVersionResolver resolver) {
+
+    return versions.matches(processVersion, resolver);
+
+  }
+
+  /**
+   * Whether this method and the given one serve at least one common process version -
+   * two methods serving the same key are ambiguous exactly then. Disjoint ranges are a
+   * legitimate way of serving several generations of a model.
+   *
+   * @param other Another method of the same contract and BPMN process
+   * @param resolver Resolves version tags of the BPMN process both belong to
+   * @return Whether both serve a common version
+   */
+  boolean overlapsVersions(
+      final ExtensionHandlerMethod other,
+      final VersionRange.ProcessVersionResolver resolver) {
+
+    return versions.overlaps(other.versions, resolver);
+
+  }
+
+  /**
+   * @return Whether this method serves every version, which is what a method naming
+   *         none does
+   */
+  boolean servesEveryVersion() {
+
+    return versions.everyVersion();
+
+  }
+
+  /**
+   * @return The version tags this method's specifications name
+   */
+  List<String> versionTags() {
+
+    return versions.versionTags();
+
+  }
+
+  /**
+   * @return The version specification(s), for guiding messages
+   */
+  String describeVersions() {
+
+    return versions.describe();
+
+  }
+
+  /**
+   * @return The annotation these methods carry, for guiding messages
+   */
+  String describeAnnotation() {
+
+    return "@%s".formatted(contract.getAnnotationType().getSimpleName());
 
   }
 

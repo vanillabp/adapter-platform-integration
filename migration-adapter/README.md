@@ -2780,15 +2780,17 @@ HandlerContract
     .build();
 ```
 
-|        Part of the contract        |                                                      What it decides                                                      |
-|------------------------------------|---------------------------------------------------------------------------------------------------------------------------|
-| annotation type                    | which methods belong to the extension; repeatable annotations are supported                                               |
-| `lookupKeys(…)`                    | the keys one occurrence names — an EMPTY list means the method's own name, `EVERY_KEY` means every element of the process |
-| `coreParameters(…)`                | which of the parameters VanillaBP binds itself may stand there (`@TaskId`/`@TaskEvent` are deliberately not among them)   |
-| `parameterBinder(…)`               | the parameters of the extension's own SPI, recognized by type or by annotation                                            |
-| `deliversReturnValue()`            | whether what a method returns reaches the caller; without it a method has to be `void`                                    |
-| `validatingAnnotation(…)`          | what the extension checks about one occurrence of its annotation, while the scan holds the method carrying it             |
-| `neverSavesTheWorkflowAggregate()` | that no method of this annotation ever writes the aggregate, so nothing is saved and nothing is warned about              |
+|        Part of the contract        |                                                          What it decides                                                           |
+|------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
+| annotation type                    | which methods belong to the extension; repeatable annotations are supported                                                        |
+| `lookupKeys(…)`                    | the keys one occurrence names — an EMPTY list means the method's own name, `EVERY_KEY` means every element of the process          |
+| `versions(…)`                      | the process versions one occurrence names, written as `@WorkflowTask(version = …)` writes them — an EMPTY list means every version |
+| `callsCarryTheProcessVersion()`    | that the calls of this contract name the version of their BPMN process wherever the BPMS reports one                               |
+| `coreParameters(…)`                | which of the parameters VanillaBP binds itself may stand there (`@TaskId`/`@TaskEvent` are deliberately not among them)            |
+| `parameterBinder(…)`               | the parameters of the extension's own SPI, recognized by type or by annotation                                                     |
+| `deliversReturnValue()`            | whether what a method returns reaches the caller; without it a method has to be `void`                                             |
+| `validatingAnnotation(…)`          | what the extension checks about one occurrence of its annotation, while the scan holds the method carrying it                      |
+| `neverSavesTheWorkflowAggregate()` | that no method of this annotation ever writes the aggregate, so nothing is saved and nothing is warned about                       |
 
 An invocation (`ExtensionHandlers#invoke`) names the keys it accepts — an element id and
 a task definition, say — and the method NAMING any of them runs; where none does, the
@@ -2796,10 +2798,28 @@ method serving `EVERY_KEY` does, so a catch-all may stand next to methods for si
 elements (the rule `@WorkflowStartedByBpms` follows for its start events too). **Zero matches are
 legal** and answered with an empty result: what to do instead is the extension's business
 (the Business Cockpit passes its prefilled details through unchanged). Two methods serving
-one key of one BPMN process end the boot naming both. A call may hand IN an aggregate
+one key of one BPMN process end the boot naming both, unless the versions they serve keep them
+apart. A call may hand IN an aggregate
 instead of naming its ID, may say that the aggregate is not to be saved, and may say that
 it runs in the transaction the caller is already in — which is what an embedded BPMS needs,
 since Camunda 7 delivers its task events inside the engine's own transaction.
+
+**The version of an event picks the method, with VanillaBP's own selection.** Where an extension's
+annotation carries a version attribute, `versions(…)` reads it and the method runs for the versions
+it names, the way a `@WorkflowTask` method does. The specifications are the same ones, version tags
+included, and a tag is resolved through the `ProcessVersionCatalog` of the adapters here as well. Two methods for one key end the boot only where their versions OVERLAP, so one
+method per generation of a model is a legitimate way to write them, and the message names both
+methods with their ranges. A method naming no version serves every version, which is what every
+extension written before this gets.
+
+The call names the version (`HandlerCall.Builder#processVersion`), and it is the version identifier
+the BPMS reports rather than one dressed up for a screen. A contract whose calls carry one wherever the
+BPMS reports one says so once (`callsCarryTheProcessVersion()`), and where it does not, a method
+naming a version can never run and the start says so for each of them. A method under such a contract which names a version the
+BPMS does not hold is reported by the same startup check VanillaBP's own methods go through. One
+class answers all of this for the core and for an extension (`ServedVersions`, decision 56 in the
+repository's `DECISIONS.md`), which is why the tests of the three registries did not change when the
+extensions were let in.
 
 **An extension whose handlers only read says so while it is wired.** A call can already ask for a
 handler to run without the aggregate being saved afterwards, but a call says it too late for the

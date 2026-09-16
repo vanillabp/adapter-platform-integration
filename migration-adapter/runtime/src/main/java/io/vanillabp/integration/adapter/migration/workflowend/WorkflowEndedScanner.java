@@ -9,7 +9,7 @@ import java.util.function.Supplier;
 
 import io.vanillabp.integration.adapter.migration.handler.CoreParameterBinders;
 import io.vanillabp.integration.adapter.migration.workflowtask.InheritedVersions;
-import io.vanillabp.integration.adapter.migration.workflowtask.VersionRange;
+import io.vanillabp.integration.adapter.migration.workflowtask.ServedVersions;
 import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedContext;
 import io.vanillabp.integration.extension.spi.handler.CoreHandlerParameter;
 import io.vanillabp.integration.extension.spi.handler.HandlerValueSource;
@@ -109,10 +109,7 @@ public final class WorkflowEndedScanner {
         .toList();
 
     final var versions = inherited
-        .effectiveFor(Arrays
-            .stream(annotation.version())
-            .map(version -> VersionRange.parse(version, location))
-            .toList());
+        .effectiveFor(ServedVersions.parse(annotation.version(), location));
     final var endEventId = annotation.id().equals(WorkflowEnded.ANY_END_EVENT)
         ? null
         : annotation.id();

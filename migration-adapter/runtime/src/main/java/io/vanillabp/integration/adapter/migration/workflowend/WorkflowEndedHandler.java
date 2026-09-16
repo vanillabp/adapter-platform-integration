@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.function.Supplier;
 
 import io.vanillabp.integration.adapter.migration.handler.HandlerContexts;
-import io.vanillabp.integration.adapter.migration.workflowtask.InheritedVersions;
+import io.vanillabp.integration.adapter.migration.workflowtask.ServedVersions;
 import io.vanillabp.integration.adapter.migration.workflowtask.VersionRange;
 import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedContext;
 import io.vanillabp.integration.extension.spi.handler.HandlerValueSource;
@@ -33,15 +33,11 @@ public class WorkflowEndedHandler {
    */
   private final String endEventId;
 
-  private final List<VersionRange> versions;
-
   /**
-   * Where the version range came from if the method named none itself: the
-   * <code>&#64;BpmnProcess</code> declaration the handlers of this class were
-   * registered for. <code>null</code> where the method names its own range, whose
-   * messages need no origin - the attribute is in front of whoever reads them.
+   * The process versions this method serves, which the whole registry shares with the
+   * other handler kinds and with the methods of an extension.
    */
-  private final String versionsInheritedFrom;
+  private final ServedVersions versions;
 
   WorkflowEndedHandler(
       final Class<?> workflowServiceClass,
@@ -49,15 +45,14 @@ public class WorkflowEndedHandler {
       final Supplier<Object> workflowServiceBean,
       final List<HandlerValueSource> binders,
       final String endEventId,
-      final InheritedVersions.EffectiveVersions versions) {
+      final ServedVersions versions) {
 
     this.workflowServiceClass = workflowServiceClass;
     this.method = method;
     this.workflowServiceBean = workflowServiceBean;
     this.binders = binders;
     this.endEventId = endEventId;
-    this.versions = versions.versions();
-    this.versionsInheritedFrom = versions.inheritedFrom();
+    this.versions = versions;
 
   }
 
@@ -103,11 +98,7 @@ public class WorkflowEndedHandler {
    */
   String describeVersions() {
 
-    return versions
-        .stream()
-        .map(VersionRange::toString)
-        .map("'%s'"::formatted)
-        .collect(java.util.stream.Collectors.joining(", "));
+    return versions.describe();
 
   }
 
@@ -121,9 +112,7 @@ public class WorkflowEndedHandler {
    */
   String describeVersionsWithOrigin() {
 
-    return versionsInheritedFrom == null
-        ? describeVersions()
-        : "%s, inherited from %s".formatted(describeVersions(), versionsInheritedFrom);
+    return versions.describeWithOrigin();
 
   }
 
@@ -133,7 +122,7 @@ public class WorkflowEndedHandler {
    */
   boolean inheritsVersions() {
 
-    return versionsInheritedFrom != null;
+    return versions.inherited();
 
   }
 
@@ -145,16 +134,14 @@ public class WorkflowEndedHandler {
    */
   String describeVersionOrigin() {
 
-    return versionsInheritedFrom == null
-        ? ""
-        : ", which inherits the range of %s".formatted(versionsInheritedFrom);
+    return versions.describeOrigin();
 
   }
 
   boolean matchesVersion(
       final String processVersion) {
 
-    return matchesVersion(processVersion, VersionRange.NO_RESOLVER);
+    return versions.matches(processVersion);
 
   }
 
@@ -162,9 +149,7 @@ public class WorkflowEndedHandler {
       final String processVersion,
       final VersionRange.ProcessVersionResolver resolver) {
 
-    return versions
-        .stream()
-        .anyMatch(version -> version.matches(processVersion, resolver));
+    return versions.matches(processVersion, resolver);
 
   }
 
@@ -180,11 +165,7 @@ public class WorkflowEndedHandler {
       final WorkflowEndedHandler other,
       final VersionRange.ProcessVersionResolver resolver) {
 
-    return versions
-        .stream()
-        .anyMatch(version -> other.versions
-            .stream()
-            .anyMatch(otherVersion -> version.overlaps(otherVersion, resolver)));
+    return versions.overlaps(other.versions, resolver);
 
   }
 
@@ -193,11 +174,7 @@ public class WorkflowEndedHandler {
    */
   List<String> versionTags() {
 
-    return versions
-        .stream()
-        .flatMap(version -> version.versionTags().stream())
-        .distinct()
-        .toList();
+    return versions.versionTags();
 
   }
 

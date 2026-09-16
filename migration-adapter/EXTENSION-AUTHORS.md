@@ -342,6 +342,26 @@ HandlerContract
     .build();
 ```
 
+If your annotation carries a version attribute, name it as well and your methods are chosen by the
+version of the BPMN process an event came from, with the selection `@WorkflowTask` goes through:
+
+```java
+.versions(annotation -> List.of(((UserTaskDetailsProvider) annotation).version()))
+.callsCarryTheProcessVersion()
+```
+
+The specifications are the ones `@WorkflowTask(version = …)` takes, version tags included, and the
+tags are resolved through the BPMS. A method naming no version serves every version, so an
+application which knows one generation of its model writes nothing and nothing changes for it. Two
+methods for one key end the boot only where their versions overlap, which is what lets a user keep
+one method per generation. Name the version on every call which has one
+(`HandlerCall.Builder#processVersion`), spelled the way the BPMS reports it, and say
+`callsCarryTheProcessVersion()` once, so a method VanillaBP could never reach is reported while the
+application boots instead of at the first event which does not arrive. Whether a version is there at all is your answer and not the application's:
+a Camunda 8 job carries the version of its process, a Camunda 7 process definition knows it, and an
+engine behind the Process-Engine-API fills a version tag only where it wants to, so an extension
+with halves per BPMS answers for the half in use (decision 56).
+
 The contract is described in full under
 [The extension's own annotation: handler contracts](./README.md#the-extensions-own-annotation-handler-contracts)
 in the core's README. What matters most while you design yours is what an invocation does. You name
@@ -349,7 +369,7 @@ the keys your event is about, in the order you prefer them, and the first key so
 wins; the element id belongs first, because that is the identity everything moves to and the
 `taskDefinition` attribute goes away later (decision 51). Zero matches are legal and answered with an
 empty result, so what to do instead stays your decision. Two methods serving one key of one BPMN
-process end the boot naming both.
+process end the boot naming both, unless the versions they serve keep them apart.
 
 Where you can, say `neverSavesTheWorkflowAggregate()` on a contract whose methods only read. Without
 it every application using your extension reads a warning at every start about a second writer which
