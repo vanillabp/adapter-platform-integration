@@ -105,10 +105,14 @@ public class DeploymentPipelineBuildStepProcessor {
    * the detected workflow module IDs as the synthetic {@link BpmsResourceIndex}
    * bean. The runtime deployment runner filters the index by the configured
    * <code>resources-location</code> - RUN_TIME configuration cannot be
-   * pattern-scanned in a Quarkus fast-jar at runtime. The indexed files are also
-   * watched for dev-mode hot deployment (note: only files existing at build time
-   * are watched; adding a NEW BPMN or DMN file in dev mode requires touching a watched
-   * file or restarting).
+   * pattern-scanned in a Quarkus fast-jar at runtime.
+   * <p>
+   * Dev mode watches the same kind of files, but by extension and not by name. A build
+   * writes the index once, so a file which arrives afterwards is in none of the lists a
+   * build produced. Watching the names of that build would leave such a file out of the
+   * restart as well, and the application would go on running against an index which no
+   * longer says what the directory holds. Watching the extension covers both: the files
+   * of the last build, and the one a developer adds while the application runs.
    * <p>
    * The indexed files are registered for the native image as well. A native image only
    * carries the resources it was told about, so without that registration the index would
@@ -117,7 +121,7 @@ public class DeploymentPipelineBuildStepProcessor {
    *
    * @param applicationArchives The archives of this Quarkus build
    * @param workflowModulesFound Information about all workflow modules found
-   * @param watchedFiles Producer registering the files for dev-mode hot deployment
+   * @param watchedFiles Producer registering the file extensions for dev-mode hot deployment
    * @param nativeImageResources Producer putting the files into the native image
    * @param syntheticBeans Producer used to register the recorded index as a bean
    * @param recorder The recorder building the runtime object
@@ -140,15 +144,17 @@ public class DeploymentPipelineBuildStepProcessor {
             .accept(openPathTree -> openPathTree
                 .walk(visit -> Optional
                     .ofNullable(visit.getRelativePath("/"))
-                    .filter(relativePath -> relativePath.endsWith(DeploymentService.BPMN_EXTENSION) || relativePath
-                        .endsWith(DeploymentService.DMN_EXTENSION))
+                    .filter(DeploymentPipelineBuildStepProcessor::isBpmsResource)
                     .ifPresent(resourcePaths::add))));
 
+    watchedFiles
+        .produce(HotDeploymentWatchedFileBuildItem
+            .builder()
+            .setLocationPredicate(DeploymentPipelineBuildStepProcessor::isBpmsResource)
+            .build());
+
     resourcePaths
-        .forEach(path -> {
-          watchedFiles.produce(new HotDeploymentWatchedFileBuildItem(path));
-          nativeImageResources.produce(new NativeImageResourceBuildItem(path));
-        });
+        .forEach(path -> nativeImageResources.produce(new NativeImageResourceBuildItem(path)));
 
     // pass items in serializable kinds of list (recorder bytecode serialization)
     final var workflowModuleIds = workflowModulesFound
@@ -171,6 +177,17 @@ public class DeploymentPipelineBuildStepProcessor {
             .runtimeValue(index)
             .setRuntimeInit()
             .done());
+
+  }
+
+  /**
+   * @param path A path relative to the classpath root or to a resource root
+   * @return Whether the file is one the deployment pipeline reads
+   */
+  private static boolean isBpmsResource(
+      final String path) {
+
+    return path.endsWith(DeploymentService.BPMN_EXTENSION) || path.endsWith(DeploymentService.DMN_EXTENSION);
 
   }
 

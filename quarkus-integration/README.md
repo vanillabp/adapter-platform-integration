@@ -164,8 +164,9 @@ as possible at **build time**, following Quarkus' extension philosophy:
      (`DeploymentPipelineBuildStepProcessor`) and recorded as the synthetic
      `BpmnResourceIndex` bean, filtered at runtime by the configured location. Only
      classpath locations are supported (a `file:` location fails with a guiding
-     message). In dev mode the indexed files are hot-reload-watched; adding a NEW
-     BPMN file requires a restart (or touching a watched file).
+     message). Dev mode watches `.bpmn` and `.dmn` files by extension rather than by
+     the names of the last build, so a file added while the application runs restarts
+     it and reaches the index of that restart.
    - **Adapters** announce their deployment services via
      `VanillaBpAdapterDeploymentServiceBuildItem` (mirroring the process-service
      build item); the announced producer yields ONE bean of type
