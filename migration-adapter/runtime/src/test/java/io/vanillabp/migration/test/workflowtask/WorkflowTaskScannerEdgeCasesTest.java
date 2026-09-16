@@ -293,6 +293,13 @@ public class WorkflowTaskScannerEdgeCasesTest {
       }
 
       @WorkflowTask
+      public void longPrimitiveParam(
+          final Aggregate aggregate,
+          @TaskParam("value") final long value) {
+        aggregates.get("4711").value = value;
+      }
+
+      @WorkflowTask
       public void doubleParam(
           final Aggregate aggregate,
           @TaskParam("value") final Double value) {
@@ -383,7 +390,7 @@ public class WorkflowTaskScannerEdgeCasesTest {
     }
 
     @Test
-    @DisplayName("Numbers widen/narrow between number types and stringify")
+    @DisplayName("Numbers widen and narrow between number types and stringify")
     public void numberConversions() {
 
       assertEquals(42, invoke("intParam", 42L));
@@ -395,6 +402,115 @@ public class WorkflowTaskScannerEdgeCasesTest {
       assertEquals((short) 7, invoke("shortParam", 7));
       assertEquals((byte) 7, invoke("byteParam", 7));
       assertEquals(7.0f, invoke("floatParam", 7));
+
+    }
+
+    @Test
+    @DisplayName("A scale the target type cannot keep is no loss, so the value is delivered")
+    public void aScaleTheTargetCannotKeepIsNoLoss() {
+
+      assertEquals(120.5d, invoke("doubleParam", new BigDecimal("120.50")));
+      assertEquals(120.5f, invoke("floatParam", new BigDecimal("120.50")));
+      assertEquals("120.50", invoke("stringParam", new BigDecimal("120.50")));
+
+    }
+
+    @Test
+    @DisplayName("A float arrives as the number it prints, not as the double it widens to")
+    public void aFloatArrivesAsTheNumberItPrints() {
+
+      assertEquals(0.1d, invoke("doubleParam", 0.1f));
+      assertEquals(new BigDecimal("0.1"), invoke("bigDecimalParam", 0.1f));
+      assertEquals(0.1f, invoke("floatParam", 0.1d));
+
+    }
+
+    @Test
+    @DisplayName("What version 1 bound by reflection still binds: a Long and an Integer into a long")
+    public void whatVersionOneBoundStillBinds() {
+
+      assertEquals(3000000000L, invoke("longPrimitiveParam", 3000000000L));
+      assertEquals(42L, invoke("longPrimitiveParam", 42));
+
+    }
+
+    @Test
+    @DisplayName("A number too large for its target fails, naming the value and what would arrive")
+    public void aNumberTooLargeForItsTargetFails() {
+
+      final var e = assertThrows(
+          IllegalStateException.class,
+          () -> invoke("intParam", 3000000000L));
+      assertTrue(e.getMessage().contains("The value '3000000000'"));
+      assertTrue(e.getMessage().contains("which would hold '-1294967296'"));
+      assertTrue(e.getMessage().contains("'int'"));
+
+    }
+
+    @Test
+    @DisplayName("A whole number a double cannot hold fails instead of losing its last digit")
+    public void aWholeNumberADoubleCannotHoldFails() {
+
+      final var tooPrecise = new BigInteger("9007199254740993");
+
+      final var intFailure = assertThrows(
+          IllegalStateException.class,
+          () -> invoke("intParam", tooPrecise));
+      assertTrue(intFailure.getMessage().contains("which would hold '1'"));
+
+      final var doubleFailure = assertThrows(
+          IllegalStateException.class,
+          () -> invoke("doubleParam", tooPrecise));
+      assertTrue(doubleFailure.getMessage().contains("which would hold '9.007199254740992E15'"));
+
+    }
+
+    @Test
+    @DisplayName("A decimal bound to an integral parameter fails instead of dropping its fraction")
+    public void aDecimalIntoAnIntegralParameterFails() {
+
+      final var e = assertThrows(
+          IllegalStateException.class,
+          () -> invoke("intParam", new BigDecimal("120.50")));
+      assertTrue(e.getMessage().contains("The value '120.50'"));
+      assertTrue(e.getMessage().contains("which would hold '120'"));
+
+    }
+
+    @Test
+    @DisplayName("A double too precise for a float parameter fails as well")
+    public void aDoubleTooPreciseForAFloatFails() {
+
+      final var e = assertThrows(
+          IllegalStateException.class,
+          () -> invoke("floatParam", 0.1234567890123d));
+      assertTrue(e.getMessage().contains("The value '0.1234567890123'"));
+
+    }
+
+    @Test
+    @DisplayName("The text of a decimal is refused like the decimal, with the guiding message")
+    public void theTextOfADecimalIsRefusedLikeTheDecimal() {
+
+      final var e = assertThrows(
+          IllegalStateException.class,
+          () -> invoke("intParam", "120.50"));
+      assertTrue(e.getMessage().contains("The value '120.50'"));
+      assertTrue(e.getMessage().contains("which would hold '120'"));
+      assertTrue(e.getMessage().contains("@TaskParam(\"value\")"));
+      assertTrue(e.getMessage().contains("intParam"));
+
+    }
+
+    @Test
+    @DisplayName("Text which is no number fails naming the text")
+    public void textWhichIsNoNumberFails() {
+
+      final var e = assertThrows(
+          IllegalStateException.class,
+          () -> invoke("intParam", "twelve"));
+      assertTrue(e.getMessage().contains("The value 'twelve'"));
+      assertTrue(e.getMessage().contains("is no number"));
 
     }
 

@@ -145,6 +145,12 @@
           <version>3.16.0</version>
           <configuration>
             <release>${version.java}</release>
+            <!-- a message about a parameter names it the way the developer wrote it, and
+                 without this flag javac replaces that name with arg0, arg1 and so on.
+                 It is the application's own build which decides what its handler methods
+                 report, and spring-boot-starter-parent sets the flag there; this one is
+                 what makes the tests of this repository read like such an application. -->
+            <parameters>true</parameters>
             <compilerArgs>
               <!-- a javadoc which names a method is checked like any other claim: a link
                    the compiler cannot resolve is an error, a parameter documented twice a

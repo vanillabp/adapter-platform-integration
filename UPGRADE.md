@@ -6,6 +6,67 @@ applications built on VanillaBP). What an application on Camunda 7 has to config
 this is in
 [that adapter's own file](https://github.com/vanillabp/camunda7-adapter/blob/main/UPGRADE.md).
 
+## A number which does not fit its `@TaskParam` fails instead of arriving wrong (2026-09-16)
+
+A `@TaskParam`, a parameter of a `@WorkflowStartedByBpms` method and an attribute of an aggregate a
+BPMS-initiated start builds all get their value through one conversion. That conversion used to
+call `intValue()`, `doubleValue()` and their siblings, which read the bit pattern of a number and
+cut it down without saying anything. It now converts a number through its decimal form and hands
+the result over only where it reads back as the same number. Where it does not, the invocation
+fails with a message and the BPMS raises the incident it raises for any other failing task.
+
+**Version 1 refused the same pairs**, so this is a return rather than a new rule. It bound the
+parameter by raw reflection, and a pair reflection could not satisfy threw `IllegalArgumentException:
+argument type mismatch` out of `Method.invoke`, with no cause, no parameter name and no method name.
+What version 1 accepted is accepted here as well: a `Long` and an `Integer` into a `long`, and
+everything else which loses nothing.
+
+These are the pairs which stop being silent. Each of them arrives today as the number in the middle
+column, with no log line and no exception, and each of them ends the invocation from now on:
+
+|     the value the BPMS reported      | what the parameter got  |    declared as     |
+|--------------------------------------|-------------------------|--------------------|
+| a `Long` of `3000000000`             | `-1294967296`           | `int`              |
+| `new BigDecimal("120.50")`           | `120`                   | `int`, `long`      |
+| `new BigInteger("9007199254740993")` | `9007199254740992`      | `Double`, `double` |
+| `new BigInteger("9007199254740993")` | `1`                     | `int`              |
+| `new BigInteger("9007199254740993")` | `9.007199E15`           | `Float`            |
+| a `Float` of `0.1f`                  | `0`                     | `int`, `long`      |
+| the text `"120.50"`                  | `NumberFormatException` | `int`, `long`      |
+
+A `Float` of `0.1f` bound to a `Double` changes as well, and in the other direction: it used to
+arrive as `0.10000000149011612` on Camunda 7 and as `0.1` on Camunda 8, and it arrives as `0.1` on
+both now. Nothing in the conversion asks which engine it is talking to; the two worlds agree because
+the value travels through the text `0.1` rather than between two binary formats.
+
+What does NOT change is a conversion which keeps the value. `new BigDecimal("120.50")` bound to a
+`Double` is still `120.5`, because the two are the same number and a scale the target type cannot
+keep is not a loss. The comparison is numeric for exactly that reason.
+
+This is the message an application sees instead of the wrong number:
+
+```
+The value '3000000000' of type 'java.lang.Long' bound to @TaskParam("count") parameter 'count' of
+@WorkflowTask method 'com.example.OrderService#checkStock' does not fit the parameter's type 'int',
+which would hold '-1294967296' instead! Declare a type the value fits into, or map a value the type
+can hold.
+```
+
+The parameter is named the way the developer wrote it where the application was compiled with
+`-parameters`, which `spring-boot-starter-parent` sets. Without the flag the message says `arg1`.
+
+**What to do before upgrading.** Read every `@TaskParam` of the application together with the value
+the model maps into it, and the same for every attribute a BPMS-initiated start writes. A parameter
+declared `int` or `long` against a value which can carry a fraction or exceed the type is the shape
+to look for, and so is a parameter declared `Double` or `Float` against a whole number larger than
+that type holds exactly. Where such a pair exists, either widen the declared type or map a value
+which fits. There is no property which switches the refusal off: the wrong number is what the
+refusal exists to stop, and a switch without an end date is a second behaviour to keep alive.
+
+What the conversion does in full is in
+[`migration-adapter/README.md`](./migration-adapter/README.md), section "What a `@TaskParam` may be
+declared as", and the reasoning is decision 55 in [`DECISIONS.md`](./DECISIONS.md).
+
 ## An inherited @WorkflowService means the same on both platforms (2026-09-06)
 
 `@WorkflowService` is `@Inherited`, so a class extending an annotated class is a workflow service,
