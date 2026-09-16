@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -367,18 +368,22 @@ public class WorkflowModuleBuildStepProcessor {
   }
 
   /**
-   * Collects the module-specific configuration files (properties or YAML) of all workflow
-   * modules found and hands the very same list to the two consumers which need it: dev mode
-   * watches those files, and the native image carries them as resources. Both locations
-   * loaded by the config source providers are covered, files at the classpath root
-   * (<code>{id}[-{profile}].{ext}</code>) and files inside a subdirectory named after the
-   * workflow module ID (<code>{id}/{id}[-{profile}].{ext}</code>), which is why a file is
-   * registered by its path relative to the archive root rather than by its name.
+   * Tells dev mode and the native image about the module-specific configuration files
+   * (properties or YAML) of all workflow modules found. One rule says which names count, and
+   * that is what keeps the two from drifting apart, but each of them needs it in a shape of
+   * its own: dev mode gets the rule, the native image gets the files which match it in this
+   * build.
+   * <p>
+   * Dev mode is asked with a predicate and not with a list of names, because a build writes
+   * such a list once. A configuration file which a developer adds afterwards is in no list a
+   * build produced, so watching the names of the last build would leave that file out of the
+   * restart, and the application would go on running against the configuration of that build.
+   * The predicate is as narrow as the names the config source providers read, so a YAML file
+   * which has nothing to do with a workflow module restarts nothing.
    * <p>
    * A native image carries only the resources it was told about, and a file which is watched
    * in dev mode but missing from the image is the difference between a workflow module whose
-   * settings apply and one whose settings are silently the defaults. Building the list once
-   * is what keeps the two from drifting apart.
+   * settings apply and one whose settings are silently the defaults.
    *
    * @param allWorkflowModules A {@link VanillaBpWorkflowModulesBuildItem} containing information about all workflow modules.
    * @param applicationArchives An {@link ApplicationArchivesBuildItem} containing the archives to be scanned for configuration files.
@@ -394,30 +399,34 @@ public class WorkflowModuleBuildStepProcessor {
       final BuildProducer<HotDeploymentWatchedFileBuildItem> watchedFiles,
       final BuildProducer<NativeImageResourceBuildItem> nativeImageResources) {
 
-    workflowModuleSpecificConfigFiles(allWorkflowModules, applicationArchives)
-        .forEach(relativePath -> {
-          watchedFiles.produce(new HotDeploymentWatchedFileBuildItem(relativePath));
-          nativeImageResources.produce(new NativeImageResourceBuildItem(relativePath));
-        });
+    final var isWorkflowModuleConfigFile = workflowModuleSpecificConfigFileRule(allWorkflowModules);
+
+    watchedFiles
+        .produce(HotDeploymentWatchedFileBuildItem
+            .builder()
+            .setLocationPredicate(isWorkflowModuleConfigFile)
+            .build());
+
+    workflowModuleSpecificConfigFiles(applicationArchives, isWorkflowModuleConfigFile)
+        .forEach(relativePath -> nativeImageResources.produce(new NativeImageResourceBuildItem(relativePath)));
 
   }
 
   /**
-   * Searches all application archives for the configuration files the config source providers
-   * of a workflow module load: the file named after the workflow module ID and every
-   * profile-specific variant of it, at the classpath root as well as inside a subdirectory
-   * named after the ID, for each file extension both providers support.
+   * Builds the rule saying whether a file is one the config source providers of a workflow
+   * module read: the file named after the workflow module ID and every profile-specific
+   * variant of it, at the classpath root as well as inside a subdirectory named after the ID,
+   * for each file extension both providers support.
+   * <p>
+   * It reads a path relative to the root of an archive or of a resource directory, which is
+   * the form dev mode hands to a watched-file predicate and the form the archives are walked
+   * in below.
    *
    * @param allWorkflowModules All workflow modules found
-   * @param applicationArchives The archives of this Quarkus build
-   * @return The paths of those files relative to the root of the archive holding them,
-   *         deduplicated because the same path may show up in more than one archive
+   * @return Whether a relative path is a configuration file of one of those workflow modules
    */
-  private static SortedSet<String> workflowModuleSpecificConfigFiles(
-      final VanillaBpWorkflowModulesBuildItem allWorkflowModules,
-      final ApplicationArchivesBuildItem applicationArchives) {
-
-    // determine all relative paths possible
+  private static Predicate<String> workflowModuleSpecificConfigFileRule(
+      final VanillaBpWorkflowModulesBuildItem allWorkflowModules) {
 
     final var propertiesFileExtensions = new WorkflowModuleSpecificPropertiesConfigSourceProvider(
         "any", -1)
@@ -439,11 +448,30 @@ public class WorkflowModuleBuildStepProcessor {
         .map(Pattern::quote)
         // to build regex patterns matching "id[-profile].(extension1|extension2)" at the
         // classpath root as well as inside a subdirectory named after the workflow module ID
-        .map(id -> "(?:%s/)?%s[^/]*\\.(?:%s)".formatted(id, id, extensionPattern))
+        .map(id -> "(?:%s/)?%s(?:-[^/]*)?\\.(?:%s)".formatted(id, id, extensionPattern))
         .map(Pattern::compile)
         .toList();
 
-    // search archives for config files
+    return relativePath -> relativePathPatterns
+        .stream()
+        .anyMatch(pattern -> pattern.matcher(relativePath).matches());
+
+  }
+
+  /**
+   * Searches all application archives for the configuration files of the workflow modules
+   * found. A file is collected by its path relative to the archive root rather than by its
+   * name, because the providers read two locations and a native image resource is named by
+   * the path it is loaded under.
+   *
+   * @param applicationArchives The archives of this Quarkus build
+   * @param isWorkflowModuleConfigFile Whether a relative path is a configuration file of a workflow module
+   * @return The paths of those files relative to the root of the archive holding them,
+   *         deduplicated because the same path may show up in more than one archive
+   */
+  private static SortedSet<String> workflowModuleSpecificConfigFiles(
+      final ApplicationArchivesBuildItem applicationArchives,
+      final Predicate<String> isWorkflowModuleConfigFile) {
 
     final var configFiles = new TreeSet<String>();
     applicationArchives
@@ -451,12 +479,11 @@ public class WorkflowModuleBuildStepProcessor {
         // traverse all archives
         .forEach(archive -> archive
             .accept(openPathTree -> openPathTree
-                .walk(visit -> relativePathPatterns.
-                // and check each file's relative path to match one of the patterns
-                    forEach(pattern -> Optional
-                        .ofNullable(visit.getRelativePath("/"))
-                        .filter(relativePath -> pattern.matcher(relativePath).matches())
-                        .ifPresent(configFiles::add)))));
+                // and check each file's relative path against the rule
+                .walk(visit -> Optional
+                    .ofNullable(visit.getRelativePath("/"))
+                    .filter(isWorkflowModuleConfigFile)
+                    .ifPresent(configFiles::add))));
     return configFiles;
 
   }
