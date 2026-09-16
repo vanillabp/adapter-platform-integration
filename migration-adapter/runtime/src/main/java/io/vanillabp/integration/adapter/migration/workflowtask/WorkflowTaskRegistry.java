@@ -1027,6 +1027,32 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
   }
 
+  @Override
+  public Collection<String> multiInstanceElementNames(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String taskDefinitionOrActivityId) {
+
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    if (entry == null) {
+      return List.of();
+    }
+    // the UNION over every method serving this element, for the reason
+    // taskParameterNames unions its answer: methods wired to one BPMN element differ in
+    // the process version they serve, and all of them read their item out of the model
+    // the adapter is asking about
+    return entry.handlers
+        .stream()
+        .filter(candidate -> sameWiring(candidate.getTaskDefinition(),
+            taskDefinitionOrActivityId) || sameWiring(candidate.getActivityId(), taskDefinitionOrActivityId))
+        .map(WorkflowTaskHandler::getMultiInstanceElementNames)
+        .flatMap(List::stream)
+        .distinct()
+        .sorted()
+        .toList();
+
+  }
+
   /**
    * The sentence a delivery from an OUTFADED version deserves - without it the
    * developer reads "no method matches" and looks for a wiring defect, while the

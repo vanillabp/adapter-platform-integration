@@ -13,6 +13,9 @@ import io.vanillabp.integration.adapter.migration.handler.CoreParameterBinders;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.extension.spi.handler.CoreHandlerParameter;
 import io.vanillabp.integration.extension.spi.handler.HandlerValueSource;
+import io.vanillabp.spi.service.MultiInstanceElement;
+import io.vanillabp.spi.service.MultiInstanceElementResolver;
+import io.vanillabp.spi.service.NoResolver;
 import io.vanillabp.spi.service.TaskEvent;
 import io.vanillabp.spi.service.TaskId;
 import io.vanillabp.spi.service.TaskParam;
@@ -107,6 +110,15 @@ class WorkflowTaskScanner {
           .distinct()
           .sorted()
           .toList();
+      // Which iterations the method wants the ITEM of. Only the core sees this, and an
+      // adapter reading its own BPMN needs it to say while it deploys that a model
+      // iterates without ever naming the value of the round
+      final var multiInstanceElements = Arrays
+          .stream(method.getParameters())
+          .map(parameter -> parameter.getAnnotation(MultiInstanceElement.class))
+          .filter(java.util.Objects::nonNull)
+          .map(annotation -> elementNamesOf(annotation, beanResolver))
+          .toList();
       for (final var annotation : annotations) {
         handlers.add(buildHandler(
             workflowServiceClass,
@@ -117,6 +129,7 @@ class WorkflowTaskScanner {
             asynchronousTask,
             subscribedEvents,
             taskParameters,
+            multiInstanceElements,
             inherited));
       }
     }
@@ -172,6 +185,7 @@ class WorkflowTaskScanner {
       final boolean asynchronousTask,
       final java.util.Set<TaskEvent.Event> subscribedEvents,
       final List<String> taskParameters,
+      final List<Supplier<java.util.Collection<String>>> multiInstanceElements,
       final InheritedVersions inherited) {
 
     final var location = "%s#%s".formatted(workflowServiceClass.getName(), method.getName());
@@ -201,7 +215,43 @@ class WorkflowTaskScanner {
             .map(version -> VersionRange.parse(version, location))
             .toList());
     return new WorkflowTaskHandler(
-        workflowServiceClass, method, workflowServiceBean, binders, taskDefinition, activityId, versions, asynchronousTask, subscribedEvents, taskParameters);
+        workflowServiceClass, method, workflowServiceBean, binders, taskDefinition, activityId, versions, asynchronousTask, subscribedEvents, taskParameters, multiInstanceElements);
+
+  }
+
+  /**
+   * Which elements ONE <code>&#64;MultiInstanceElement</code> parameter asks the item of.
+   * A parameter naming its element answers itself; a parameter using a resolver bean is
+   * answered by that bean, which is asked when the answer is first needed - the beans of
+   * the application are not all built while a workflow service is scanned.
+   * <p>
+   * A resolver bean nobody defined answers nothing here. The binder built for the same
+   * parameter says what is missing and how to define it, and saying it twice, in two
+   * voices, from a question about a model would only make that message harder to find.
+   */
+  private static Supplier<java.util.Collection<String>> elementNamesOf(
+      final MultiInstanceElement annotation,
+      final Function<Class<?>, Object> beanResolver) {
+
+    if (!annotation.value().equals(MultiInstanceElement.USE_RESOLVER)) {
+      final var named = List.of(annotation.value());
+      return () -> named;
+    }
+    final var resolverClass = annotation.resolverBean();
+    if (resolverClass.equals(NoResolver.class)) {
+      // neither the name nor a resolver: refused by the binder of this very parameter
+      return List::of;
+    }
+    return () -> {
+      final var resolver = (MultiInstanceElementResolver<?, ?>) beanResolver.apply(resolverClass);
+      if (resolver == null) {
+        return List.of();
+      }
+      final var names = resolver.getNames();
+      return names == null
+          ? List.of()
+          : names;
+    };
 
   }
 

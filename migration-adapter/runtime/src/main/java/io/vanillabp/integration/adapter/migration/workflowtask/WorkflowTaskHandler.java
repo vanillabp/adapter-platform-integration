@@ -75,6 +75,22 @@ public class WorkflowTaskHandler {
   private final List<String> taskParameters;
 
   /**
+   * Which iterations the method wants the ITEM of, one entry per
+   * <code>&#64;MultiInstanceElement</code> parameter. A parameter naming its element
+   * answers itself, one using a resolver bean asks that bean, and the bean is looked up
+   * when the answer is first needed rather than while the method is scanned - the
+   * application's beans are not all there yet at that point.
+   */
+  private final List<Supplier<java.util.Collection<String>>> multiInstanceElements;
+
+  /**
+   * What {@link #getMultiInstanceElementNames()} answered the first time, kept because
+   * the deployment asks it once per BPMN element and a resolver bean is looked up for
+   * every question.
+   */
+  private volatile List<String> knownMultiInstanceElementNames;
+
+  /**
    * Whether some BPMN task matched this handler during wiring validation - input
    * for the per-module unwired-methods check (a handler registered under several
    * BPMN processes via {@code secondaryBpmnProcesses} legitimately matches in only
@@ -92,7 +108,8 @@ public class WorkflowTaskHandler {
       final InheritedVersions.EffectiveVersions versions,
       final boolean asynchronousTask,
       final java.util.Set<io.vanillabp.spi.service.TaskEvent.Event> subscribedEvents,
-      final List<String> taskParameters) {
+      final List<String> taskParameters,
+      final List<Supplier<java.util.Collection<String>>> multiInstanceElements) {
 
     this.workflowServiceClass = workflowServiceClass;
     this.method = method;
@@ -105,6 +122,7 @@ public class WorkflowTaskHandler {
     this.asynchronousTask = asynchronousTask;
     this.subscribedEvents = subscribedEvents;
     this.taskParameters = taskParameters;
+    this.multiInstanceElements = multiInstanceElements;
 
   }
 
@@ -114,6 +132,33 @@ public class WorkflowTaskHandler {
   List<String> getTaskParameters() {
 
     return taskParameters;
+
+  }
+
+  /**
+   * The BPMN element ids the method wants the item of an iteration for, sorted and
+   * duplicate-free. The core reports them to the adapters through
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#multiInstanceElementNames},
+   * so an adapter reading its own BPMN can say that a model hands over no such item.
+   *
+   * @return The element ids, empty where the method declares no
+   *         <code>&#64;MultiInstanceElement</code>
+   */
+  List<String> getMultiInstanceElementNames() {
+
+    var known = knownMultiInstanceElementNames;
+    if (known == null) {
+      known = multiInstanceElements
+          .stream()
+          .map(Supplier::get)
+          .flatMap(java.util.Collection::stream)
+          .filter(java.util.Objects::nonNull)
+          .distinct()
+          .sorted()
+          .toList();
+      knownMultiInstanceElementNames = known;
+    }
+    return known;
 
   }
 

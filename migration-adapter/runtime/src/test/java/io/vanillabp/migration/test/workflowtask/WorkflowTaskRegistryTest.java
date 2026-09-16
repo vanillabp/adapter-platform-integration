@@ -1015,6 +1015,194 @@ public class WorkflowTaskRegistryTest {
 
   }
 
+  /**
+   * Two methods serving ONE BPMN element in different process versions, each asking for
+   * the item of an iteration of its own - what the model behind that element has to hand
+   * over, whichever of the two runs.
+   */
+  static class IteratingVersionsService {
+
+    @WorkflowTask(taskDefinition = "iterated", version = "1")
+    public void firstVersion(
+        final Aggregate aggregate,
+        @MultiInstanceElement("Subprocess_orders") final Object element) {
+
+      aggregate.element = element;
+
+    }
+
+    @WorkflowTask(taskDefinition = "iterated", version = ">1")
+    public void laterVersions(
+        final Aggregate aggregate,
+        @MultiInstanceElement("Activity_positions") final Object element) {
+
+      aggregate.element = element;
+
+    }
+
+  }
+
+  /**
+   * A handler which counts rather than reads: it is told which round it is in and how
+   * many rounds there are, and never asks for the item. An element iterating a fixed
+   * number of times serves it, which is why it must not be reported.
+   */
+  static class CountingService {
+
+    @WorkflowTask
+    public void counted(
+        final Aggregate aggregate,
+        @MultiInstanceIndex("Subprocess_orders") final int index,
+        @MultiInstanceTotal("Subprocess_orders") final int total) {
+
+      aggregate.index = index;
+      aggregate.total = total;
+
+    }
+
+  }
+
+  @Nested
+  @DisplayName("The iterations a handler wants the item of")
+  class MultiInstanceElementsAskedFor {
+
+    @Test
+    @DisplayName("The element a @MultiInstanceElement names is reported to the adapter")
+    public void theNamedElementIsReported() {
+
+      assertEquals(
+          List.of("items"),
+          List.copyOf(registry.multiInstanceElementNames(MODULE, PROCESS, "withBindings")),
+          "only the core scans the handlers, so the adapter reading the BPMN has to be told");
+
+    }
+
+    @Test
+    @DisplayName("A handler reading index and total asks for no item")
+    public void countingAsksForNoItem() {
+
+      registry.registerWorkflowService(
+          MODULE,
+          "CountingProcess",
+          CountingService.class,
+          CountingService::new,
+          beans::get,
+          createProcessService());
+
+      assertTrue(
+          registry.multiInstanceElementNames(MODULE, "CountingProcess", "counted").isEmpty(),
+          "an element which iterates a fixed number of times serves such a handler, so nothing "
+              + "about it may be refused");
+
+    }
+
+    @Test
+    @DisplayName("A method reading nothing but its aggregate asks for no item either")
+    public void aMethodWithoutMultiInstanceAsksForNothing() {
+
+      assertTrue(registry.multiInstanceElementNames(MODULE, PROCESS, "doSomething").isEmpty());
+      assertTrue(registry.multiInstanceElementNames(MODULE, PROCESS, "unknownTask").isEmpty());
+      assertTrue(registry.multiInstanceElementNames(MODULE, "UnknownProcess", "withBindings").isEmpty());
+
+    }
+
+    @Test
+    @DisplayName("A resolver bean is asked which elements it reads")
+    public void theResolverBeanIsAsked() {
+
+      // the bean arrives AFTER the workflow service was registered, which is the order a
+      // booting application has: the scan must not have looked it up yet
+      beans.put(ItemResolver.class, new ItemResolver() {
+
+        @Override
+        public java.util.Collection<String> getNames() {
+          return List.of("Subprocess_orders", "items");
+        }
+
+        @Override
+        public Object resolve(
+            final Aggregate workflowAggregate,
+            final Map<String, MultiInstanceElementResolver.MultiInstance<Object>> multiInstances) {
+          return null;
+        }
+
+      });
+
+      assertEquals(
+          List.of("Subprocess_orders", "items"),
+          List.copyOf(registry.multiInstanceElementNames(MODULE, PROCESS, "withResolver")),
+          "a resolver reads the iterations it names, and those are the ones a model has to "
+              + "hand over");
+
+    }
+
+    @Test
+    @DisplayName("A resolver bean nobody defined reports nothing")
+    public void aMissingResolverBeanReportsNothing() {
+
+      assertTrue(
+          registry.multiInstanceElementNames(MODULE, PROCESS, "withResolver").isEmpty(),
+          "the binder of that parameter says what is missing and how to define it - saying it "
+              + "again from a question about a model would only hide that message");
+
+    }
+
+    @Test
+    @DisplayName("Several methods serving one element contribute the UNION of their elements")
+    public void theUnionOfEveryMethodServingTheElement() {
+
+      registry.registerWorkflowService(
+          MODULE,
+          "IteratingProcess",
+          IteratingVersionsService.class,
+          IteratingVersionsService::new,
+          beans::get,
+          createProcessService());
+
+      assertEquals(
+          List.of("Activity_positions", "Subprocess_orders"),
+          List.copyOf(registry.multiInstanceElementNames(MODULE, "IteratingProcess", "iterated")),
+          "whichever version is delivered reads its item out of the same model");
+
+    }
+
+    @Test
+    @DisplayName("An adapter not implementing the SPI method sees the previous behaviour")
+    public void theDefaultAnswersNothing() {
+
+      final var untouched = new io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring() {
+
+        @Override
+        public void validateTaskWiring(
+            final String workflowModuleId,
+            final String bpmnProcessId,
+            final java.util.Collection<BpmnTaskSpec> tasks) {
+        }
+
+        @Override
+        public void validateNoUnwiredWorkflowTaskMethods(
+            final String workflowModuleId) {
+        }
+
+        @Override
+        public String resolveWorkflowAggregateIdName(
+            final String workflowModuleId,
+            final String bpmnProcessId) {
+
+          return null;
+
+        }
+
+      };
+
+      assertTrue(
+          untouched.multiInstanceElementNames(MODULE, PROCESS, "withBindings").isEmpty(),
+          "the SPI method is additive: an adapter which never heard of it keeps the behaviour it had");
+
+    }
+
+  }
+
   @Nested
   @DisplayName("Wiring validation")
   class WiringValidation {
