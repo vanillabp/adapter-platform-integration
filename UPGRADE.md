@@ -63,6 +63,16 @@ that type holds exactly. Where such a pair exists, either widen the declared typ
 which fits. There is no property which switches the refusal off: the wrong number is what the
 refusal exists to stop, and a switch without an end date is a second behaviour to keep alive.
 
+**A value which travels as text is served where version 1 could not serve it.** A workflow
+aggregate shares an enum as the name of its constant and a value type such as a `UUID`, a
+`LocalDate` or a `Duration` as the text that type writes itself. A parameter or an attribute
+declaring one of those types now receives the value, where version 1 threw the same
+`argument type mismatch` it threw for a number which did not fit. A workaround which declares a
+`String` and parses it in the handler keeps working, so nothing has to be changed on upgrading.
+`java.util.Date`, `java.util.Calendar` and `java.util.Locale` are the exception: their text does not
+carry the value back, they stay refused, and the message names the type to declare instead. The
+measurement behind that is decision 57 in [`DECISIONS.md`](./DECISIONS.md).
+
 What the conversion does in full is in
 [`migration-adapter/README.md`](./migration-adapter/README.md), section "What a `@TaskParam` may be
 declared as", and the reasoning is decision 55 in [`DECISIONS.md`](./DECISIONS.md).

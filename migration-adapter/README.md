@@ -1175,16 +1175,19 @@ the workflow.
 
 What it does:
 
-|   the value the BPMS reported   |   the declared type    |                       what the parameter gets                        |
-|---------------------------------|------------------------|----------------------------------------------------------------------|
-| anything the type already holds | that type, or `Object` | the value itself                                                     |
-| `null`                          | a wrapper type         | `null`                                                               |
-| `null`                          | a primitive type       | the invocation fails, naming the input mapping as the way out        |
-| a number                        | another number type    | the same number, or a failure where it would not be the same number  |
-| a number                        | `String`               | its `toString()`                                                     |
-| the text of a number            | a number type          | the number, or a failure where the text is no number                 |
-| `"true"` or `"false"`           | `Boolean`              | the boolean                                                          |
-| everything else                 | anything               | the invocation fails, naming the value's class and the declared type |
+|           the value the BPMS reported            |   the declared type    |                        what the parameter gets                         |
+|--------------------------------------------------|------------------------|------------------------------------------------------------------------|
+| anything the type already holds                  | that type, or `Object` | the value itself                                                       |
+| `null`                                           | a wrapper type         | `null`                                                                 |
+| `null`                                           | a primitive type       | the invocation fails, naming the input mapping as the way out          |
+| a number                                         | another number type    | the same number, or a failure where it would not be the same number    |
+| a number                                         | `String`               | its `toString()`                                                       |
+| the text of a number                             | a number type          | the number, or a failure where the text is no number                   |
+| `"true"` or `"false"`                            | `Boolean`              | the boolean                                                            |
+| the name of an enum constant                     | that enum              | the constant, or a failure where the enum has no constant of that name |
+| the text a `UUID` or a `java.time` value writes  | that type              | the value, or a failure where the text is none that type writes        |
+| the text of a `Date`, a `Calendar` or a `Locale` | that type              | the invocation fails, naming the type to declare instead               |
+| everything else                                  | anything               | the invocation fails, naming the value's class and the declared type   |
 
 The row worth reading twice is the one about numbers. A number travels through its decimal
 form, never through `intValue()` or `doubleValue()`, and the converted value is handed over
@@ -1208,19 +1211,66 @@ which is why this is a refusal rather than a rounding rule. It is
 [decision 55](../DECISIONS.md), and `UPGRADE.md` says what it means for an application
 coming from version 1. The cases are held by
 `WorkflowTaskScannerEdgeCasesTest`, nested class "Task-parameter conversion", and by
-`AggregatePropertyWriterTest` for the writing side.
+`AggregatePropertyWriterTest` for the writing side. `TextValueRoundTripTest` holds the way
+out and the way back against each other: it asserts the text every one of those types is
+shared as and that the same text comes back as the same value.
 
 The message names the parameter as the developer wrote it where the application was
 compiled with `-parameters`, which `spring-boot-starter-parent` sets. Without the flag
 javac keeps no names and the message says `arg1`.
+
+The other row worth reading twice is the one about text. A workflow aggregate shares an
+enum as the name of its constant, and a value type such as a `UUID` or a `LocalDate` as the
+string form that type writes itself. The way back reads exactly those forms, so a handler
+declares the type the aggregate holds and gets the value the aggregate held:
+
+|        what the aggregate shared        | what the BPMS carries  | declared as |
+|-----------------------------------------|------------------------|-------------|
+| `UUID.fromString("f81d4fae-7dec-...")`  | `f81d4fae-7dec-...`    | `UUID`      |
+| `Decision.APPROVED`                     | `APPROVED`             | `Decision`  |
+| `LocalDate.parse("2026-09-16")`         | `2026-09-16`           | `LocalDate` |
+| `Instant.parse("2026-09-16T18:15:30Z")` | `2026-09-16T18:15:30Z` | `Instant`   |
+| `Duration.ofMinutes(90)`                | `PT1H30M`              | `Duration`  |
+
+The types read back are `UUID`, every enum, and the `java.time` values `Instant`,
+`LocalDate`, `LocalTime`, `LocalDateTime`, `OffsetDateTime`, `OffsetTime`,
+`ZonedDateTime`, `Year`, `YearMonth`, `MonthDay`, `Duration`, `Period`, `ZoneId` and
+`ZoneOffset`. `DayOfWeek` and `Month` are enums and come along with every other enum. A
+text in any other form is refused, and the message shows a form the type does write. A
+constant name the model invented is refused too, naming the constants the enum has,
+because a handler reading such a name would act on a value nobody declared.
+
+Timers are where a model reads these texts back, so two limits belong here. Camunda accepts
+a date, a duration and a cycle in a timer event. A `Duration` carries days, hours, minutes
+and seconds, a `Period` carries years, months and days, and neither of them carries the
+combined form `P3Y6M4DT12H30M5S`. A cycle such as `R5/PT10S` and a cron expression are no
+`java.time` value at all, so share them as a `String`.
+
+The second limit is visible in the model. `java.time` writes a duration of a day or more in
+hours, so `Duration.ofDays(14)` reaches the BPMS as `PT336H` rather than as `P14D`. A timer
+fires at the same moment either way, because the engine reads both forms, but the text an
+operator reads is not the text the application wrote. Where the wording has to survive,
+share the value as a `String`.
+
+`java.util.Date`, `java.util.Calendar` and `java.util.Locale` stay refused although the
+platform writes them out as text, and the message says which type to declare instead. A
+`Date` is written as `Wed Sep 16 21:55:30 CEST 2026`, which carries no milliseconds and
+names the time zone by an abbreviation several zones share. Measured on 2026-09-16: the
+same text written in `Asia/Kolkata` and read in `Europe/Dublin` gives an instant four and a
+half hours away, and no check on the text sees the difference, because both zones write
+`IST`. Declare an `Instant`, an `OffsetDateTime` or a `ZonedDateTime` instead, in the
+parameter and in the aggregate. A `Locale` is written as `de_DE`, which no `Locale` method
+reads back, and `Locale.ROOT` is written as an empty text.
 
 **What to share, and as what.** A workflow aggregate carries the results a model decides on
 and the values an operator reads, not every field of a business object. So a `@TaskParam`
 reads a decision or a number somebody looks at, and the types worth declaring are the ones
 such a value needs: `String` in both directions, the integral types among each other where
 the value fits, a decimal to a decimal, and a decimal to a floating type where the value
-survives. A value nobody computes with travels best as text, because every BPMS carries
-text and text loses nothing on the way. A type of the application's own is refused, and
+survives. A decision the model acts on travels as the name of an enum constant and a point
+in time as the text `java.time` writes, and each of them comes back as the type the
+aggregate declared. A value nobody computes with travels best as text, because every BPMS
+carries text and text loses nothing on the way. A type of the application's own is refused, and
 stays refused: a BPMS variable is a plain value and only the application knows what its own
 types mean.
 
