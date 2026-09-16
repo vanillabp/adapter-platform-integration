@@ -75,6 +75,39 @@ public class NoteWorkflowService {
   }
 
   /**
+   * One of two methods for one element, this one for the first version of the model. A
+   * version an extension reports picks the method the way it picks a
+   * <code>&#64;WorkflowTask</code> method, so two generations of a model stand next to
+   * each other here as well.
+   *
+   * @param prefilled The note this extension prefilled
+   * @return The note the extension publishes
+   */
+  @SampleNote(element = "Activity_TwoGenerations", version = "1")
+  public SampleNoteDetails noteOfTheFirstGeneration(
+      final SampleNoteDetails prefilled) {
+
+    prefilled.setTitle("first generation");
+    return prefilled;
+
+  }
+
+  /**
+   * The other one, for every version deployed after the first.
+   *
+   * @param prefilled The note this extension prefilled
+   * @return The note the extension publishes
+   */
+  @SampleNote(element = "Activity_TwoGenerations", version = ">1")
+  public SampleNoteDetails noteOfTheLaterGenerations(
+      final SampleNoteDetails prefilled) {
+
+    prefilled.setTitle("later generations");
+    return prefilled;
+
+  }
+
+  /**
    * Matched by its own name, which is the convention VanillaBP's own annotations follow.
    *
    * @param prefilled The note this extension prefilled

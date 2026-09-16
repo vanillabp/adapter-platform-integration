@@ -36,6 +36,8 @@ public final class SampleNoteContract {
     return HandlerContract
         .of(EXTENSION_ID, SampleNote.class)
         .lookupKeys(annotation -> keysOf((SampleNote) annotation))
+        .versions(annotation -> List.of(((SampleNote) annotation).version()))
+        .callsCarryTheProcessVersion()
         .coreParameters(
             CoreHandlerParameter.WORKFLOW_AGGREGATE,
             CoreHandlerParameter.TASK_PARAM,

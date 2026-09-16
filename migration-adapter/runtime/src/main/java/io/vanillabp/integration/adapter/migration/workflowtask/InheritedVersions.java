@@ -1,8 +1,5 @@
 package io.vanillabp.integration.adapter.migration.workflowtask;
 
-import java.util.Arrays;
-import java.util.List;
-
 import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.WorkflowService;
 
@@ -35,25 +32,14 @@ import io.vanillabp.spi.service.WorkflowService;
  * DECISIONS.md.
  */
 public record InheritedVersions(
-                                List<VersionRange> versions,
+                                ServedVersions versions,
                                 String declaredBy) {
 
   /**
    * Nothing to inherit: the class named no version for this process, or it is not
    * annotated at all (test doubles registering handler classes directly).
    */
-  private static final InheritedVersions NOTHING = new InheritedVersions(List.of(), null);
-
-  /**
-   * What a handler method actually serves and where that came from -
-   * <code>inheritedFrom</code> is <code>null</code> for a method naming its own range,
-   * whose messages need no origin because the attribute is right in front of the
-   * reader.
-   */
-  public record EffectiveVersions(
-                                  List<VersionRange> versions,
-                                  String inheritedFrom) {
-  }
+  private static final InheritedVersions NOTHING = new InheritedVersions(ServedVersions.EVERY_VERSION, null);
 
   /**
    * @param workflowServiceClass The <code>&#64;WorkflowService</code> class
@@ -74,13 +60,10 @@ public record InheritedVersions(
     }
     final var declaredBy = "the @BpmnProcess(bpmnProcessId = \"%s\") of '%s'"
         .formatted(bpmnProcessId, workflowServiceClass.getName());
-    final var versions = Arrays
-        .stream(declaration.version())
-        .map(version -> VersionRange.parse(version, declaredBy))
-        .toList();
+    final var versions = ServedVersions.parse(declaration.version(), declaredBy);
     // '*' on the class is what every class says which says nothing, so there is
     // nothing to inherit and nothing to explain in a message either
-    return versions.stream().allMatch(VersionRange::everyVersion)
+    return versions.everyVersion()
         ? NOTHING
         : new InheritedVersions(versions, declaredBy);
 
@@ -110,16 +93,17 @@ public record InheritedVersions(
 
   /**
    * @param namedByTheMethod What the method's own <code>version</code> attribute parses
-   *          to - a single <code>*</code> where it names none
-   * @return The range the handler serves, and its origin where the class supplied it
+   *          to - {@link ServedVersions#EVERY_VERSION} where it names none
+   * @return The versions the handler serves, naming their origin where the class
+   *         supplied them
    */
-  public EffectiveVersions effectiveFor(
-      final List<VersionRange> namedByTheMethod) {
+  public ServedVersions effectiveFor(
+      final ServedVersions namedByTheMethod) {
 
-    if (versions.isEmpty() || !namedByTheMethod.stream().allMatch(VersionRange::everyVersion)) {
-      return new EffectiveVersions(namedByTheMethod, null);
+    if (versions.everyVersion() || !namedByTheMethod.everyVersion()) {
+      return namedByTheMethod;
     }
-    return new EffectiveVersions(versions, declaredBy);
+    return versions.inheritedFrom(declaredBy);
 
   }
 

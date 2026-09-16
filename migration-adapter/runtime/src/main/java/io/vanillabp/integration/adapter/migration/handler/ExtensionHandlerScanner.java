@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import io.vanillabp.integration.adapter.migration.workflowtask.ServedVersions;
 import io.vanillabp.integration.extension.spi.handler.HandlerContract;
 import io.vanillabp.integration.extension.spi.handler.HandlerValueSource;
 
@@ -119,7 +120,35 @@ final class ExtensionHandlerScanner {
         .toList();
 
     return new ExtensionHandlerMethod(
-        contract, workflowServiceClass, method, workflowServiceBean, binders, List.copyOf(lookupKeys));
+        contract, workflowServiceClass, method, workflowServiceBean, binders, List
+            .copyOf(lookupKeys), versionsOf(contract, annotations, where));
+
+  }
+
+  /**
+   * The versions a method serves, read from the attribute the contract names. A
+   * repeatable annotation contributes the specifications of every repetition, the way it
+   * contributes its keys; naming none means every version, which is what a contract
+   * saying nothing about versions gets for all of its methods.
+   */
+  private static ServedVersions versionsOf(
+      final HandlerContract contract,
+      final java.lang.annotation.Annotation[] annotations,
+      final String where) {
+
+    final var specifications = new LinkedHashSet<String>();
+    for (final var annotation : annotations) {
+      final var named = contract
+          .getVersions()
+          .apply(annotation);
+      if (named != null) {
+        named
+            .stream()
+            .filter(specification -> (specification != null) && !specification.isBlank())
+            .forEach(specifications::add);
+      }
+    }
+    return ServedVersions.parse(List.copyOf(specifications), where);
 
   }
 

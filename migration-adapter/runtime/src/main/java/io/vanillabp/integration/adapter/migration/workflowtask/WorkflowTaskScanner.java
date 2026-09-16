@@ -210,10 +210,7 @@ class WorkflowTaskScanner {
           : null;
     }
     final var versions = inherited
-        .effectiveFor(Arrays
-            .stream(annotation.version())
-            .map(version -> VersionRange.parse(version, location))
-            .toList());
+        .effectiveFor(ServedVersions.parse(annotation.version(), location));
     return new WorkflowTaskHandler(
         workflowServiceClass, method, workflowServiceBean, binders, taskDefinition, activityId, versions, asynchronousTask, subscribedEvents, taskParameters, multiInstanceElements);
 

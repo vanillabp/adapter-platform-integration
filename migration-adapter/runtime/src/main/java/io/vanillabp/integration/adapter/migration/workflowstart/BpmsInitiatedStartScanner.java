@@ -9,7 +9,7 @@ import java.util.function.Supplier;
 
 import io.vanillabp.integration.adapter.migration.handler.CoreParameterBinders;
 import io.vanillabp.integration.adapter.migration.workflowtask.InheritedVersions;
-import io.vanillabp.integration.adapter.migration.workflowtask.VersionRange;
+import io.vanillabp.integration.adapter.migration.workflowtask.ServedVersions;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartContext;
 import io.vanillabp.integration.extension.spi.handler.CoreHandlerParameter;
 import io.vanillabp.integration.extension.spi.handler.HandlerValueSource;
@@ -119,10 +119,7 @@ public final class BpmsInitiatedStartScanner {
     }
 
     final var versions = inherited
-        .effectiveFor(Arrays
-            .stream(annotation.version())
-            .map(version -> VersionRange.parse(version, location))
-            .toList());
+        .effectiveFor(ServedVersions.parse(annotation.version(), location));
     final var startEventId = annotation.id().equals(WorkflowStartedByBpms.ANY_START_EVENT)
         ? null
         : annotation.id();

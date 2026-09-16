@@ -33,6 +33,8 @@ public final class HandlerCall {
 
   private final List<String> lookupKeys;
 
+  private final String processVersion;
+
   private final Object workflowAggregateId;
 
   private final Object workflowAggregate;
@@ -54,6 +56,7 @@ public final class HandlerCall {
     this.workflowModuleId = builder.workflowModuleId;
     this.bpmnProcessId = builder.bpmnProcessId;
     this.lookupKeys = List.copyOf(builder.lookupKeys);
+    this.processVersion = builder.processVersion;
     this.workflowAggregateId = builder.workflowAggregateId;
     this.workflowAggregate = builder.workflowAggregate;
     this.aggregateProvided = builder.aggregateProvided;
@@ -114,6 +117,19 @@ public final class HandlerCall {
   public List<String> getLookupKeys() {
 
     return lookupKeys;
+
+  }
+
+  /**
+   * The version of the BPMN process this call is about, as the BPMS reports it - what
+   * decides between methods serving different versions
+   * ({@link HandlerContract.Builder#versions(java.util.function.Function)}).
+   *
+   * @return The version, or <code>null</code> where the BPMS reported none
+   */
+  public String getProcessVersion() {
+
+    return processVersion;
 
   }
 
@@ -195,6 +211,8 @@ public final class HandlerCall {
 
     private List<String> lookupKeys = List.of();
 
+    private String processVersion;
+
     private Object workflowAggregateId;
 
     private Object workflowAggregate;
@@ -245,6 +263,31 @@ public final class HandlerCall {
               .stream()
               .filter(java.util.Objects::nonNull)
               .toList();
+      return this;
+
+    }
+
+    /**
+     * The version of the BPMN process this call is about, which decides between methods
+     * serving different versions of one model.
+     * <p>
+     * Pass the version identifier THE BPMS reports, spelled the way it reports it: the
+     * number for Camunda 7 and Camunda 8, the version tag where that is all an engine
+     * has. It is compared to what the methods name, so a version dressed up for a
+     * screen ("3 (release-2024)") matches nothing.
+     * <p>
+     * Where a BPMS reports no version, leave it out. A call without a version is served
+     * by a method naming no version only, and a method which does name one is reported
+     * at startup instead of silently never running - see
+     * {@link HandlerContract.Builder#callsCarryTheProcessVersion()}.
+     *
+     * @param processVersion The version, or <code>null</code> where none is known
+     * @return This builder
+     */
+    public Builder processVersion(
+        final String processVersion) {
+
+      this.processVersion = processVersion;
       return this;
 
     }

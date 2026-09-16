@@ -41,15 +41,11 @@ public class WorkflowTaskHandler {
    */
   private final String activityId;
 
-  private final List<VersionRange> versions;
-
   /**
-   * Where the version range came from if the method named none itself: the
-   * <code>&#64;BpmnProcess</code> declaration the handlers of this class were
-   * registered for. <code>null</code> where the method names its own range, whose
-   * messages need no origin - the attribute is in front of whoever reads them.
+   * The process versions this method serves, which the whole registry shares with the
+   * other handler kinds and with the methods of an extension.
    */
-  private final String versionsInheritedFrom;
+  private final ServedVersions versions;
 
   /**
    * Whether the method declares a <code>&#64;TaskId</code> parameter: the task is
@@ -105,7 +101,7 @@ public class WorkflowTaskHandler {
       final List<HandlerValueSource> parameterBinders,
       final String taskDefinition,
       final String activityId,
-      final InheritedVersions.EffectiveVersions versions,
+      final ServedVersions versions,
       final boolean asynchronousTask,
       final java.util.Set<io.vanillabp.spi.service.TaskEvent.Event> subscribedEvents,
       final List<String> taskParameters,
@@ -117,8 +113,7 @@ public class WorkflowTaskHandler {
     this.parameterBinders = parameterBinders;
     this.taskDefinition = taskDefinition;
     this.activityId = activityId;
-    this.versions = versions.versions();
-    this.versionsInheritedFrom = versions.inheritedFrom();
+    this.versions = versions;
     this.asynchronousTask = asynchronousTask;
     this.subscribedEvents = subscribedEvents;
     this.taskParameters = taskParameters;
@@ -236,11 +231,7 @@ public class WorkflowTaskHandler {
    */
   String describeVersions() {
 
-    return versions
-        .stream()
-        .map(VersionRange::toString)
-        .map("'%s'"::formatted)
-        .collect(java.util.stream.Collectors.joining(", "));
+    return versions.describe();
 
   }
 
@@ -254,9 +245,7 @@ public class WorkflowTaskHandler {
    */
   String describeVersionsWithOrigin() {
 
-    return versionsInheritedFrom == null
-        ? describeVersions()
-        : "%s, inherited from %s".formatted(describeVersions(), versionsInheritedFrom);
+    return versions.describeWithOrigin();
 
   }
 
@@ -266,7 +255,7 @@ public class WorkflowTaskHandler {
    */
   boolean inheritsVersions() {
 
-    return versionsInheritedFrom != null;
+    return versions.inherited();
 
   }
 
@@ -278,16 +267,14 @@ public class WorkflowTaskHandler {
    */
   String describeVersionOrigin() {
 
-    return versionsInheritedFrom == null
-        ? ""
-        : ", which inherits the range of %s".formatted(versionsInheritedFrom);
+    return versions.describeOrigin();
 
   }
 
   boolean matchesVersion(
       final String processVersion) {
 
-    return matchesVersion(processVersion, VersionRange.NO_RESOLVER);
+    return versions.matches(processVersion);
 
   }
 
@@ -295,9 +282,7 @@ public class WorkflowTaskHandler {
       final String processVersion,
       final VersionRange.ProcessVersionResolver resolver) {
 
-    return versions
-        .stream()
-        .anyMatch(version -> version.matches(processVersion, resolver));
+    return versions.matches(processVersion, resolver);
 
   }
 
@@ -313,11 +298,7 @@ public class WorkflowTaskHandler {
       final WorkflowTaskHandler other,
       final VersionRange.ProcessVersionResolver resolver) {
 
-    return versions
-        .stream()
-        .anyMatch(version -> other.versions
-            .stream()
-            .anyMatch(otherVersion -> version.overlaps(otherVersion, resolver)));
+    return versions.overlaps(other.versions, resolver);
 
   }
 
@@ -326,11 +307,7 @@ public class WorkflowTaskHandler {
    */
   List<String> versionTags() {
 
-    return versions
-        .stream()
-        .flatMap(version -> version.versionTags().stream())
-        .distinct()
-        .toList();
+    return versions.versionTags();
 
   }
 

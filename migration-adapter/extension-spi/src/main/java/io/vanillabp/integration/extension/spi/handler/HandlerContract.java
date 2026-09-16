@@ -35,13 +35,24 @@ import java.util.function.Function;
  * such rank: a method says what it answers to, and that is a set (see decision 51 in the
  * repository's DECISIONS.md).
  * <p>
+ * <b>Versions narrow a method further.</b> Where your annotation carries a version
+ * attribute, {@link Builder#versions(Function)} reads it and VanillaBP applies the same
+ * selection its own <code>&#64;WorkflowTask</code> uses: a method runs for the versions
+ * of the BPMN process it names, and a method naming none runs for every version, which
+ * is what a contract saying nothing about versions gets. The call names the version it
+ * is about ({@link HandlerCall.Builder#processVersion(String)}), and a contract whose
+ * calls carry one says so once
+ * ({@link Builder#callsCarryTheProcessVersion()}), so a method nothing could ever
+ * reach is reported at startup rather than at the first event.
+ * <p>
  * <b>Zero matches are legal.</b> Nothing is registered for a BPMN process whose
  * workflow service carries no such method, and an invocation for it answers
  * {@link ExtensionHandlers#hasHandler} with <code>false</code> respectively returns an
  * empty result - what an extension does instead is its own business (the Business
  * Cockpit passes its prefilled details through unchanged). Two methods naming the same
  * key of one BPMN process, on the other hand, end the boot, and so do two catch-alls:
- * which of them was meant cannot be guessed.
+ * which of them was meant cannot be guessed. Two methods whose versions do not overlap
+ * are not such a pair, because the version says which of them is meant.
  * <p>
  * <b>Saving the workflow aggregate is the normal case</b> and a call may switch it off
  * ({@link HandlerCall.Builder#withoutSavingTheWorkflowAggregate()}). An extension whose
@@ -64,6 +75,8 @@ public final class HandlerContract {
 
   private final Function<Annotation, List<String>> lookupKeys;
 
+  private final Function<Annotation, List<String>> versions;
+
   private final Set<CoreHandlerParameter> coreParameters;
 
   private final List<HandlerParameterBinder> parameterBinders;
@@ -74,12 +87,16 @@ public final class HandlerContract {
 
   private final boolean savesWorkflowAggregate;
 
+  private final boolean callsCarryTheProcessVersion;
+
   private HandlerContract(
       final Builder builder) {
 
     this.extensionId = builder.extensionId;
     this.annotationType = builder.annotationType;
     this.lookupKeys = builder.lookupKeys;
+    this.versions = builder.versions;
+    this.callsCarryTheProcessVersion = builder.callsCarryTheProcessVersion;
     this.coreParameters = Set.copyOf(builder.coreParameters);
     this.parameterBinders = List.copyOf(builder.parameterBinders);
     this.annotationCheck = builder.annotationCheck;
@@ -131,6 +148,26 @@ public final class HandlerContract {
   public Function<Annotation, List<String>> getLookupKeys() {
 
     return lookupKeys;
+
+  }
+
+  /**
+   * @return Reads the version specifications one occurrence of the annotation names,
+   *         or an empty list for "every version"
+   */
+  public Function<Annotation, List<String>> getVersions() {
+
+    return versions;
+
+  }
+
+  /**
+   * @return Whether the calls of this contract name the version of the BPMN process they
+   *         are about
+   */
+  public boolean callsCarryTheProcessVersion() {
+
+    return callsCarryTheProcessVersion;
 
   }
 
@@ -195,6 +232,8 @@ public final class HandlerContract {
 
     private Function<Annotation, List<String>> lookupKeys = annotation -> List.of();
 
+    private Function<Annotation, List<String>> versions = annotation -> List.of();
+
     private final Set<CoreHandlerParameter> coreParameters = new LinkedHashSet<>();
 
     private final List<HandlerParameterBinder> parameterBinders = new java.util.LinkedList<>();
@@ -204,6 +243,8 @@ public final class HandlerContract {
     private boolean deliversReturnValue = false;
 
     private boolean savesWorkflowAggregate = true;
+
+    private boolean callsCarryTheProcessVersion = false;
 
     private Builder(
         final String extensionId,
@@ -230,6 +271,63 @@ public final class HandlerContract {
         final Function<Annotation, List<String>> lookupKeys) {
 
       this.lookupKeys = lookupKeys;
+      return this;
+
+    }
+
+    /**
+     * How the process versions a method serves are read from one occurrence of the
+     * annotation - typically its <code>version</code> attribute. The specifications are
+     * written the way <code>&#64;WorkflowTask(version = ...)</code> writes them, version
+     * tags included: <code>3</code>, <code>release-2024</code>, <code>1-3</code>,
+     * <code>v1.0..v2.0</code>, <code>&gt;3</code>, <code>&lt;=v2.0</code> and
+     * <code>*</code> for every version.
+     * <p>
+     * Returning an EMPTY list means every version, which is what a method naming
+     * nothing serves and what a contract leaving this out gets for all of its methods.
+     * Two methods serving one key end the boot only where their versions overlap, so
+     * one method per generation of a model is a legitimate way to write them.
+     * <p>
+     * A method is compared to the version the call names
+     * ({@link HandlerCall.Builder#processVersion(String)}). Say
+     * {@link #callsCarryTheProcessVersion()} where your calls name one, so a method
+     * VanillaBP could never reach is reported at startup.
+     *
+     * @param versions Reads the version specifications of one occurrence of the
+     *          annotation
+     * @return This builder
+     */
+    public Builder versions(
+        final Function<Annotation, List<String>> versions) {
+
+      this.versions = versions;
+      return this;
+
+    }
+
+    /**
+     * Declares that the calls of this contract name the version of the BPMN process they
+     * are about ({@link HandlerCall.Builder#processVersion(String)}) wherever the BPMS
+     * reports one.
+     * <p>
+     * It is what makes a version attribute usable, and what VanillaBP judges the methods
+     * of an application by while it boots. Without it a method naming a version can never
+     * run, because a call without a version is served by a method naming none, and the
+     * start says so for every such method instead of leaving the application to notice at
+     * the first event which does not arrive.
+     * <p>
+     * Say it only where a version really does arrive. Which BPMS your extension runs on
+     * decides that: a Camunda 8 job carries the version of its process, a Camunda 7
+     * process definition knows it, and an engine behind the Process-Engine-API fills a
+     * version tag only where it wants to. Where your extension has halves per BPMS, the
+     * half which is in use is what this answers for, and a single event which arrives
+     * without a version is served by the methods naming none.
+     *
+     * @return This builder
+     */
+    public Builder callsCarryTheProcessVersion() {
+
+      this.callsCarryTheProcessVersion = true;
       return this;
 
     }
