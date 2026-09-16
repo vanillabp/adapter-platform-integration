@@ -1125,6 +1125,85 @@ regardless of what any `@TaskParam` names. The union and its order are held by
 `WorkflowTaskRegistryTest#theUnionOfEveryMethodServingTheElement`,
 `#theDeclaredNamesAreReported` and `#theDefaultAnswersNothing`.
 
+#### What a `@TaskParam` may be declared as (`ValueConversion`)
+
+An adapter hands the value over as its BPMS deserialized it and converts nothing. The
+conversion into the declared type happens once, in the platform, in `ValueConversion`,
+which serves the parameters of a `@WorkflowTask` method, the parameters of a
+`@WorkflowStartedByBpms` method and the attributes an aggregate gets when the BPMS started
+the workflow.
+
+What it does:
+
+|   the value the BPMS reported   |   the declared type    |                       what the parameter gets                        |
+|---------------------------------|------------------------|----------------------------------------------------------------------|
+| anything the type already holds | that type, or `Object` | the value itself                                                     |
+| `null`                          | a wrapper type         | `null`                                                               |
+| `null`                          | a primitive type       | the invocation fails, naming the input mapping as the way out        |
+| a number                        | another number type    | the same number, or a failure where it would not be the same number  |
+| a number                        | `String`               | its `toString()`                                                     |
+| the text of a number            | a number type          | the number, or a failure where the text is no number                 |
+| `"true"` or `"false"`           | `Boolean`              | the boolean                                                          |
+| everything else                 | anything               | the invocation fails, naming the value's class and the declared type |
+
+The row worth reading twice is the one about numbers. A number travels through its decimal
+form, never through `intValue()` or `doubleValue()`, and the converted value is handed over
+only where it reads back as the same number. Comparison is numeric, so a scale the target
+type cannot keep is no reason to refuse:
+
+|      what the aggregate shared       | declared as |     what arrives     |
+|--------------------------------------|-------------|----------------------|
+| `new BigDecimal("120.50")`           | `Double`    | `120.5`              |
+| `new BigDecimal("120.50")`           | `int`       | the invocation fails |
+| a `Long` of `3000000000`             | `long`      | `3000000000`         |
+| a `Long` of `3000000000`             | `int`       | the invocation fails |
+| `new BigInteger("9007199254740993")` | `Double`    | the invocation fails |
+| a `Float` of `0.1f`                  | `Double`    | `0.1`                |
+| `"120.50"`                           | `int`       | the invocation fails |
+
+A failure ends the invocation, so the BPMS raises the incident it raises for any other
+failing task, and the message names the value, the declared type and the number which
+would have arrived instead. The alternative is a handler acting on a number nobody wrote,
+which is why this is a refusal rather than a rounding rule. It is
+[decision 55](../DECISIONS.md), and `UPGRADE.md` says what it means for an application
+coming from version 1. The cases are held by
+`WorkflowTaskScannerEdgeCasesTest`, nested class "Task-parameter conversion", and by
+`AggregatePropertyWriterTest` for the writing side.
+
+The message names the parameter as the developer wrote it where the application was
+compiled with `-parameters`, which `spring-boot-starter-parent` sets. Without the flag
+javac keeps no names and the message says `arg1`.
+
+**What to share, and as what.** A workflow aggregate carries the results a model decides on
+and the values an operator reads, not every field of a business object. So a `@TaskParam`
+reads a decision or a number somebody looks at, and the types worth declaring are the ones
+such a value needs: `String` in both directions, the integral types among each other where
+the value fits, a decimal to a decimal, and a decimal to a floating type where the value
+survives. A value nobody computes with travels best as text, because every BPMS carries
+text and text loses nothing on the way. A type of the application's own is refused, and
+stays refused: a BPMS variable is a plain value and only the application knows what its own
+types mean.
+
+**What the BPMS decides, and VanillaBP does not.** Which Java type a value comes back as is
+the engine's answer, and the three of them differ. Camunda 7 returns the class it stored,
+so a `BigDecimal` it wrote is a `BigDecimal` again. Camunda 8 holds JSON, so a decimal
+comes back as a `Double` and a whole number as a `Long`, and no value the cluster returns
+is ever a `BigDecimal`, a `BigInteger` or a `Float`. The Process-Engine-API answers
+whatever its backend stored. `@TaskParam Object` is therefore the one declaration whose
+answer is BPMS-shaped, and it is the hatch for a handler which wants to see what the engine
+really sent. A typed parameter is served on all three, because the conversion builds the
+target from the number's decimal form. This paragraph and the next one report a
+measurement taken on 2026-09-16, against Camunda 7.24 in both of its serialization worlds,
+a Camunda 8.9.19 cluster and the Process-Engine-API's in-memory engine; no test holds
+them.
+
+Whether a `@TaskParam` finds anything at all without an input mapping is decided by the
+model as well. Camunda 7 reads the task execution's own scope, so a task standing straight
+in the process sees a process variable while the same task on a parallel branch or in an
+embedded subprocess sees `null`. Camunda 8 resolves a job's variables up the scope
+hierarchy and finds the variable wherever the task sits. Declare the input mapping rather
+than relying on either.
+
 #### Deliveries VanillaBP already processed (`TaskDeliveryLog` SPI)
 
 The inbound counterpart of the outbox. A remote BPMS reports the outcome AFTER the

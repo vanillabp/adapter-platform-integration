@@ -1651,3 +1651,44 @@ of `TaskDeliveryLog#openTasksOfAggregate` says that the answer is the open work 
 and that the open work of the workflow is a question for the BPMS. An extension which needs the
 second one asks the BPMS through its own adapter half, which is where the knowledge about querying
 that BPMS lives anyway.
+
+### 55. A number reaches a handler as the number the BPMS reported, or not at all
+
+A `@TaskParam` declares a type and the BPMS reports a value, and the two of them do not have to
+agree. Until now the core bridged the gap with `intValue()`, `doubleValue()` and their siblings.
+Those read the bit pattern and cut a value down without saying anything, so a `Long` of
+`3000000000` reached an `int` parameter as `-1294967296`, a `BigDecimal` of `120.50` reached one as
+`120`, and a `BigInteger` of `9007199254740993` reached a `Double` with its last digit gone. A
+measurement on 2026-09-16 found thirteen such cells in a matrix of forty-eight, the same thirteen on
+Camunda 7, on Camunda 8 and on the Process-Engine-API, and not one of them wrote a log line.
+
+The rule now is the one this repository already applies to an aggregate ID. A number is converted
+through its decimal form, and the converted value is handed over only where it reads back as the
+same number. Where it does not, the conversion fails, the invocation ends and the BPMS raises its
+incident. The text of a number goes the same way, so a `String` of `"120.50"` bound to an `int` ends
+in that message too, instead of the bare `For input string: "120.50"` an uncaught
+`NumberFormatException` used to write.
+
+Comparison is numeric, not textual. A `BigDecimal` of `120.50` bound to a `Double` is delivered as
+`120.5`, because the two are the same number and the scale is not a value. A textual comparison
+would have refused it. It would also have made the answer depend on the serialization format the
+value was stored in: a nested decimal keeps its scale in one Camunda 7 world and loses it in the
+other, so one and the same model would have converted here and failed there.
+
+Why a refusal and not a warning: a warning is what an application already fails to read today, and
+the wrong number keeps reaching handlers while nobody reads it. Version 1 bound the parameter by
+raw reflection, so every narrowing pair threw `IllegalArgumentException: argument type mismatch`
+there. The refusal is therefore a return to what version 1 did, with a message which names the
+value, the declared type and the number which would have arrived. What version 1 accepted, a `Long`
+and an `Integer` into a `long`, is accepted here as well.
+
+Why in the platform and not in an adapter: no engine is involved in this. The check reads the value
+in hand and the declared type, and it knows no BPMS, no version and no serialization format. Four
+adapters converting on their own is how one handler starts answering differently per BPMS, and a
+rule which had to know which engine wrote a value would go stale the moment that engine changed.
+Which Java type a value comes back as stays the BPMS' answer, and `@TaskParam Object` is where an
+application sees it.
+
+The same method writes the attributes of a workflow aggregate the BPMS started
+(`AggregatePropertyWriter`), so one rule serves both. A wrong number in an aggregate outlives the
+handler which received it, which makes the refusal worth more there, not less.

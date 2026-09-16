@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.math.BigDecimal;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,6 +26,8 @@ public class AggregatePropertyWriterTest {
 
     private int amount;
 
+    private double rate;
+
     String withoutSetter;
 
     private final String readOnly = "fixed";
@@ -36,6 +40,11 @@ public class AggregatePropertyWriterTest {
     public void setAmount(
         final int amount) {
       this.amount = amount;
+    }
+
+    public void setRate(
+        final double rate) {
+      this.rate = rate;
     }
 
     public String getReadOnly() {
@@ -90,6 +99,44 @@ public class AggregatePropertyWriterTest {
         () -> AggregatePropertyWriter.write(new Aggregate(), "amount", new Object(), "the amount"));
 
     assertTrue(exception.getMessage().contains("the amount"));
+
+  }
+
+  @Test
+  @DisplayName("A number the attribute cannot hold fails instead of being cut down to size")
+  public void aNumberTheAttributeCannotHoldFails() {
+
+    final var exception = assertThrows(
+        IllegalStateException.class,
+        () -> AggregatePropertyWriter.write(new Aggregate(), "amount", 3000000000L, "the amount"));
+
+    assertTrue(exception.getMessage().contains("The value '3000000000'"));
+    assertTrue(exception.getMessage().contains("which would hold '-1294967296'"));
+    assertTrue(exception.getMessage().contains("the amount"));
+
+  }
+
+  @Test
+  @DisplayName("A decimal written into an integral attribute fails instead of dropping its fraction")
+  public void aDecimalIntoAnIntegralAttributeFails() {
+
+    final var exception = assertThrows(
+        IllegalStateException.class,
+        () -> AggregatePropertyWriter.write(new Aggregate(), "amount", new BigDecimal("120.50"), "the amount"));
+
+    assertTrue(exception.getMessage().contains("The value '120.50'"));
+    assertTrue(exception.getMessage().contains("which would hold '120'"));
+
+  }
+
+  @Test
+  @DisplayName("A scale the attribute cannot keep is no loss, so the value is written")
+  public void aScaleTheAttributeCannotKeepIsNoLoss() {
+
+    final var aggregate = new Aggregate();
+
+    assertTrue(AggregatePropertyWriter.write(aggregate, "rate", new BigDecimal("120.50"), "the rate"));
+    assertEquals(120.5d, aggregate.rate);
 
   }
 
