@@ -115,19 +115,17 @@ as possible at **build time**, following Quarkus' extension philosophy:
    while the application is built and the line is written when it starts, so a native
    binary says it too. `WorkflowModuleProfileFileNeedsItsPlainFileTest` of the runtime
    module holds the SmallRye rule behind it.
-   A `config` directory is read by neither config source: the two places are
-   `<module-id>[-<profile>].yaml` at the classpath root and the same name inside
-   `<module-id>/`. Spring Boot reads `config/<module-id>.yaml` and
-   `<module-id>/config/<module-id>.yaml` as well, so a module built there arrives here
-   with its file where nobody looks. The same report names such a file and the place it
-   belongs at, which is its own path without the `config` directory
-   (`messageAboutFilesInAConfigDirectory`, decision 65). Dev mode watches those files
-   although nothing reads them: adding one is the mistake being reported, and without the
-   restart the developer sees neither the settings nor the report. The native image gets
-   only the files which are read. A workflow module whose ID is `config` reads
-   `config/config.yaml` itself, so the report leaves out whatever the read rule matches.
-   `ModuleFileInAConfigDirectoryTest` and `ModuleFileInTheModulesConfigDirectoryTest` of
-   `deployment-integration-tests` hold both places.
+   The places a module may put a file are the four `WorkflowModuleConfigFiles` of the core
+   names, and the Spring Boot integration reads the same four: the classpath root, a
+   `config` directory, a directory named after the module, and a `config` directory of
+   that one. They are styles rather than a ranking, so a file belongs in exactly one of
+   them, and the same file found in two of them ends the boot with a message naming both
+   (`placesPerFilename`, `WorkflowModuleConfigFiles.messageAboutAFileFoundInMoreThanOnePlace`,
+   decision 65). The build finds the files, the recorder ends the boot, so a native binary
+   refuses as the JVM does. `ModuleFileInAConfigDirectoryTest` and
+   `TheSameFileInTwoPlacesTest` of `deployment-integration-tests` hold both halves, and
+   `WorkflowModuleConfigLocationsTest` of the runtime module asks the config sources
+   themselves, one test per place.
    The application's own `application-<profile>.yaml` is a different animal and stays
    Quarkus': that file list is resolved while the image is built, so a profile chosen at
    the binary adds nothing to it. `ProfileSpecificApplicationFilesBuildStepProcessor` says

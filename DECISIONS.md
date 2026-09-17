@@ -2030,37 +2030,45 @@ as it was costs no space and needs an auditing, and it reconstructs rather than 
 extension which can pass a payload passes one; this is for the case where the state is large or
 expensive to build.
 
-### 65. A workflow module file in a config directory is named, not taught to the other platform
+### 65. Four places for a module file, and the same file may lie in one of them
 
-Spring Boot reads a workflow module's configuration out of `config/loan-approval.yaml` and
-`loan-approval/config/loan-approval.yaml` as well, because the post processor follows Spring
-Boot's own search for `application.yaml`. Quarkus reads neither place: the config source
-providers of a workflow module look at the classpath root and at the directory named after the
-module. Measured on 2026-09-17, with a module which ships each of those files and nothing else.
+Spring Boot read a workflow module's configuration at four places, Quarkus at two. Measured on
+2026-09-17: a module which ships only `config/loan-approval.yaml`, or only
+`loan-approval/config/loan-approval.yaml`, is read on Spring Boot and nowhere on Quarkus. A
+workflow module is a library and the platform it ends up on is not always the one it was built
+on, so the same jar carried settings which apply on one and are missing on the other.
 
-A workflow module is a library and the platform it ends up on is not always the one it was
-built on. The same jar therefore carries settings which apply on Spring Boot and are missing on
-Quarkus. Nothing said so, and the first sign was a value which is not what the file says.
+Quarkus reads the same four now:
 
-Quarkus does not learn the two locations. The set of places a configuration file may lie in is
-Spring Boot's, and copying it here would be a promise about a mechanism this extension does not
-own. A reader of the Quarkus code would have to know which parts of Spring Boot's search
-VanillaBP reproduces. The next release of either platform can move that line. It would also make
-a workflow module the one piece of Quarkus configuration with a search of its own.
+```
+loan-approval.yaml
+config/loan-approval.yaml
+loan-approval/loan-approval.yaml
+loan-approval/config/loan-approval.yaml
+```
 
-Instead both platforms name the file. Quarkus finds it while the application is built and
-writes the line when it starts, so a native binary says it as the JVM does. Dev mode watches
-those files although nothing reads them, because adding one is the mistake being reported.
-Spring Boot reads the file and says that a Quarkus application would not. Every line names the
-place the file belongs at, which is its own path without the `config` directory, so the fix is
-to move it one directory up and nothing else. A profile file in such a directory gets only this
-report, because the file it would need for decision 61 would not be read there either.
+The four are styles, not a ranking. Somebody who keeps the module's configuration next to its
+BPMN files should be able to, and so should somebody who collects configuration in a `config`
+directory. VanillaBP prescribes neither. The alternative was to report the two places Quarkus
+lacks and leave them unread there, and it would have made the choice of a style into a choice
+of a platform.
 
-The one file in a `config` directory which is read on both platforms belongs to a workflow module
-whose ID is `config`, and neither report names it.
+There is no order among the four, and none is needed, because **the same file may lie in
+exactly one of them**. A module which ships it twice ends the boot with a message naming both
+places. A ranking would mean a setting whose source cannot be seen from the outside: two files,
+one of them silently ignored, and nothing in the log to say which. The check runs on both
+platforms. Spring Boot read the four places before this story and let one of two files win
+without a word, which is the same defect, only older.
 
-`ModuleFileInAConfigDirectoryTest` and `ModuleFileOutsideAConfigDirectoryTest` of the Spring Boot
-integration tests hold that the values are there and which line is written.
-`ModuleFileInAConfigDirectoryTest` and `ModuleFileInTheModulesConfigDirectoryTest` of the Quarkus
-deployment integration tests hold that the values are nowhere and which line is written.
-`FilesInAConfigDirectoryTest` holds which files the report picks and what it offers.
+The list lives once, in `WorkflowModuleConfigFiles` of the core, so the two platform
+integrations cannot drift apart. Quarkus finds the files while the application is built and
+ends the boot when it starts, so a native binary refuses as the JVM does.
+
+The profile rule of decision 61 applies per place: a file carrying a profile is read only where
+the file without the profile lies next to it, and with four places there are four spots where
+that bites. Nothing about that rule changed, it just has more places to apply to now.
+
+`WorkflowModuleConfigFilesTest` of the core holds the four places and the message.
+`WorkflowModuleConfigLocationsTest` holds what the Quarkus config sources read, one test per
+place. `ModuleFileInEachOfTheFourPlacesTest` holds the same for Spring Boot, and
+`TheSameFileInTwoPlacesTest` of each platform holds the refusal.

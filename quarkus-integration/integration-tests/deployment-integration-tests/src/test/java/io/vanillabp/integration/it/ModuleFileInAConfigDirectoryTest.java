@@ -1,7 +1,5 @@
 package io.vanillabp.integration.it;
 
-import java.util.logging.Level;
-
 import org.eclipse.microprofile.config.Config;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
@@ -17,8 +15,11 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * The measurement behind the report: a workflow module which ships its file as
- * <i>config/test-module.yaml</i>. Spring Boot reads that place, Quarkus does not.
+ * A workflow module which ships its file as <i>config/test-module.yaml</i>. Spring Boot
+ * reads that place and so does this extension, which is the whole point of decision 65 in
+ * the repository's DECISIONS.md: the four places are styles, and VanillaBP prescribes
+ * none of them. The other three are measured by
+ * {@code WorkflowModuleConfigLocationsTest} of the runtime module.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ModuleFileInAConfigDirectoryTest {
@@ -32,34 +33,18 @@ public class ModuleFileInAConfigDirectoryTest {
           .addClass(AggregatePersistence.class)
           .addClass(WorkflowService.class)
           .addAsResource("bpmn/first.bpmn", "processes/dummy/first.bpmn")
-          .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
-      .setLogRecordPredicate(record -> record.getLevel().intValue() >= Level.WARNING.intValue())
-      .assertLogRecords(records -> {
-        final var messages = records
-            .stream()
-            .map(record -> record.getMessage() == null
-                ? ""
-                : record.getMessage())
-            .toList();
-        Assertions.assertTrue(
-            messages
-                .stream()
-                .anyMatch(message -> message.contains("config/test-module.yaml") && message
-                    .contains("which belongs at 'test-module.yaml'")),
-            "expected the WARN naming the unread file and the place it belongs at but got: "
-                + messages);
-      });
+          .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"));
 
   @Inject
   Config config;
 
   @Test
-  @DisplayName("None of the settings of a file in 'config/' are there")
-  public void theSettingsOfTheFileAreNotThere() {
+  @DisplayName("The settings of a file in 'config/' arrive")
+  public void theSettingsOfTheFileAreThere() {
 
-    Assertions.assertTrue(
-        config.getOptionalValue("test-module.a-setting", String.class).isEmpty(),
-        "Quarkus read the file after all");
+    Assertions.assertEquals(
+        "from-the-file",
+        config.getValue("test-module.a-setting", String.class));
 
   }
 

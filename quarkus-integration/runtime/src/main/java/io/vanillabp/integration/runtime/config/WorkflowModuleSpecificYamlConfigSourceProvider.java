@@ -5,23 +5,24 @@ import static java.util.Collections.emptyList;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Stream;
 
 import org.eclipse.microprofile.config.spi.ConfigSource;
 import org.eclipse.microprofile.config.spi.ConfigSourceProvider;
 
 import io.quarkus.runtime.annotations.StaticInitSafe;
 import io.smallrye.config.source.yaml.YamlConfigSourceLoader;
+import io.vanillabp.integration.adapter.migration.config.WorkflowModuleConfigFiles;
 import lombok.RequiredArgsConstructor;
 
 /**
  * A config source provider loading config files named by a workflow module ID.
  * The super class is responsible for determining profile-based variants.
  *
- * <p>Files are searched both at the classpath root and inside a subdirectory
- * named after the workflow module ID. This allows workflow modules packaged
- * as separate Maven/Gradle modules to place their configuration in a
- * module-specific subdirectory (avoiding classpath conflicts).
+ * <p>Files are searched at the four places a workflow module may put them,
+ * which {@link WorkflowModuleConfigFiles} names and the Spring Boot integration
+ * searches as well. A module packaged as its own Maven or Gradle module can
+ * therefore keep its configuration next to its other resources, and a module
+ * which prefers a {@code config} directory can do that instead.
  */
 @StaticInitSafe
 @RequiredArgsConstructor
@@ -38,9 +39,8 @@ public class WorkflowModuleSpecificYamlConfigSourceProvider extends YamlConfigSo
   private final int ordinal;
 
   /**
-   * Determine all config sources for all known file extensions.
-   * Searches both at the classpath root ({@code {id}.yaml}) and in
-   * a workflow module subdirectory ({@code {id}/{id}.yaml}).
+   * Determine all config sources for all known file extensions, at each of the
+   * four places a workflow module may put a file.
    *
    * @param classLoader
    *            the class loader, which should be used for discovery and resource loading purposes
@@ -54,9 +54,9 @@ public class WorkflowModuleSpecificYamlConfigSourceProvider extends YamlConfigSo
         .stream(getFileExtensions())
         .flatMap(extension -> {
           final var filename = "%s.%s".formatted(workflowModuleId, extension);
-          return Stream.of(
-              filename,
-              "%s/%s".formatted(workflowModuleId, filename));
+          return WorkflowModuleConfigFiles
+              .locationsOf(workflowModuleId, filename)
+              .stream();
         })
         .flatMap(location -> loadConfigSources(location, ordinal, classLoader).stream())
         .toList();

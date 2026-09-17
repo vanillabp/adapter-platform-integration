@@ -31,8 +31,9 @@ workflow module ships defaults: everything the application configures wins over
 them. Appending is what keeps that true for an application bringing sources this
 integration cannot know about, so no source name is matched to find a position. It also
 names a `<module-id>-<profile>` file lying without its `<module-id>` file: Spring Boot
-reads such a file and Quarkus does not, and a workflow module runs on both (decision 61). A
-file in a `config` folder is named for the same reason (decision 65).
+reads such a file and Quarkus does not, and a workflow module runs on both (decision 61). It
+also ends the boot where the same file lies in two of the four places a module may use
+(decision 65).
 
 ### Workflow module detection
 
@@ -335,14 +336,16 @@ in the classpath root by using these source code folders within your workflow mo
 - `src/main/resources/loan-approval-environment-dev.yaml`<br>
   (properties specific to Spring Boot profile `environment-dev`)
 
-Alternative using a sub-folder named after the workflow module:
-- `src/main/resources/loan-approval/loan-approval.yaml`
-- `src/main/resources/loan-approval/loan-approval-environment-dev.yaml`
+There are four places to choose from, and they are styles rather than a ranking:
 
-Spring Boot reads a `config` sub-folder as well, the way it does for `application.yaml`, and
-Quarkus reads no such folder for a workflow module. A file placed there is therefore read here
-and nowhere on Quarkus, so the boot names it and says where it belongs (decision 65). Keep the
-files out of a `config` folder and the module works on both platforms.
+- `src/main/resources/loan-approval.yaml`
+- `src/main/resources/config/loan-approval.yaml`
+- `src/main/resources/loan-approval/loan-approval.yaml`
+- `src/main/resources/loan-approval/config/loan-approval.yaml`
+
+Quarkus reads the same four. Because none of them ranks above another, the same file may lie in
+exactly one of them: a module which ships `loan-approval.yaml` at the root and in `config` ends
+the boot with a message naming both (decision 65).
 
 To avoid name-clashes of properties a workflow module has to use a separate properties section typically named
 using the workflow module ID:

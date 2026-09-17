@@ -106,14 +106,11 @@ because an environment post processor runs before the logging system is up.
 `ProfileFileWithoutItsPlainFileTest` of `globalclasspath-integration-test` holds both halves,
 the values which are there and the line which names the file.
 
-The same post processor reads `config/<module-id>.yaml` and
-`<module-id>/config/<module-id>.yaml`, because it follows Spring Boot's own search for
-`application.yaml`. Quarkus searches no such place for a workflow module (decision 65). A file
-found there is named at startup as well, together with the place it is read at on both
-platforms, which is the same path without the `config` directory.
-`ModuleFileInAConfigDirectoryTest` and `ModuleFileOutsideAConfigDirectoryTest` of
-`globalclasspath-integration-test` hold it; the second one boots on its own because the
-captured output of a test class holds what every test of it wrote.
+The places it searches are the four `WorkflowModuleConfigFiles` of the core names, and Quarkus
+reads the same four (decision 65). They are styles rather than a ranking, so the same file may
+lie in exactly one of them, and a module which ships it twice ends the boot with a message
+naming both places. `ModuleFileInEachOfTheFourPlacesTest` and `TheSameFileInTwoPlacesTest` of
+`globalclasspath-integration-test` hold both halves.
 
 ## The store of processed task deliveries
 
