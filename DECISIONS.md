@@ -1781,3 +1781,61 @@ sees, which the documentation says rather than the conversion repairing it.
 
 `AggregatePropertyWriter` hangs on the same method, so an aggregate a BPMS-initiated start builds
 gets its `UUID`, its dates and its enum attributes the same way, and refuses the same texts.
+
+### 58. A value type is recognised by what it is, and a Date travels as the instant it holds
+
+The way out shared a value as text when the package of its class began with `java.` or
+`javax.`, and that question was wrong at both ends. A `TimeZone` is a
+`sun.util.calendar.ZoneInfo` at runtime, so it failed the check, the walk read its getters
+and the sync point ended with an `InaccessibleObjectException` (measured on 2026-09-16).
+A `Calendar` passed the check and reached the BPMS as its debug form, several hundred characters
+naming every field of the implementation.
+
+`TextValueTypes` now names the types a value travels as text for, and both ways read that
+one list. The way out asks which of those types a VALUE is one of, so an implementation
+class the runtime hands out is recognised by the type it extends. The way back asks the
+DECLARED type exactly, because the text is promised for the types named and a subclass may
+write a text of its own. Everything the JDK wrote and the list does not name still travels
+as its own text, and the check for that now also asks which module a class comes from, so
+no package the runtime exports to nobody is read by reflection again.
+
+The list is a selection, and the documentation says so. It holds what a workflow aggregate
+carries often enough to be worth carrying: an identifier, a point in time, a length of
+time, a zone. Somebody who misses a type opens an issue for it. A list which promised the
+JDK in full would promise a text for types whose text says nothing.
+
+`java.util.Date` travels as the instant it holds, `2026-09-16T19:55:30.123Z`, and
+decision 57 refused it for the text it used to travel as. The form of `Instant` was
+chosen over the form of `OffsetDateTime` in the zone of the JVM because a `Date` is a
+count of milliseconds and carries no zone of its own. The offset of the writing node is
+not part of the value, so putting it into the text would let two nodes of one application
+write two texts for the same value, and a value written in summer would read differently
+from the same value written in winter. What an operator gives up for that is local time in
+the model, which the documentation names. Every subclass travels the same way, through
+`Instant.ofEpochMilli(getTime())`, so an attribute declared `Date` which a JPA provider
+fills with a `java.sql.Timestamp` reaches the BPMS as the text a plain `Date` reaches it
+as. A `Timestamp` loses what it holds below the millisecond, which is all a `Date` holds
+anyway.
+
+`java.util.TimeZone` travels as the id of `toZoneId()` and comes back through
+`TimeZone.getTimeZone(ZoneId)`. `ZoneId.of` reads the text, because
+`TimeZone.getTimeZone(String)` answers GMT for every text it does not know and a wrong
+zone would travel unnoticed. Measured on 2026-09-17 against Java 21: a zone with a fixed
+offset survives as it was written, so `GMT+05:30` is shared and read back as `GMT+05:30`.
+A three-letter id does not survive, because it is no zone name. `IST` is shared as
+`Asia/Kolkata` and `EST` as `-05:00`. The zone is the same one and its rules are the same,
+the id is not, and an application comparing ids has to know that.
+
+`java.util.Calendar` is carried neither way. Its text is the debug form, and reading a
+point in time out of it means guessing which of its fields to trust. An attribute of that
+type is named while the application boots, with `Instant` as the way. What a sync point
+writes for it does not change: an attribute which quietly stopped being a process variable
+would make a model read null and take a branch nobody chose, and the message at startup is
+what makes the case stop being silent. `java.util.Locale` stays as decision 57 left it.
+
+That message is a warning and not a failed boot. `validateSyncModel` is not told the
+adapter's default, so it cannot know whether the attribute is shared at all, and an
+aggregate whose values only ever travel outwards is an ordinary application. An attribute
+marked `@NoSyncWithBPMS` is left out of it, because that one is certain never to travel.
+`AggregateSyncSupportTest#whatCannotComeBackIsSaidAtStartup` holds the message, and
+`TextValueRoundTripTest` holds both ways against each other for every type in the list.

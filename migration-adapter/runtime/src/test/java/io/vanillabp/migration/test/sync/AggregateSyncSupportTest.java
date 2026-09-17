@@ -811,4 +811,136 @@ public class AggregateSyncSupportTest {
 
   }
 
+  public static class ZonesAggregate {
+
+    public java.util.TimeZone getZone() {
+      return java.util.TimeZone.getTimeZone("Europe/Berlin");
+    }
+
+    public java.time.ZoneId getPreferredZone() {
+      return java.time.ZoneId.of("Europe/Vienna");
+    }
+
+    public List<java.util.TimeZone> getOfficeZones() {
+      return List.of(java.util.TimeZone.getTimeZone("America/New_York"));
+    }
+
+    public ZoneHolder getHome() {
+      return new ZoneHolder();
+    }
+
+  }
+
+  public static class ZoneHolder {
+
+    public java.util.TimeZone getZone() {
+      return java.util.TimeZone.getTimeZone("Asia/Kolkata");
+    }
+
+  }
+
+  @Test
+  @DisplayName("A time zone is shared as the id of its zone, however deep it sits")
+  public void aTimeZoneIsSharedAsTheIdOfItsZone() {
+
+    // the runtime hands out an implementation of its own for a time zone
+    // (sun.util.calendar.ZoneInfo), whose getters no application may read. Reading them
+    // ended the sync point with an InaccessibleObjectException, measured on 2026-09-16.
+    final var shared = full(new ZonesAggregate());
+
+    assertEquals("Europe/Berlin", shared.get("zone"));
+    assertEquals("Europe/Vienna", shared.get("preferredZone"));
+    assertEquals(List.of("America/New_York"), shared.get("officeZones"), "an element of a collection too");
+    assertEquals(Map.of("zone", "Asia/Kolkata"), shared.get("home"), "and an attribute of a nested object");
+
+  }
+
+  @Test
+  @DisplayName("A time zone carries nothing a path could read below it")
+  public void nothingIsBelowATimeZone() {
+
+    assertEquals(Kind.NOTHING_BELOW, find(ZonesAggregate.class, "zone.rawOffset").kind());
+    assertEquals(
+        Optional.of(java.util.TimeZone.class),
+        typeAtTheEndOf(ZonesAggregate.class, "zone"));
+
+  }
+
+  public static class AggregateWithTextNobodyReadsBack {
+
+    public java.util.Calendar getSignedOn() {
+      return java.util.GregorianCalendar.getInstance();
+    }
+
+    public List<java.util.Locale> getLanguages() {
+      return List.of(java.util.Locale.GERMANY);
+    }
+
+    @NoSyncWithBPMS
+    public java.util.Calendar getNeverShared() {
+      return java.util.GregorianCalendar.getInstance();
+    }
+
+    public java.time.LocalDate getDay() {
+      return java.time.LocalDate.parse("2026-09-16");
+    }
+
+    public SignedContract getContract() {
+      return new SignedContract();
+    }
+
+  }
+
+  public static class SignedContract {
+
+    public java.util.Calendar getCountersignedOn() {
+      return java.util.GregorianCalendar.getInstance();
+    }
+
+  }
+
+  @Test
+  @DisplayName("An attribute whose text nothing reads back is named while the application boots")
+  public void whatCannotComeBackIsSaidAtStartup() {
+
+    final var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory
+        .getLogger(AggregateSyncSupport.class);
+    final var recorded = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    recorded.start();
+    logger.addAppender(recorded);
+    try {
+      testee.validateSyncModel(AggregateWithTextNobodyReadsBack.class);
+    } finally {
+      logger.detachAppender(recorded);
+    }
+
+    final var said = recorded.list.stream().map(event -> event.getFormattedMessage()).toList();
+
+    assertEquals(3, said.size(), () -> "one word per attribute, and none about the others: "
+        + said);
+    assertTrue(
+        said.stream().anyMatch(message -> message.contains("'signedOn'") && message.contains("debug form")),
+        () -> said.toString());
+    assertTrue(
+        said.stream().anyMatch(message -> message.contains("'languages'") && message.contains("'de_DE'")),
+        () -> "an element of a collection is asked about as well: "
+            + said);
+    assertTrue(
+        said
+            .stream()
+            .anyMatch(
+                message -> message.contains("'countersignedOn'") && message.contains(SignedContract.class.getName())),
+        () -> "a nested object is walked into, and the word names the class it belongs to: "
+            + said);
+    assertTrue(
+        said.stream().noneMatch(message -> message.contains("'neverShared'")),
+        () -> "an attribute which never travels is no case at all: "
+            + said);
+    assertTrue(
+        said.stream().noneMatch(message -> message.contains("'day'")),
+        () -> "and neither is one the way back reads: "
+            + said);
+
+  }
+
 }

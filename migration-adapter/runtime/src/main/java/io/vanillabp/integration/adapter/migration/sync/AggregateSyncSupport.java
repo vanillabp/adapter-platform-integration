@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
+import io.vanillabp.integration.adapter.migration.values.TextValueTypes;
 import io.vanillabp.integration.adapter.spi.AggregateSyncMode;
 import io.vanillabp.integration.adapter.spi.WorkflowAggregateSync;
 import io.vanillabp.integration.adapter.spi.WorkflowAggregateSync.PathVerdict;
@@ -82,8 +83,9 @@ import lombok.extern.slf4j.Slf4j;
  * <ul>
  * <li>{@code null}, primitives/wrappers, {@link String}, {@link Number},
  * {@link Boolean} and {@link Character} are taken as they are,</li>
- * <li>enums become their {@link Enum#name()}, temporal values and everything else
- * without accessible properties become their {@code toString()},</li>
+ * <li>enums become their {@link Enum#name()}, and a value type of the JDK becomes the
+ * text {@link TextValueTypes} names for it, which for most of them is their own
+ * {@code toString()},</li>
  * <li>collections and arrays become {@link List}s of converted elements, maps
  * become maps with their keys converted to strings,</li>
  * <li>any other object becomes a {@link Map} of its shared attributes.</li>
@@ -449,7 +451,7 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
 
     return owner.isPrimitive() || owner.isEnum() || CharSequence.class
         .isAssignableFrom(owner) || Number.class
-            .isAssignableFrom(owner) || (owner == Boolean.class) || (owner == Character.class) || isJdkValueType(
+            .isAssignableFrom(owner) || (owner == Boolean.class) || (owner == Character.class) || travelsAsText(
                 owner);
 
   }
@@ -533,6 +535,7 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
     } catch (final IllegalStateException e) {
       defects.add(e.getMessage());
     }
+    reportAttributesNothingReadsBack(clazz);
     if (depth >= MAX_DEPTH) {
       // the documented limit: nested types are followed at most MAX_DEPTH levels
       // deep. A type reached only deeper (or only at runtime, e.g. a subclass
@@ -555,6 +558,101 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   }
 
   /**
+   * Names the attributes whose type reaches the BPMS as text nothing reads back, while
+   * the application boots. Such an attribute works on the way out and fails on the way
+   * in, and the way in is a task handler, so without this the application learns about
+   * it when a model first maps the value into one.
+   * <p>
+   * A warning, not a defect: the attribute may never be shared at all (the adapter's
+   * default decides that, and it is not known here), and an aggregate whose values only
+   * ever travel outwards is a normal application. An attribute the application marked
+   * {@code @NoSyncWithBPMS} is left out, because that one is certain never to travel.
+   *
+   * @param clazz The type whose attributes are looked at
+   */
+  private void reportAttributesNothingReadsBack(
+      final Class<?> clazz) {
+
+    for (final var property : propertiesOf(clazz)) {
+      if (Boolean.FALSE.equals(property.synced())) {
+        continue;
+      }
+      typesOfAnAttribute(property.getter().getGenericReturnType())
+          .filter(AggregateSyncSupport::isTextNothingReadsBack)
+          .distinct()
+          .forEach(type -> log.warn(
+              """
+                  The attribute '{}' of '{}' is a '{}'. Nothing reads its text back, so a \
+                  @TaskParam and an attribute of an aggregate the BPMS starts fail when they are \
+                  declared as one. {}""",
+              property.name(),
+              clazz.getName(),
+              type.getName(),
+              TextValueTypes.adviceFor(type)));
+    }
+
+  }
+
+  /**
+   * Whether values of that declared type travel as text and no type of
+   * {@link TextValueTypes} reads that text back. The plain values are no such case (a
+   * number, a text, a boolean, a character and an enum travel as themselves), nor is a
+   * collection or a map (their elements are asked separately), nor a type of the
+   * application's own (it travels as a structure and is walked into).
+   *
+   * @param type The declared type of an attribute, or of an element of one
+   * @return Whether an attribute of that type is worth a word at startup
+   */
+  private static boolean isTextNothingReadsBack(
+      final Class<?> type) {
+
+    if (type.isPrimitive() || Enum.class.isAssignableFrom(type) || (type == Object.class)) {
+      return false;
+    }
+    if (CharSequence.class.isAssignableFrom(type) || Number.class
+        .isAssignableFrom(type) || (type == Boolean.class) || (type == Character.class)) {
+      return false;
+    }
+    if (Collection.class.isAssignableFrom(type) || Map.class.isAssignableFrom(type)) {
+      return false;
+    }
+    return travelsAsText(type) && (TextValueTypes.ofDeclaredType(type) == null);
+
+  }
+
+  /**
+   * Every type an attribute names: the declared type itself, the component type of an
+   * array and the type arguments of a generic type. Unlike {@link #attributeTypes} this
+   * keeps the types travelling as text, because those are the ones asked about here.
+   *
+   * @param type The attribute's generic type
+   * @return The types named
+   */
+  private static java.util.stream.Stream<Class<?>> typesOfAnAttribute(
+      final java.lang.reflect.Type type) {
+
+    if (type instanceof Class<?> clazz) {
+      return clazz.isArray()
+          ? typesOfAnAttribute(clazz.getComponentType())
+          : java.util.stream.Stream.of(clazz);
+    }
+    if (type instanceof java.lang.reflect.ParameterizedType parameterized) {
+      return java.util.stream.Stream
+          .concat(
+              typesOfAnAttribute(parameterized.getRawType()),
+              java.util.Arrays
+                  .stream(parameterized.getActualTypeArguments())
+                  .flatMap(AggregateSyncSupport::typesOfAnAttribute));
+    }
+    if (type instanceof java.lang.reflect.GenericArrayType genericArray) {
+      return typesOfAnAttribute(genericArray.getGenericComponentType());
+    }
+    // a wildcard or a type variable names no type to look at
+    return java.util.stream.Stream.empty();
+
+  }
+
+  /**
    * The types an attribute may hold values of - the declared type itself plus the
    * type arguments of a generic type (a {@code List<Item>} holds {@code Item}s).
    * Types whose values are never followed (JDK value types, primitives, enums) are
@@ -570,7 +668,7 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
       if (clazz.isArray()) {
         return attributeTypes(clazz.getComponentType());
       }
-      return clazz.isPrimitive() || clazz.isEnum() || isJdkValueType(clazz)
+      return clazz.isPrimitive() || clazz.isEnum() || travelsAsText(clazz)
           ? java.util.stream.Stream.empty()
           : java.util.stream.Stream.of(clazz);
     }
@@ -736,10 +834,19 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
       return converted;
     }
 
-    if (isJdkValueType(value.getClass())) {
-      // JDK value types (java.time.*, UUID, Date, Duration, Locale, ...) do have
-      // readable getters, but their string form is what a BPMS - and a BPMN
-      // expression - can work with
+    final var howItTravels = TextValueTypes.ofValue(value.getClass());
+    if (howItTravels != null) {
+      // a type carried both ways: the text is the one the way back reads, and it is
+      // found by what the value IS, not by the package its class sits in - a zone is a
+      // java.time.ZoneRegion and a time zone a sun.util.calendar.ZoneInfo
+      return howItTravels.write().apply(value);
+    }
+
+    if (travelsAsText(value.getClass())) {
+      // every other type of the JDK (java.net.URI, java.util.Locale, ...): it does have
+      // readable getters, but those are implementation detail, and following them into a
+      // package the runtime exports to nobody ends the sync point. The text is what a
+      // BPMS - and a BPMN expression - can work with anyway
       return String.valueOf(value);
     }
 
@@ -810,14 +917,33 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   }
 
   /**
-   * Whether the given type is a JDK value type shared in its string form (see
-   * {@link #convert}). Collections, maps and arrays are handled before this check.
+   * Whether values of the given type reach the BPMS as ONE text rather than as a
+   * structure of their own (see {@link #convert}). Collections, maps and arrays are
+   * handled before this check.
+   * <p>
+   * Two questions, because a class can fail either of them. A type
+   * {@link TextValueTypes} carries is one whatever its name, which is how a subclass the
+   * runtime hands out is recognised. Everything else the JDK itself wrote is text too:
+   * its getters are implementation detail, and a package like
+   * <code>sun.util.calendar</code> is exported to nobody, so reading them ended the sync
+   * point with an <code>InaccessibleObjectException</code>. A type named
+   * <code>java.*</code> or <code>javax.*</code> counts as well, which keeps a
+   * <code>javax</code> type of a library on the class path behaving as it did.
    */
-  private static boolean isJdkValueType(
+  private static boolean travelsAsText(
       final Class<?> clazz) {
 
+    if (TextValueTypes.ofValue(clazz) != null) {
+      return true;
+    }
     final var packageName = clazz.getPackageName();
-    return packageName.startsWith("java.") || packageName.startsWith("javax.");
+    if (packageName.startsWith("java.") || packageName.startsWith("javax.")) {
+      return true;
+    }
+    final var module = clazz.getModule();
+    return module.isNamed() && (module.getName().startsWith("java.") || module
+        .getName()
+        .startsWith("jdk."));
 
   }
 

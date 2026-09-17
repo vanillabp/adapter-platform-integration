@@ -19,9 +19,13 @@ import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.GregorianCalendar;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TimeZone;
 import java.util.UUID;
 
 import org.junit.jupiter.api.DisplayName;
@@ -93,7 +97,7 @@ public class TextValueRoundTripTest {
   }
 
   @Test
-  @DisplayName("Every value shared as text is shared as the text its own type writes")
+  @DisplayName("Every value shared as text is shared as the text its type travels as")
   public void theTextsSharedWithTheBpms() {
 
     final var texts = new LinkedHashMap<Object, String>();
@@ -116,6 +120,8 @@ public class TextValueRoundTripTest {
     texts.put(Period.of(3, 6, 4), "P3Y6M4D");
     texts.put(ZoneId.of("Europe/Berlin"), "Europe/Berlin");
     texts.put(ZoneOffset.ofHours(2), "+02:00");
+    texts.put(TimeZone.getTimeZone("Europe/Berlin"), "Europe/Berlin");
+    texts.put(new Date(1789588530123L), "2026-09-16T19:55:30.123Z");
 
     texts.forEach((
         value,
@@ -148,15 +154,25 @@ public class TextValueRoundTripTest {
             Map.entry("a period of no time at all", Period.ZERO),
             Map.entry("an offset", ZoneOffset.ofHours(2)),
             Map.entry("a day of the week", java.time.DayOfWeek.FRIDAY),
-            Map.entry("a month", java.time.Month.SEPTEMBER));
+            Map.entry("a month", java.time.Month.SEPTEMBER),
+            Map.entry("a date with milliseconds", new Date(1789588530123L)),
+            Map.entry("a date before 1970", new Date(-12345678901234L)));
 
     values.forEach((
         what,
         value) -> assertEquals(value, handedBack(value), what));
 
-    // a zone is the one value whose runtime class is not the type an application declares
+    // a zone and a time zone are the values whose runtime class is not the type an
+    // application declares, so the declared type is named here rather than read off the
+    // value
     final var zone = ZoneId.of("Europe/Berlin");
     assertEquals(zone, ValueConversion.convert(shared(zone), ZoneId.class, "the parameter"), "a zone");
+
+    final var timeZone = TimeZone.getTimeZone("Europe/Berlin");
+    assertEquals(
+        timeZone,
+        ValueConversion.convert(shared(timeZone), TimeZone.class, "the parameter"),
+        "a time zone");
 
   }
 
@@ -173,18 +189,93 @@ public class TextValueRoundTripTest {
   }
 
   @Test
-  @DisplayName("A Date is refused with the type to declare instead, because its text carries less than it holds")
-  public void aDateIsRefusedWithSomethingToDoAboutIt() {
+  @DisplayName("A Date travels as the instant it holds, milliseconds included")
+  public void aDateTravelsAsTheInstantItHolds() {
 
-    final var noon = new java.util.Date(1789588530123L);
+    final var signedAt = new Date(1789588530123L);
+
+    assertEquals("2026-09-16T19:55:30.123Z", shared(signedAt), "the text the BPMS carries");
+    assertEquals(signedAt, handedBack(signedAt), "and the same point in time comes back");
+
+    final var wholeSecond = new Date(1789588530000L);
+    assertEquals("2026-09-16T19:55:30Z", shared(wholeSecond), "a whole second writes no milliseconds");
+    assertEquals(wholeSecond, handedBack(wholeSecond));
+
+  }
+
+  @Test
+  @DisplayName("A Date reads the same in every time zone, because it travels as an instant")
+  public void aDateDoesNotDependOnTheZoneOfTheServerWritingIt() {
+
+    final var signedAt = new Date(1789588530123L);
+    final var zoneOfThisJvm = TimeZone.getDefault();
+    try {
+      TimeZone.setDefault(TimeZone.getTimeZone("Asia/Kolkata"));
+      final var writtenInIndia = shared(signedAt);
+      TimeZone.setDefault(TimeZone.getTimeZone("Europe/Dublin"));
+      final var writtenInIreland = shared(signedAt);
+
+      assertEquals(writtenInIndia, writtenInIreland, "the text does not say which server wrote it");
+      assertEquals(signedAt, handedBack(signedAt), "and it reads back to the same point in time");
+    } finally {
+      TimeZone.setDefault(zoneOfThisJvm);
+    }
+
+  }
+
+  @Test
+  @DisplayName("A TimeZone travels as the id of its zone, a value whose class is not the declared type")
+  public void aTimeZoneTravelsAsTheIdOfItsZone() {
+
+    final var berlin = TimeZone.getTimeZone("Europe/Berlin");
+
+    assertNotEquals(
+        TimeZone.class,
+        berlin.getClass(),
+        "the runtime hands out an implementation of its own, which used to end the sync point");
+    assertEquals("Europe/Berlin", shared(berlin), "the text the BPMS carries");
+    assertEquals(berlin, ValueConversion.convert(shared(berlin), TimeZone.class, "the parameter"));
+
+  }
+
+  @Test
+  @DisplayName("A zone with a fixed offset survives, a three-letter id is replaced by the zone it means")
+  public void whatBecomesOfAnIdWhichIsNoZoneName() {
+
+    final var fixedOffset = TimeZone.getTimeZone("GMT+05:30");
+    assertEquals("GMT+05:30", shared(fixedOffset), "a fixed offset is a zone id of its own");
+    assertEquals(fixedOffset, ValueConversion.convert(shared(fixedOffset), TimeZone.class, "the parameter"));
+
+    // measured on 2026-09-17, Java 21: the three-letter ids are not zone names, and
+    // TimeZone.toZoneId() replaces them by the zone they stand for. The rules are the
+    // same, the id is not, and an application comparing ids has to know that.
+    final var india = TimeZone.getTimeZone("IST");
+    assertEquals("Asia/Kolkata", shared(india), "the id of the zone the abbreviation means");
+
+    final var read = (TimeZone) ValueConversion.convert(shared(india), TimeZone.class, "the parameter");
+    assertTrue(india.hasSameRules(read), "the same zone");
+    assertNotEquals(india.getID(), read.getID(), "under the name the abbreviation stands for");
+
+  }
+
+  @Test
+  @DisplayName("A Calendar is shared as its debug form and refused on the way back")
+  public void aCalendarIsNoWayToCarryAPointInTime() {
+
+    final var calendar = new GregorianCalendar(TimeZone.getTimeZone("Europe/Berlin"));
+    calendar.setTimeInMillis(1789588530123L);
+
+    final var text = (String) shared(calendar);
+    assertTrue(text.startsWith(GregorianCalendar.class.getName()
+        + "["), text);
+    assertTrue(text.length() > 500, "the debug form, several hundred characters long");
 
     final var exception = assertThrows(
         IllegalStateException.class,
-        () -> ValueConversion.convert(shared(noon), java.util.Date.class, "the parameter"));
+        () -> ValueConversion.convert(text, Calendar.class, "the parameter"));
 
-    assertTrue(exception.getMessage().contains("the parameter"), exception::getMessage);
-    assertTrue(exception.getMessage().contains("Declare an Instant"), exception::getMessage);
-    assertTrue(exception.getMessage().contains("milliseconds"), exception::getMessage);
+    assertTrue(exception.getMessage().contains("debug form"), exception::getMessage);
+    assertTrue(exception.getMessage().contains("Share an Instant"), exception::getMessage);
 
   }
 
@@ -197,7 +288,7 @@ public class TextValueRoundTripTest {
         () -> ValueConversion.convert(shared(Locale.GERMANY), Locale.class, "the parameter"));
 
     assertEquals("de_DE", shared(Locale.GERMANY), "what the way out writes for a locale");
-    assertTrue(exception.getMessage().contains("Declare the parameter as a String"), exception::getMessage);
+    assertTrue(exception.getMessage().contains("Share a String"), exception::getMessage);
 
   }
 

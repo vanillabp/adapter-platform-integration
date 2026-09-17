@@ -6,6 +6,49 @@ applications built on VanillaBP). What an application on Camunda 7 has to config
 this is in
 [that adapter's own file](https://github.com/vanillabp/camunda7-adapter/blob/main/UPGRADE.md).
 
+## A Date reaches the BPMS as an instant, and a TimeZone as the id of its zone (2026-09-17)
+
+An aggregate attribute of type `java.util.Date` used to reach the BPMS as the text a `Date` prints,
+and it reaches it as the instant it holds now. This is visible in the model, so read it before
+upgrading if any of your aggregates shares such an attribute:
+
+| what the aggregate holds |      what the BPMS carried      | what the BPMS carries now  |
+|--------------------------|---------------------------------|----------------------------|
+| a `Date` at 21:55:30.123 | `Wed Sep 16 21:55:30 CEST 2026` | `2026-09-16T19:55:30.123Z` |
+
+The milliseconds survive, where the old text dropped them, and the text no longer depends on the
+server which wrote it, where the old one named the zone that server ran in. A `@TaskParam` may be
+declared as a `Date` now, which neither version 1 nor the entry below allowed.
+
+What an operator reads is UTC and no longer local time, and that is the price of a text which says
+the same thing wherever it was written. **A BPMN expression comparing the old text reads something
+else from now on.** An expression comparing dates should read the text as a date rather than as a
+string; where one really has to match the printed form, share a `String` your own code writes and
+keep the form in your hand.
+
+`java.util.TimeZone` is served as well, and it is a fix rather than a change: an aggregate with such
+an attribute ended every sync point with an `InaccessibleObjectException`, because the runtime hands
+out an implementation class of its own (`sun.util.calendar.ZoneInfo`) and the sync model read its
+getters. A `TimeZone` now travels as the id of its zone, `Europe/Berlin`, and a parameter declared
+`TimeZone` reads it back. Two details are worth knowing, both measured against Java 21. A zone with
+a fixed offset survives as it was written, so `GMT+05:30` stays `GMT+05:30`. A three-letter id does
+not, because it is no zone name: `IST` is shared as `Asia/Kolkata` and `EST` as `-05:00`, the same
+zone under the name it really has.
+
+`java.util.Calendar` is carried neither way, and an attribute of that type is named while the
+application boots. Its text is the debug form of the implementation, several hundred characters
+long, and nothing reads a point in time back out of it. What a sync point writes for such an
+attribute does not change, so no variable disappears from a running model. Share an `Instant` for
+the point in time, and a `TimeZone` or a `ZoneId` next to it where the zone matters too.
+
+The same word at startup names every other attribute whose text nothing reads back, a
+`java.util.Locale` or a `java.net.URI` among them. It is a warning and the application boots.
+
+The types carried both ways are listed in
+[`migration-adapter/README.md`](./migration-adapter/README.md), section "What a `@TaskParam` may be
+declared as". The list is a selection and not a promise about the JDK, so a type you miss is worth
+an issue. The reasoning is decision 58 in [`DECISIONS.md`](./DECISIONS.md).
+
 ## A number which does not fit its `@TaskParam` fails instead of arriving wrong (2026-09-16)
 
 A `@TaskParam`, a parameter of a `@WorkflowStartedByBpms` method and an attribute of an aggregate a
@@ -69,9 +112,10 @@ aggregate shares an enum as the name of its constant and a value type such as a 
 declaring one of those types now receives the value, where version 1 threw the same
 `argument type mismatch` it threw for a number which did not fit. A workaround which declares a
 `String` and parses it in the handler keeps working, so nothing has to be changed on upgrading.
-`java.util.Date`, `java.util.Calendar` and `java.util.Locale` are the exception: their text does not
-carry the value back, they stay refused, and the message names the type to declare instead. The
-measurement behind that is decision 57 in [`DECISIONS.md`](./DECISIONS.md).
+`java.util.Calendar` and `java.util.Locale` are the exception: their text does not carry the value
+back, they stay refused, and the message names the type to declare instead. The measurement behind
+that is decision 57 in [`DECISIONS.md`](./DECISIONS.md). A `java.util.Date` was refused with them
+until its text changed, which the entry above is about.
 
 What the conversion does in full is in
 [`migration-adapter/README.md`](./migration-adapter/README.md), section "What a `@TaskParam` may be

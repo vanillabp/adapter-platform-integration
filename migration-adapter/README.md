@@ -1175,19 +1175,19 @@ the workflow.
 
 What it does:
 
-|           the value the BPMS reported            |   the declared type    |                        what the parameter gets                         |
-|--------------------------------------------------|------------------------|------------------------------------------------------------------------|
-| anything the type already holds                  | that type, or `Object` | the value itself                                                       |
-| `null`                                           | a wrapper type         | `null`                                                                 |
-| `null`                                           | a primitive type       | the invocation fails, naming the input mapping as the way out          |
-| a number                                         | another number type    | the same number, or a failure where it would not be the same number    |
-| a number                                         | `String`               | its `toString()`                                                       |
-| the text of a number                             | a number type          | the number, or a failure where the text is no number                   |
-| `"true"` or `"false"`                            | `Boolean`              | the boolean                                                            |
-| the name of an enum constant                     | that enum              | the constant, or a failure where the enum has no constant of that name |
-| the text a `UUID` or a `java.time` value writes  | that type              | the value, or a failure where the text is none that type writes        |
-| the text of a `Date`, a `Calendar` or a `Locale` | that type              | the invocation fails, naming the type to declare instead               |
-| everything else                                  | anything               | the invocation fails, naming the value's class and the declared type   |
+|      the value the BPMS reported       |   the declared type    |                        what the parameter gets                         |
+|----------------------------------------|------------------------|------------------------------------------------------------------------|
+| anything the type already holds        | that type, or `Object` | the value itself                                                       |
+| `null`                                 | a wrapper type         | `null`                                                                 |
+| `null`                                 | a primitive type       | the invocation fails, naming the input mapping as the way out          |
+| a number                               | another number type    | the same number, or a failure where it would not be the same number    |
+| a number                               | `String`               | its `toString()`                                                       |
+| the text of a number                   | a number type          | the number, or a failure where the text is no number                   |
+| `"true"` or `"false"`                  | `Boolean`              | the boolean                                                            |
+| the name of an enum constant           | that enum              | the constant, or a failure where the enum has no constant of that name |
+| the text a value type travels as       | that type              | the value, or a failure where the text is none that type travels as    |
+| the text of a `Calendar` or a `Locale` | that type              | the invocation fails, naming the type to declare instead               |
+| everything else                        | anything               | the invocation fails, naming the value's class and the declared type   |
 
 The row worth reading twice is the one about numbers. A number travels through its decimal
 form, never through `intValue()` or `doubleValue()`, and the converted value is handed over
@@ -1221,24 +1221,35 @@ javac keeps no names and the message says `arg1`.
 
 The other row worth reading twice is the one about text. A workflow aggregate shares an
 enum as the name of its constant, and a value type such as a `UUID` or a `LocalDate` as the
-string form that type writes itself. The way back reads exactly those forms, so a handler
-declares the type the aggregate holds and gets the value the aggregate held:
+text `TextValueTypes` names for it, which for most of them is the text the type writes
+itself. The way back reads exactly those texts, so a handler declares the type the
+aggregate holds and gets the value the aggregate held:
 
-|        what the aggregate shared        | what the BPMS carries  | declared as |
-|-----------------------------------------|------------------------|-------------|
-| `UUID.fromString("f81d4fae-7dec-...")`  | `f81d4fae-7dec-...`    | `UUID`      |
-| `Decision.APPROVED`                     | `APPROVED`             | `Decision`  |
-| `LocalDate.parse("2026-09-16")`         | `2026-09-16`           | `LocalDate` |
-| `Instant.parse("2026-09-16T18:15:30Z")` | `2026-09-16T18:15:30Z` | `Instant`   |
-| `Duration.ofMinutes(90)`                | `PT1H30M`              | `Duration`  |
+|             what the aggregate shared              | what the BPMS carries  | declared as |
+|----------------------------------------------------|------------------------|-------------|
+| `UUID.fromString("f81d4fae-7dec-...")`             | `f81d4fae-7dec-...`    | `UUID`      |
+| `Decision.APPROVED`                                | `APPROVED`             | `Decision`  |
+| `LocalDate.parse("2026-09-16")`                    | `2026-09-16`           | `LocalDate` |
+| `Instant.parse("2026-09-16T18:15:30Z")`            | `2026-09-16T18:15:30Z` | `Instant`   |
+| `Duration.ofMinutes(90)`                           | `PT1H30M`              | `Duration`  |
+| `Date.from(Instant.parse("2026-09-16T19:55:30Z"))` | `2026-09-16T19:55:30Z` | `Date`      |
+| `TimeZone.getTimeZone("Europe/Berlin")`            | `Europe/Berlin`        | `TimeZone`  |
 
-The types read back are `UUID`, every enum, and the `java.time` values `Instant`,
+The types carried both ways are `UUID`, every enum, the `java.time` values `Instant`,
 `LocalDate`, `LocalTime`, `LocalDateTime`, `OffsetDateTime`, `OffsetTime`,
 `ZonedDateTime`, `Year`, `YearMonth`, `MonthDay`, `Duration`, `Period`, `ZoneId` and
-`ZoneOffset`. `DayOfWeek` and `Month` are enums and come along with every other enum. A
-text in any other form is refused, and the message shows a form the type does write. A
-constant name the model invented is refused too, naming the constants the enum has,
-because a handler reading such a name would act on a value nobody declared.
+`ZoneOffset`, plus `java.util.Date` and `java.util.TimeZone`. `DayOfWeek` and `Month` are
+enums and come along with every other enum. A text in any other form is refused, and the
+message shows a text the type does travel as. A constant name the model invented is
+refused too, naming the constants the enum has, because a handler reading such a name
+would act on a value nobody declared.
+
+**That list is a selection, not a promise about the JDK.** It holds what a workflow
+aggregate carries often enough to be worth carrying, and a type missing from it is a type
+nobody has needed yet rather than a type ruled out. Somebody who misses one opens an
+issue, and it is added with the text it travels as. Everything else the JDK wrote still
+reaches the BPMS as its own text, one way, and a parameter declaring such a type is
+refused.
 
 Timers are where a model reads these texts back, so two limits belong here. Camunda accepts
 a date, a duration and a cycle in a timer event. A `Duration` carries days, hours, minutes
@@ -1252,15 +1263,39 @@ fires at the same moment either way, because the engine reads both forms, but th
 operator reads is not the text the application wrote. Where the wording has to survive,
 share the value as a `String`.
 
-`java.util.Date`, `java.util.Calendar` and `java.util.Locale` stay refused although the
-platform writes them out as text, and the message says which type to declare instead. A
-`Date` is written as `Wed Sep 16 21:55:30 CEST 2026`, which carries no milliseconds and
-names the time zone by an abbreviation several zones share. Measured on 2026-09-16: the
-same text written in `Asia/Kolkata` and read in `Europe/Dublin` gives an instant four and a
-half hours away, and no check on the text sees the difference, because both zones write
-`IST`. Declare an `Instant`, an `OffsetDateTime` or a `ZonedDateTime` instead, in the
-parameter and in the aggregate. A `Locale` is written as `de_DE`, which no `Locale` method
-reads back, and `Locale.ROOT` is written as an empty text.
+**A `Date` and a `TimeZone` travel as a text built for them**, not as the text they write
+themselves, and that is the one place where the way out does more than call `toString()`.
+A `Date` is a count of milliseconds and carries no zone, so it travels as the instant it
+holds and the milliseconds survive. The text is the same whichever server wrote it, which
+an offset in the zone of the JVM would not be: two nodes of one application would write
+two texts for one value, and a value written in summer would read differently from the
+same value written in winter. What an operator gives up for that is local time in the
+model. Every subclass travels the same way, so an attribute declared `Date` which a JPA
+provider fills with a `java.sql.Timestamp` carries the same text as a plain `Date`, down
+to the millisecond and no further.
+
+A `TimeZone` travels as the id of its zone, which is what `toZoneId()` answers, and
+`TimeZone.getTimeZone(ZoneId)` reads it back. Measured on 2026-09-17 against Java 21: a
+zone with a fixed offset survives as it was written, so `GMT+05:30` is shared and read
+back as `GMT+05:30`. A three-letter id does not, because it is no zone name. `IST` is
+shared as `Asia/Kolkata` and `EST` as `-05:00`. It is the same zone with the same rules
+under the name it really has, and an application comparing ids has to know that.
+
+`java.util.Calendar` and `java.util.Locale` stay refused although the platform writes them
+out as text, and the message says which type to declare instead. A `Calendar` is written
+as its debug form, several hundred characters naming every field of the implementation,
+and no point in time can be read out of it without guessing which of its fields to trust.
+A `Locale` is written as `de_DE`, which no `Locale` method reads back, and `Locale.ROOT` is
+written as an empty text.
+
+An attribute of such a type is named while the application boots, once per attribute, with
+the type to share instead. It works on the way out and fails on the way in, and the way in
+is a task handler, so without that word the application learns about it when a model first
+maps the value into one. It is a warning and not a failed boot, because `validateSyncModel`
+is not told the adapter's default and therefore cannot know whether the attribute is
+shared at all. An attribute marked `@NoSyncWithBPMS` is left out of it. This, and why the
+list is asked about the type a value IS rather than about the package its class sits in,
+is [decision 58](../DECISIONS.md).
 
 **What to share, and as what.** A workflow aggregate carries the results a model decides on
 and the values an operator reads, not every field of a business object. So a `@TaskParam`
