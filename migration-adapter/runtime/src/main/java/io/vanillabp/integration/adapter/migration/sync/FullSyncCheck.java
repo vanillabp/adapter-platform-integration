@@ -70,7 +70,13 @@ public class FullSyncCheck {
     if (properties.allowsFullSyncWithBpms(workflowModuleId, bpmnProcessId)) {
       return;
     }
-    final var shared = aggregateSync.everythingSharedWithBpms(workflowAggregateClass, aggregateIdAttribute);
+    // a persistence which does not name the ID attribute leaves the conventional name,
+    // which is the one every persistence VanillaBP ships derives anyway: an aggregate made
+    // of nothing but its ID must not be refused because nobody could name that attribute
+    final var idAttribute = aggregateIdAttribute != null
+        ? aggregateIdAttribute
+        : "id";
+    final var shared = aggregateSync.everythingSharedWithBpms(workflowAggregateClass, idAttribute);
     if (shared.isEmpty()) {
       return;
     }

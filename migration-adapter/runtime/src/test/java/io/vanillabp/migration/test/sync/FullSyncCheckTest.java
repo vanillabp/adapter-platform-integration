@@ -123,6 +123,15 @@ public class FullSyncCheckTest {
   }
 
   @Test
+  @DisplayName("An ID nobody could name is still an ID: the conventional name stands in")
+  public void anAggregateOfAnIdNobodyNamedStarts() {
+
+    refusing
+        .refuseSharingEverythingUnlessAllowed(MODULE, PROCESS, NothingButAnIdService.class, NothingButAnId.class, null);
+
+  }
+
+  @Test
   @DisplayName("One @NoSyncWithBPMS is enough to start without the permission")
   public void anAggregateHoldingSomethingBackStarts() {
 

@@ -2058,7 +2058,9 @@ belongs. Ignoring it would leave somebody believing the permission was given.
 What "everything" means is asked of the code which later decides what is written, so the check
 cannot invent an answer of its own. The aggregate's ID attribute is left out of it: that value
 reaches the BPMS whatever the sync model says, so an aggregate made of nothing but its ID gives
-nothing away and starts without a permission. A secondary BPMN process is not asked either. It
+nothing away and starts without a permission. The persistence names that attribute, and where it
+does not, the conventional name `id` stands in - an aggregate must not be refused because nobody
+could name its ID. A secondary BPMN process is not asked either. It
 runs on the workflow of the primary process, and the primary id is the one the configuration
 knows.
 
