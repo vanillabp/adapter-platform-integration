@@ -773,6 +773,57 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
   }
 
+  /**
+   * Whether this method serves the delivery at hand, asked with BOTH keys a task is wired
+   * by. A method names one of them (<code>&#64;WorkflowTask(taskDefinition = ...)</code>
+   * respectively <code>&#64;WorkflowTask(id = ...)</code>) and a delivery reports both,
+   * the task definition the BPMS subscribed to and the id of the element it belongs to.
+   * <p>
+   * The pair is the same one <code>validateTaskWiring</code> matches a method against while
+   * the application boots, and that is the point: a wiring the boot accepts has to be a
+   * wiring a delivery finds. Asking with the task definition alone accepted a method wired
+   * by the element id at deployment and failed it at the first delivery, which the
+   * application learnt from an incident.
+   * <p>
+   * The element id is also compared against the reported task definition, for an adapter
+   * which names no element of its own: there the one value it reports IS the element id.
+   * <p>
+   * Why the routing learns the second key instead of the deployment refusing such a wiring
+   * is decision 67 in the repository's DECISIONS.md.
+   *
+   * @param handler One method registered for this BPMN process
+   * @param context What the adapter reports about the delivery
+   * @return Whether the method serves it
+   */
+  private static boolean serves(
+      final WorkflowTaskHandler handler,
+      final TaskInvocationContext context) {
+
+    return sameWiring(handler.getTaskDefinition(), context.getTaskDefinition()) || sameWiring(
+        handler.getActivityId(),
+        context.getTaskDefinition()) || sameWiring(handler.getActivityId(), context.getBpmnElementId());
+
+  }
+
+  /**
+   * How a delivery names its BPMN element in the message about a method nobody found,
+   * and nothing where the adapter names none. The two keys are different values on most
+   * models, and a reader who only sees the task definition looks for a method under a
+   * name their model does not carry.
+   *
+   * @param context What the adapter reports about the delivery
+   * @return The phrase to put after the task definition, possibly empty
+   */
+  private static String elementIdOfTheDelivery(
+      final TaskInvocationContext context) {
+
+    final var elementId = context.getBpmnElementId();
+    return ((elementId == null) || elementId.equals(context.getTaskDefinition()))
+        ? ""
+        : " of BPMN element '%s'".formatted(elementId);
+
+  }
+
   private static boolean matches(
       final WorkflowTaskHandler handler,
       final BpmnTaskSpec task) {
@@ -805,8 +856,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     }
     final var handler = entry.handlers
         .stream()
-        .filter(candidate -> sameWiring(candidate.getTaskDefinition(),
-            context.getTaskDefinition()) || sameWiring(candidate.getActivityId(), context.getTaskDefinition()))
+        .filter(candidate -> serves(candidate, context))
         .filter(candidate -> candidate.matchesVersion(
             context.getProcessVersion(),
             processVersions.resolverFor(workflowModuleId, bpmnProcessId)))
@@ -814,11 +864,12 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
         .orElseThrow(() -> new IllegalStateException(
             """
                 No @WorkflowTask method of BPMN process '%s' of workflow module '%s' matches task \
-                definition '%s' (process version '%s')!%s%s Registered methods: %s."""
+                definition '%s'%s (process version '%s')!%s%s Registered methods: %s."""
                 .formatted(
                     bpmnProcessId,
                     workflowModuleId,
                     context.getTaskDefinition(),
+                    elementIdOfTheDelivery(context),
                     context.getProcessVersion(),
                     VersionRange.noVersionReportedHint(
                         context.getProcessVersion(),
