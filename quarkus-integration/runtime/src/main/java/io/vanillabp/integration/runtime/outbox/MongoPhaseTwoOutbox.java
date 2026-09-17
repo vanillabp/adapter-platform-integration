@@ -38,6 +38,17 @@ import lombok.extern.slf4j.Slf4j;
  * <code>vanillabp-phase-two-outbox</code>) so both platforms share the same store
  * layout.
  * <p>
+ * <strong>A younger call may take the waiting entry's place</strong> instead of being
+ * discarded against it, where it says so
+ * ({@link PhaseTwoCall#replacingWhatIsStillWaiting()}). The document keeps its id and
+ * its key and gets everything the dispatch reads, and the payload of the entry it
+ * replaced is removed with it. What decides is <code>attempts</code>: the dispatcher
+ * counts the attempt when it claims an entry, so a zero there means no dispatch has
+ * read this entry and none is holding its payload. The update carries that condition,
+ * which makes it the same atomic claim - if a poller wins the document, the update
+ * matches nothing and the call becomes an entry of its own, with <code>dedupKey</code>
+ * set to its own id because the key belongs to the entry on its way.
+ * <p>
  * <strong>One transaction where MongoDB Panache provides a session:</strong>
  * MongoDB Panache enlists itself in the Narayana transaction - it starts a
  * <code>ClientSession</code> with a MongoDB transaction and keeps it as a transaction
@@ -158,17 +169,41 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
 
     final var collection = dispatcher.outboxCollection();
 
-    // pre-check for an operation still waiting for its dispatch (fast no-op for the
-    // common duplicate case); the unique index remains the backstop for concurrent
-    // duplicates
     final var idempotencyKey = call.idempotencyKey().orElse(null);
-    if ((idempotencyKey != null) && (collection.find(new Document("dedupKey", idempotencyKey)).first() != null)) {
-      logDiscardedSchedule(call);
-      return false;
-    }
-
     final var now = Instant.now();
     final var entryId = UUID.randomUUID().toString();
+    // the session of the running transaction where MongoDB Panache provides one: the
+    // entry then commits with the aggregate instead of being written immediately
+    //
+    final var session = io.vanillabp.integration.runtime.mongo.MongoSessions
+        .activeSession(txRegistry);
+    // within a MongoDB transaction a duplicate-key error would abort the whole
+    // transaction (the aggregate included), so a duplicate is detected by a read - the
+    // unique index stays the backstop for two nodes scheduling at once
+    final var waiting = idempotencyKey == null
+        ? null
+        : (session == null
+            ? collection.find(new Document("dedupKey", idempotencyKey)).first()
+            : collection.find(session, new Document("dedupKey", idempotencyKey)).first());
+    // what the unique index sees. An operation which must not be deduplicated dedupes
+    // against itself, so the field is present on every entry and the index needs no
+    // partial filter, and a second entry beside one a dispatch already took does the
+    // same: the key belongs to the entry on its way
+    var dedupKey = idempotencyKey == null ? entryId : idempotencyKey;
+    if (waiting != null) {
+      if (!call.replacesWhatIsStillWaiting()) {
+        logDiscardedSchedule(call);
+        return false;
+      }
+      if (replacePendingEntry(collection, session, waiting, call, now)) {
+        triggerPollAfterCommit(session, call, entryId, true);
+        return true;
+      }
+      // a poller claimed the entry between the read and the update: it runs to its end
+      // and this call becomes an entry of its own
+      logSecondEntryBesideAClaimedOne(call);
+      dedupKey = entryId;
+    }
     final var entry = new Document()
         .append("_id", entryId)
         .append("workflowModuleId", call.workflowModuleId())
@@ -178,27 +213,11 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
         .append("adapterId", call.adapterId())
         .append("args", new Document(new java.util.LinkedHashMap<String, Object>(call.args())))
         .append("idempotencyKey", idempotencyKey)
-        // an operation which must not be deduplicated dedupes against itself, so the
-        // field is present on every entry and the index needs no partial filter
-        .append("dedupKey", idempotencyKey == null ? entryId : idempotencyKey)
+        .append("dedupKey", dedupKey)
         .append("status", STATUS_OPEN)
         .append("createdAt", java.util.Date.from(now))
         .append("attempts", 0)
         .append("nextAttemptAt", java.util.Date.from(now));
-    // the session of the running transaction where MongoDB Panache provides one: the
-    // entry then commits with the aggregate instead of being written immediately
-    //
-    final var session = io.vanillabp.integration.runtime.mongo.MongoSessions
-        .activeSession(txRegistry);
-    // within a MongoDB transaction a duplicate-key error would abort the whole
-    // transaction (the aggregate included), so the common duplicate is detected by a
-    // read - the unique index stays the backstop for two nodes scheduling at once
-    if ((session != null) && (idempotencyKey != null) && (collection
-        .find(session, new Document("dedupKey", idempotencyKey))
-        .first() != null)) {
-      logDiscardedSchedule(call);
-      return false;
-    }
     try {
       if (session != null) {
         collection.insertOne(session, entry);
@@ -221,44 +240,176 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
       dispatcher.getPayloadStore().write(call);
     }
 
-    if (txRegistry.getTransactionKey() != null) {
-      // dispatch right after the commit; on rollback delete the entry best-effort
-      // (see the class javadoc for the remaining crash windows)
-      txRegistry.registerInterposedSynchronization(new Synchronization() {
-        @Override
-        public void beforeCompletion() {
-          // nothing to do
-        }
-
-        @Override
-        public void afterCompletion(
-            final int status) {
-          if (status == Status.STATUS_COMMITTED) {
-            dispatcher.triggerPoll();
-          } else if (session == null) {
-            // no MongoDB transaction covered the insert, so it has to be undone here;
-            // with a session the abort of that transaction removed it already
-            try {
-              collection.deleteOne(new Document("_id", entryId));
-              if (call.hasPayload()) {
-                dispatcher.getPayloadStore().remove(call.payloadReference());
-              }
-            } catch (final RuntimeException e) {
-              log.warn(
-                  "Could not delete the phase-two outbox entry '{}' after the rollback of the local "
-                      + "transaction - the entry is an orphan and will end up BLOCKED after failing "
-                      + "dispatches; clean it up manually",
-                  entryId,
-                  e);
-            }
-          }
-        }
-      });
-    } else {
-      dispatcher.triggerPoll();
-    }
+    triggerPollAfterCommit(session, call, entryId, false);
 
     return true;
+
+  }
+
+  /**
+   * A call which replaces goes the same way as any other, and this is the one method
+   * which says so - the mark travels in the call, so {@link #schedule(PhaseTwoCall)}
+   * reads it where the entry is written.
+   */
+  @Override
+  public boolean scheduleReplacingWhatIsStillWaiting(
+      final PhaseTwoCall call) {
+
+    return schedule(call.replacingWhatIsStillWaiting());
+
+  }
+
+  /**
+   * Puts the younger call into the document of the waiting entry, its payload
+   * included, and removes the payload the replaced entry named.
+   * <p>
+   * What decides is the number of attempts: the dispatcher counts one when it claims an
+   * entry, so a zero means no dispatch has read this entry and none is holding its
+   * payload. The update carries that condition, which makes it the same atomic claim
+   * the dispatcher uses - if a poller wins the document, the update matches nothing.
+   * <p>
+   * Where a session covers the writes they commit together and a rollback takes them
+   * all. Without one they are three separate writes and the window between them is the
+   * one an insert has in this store as well, which the class javadoc calls
+   * best-effort.
+   *
+   * @return Whether the entry was replaced - <code>false</code> where a poller claimed
+   *         it in the meantime, which makes the call an entry of its own
+   */
+  private boolean replacePendingEntry(
+      final com.mongodb.client.MongoCollection<Document> collection,
+      final com.mongodb.client.ClientSession session,
+      final Document waiting,
+      final PhaseTwoCall call,
+      final Instant now) {
+
+    if (waiting.getInteger("attempts", 0) > 0) {
+      return false;
+    }
+    final var replacement = com.mongodb.client.model.Updates
+        .combine(
+            com.mongodb.client.model.Updates.set("operation", call.operation()),
+            com.mongodb.client.model.Updates.set("aggregateId", call.workflowAggregateId()),
+            com.mongodb.client.model.Updates.set("adapterId", call.adapterId()),
+            com.mongodb.client.model.Updates
+                .set("args", new Document(new java.util.LinkedHashMap<String, Object>(call.args()))),
+            com.mongodb.client.model.Updates.set("createdAt", java.util.Date.from(now)),
+            com.mongodb.client.model.Updates.set("nextAttemptAt", java.util.Date.from(now)));
+    final var filter = com.mongodb.client.model.Filters
+        .and(
+            com.mongodb.client.model.Filters.eq("_id", waiting.getString("_id")),
+            com.mongodb.client.model.Filters.eq("attempts", 0));
+    final var replaced = (session == null
+        ? collection.updateOne(filter, replacement)
+        : collection.updateOne(session, filter, replacement)).getModifiedCount() == 1;
+    if (!replaced) {
+      return false;
+    }
+    if (call.hasPayload()) {
+      dispatcher.getPayloadStore().write(call);
+    }
+    final var replacedReference = waiting
+        .get("args", Document.class)
+        .getString(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
+    if (replacedReference != null) {
+      dispatcher.getPayloadStore().remove(replacedReference);
+    }
+    logReplacedEntry(call);
+    return true;
+
+  }
+
+  /**
+   * Dispatches right after the commit; on rollback the entry is deleted best-effort
+   * where no MongoDB transaction covered the write (see the class javadoc for the
+   * remaining crash windows).
+   *
+   * @param session The session covering the writes, or <code>null</code>
+   * @param call The call which was scheduled
+   * @param entryId The id of the entry which was written
+   * @param replacedAnEntry Whether the call took the place of a waiting entry - there
+   *        is no own document to delete on a rollback then, and undoing a replacement
+   *        without a transaction is not something a store can promise
+   */
+  private void triggerPollAfterCommit(
+      final com.mongodb.client.ClientSession session,
+      final PhaseTwoCall call,
+      final String entryId,
+      final boolean replacedAnEntry) {
+
+    if (txRegistry.getTransactionKey() == null) {
+      dispatcher.triggerPoll();
+      return;
+    }
+    final var collection = dispatcher.outboxCollection();
+    txRegistry.registerInterposedSynchronization(new Synchronization() {
+      @Override
+      public void beforeCompletion() {
+        // nothing to do
+      }
+
+      @Override
+      public void afterCompletion(
+          final int status) {
+        if (status == Status.STATUS_COMMITTED) {
+          dispatcher.triggerPoll();
+        } else if ((session == null) && !replacedAnEntry) {
+          // no MongoDB transaction covered the insert, so it has to be undone here;
+          // with a session the abort of that transaction removed it already
+          try {
+            collection.deleteOne(new Document("_id", entryId));
+            if (call.hasPayload()) {
+              dispatcher.getPayloadStore().remove(call.payloadReference());
+            }
+          } catch (final RuntimeException e) {
+            log.warn(
+                "Could not delete the phase-two outbox entry '{}' after the rollback of the local "
+                    + "transaction - the entry is an orphan and will end up BLOCKED after failing "
+                    + "dispatches; clean it up manually",
+                entryId,
+                e);
+          }
+        }
+      }
+    });
+
+  }
+
+  /**
+   * A younger call took the place of the entry which was waiting. At DEBUG for the
+   * reason a discard is: it is what the caller asked for, and under a backlog it
+   * happens as often as reports are planned.
+   */
+  private static void logReplacedEntry(
+      final PhaseTwoCall call) {
+
+    log.debug(
+        "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' replaced the "
+            + "entry which was waiting for its dispatch",
+        call.operation(),
+        call.bpmnProcessId(),
+        call.workflowModuleId(),
+        call.workflowAggregateId());
+
+  }
+
+  /**
+   * A younger call could not take the place of the entry it meant to replace, because a
+   * dispatch had claimed it. It becomes an entry of its own, so the handler is called
+   * twice - worth a line, because an application counting its reports finds the second
+   * one here.
+   */
+  private static void logSecondEntryBesideAClaimedOne(
+      final PhaseTwoCall call) {
+
+    log.debug(
+        "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' asked to "
+            + "replace an entry a dispatch had already taken - that one runs to its end and this "
+            + "call becomes an entry of its own",
+        call.operation(),
+        call.bpmnProcessId(),
+        call.workflowModuleId(),
+        call.workflowAggregateId());
 
   }
 

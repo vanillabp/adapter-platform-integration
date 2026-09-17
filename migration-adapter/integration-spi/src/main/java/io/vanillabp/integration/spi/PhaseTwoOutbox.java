@@ -1,11 +1,13 @@
 package io.vanillabp.integration.spi;
 
+import org.slf4j.LoggerFactory;
+
 /**
  * Transaction outbox used to reliably execute the second phase of two-phase committed
  * BPMS calls after the local transaction which persisted the workflow aggregate was
  * committed.
  * <p>
- * A store implements exactly one method, {@link #schedule(PhaseTwoCall)}, and never
+ * A store has to implement one method, {@link #schedule(PhaseTwoCall)}, and never
  * learns which operations exist: a call carries the operation's NAME, its arguments and
  * its idempotency key, all of them opaque here. The core builds those calls from the
  * {@link PhaseOperation} the application asked for, and dispatch happens through the
@@ -43,13 +45,39 @@ package io.vanillabp.integration.spi;
  * {@link PhaseTwoCall#idempotencyKey()} (where present) AMONG THE ENTRIES STILL
  * WAITING FOR THEIR DISPATCH, using the store's unique-constraint mechanism (unique
  * index/constraint on the persisted key). A key says "this operation is planned once",
- * not "this operation ever happened": scheduling a call whose key matches an entry
- * which has not been dispatched yet is a no-op returning <code>false</code>, while the
- * same call after that entry reached the BPMS is a NEW operation and is scheduled. That
- * is what makes a second round of a loop, or a second element of a multi-instance
- * activity, correlate the same message again instead of waiting forever for a message
- * VanillaBP silently dropped - see decision 22 in the repository's DECISIONS.md and
+ * not "this operation ever happened": a call whose key matches an entry which has not
+ * been dispatched yet meets one of the two entries below, while the same call after
+ * that entry reached the BPMS is a NEW operation and is scheduled. That is what makes a
+ * second round of a loop, or a second element of a multi-instance activity, correlate
+ * the same message again instead of waiting forever for a message VanillaBP silently
+ * dropped - see decision 22 in the repository's DECISIONS.md and
  * {@link #schedule(PhaseTwoCall)} for what a store logs about a discard.
+ * <p>
+ * Which of the two happens is the CALL's own word, never a setting:
+ * <ul>
+ * <li>A plain call is discarded, and {@link #schedule(PhaseTwoCall)} answers
+ * <code>false</code>. The entry which waits stays as it is, which is right where a
+ * call carries the intention and the dispatch reads the state fresh.</li>
+ * <li>A call marked by {@link PhaseTwoCall#replacingWhatIsStillWaiting()} takes the
+ * waiting entry's place, payload included, in the transaction it is scheduled in, and
+ * {@link #scheduleReplacingWhatIsStillWaiting(PhaseTwoCall)} answers <code>true</code>.
+ * The waiting reports of one workflow still collapse into one, and the one which is
+ * left carries the youngest state - see decision 68 in the repository's
+ * DECISIONS.md.</li>
+ * </ul>
+ * <strong>An entry a dispatch has already taken for itself is never replaced.</strong>
+ * It runs to its end, and the younger call becomes an entry of its own, which takes no
+ * part in the deduplication of that key: the key belongs to the entry which is on its
+ * way. Two calls then reach the handler where one was asked for, which is the price of
+ * never taking work away from a dispatch which may have reached the BPMS already.
+ * <p>
+ * <strong>What the dispatch reads is what was written last.</strong> Removing the
+ * replaced payload, writing the younger one and pointing the entry at it belong to the
+ * transaction the call was scheduled in, exactly as the entry itself does, so no reader
+ * meets an entry whose payload is gone and a rollback leaves the replaced entry and its
+ * payload as they were. Where a store cannot enlist at all - the MongoDB stores without
+ * a replica set say so in their own javadoc - a replacement is best-effort in the way
+ * an insert is there.
  * <p>
  * What the narrowed window does NOT protect against is two entries planned in the same
  * batch of work: multi-instance siblings of one aggregate share module, process and
@@ -111,6 +139,11 @@ public interface PhaseTwoOutbox {
    * cannot tell apart - a redelivered at-least-once dispatch, or a genuinely second
    * operation which lost against one still waiting - and the core reports it to
    * whoever called.
+   * <p>
+   * A call marked by {@link PhaseTwoCall#replacingWhatIsStillWaiting()} takes the
+   * waiting entry's place here as well, because the mark travels in the call. What
+   * {@link #scheduleReplacingWhatIsStillWaiting(PhaseTwoCall)} adds is the warning a
+   * store which never learned replacing inherits, so reach for that one.
    *
    * @param call The phase-two call to schedule
    * @return <code>true</code> if the call was scheduled, <code>false</code> if an
@@ -119,6 +152,53 @@ public interface PhaseTwoOutbox {
    */
   boolean schedule(
       PhaseTwoCall call);
+
+  /**
+   * Schedule the given phase-two call so that it takes the place of the entry of the
+   * same {@link PhaseTwoCall#idempotencyKey()} which is still waiting for its dispatch,
+   * payload included. Everything {@link #schedule(PhaseTwoCall)} demands holds here as
+   * well: the same running transaction, and the entry becoming visible if and only if
+   * that transaction commits.
+   * <p>
+   * It is what a caller whose call carries the state itself needs, because for such a
+   * call the older entry holds the older state - see decision 68 in the repository's
+   * DECISIONS.md. Only an operation an extension registered may ask for it, which
+   * {@link PhaseTwoCall#replacingWhatIsStillWaiting()} refuses to build otherwise.
+   * <p>
+   * The default is what an outbox did before replacing existed: the call is discarded
+   * against the waiting entry, the older state survives, and a WARN names the store so
+   * the application learns why its youngest report never arrived. Quietly keeping the
+   * older state is the one outcome which must not happen, which is why a store written
+   * outside VanillaBP says so rather than looking as if it had replaced. Every store
+   * VanillaBP ships overrides it.
+   *
+   * @param call The phase-two call to schedule, marked by
+   *        {@link PhaseTwoCall#replacingWhatIsStillWaiting()}
+   * @return <code>true</code> if the call was scheduled, whether it replaced a waiting
+   *         entry or became an entry of its own; <code>false</code> where this store
+   *         cannot replace and discarded the call
+   */
+  default boolean scheduleReplacingWhatIsStillWaiting(
+      final PhaseTwoCall call) {
+
+    LoggerFactory
+        .getLogger(PhaseTwoOutbox.class)
+        .warn(
+            """
+                Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' asked to \
+                replace the entry still waiting for its dispatch, and the outbox store '{}' does not \
+                know how to do that. The call is discarded against the waiting entry, so the state \
+                which reaches the handler is the OLDER one. Implement \
+                PhaseTwoOutbox#scheduleReplacingWhatIsStillWaiting in that store, or use one of the \
+                stores VanillaBP ships.""",
+            call.operation(),
+            call.bpmnProcessId(),
+            call.workflowModuleId(),
+            call.workflowAggregateId(),
+            getClass().getName());
+    return schedule(call);
+
+  }
 
   /**
    * The adapter ids the entries of one workflow's BPMN process are waiting for - every

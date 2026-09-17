@@ -51,6 +51,18 @@ import lombok.extern.slf4j.Slf4j;
  * the authority for two nodes scheduling at the same moment - there the losing
  * transaction fails, which is acceptable for an operation that was a duplicate anyway.
  * <p>
+ * <strong>A younger call may take the waiting entry's place</strong> instead of being
+ * discarded against it, where it says so
+ * ({@link PhaseTwoCall#replacingWhatIsStillWaiting()}). The row keeps its ID and its
+ * key and gets everything the dispatch reads, and the payload of the entry it replaced
+ * is removed in the same transaction. What decides is <code>ATTEMPTS</code>: the
+ * dispatcher counts the attempt when it claims an entry, so a zero there means no
+ * dispatch has read this entry and none is holding its payload. The update carries that
+ * condition, which makes it the same optimistic lock the claim is - if a poller wins
+ * the row, the update matches nothing and the call becomes an entry of its own, with
+ * <code>DEDUP_KEY</code> set to its own ID because the key belongs to the entry on its
+ * way.
+ * <p>
  * The {@link PhaseTwoCall#args()} map is persisted GENERICALLY in its serialized
  * form ({@link PhaseTwoCall#serializeArgs(java.util.Map)}, column
  * <code>ARGS</code>) - the store stays operation-agnostic (stores never interpret
@@ -75,7 +87,22 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '%s', ?, 0, ?)""";
 
   private static final String SELECT_PENDING_ENTRY = """
-      SELECT ID FROM %s WHERE DEDUP_KEY = ?""";
+      SELECT ID, ARGS, ATTEMPTS FROM %s WHERE DEDUP_KEY = ?""";
+
+  /**
+   * Puts a younger call into the row of the entry it replaces. Everything the dispatch
+   * reads is overwritten, the identifiers included, because an extension is free to
+   * derive one key from several calls; what stays is the row's ID, so a poller holding
+   * the entry it read a moment ago still addresses the same row.
+   * <p>
+   * <code>ATTEMPTS = 0</code> is the whole guard: an entry no dispatch has taken yet is
+   * one nobody is reading, and a poller which claims it while this update waits for the
+   * row finds the update matching no row afterwards.
+   */
+  private static final String REPLACE_PENDING_ENTRY = """
+      UPDATE %s \
+      SET OPERATION = ?, AGGREGATE_ID = ?, ADAPTER_ID = ?, ARGS = ?, CREATED_AT = ?, NEXT_ATTEMPT_AT = ? \
+      WHERE ID = ? AND ATTEMPTS = 0""";
 
   /**
    * Resolves the configured name of the payload table
@@ -246,10 +273,28 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
         .formatted(
             tableName,
             JdbcPhaseTwoOutboxDispatcher.STATUS_OPEN);
+    // what the unique constraint sees. An operation which must not be deduplicated
+    // occupies its own ID instead of a null, because not every database treats two
+    // nulls as different values, and a second entry beside one a dispatch already took
+    // does the same: the key belongs to the entry on its way
+    var dedupKey = idempotencyKey == null ? entryId : idempotencyKey;
     try (var connection = dataSource.get().getConnection()) {
-      if ((idempotencyKey != null) && pendingEntryExists(connection, tableName, idempotencyKey)) {
-        logDiscardedSchedule(call);
-        return false;
+      final var waiting = idempotencyKey == null
+          ? null
+          : pendingEntry(connection, tableName, idempotencyKey);
+      if (waiting != null) {
+        if (!call.replacesWhatIsStillWaiting()) {
+          logDiscardedSchedule(call);
+          return false;
+        }
+        if (replacePendingEntry(connection, tableName, waiting, call, now)) {
+          triggerPollAfterCommit();
+          return true;
+        }
+        // a poller claimed the entry between the read and the update: it runs to its
+        // end and this call becomes an entry of its own
+        logSecondEntryBesideAClaimedOne(call);
+        dedupKey = entryId;
       }
       try (var statement = connection.prepareStatement(insertEntry)) {
         statement.setString(1, entryId);
@@ -260,9 +305,7 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
         statement.setString(6, call.adapterId());
         statement.setString(7, PhaseTwoCall.serializeArgs(call.args()));
         statement.setString(8, idempotencyKey);
-        // an operation which must not be deduplicated occupies its own ID instead of a
-        // null, because not every database treats two nulls as different values
-        statement.setString(9, idempotencyKey == null ? entryId : idempotencyKey);
+        statement.setString(9, dedupKey);
         statement.setTimestamp(10, Timestamp.from(now));
         statement.setTimestamp(11, Timestamp.from(now));
         statement.executeUpdate();
@@ -285,8 +328,31 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
       dispatcher.getPayloadStore().write(call);
     }
 
-    // dispatch the entry right after the transaction was committed; recovery after a
-    // crash is covered by the dispatcher's fixed-delay poller
+    triggerPollAfterCommit();
+
+    return true;
+
+  }
+
+  /**
+   * A call which replaces goes the same way as any other, and this is the one method
+   * which says so - the mark travels in the call, so {@link #schedule(PhaseTwoCall)}
+   * reads it where the entry is written.
+   */
+  @Override
+  public boolean scheduleReplacingWhatIsStillWaiting(
+      final PhaseTwoCall call) {
+
+    return schedule(call.replacingWhatIsStillWaiting());
+
+  }
+
+  /**
+   * Dispatches the entry right after the transaction was committed; recovery after a
+   * crash is covered by the dispatcher's fixed-delay poller.
+   */
+  private void triggerPollAfterCommit() {
+
     txRegistry.registerInterposedSynchronization(new Synchronization() {
       @Override
       public void beforeCompletion() {
@@ -302,17 +368,14 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
       }
     });
 
-    return true;
-
   }
 
-
   /**
-   * Whether an operation of this key is still waiting for its dispatch. Nothing else
-   * can carry the key: the dispatcher replaces it by the entry's ID when the entry is
-   * marked DONE.
+   * The entry of this key still waiting for its dispatch, or <code>null</code> where
+   * the key is free. Nothing else can carry the key: the dispatcher replaces it by the
+   * entry's ID when the entry is marked DONE or blocked.
    */
-  private static boolean pendingEntryExists(
+  private static PendingEntry pendingEntry(
       final java.sql.Connection connection,
       final String tableName,
       final String idempotencyKey) throws SQLException {
@@ -320,9 +383,109 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
     try (var statement = connection.prepareStatement(SELECT_PENDING_ENTRY.formatted(tableName))) {
       statement.setString(1, idempotencyKey);
       try (var resultSet = statement.executeQuery()) {
-        return resultSet.next();
+        return resultSet.next()
+            ? new PendingEntry(resultSet.getString(1), resultSet.getString(2), resultSet.getInt(3))
+            : null;
       }
     }
+
+  }
+
+  /**
+   * Puts the younger call into the row of the waiting entry, its payload included.
+   * <p>
+   * All three writes ride the transaction the call was scheduled in, so no reader ever
+   * sees one of them without the others, and a rollback takes them all. Removing the
+   * replaced payload is safe for the reason the replacement itself is safe: an entry
+   * which no dispatch has claimed has had its payload read by nobody.
+   *
+   * @return Whether the entry was replaced - <code>false</code> where a poller claimed
+   *         it in the meantime, which makes the call an entry of its own
+   */
+  private boolean replacePendingEntry(
+      final java.sql.Connection connection,
+      final String tableName,
+      final PendingEntry waiting,
+      final PhaseTwoCall call,
+      final Instant now) throws SQLException {
+
+    if (waiting.attempts() > 0) {
+      return false;
+    }
+    final boolean replaced;
+    try (var statement = connection.prepareStatement(REPLACE_PENDING_ENTRY.formatted(tableName))) {
+      statement.setString(1, call.operation());
+      statement.setString(2, call.workflowAggregateId());
+      statement.setString(3, call.adapterId());
+      statement.setString(4, PhaseTwoCall.serializeArgs(call.args()));
+      statement.setTimestamp(5, Timestamp.from(now));
+      statement.setTimestamp(6, Timestamp.from(now));
+      statement.setString(7, waiting.id());
+      replaced = statement.executeUpdate() == 1;
+    }
+    if (!replaced) {
+      return false;
+    }
+    if (call.hasPayload()) {
+      dispatcher.getPayloadStore().write(call);
+    }
+    final var replacedReference = PhaseTwoCall
+        .deserializeArgs(waiting.args())
+        .get(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
+    if (replacedReference != null) {
+      dispatcher.getPayloadStore().remove(replacedReference);
+    }
+    logReplacedEntry(call);
+    return true;
+
+  }
+
+  /**
+   * What a store needs to know about the entry a younger call meets: which row it is,
+   * which payload it names, and whether a dispatch has taken it already.
+   *
+   * @param id The entry's own ID
+   * @param args The arguments it persisted, holding the reference of its payload
+   * @param attempts How often a dispatch claimed it - zero means nobody read it yet
+   */
+  private record PendingEntry(String id, String args, int attempts) {
+  }
+
+  /**
+   * A younger call took the place of the entry which was waiting. At DEBUG for the
+   * reason a discard is: it is what the caller asked for, and under a backlog it
+   * happens as often as reports are planned.
+   */
+  private static void logReplacedEntry(
+      final PhaseTwoCall call) {
+
+    log.debug(
+        "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' replaced the "
+            + "entry which was waiting for its dispatch",
+        call.operation(),
+        call.bpmnProcessId(),
+        call.workflowModuleId(),
+        call.workflowAggregateId());
+
+  }
+
+  /**
+   * A younger call could not take the place of the entry it meant to replace, because a
+   * dispatch had claimed it. It becomes an entry of its own, so the handler is called
+   * twice - worth a line, because an application counting its reports finds the second
+   * one here.
+   */
+  private static void logSecondEntryBesideAClaimedOne(
+      final PhaseTwoCall call) {
+
+    log.debug(
+        "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' asked to "
+            + "replace an entry a dispatch had already taken - that one runs to its end and this "
+            + "call becomes an entry of its own",
+        call.operation(),
+        call.bpmnProcessId(),
+        call.workflowModuleId(),
+        call.workflowAggregateId());
 
   }
 

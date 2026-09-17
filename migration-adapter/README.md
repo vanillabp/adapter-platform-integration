@@ -2270,6 +2270,27 @@ The core does not implement (or depend on) any outbox itself — it only defines
   `AGGREGATE_ID` column is refused where the call is built, with a message naming the
   column. The derivation rules per operation are documented on `PhaseOperation` and
   are a persisted contract.
+- **The youngest call may replace the one still waiting** (decision 68 of this
+  repository). A call which carries the state its caller saw - the payload of decision
+  62 - loses that state where the older entry wins, and under a backlog the surviving
+  report is the furthest behind. Such a call says
+  `PhaseTwoCall.replacingWhatIsStillWaiting()` and goes to
+  `PhaseTwoOutbox.scheduleReplacingWhatIsStillWaiting`; the store then puts it into the
+  waiting entry, payload included, in the transaction it was planned in, and removes the
+  payload the replaced entry named. Without the word nothing changes, and only an
+  operation an extension registered may say it: what VanillaBP plans itself reads the
+  state it needs at dispatch time, so `PhaseTwoCall` refuses the word for its own
+  operations. An entry a dispatch has already taken is NOT replaced - it runs to its end
+  and the younger call becomes an entry of its own, which holds no key, because the key
+  belongs to the entry on its way. The stores VanillaBP wrote itself read that off
+  `ATTEMPTS`, which their dispatchers count up when they claim an entry, and gruelbox off
+  its `version` column plus the register of `GruelboxRedispatchAwareSubmitter`, because a
+  gruelbox entry submitted right after a commit was never pushed back and its row is
+  locked by the dispatch. A store which never learned replacing inherits the default of
+  `scheduleReplacingWhatIsStillWaiting`, which discards as before and writes a WARN naming
+  the store. Held by `AYoungerCallReplacesTheWaitingOneTest` (gruelbox),
+  `ExtensionOperationDispatchTest` (JDBC on Quarkus) and `MongoPhaseTwoPayloadTest` on
+  both platforms.
 - **The activation which planned a correlation is part of its key**, and of no other key
   (decision 23 of this repository). A called process is a secondary workflow of the SAME
   aggregate, so three elements of a multi-instance call activity used to derive one key

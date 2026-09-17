@@ -2,6 +2,7 @@ package io.vanillabp.integration.test.outbox;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -34,7 +35,9 @@ import io.vanillabp.spi.process.ProcessService;
 /**
  * A payload on the MongoDB store: the document with the bytes is written in the very
  * transaction which writes the outbox entry, the dispatch reads it back, and it is gone
- * once the entry was marked DONE.
+ * once the entry was marked DONE. And the whole way of a younger report which takes the
+ * place of one still waiting - one dispatch, the younger bytes, one payload document
+ * left.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
@@ -46,6 +49,8 @@ import io.vanillabp.spi.process.ProcessService;
 public class MongoPhaseTwoPayloadTest {
 
   private static final String PAYLOAD_COLLECTION = "vanillabp-phase-two-payloads";
+
+  private static final String OUTBOX_COLLECTION = "vanillabp-phase-two-outbox";
 
   @Container
   static MongoDBContainer mongoDb = new MongoDBContainer(DockerImageName.parse("mongo:5.0"))
@@ -108,6 +113,95 @@ public class MongoPhaseTwoPayloadTest {
     return mongoTemplate
         .getCollection(PAYLOAD_COLLECTION)
         .countDocuments(new org.bson.Document("_id", reference));
+
+  }
+
+  private long countEntriesOf(
+      final String dedupKey) {
+
+    return mongoTemplate
+        .getCollection(OUTBOX_COLLECTION)
+        .countDocuments(new org.bson.Document("dedupKey", dedupKey));
+
+  }
+
+  private static byte[] payloadOf(
+      final String content) {
+
+    return content.getBytes(StandardCharsets.UTF_8);
+
+  }
+
+  @Test
+  @DisplayName("The younger report replaces the waiting one, and only it is dispatched")
+  public void theYoungerReportReplacesTheWaitingOne() throws Exception {
+
+    final var older = new java.util.concurrent.atomic.AtomicReference<String>();
+    final var younger = new java.util.concurrent.atomic.AtomicReference<String>();
+    final var key = new java.util.concurrent.atomic.AtomicReference<String>();
+
+    // both ride ONE transaction on purpose: nothing is dispatched before it commits,
+    // so the second call meets an entry which is certainly still waiting
+    final var aggregate = transactionTemplate.execute(status -> {
+      final var newAggregate = new Aggregate();
+      newAggregate.setContent("replace-mongo");
+      final var attached = processService.startWorkflow(newAggregate);
+
+      final var first = PayloadExtension.call(attached.getId(), "replaced", payloadOf("{\"amount\":1}"));
+      older.set(first.payloadReference());
+      key.set(first.idempotencyKey().orElseThrow());
+      assertTrue(outbox.scheduleReplacingWhatIsStillWaiting(first));
+
+      final var second = PayloadExtension.call(attached.getId(), "replaced", payloadOf("{\"amount\":2}"));
+      younger.set(second.payloadReference());
+      assertTrue(outbox.scheduleReplacingWhatIsStillWaiting(second));
+      return attached;
+    });
+    assertNotNull(aggregate);
+
+    // one entry under that key, and the bytes of the replaced call are gone
+    assertEquals(1L, countEntriesOf(key.get()));
+    assertEquals(0L, countPayloadsOf(older.get()));
+
+    final var dispatched = extension.awaitDispatched(1, 20000);
+    assertArrayEquals(payloadOf("{\"amount\":2}"), dispatched.getFirst().payload());
+    assertEquals(younger.get(), dispatched.getFirst().payloadReference());
+
+    // and the one which was dispatched is the only one there ever was
+    Thread.sleep(1500);
+    assertEquals(1, extension.awaitDispatched(1, 1000).size());
+
+  }
+
+  @Test
+  @DisplayName("Without the word the older report stays and the younger one is dropped")
+  public void withoutTheWordTheOlderReportStays() throws Exception {
+
+    final var older = new java.util.concurrent.atomic.AtomicReference<String>();
+    final var younger = new java.util.concurrent.atomic.AtomicReference<String>();
+
+    final var aggregate = transactionTemplate.execute(status -> {
+      final var newAggregate = new Aggregate();
+      newAggregate.setContent("no-replace-mongo");
+      final var attached = processService.startWorkflow(newAggregate);
+
+      final var first = PayloadExtension.call(attached.getId(), "kept", payloadOf("{\"amount\":1}"));
+      older.set(first.payloadReference());
+      assertTrue(outbox.schedule(first));
+
+      final var second = PayloadExtension.call(attached.getId(), "kept", payloadOf("{\"amount\":2}"));
+      younger.set(second.payloadReference());
+      assertFalse(outbox.schedule(second));
+      return attached;
+    });
+    assertNotNull(aggregate);
+
+    // a schedule which was discarded leaves nothing behind
+    assertEquals(0L, countPayloadsOf(younger.get()));
+
+    final var dispatched = extension.awaitDispatched(1, 20000);
+    assertArrayEquals(payloadOf("{\"amount\":1}"), dispatched.getFirst().payload());
+    assertEquals(older.get(), dispatched.getFirst().payloadReference());
 
   }
 

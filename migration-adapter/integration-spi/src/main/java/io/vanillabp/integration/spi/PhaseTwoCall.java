@@ -50,6 +50,11 @@ import java.util.Optional;
  *        transaction and the entry names them by
  *        {@link #ARG_PAYLOAD_REFERENCE}, which is what keeps an outbox entry a row of
  *        identifiers
+ * @param replacesWhatIsStillWaiting Whether this call takes the place of an entry of
+ *        the same idempotency key which is still waiting for its dispatch, instead of
+ *        being discarded against it - see {@link #replacingWhatIsStillWaiting()}. It is
+ *        a property of the planning and not of the entry: no store persists it, no
+ *        derivation rule sees it, and a call rebuilt at dispatch time never carries it
  */
 public record PhaseTwoCall(
                            String operation,
@@ -59,7 +64,8 @@ public record PhaseTwoCall(
                            String adapterId,
                            Map<String, String> args,
                            Optional<String> idempotencyKey,
-                           byte[] payload) {
+                           byte[] payload,
+                           boolean replacesWhatIsStillWaiting) {
 
   /**
    * The number of characters an idempotency key may have before it is replaced by a
@@ -232,7 +238,51 @@ public record PhaseTwoCall(
       final byte[] payload) {
 
     return new PhaseTwoCall(
-        operation, workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, args, idempotencyKey, payload);
+        operation, workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, args, idempotencyKey, payload, replacesWhatIsStillWaiting);
+
+  }
+
+  /**
+   * The same call, asking the store to put it in the place of the entry of the same
+   * idempotency key which is still waiting for its dispatch - payload included - rather
+   * than to discard it against that entry. Hand the result to
+   * {@link PhaseTwoOutbox#scheduleReplacingWhatIsStillWaiting(PhaseTwoCall)}.
+   * <p>
+   * Without this word nothing changes: the older entry stays and the younger call is
+   * dropped, which is right as long as a call only carries the intention and the
+   * dispatch reads the state fresh. It stops being right once the call carries the
+   * state itself. Under a backlog the oldest report would then win, and that is when the
+   * answer matters most - see decision 68 in the repository's DECISIONS.md.
+   * <p>
+   * An entry a dispatch has already taken for itself is NOT replaced. It runs to its
+   * end and the younger call becomes an entry of its own, so two calls reach the
+   * handler instead of one. The store says which of the two it did.
+   * <p>
+   * Only an EXTENSION may ask for it. The operations VanillaBP itself plans write into
+   * the BPMS and read the state they need when they are dispatched, so there is nothing
+   * a younger call could carry for them - asking is a mistake and is refused here,
+   * where the stack trace still points at the code which asked.
+   *
+   * @return A copy of this call which replaces what is still waiting
+   * @throws IllegalArgumentException If the operation is one of VanillaBP's own
+   *         (guiding message)
+   */
+  public PhaseTwoCall replacingWhatIsStillWaiting() {
+
+    if (!operation.contains(PhaseOperation.NAMESPACE_SEPARATOR)) {
+      throw new IllegalArgumentException(
+          """
+              The operation '%s' of BPMN process '%s' of workflow module '%s' asks to replace the \
+              entry still waiting for its dispatch, and that is reserved for the operations an \
+              extension registers itself (their names carry the extension's namespace, e.g. \
+              'my-extension%sNOTIFY'). An operation of VanillaBP writes into the BPMS and reads \
+              what it needs at dispatch time, so there is no state a younger call could bring \
+              along - drop the call to replacingWhatIsStillWaiting() and the operation keeps the \
+              behaviour it always had."""
+              .formatted(operation, bpmnProcessId, workflowModuleId, PhaseOperation.NAMESPACE_SEPARATOR));
+    }
+    return new PhaseTwoCall(
+        operation, workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, args, idempotencyKey, payload, true);
 
   }
 
@@ -255,7 +305,8 @@ public record PhaseTwoCall(
         call.workflowModuleId) && Objects.equals(bpmnProcessId, call.bpmnProcessId) && Objects
             .equals(workflowAggregateId, call.workflowAggregateId) && Objects.equals(adapterId,
                 call.adapterId) && Objects.equals(args, call.args) && Objects.equals(idempotencyKey,
-                    call.idempotencyKey) && Arrays.equals(payload, call.payload);
+                    call.idempotencyKey) && Arrays.equals(payload,
+                        call.payload) && (replacesWhatIsStillWaiting == call.replacesWhatIsStillWaiting);
 
   }
 
@@ -271,7 +322,8 @@ public record PhaseTwoCall(
             adapterId,
             args,
             idempotencyKey,
-            Arrays.hashCode(payload));
+            Arrays.hashCode(payload),
+            replacesWhatIsStillWaiting);
 
   }
 
@@ -282,7 +334,7 @@ public record PhaseTwoCall(
   @Override
   public String toString() {
 
-    return "PhaseTwoCall[operation=%s, workflowModuleId=%s, bpmnProcessId=%s, workflowAggregateId=%s, adapterId=%s, args=%s, idempotencyKey=%s, payload=%s]"
+    return "PhaseTwoCall[operation=%s, workflowModuleId=%s, bpmnProcessId=%s, workflowAggregateId=%s, adapterId=%s, args=%s, idempotencyKey=%s, payload=%s, replacesWhatIsStillWaiting=%s]"
         .formatted(
             operation,
             workflowModuleId,
@@ -291,7 +343,8 @@ public record PhaseTwoCall(
             adapterId,
             args,
             idempotencyKey,
-            payload == null ? "none" : "%d bytes".formatted(payload.length));
+            payload == null ? "none" : "%d bytes".formatted(payload.length),
+            replacesWhatIsStillWaiting);
 
   }
 
@@ -363,7 +416,8 @@ public record PhaseTwoCall(
     // to derive from, once carrying the result
     final var withoutKey = new PhaseTwoCall(
         operation
-            .name(), workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, args, Optional.empty(), null);
+            .name(), workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, args, Optional
+                .empty(), null, false);
     // bounded HERE and not in the derivation rules, so no operation added later can
     // forget it - a key too long for the store fails the application's own
     // transaction, at the moment it starts a workflow or correlates a message
@@ -374,7 +428,7 @@ public record PhaseTwoCall(
     return new PhaseTwoCall(
         withoutKey.operation(), withoutKey.workflowModuleId(), withoutKey.bpmnProcessId(), withoutKey
             .workflowAggregateId(), withoutKey
-                .adapterId(), withPayloadReference(withoutKey.args(), payload), boundedKey, payload);
+                .adapterId(), withPayloadReference(withoutKey.args(), payload), boundedKey, payload, false);
 
   }
 
@@ -555,7 +609,7 @@ public record PhaseTwoCall(
 
     return new PhaseTwoCall(
         operation, workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, args, Optional
-            .empty(), payload);
+            .empty(), payload, false);
 
   }
 

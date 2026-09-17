@@ -33,6 +33,17 @@ import lombok.extern.slf4j.Slf4j;
  * {@link DuplicateKeyException} would abort the whole transaction, so the unique
  * index only remains the backstop for concurrent duplicates.
  * <p>
+ * <strong>A younger call may take the waiting entry's place</strong> instead of being
+ * discarded against it, where it says so
+ * ({@link PhaseTwoCall#replacingWhatIsStillWaiting()}). The document keeps its id and
+ * its key and gets everything the dispatch reads, and the payload of the entry it
+ * replaced is removed with it. What decides is <code>attempts</code>: the dispatcher
+ * counts the attempt when it claims an entry, so a zero there means no dispatch has
+ * read this entry and none is holding its payload. The update carries that condition,
+ * which makes it the same atomic claim - if a poller wins the document, the update
+ * matches nothing and the call becomes an entry of its own, with <code>dedupKey</code>
+ * set to its own id because the key belongs to the entry on its way.
+ * <p>
  * <strong>Note:</strong> MongoDB transactions require a replica set. Without one (no
  * <code>MongoTransactionManager</code> or standalone server) the entry is written
  * immediately and dispatching is best-effort: a crash between persisting the aggregate
@@ -112,22 +123,39 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
     // index remains the backstop for concurrent duplicates (there the losing
     // transaction aborts - acceptable, since the operation was a duplicate anyway)
     final var idempotencyKey = call.idempotencyKey().orElse(null);
-    if ((idempotencyKey != null) && mongoTemplate.exists(
-        Query.query(Criteria.where("dedupKey").is(idempotencyKey)),
-        collection)) {
-      logDiscardedSchedule(call);
-      return false;
-    }
+    final var waiting = idempotencyKey == null
+        ? null
+        : mongoTemplate
+            .findOne(
+                Query.query(Criteria.where("dedupKey").is(idempotencyKey)),
+                PhaseTwoOutboxEntry.class,
+                collection);
 
     final var now = Instant.now();
     final var entryId = UUID.randomUUID().toString();
+    // what the unique index sees. An operation which must not be deduplicated dedupes
+    // against itself, so the field is present on every entry and the index needs no
+    // partial filter, and a second entry beside one a dispatch already took does the
+    // same: the key belongs to the entry on its way
+    var dedupKey = idempotencyKey == null ? entryId : idempotencyKey;
+    if (waiting != null) {
+      if (!call.replacesWhatIsStillWaiting()) {
+        logDiscardedSchedule(call);
+        return false;
+      }
+      if (replacePendingEntry(waiting, call, now)) {
+        triggerPollAfterCommit();
+        return true;
+      }
+      // a poller claimed the entry between the read and the update: it runs to its end
+      // and this call becomes an entry of its own
+      logSecondEntryBesideAClaimedOne(call);
+      dedupKey = entryId;
+    }
     final var entry = new PhaseTwoOutboxEntry(
         entryId, call.workflowModuleId(), call.bpmnProcessId(), call.operation(), call
             .workflowAggregateId(), call.adapterId(), call
-                .args(), idempotencyKey,
-        // an operation which must not be deduplicated dedupes against itself, which
-        // keeps the field free of nulls a database might treat as equal
-        idempotencyKey == null ? entryId : idempotencyKey, PhaseTwoOutboxEntry.STATUS_OPEN, now, 0, now, null);
+                .args(), idempotencyKey, dedupKey, PhaseTwoOutboxEntry.STATUS_OPEN, now, 0, now, null);
 
     try {
       mongoTemplate.insert(entry, collection);
@@ -143,8 +171,84 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
       dispatcher.getPayloadStore().write(call);
     }
 
-    // dispatch the entry right after the transaction was committed; recovery after a
-    // crash is covered by the dispatcher's fixed-delay poller
+    triggerPollAfterCommit();
+
+    return true;
+
+  }
+
+  /**
+   * A call which replaces goes the same way as any other, and this is the one method
+   * which says so - the mark travels in the call, so {@link #schedule(PhaseTwoCall)}
+   * reads it where the entry is written.
+   */
+  @Override
+  public boolean scheduleReplacingWhatIsStillWaiting(
+      final PhaseTwoCall call) {
+
+    return schedule(call.replacingWhatIsStillWaiting());
+
+  }
+
+  /**
+   * Puts the younger call into the document of the waiting entry, its payload
+   * included, and removes the payload the replaced entry named.
+   * <p>
+   * What decides is the number of attempts: the dispatcher counts one when it claims an
+   * entry, so a zero means no dispatch has read this entry and none is holding its
+   * payload. The update carries that condition, which makes it the same atomic claim
+   * the dispatcher uses - if a poller wins the document, the update matches nothing.
+   * <p>
+   * Where a MongoDB transaction covers the writes they commit together and a rollback
+   * takes them all. Without one they are three separate writes, the window this store's
+   * javadoc calls best-effort.
+   *
+   * @return Whether the entry was replaced - <code>false</code> where a poller claimed
+   *         it in the meantime, which makes the call an entry of its own
+   */
+  private boolean replacePendingEntry(
+      final PhaseTwoOutboxEntry waiting,
+      final PhaseTwoCall call,
+      final Instant now) {
+
+    if (waiting.getAttempts() > 0) {
+      return false;
+    }
+    final var replaced = mongoTemplate
+        .updateFirst(
+            Query.query(Criteria.where("_id").is(waiting.getId()).and("attempts").is(0)),
+            new org.springframework.data.mongodb.core.query.Update()
+                .set("operation", call.operation())
+                .set("aggregateId", call.workflowAggregateId())
+                .set("adapterId", call.adapterId())
+                .set("args", call.args())
+                .set("createdAt", now)
+                .set("nextAttemptAt", now),
+            collection)
+        .getModifiedCount() == 1;
+    if (!replaced) {
+      return false;
+    }
+    if (call.hasPayload()) {
+      dispatcher.getPayloadStore().write(call);
+    }
+    final var replacedReference = waiting.getArgs() == null
+        ? null
+        : waiting.getArgs().get(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
+    if (replacedReference != null) {
+      dispatcher.getPayloadStore().remove(replacedReference);
+    }
+    logReplacedEntry(call);
+    return true;
+
+  }
+
+  /**
+   * Dispatches the entry right after the transaction was committed; recovery after a
+   * crash is covered by the dispatcher's fixed-delay poller.
+   */
+  private void triggerPollAfterCommit() {
+
     if (TransactionSynchronizationManager.isSynchronizationActive()) {
       TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
         @Override
@@ -156,7 +260,43 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
       dispatcher.triggerPoll();
     }
 
-    return true;
+  }
+
+  /**
+   * A younger call took the place of the entry which was waiting. At DEBUG for the
+   * reason a discard is: it is what the caller asked for, and under a backlog it
+   * happens as often as reports are planned.
+   */
+  private static void logReplacedEntry(
+      final PhaseTwoCall call) {
+
+    log.debug(
+        "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' replaced the "
+            + "entry which was waiting for its dispatch",
+        call.operation(),
+        call.bpmnProcessId(),
+        call.workflowModuleId(),
+        call.workflowAggregateId());
+
+  }
+
+  /**
+   * A younger call could not take the place of the entry it meant to replace, because a
+   * dispatch had claimed it. It becomes an entry of its own, so the handler is called
+   * twice - worth a line, because an application counting its reports finds the second
+   * one here.
+   */
+  private static void logSecondEntryBesideAClaimedOne(
+      final PhaseTwoCall call) {
+
+    log.debug(
+        "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' asked to "
+            + "replace an entry a dispatch had already taken - that one runs to its end and this "
+            + "call becomes an entry of its own",
+        call.operation(),
+        call.bpmnProcessId(),
+        call.workflowModuleId(),
+        call.workflowAggregateId());
 
   }
 

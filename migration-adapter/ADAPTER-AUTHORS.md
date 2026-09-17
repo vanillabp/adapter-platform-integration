@@ -706,6 +706,15 @@ reuses a key after a rebuild would disprove it.
 Outbox entries have no order. A pushed aggregate and a task completion scheduled in one
 transaction may reach you in either order.
 
+An entry which waited may hold a younger call than the one which was planned first. A caller
+whose call carries its own state can ask for that with
+`PhaseTwoCall.replacingWhatIsStillWaiting()`, and the store then puts the younger call into the
+waiting entry instead of dropping it. No operation of yours can ask for it - it is reserved for
+the operations an extension registers - and what reaches your phase two looks exactly as it
+always did. What changes for you is how often it arrives: the reports of one workflow which
+piled up during an outage now reach the handler as one, and where a dispatch had already taken
+the entry, as two.
+
 Phase two of a start may run before or after the first inbound delivery of that workflow arrives,
 possibly on another node.
 
