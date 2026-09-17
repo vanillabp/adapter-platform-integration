@@ -36,6 +36,10 @@ public class AggregatePropertyWriterTest {
 
     private java.util.Date signedAt;
 
+    private java.util.TimeZone zone;
+
+    private java.time.Instant seenAt;
+
     String withoutSetter;
 
     private final String readOnly = "fixed";
@@ -73,6 +77,16 @@ public class AggregatePropertyWriterTest {
     public void setSignedAt(
         final java.util.Date signedAt) {
       this.signedAt = signedAt;
+    }
+
+    public void setZone(
+        final java.util.TimeZone zone) {
+      this.zone = zone;
+    }
+
+    public void setSeenAt(
+        final java.time.Instant seenAt) {
+      this.seenAt = seenAt;
     }
 
     public String getReadOnly() {
@@ -196,16 +210,34 @@ public class AggregatePropertyWriterTest {
   }
 
   @Test
-  @DisplayName("A java.util.Date attribute is refused with the type to declare instead")
-  public void aDateAttributeIsRefused() {
+  @DisplayName("A point in time and a zone reach the aggregate as the types it declares")
+  public void aPointInTimeAndAZoneAreWritten() {
+
+    final var aggregate = new Aggregate();
+
+    assertTrue(AggregatePropertyWriter.write(aggregate, "signedAt", "2026-09-16T19:55:30.123Z", "the signing date"));
+    assertEquals(java.util.Date.from(java.time.Instant.parse("2026-09-16T19:55:30.123Z")), aggregate.signedAt,
+        "the milliseconds survive");
+
+    assertTrue(AggregatePropertyWriter.write(aggregate, "seenAt", "2026-09-16T19:55:30.123Z", "the sighting"));
+    assertEquals(java.time.Instant.parse("2026-09-16T19:55:30.123Z"), aggregate.seenAt);
+
+    assertTrue(AggregatePropertyWriter.write(aggregate, "zone", "Europe/Berlin", "the zone"));
+    assertEquals(java.util.TimeZone.getTimeZone("Europe/Berlin"), aggregate.zone);
+
+  }
+
+  @Test
+  @DisplayName("A zone the model invented does not reach the aggregate as GMT")
+  public void aZoneNobodyKnowsIsRefused() {
 
     final var exception = assertThrows(
         IllegalStateException.class,
-        () -> AggregatePropertyWriter
-            .write(new Aggregate(), "signedAt", "Wed Sep 16 21:55:30 CEST 2026", "the signing date"));
+        () -> AggregatePropertyWriter.write(new Aggregate(), "zone", "Nonsense/Zone", "the zone"));
 
-    assertTrue(exception.getMessage().contains("Declare an Instant"));
-    assertTrue(exception.getMessage().contains("the signing date"));
+    assertTrue(exception.getMessage().contains("'Nonsense/Zone'"));
+    assertTrue(exception.getMessage().contains("'Europe/Berlin'"));
+    assertTrue(exception.getMessage().contains("the zone"));
 
   }
 

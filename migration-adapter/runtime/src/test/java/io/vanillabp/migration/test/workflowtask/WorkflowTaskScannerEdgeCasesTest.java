@@ -616,13 +616,25 @@ public class WorkflowTaskScannerEdgeCasesTest {
     }
 
     @Test
-    @DisplayName("A java.util.Date parameter fails, naming the types to declare instead")
-    public void aDateParameterFails() {
+    @DisplayName("A java.util.Date parameter reads the instant the aggregate shared")
+    public void aDateParameterReadsAnInstant() {
+
+      invoke("dateParam", "2026-09-16T19:55:30.123Z");
+
+      assertEquals(
+          java.util.Date.from(java.time.Instant.parse("2026-09-16T19:55:30.123Z")),
+          aggregates.get("4711").value);
+
+    }
+
+    @Test
+    @DisplayName("A java.util.Date parameter refuses the text a Date writes itself")
+    public void aDateParameterRefusesWhatADatePrints() {
 
       final var e = assertThrows(
           IllegalStateException.class,
           () -> invoke("dateParam", "Wed Sep 16 21:55:30 CEST 2026"));
-      assertTrue(e.getMessage().contains("Declare an Instant"));
+      assertTrue(e.getMessage().contains("'2026-09-16T18:15:30.123Z'"));
 
     }
 

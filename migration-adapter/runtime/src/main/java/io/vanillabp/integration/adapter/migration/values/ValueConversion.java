@@ -2,25 +2,8 @@ package io.vanillabp.integration.adapter.migration.values;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.time.Duration;
-import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.MonthDay;
-import java.time.OffsetDateTime;
-import java.time.OffsetTime;
-import java.time.Period;
-import java.time.Year;
-import java.time.YearMonth;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
 import java.util.Arrays;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
@@ -52,17 +35,17 @@ import java.util.stream.Collectors;
  * <li>A number becomes a <code>String</code>, and the text of one becomes a
  * <code>Boolean</code>.</li>
  * <li>The text of a value the platform shares AS text becomes that value again: an enum
- * from the name of its constant, a {@link java.util.UUID}, and the
- * <code>java.time</code> values from the form each of them writes itself. This is the way
- * back for what {@code AggregateSyncSupport} wrote on the way out, so the forms read here
- * are the forms written there and no others.</li>
+ * from the name of its constant, and every type of {@link TextValueTypes} from the text
+ * it travels as. This is the way back for what {@code AggregateSyncSupport} wrote on the
+ * way out, so the forms read here are the forms written there and no others.</li>
  * <li>Everything else fails, naming what was bound and what it was bound to. A type of
  * the application's own is such a case: a BPMS carries plain values, and what one of the
- * application's types means is the application's to build. A {@link java.util.Date}, a
- * {@link java.util.Calendar} and a {@link java.util.Locale} fail as well although the
- * platform writes them out as text, because that text does not carry the value back; the
- * message says which type to declare instead. What was measured about those three is in
- * decision 57 in the repository's DECISIONS.md.</li>
+ * application's types means is the application's to build. A {@link java.util.Calendar}
+ * and a {@link java.util.Locale} fail as well although the platform writes them out as
+ * text, because that text does not carry the value back; the message says which type to
+ * declare instead. What was measured about those two is in decision 57 in the
+ * repository's DECISIONS.md, and why a {@link java.util.Date} is no longer among them is
+ * decision 58.</li>
  * </ul>
  * Why a value which does not fit fails rather than being cut down to size: the handler
  * would otherwise receive a number nobody wrote, with nothing said about it, and act on
@@ -88,83 +71,15 @@ public final class ValueConversion {
           Short.class, BigDecimal::shortValue,
           Byte.class, BigDecimal::byteValue);
 
-  /**
-   * One type travelling as text: how its own text form is read back, and an example of
-   * that form for the message a wrong text earns.
-   */
-  private record TextForm(
-                          Function<String, Object> readBack,
-                          String example) {
-  }
-
-  /**
-   * The types the way out shares as text, and the way back for each of them. The way out
-   * writes the string form the type itself produces ({@code AggregateSyncSupport}), and
-   * every entry here reads exactly that form back as the same value. Nothing else is
-   * added: a text a type does not write is a text this cannot promise anything about.
-   */
-  private static final Map<Class<?>, TextForm> TEXT_TYPES = textTypes();
-
-  /**
-   * Types whose text form the way out writes and the way back cannot trust, each with the
-   * advice the developer needs. Kept apart from a bare refusal because the text in the
-   * BPMS looks readable, so somebody has to say why it is not read.
-   */
-  private static final Map<Class<?>, String> UNREADABLE_TEXT_TYPES = unreadableTextTypes();
-
   private ValueConversion() {
-  }
-
-  private static Map<Class<?>, TextForm> textTypes() {
-
-    final Map<Class<?>, TextForm> types = new LinkedHashMap<>();
-    types.put(UUID.class, new TextForm(UUID::fromString, "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"));
-    types.put(Instant.class, new TextForm(Instant::parse, "2026-09-16T18:15:30Z"));
-    types.put(LocalDate.class, new TextForm(LocalDate::parse, "2026-09-16"));
-    types.put(LocalTime.class, new TextForm(LocalTime::parse, "20:15:30"));
-    types.put(LocalDateTime.class, new TextForm(LocalDateTime::parse, "2026-09-16T20:15:30"));
-    types.put(OffsetDateTime.class, new TextForm(OffsetDateTime::parse, "2026-09-16T20:15:30+02:00"));
-    types.put(OffsetTime.class, new TextForm(OffsetTime::parse, "20:15:30+02:00"));
-    types.put(ZonedDateTime.class, new TextForm(ZonedDateTime::parse, "2026-09-16T20:15:30+02:00[Europe/Berlin]"));
-    types.put(Year.class, new TextForm(Year::parse, "2026"));
-    types.put(YearMonth.class, new TextForm(YearMonth::parse, "2026-09"));
-    types.put(MonthDay.class, new TextForm(MonthDay::parse, "--09-16"));
-    types.put(Duration.class, new TextForm(Duration::parse, "PT1H30M"));
-    types.put(Period.class, new TextForm(Period::parse, "P3Y6M4D"));
-    types.put(ZoneId.class, new TextForm(ZoneId::of, "Europe/Berlin"));
-    types.put(ZoneOffset.class, new TextForm(ZoneOffset::of, "+02:00"));
-    return Map.copyOf(types);
-
-  }
-
-  private static Map<Class<?>, String> unreadableTextTypes() {
-
-    final Map<Class<?>, String> types = new LinkedHashMap<>();
-    final var insteadOfADate = """
-        A Date is shared with the BPMS as text like 'Wed Sep 16 21:55:30 CEST 2026', which \
-        drops the milliseconds and names the time zone by an abbreviation several zones \
-        share, so reading it back can move the point in time. Declare an Instant, an \
-        OffsetDateTime or a ZonedDateTime instead, in the parameter and in the workflow \
-        aggregate.""";
-    types.put(Date.class, insteadOfADate);
-    types.put(Calendar.class, insteadOfADate);
-    types
-        .put(
-            Locale.class,
-            """
-                A Locale is shared with the BPMS as text like 'de_DE', which no Locale method reads \
-                back, and Locale.ROOT is shared as an empty text. Declare the parameter as a String \
-                and build the Locale in your own code.""");
-    return Map.copyOf(types);
-
   }
 
   /**
    * Converts a value supplied by a BPMS to the target type: assignable values pass
    * through, a number and the text of a number become any other number type where the
    * value survives, a number becomes a String and the text of one becomes a Boolean, and
-   * the text of an enum, a UUID or a <code>java.time</code> value becomes that value
-   * again.
+   * the text of an enum, a UUID, a <code>java.time</code> value, a Date or a TimeZone
+   * becomes that value again.
    *
    * @param value The value reported by the BPMS (may be <code>null</code>)
    * @param targetType The type the application expects
@@ -292,8 +207,8 @@ public final class ValueConversion {
   /**
    * Reads a value back from the text the way out wrote for it. The platform shares an
    * enum as its name and a value type like a {@link UUID} or a {@link LocalDate} as the
-   * string form the type itself writes, so the way back reads exactly those forms and
-   * nothing it invented. A text a type does not write is refused rather than guessed at.
+   * text {@link TextValueTypes} names for it, so the way back reads exactly those forms
+   * and nothing it invented. A text of another shape is refused rather than guessed at.
    *
    * @param text The text the BPMS reported
    * @param target The target type, already unwrapped from a primitive
@@ -313,27 +228,26 @@ public final class ValueConversion {
       return constantOf(text, target, targetType, location);
     }
 
-    final var whatToDeclareInstead = UNREADABLE_TEXT_TYPES.get(target);
-    if (whatToDeclareInstead != null) {
+    if (TextValueTypes.isKnownToCarryNothingBack(target)) {
       throw new IllegalStateException(
           """
               The value '%s' bound to %s cannot be converted to the parameter's type '%s'! %s"""
-              .formatted(text, location, targetType.getName(), whatToDeclareInstead));
+              .formatted(text, location, targetType.getName(), TextValueTypes.adviceFor(target)));
     }
 
-    final var howItIsWritten = TEXT_TYPES.get(target);
-    if (howItIsWritten == null) {
+    final var howItTravels = TextValueTypes.ofDeclaredType(target);
+    if (howItTravels == null) {
       return null;
     }
     try {
-      return howItIsWritten.readBack().apply(text);
+      return howItTravels.read().apply(text);
     } catch (final RuntimeException e) {
       throw new IllegalStateException(
           """
-              The value '%s' bound to %s is no '%s'! A value of that type travels as the text it \
-              writes itself, like '%s'. Map a value in that form, or declare the parameter as a \
-              String and read it in your own code."""
-              .formatted(text, location, targetType.getName(), howItIsWritten.example()), e);
+              The value '%s' bound to %s is no '%s'! A value of that type travels as text like \
+              '%s'. Map a value in that form, or declare the parameter as a String and read it in \
+              your own code."""
+              .formatted(text, location, targetType.getName(), howItTravels.example()), e);
     }
 
   }
