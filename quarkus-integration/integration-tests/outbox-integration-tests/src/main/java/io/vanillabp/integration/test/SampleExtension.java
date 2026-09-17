@@ -54,18 +54,6 @@ public class SampleExtension {
 
   private final List<PhaseTwoCall> dispatched = new CopyOnWriteArrayList<>();
 
-  /**
-   * How the dispatch loads the workflow aggregate of a call, set by a test which is
-   * about the state such a load sees. It takes the aggregate's id and the auditing id of
-   * the call, which is what an extension reporting an event has at that moment.
-   */
-  private volatile java.util.function.BiFunction<String, String, Object> aggregateLoader;
-
-  /**
-   * What those loads answered, in the order they happened.
-   */
-  private final List<Object> loadedWhileDispatching = new CopyOnWriteArrayList<>();
-
   private volatile int failNextDispatches;
 
   void onStart(
@@ -80,10 +68,6 @@ public class SampleExtension {
               if (failNextDispatches > 0) {
                 failNextDispatches--;
                 throw new RuntimeException("test dispatch failure");
-              }
-              if (aggregateLoader != null) {
-                loadedWhileDispatching
-                    .add(aggregateLoader.apply(call.workflowAggregateId(), call.auditingId()));
               }
               dispatched.add(call);
             });
@@ -136,62 +120,15 @@ public class SampleExtension {
 
   }
 
-  /**
-   * Builds a call of this extension's operation which is to see the aggregate as it is
-   * now rather than as it will be when the entry is dispatched - what a sync to the
-   * Business Cockpit asks for.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The BPMN process ID
-   * @param workflowAggregateId The aggregate's ID in serialized form
-   * @param event The event to be published
-   * @param auditingId The state to be seen at the dispatch, or <code>null</code>
-   * @return The call to be scheduled
-   */
-  public static PhaseTwoCall callAboutTheStateOfNow(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final String workflowAggregateId,
-      final String event,
-      final String auditingId) {
-
-    return call(workflowModuleId, bpmnProcessId, workflowAggregateId, event)
-        .askingForTheStateOfTheEvent(auditingId);
-
-  }
-
   public List<PhaseTwoCall> getDispatched() {
 
     return dispatched;
 
   }
 
-  /**
-   * Lets the dispatch load the workflow aggregate of every call it gets from now on.
-   *
-   * @param aggregateLoader Takes the aggregate's id and the call's auditing id
-   */
-  public void loadTheAggregateWhileDispatching(
-      final java.util.function.BiFunction<String, String, Object> aggregateLoader) {
-
-    this.aggregateLoader = aggregateLoader;
-
-  }
-
-  /**
-   * @return What the dispatches loaded, in the order they ran
-   */
-  public List<Object> getLoadedWhileDispatching() {
-
-    return loadedWhileDispatching;
-
-  }
-
   public void reset() {
 
     dispatched.clear();
-    loadedWhileDispatching.clear();
-    aggregateLoader = null;
     failNextDispatches = 0;
 
   }
