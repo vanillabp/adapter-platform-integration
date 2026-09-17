@@ -106,6 +106,12 @@ because an environment post processor runs before the logging system is up.
 `ProfileFileWithoutItsPlainFileTest` of `globalclasspath-integration-test` holds both halves,
 the values which are there and the line which names the file.
 
+The places it searches are the four `WorkflowModuleConfigFiles` of the core names, and Quarkus
+reads the same four (decision 65). They are styles rather than a ranking, so the same file may
+lie in exactly one of them, and a module which ships it twice ends the boot with a message
+naming both places. `ModuleFileInEachOfTheFourPlacesTest` and `TheSameFileInTwoPlacesTest` of
+`globalclasspath-integration-test` hold both halves.
+
 ## The store of processed task deliveries
 
 `io.vanillabp.integration.delivery` implements the core's `TaskDeliveryLog` (the

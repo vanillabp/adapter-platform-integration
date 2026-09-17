@@ -37,6 +37,7 @@ import io.quarkus.deployment.logging.LoggingSetupBuildItem;
 import io.quarkus.gizmo.ClassCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.runtime.configuration.ConfigBuilder;
+import io.vanillabp.integration.adapter.migration.config.WorkflowModuleConfigFiles;
 import io.vanillabp.integration.runtime.config.WorkflowModuleConfigFilesRecorder;
 import io.vanillabp.integration.runtime.config.WorkflowModuleSpecificPropertiesConfigBuilder;
 import io.vanillabp.integration.runtime.config.WorkflowModuleSpecificPropertiesConfigSourceProvider;
@@ -256,16 +257,17 @@ public class WorkflowModuleBuildStepProcessor {
    * when building the configuration. based on the {@link ConfigBuilder}.
    *
    * @param generatedConfigLoaders The build item holding the names of all {@link ConfigBuilder} classes
-   * @param profileFilesReported The report about profile-specific files without their plain file,
-   *          asked for here because a build step whose items nobody consumes is dropped, and the
-   *          report has to be written in every build
+   * @param configFilesReported The report about the configuration files of the workflow
+   *          modules which this application does not read, asked for here because a build step
+   *          whose items nobody consumes is dropped, and the report has to be written in every
+   *          build
    * @param staticInitConfigProducer Producer for static initialization config builders
    * @param runTimeConfigProducer Producer for static runtime config builders
    */
   @BuildStep
   WorkflowModuleSpecificConfigBuilderBuildItem addWorkflowModuleSpecificConfigFiles(
       final GeneratedConfigBuilderClassesBuildItem generatedConfigLoaders,
-      final WorkflowModuleProfileFilesReportedBuildItem profileFilesReported,
+      final WorkflowModuleConfigFilesReportedBuildItem configFilesReported,
       final BuildProducer<StaticInitConfigBuilderBuildItem> staticInitConfigProducer,
       final BuildProducer<RunTimeConfigBuilderBuildItem> runTimeConfigProducer) {
 
@@ -445,12 +447,12 @@ public class WorkflowModuleBuildStepProcessor {
    * @param applicationArchives The archives of this Quarkus build
    * @param recorder The recorder writing the report at startup
    * @return The item saying the report is written, consumed by
-   *         {@link #addWorkflowModuleSpecificConfigFiles(GeneratedConfigBuilderClassesBuildItem, WorkflowModuleProfileFilesReportedBuildItem, BuildProducer, BuildProducer)}
+   *         {@link #addWorkflowModuleSpecificConfigFiles(GeneratedConfigBuilderClassesBuildItem, WorkflowModuleConfigFilesReportedBuildItem, BuildProducer, BuildProducer)}
    */
   @Record(ExecutionTime.RUNTIME_INIT)
   @Consume(LoggingSetupBuildItem.class)
   @BuildStep
-  WorkflowModuleProfileFilesReportedBuildItem reportProfileFilesWithoutTheirPlainFile(
+  WorkflowModuleConfigFilesReportedBuildItem reportConfigFilesWhichStayUnread(
       final VanillaBpWorkflowModulesBuildItem allWorkflowModules,
       final ApplicationArchivesBuildItem applicationArchives,
       final WorkflowModuleConfigFilesRecorder recorder) {
@@ -466,7 +468,51 @@ public class WorkflowModuleBuildStepProcessor {
             .toList())
         .ifPresent(recorder::report);
 
-    return new WorkflowModuleProfileFilesReportedBuildItem();
+    final var configFiles = workflowModuleSpecificConfigFiles(
+        applicationArchives,
+        workflowModuleSpecificConfigFileRule(allWorkflowModules));
+    allWorkflowModules
+        .getWorkflowModules()
+        .stream()
+        .map(WorkflowModule::getId)
+        .map(workflowModuleId -> WorkflowModuleConfigFiles.messageAboutAFileFoundInMoreThanOnePlace(
+            workflowModuleId,
+            placesPerFilename(workflowModuleId, configFiles)))
+        .flatMap(Optional::stream)
+        .forEach(recorder::refuseToStart);
+
+    return new WorkflowModuleConfigFilesReportedBuildItem();
+
+  }
+
+  /**
+   * Sorts the configuration files found into the places they were found at, so that a file
+   * shipped twice can be seen. The files of the other workflow modules fall out here: a path
+   * belongs to this module only where one of its places plus the file's name builds that
+   * path again.
+   *
+   * @param workflowModuleId The ID of the workflow module
+   * @param configFiles The paths of every workflow module configuration file found, relative
+   *          to the root of the archive holding it
+   * @return The places each file of that module was found at, keyed by the file's name
+   */
+  private static Map<String, List<String>> placesPerFilename(
+      final String workflowModuleId,
+      final Collection<String> configFiles) {
+
+    final var placesPerFilename = new TreeMap<String, List<String>>();
+    configFiles
+        .forEach(configFile -> {
+          final var filename = configFile.substring(configFile.lastIndexOf('/') + 1);
+          if (WorkflowModuleConfigFiles
+              .locationsOf(workflowModuleId, filename)
+              .contains(configFile)) {
+            placesPerFilename
+                .computeIfAbsent(filename, name -> new LinkedList<>())
+                .add(configFile);
+          }
+        });
+    return placesPerFilename;
 
   }
 
@@ -627,10 +673,16 @@ public class WorkflowModuleBuildStepProcessor {
         .getWorkflowModules()
         .stream()
         .map(WorkflowModule::getId)
-        .map(Pattern::quote)
-        // to build regex patterns matching "id[-profile].(extension1|extension2)" at the
-        // classpath root as well as inside a subdirectory named after the workflow module ID
-        .map(id -> "(?:%s/)?%s(?:-[^/]*)?\\.(?:%s)".formatted(id, id, extensionPattern))
+        // to build one regex per workflow module matching "id[-profile].(extension1|extension2)"
+        // in each of the places that module may put a file
+        .map(id -> "(?:%s)%s(?:-[^/]*)?\\.(?:%s)".formatted(
+            WorkflowModuleConfigFiles
+                .directoriesOf(id)
+                .stream()
+                .map(Pattern::quote)
+                .collect(Collectors.joining("|")),
+            Pattern.quote(id),
+            extensionPattern))
         .map(Pattern::compile)
         .toList();
 

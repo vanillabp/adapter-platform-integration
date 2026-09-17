@@ -2074,6 +2074,48 @@ aggregates and reads an old state back, and VanillaBP takes no part in it.
 Nothing is written in `UPGRADE.md`. The seam never reached a release. It lived one day in a
 snapshot, so there is no step from version 1 to describe.
 
+### 65. Four places for a module file, and the same file may lie in one of them
+
+Spring Boot read a workflow module's configuration at four places, Quarkus at two. Measured on
+2026-09-17: a module which ships only `config/loan-approval.yaml`, or only
+`loan-approval/config/loan-approval.yaml`, is read on Spring Boot and nowhere on Quarkus. A
+workflow module is a library and the platform it ends up on is not always the one it was built
+on, so the same jar carried settings which apply on one and are missing on the other.
+
+Quarkus reads the same four now:
+
+```
+loan-approval.yaml
+config/loan-approval.yaml
+loan-approval/loan-approval.yaml
+loan-approval/config/loan-approval.yaml
+```
+
+The four are styles, not a ranking. Somebody who keeps the module's configuration next to its
+BPMN files should be able to, and so should somebody who collects configuration in a `config`
+directory. VanillaBP prescribes neither. The alternative was to report the two places Quarkus
+lacks and leave them unread there, and it would have made the choice of a style into a choice
+of a platform.
+
+There is no order among the four, and none is needed, because **the same file may lie in
+exactly one of them**. A module which ships it twice ends the boot with a message naming both
+places. A ranking would mean a setting whose source cannot be seen from the outside: two files,
+one of them silently ignored, and nothing in the log to say which. The check runs on both
+platforms. Spring Boot read the four places before this story and let one of two files win
+without a word, which is the same defect, only older.
+
+The list lives once, in `WorkflowModuleConfigFiles` of the core, so the two platform
+integrations cannot drift apart. Quarkus finds the files while the application is built and
+ends the boot when it starts, so a native binary refuses as the JVM does.
+
+The profile rule of decision 61 applies per place: a file carrying a profile is read only where
+the file without the profile lies next to it, and with four places there are four spots where
+that bites. Nothing about that rule changed, it just has more places to apply to now.
+
+`WorkflowModuleConfigFilesTest` of the core holds the four places and the message.
+`WorkflowModuleConfigLocationsTest` holds what the Quarkus config sources read, one test per
+place. `ModuleFileInEachOfTheFourPlacesTest` holds the same for Spring Boot, and
+`TheSameFileInTwoPlacesTest` of each platform holds the refusal.
 ### 66. Sharing a whole workflow aggregate is allowed at the workflow and nowhere else
 
 An aggregate which carries no `@NoSyncWithBPMS` anywhere hands every attribute it reaches to the

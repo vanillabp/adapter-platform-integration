@@ -23,4 +23,17 @@ public class WorkflowModuleConfigFilesRecorder {
 
   }
 
+  /**
+   * Ends the boot. A workflow module which ships the same file in two places has no answer
+   * to which of the two applies, so the application says so instead of picking one.
+   *
+   * @param reason What the build found out about those files
+   */
+  public void refuseToStart(
+      final String reason) {
+
+    throw new IllegalStateException(reason);
+
+  }
+
 }

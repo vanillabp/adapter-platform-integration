@@ -4,7 +4,11 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -24,6 +28,8 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.ResourcePatternResolver;
 import org.springframework.core.io.support.ResourcePatternUtils;
 
+import io.vanillabp.integration.adapter.migration.config.WorkflowModuleConfigFiles;
+
 /**
  * An {@link EnvironmentPostProcessor} that loads workflow module-specific
  * YAML and properties files into the Spring {@link ConfigurableEnvironment}.
@@ -37,9 +43,8 @@ import org.springframework.core.io.support.ResourcePatternUtils;
  *   <li>{@code {moduleId}-{profile}.properties} (for each active profile)</li>
  * </ul>
  *
- * <p>Files are searched in the following classpath locations (analogous to
- * Spring Boot's own {@code application.yaml} resolution which covers both
- * root and {@code config/}):
+ * <p>Files are searched in the classpath locations {@link WorkflowModuleConfigFiles}
+ * names:
  * <ol>
  *   <li>{@code {filename}} — classpath root</li>
  *   <li>{@code config/{filename}} — config directory</li>
@@ -72,6 +77,11 @@ import org.springframework.core.io.support.ResourcePatternUtils;
  * profile is missing. Quarkus reads it only where the two lie next to each other, so
  * such a file is named at startup together with the file which would make Quarkus read
  * it (see decision 61 in the repository's DECISIONS.md).
+ *
+ * <p>The four locations are the ones {@link WorkflowModuleConfigFiles} names, and Quarkus
+ * reads the same four. They are styles rather than a ranking, so a file belongs in exactly
+ * one of them: the same file found in two of them ends the boot rather than let one of the
+ * two win (see decision 65 in the repository's DECISIONS.md).
  *
  * <p><b>Limitation:</b> Multi-document YAML using
  * {@code spring.config.activate.on-profile} is not supported inside workflow
@@ -153,6 +163,13 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
 
       messageAboutProfileFilesQuarkusWouldNotRead(profileFiles, plainFiles)
           .ifPresent(log::warn);
+      WorkflowModuleConfigFiles
+          .messageAboutAFileFoundInMoreThanOnePlace(
+              moduleId,
+              placesPerFilename(Stream.concat(profileFiles.stream(), plainFiles.stream())))
+          .ifPresent(reason -> {
+            throw new IllegalStateException(reason);
+          });
     }
 
   }
@@ -201,6 +218,27 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
   }
 
   /**
+   * Sorts the files of one workflow module into the places they were found at, so that a
+   * file shipped twice can be seen.
+   *
+   * @param configFiles The files of one workflow module found in the classpath
+   * @return The places each of them was found at, keyed by the file's name
+   */
+  private static Map<String, Set<String>> placesPerFilename(
+      final Stream<ConfigFile> configFiles) {
+
+    final var placesPerFilename = new TreeMap<String, Set<String>>();
+    configFiles
+        .forEach(configFile -> placesPerFilename
+            // a location found through two prefixes of the same module is one place, which
+            // is what a module whose ID is "config" produces
+            .computeIfAbsent(configFile.filename(), name -> new TreeSet<>())
+            .add(configFile.location()));
+    return placesPerFilename;
+
+  }
+
+  /**
    * Find the files of a given module ID and optional profile, ordered by
    * priority (highest first): YAML before .properties.
    */
@@ -221,9 +259,8 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
   }
 
   /**
-   * Find all files matching the given base name for the given loader. Files are
-   * searched in multiple classpath locations: root, config/, {moduleId}/, and
-   * {moduleId}/config/.
+   * Find all files matching the given base name for the given loader, in each of the
+   * four places a workflow module may put a file.
    */
   private List<ConfigFile> findResources(
       final ResourcePatternResolver resolver,
@@ -231,13 +268,7 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
       final String baseName,
       final PropertySourceLoader loader) {
 
-    // Search locations analogous to Spring Boot's application.yaml resolution,
-    // plus workflow module subdirectory variants
-    final var searchPrefixes = List.of(
-        "",
-        "config/",
-        "%s/".formatted(moduleId),
-        "%s/config/".formatted(moduleId));
+    final var searchPrefixes = WorkflowModuleConfigFiles.directoriesOf(moduleId);
 
     return Arrays.stream(loader.getFileExtensions())
         .flatMap(extension -> {
@@ -318,6 +349,15 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
                   .stream(loader.getFileExtensions())
                   .map(extension -> "'%s.%s'".formatted(moduleId, extension))
                   .collect(Collectors.joining(" or "))));
+
+    }
+
+    /**
+     * @return The name of the file, without the classpath location it was found at
+     */
+    String filename() {
+
+      return location.substring(location.lastIndexOf('/') + 1);
 
     }
 

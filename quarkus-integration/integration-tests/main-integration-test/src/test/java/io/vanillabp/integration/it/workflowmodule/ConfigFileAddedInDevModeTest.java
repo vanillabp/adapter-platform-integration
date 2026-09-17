@@ -35,7 +35,7 @@ public class ConfigFileAddedInDevModeTest {
 
   private static final String PROFILE_CONFIG = "test-module-dev.yaml";
 
-  private static final String SUBDIRECTORY_CONFIG = "test-module/test-module.yaml";
+  private static final String SUBDIRECTORY_CONFIG = "test-module/test-module.yml";
 
   private static final String PROPERTIES_CONFIG = "test-module.properties";
 
@@ -105,7 +105,8 @@ public class ConfigFileAddedInDevModeTest {
         theFileWasNotRead(PROFILE_CONFIG, bootIdBefore));
 
     // the file in the subdirectory named after the module, where a module packaged as
-    // its own Maven module puts it to stay clear of the classpath root
+    // its own Maven module puts it to stay clear of the classpath root; a '.yml' this
+    // time, because the same file name may lie in one place only
     bootIdBefore = get("/boot-id");
     test.addResourceFile(
         SUBDIRECTORY_CONFIG,
