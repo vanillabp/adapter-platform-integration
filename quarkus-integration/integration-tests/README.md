@@ -22,6 +22,19 @@ A collection of integration tests to guarantee desired functionality.
 The BPMS these tests run against is the published [BPMS double](../../bpms-double), which used to
 live here as a sibling module.
 
+## Why these applications allow the full sync
+
+Their workflow aggregates carry no `@NoSyncWithBPMS`, so every attribute of them travels to the
+BPMS, and VanillaBP does not start such a workflow without a word (see decision 66 in the
+repository's DECISIONS.md). These are test aggregates holding test data, and the tests are about
+other things, so the configurations say
+`vanillabp.workflow-modules.<module>.workflows.<process>.allow-full-sync-with-bpms: true` rather
+than pretending to protect something. Where one aggregate serves many scenario configurations,
+the aggregate keeps back the attribute no model ever reads instead, which is the same answer an
+application would give.
+
+The comment belongs here because the YAML formatter drops comments inside a mapping.
+
 ## Noteworthy & Contributors
 
 [VanillaBP](https://www.github.com/vanillabp/spi-for-java) was developed by [Phactum](https://www.phactum.at) with the

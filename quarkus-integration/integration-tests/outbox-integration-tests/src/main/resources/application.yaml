@@ -15,6 +15,9 @@ vanillabp:
       adapters:
         test:
           resources-location: classpath:test-module/processes/dummy
+      workflows:
+        WorkflowService:
+          allow-full-sync-with-bpms: true
   outbox:
     poll-interval: PT0.5S
     attempt-frequency: PT0.5S
