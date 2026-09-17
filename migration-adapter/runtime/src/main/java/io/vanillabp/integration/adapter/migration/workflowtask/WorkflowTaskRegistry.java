@@ -263,7 +263,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
     // STARTUP validation of the sync model: an aggregate whose
     // attributes are annotated both ways without the class stating its own mode is
-    // ambiguous - the developer learns it when the application boots, not when the
+    // ambiguous, and an attribute shared as a type whose text carries no value is
+    // refused - the developer learns both when the application boots, not when the
     // first workflow reaches a sync point
     if (aggregateSync != null) {
       aggregateSync.validateSyncModel(processService.getWorkflowAggregateClass());

@@ -868,17 +868,20 @@ public class AggregateSyncSupportTest {
 
   public static class AggregateWithTextNobodyReadsBack {
 
-    public java.util.Calendar getSignedOn() {
-      return java.util.GregorianCalendar.getInstance();
-    }
-
     public List<java.util.Locale> getLanguages() {
       return List.of(java.util.Locale.GERMANY);
     }
 
-    @NoSyncWithBPMS
-    public java.util.Calendar getNeverShared() {
-      return java.util.GregorianCalendar.getInstance();
+    public java.net.URI getHomepage() {
+      return java.net.URI.create("https://vanillabp.io");
+    }
+
+    public java.sql.Timestamp getSignedOn() {
+      return java.sql.Timestamp.from(java.time.Instant.parse("2026-09-16T18:15:30Z"));
+    }
+
+    public Optional<String> getNote() {
+      return Optional.of("a note");
     }
 
     public java.time.LocalDate getDay() {
@@ -893,8 +896,8 @@ public class AggregateSyncSupportTest {
 
   public static class SignedContract {
 
-    public java.util.Calendar getCountersignedOn() {
-      return java.util.GregorianCalendar.getInstance();
+    public java.util.Locale getCountersignedIn() {
+      return java.util.Locale.GERMANY;
     }
 
   }
@@ -903,43 +906,213 @@ public class AggregateSyncSupportTest {
   @DisplayName("An attribute whose text nothing reads back is named while the application boots")
   public void whatCannotComeBackIsSaidAtStartup() {
 
+    final var said = whatIsSaidWhileValidating(AggregateWithTextNobodyReadsBack.class);
+
+    assertEquals(5, said.size(), () -> "one word per attribute, and none about the others: "
+        + said);
+    assertTrue(
+        said.stream().anyMatch(message -> message.contains("'languages'") && message.contains("'de_DE'")),
+        () -> "an element of a collection is asked about as well: "
+            + said);
+    assertTrue(
+        said.stream().anyMatch(message -> message.contains("'homepage'") && message.contains("java.net.URI")),
+        () -> said.toString());
+    assertTrue(
+        said.stream().anyMatch(message -> message.contains("'signedOn'") && message.contains("java.sql.Timestamp")),
+        () -> "a Date subclass is carried, the declared type is not: "
+            + said);
+    assertTrue(
+        said.stream().anyMatch(message -> message.contains("'note'") && message.contains("java.util.Optional")),
+        () -> said.toString());
+    assertTrue(
+        said
+            .stream()
+            .anyMatch(
+                message -> message.contains("'countersignedIn'") && message.contains(SignedContract.class.getName())),
+        () -> "a nested object is walked into, and the word names the class it belongs to: "
+            + said);
+    assertTrue(
+        said.stream().noneMatch(message -> message.contains("'day'")),
+        () -> "and one the way back reads is no case at all: "
+            + said);
+
+  }
+
+  public static class AggregateWithACalendar {
+
+    public java.util.Calendar getSignedOn() {
+      return java.util.GregorianCalendar.getInstance();
+    }
+
+    @NoSyncWithBPMS
+    public java.util.Calendar getNeverShared() {
+      return java.util.GregorianCalendar.getInstance();
+    }
+
+    public List<java.util.GregorianCalendar> getReminders() {
+      return List.of(new java.util.GregorianCalendar());
+    }
+
+    public SigningDetails getDetails() {
+      return new SigningDetails();
+    }
+
+  }
+
+  public static class SigningDetails {
+
+    public java.util.Calendar getCountersignedOn() {
+      return java.util.GregorianCalendar.getInstance();
+    }
+
+  }
+
+  @Test
+  @DisplayName("A Calendar the BPMS would be given stops the boot, wherever it sits")
+  public void aSharedCalendarStopsTheBoot() {
+
+    final var refused = assertThrowsExactly(
+        IllegalStateException.class,
+        () -> testee.validateSyncModel(AggregateWithACalendar.class));
+
+    final var message = refused.getMessage();
+
+    assertTrue(
+        message.contains("'signedOn'") && message.contains("java.util.Calendar"),
+        () -> "the attribute and its type: "
+            + message);
+    assertTrue(
+        message.contains("Share an Instant"),
+        () -> "and what to declare instead: "
+            + message);
+    assertTrue(
+        message.contains("debug form"),
+        () -> "and what the BPMS would be given today: "
+            + message);
+    assertTrue(
+        message.contains("'reminders'") && message.contains("java.util.GregorianCalendar"),
+        () -> "an element of a collection is refused as well, subclass included: "
+            + message);
+    assertTrue(
+        message.contains("'countersignedOn'") && message.contains(SigningDetails.class.getName()),
+        () -> "and so is one inside a nested object: "
+            + message);
+    assertTrue(
+        !message.contains("'neverShared'"),
+        () -> "an attribute which never travels is no case at all: "
+            + message);
+
+  }
+
+  public static class AggregateSharingOnlyItsReference {
+
+    @SyncWithBPMS
+    public String getReference() {
+      return "R-1";
+    }
+
+    public java.util.Calendar getSignedOn() {
+      return java.util.GregorianCalendar.getInstance();
+    }
+
+  }
+
+  @Test
+  @DisplayName("A Calendar nobody shares lets the application boot")
+  public void aCalendarNobodySharesIsNoDefect() {
+
+    // the class names what it shares, so everything it does not name stays at home -
+    // and the refusal asks the same chain the sync point asks
+    assertEquals(
+        Set.of("reference"),
+        full(new AggregateSharingOnlyItsReference()).keySet(),
+        "the calendar does not reach the BPMS");
+
+    testee.validateSyncModel(AggregateSharingOnlyItsReference.class);
+
+  }
+
+  public static class AuditTrail {
+
+    public java.util.Calendar getTouchedOn() {
+      return java.util.GregorianCalendar.getInstance();
+    }
+
+  }
+
+  public static class AggregateHidingItsAudit {
+
+    public String getReference() {
+      return "R-2";
+    }
+
+    @NoSyncWithBPMS
+    public AuditTrail getAudit() {
+      return new AuditTrail();
+    }
+
+  }
+
+  @Test
+  @DisplayName("A Calendar below an attribute nobody shares lets the application boot")
+  public void aCalendarBelowAHiddenAttributeIsNoDefect() {
+
+    assertEquals(
+        Set.of("reference"),
+        full(new AggregateHidingItsAudit()).keySet(),
+        "the audit trail does not reach the BPMS");
+
+    testee.validateSyncModel(AggregateHidingItsAudit.class);
+
+  }
+
+  public static class AggregateShowingTheAuditOnceMore {
+
+    @NoSyncWithBPMS
+    public AuditTrail getHiddenAudit() {
+      return new AuditTrail();
+    }
+
+    public AuditTrail getVisibleAudit() {
+      return new AuditTrail();
+    }
+
+  }
+
+  @Test
+  @DisplayName("A type reached twice is refused for the path which shares it")
+  public void aTypeHiddenOnOnePathIsStillRefusedOnTheOther() {
+
+    final var refused = assertThrowsExactly(
+        IllegalStateException.class,
+        () -> testee.validateSyncModel(AggregateShowingTheAuditOnceMore.class));
+
+    assertTrue(
+        refused.getMessage().contains("'touchedOn'"),
+        () -> "the hidden path must not silence the shared one: "
+            + refused.getMessage());
+    assertEquals(
+        1,
+        refused.getMessage().lines().count(),
+        () -> "and the same word is not said twice: "
+            + refused.getMessage());
+
+  }
+
+  private List<String> whatIsSaidWhileValidating(
+      final Class<?> workflowAggregateClass) {
+
     final var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory
         .getLogger(AggregateSyncSupport.class);
     final var recorded = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
     recorded.start();
     logger.addAppender(recorded);
     try {
-      testee.validateSyncModel(AggregateWithTextNobodyReadsBack.class);
+      testee.validateSyncModel(workflowAggregateClass);
     } finally {
       logger.detachAppender(recorded);
     }
-
-    final var said = recorded.list.stream().map(event -> event.getFormattedMessage()).toList();
-
-    assertEquals(3, said.size(), () -> "one word per attribute, and none about the others: "
-        + said);
-    assertTrue(
-        said.stream().anyMatch(message -> message.contains("'signedOn'") && message.contains("debug form")),
-        () -> said.toString());
-    assertTrue(
-        said.stream().anyMatch(message -> message.contains("'languages'") && message.contains("'de_DE'")),
-        () -> "an element of a collection is asked about as well: "
-            + said);
-    assertTrue(
-        said
-            .stream()
-            .anyMatch(
-                message -> message.contains("'countersignedOn'") && message.contains(SignedContract.class.getName())),
-        () -> "a nested object is walked into, and the word names the class it belongs to: "
-            + said);
-    assertTrue(
-        said.stream().noneMatch(message -> message.contains("'neverShared'")),
-        () -> "an attribute which never travels is no case at all: "
-            + said);
-    assertTrue(
-        said.stream().noneMatch(message -> message.contains("'day'")),
-        () -> "and neither is one the way back reads: "
-            + said);
+    return recorded.list.stream().map(event -> event.getFormattedMessage()).toList();
 
   }
 

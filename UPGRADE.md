@@ -6,6 +6,31 @@ applications built on VanillaBP). What an application on Camunda 7 has to config
 this is in
 [that adapter's own file](https://github.com/vanillabp/camunda7-adapter/blob/main/UPGRADE.md).
 
+## An aggregate which shares a Calendar does not start (2026-09-17)
+
+An attribute of type `java.util.Calendar` reached the BPMS as the text a `Calendar` prints, and that
+text is the debug form of the implementation: 769 characters naming every field of it, written again
+at every sync point. It is a dump for a debugger and not a value. No model reads a point in time out
+of it, and nothing reads it back into a `@TaskParam`.
+
+Version 2 refuses it. An application whose workflow aggregate shares such an attribute does not
+start, and the message names the attribute, the class it belongs to and the type it is declared as.
+Share an `Instant` for the point in time instead, and a `TimeZone` or a `ZoneId` next to it where
+the zone matters too. Where no model needs the attribute at all, annotate it `@NoSyncWithBPMS` and
+the application starts.
+
+A `Calendar` inside a nested object, or as the element of a collection, is refused the same way. An
+attribute nobody shares is no case at all: the refusal follows the same chain a sync point follows,
+so an aggregate which shares only the attributes it names keeps its `Calendar` at home and starts.
+
+**What to do before upgrading.** Look for `java.util.Calendar` in your workflow aggregates:
+`grep -rn "java.util.Calendar" --include="*.java" .`. Every attribute of that type which is shared
+becomes an `Instant`, or is marked `@NoSyncWithBPMS`. The variable it used to write is worth a look
+too. A BPMN expression reading it read the dump, so it read nothing it could work with, and an
+expression on the `Instant` is what replaces it.
+
+The reasoning is decision 59 in [`DECISIONS.md`](./DECISIONS.md).
+
 ## A Date reaches the BPMS as an instant, and a TimeZone as the id of its zone (2026-09-17)
 
 An aggregate attribute of type `java.util.Date` used to reach the BPMS as the text a `Date` prints,
@@ -35,14 +60,11 @@ a fixed offset survives as it was written, so `GMT+05:30` stays `GMT+05:30`. A t
 not, because it is no zone name: `IST` is shared as `Asia/Kolkata` and `EST` as `-05:00`, the same
 zone under the name it really has.
 
-`java.util.Calendar` is carried neither way, and an attribute of that type is named while the
-application boots. Its text is the debug form of the implementation, several hundred characters
-long, and nothing reads a point in time back out of it. What a sync point writes for such an
-attribute does not change, so no variable disappears from a running model. Share an `Instant` for
-the point in time, and a `TimeZone` or a `ZoneId` next to it where the zone matters too.
+`java.util.Calendar` is carried neither way, and an attribute of that type stops the application
+from starting. The entry above says what to do with one.
 
-The same word at startup names every other attribute whose text nothing reads back, a
-`java.util.Locale` or a `java.net.URI` among them. It is a warning and the application boots.
+Every other attribute whose text nothing reads back is named while the application boots, a
+`java.util.Locale` or a `java.net.URI` among them. That one is a warning and the application boots.
 
 The types carried both ways are listed in
 [`migration-adapter/README.md`](./migration-adapter/README.md), section "What a `@TaskParam` may be

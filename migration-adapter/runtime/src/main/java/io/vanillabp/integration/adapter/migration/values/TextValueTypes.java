@@ -217,6 +217,27 @@ public final class TextValueTypes {
   }
 
   /**
+   * Whether an attribute of that type stops the boot instead of being shared with the
+   * BPMS. {@link Calendar} is the one such type. Its text is the debug form of the
+   * implementation, several hundred characters naming every field of it, so no model
+   * reads a point in time out of it and no operator understands what they are looking
+   * at. Every other type whose text carries no value back at least writes something a
+   * person can read, and those earn a word at startup rather than a refusal.
+   * <p>
+   * Why this one type is refused while the others are not is decision 59 in the
+   * repository's DECISIONS.md.
+   *
+   * @param type The declared type of an attribute, or of an element of one
+   * @return Whether an attribute of that type may not reach the BPMS
+   */
+  public static boolean isRefusedOnTheWayOut(
+      final Class<?> type) {
+
+    return Calendar.class.isAssignableFrom(type);
+
+  }
+
+  /**
    * @param type The declared type
    * @return Whether something is known about why this type's text carries no value back
    */

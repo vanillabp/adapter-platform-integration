@@ -1281,21 +1281,40 @@ back as `GMT+05:30`. A three-letter id does not, because it is no zone name. `IS
 shared as `Asia/Kolkata` and `EST` as `-05:00`. It is the same zone with the same rules
 under the name it really has, and an application comparing ids has to know that.
 
-`java.util.Calendar` and `java.util.Locale` stay refused although the platform writes them
-out as text, and the message says which type to declare instead. A `Calendar` is written
-as its debug form, several hundred characters naming every field of the implementation,
-and no point in time can be read out of it without guessing which of its fields to trust.
-A `Locale` is written as `de_DE`, which no `Locale` method reads back, and `Locale.ROOT` is
-written as an empty text.
+`java.util.Calendar` and `java.util.Locale` stay refused on the way back although such a
+text looks readable, and the message says which type to declare instead. A `Calendar` is written
+as its debug form, 769 characters naming every field of the implementation, and no point
+in time can be read out of it without guessing which of its fields to trust. A `Locale` is
+written as `de_DE`, which no `Locale` method reads back, and `Locale.ROOT` is written as an
+empty text.
 
-An attribute of such a type is named while the application boots, once per attribute, with
-the type to share instead. It works on the way out and fails on the way in, and the way in
-is a task handler, so without that word the application learns about it when a model first
-maps the value into one. It is a warning and not a failed boot, because `validateSyncModel`
-is not told the adapter's default and therefore cannot know whether the attribute is
-shared at all. An attribute marked `@NoSyncWithBPMS` is left out of it. This, and why the
-list is asked about the type a value IS rather than about the package its class sits in,
-is [decision 58](../DECISIONS.md).
+**An aggregate which shares a `Calendar` attribute does not boot.** Such a text is no
+value, so the application is not allowed to send it, and `validateSyncModel` reports the
+attribute as a defect. The message names the attribute, the class it belongs to, the type
+it is declared as and what the BPMS would be given, and it says to share an `Instant` for
+the point in time, with a `TimeZone` or a `ZoneId` next to it where the zone matters too.
+Leaving the attribute out of what is shared would be worse than refusing it: a process
+variable which quietly stopped being written makes a model read null and take a branch
+nobody chose. Where no model needs the attribute, `@NoSyncWithBPMS` says so and the
+application boots.
+
+A boot which fails may not rest on a guess, so the refusal asks whether the attribute
+really is shared, along the same chain a sync point walks. A class states its own mode or
+inherits from the attribute holding it, and an attribute may state its own. The walk starts
+out sharing, because `FULL` is the default of every adapter. A `Calendar` inside a nested
+object or as the element of a collection is refused the same way, because it is the same
+walk.
+
+Every other attribute whose text nothing reads back is named while the application boots,
+once per attribute, with the type to share instead. It works on the way out and fails on
+the way in, and the way in is a task handler, so without that word the application learns
+about it when a model first maps the value into one. That one is a warning and the
+application boots: `validateSyncModel` is not told the adapter's default and therefore
+cannot know whether the attribute is shared at all, and a warning which is wrong costs a
+log line. An attribute marked `@NoSyncWithBPMS` is left out of it. Why the list is asked
+about the type a value IS rather than about the package its class sits in is
+[decision 58](../DECISIONS.md), and the refused `Calendar` is
+[decision 59](../DECISIONS.md).
 
 **What to share, and as what.** A workflow aggregate carries the results a model decides on
 and the values an operator reads, not every field of a business object. So a `@TaskParam`
