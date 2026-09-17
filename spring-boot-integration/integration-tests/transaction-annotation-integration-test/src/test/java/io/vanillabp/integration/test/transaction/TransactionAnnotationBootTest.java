@@ -59,6 +59,9 @@ public class TransactionAnnotationBootTest {
             adapters:
               test:
                 resources-location: classpath*:test-module/processes/transactional
+            workflows:
+              TransactionalProcess:
+                allow-full-sync-with-bpms: true
       """;
 
   @Configuration

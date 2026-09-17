@@ -1,5 +1,6 @@
 package io.vanillabp.integration.test.secondary;
 
+import io.vanillabp.spi.service.NoSyncWithBPMS;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -13,6 +14,10 @@ import lombok.Setter;
 public class OrderAggregate {
 
   private String id;
+
+  // the test reads this, no BPMN model does - so it stays out of the BPMS
+
+  @NoSyncWithBPMS
 
   private String status;
 

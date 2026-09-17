@@ -10,6 +10,11 @@ vanillabp:
       adapters:
         test:
           resources-location: classpath*:test-module/processes/dummy
+      # the test aggregates here are not annotated, so everything of them travels; the tests
+      # are about other things, so the workflows allow it (see decision 66)
+      workflows:
+        SampleWorkflowService:
+          allow-full-sync-with-bpms: true
   outbox:
     poll-interval: PT0.5S
     attempt-frequency: PT0.5S

@@ -18,5 +18,8 @@ vanillabp:
       adapters:
         the-bpms:
           resources-location: classpath*:election-cost-module/processes/dummy
+      workflows:
+        CostProcess:
+          allow-full-sync-with-bpms: true
 election-cost-module:
   nothing: there

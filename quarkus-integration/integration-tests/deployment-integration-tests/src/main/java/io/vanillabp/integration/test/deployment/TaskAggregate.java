@@ -1,5 +1,6 @@
 package io.vanillabp.integration.test.deployment;
 
+import io.vanillabp.spi.service.NoSyncWithBPMS;
 import io.vanillabp.spi.service.TaskEvent;
 import lombok.Getter;
 import lombok.Setter;
@@ -24,6 +25,10 @@ public class TaskAggregate {
   private int index;
 
   private int total;
+
+  // the test reads this, no BPMN model does - so it stays out of the BPMS
+
+  @NoSyncWithBPMS
 
   private String requestScopedProbe;
 

@@ -1,5 +1,7 @@
 package io.vanillabp.integration.test.extension;
 
+import io.vanillabp.spi.service.NoSyncWithBPMS;
+
 /**
  * The workflow aggregate of the extension acceptance test. Its <code>touched</code>
  * attribute is what a handler method of the extension writes, so a test can tell whether
@@ -10,6 +12,10 @@ public class NoteAggregate {
   private String id;
 
   private String content;
+
+  // the test reads this, no BPMN model does - so it stays out of the BPMS
+
+  @NoSyncWithBPMS
 
   private String touched;
 

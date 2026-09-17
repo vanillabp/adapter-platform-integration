@@ -1,5 +1,6 @@
 package io.vanillabp.integration.test.deployment.conflict;
 
+import io.vanillabp.spi.service.NoSyncWithBPMS;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
@@ -23,6 +24,10 @@ public class ConflictAggregate {
   private String id;
 
   private String content;
+
+  // the test reads this, no BPMN model does - so it stays out of the BPMS
+
+  @NoSyncWithBPMS
 
   @Version
   private Long version;
