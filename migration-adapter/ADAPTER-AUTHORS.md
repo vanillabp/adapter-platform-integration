@@ -377,6 +377,7 @@ arrives here.
 | `workflowsShareTheWorkflowAggregate(module, process, otherProcess)`             | a called process running on the same aggregate has to be handed the caller's identity, and one running on its own aggregate must not                                                                                                              |
 | `reportConcurrentTokenElements(module, process, elementIds)`                    | the elements which can put a second token into a running workflow; the core warns where the aggregate has no version attribute                                                                                                                    |
 | `registerProcessVersions(adapterId, module, process, catalog)`                  | only where your BPMS can place version tags. The core asks you again after the deployment, for the ids the application declared without a model - see below                                                                                       |
+| `reportNoProcessVersionCatalog(adapterId, module, process, reported)`           | where your BPMS counts no versions. Registering nothing says "not asked yet", this says "there is nothing to ask", and only the second lets the core name the methods waiting for a version which never comes                                     |
 | `unsharedWorkflowAggregateProperties(module, process, names, adapterDefault)`   | the identifiers your models read which the aggregate does not share, so the developer hears about it at startup                                                                                                                                   |
 | `unsharedWorkflowAggregatePaths(module, process, paths, adapterDefault)`        | the same question for a whole dotted path, if you can read one out of your model. The core walks the declared types and names the segment which stops the path, or says nothing where they cannot decide                                          |
 | `declaredTypesOfWorkflowAggregatePaths(module, process, paths, adapterDefault)` | the type each of those paths ends at, asked where your BPMS stores a value in a format which may hand another type back. Only a path reaching a shared value is answered, and what the type costs is yours to judge                               |
@@ -396,6 +397,15 @@ If your BPMS can start a workflow by itself, ask `BpmsInitiatedStartInvoker` to 
 events you found, and throw where your BPMS cannot report such a start at all: a workflow running
 without an aggregate is worse than a deployment which failed. Ask `WorkflowEndedInvoker` whether a
 handler for the end of a workflow exists at all, and attach your listener only where it does.
+
+If your BPMS counts no versions of a process, say so with `reportNoProcessVersionCatalog`. It costs
+one call per process and it buys the application a straight answer. A method whose `version` names
+a number or a range cannot run on such a BPMS, and until you say this nobody knows whether that is
+the engine or an adapter which was not finished yet, so the messages about it point the wrong way.
+`ReportedProcessVersion` is what a delivery of your BPMS carries instead: `VERSION_TAG` where the
+engine hands over the tag of the model, `NONE` where it hands over nothing. The core names the
+methods which never run there, as a warning, because the same method can be the right one on
+another BPMS the application is configured for.
 
 At the end of `deployResources`, per process, call `registerDeployedVersion`. Do it also when your
 BPMS deployed nothing because nothing had changed, because only you can find out which version it

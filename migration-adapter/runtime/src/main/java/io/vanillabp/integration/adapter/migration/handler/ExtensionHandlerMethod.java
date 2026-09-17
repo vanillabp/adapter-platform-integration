@@ -162,6 +162,16 @@ final class ExtensionHandlerMethod {
   }
 
   /**
+   * @return What this handler serves, for a question the version specifications
+   *         answer on their own
+   */
+  io.vanillabp.integration.adapter.migration.workflowtask.ServedVersions servedVersions() {
+
+    return versions;
+
+  }
+
+  /**
    * @return The version specification(s), for guiding messages
    */
   String describeVersions() {

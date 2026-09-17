@@ -1878,3 +1878,38 @@ One consequence is worth naming: a type is now validated once per path leading t
 than once in total, because the same class may be shared below one attribute and hidden
 below another. `AggregateSyncSupportTest#aSharedCalendarStopsTheBoot` holds the message,
 and the tests next to it hold the aggregates which still boot.
+
+### 60. A BPMS which keeps no version catalog says so, and the methods which never run are named
+
+An adapter used to have one way of saying that its BPMS cannot place version tags: register no
+`ProcessVersionCatalog`. That is the same thing the core sees before any adapter was asked, so the
+core said nothing about the methods of such a process, and the two lines which did come out were
+both wrong. One said at startup that a version tag is known to no BPMS, on the one BPMS where the
+tag is the only thing a delivery carries. The other said at a delivery that no adapter can be asked
+about the versions, which reads like a missing adapter and is a missing version notion. Both were
+measured on 2026-09-17, on an application booted against the Process-Engine-API adapter with the
+output suppression of the tests switched off.
+
+An adapter can now answer instead of staying silent:
+`WorkflowTaskWiring#reportNoProcessVersionCatalog(adapterId, module, process, reported)`, called
+where `registerProcessVersions` would be called. `ReportedProcessVersion` is the second half of the
+answer and says what a delivery of that BPMS carries, a version tag or nothing at all. With it the
+core can name the methods whose version will never be met there, and both old lines are written in
+the words of an engine which counts no versions.
+
+The finding is a warning and the boot goes on. The same method can be the right one on another
+BPMS the application is configured for, which is what the prioritized adapter list is for: a
+workflow module served by the Process-Engine-API today and by Camunda 8 tomorrow keeps the methods
+of both, and refusing to boot over the half which is idle would make the migration feature
+unusable. It also fits what the other version findings do. A method serving no version a BPMS holds
+is a warning too, for the neighbouring reason that the version may be deployed later.
+
+The report is per BPMN process and it names the adapter, unlike the report about methods which
+serve no version anywhere: what is stated here is true of ONE BPMS, so a method which runs on
+another one is named without being called dead. Where a second adapter of the same process
+registers a catalog, nothing is reported at all - the method runs on that BPMS, and the core has
+nothing to warn about.
+
+An adapter which registers no catalog and says nothing keeps the behaviour it had. Silence is not
+an answer, and treating it as one would name methods of an adapter which was simply never asked.
+`ProcessVersionMatchingTest.WithoutAVersionCatalog` holds both sides of that difference.

@@ -30,6 +30,7 @@ import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegis
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.version.CachingProcessVersionCatalog;
 import io.vanillabp.integration.adapter.spi.version.DeployedProcessVersion;
+import io.vanillabp.integration.adapter.spi.version.ReportedProcessVersion;
 import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedContext;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
@@ -1197,6 +1198,254 @@ public class ProcessVersionMatchingTest {
       assertNull(persistence.aggregates.get("4712").servedBy, "no method initialized the aggregate");
 
     }
+
+  }
+
+  /**
+   * A BPMS which says it keeps no catalog of its deployed versions, instead of simply
+   * registering none.
+   * <p>
+   * The difference matters to the developer, not to the machine: an adapter which
+   * registers nothing may not have been asked yet, while one which says this has
+   * answered. Only the second lets the start name the methods waiting for a version
+   * which never comes.
+   */
+  @Nested
+  @DisplayName("A BPMS which keeps no version catalog")
+  class WithoutAVersionCatalog {
+
+    @Test
+    @DisplayName("The methods which never run there are named, the ones which still run are not")
+    public void methodsWhichNeverRunAreNamed() {
+
+      final var testee = registry(MixedVersionsService.class, MixedVersionsService::new);
+      testee.reportNoProcessVersionCatalog(ADAPTER, MODULE, PROCESS, ReportedProcessVersion.VERSION_TAG);
+
+      final var messages = loggedBy(ProcessVersions.class, () -> testee.resolveProcessVersions(MODULE));
+      final var reported = oneMessageAbout(messages, "keeps no catalog");
+
+      assertTrue(reported.contains("byRange"), reported);
+      assertTrue(reported.contains("byNumber"), reported);
+      assertTrue(reported.contains("ended"), reported);
+      assertFalse(reported.contains("byTag"), "the tag is what a delivery carries here: "
+          + reported);
+      assertFalse(reported.contains("always"), "a method without a version serves everything: "
+          + reported);
+      assertTrue(reported.contains("'%s'".formatted(ADAPTER)), "the message names who answered: "
+          + reported);
+      assertTrue(reported.contains("version tag of its model"), reported);
+
+    }
+
+    @Test
+    @DisplayName("A BPMS carrying no version at all leaves only the methods naming none")
+    public void withoutAnyVersionEveryRangeIsNamed() {
+
+      final var testee = registry(MixedVersionsService.class, MixedVersionsService::new);
+      testee.reportNoProcessVersionCatalog(ADAPTER, MODULE, PROCESS, ReportedProcessVersion.NONE);
+
+      final var messages = loggedBy(ProcessVersions.class, () -> testee.resolveProcessVersions(MODULE));
+      final var reported = oneMessageAbout(messages, "keeps no catalog");
+
+      assertTrue(reported.contains("byTag"), "no delivery carries a tag either: "
+          + reported);
+      assertTrue(reported.contains("byRange"), reported);
+      assertFalse(reported.contains("always"), reported);
+      assertTrue(reported.contains("no process version at all"), reported);
+
+    }
+
+    @Test
+    @DisplayName("Nothing claims the tag is unknown, because the tag is what works here")
+    public void theUnknownTagLineIsGone() {
+
+      final var testee = registry(MixedVersionsService.class, MixedVersionsService::new);
+      testee.reportNoProcessVersionCatalog(ADAPTER, MODULE, PROCESS, ReportedProcessVersion.VERSION_TAG);
+
+      final var messages = loggedBy(ProcessVersions.class, () -> testee.resolveProcessVersions(MODULE));
+
+      assertTrue(
+          messages.stream().noneMatch(message -> message.contains("names a version tag no BPMS knows")),
+          messages.toString());
+
+    }
+
+    @Test
+    @DisplayName("A delivery naming a version says there is no catalog, not that nobody can be asked")
+    public void theDeliveryMessageSaysWhatIsMissing() {
+
+      final var testee = registry(MixedVersionsService.class, MixedVersionsService::new);
+      testee.reportNoProcessVersionCatalog(ADAPTER, MODULE, PROCESS, ReportedProcessVersion.VERSION_TAG);
+      testee.resolveProcessVersions(MODULE);
+      storeAggregate("4711");
+
+      final var messages = loggedBy(
+          ProcessVersions.class,
+          () -> assertThrows(
+              IllegalStateException.class,
+              () -> testee.invokeWorkflowTask(MODULE, PROCESS, rangedTask("4711", "release-2030"))));
+
+      assertTrue(
+          messages.stream().noneMatch(message -> message.contains("can be asked")),
+          messages.toString());
+      final var reported = oneMessageAbout(messages, "keeps no catalog of the versions");
+      assertTrue(reported.contains("version tag of its model"), reported);
+
+    }
+
+    @Test
+    @DisplayName("A second BPMS with a catalog serves the method, so nothing is reported")
+    public void aCatalogOfAnotherAdapterKeepsTheStartQuiet() {
+
+      final var testee = registry(MixedVersionsService.class, MixedVersionsService::new);
+      testee.reportNoProcessVersionCatalog(ADAPTER, MODULE, PROCESS, ReportedProcessVersion.VERSION_TAG);
+      final var catalog = new RecordingCatalog();
+      catalog.versions.add(DeployedProcessVersion.of("2", "release-2024"));
+      testee.registerProcessVersions("counting-adapter", MODULE, PROCESS, catalog);
+
+      final var messages = loggedBy(ProcessVersions.class, () -> testee.resolveProcessVersions(MODULE));
+
+      assertTrue(
+          messages.stream().noneMatch(message -> message.contains("keeps no catalog")),
+          "the method runs on the BPMS which counts versions: "
+              + messages);
+
+    }
+
+    @Test
+    @DisplayName("An adapter which says nothing changes nothing")
+    public void silenceIsStillSilence() {
+
+      final var testee = registry(MixedVersionsService.class, MixedVersionsService::new);
+
+      final var messages = loggedBy(ProcessVersions.class, () -> testee.resolveProcessVersions(MODULE));
+
+      assertTrue(
+          messages.stream().noneMatch(message -> message.contains("keeps no catalog")),
+          messages.toString());
+      assertTrue(
+          messages.stream().anyMatch(message -> message.contains("names a version tag no BPMS knows")),
+          "the old message is what an adapter saying nothing still gets: "
+              + messages);
+
+    }
+
+    @Test
+    @DisplayName("The report is a warning, and the methods a delivery can still reach keep running")
+    public void theBootGoesOnAndTheTaggedMethodRuns() {
+
+      final var testee = registry(MixedVersionsService.class, MixedVersionsService::new);
+      testee.reportNoProcessVersionCatalog(ADAPTER, MODULE, PROCESS, ReportedProcessVersion.VERSION_TAG);
+      testee.resolveProcessVersions(MODULE);
+      storeAggregate("4711");
+
+      testee.invokeWorkflowTask(MODULE, PROCESS, taskOf("4711", "tagged", "release-2024"));
+      assertEquals("byTag", persistence.aggregates.get("4711").servedBy);
+
+      testee.invokeWorkflowTask(MODULE, PROCESS, taskOf("4711", "task", "release-2024"));
+      assertEquals("always", persistence.aggregates.get("4711").servedBy);
+
+    }
+
+    @Test
+    @DisplayName("The same process is reported once, however often the start asks")
+    public void theProcessIsReportedOnce() {
+
+      final var testee = registry(MixedVersionsService.class, MixedVersionsService::new);
+      testee.reportNoProcessVersionCatalog(ADAPTER, MODULE, PROCESS, ReportedProcessVersion.VERSION_TAG);
+
+      final var messages = loggedBy(ProcessVersions.class, () -> {
+        testee.resolveProcessVersions(MODULE);
+        testee.resolveProcessVersions(MODULE);
+      });
+
+      assertEquals(
+          1,
+          messages.stream().filter(message -> message.contains("keeps no catalog")).count(),
+          messages.toString());
+
+    }
+
+    private String oneMessageAbout(
+        final List<String> messages,
+        final String fragment) {
+
+      return messages
+          .stream()
+          .filter(message -> message.contains(fragment))
+          .findFirst()
+          .orElseThrow(() -> new AssertionError("no message about '%s': %s".formatted(fragment, messages)));
+
+    }
+
+    private TaskInvocationContext rangedTask(
+        final String aggregateId,
+        final String processVersion) {
+
+      return taskOf(aggregateId, "numbered", processVersion);
+
+    }
+
+  }
+
+  static class MixedVersionsService {
+
+    @WorkflowTask(taskDefinition = "task")
+    public void always(
+        final Aggregate aggregate) {
+
+      aggregate.servedBy = "always";
+
+    }
+
+    @WorkflowTask(taskDefinition = "tagged", version = "release-2024")
+    public void byTag(
+        final Aggregate aggregate) {
+
+      aggregate.servedBy = "byTag";
+
+    }
+
+    @WorkflowTask(taskDefinition = "numbered", version = "1-3")
+    public void byRange(
+        final Aggregate aggregate) {
+    }
+
+    @WorkflowTask(taskDefinition = "counted", version = "2")
+    public void byNumber(
+        final Aggregate aggregate) {
+    }
+
+    @WorkflowEnded(version = "release-2023..release-2024")
+    public void ended(
+        final Aggregate aggregate) {
+    }
+
+  }
+
+  private TaskInvocationContext taskOf(
+      final String aggregateId,
+      final String taskDefinition,
+      final String processVersion) {
+
+    return new TaskInvocationContext() {
+
+      @Override
+      public String getTaskDefinition() {
+        return taskDefinition;
+      }
+
+      @Override
+      public String getWorkflowAggregateId() {
+        return aggregateId;
+      }
+
+      @Override
+      public String getProcessVersion() {
+        return processVersion;
+      }
+
+    };
 
   }
 
