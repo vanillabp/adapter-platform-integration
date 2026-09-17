@@ -2074,6 +2074,40 @@ aggregates and reads an old state back, and VanillaBP takes no part in it.
 Nothing is written in `UPGRADE.md`. The seam never reached a release. It lived one day in a
 snapshot, so there is no step from version 1 to describe.
 
+### 67. A delivery is routed by both wiring keys, because the boot accepts both
+
+A `@WorkflowTask` method is wired by one of two keys and says which: `taskDefinition` names what
+the BPMS subscribed to, `id` names the element of the model. The wiring validation accepts either
+of them while the application boots. The routing of a delivery asked with one value only, so a
+method wired by the element id was accepted at deployment and not found at the first delivery.
+
+Measured on all three engines. On Camunda 7 a service task wired by `camunda:delegateExpression`
+whose method names the element id deployed without a word and then ran into
+`No @WorkflowTask method ... matches task definition ...`, retried by the job executor into an
+incident. On Camunda 8, on cluster 8.9.19, a job type served by an id-wired method was activated
+by the adapter and refused by the core, three attempts and then an incident. The
+Process-Engine-API has the same shape, read rather than measured. So the defect was never one
+adapter's.
+
+Two ways were open. The deployment could refuse such a wiring with a message saying how to wire
+it instead, or the routing could learn the second key. The routing learns it, for three reasons.
+It is what a reader expects from `@WorkflowTask(id = ...)`, and the wiki of the Camunda 7 adapter
+promises it. The deployment already treats the two keys as one pair, so refusing at boot what the
+same check accepts would need the check to grow a rule instead of the routing losing one. And a
+refusal would take away the wiring an application uses where the task definition is not stable,
+a Camunda 7 expression above all.
+
+So `TaskInvocationContext.getBpmnElementId()` is no longer only a field of the delivery record: the
+routing reads it, and an adapter which leaves it `null` can serve a method wired by the element id
+only where the one value it reports IS that id. The author guide says so, and the comparison of
+the element id against the reported task definition stays for exactly that adapter.
+
+The refusal message names both keys now. A reader who only sees the task definition looks for a
+method under a name their model does not carry, which is what made the Camunda 8 measurement take
+a cluster to understand.
+
+`WorkflowTaskRoutingTest` holds both wirings, the adapter which names no element, and the message.
+
 ### 68. The youngest call replaces the one still waiting, and only where it says so
 
 The outbox deduplicates a call against the entries still waiting for their dispatch, and the
