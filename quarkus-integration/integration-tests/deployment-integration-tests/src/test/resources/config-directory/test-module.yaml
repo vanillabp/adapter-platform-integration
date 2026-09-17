@@ -1,0 +1,2 @@
+test-module:
+  from-a-config-directory: it-is-read

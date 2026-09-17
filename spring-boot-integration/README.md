@@ -106,6 +106,15 @@ because an environment post processor runs before the logging system is up.
 `ProfileFileWithoutItsPlainFileTest` of `globalclasspath-integration-test` holds both halves,
 the values which are there and the line which names the file.
 
+The same post processor reads `config/<module-id>.yaml` and
+`<module-id>/config/<module-id>.yaml`, because it follows Spring Boot's own search for
+`application.yaml`, and Quarkus searches no such place for a workflow module (decision 65).
+A file found there is named at startup as well, together with the place it is read at on
+both platforms, which is the same path without the `config` directory.
+`ModuleFileInAConfigDirectoryTest` and `ModuleFileOutsideAConfigDirectoryTest` of
+`globalclasspath-integration-test` hold it; the second one boots on its own because the
+captured output of a test class holds what every test of it wrote.
+
 ## The store of processed task deliveries
 
 `io.vanillabp.integration.delivery` implements the core's `TaskDeliveryLog` (the

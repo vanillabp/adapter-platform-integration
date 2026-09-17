@@ -110,11 +110,23 @@ as possible at **build time**, following Quarkus' extension philosophy:
    same archive, which is how SmallRye pairs the two, so a module shipping
    `<module-id>-prod.yaml` alone ships settings nobody reads. VanillaBP does not load such
    a file behind SmallRye's back and says at startup which file it found and which file it
-   misses (`reportProfileFilesWithoutTheirPlainFile`, the message in
+   misses (`reportConfigFilesWhichStayUnread`, the message in
    `messageAboutProfileFilesWithoutTheirPlainFile`, decision 61). The files are known
    while the application is built and the line is written when it starts, so a native
    binary says it too. `WorkflowModuleProfileFileNeedsItsPlainFileTest` of the runtime
    module holds the SmallRye rule behind it.
+   A `config` directory is read by neither config source: the two places are
+   `<module-id>[-<profile>].yaml` at the classpath root and the same name inside
+   `<module-id>/`. Spring Boot reads `config/<module-id>.yaml` and
+   `<module-id>/config/<module-id>.yaml` as well, so a module built there arrives here
+   with its file where nobody looks. The same report names such a file and the place it
+   belongs at, which is its own path without the `config` directory
+   (`messageAboutFilesInAConfigDirectory`, decision 65). Dev mode watches those files
+   although nothing reads them, because adding one is the mistake being reported and
+   without the restart the developer sees neither the settings nor the report; the native
+   image gets only the files which are read.
+   `ModuleFileInAConfigDirectoryTest` and `ModuleFileInTheModulesConfigDirectoryTest` of
+   `deployment-integration-tests` hold both places.
    The application's own `application-<profile>.yaml` is a different animal and stays
    Quarkus': that file list is resolved while the image is built, so a profile chosen at
    the binary adds nothing to it. `ProfileSpecificApplicationFilesBuildStepProcessor` says

@@ -31,7 +31,8 @@ workflow module ships defaults: everything the application configures wins over
 them. Appending is what keeps that true for an application bringing sources this
 integration cannot know about, so no source name is matched to find a position. It also
 names a `<module-id>-<profile>` file lying without its `<module-id>` file: Spring Boot
-reads such a file and Quarkus does not, and a workflow module runs on both (decision 61).
+reads such a file and Quarkus does not, and a workflow module runs on both (decision 61). A
+file in a `config` folder is named for the same reason (decision 65).
 
 ### Workflow module detection
 
@@ -327,21 +328,26 @@ workflow module.
 
 Instead of `application-xxxx.yaml` files (where `xxxx` might name active Spring boot profiles)
 those specific config files are named `yyyy-xxxx.yaml`, where `yyyy` is the ID of the workflow module. Place your files
-in the classpath root or folder `config` by using these source code folders within your workflow module:
+in the classpath root by using these source code folders within your workflow module:
 
 - `src/main/resources/loan-approval.yaml`<br>
   (common properties of workflow module `loan-approval`)
 - `src/main/resources/loan-approval-environment-dev.yaml`<br>
   (properties specific to Spring Boot profile `environment-dev`)
 
-Alternative using the `config` sub-folder:
-- `src/main/resources/config/loan-approval.yaml`
-- `src/main/resources/config/loan-approval-environment-dev.yaml`
+Alternative using a sub-folder named after the workflow module:
+- `src/main/resources/loan-approval/loan-approval.yaml`
+- `src/main/resources/loan-approval/loan-approval-environment-dev.yaml`
+
+Spring Boot reads a `config` sub-folder as well, the way it does for `application.yaml`, and
+Quarkus reads no such folder for a workflow module. A file placed there is therefore read here
+and nowhere on Quarkus, so the boot names it and says where it belongs (decision 65). Keep the
+files out of a `config` folder and the module works on both platforms.
 
 To avoid name-clashes of properties a workflow module has to use a separate properties section typically named
 using the workflow module ID:
 
-- `src/main/resources/config/loan-approval.yaml`:<br>
+- `src/main/resources/loan-approval.yaml`:<br>
 
   ```yaml
   loan-approval: # all properties of workflow module "loan approval"
@@ -350,7 +356,7 @@ using the workflow module ID:
       url: to-be-defined-for-each-environment # invalid URL to ensure value is overwritten for each target environment
       read-timeout: 30000 # property used by banking-system client
   ```
-- `src/main/resources/config/loan-approval-environment-dev.yaml`:<br>
+- `src/main/resources/loan-approval-environment-dev.yaml`:<br>
 
   ```yaml
   loan-approval:

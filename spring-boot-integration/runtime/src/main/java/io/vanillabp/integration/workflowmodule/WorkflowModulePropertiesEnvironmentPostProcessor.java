@@ -73,6 +73,12 @@ import org.springframework.core.io.support.ResourcePatternUtils;
  * such a file is named at startup together with the file which would make Quarkus read
  * it (see decision 61 in the repository's DECISIONS.md).
  *
+ * <p>The two {@code config/} locations are searched here and nowhere on Quarkus, which
+ * reads a workflow module's files at the classpath root and in the directory named after
+ * the module. A file found in one of them is named at startup as well, together with the
+ * place it is read at on both platforms (see decision 65 in the repository's
+ * DECISIONS.md).
+ *
  * <p><b>Limitation:</b> Multi-document YAML using
  * {@code spring.config.activate.on-profile} is not supported inside workflow
  * module config files — profile-specific values must be placed in files using
@@ -153,6 +159,11 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
 
       messageAboutProfileFilesQuarkusWouldNotRead(profileFiles, plainFiles)
           .ifPresent(log::warn);
+      messageAboutFilesInAConfigDirectory(
+          Stream
+              .concat(profileFiles.stream(), plainFiles.stream())
+              .toList())
+          .ifPresent(log::warn);
     }
 
   }
@@ -178,6 +189,9 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
 
     final var filesWithoutTheirPlainFile = profileFiles
         .stream()
+        // a file in a config directory is named by the other report, and the plain file
+        // it would need there would not be read either
+        .filter(profileFile -> !profileFile.liesInAConfigDirectory())
         .filter(profileFile -> plainFiles
             .stream()
             .noneMatch(profileFile::liesNextTo))
@@ -197,6 +211,43 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
         where the file without the profile lies in the same place. Add the file each line \
         asks for, in the same workflow module, and the module works on both platforms. An \
         empty file is enough.""".formatted(String.join("\n  ", filesWithoutTheirPlainFile)));
+
+  }
+
+  /**
+   * Reports the files of a workflow module which this application reads out of a
+   * <code>config</code> directory, because a Quarkus application reads none of them.
+   * <p>
+   * Spring Boot searches a <code>config</code> directory here the way it searches one for
+   * <code>application.yaml</code>. Quarkus has no such place for a file named after a
+   * workflow module, so the same library ships settings which arrive here and nowhere
+   * there. Moving the file one directory up makes it work on both, which is why every line
+   * names the place it belongs at (see decision 65 in the repository's DECISIONS.md).
+   *
+   * @param configFiles The files of one workflow module found in the classpath
+   * @return The warning, or nothing where no file of that module lies in such a directory
+   */
+  private static Optional<String> messageAboutFilesInAConfigDirectory(
+      final List<ConfigFile> configFiles) {
+
+    final var filesInAConfigDirectory = configFiles
+        .stream()
+        .filter(ConfigFile::liesInAConfigDirectory)
+        .map(ConfigFile::describeWhereItBelongs)
+        .distinct()
+        .sorted()
+        .toList();
+    if (filesInAConfigDirectory.isEmpty()) {
+      return Optional.empty();
+    }
+
+    return Optional.of("""
+        Configuration files of workflow modules which a Quarkus application would not read:
+          %s
+        Spring Boot searches a 'config' directory, Quarkus reads a workflow module's \
+        configuration at the classpath root and in a directory named after the module. \
+        Move each file to the place its line names and the module works on both \
+        platforms.""".formatted(String.join("\n  ", filesInAConfigDirectory)));
 
   }
 
@@ -318,6 +369,31 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
                   .stream(loader.getFileExtensions())
                   .map(extension -> "'%s.%s'".formatted(moduleId, extension))
                   .collect(Collectors.joining(" or "))));
+
+    }
+
+    /**
+     * @return Whether the file was found in one of the two <code>config</code> locations,
+     *         which are the locations only this platform searches
+     */
+    boolean liesInAConfigDirectory() {
+
+      return location.startsWith("config/") || location.startsWith("%s/config/".formatted(moduleId));
+
+    }
+
+    /**
+     * @return The file and the location it is read at on either platform, which is the
+     *         same location without the <code>config</code> directory
+     */
+    String describeWhereItBelongs() {
+
+      final var filename = location.substring(location.lastIndexOf('/') + 1);
+      final var directory = location.substring(0, location.lastIndexOf('/'));
+      // the file lies in a config directory, so what is left of the directory above it
+      // is either nothing or the name of the workflow module
+      final var whereItBelongs = directory.substring(0, directory.lastIndexOf('/') + 1) + filename;
+      return "%s, which belongs at '%s'".formatted(url().orElse(location), whereItBelongs);
 
     }
 

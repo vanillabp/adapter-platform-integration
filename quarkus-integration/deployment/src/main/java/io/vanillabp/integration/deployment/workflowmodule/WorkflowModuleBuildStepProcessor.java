@@ -256,16 +256,17 @@ public class WorkflowModuleBuildStepProcessor {
    * when building the configuration. based on the {@link ConfigBuilder}.
    *
    * @param generatedConfigLoaders The build item holding the names of all {@link ConfigBuilder} classes
-   * @param profileFilesReported The report about profile-specific files without their plain file,
-   *          asked for here because a build step whose items nobody consumes is dropped, and the
-   *          report has to be written in every build
+   * @param configFilesReported The report about the configuration files of the workflow
+   *          modules which this application does not read, asked for here because a build step
+   *          whose items nobody consumes is dropped, and the report has to be written in every
+   *          build
    * @param staticInitConfigProducer Producer for static initialization config builders
    * @param runTimeConfigProducer Producer for static runtime config builders
    */
   @BuildStep
   WorkflowModuleSpecificConfigBuilderBuildItem addWorkflowModuleSpecificConfigFiles(
       final GeneratedConfigBuilderClassesBuildItem generatedConfigLoaders,
-      final WorkflowModuleProfileFilesReportedBuildItem profileFilesReported,
+      final WorkflowModuleConfigFilesReportedBuildItem configFilesReported,
       final BuildProducer<StaticInitConfigBuilderBuildItem> staticInitConfigProducer,
       final BuildProducer<RunTimeConfigBuilderBuildItem> runTimeConfigProducer) {
 
@@ -396,6 +397,11 @@ public class WorkflowModuleBuildStepProcessor {
    * A native image carries only the resources it was told about, and a file which is watched
    * in dev mode but missing from the image is the difference between a workflow module whose
    * settings apply and one whose settings are silently the defaults.
+   * <p>
+   * Dev mode watches a file in a <code>config</code> directory as well, although nothing
+   * reads it. Adding one is the mistake this extension reports at startup, and without the
+   * restart the developer sees neither the settings nor the report. The native image gets
+   * only the files which are read.
    *
    * @param allWorkflowModules A {@link VanillaBpWorkflowModulesBuildItem} containing information about all workflow modules.
    * @param applicationArchives An {@link ApplicationArchivesBuildItem} containing the archives to be scanned for configuration files.
@@ -412,11 +418,13 @@ public class WorkflowModuleBuildStepProcessor {
       final BuildProducer<NativeImageResourceBuildItem> nativeImageResources) {
 
     final var isWorkflowModuleConfigFile = workflowModuleSpecificConfigFileRule(allWorkflowModules);
+    final var isInAConfigDirectory = workflowModuleConfigFileInAConfigDirectoryRule(allWorkflowModules);
 
     watchedFiles
         .produce(HotDeploymentWatchedFileBuildItem
             .builder()
-            .setLocationPredicate(isWorkflowModuleConfigFile)
+            .setLocationPredicate(relativePath -> isWorkflowModuleConfigFile.test(relativePath) || isInAConfigDirectory
+                .test(relativePath))
             .build());
 
     workflowModuleSpecificConfigFiles(applicationArchives, isWorkflowModuleConfigFile)
@@ -445,12 +453,12 @@ public class WorkflowModuleBuildStepProcessor {
    * @param applicationArchives The archives of this Quarkus build
    * @param recorder The recorder writing the report at startup
    * @return The item saying the report is written, consumed by
-   *         {@link #addWorkflowModuleSpecificConfigFiles(GeneratedConfigBuilderClassesBuildItem, WorkflowModuleProfileFilesReportedBuildItem, BuildProducer, BuildProducer)}
+   *         {@link #addWorkflowModuleSpecificConfigFiles(GeneratedConfigBuilderClassesBuildItem, WorkflowModuleConfigFilesReportedBuildItem, BuildProducer, BuildProducer)}
    */
   @Record(ExecutionTime.RUNTIME_INIT)
   @Consume(LoggingSetupBuildItem.class)
   @BuildStep
-  WorkflowModuleProfileFilesReportedBuildItem reportProfileFilesWithoutTheirPlainFile(
+  WorkflowModuleConfigFilesReportedBuildItem reportConfigFilesWhichStayUnread(
       final VanillaBpWorkflowModulesBuildItem allWorkflowModules,
       final ApplicationArchivesBuildItem applicationArchives,
       final WorkflowModuleConfigFilesRecorder recorder) {
@@ -466,7 +474,60 @@ public class WorkflowModuleBuildStepProcessor {
             .toList())
         .ifPresent(recorder::report);
 
-    return new WorkflowModuleProfileFilesReportedBuildItem();
+    messageAboutFilesInAConfigDirectory(
+        workflowModuleSpecificConfigFiles(
+            applicationArchives,
+            workflowModuleConfigFileInAConfigDirectoryRule(allWorkflowModules)))
+        .ifPresent(recorder::report);
+
+    return new WorkflowModuleConfigFilesReportedBuildItem();
+
+  }
+
+  /**
+   * Builds the report about the files lying in a <code>config</code> directory. The archives
+   * are asked as one list here, because where such a file lies is the whole answer and the
+   * archive holding it changes nothing about it.
+   *
+   * @param configFilesInAConfigDirectory The paths of those files, relative to the archive roots
+   * @return The warning, or nothing where no workflow module put a file there
+   */
+  static Optional<String> messageAboutFilesInAConfigDirectory(
+      final Collection<String> configFilesInAConfigDirectory) {
+
+    if (configFilesInAConfigDirectory.isEmpty()) {
+      return Optional.empty();
+    }
+
+    return Optional.of("""
+        Configuration files of workflow modules which this application does not read:
+          %s
+        Quarkus reads a workflow module's configuration at the classpath root and in a \
+        directory named after the workflow module. A 'config' directory is neither, so none \
+        of the settings above arrive. Move each file to the place its line names. Spring \
+        Boot searches a 'config' directory as well, so a workflow module built there arrives \
+        here with its file in a place nobody looks at.""".formatted(
+        configFilesInAConfigDirectory
+            .stream()
+            .map(configFile -> "%s, which belongs at '%s'".formatted(
+                configFile,
+                withoutTheConfigDirectory(configFile)))
+            .collect(Collectors.joining("\n  "))));
+
+  }
+
+  /**
+   * @param configFile The path of a file in a <code>config</code> directory
+   * @return The same path with that directory taken out, which is where the file is read
+   */
+  private static String withoutTheConfigDirectory(
+      final String configFile) {
+
+    final var lastSlash = configFile.lastIndexOf('/');
+    final var filename = configFile.substring(lastSlash + 1);
+    // the rule matched the file, so its directory is "config" or "<module-id>/config"
+    final var directory = configFile.substring(0, lastSlash);
+    return directory.substring(0, directory.lastIndexOf('/') + 1) + filename;
 
   }
 
@@ -617,6 +678,46 @@ public class WorkflowModuleBuildStepProcessor {
   private static Predicate<String> workflowModuleSpecificConfigFileRule(
       final VanillaBpWorkflowModulesBuildItem allWorkflowModules) {
 
+    return configFileRule(allWorkflowModules, "(?:%s/)?");
+
+  }
+
+  /**
+   * Builds the rule saying whether a file is named like the configuration of a workflow
+   * module but lies in a <code>config</code> directory, which is a place the config source
+   * providers do not read: <code>config/id.yaml</code> and
+   * <code>id/config/id.yaml</code>, again with every profile-specific variant and every
+   * file extension.
+   * <p>
+   * Spring Boot reads both of them, because it follows its own search for
+   * <code>application.yaml</code>, which covers a <code>config</code> directory. Quarkus
+   * has nothing of the kind for a file named after a workflow module. The rule exists so
+   * that such a file can be named at startup rather than be missed
+   * (see decision 65 in the repository's DECISIONS.md).
+   *
+   * @param allWorkflowModules All workflow modules found
+   * @return Whether a relative path is such a file
+   */
+  private static Predicate<String> workflowModuleConfigFileInAConfigDirectoryRule(
+      final VanillaBpWorkflowModulesBuildItem allWorkflowModules) {
+
+    return configFileRule(allWorkflowModules, "(?:%s/)?config/");
+
+  }
+
+  /**
+   * The shared shape of the two rules above: a file named after a workflow module, with an
+   * optional profile and one of the extensions the providers read, in the directories the
+   * given pattern allows.
+   *
+   * @param allWorkflowModules All workflow modules found
+   * @param directoryPattern The regex for the directory part, taking the quoted module ID
+   * @return Whether a relative path matches that shape for one of the workflow modules
+   */
+  private static Predicate<String> configFileRule(
+      final VanillaBpWorkflowModulesBuildItem allWorkflowModules,
+      final String directoryPattern) {
+
     final var extensionPattern = Stream
         // combine each file extension possible for later use as or-expression
         .concat(
@@ -628,9 +729,12 @@ public class WorkflowModuleBuildStepProcessor {
         .stream()
         .map(WorkflowModule::getId)
         .map(Pattern::quote)
-        // to build regex patterns matching "id[-profile].(extension1|extension2)" at the
-        // classpath root as well as inside a subdirectory named after the workflow module ID
-        .map(id -> "(?:%s/)?%s(?:-[^/]*)?\\.(?:%s)".formatted(id, id, extensionPattern))
+        // to build regex patterns matching "id[-profile].(extension1|extension2)" in the
+        // directories the caller allows
+        .map(id -> "%s%s(?:-[^/]*)?\\.(?:%s)".formatted(
+            directoryPattern.formatted(id),
+            id,
+            extensionPattern))
         .map(Pattern::compile)
         .toList();
 

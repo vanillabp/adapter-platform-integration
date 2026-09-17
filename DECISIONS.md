@@ -2029,3 +2029,37 @@ each other. A payload is exact and needs no auditing, and it costs space. Loadin
 as it was costs no space and needs an auditing, and it reconstructs rather than remembers. An
 extension which can pass a payload passes one; this is for the case where the state is large or
 expensive to build.
+
+### 65. A workflow module file in a config directory is named, not taught to the other platform
+
+Spring Boot reads a workflow module's configuration out of `config/loan-approval.yaml` and
+`loan-approval/config/loan-approval.yaml` as well, because the post processor follows Spring
+Boot's own search for `application.yaml`. Quarkus reads neither place: the config source
+providers of a workflow module look at the classpath root and at the directory named after the
+module. Measured on 2026-09-17, with a module which ships each of those files and nothing else.
+
+A workflow module is a library and the platform it ends up on is not always the one it was
+built on, so the same jar carries settings which apply here and are missing there. Nothing said
+so, and the first sign was a value which is not what the file says.
+
+Quarkus does not learn the two locations. The set of places a configuration file may lie in is
+Spring Boot's, and copying it here would be a promise about a mechanism this extension does not
+own: a reader of the Quarkus code would have to know which parts of Spring Boot's search
+VanillaBP reproduces and which it does not, and the next release of either platform can move
+that line. It would also make a workflow module the one piece of Quarkus configuration with a
+search of its own.
+
+Instead both platforms name the file. Quarkus finds it while the application is built and
+writes the line when it starts, so a native binary says it as the JVM does, and dev mode watches
+those files although nothing reads them, because adding one is the mistake being reported.
+Spring Boot reads the file and says that a Quarkus application would not. Every line names the
+place the file belongs at, which is its own path without the `config` directory, so the fix is
+to move it one directory up and nothing else. Where a profile file lies in such a directory only
+this report is written, because the file it would need for decision 61 would not be read there
+either.
+
+`ModuleFileInAConfigDirectoryTest` and `ModuleFileOutsideAConfigDirectoryTest` of the Spring Boot
+integration tests hold that the values are there and which line is written.
+`ModuleFileInAConfigDirectoryTest` and `ModuleFileInTheModulesConfigDirectoryTest` of the Quarkus
+deployment integration tests hold that the values are nowhere and which line is written.
+`FilesInAConfigDirectoryTest` holds which files the report picks and what it offers.
