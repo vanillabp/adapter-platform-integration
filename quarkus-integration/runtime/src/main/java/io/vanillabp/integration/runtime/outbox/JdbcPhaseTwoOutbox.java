@@ -273,8 +273,10 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
         .formatted(
             tableName,
             JdbcPhaseTwoOutboxDispatcher.STATUS_OPEN);
-    // a second entry of a key an entry on its way still holds takes no part in the
-    // deduplication of that key, the way a keyless entry does not - see the contract
+    // what the unique constraint sees. An operation which must not be deduplicated
+    // occupies its own ID instead of a null, because not every database treats two
+    // nulls as different values, and a second entry beside one a dispatch already took
+    // does the same: the key belongs to the entry on its way
     var dedupKey = idempotencyKey == null ? entryId : idempotencyKey;
     try (var connection = dataSource.get().getConnection()) {
       final var waiting = idempotencyKey == null

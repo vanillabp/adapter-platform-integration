@@ -133,8 +133,10 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
 
     final var now = Instant.now();
     final var entryId = UUID.randomUUID().toString();
-    // a second entry of a key an entry on its way still holds takes no part in the
-    // deduplication of that key, the way a keyless entry does not - see the contract
+    // what the unique index sees. An operation which must not be deduplicated dedupes
+    // against itself, so the field is present on every entry and the index needs no
+    // partial filter, and a second entry beside one a dispatch already took does the
+    // same: the key belongs to the entry on its way
     var dedupKey = idempotencyKey == null ? entryId : idempotencyKey;
     if (waiting != null) {
       if (!call.replacesWhatIsStillWaiting()) {
@@ -153,10 +155,7 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
     final var entry = new PhaseTwoOutboxEntry(
         entryId, call.workflowModuleId(), call.bpmnProcessId(), call.operation(), call
             .workflowAggregateId(), call.adapterId(), call
-                .args(), idempotencyKey,
-        // an operation which must not be deduplicated dedupes against itself, which
-        // keeps the field free of nulls a database might treat as equal
-        dedupKey, PhaseTwoOutboxEntry.STATUS_OPEN, now, 0, now, null);
+                .args(), idempotencyKey, dedupKey, PhaseTwoOutboxEntry.STATUS_OPEN, now, 0, now, null);
 
     try {
       mongoTemplate.insert(entry, collection);

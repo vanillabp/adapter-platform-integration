@@ -185,8 +185,10 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
         : (session == null
             ? collection.find(new Document("dedupKey", idempotencyKey)).first()
             : collection.find(session, new Document("dedupKey", idempotencyKey)).first());
-    // a second entry of a key an entry on its way still holds takes no part in the
-    // deduplication of that key, the way a keyless entry does not - see the contract
+    // what the unique index sees. An operation which must not be deduplicated dedupes
+    // against itself, so the field is present on every entry and the index needs no
+    // partial filter, and a second entry beside one a dispatch already took does the
+    // same: the key belongs to the entry on its way
     var dedupKey = idempotencyKey == null ? entryId : idempotencyKey;
     if (waiting != null) {
       if (!call.replacesWhatIsStillWaiting()) {
@@ -211,8 +213,6 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
         .append("adapterId", call.adapterId())
         .append("args", new Document(new java.util.LinkedHashMap<String, Object>(call.args())))
         .append("idempotencyKey", idempotencyKey)
-        // an operation which must not be deduplicated dedupes against itself, so the
-        // field is present on every entry and the index needs no partial filter
         .append("dedupKey", dedupKey)
         .append("status", STATUS_OPEN)
         .append("createdAt", java.util.Date.from(now))
