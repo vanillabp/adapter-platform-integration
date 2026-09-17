@@ -56,35 +56,6 @@ public class TestApplication {
    * @param handlers The seam VanillaBP offers an extension to have a handler run
    * @return The sample extension
    */
-  /**
-   * The persistence of this scenario's aggregate: the application's own, because it
-   * keeps a history of its aggregate the way an application using Hibernate Envers
-   * does.
-   *
-   * @param repository The repository everything else is delegated to
-   * @return The persistence VanillaBP resolves for the aggregate of this scenario
-   */
-  @Bean
-  public AggregatePersistenceWithAHistory aggregatePersistence(
-      final AggregateRepository repository) {
-
-    return new AggregatePersistenceWithAHistory(repository);
-
-  }
-
-  /**
-   * Stands in for the per-aggregate service an extension offers, and the only way an
-   * extension reaches the persistence of an aggregate.
-   *
-   * @return The factory building one service per workflow aggregate
-   */
-  @Bean
-  public AggregateHistoryServiceFactory aggregateHistoryServiceFactory() {
-
-    return new AggregateHistoryServiceFactory();
-
-  }
-
   @Bean
   public SampleExtension sampleExtension(
       final io.vanillabp.integration.spi.PhaseOperationRegistry registry,

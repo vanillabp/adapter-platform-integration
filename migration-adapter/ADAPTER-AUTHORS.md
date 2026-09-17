@@ -203,18 +203,6 @@ says so. Read it if your BPMS deduplicates messages in a net of its own: three e
 multi-instance call activity reach the outbox as three operations and would reach such a BPMS as
 one message otherwise, and VanillaBP cannot repair that from its side.
 
-`auditingId()` is the other one, and for your operations it is always `null`. An entry may ask to
-see the aggregate as it was when the entry was planned rather than as it is at the dispatch, and
-the operations of VanillaBP are refused that: you write to the BPMS, the BPMS is where the case
-goes on, and it hears what the aggregate says now. So load with `loadById` as you always did. An
-operation an extension contributed may ask, and if such an operation reaches a handler of yours,
-`loadByIdAndAuditingId(id, auditingId)` is the load which serves it - it answers the current state
-anyway in an application which keeps no history of its aggregates.
-
-What none of this covers is your own data. Who a user task is assigned to, when it is due: that
-lives in your BPMS, it has no auditing VanillaBP could ask, and what you read while you dispatch
-is the state of that moment.
-
 What your BPMS is asked about are the four awareness probes and the read-only viewer methods.
 The probes are section 4. The viewer methods, `getProcessDefinitions`, `getBpmnXml` and
 `getWorkflowHistory`, have no phases and no transaction; their defaults throw a guiding message,
@@ -522,7 +510,7 @@ What your context answers decides how much of VanillaBP works for your BPMS:
 | `getTaskEvent()`            | created or cancelled, for the notifications a user task produces                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `getDeliveryId()`           | the identity of the DELIVERY: equal across redeliveries of one task, different for a new task instance. Without it the core cannot tell a redelivery from a new task and runs the handler again                                                                                                                                                                                                                                                                                   |
 | `getActivationId()`         | the identity of the ACTIVATION: different between two activations of one element, saying nothing about redeliveries. It is not the delivery id under another name, and answering it with the delivery id is right only where your BPMS happens to name deliveries after element instances                                                                                                                                                                                         |
-| `getBpmnElementId()`        | the `id` a modeller wrote on the element being delivered. Nothing is routed by it: it travels into the delivery record, where it is what an extension addresses the task in the model by. `getTaskDefinition()` is not the same answer wherever your BPMN task carries a task definition                                                                                                                                                                                          |
+| `getBpmnElementId()`        | the `id` a modeller wrote on the element being delivered. The core routes by it as well as by the task definition, because a method may be wired by either of the two, so an adapter which leaves it out cannot serve a method wired by the element id. It also travels into the delivery record, where it is what an extension addresses the task in the model by. `getTaskDefinition()` is not the same answer wherever your BPMN task carries a task definition                |
 | `getWorkflowId()`           | your BPMS' own id of the running instance. Nothing is routed by it either - VanillaBP addresses a workflow by its aggregate - and it travels into the record for whoever follows a task into the tooling of your BPMS                                                                                                                                                                                                                                                             |
 | `getAdapterId()`            | a delivery proves which BPMS holds the workflow, and the core remembers it                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `getProcessVersion()`       | matched against the `version` attribute of the annotations                                                                                                                                                                                                                                                                                                                                                                                                                        |

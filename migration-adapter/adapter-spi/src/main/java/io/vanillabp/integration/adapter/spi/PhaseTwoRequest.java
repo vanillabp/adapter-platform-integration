@@ -103,26 +103,4 @@ public record PhaseTwoRequest<A>(
 
   }
 
-  /**
-   * The state of the aggregate this call wants to see, named as the application's own
-   * auditing names it, or <code>null</code> where it wants the state of this moment.
-   * <p>
-   * It is <code>null</code> for every operation of VanillaBP's own, always: those tell
-   * the BPMS what the workflow does next, and the BPMS is where the case goes on, so it
-   * hears what the aggregate says now. Load with
-   * {@link AggregatePersistenceAware#loadById(Object)} as you always did.
-   * <p>
-   * An operation contributed by an extension may ask for the state of its event, and
-   * then this is the id to load with
-   * ({@link AggregatePersistenceAware#loadByIdAndAuditingId(Object, String)}, which
-   * answers the current state where the application keeps no history).
-   *
-   * @return The auditing id or <code>null</code>
-   */
-  public String auditingId() {
-
-    return args.get(PhaseTwoCall.ARG_AUDITING_ID);
-
-  }
-
 }

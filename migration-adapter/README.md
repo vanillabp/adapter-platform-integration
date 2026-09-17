@@ -925,7 +925,7 @@ reached the task.
    ended up with.
 
 2. At runtime: `invokeWorkflowTask(module, process, TaskInvocationContext)` - the
-   core resolves the handler (task definition or activity ID, `version` ranges),
+   core resolves the handler (see [Which method serves a delivery](#which-method-serves-a-delivery)),
    loads the aggregate by its serialized ID, invokes the method with bound
    parameters and saves the aggregate, all within one transaction run by the
    platform's `TransactionRunner` (a new transaction, or the caller's for embedded
@@ -1022,7 +1022,7 @@ classDiagram
     +getAdapterId() String  «default null — fills the election cache»
     +getDeliveryId() String  «default null → no record · C8 job key, PEA task id, C7 the engine's job id on an own datasource and none otherwise, never for a user task»
     +getActivationId() String  «default null · C7 activityInstanceId, C8 elementInstanceKey, PEA task id»
-    +getBpmnElementId() String  «default null · the id a modeller wrote, travels into the record»
+    +getBpmnElementId() String  «default null · the id a modeller wrote, routes a delivery and travels into the record»
     +getWorkflowId() String  «default null · the BPMS' own id of the running instance»
     +predatesDeployedVersion() boolean
   }
@@ -1079,6 +1079,31 @@ An adapter's `AdapterDeploymentService` extends `ExtensionWiringService`
 workflow processing are inherited, reading and deploying of BPMS resources is added.
 There is deliberately no DMN model type parameter yet — DMN support will be added to
 the interface once designed.
+
+#### Which method serves a delivery
+
+A `@WorkflowTask` method is wired by one of two keys, and the method says which:
+`taskDefinition` names what the BPMS subscribed to (a Camunda 8 job type, the expression of a
+Camunda 7 service task), `id` names the BPMN element itself. A method setting neither is wired by
+its own name and answers to both.
+
+A delivery reports both keys as well: `TaskInvocationContext.getTaskDefinition()` and
+`getBpmnElementId()`. The routing matches a method's key against the delivery's key of the same
+kind, which is the pair `validateTaskWiring` matches against while the application boots. That the
+two use the same pair is the point: a wiring the boot accepts has to be a wiring a delivery finds.
+Until this was so, a service task wired by an expression whose method named the element id passed
+the boot without a word and failed at the first delivery, which the application then learnt from an
+incident.
+
+The element id is compared against the reported task definition as well, for an adapter which names
+no element of its own. There the one value it reports IS the element id, and a method wired by the
+element id is reachable. An adapter which names neither the element nor an id-shaped task
+definition cannot serve such a method at all, which is why `getBpmnElementId()` is worth answering
+even though it is `default null`.
+
+`WorkflowTaskRoutingTest` holds all of it, including the message a delivery nobody serves produces:
+it names both keys, because a reader who only sees the task definition looks for a method under a
+name their model does not carry.
 
 #### Deployment-failure policy
 
@@ -1744,15 +1769,16 @@ stores.
 
 ##### What a record says about the element and the workflow
 
-Two more fields travel with every record, and VanillaBP reads neither of them. They are there for
-whoever looks at the task from outside: `bpmnElementId`, the `id` attribute a modeller wrote on the
-element, and `workflowId`, the BPMS' own id of the running instance.
+Two more fields travel with every record: `bpmnElementId`, the `id` attribute a modeller wrote on
+the element, and `workflowId`, the BPMS' own id of the running instance. `workflowId` is there for
+whoever looks at the task from outside and VanillaBP reads none of it; `bpmnElementId` is read by
+the routing as well, see [Which method serves a delivery](#which-method-serves-a-delivery).
 
 - `TaskInvocationContext.getBpmnElementId()` and `getWorkflowId()` are where they come from, both
   `default null`, so an adapter which names neither keeps working and its records carry nothing
   there. Camunda 7 knows both from the execution, Camunda 8 from the activated job, and the
   Process-Engine-API reports them as task meta.
-- `taskDefinition` is not the same question. A handler is registered under the task definition AND
+- `taskDefinition` is not the same question. A handler is registered under the task definition OR
   under the element id, so the two carry the same text only where the model names no task
   definition - a Camunda 8 job type or a Camunda 7 topic stands there otherwise. An extension
   which wants the element of the model reads `bpmnElementId`.
@@ -2611,19 +2637,6 @@ the platform integration (e.g. based on Spring Data) or by the business applicat
 itself; the implementation with the most specific generic type for the aggregate wins.
 It is the single canonical interface used on all platforms — business code implements
 it regardless of running on Spring Boot or Quarkus.
-
-Two of its methods are about an aggregate's PAST, and both defaults keep what an
-application without an auditing has. `getAuditingId(aggregate)` names the state the
-aggregate stands at, as the application's own auditing names it, and answers `null`
-where there is no auditing. `loadByIdAndAuditingId(id, auditingId)` reads that state
-back, and its default ignores the id and loads the current state. They exist for the
-outbox: an entry which reports may say which state it means when it is planned
-(`PhaseTwoCall#askingForTheStateOfTheEvent`), and its dispatch is then served with that
-state through `MigrationProcessService#loadWorkflowAggregateById(id, auditingId)`, which
-falls back to the current state with a warning where the auditing no longer has it. An
-extension reaches it through `AggregateServiceContext`, whose two new methods pass both
-questions on. Why the choice belongs to the call and not to the application is
-decision 63 in the repository's `DECISIONS.md`.
 
 ### What the platform hands a process service (`MigrationProcessService.Builder`)
 

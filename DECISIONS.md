@@ -1983,6 +1983,10 @@ an age sweep riding the housekeeping each store already runs.
 
 ### 63. An entry which reports says which state it means, an entry which writes never does
 
+*Withdrawn on 2026-09-17, see decision 64: the report is built at the event and travels
+as the payload of decision 62, so nothing asked for an older state any more and the seam
+went out again.*
+
 An outbox entry is written in the transaction of an event and dispatched afterwards. The
 aggregate it reads at the dispatch is the aggregate of that moment, not of the event.
 Milliseconds while everything works, and days once a receiver is gone or a dispatch keeps
@@ -2030,6 +2034,46 @@ as it was costs no space and needs an auditing, and it reconstructs rather than 
 extension which can pass a payload passes one; this is for the case where the state is large or
 expensive to build.
 
+### 64. A report is built at the event, so the platform asks the application for no older state
+
+Decision 63 gave the platform a seam: an outbox entry could say that it means the state of its
+event, the application answered an id for that state and read it back at the dispatch. It was
+built for one reader, a report to the Business Cockpit which is written at an event and sent
+later.
+
+The premise fell on 2026-09-17. A report does not have to be built at the dispatch at all.
+Everything it carries is there at the event which triggers it, so it is built there and travels
+as the payload of decision 62. What the BPMS knows about a user task is a copy of what the
+application decided. The truth stays in the application, and a copy taken at the event is the
+copy the event had.
+
+What was measured that day:
+
+- The Process-Engine-API adapter already builds the whole prefill when the task is delivered,
+  stores it and reads only from that store when it sends.
+- The Camunda 7 cockpit listeners are built-in task listeners running inside the engine command,
+  where every field of the prefill is at hand and no query is needed.
+- `ActivatedJob.getUserTask()` of the Camunda 8 client 8.9.6 carries assignee, candidates,
+  `dueDate` and `followUpDate`.
+- A `UserTaskEvent` with every field filled is about 1078 bytes as JSON. The payload limit is a
+  mebibyte.
+
+That left the seam without a caller in any of the ten repositories of the workspace. An additive
+SPI which nobody calls still costs documentation and tests, and everyone who reads the interface
+has to be told what it is for. So it goes out rather than staying as a switch nobody flips.
+
+Removed with this: `PhaseTwoCall#askingForTheStateOfTheEvent` and the auditing id it carried,
+`PhaseTwoRequest#auditingId`, the two defaults `getAuditingId` and `loadByIdAndAuditingId` on
+`AggregatePersistenceAware`, the two defaults on `AggregateServiceContext`, and the load by id
+plus the fallback warning in `MigrationProcessService` and `ExtensionAggregateServiceContext`.
+
+Decision 62 stays and now carries this case alone. Auditing itself stays a matter of the
+application: the blueprint `persistence-audited-aggregate` shows how an application revisions its
+aggregates and reads an old state back, and VanillaBP takes no part in it.
+
+Nothing is written in `UPGRADE.md`. The seam never reached a release. It lived one day in a
+snapshot, so there is no step from version 1 to describe.
+
 ### 65. Four places for a module file, and the same file may lie in one of them
 
 Spring Boot read a workflow module's configuration at four places, Quarkus at two. Measured on
@@ -2072,3 +2116,37 @@ that bites. Nothing about that rule changed, it just has more places to apply to
 `WorkflowModuleConfigLocationsTest` holds what the Quarkus config sources read, one test per
 place. `ModuleFileInEachOfTheFourPlacesTest` holds the same for Spring Boot, and
 `TheSameFileInTwoPlacesTest` of each platform holds the refusal.
+
+### 67. A delivery is routed by both wiring keys, because the boot accepts both
+
+A `@WorkflowTask` method is wired by one of two keys and says which: `taskDefinition` names what
+the BPMS subscribed to, `id` names the element of the model. The wiring validation accepts either
+of them while the application boots. The routing of a delivery asked with one value only, so a
+method wired by the element id was accepted at deployment and not found at the first delivery.
+
+Measured on all three engines. On Camunda 7 a service task wired by `camunda:delegateExpression`
+whose method names the element id deployed without a word and then ran into
+`No @WorkflowTask method ... matches task definition ...`, retried by the job executor into an
+incident. On Camunda 8, on cluster 8.9.19, a job type served by an id-wired method was activated
+by the adapter and refused by the core, three attempts and then an incident. The
+Process-Engine-API has the same shape, read rather than measured. So the defect was never one
+adapter's.
+
+Two ways were open. The deployment could refuse such a wiring with a message saying how to wire
+it instead, or the routing could learn the second key. The routing learns it, for three reasons.
+It is what a reader expects from `@WorkflowTask(id = ...)`, and the wiki of the Camunda 7 adapter
+promises it. The deployment already treats the two keys as one pair, so refusing at boot what the
+same check accepts would need the check to grow a rule instead of the routing losing one. And a
+refusal would take away the wiring an application uses where the task definition is not stable,
+a Camunda 7 expression above all.
+
+So `TaskInvocationContext.getBpmnElementId()` is no longer only a field of the delivery record: the
+routing reads it, and an adapter which leaves it `null` can serve a method wired by the element id
+only where the one value it reports IS that id. The author guide says so, and the comparison of
+the element id against the reported task definition stays for exactly that adapter.
+
+The refusal message names both keys now. A reader who only sees the task definition looks for a
+method under a name their model does not carry, which is what made the Camunda 8 measurement take
+a cluster to understand.
+
+`WorkflowTaskRoutingTest` holds both wirings, the adapter which names no element, and the message.
