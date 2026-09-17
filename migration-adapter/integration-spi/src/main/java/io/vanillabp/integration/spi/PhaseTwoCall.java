@@ -108,6 +108,16 @@ public record PhaseTwoCall(
   public static final int MAX_PAYLOAD_SIZE = 1024 * 1024;
 
   /**
+   * The number of characters an auditing id may have
+   * ({@link #askingForTheStateOfTheEvent(String)}). It rides the <code>ARGS</code>
+   * column together with the arguments of the call, so it is bounded well below what
+   * that column holds ({@link #MAX_ARGS_LENGTH}) and for the same reason the
+   * idempotency key is bounded: a value which names a state is a revision number or a
+   * timestamp, and one which is longer than this is something else.
+   */
+  public static final int MAX_AUDITING_ID_LENGTH = 250;
+
+  /**
    * The {@link #args()} key carrying the task ID of
    * {@link PhaseOperation#COMPLETE_TASK} / {@link PhaseOperation#CANCEL_TASK}
    * calls. Part of the persisted contract - never change the literal.
@@ -157,6 +167,19 @@ public record PhaseTwoCall(
    * would otherwise make every call unique and deduplicate nothing.
    */
   public static final String ARG_PAYLOAD_REFERENCE = "payloadReference";
+
+  /**
+   * The {@link #args()} key carrying the auditing id of the aggregate state the call
+   * wants to see at its dispatch, written by
+   * {@link #askingForTheStateOfTheEvent(String)} and absent where the call takes the
+   * state of the moment it is dispatched in. Part of the persisted contract - never
+   * change the literal.
+   * <p>
+   * It is added AFTER the idempotency key was derived, for the reason given at
+   * {@link #ARG_PAYLOAD_REFERENCE}: which state a call wants to read says nothing about
+   * whether it is the same operation as another one, so no derivation rule may see it.
+   */
+  public static final String ARG_AUDITING_ID = "auditingId";
 
   /**
    * The {@link #args()} key carrying the activation a
@@ -233,6 +256,110 @@ public record PhaseTwoCall(
 
     return new PhaseTwoCall(
         operation, workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, args, idempotencyKey, payload);
+
+  }
+
+  /**
+   * The auditing id of the aggregate state this call wants to see when it is
+   * dispatched, or <code>null</code> where it wants the state of that moment.
+   *
+   * @return The auditing id or <code>null</code>
+   */
+  public String auditingId() {
+
+    return args.get(ARG_AUDITING_ID);
+
+  }
+
+  /**
+   * The same call, asking to see the aggregate as it was at the moment this call was
+   * planned instead of as it is when it is dispatched.
+   * <p>
+   * Between the two moments lies the time the entry waits, and that is milliseconds
+   * while everything works and days once a receiver is gone. Which of the two states is
+   * the right one belongs to the single call, not to the application: an entry which
+   * syncs the aggregate INTO the BPMS needs the current state, because the engine is
+   * where the case goes on and older values written back there are wrong; an entry
+   * which reports what happened wants the state of the event, because that is what the
+   * report is about.
+   * <p>
+   * The id comes from {@link AggregatePersistenceAware#getAuditingId(Object)} and is
+   * collected while the caller's transaction is still open. At the dispatch the
+   * aggregate is loaded through
+   * {@link AggregatePersistenceAware#loadByIdAndAuditingId(Object, String)}, which
+   * answers the current state where the application keeps no history at all. So a call
+   * asking for the state of the event in an application without auditing behaves
+   * exactly like one which does not ask, and a call which does not ask costs nothing
+   * either way - it reads no history.
+   * <p>
+   * Why the choice sits on the call rather than in a setting, and why the operations of
+   * VanillaBP cannot make it, is decision 63 in the repository's DECISIONS.md.
+   *
+   * @param auditingId The auditing id of the state to be seen at the dispatch. A
+   *          <code>null</code> - which is what an application without auditing answers
+   *          - leaves the call unchanged
+   * @return The call, asking for that state
+   * @throws IllegalArgumentException If this is one of VanillaBP's own operations,
+   *           which always sync into the BPMS, or if the auditing id is longer than
+   *           {@link #MAX_AUDITING_ID_LENGTH} characters (guiding message)
+   */
+  public PhaseTwoCall askingForTheStateOfTheEvent(
+      final String auditingId) {
+
+    if (auditingId == null) {
+      return this;
+    }
+    validateAuditingId(auditingId);
+    final var withAuditingId = new java.util.LinkedHashMap<>(args);
+    withAuditingId.put(ARG_AUDITING_ID, auditingId);
+    // the id rides the same column as the arguments, so what fitted before may not fit
+    // with it - measured again rather than trusted, the way the arguments themselves are
+    validateArgsLength(operation, workflowModuleId, bpmnProcessId, withAuditingId);
+    return new PhaseTwoCall(
+        operation, workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, withAuditingId, idempotencyKey, payload);
+
+  }
+
+  /**
+   * Refuses an auditing id which would be read by nobody or stored by nothing.
+   * <p>
+   * The first half is the rule of the story behind this method: an operation of
+   * VanillaBP's own tells the BPMS what the workflow is to do next, and it reads the
+   * aggregate to do so. Served with the state of an event which is a day old, it would
+   * write a day-old value into the engine the case goes on in. So the state of the
+   * event is for the entries which report, and asking for it here is refused where it
+   * is asked rather than quietly ignored at the dispatch.
+   */
+  private void validateAuditingId(
+      final String auditingId) {
+
+    if (PhaseOperation.coreOperation(operation).isPresent()) {
+      throw new IllegalArgumentException(
+          """
+              The operation '%s' of BPMN process '%s' of workflow module '%s' cannot ask for the \
+              state of the event: it is one of VanillaBP's own operations, and those write to the \
+              BPMS. The BPMS is where the workflow goes on, so it is told what the aggregate says \
+              now and not what it said when the entry was planned. Ask for the state of the event \
+              in an operation of your own, which reports rather than writes."""
+              .formatted(operation, bpmnProcessId, workflowModuleId));
+    }
+    if (auditingId.length() > MAX_AUDITING_ID_LENGTH) {
+      throw new IllegalArgumentException(
+          """
+              The auditing id of operation '%s' of BPMN process '%s' of workflow module '%s' is %d \
+              characters long, and a phase-two call carries at most %d characters. It travels in \
+              the ARGS column beside the arguments of the call and names one state of one \
+              aggregate, so it is a revision number or a timestamp. Answer a shorter id in \
+              getAuditingId of your AggregatePersistenceAware implementation. The id begins with \
+              '%s'."""
+              .formatted(
+                  operation,
+                  bpmnProcessId,
+                  workflowModuleId,
+                  auditingId.length(),
+                  MAX_AUDITING_ID_LENGTH,
+                  auditingId.substring(0, 64)));
+    }
 
   }
 
@@ -357,7 +484,7 @@ public record PhaseTwoCall(
       final byte[] payload) {
 
     validateAggregateIdLength(operation, workflowModuleId, bpmnProcessId, workflowAggregateId);
-    validateArgsLength(operation, workflowModuleId, bpmnProcessId, args);
+    validateArgsLength(operation.name(), workflowModuleId, bpmnProcessId, args);
     validatePayloadSize(operation, workflowModuleId, bpmnProcessId, payload);
     // the key is derived from the call itself, so the call is built twice: once
     // to derive from, once carrying the result
@@ -467,7 +594,7 @@ public record PhaseTwoCall(
    * still points at the business code which passed them.
    */
   private static void validateArgsLength(
-      final PhaseOperation operation,
+      final String operation,
       final String workflowModuleId,
       final String bpmnProcessId,
       final Map<String, String> args) {
@@ -494,7 +621,7 @@ public record PhaseTwoCall(
             aggregate, which your application persists itself and VanillaBP hands to every \
             handler. The value begins with '%s'."""
             .formatted(
-                operation.name(),
+                operation,
                 bpmnProcessId,
                 workflowModuleId,
                 serialized.length(),

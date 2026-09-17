@@ -1980,3 +1980,52 @@ dispatched. Removing it before that would leave an entry whose payload is gone, 
 is fixed and errs towards keeping a payload too long. What a crash between the two writes
 leaves behind, and the payload of an entry blocked longer than the retention, is removed by
 an age sweep riding the housekeeping each store already runs.
+
+### 63. An entry which reports says which state it means, an entry which writes never does
+
+An outbox entry is written in the transaction of an event and dispatched afterwards. The
+aggregate it reads at the dispatch is the aggregate of that moment, not of the event.
+Milliseconds while everything works, and days once a receiver is gone or a dispatch keeps
+failing, which is when a report starts carrying values the event never had.
+
+Which of the two states is right belongs to the single call, not to the application and not to a
+setting. An entry which syncs the aggregate INTO the BPMS - a task completion or a push of changed
+values - needs the state of now: the engine is where the case goes on, and writing a
+day-old value back there is wrong in a way nobody notices for a while. An entry which reports to
+somebody else - the Business Cockpit is the case this comes from - wants the state of its event,
+because the sync points are set by the application and the report is about what it saw there.
+
+So the choice sits on the call, `PhaseTwoCall#askingForTheStateOfTheEvent`, and VanillaBP's own
+operations cannot make it: asking is refused for them where it is asked, with a message saying
+why, instead of being ignored at a dispatch nobody watches. An entry which asks for nothing reads
+what it always read and costs what it always cost - no history is read, which is what keeps this
+cheap in an application which has an auditing and entries of both kinds.
+
+The state is named by an id the application answers, through two defaults on
+`AggregatePersistenceAware`: `getAuditingId` names the state an aggregate stands at, and
+`loadByIdAndAuditingId` reads it back. Both defaults keep today's behaviour - no id, and a load
+which ignores one - so an application without an auditing behaves as before, and one which has
+an auditing writes the two answers its framework already has. What the id means is the
+application's: an Envers revision, or a version an application keeps itself. VanillaBP carries it
+and reads nothing in it, the way it carries a payload.
+
+The id travels in the arguments of the entry, like the payload reference of decision 62 and for
+the same two reasons: it IS an identifier, and every store persists the arguments already, so no
+store learns anything new. It is added after the idempotency key was derived, because which state
+a call wants to read says nothing about whether it is the same operation as another one.
+
+Where the state is gone - the auditing cleaned it up while the entry waited - the current one is
+read and a warning says so, naming the aggregate and the id. A report carrying newer values is
+better than no report, and the line is what tells the two apart afterwards. Where the aggregate
+itself is gone, nothing is said: there is nothing to fall back to.
+
+This covers the business data and nothing else. What an adapter reads out of the BPMS while it
+dispatches - the assignee of a user task, its candidates, its due date - is the state of the
+dispatch, because it is the BPMS' data and the BPMS has no history of it that VanillaBP could
+ask for.
+
+It is the second answer to the question decision 62 answered first, and the two do not exclude
+each other. A payload is exact and needs no auditing, and it costs space. Loading the aggregate
+as it was costs no space and needs an auditing, and it reconstructs rather than remembers. An
+extension which can pass a payload passes one; this is for the case where the state is large or
+expensive to build.

@@ -75,6 +75,26 @@ public final class ExtensionAggregateServiceContext<A> implements AggregateServi
   }
 
   @Override
+  public String getAuditingId(
+      final Object workflowAggregate) {
+
+    return processService.getAuditingId(cast(workflowAggregate));
+
+  }
+
+  @Override
+  public Object loadWorkflowAggregate(
+      final Object workflowAggregateId,
+      final String auditingId) {
+
+    return processService
+        .loadWorkflowAggregateById(
+            processService.convertAggregateId(String.valueOf(workflowAggregateId)),
+            auditingId);
+
+  }
+
+  @Override
   public Object saveWorkflowAggregate(
       final Object workflowAggregate) {
 
