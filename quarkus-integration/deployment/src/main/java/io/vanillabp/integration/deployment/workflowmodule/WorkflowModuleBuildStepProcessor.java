@@ -6,11 +6,14 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.SortedSet;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -20,6 +23,9 @@ import java.util.stream.Stream;
 import io.quarkus.deployment.GeneratedClassGizmoAdaptor;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.annotations.Consume;
+import io.quarkus.deployment.annotations.ExecutionTime;
+import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
@@ -27,9 +33,11 @@ import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
 import io.quarkus.deployment.builditem.RunTimeConfigBuilderBuildItem;
 import io.quarkus.deployment.builditem.StaticInitConfigBuilderBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
+import io.quarkus.deployment.logging.LoggingSetupBuildItem;
 import io.quarkus.gizmo.ClassCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.runtime.configuration.ConfigBuilder;
+import io.vanillabp.integration.runtime.config.WorkflowModuleConfigFilesRecorder;
 import io.vanillabp.integration.runtime.config.WorkflowModuleSpecificPropertiesConfigBuilder;
 import io.vanillabp.integration.runtime.config.WorkflowModuleSpecificPropertiesConfigSourceProvider;
 import io.vanillabp.integration.runtime.config.WorkflowModuleSpecificYamlConfigBuilder;
@@ -248,12 +256,16 @@ public class WorkflowModuleBuildStepProcessor {
    * when building the configuration. based on the {@link ConfigBuilder}.
    *
    * @param generatedConfigLoaders The build item holding the names of all {@link ConfigBuilder} classes
+   * @param profileFilesReported The report about profile-specific files without their plain file,
+   *          asked for here because a build step whose items nobody consumes is dropped, and the
+   *          report has to be written in every build
    * @param staticInitConfigProducer Producer for static initialization config builders
    * @param runTimeConfigProducer Producer for static runtime config builders
    */
   @BuildStep
   WorkflowModuleSpecificConfigBuilderBuildItem addWorkflowModuleSpecificConfigFiles(
       final GeneratedConfigBuilderClassesBuildItem generatedConfigLoaders,
+      final WorkflowModuleProfileFilesReportedBuildItem profileFilesReported,
       final BuildProducer<StaticInitConfigBuilderBuildItem> staticInitConfigProducer,
       final BuildProducer<RunTimeConfigBuilderBuildItem> runTimeConfigProducer) {
 
@@ -413,6 +425,183 @@ public class WorkflowModuleBuildStepProcessor {
   }
 
   /**
+   * Reports the profile-specific configuration files of workflow modules which this
+   * application does not read, and names the file each of them is missing.
+   * <p>
+   * SmallRye loads <code>id-{profile}.yaml</code> only where <code>id.yaml</code> lies in the
+   * same place. It pairs the two so that the order the files are loaded in does not depend on
+   * which resource a class loader answers with first
+   * ({@code AbstractLocationConfigSourceLoader}). A workflow module which ships a file for one
+   * profile and nothing else therefore ships settings nobody reads. Nothing said so until this
+   * report: the application starts, and the first sign is a value which is not what the file
+   * says. Spring Boot reads such a file, which is why a module author can build one
+   * without ever meeting the rule (see decision 61 in the repository's DECISIONS.md).
+   * <p>
+   * The files are known while the application is built, the report is written when it starts:
+   * a developer reads the log of a start far more often than the log of a build, and a native
+   * binary says it as the JVM does.
+   *
+   * @param allWorkflowModules All workflow modules found
+   * @param applicationArchives The archives of this Quarkus build
+   * @param recorder The recorder writing the report at startup
+   * @return The item saying the report is written, consumed by
+   *         {@link #addWorkflowModuleSpecificConfigFiles(GeneratedConfigBuilderClassesBuildItem, WorkflowModuleProfileFilesReportedBuildItem, BuildProducer, BuildProducer)}
+   */
+  @Record(ExecutionTime.RUNTIME_INIT)
+  @Consume(LoggingSetupBuildItem.class)
+  @BuildStep
+  WorkflowModuleProfileFilesReportedBuildItem reportProfileFilesWithoutTheirPlainFile(
+      final VanillaBpWorkflowModulesBuildItem allWorkflowModules,
+      final ApplicationArchivesBuildItem applicationArchives,
+      final WorkflowModuleConfigFilesRecorder recorder) {
+
+    messageAboutProfileFilesWithoutTheirPlainFile(
+        workflowModuleSpecificConfigFilesPerArchive(
+            applicationArchives,
+            workflowModuleSpecificConfigFileRule(allWorkflowModules)),
+        allWorkflowModules
+            .getWorkflowModules()
+            .stream()
+            .map(WorkflowModule::getId)
+            .toList())
+        .ifPresent(recorder::report);
+
+    return new WorkflowModuleProfileFilesReportedBuildItem();
+
+  }
+
+  /**
+   * Builds the report about the profile-specific files which stay unread. Every archive is
+   * asked on its own, because the file without the profile has to lie in the same archive and
+   * the same directory to be found.
+   *
+   * @param configFilesPerArchive The configuration files of the workflow modules, per archive
+   * @param workflowModuleIds The IDs of all workflow modules found
+   * @return The warning, or nothing where every profile-specific file has its plain file
+   */
+  static Optional<String> messageAboutProfileFilesWithoutTheirPlainFile(
+      final Collection<? extends Collection<String>> configFilesPerArchive,
+      final Collection<String> workflowModuleIds) {
+
+    final var filesWithoutTheirPlainFile = new TreeMap<String, String>();
+    configFilesPerArchive
+        .forEach(configFilesOfOneArchive -> configFilesOfOneArchive
+            .forEach(configFile -> plainFileAProfileFileNeeds(
+                configFile,
+                configFilesOfOneArchive,
+                workflowModuleIds)
+                .ifPresent(plainFile -> filesWithoutTheirPlainFile.put(configFile, plainFile))));
+    if (filesWithoutTheirPlainFile.isEmpty()) {
+      return Optional.empty();
+    }
+
+    return Optional.of("""
+        Configuration files of workflow modules which this application does not read:
+          %s
+        Quarkus reads a file carrying a profile in its name only where the file without the \
+        profile lies in the same place, so none of the settings above arrive. Add the file \
+        each line asks for, in the same workflow module. An empty file is enough. Spring \
+        Boot reads a profile file on its own, so a workflow module which has to run on both \
+        platforms needs the plain file as well.""".formatted(
+        filesWithoutTheirPlainFile
+            .entrySet()
+            .stream()
+            .map(file -> "%s, which needs %s next to it".formatted(file.getKey(), file.getValue()))
+            .collect(Collectors.joining("\n  "))));
+
+  }
+
+  /**
+   * Says which file a profile-specific configuration file of a workflow module is missing.
+   * A file the extension of which belongs to the other provider is no help: the properties
+   * provider and the YAML provider each pair a profile-specific file with a plain file of
+   * their own extensions.
+   *
+   * @param configFile The path of the file, relative to the root of the archive holding it
+   * @param configFilesOfTheSameArchive The paths of all workflow module configuration files of that archive
+   * @param workflowModuleIds The IDs of all workflow modules found
+   * @return The plain files which would make this one be read, or nothing where the file is
+   *         read as it is
+   */
+  private static Optional<String> plainFileAProfileFileNeeds(
+      final String configFile,
+      final Collection<String> configFilesOfTheSameArchive,
+      final Collection<String> workflowModuleIds) {
+
+    final var lastSlash = configFile.lastIndexOf('/');
+    final var directory = configFile.substring(0, lastSlash + 1);
+    final var filename = configFile.substring(lastSlash + 1);
+    final var lastDot = filename.lastIndexOf('.');
+    final var filenameWithoutExtension = filename.substring(0, lastDot);
+    final var extension = filename.substring(lastDot + 1);
+
+    if (workflowModuleIds.contains(filenameWithoutExtension)) {
+      // a file named after a workflow module and nothing else is a plain file itself,
+      // also where the ID of another module starts its name
+      return Optional.empty();
+    }
+    // the longest ID wins: for the modules "loan" and "loan-approval" the file
+    // "loan-approval-prod.yaml" belongs to the second one
+    final var workflowModuleId = workflowModuleIds
+        .stream()
+        .filter(id -> filenameWithoutExtension.startsWith("%s-".formatted(id)))
+        .max(Comparator.comparingInt(String::length));
+    if (workflowModuleId.isEmpty()) {
+      return Optional.empty();
+    }
+
+    final var plainFiles = fileExtensionsOfTheSameProvider(extension)
+        .map(sameKind -> "%s%s.%s".formatted(directory, workflowModuleId.get(), sameKind))
+        .toList();
+    if (plainFiles
+        .stream()
+        .anyMatch(configFilesOfTheSameArchive::contains)) {
+      return Optional.empty();
+    }
+    return Optional.of(plainFiles
+        .stream()
+        .map("'%s'"::formatted)
+        .collect(Collectors.joining(" or ")));
+
+  }
+
+  /**
+   * @param extension A file extension one of the two config source providers reads
+   * @return The extensions of that provider, this one included
+   */
+  private static Stream<String> fileExtensionsOfTheSameProvider(
+      final String extension) {
+
+    return Stream
+        .of(propertiesFileExtensions(), yamlFileExtensions())
+        .filter(extensionsOfOneProvider -> Arrays
+            .asList(extensionsOfOneProvider)
+            .contains(extension))
+        .flatMap(Arrays::stream);
+
+  }
+
+  /**
+   * @return The file extensions the properties config source provider of a workflow module reads
+   */
+  private static String[] propertiesFileExtensions() {
+
+    return new WorkflowModuleSpecificPropertiesConfigSourceProvider("any", -1)
+        .getFileExtensions();
+
+  }
+
+  /**
+   * @return The file extensions the YAML config source provider of a workflow module reads
+   */
+  private static String[] yamlFileExtensions() {
+
+    return new WorkflowModuleSpecificYamlConfigSourceProvider("any", -1)
+        .getFileExtensions();
+
+  }
+
+  /**
    * Builds the rule saying whether a file is one the config source providers of a workflow
    * module read: the file named after the workflow module ID and every profile-specific
    * variant of it, at the classpath root as well as inside a subdirectory named after the ID,
@@ -428,18 +617,11 @@ public class WorkflowModuleBuildStepProcessor {
   private static Predicate<String> workflowModuleSpecificConfigFileRule(
       final VanillaBpWorkflowModulesBuildItem allWorkflowModules) {
 
-    final var propertiesFileExtensions = new WorkflowModuleSpecificPropertiesConfigSourceProvider(
-        "any", -1)
-        .getFileExtensions();
-    final var yamlFileExtensions = new WorkflowModuleSpecificYamlConfigSourceProvider(
-        "any", -1)
-        .getFileExtensions();
-
     final var extensionPattern = Stream
         // combine each file extension possible for later use as or-expression
         .concat(
-            Arrays.stream(propertiesFileExtensions),
-            Arrays.stream(yamlFileExtensions))
+            Arrays.stream(propertiesFileExtensions()),
+            Arrays.stream(yamlFileExtensions()))
         .collect(Collectors.joining("|"));
     final var relativePathPatterns = allWorkflowModules
         .getWorkflowModules()
@@ -474,17 +656,41 @@ public class WorkflowModuleBuildStepProcessor {
       final Predicate<String> isWorkflowModuleConfigFile) {
 
     final var configFiles = new TreeSet<String>();
+    workflowModuleSpecificConfigFilesPerArchive(applicationArchives, isWorkflowModuleConfigFile)
+        .forEach(configFiles::addAll);
+    return configFiles;
+
+  }
+
+  /**
+   * The same search as {@link #workflowModuleSpecificConfigFiles(ApplicationArchivesBuildItem, Predicate)},
+   * but keeping the files of each archive apart. Whether a profile-specific file is read
+   * depends on the archive it sits in, so that question cannot be answered on the merged list.
+   *
+   * @param applicationArchives The archives of this Quarkus build
+   * @param isWorkflowModuleConfigFile Whether a relative path is a configuration file of a workflow module
+   * @return One set of relative paths per archive, archives without such a file included
+   */
+  private static List<SortedSet<String>> workflowModuleSpecificConfigFilesPerArchive(
+      final ApplicationArchivesBuildItem applicationArchives,
+      final Predicate<String> isWorkflowModuleConfigFile) {
+
+    final var configFilesPerArchive = new LinkedList<SortedSet<String>>();
     applicationArchives
         .getAllArchives()
         // traverse all archives
-        .forEach(archive -> archive
-            .accept(openPathTree -> openPathTree
-                // and check each file's relative path against the rule
-                .walk(visit -> Optional
-                    .ofNullable(visit.getRelativePath("/"))
-                    .filter(isWorkflowModuleConfigFile)
-                    .ifPresent(configFiles::add))));
-    return configFiles;
+        .forEach(archive -> {
+          final var configFiles = new TreeSet<String>();
+          archive
+              .accept(openPathTree -> openPathTree
+                  // and check each file's relative path against the rule
+                  .walk(visit -> Optional
+                      .ofNullable(visit.getRelativePath("/"))
+                      .filter(isWorkflowModuleConfigFile)
+                      .ifPresent(configFiles::add)));
+          configFilesPerArchive.add(configFiles);
+        });
+    return configFilesPerArchive;
 
   }
 

@@ -96,6 +96,16 @@ The adapter-id set is always derived from the core properties
 coexistence and the environment-variable rules; the guiding validation itself lives in the
 core and is held by `MigrationAdapterPropertiesTest`.
 
+The files a workflow module ships are read by
+`WorkflowModulePropertiesEnvironmentPostProcessor`, which appends them below everything the
+application brings. It reads `<module-id>-<profile>.yaml` wherever it finds it, also where
+`<module-id>.yaml` is missing, and Quarkus does not (decision 61). A workflow module is a
+library and runs on either platform, so the post processor names such a file at startup and
+says which file would make Quarkus read it. The line is written through a `DeferredLogFactory`,
+because an environment post processor runs before the logging system is up.
+`ProfileFileWithoutItsPlainFileTest` of `globalclasspath-integration-test` holds both halves,
+the values which are there and the line which names the file.
+
 ## The store of processed task deliveries
 
 `io.vanillabp.integration.delivery` implements the core's `TaskDeliveryLog` (the

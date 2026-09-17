@@ -1878,3 +1878,26 @@ One consequence is worth naming: a type is now validated once per path leading t
 than once in total, because the same class may be shared below one attribute and hidden
 below another. `AggregateSyncSupportTest#aSharedCalendarStopsTheBoot` holds the message,
 and the tests next to it hold the aggregates which still boot.
+
+### 61. A profile file without its plain file is reported, not loaded
+
+A workflow module may ship `loan-approval-prod.yaml` and no `loan-approval.yaml`. Measured on
+2026-09-17: Spring Boot reads that file, Quarkus reads nothing of it. SmallRye pairs a
+profile file with the file of the same name without the profile, in the same directory and
+the same archive, so that the order the files are loaded in does not depend on which resource
+a class loader answers with first. Where the second file is missing, the first one is never
+looked for. The application starts either way and the first sign of the gap is a setting which
+is not what the file says.
+
+VanillaBP does not load the file itself. Registering it as a source of its own would make a
+workflow module behave differently from every other piece of Quarkus configuration, and the
+next reader of that code would have two rules to hold in their head instead of one. Instead
+both platforms name the file at startup together with the file which would make it be read. An
+empty file does the job, which is the smallest change an application can make. Quarkus finds the files while the application is built and writes the
+line when it starts, so a native binary says it as the JVM does. Spring Boot reads the file, so
+its line says that Quarkus would not: a workflow module is a library and the platform it ends
+up on is not the one it was built on.
+
+`WorkflowModuleProfileFileNeedsItsPlainFileTest` holds the rule this rests on, measured against
+SmallRye 3.17.2. `ProfileFilesWithoutTheirPlainFileTest` holds which files are picked and what
+the message offers, and one test per platform boots an application with such a module.

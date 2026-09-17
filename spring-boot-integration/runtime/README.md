@@ -29,7 +29,9 @@ Additionally, `WorkflowModulePropertiesEnvironmentPostProcessor` (registered in
 `Environment`. They are appended at the END of the property sources, because a
 workflow module ships defaults: everything the application configures wins over
 them. Appending is what keeps that true for an application bringing sources this
-integration cannot know about, so no source name is matched to find a position.
+integration cannot know about, so no source name is matched to find a position. It also
+names a `<module-id>-<profile>` file lying without its `<module-id>` file: Spring Boot
+reads such a file and Quarkus does not, and a workflow module runs on both (decision 61).
 
 ### Workflow module detection
 
