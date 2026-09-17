@@ -74,6 +74,15 @@ public class GruelboxPhaseTwoOutboxDispatcher {
   private final DueEntryPoller poller;
 
   /**
+   * How long a payload nobody removed is kept, and where those are removed from.
+   * <code>null</code> for a dispatcher built without a payload store - nothing is
+   * house-kept then.
+   */
+  private final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore;
+
+  private final java.time.Duration retention;
+
+  /**
    * Polls an outbox which dispatches right after a commit, whoever built it. Use the
    * constructor taking VanillaBP's submitter to have the entries of the window before
    * the deployment wait for the first poll.
@@ -85,7 +94,7 @@ public class GruelboxPhaseTwoOutboxDispatcher {
       final TransactionOutbox transactionOutbox,
       final PhaseTwoOutboxProperties properties) {
 
-    this(transactionOutbox, properties, null, null);
+    this(transactionOutbox, properties, null, null, null);
 
   }
 
@@ -106,9 +115,32 @@ public class GruelboxPhaseTwoOutboxDispatcher {
       final GruelboxRedispatchAwareSubmitter submitter,
       final GruelboxPhaseTwoOutbox outbox) {
 
+    this(transactionOutbox, properties, submitter, outbox, null);
+
+  }
+
+  /**
+   * Polls the outbox, holds its submitter back until it does and house-keeps the
+   * payloads nobody removed.
+   *
+   * @param transactionOutbox The outbox to poll
+   * @param properties The bound <code>vanillabp.outbox</code> section
+   * @param submitter The submitter the outbox was built with
+   * @param outbox The store, asked when the next flush has something to do
+   * @param payloadStore Where the payloads of this outbox lie
+   */
+  public GruelboxPhaseTwoOutboxDispatcher(
+      final TransactionOutbox transactionOutbox,
+      final PhaseTwoOutboxProperties properties,
+      final GruelboxRedispatchAwareSubmitter submitter,
+      final GruelboxPhaseTwoOutbox outbox,
+      final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore) {
+
     this.transactionOutbox = transactionOutbox;
     this.submitter = submitter;
     this.outbox = outbox;
+    this.payloadStore = payloadStore;
+    this.retention = properties.getRetention();
     this.poller = new DueEntryPoller(
         "vanillabp-outbox", properties.getPollInterval(), this::flush, this::earliestDueAt);
     if (submitter != null) {
@@ -171,6 +203,12 @@ public class GruelboxPhaseTwoOutboxDispatcher {
       }
     } catch (Exception e) {
       log.error("Flushing the VanillaBP phase-two outbox failed - will retry", e);
+    }
+    // what a crash between the two writes of a schedule left behind, and the payload of
+    // an entry gruelbox blocked longer than the retention. Both are rows nobody reads
+    // again, and this flush was going to happen anyway
+    if (payloadStore != null) {
+      payloadStore.removeOlderThan(java.time.Instant.now().minus(retention));
     }
 
   }

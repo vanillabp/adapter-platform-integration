@@ -131,6 +131,33 @@ enforced by a unique index over `dedupKey`, created automatically unless
 are present, the JDBC outbox wins deterministically (consistent with Spring Boot
 where the JPA outbox is ordered first).
 
+### A call which carries a payload
+
+A phase-two call carries identifiers, and an extension which wants to hand over the state
+it saw at its sync point passes bytes as well:
+`PhaseTwoCall.of(operation, module, process, aggregateId, adapterId, args, payload)`. The
+bytes do not travel in the outbox entry. They are written into a store of their own, in the
+same transaction, and the entry names them by a reference in its arguments - the reasoning
+is decision 60 in `DECISIONS.md`.
+
+The store is a table `VANILLABP_PHASE_TWO_PAYLOAD` for the JDBC-backed outboxes
+(`vanillabp.outbox.jdbc.payload-table`) and a collection `vanillabp-phase-two-payloads` for
+the MongoDB ones (`vanillabp.outbox.mongo.payload-collection`). It is created together with
+the other tables unless `vanillabp.outbox.create-schema` is disabled, and
+`io.vanillabp:vanillabp-schema` describes it for Liquibase and Flyway.
+
+The form costs one read by primary key per dispatch attempt of a call which carries a
+payload, and nothing at all for a call which carries none - such a call writes no row
+either. A payload is at most `PhaseTwoCall.MAX_PAYLOAD_SIZE` bytes, one mebibyte, and that
+limit holds for every store, so an application meets the same one whichever store it runs.
+On MongoDB the bytes are a field of the payload document, which is why MongoDB's own limit
+of 16 MB per document is never reached.
+
+The payload is removed when its entry is marked dispatched. What a crash between the two
+writes leaves behind, and the payload of an entry blocked longer than
+`vanillabp.outbox.retention`, is removed by the age sweep which rides the housekeeping of
+each store.
+
 |                  |           JDBC outbox (Agroal)           |       MongoDB outbox (`quarkus-mongodb-client`)       |
 |------------------|------------------------------------------|-------------------------------------------------------|
 | Enlisting        | JTA transaction (entry = part of TX)     | best-effort (write before commit, delete on rollback) |

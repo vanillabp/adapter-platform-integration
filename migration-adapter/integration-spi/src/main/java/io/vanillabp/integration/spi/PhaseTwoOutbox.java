@@ -18,6 +18,16 @@ package io.vanillabp.integration.spi;
  * and schedules them here - the store treats them like any other entry, and the
  * router dispatches them to the extension's own handler.
  * <p>
+ * <strong>A call which carries a payload:</strong> a caller may hand bytes along with
+ * the identifiers ({@link PhaseTwoCall#payload()}), and a store has to keep them until
+ * the call is dispatched, in the same transaction as the entry. The stores VanillaBP
+ * ships put them into a {@link PhaseTwoPayloadStore} beside the entry and persist only
+ * the reference, which is what keeps an entry a row of identifiers (decision 60 in the
+ * repository's DECISIONS.md). A store of an application's own is free to do it
+ * differently - one which keeps the whole call in memory until the commit already
+ * carries the bytes and has nothing to add. What no store may do is drop them: a
+ * handler would then be told a state which is not the one the caller saw.
+ * <p>
  * Implementations are provided by the platform integrations (e.g. based on JDBC, JPA
  * or MongoDB) or by the business application itself, since the platform-neutral core
  * must not depend on any particular persistence technology.

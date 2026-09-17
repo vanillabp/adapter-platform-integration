@@ -40,10 +40,31 @@ public class GruelboxPhaseTwoDispatchBean implements GruelboxPhaseTwoDispatch {
 
   private final PhaseTwoRouter phaseTwoRouter;
 
+  /**
+   * Where the bytes of a call which carries a payload are read from, and where they are
+   * removed once the call was dispatched. <code>null</code> for a caller which brings
+   * none - an entry which names a payload is then dispatched without it, which the
+   * router's handler sees as a call carrying nothing.
+   */
+  private final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore;
+
   public GruelboxPhaseTwoDispatchBean(
       final PhaseTwoRouter phaseTwoRouter) {
 
+    this(phaseTwoRouter, null);
+
+  }
+
+  /**
+   * @param phaseTwoRouter The router the rebuilt call is handed to
+   * @param payloadStore Where the payload of an entry which names one is read from
+   */
+  public GruelboxPhaseTwoDispatchBean(
+      final PhaseTwoRouter phaseTwoRouter,
+      final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore) {
+
     this.phaseTwoRouter = phaseTwoRouter;
+    this.payloadStore = payloadStore;
 
   }
 
@@ -56,6 +77,13 @@ public class GruelboxPhaseTwoDispatchBean implements GruelboxPhaseTwoDispatch {
       final String adapterId,
       final String serializedArgs) {
 
+    final var args = PhaseTwoCall.deserializeArgs(serializedArgs);
+    // the one extra read this form costs, and only for an entry which names a payload:
+    // a lookup by primary key, once per dispatch attempt
+    final var payloadReference = args.get(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
+    final var payload = (payloadReference == null) || (payloadStore == null)
+        ? null
+        : payloadStore.read(payloadReference);
     final var call = PhaseTwoCall
         .forDispatch(
             operation,
@@ -63,12 +91,20 @@ public class GruelboxPhaseTwoDispatchBean implements GruelboxPhaseTwoDispatch {
             bpmnProcessId,
             workflowAggregateId,
             adapterId,
-            PhaseTwoCall.deserializeArgs(serializedArgs));
+            args,
+            payload);
     // set by the submitter wrapper on this thread - a retried entry runs the START
     // re-dispatch mitigation
     final var previouslyAttempted = GruelboxRedispatchAwareSubmitter.isPreviouslyAttempted();
 
     phaseTwoRouter.dispatch(call, previouslyAttempted);
+
+    // the bytes have done their work, and this runs in the transaction gruelbox opened
+    // around the invocation - the same one it marks the entry processed in, so the two
+    // end together. Nothing is removed where the dispatch threw: the entry comes again
+    if ((payloadReference != null) && (payloadStore != null)) {
+      payloadStore.remove(payloadReference);
+    }
 
   }
 

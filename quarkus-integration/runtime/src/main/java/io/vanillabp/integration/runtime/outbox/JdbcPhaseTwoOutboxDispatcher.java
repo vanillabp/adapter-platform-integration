@@ -62,8 +62,8 @@ import lombok.extern.slf4j.Slf4j;
  * claim and dispatches the entry, the others simply skip it. The retention cleanup
  * is a plain idempotent DELETE.
  * <p>
- * The outbox table is created on startup unless
- * <code>vanillabp.outbox.create-schema</code> is disabled for manually managed
+ * The outbox table and the table holding the payloads of the calls which carry one are
+ * created on startup unless <code>vanillabp.outbox.create-schema</code> is disabled for manually managed
  * schemas - in that case also create the unique constraint on
  * <code>DEDUP_KEY</code> yourself (the storage-level deduplication of the
  * outbox contract, spanning the entries still waiting for their dispatch; see
@@ -208,7 +208,26 @@ public class JdbcPhaseTwoOutboxDispatcher {
 
   private volatile PhaseTwoOutboxProperties properties;
 
+  private volatile io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore payloadStore;
+
   private volatile DueEntryPoller poller;
+
+  /**
+   * Where the bytes of a call which carries a payload lie while its entry waits. Built
+   * on demand like the properties, because the outbox writes into it during the
+   * application's own transaction and may get there before this dispatcher started.
+   *
+   * @return The payload store of this outbox
+   */
+  io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore getPayloadStore() {
+
+    if (payloadStore == null) {
+      payloadStore = new io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore(
+          () -> dataSource.get().getConnection(), JdbcPhaseTwoOutbox.payloadTableName(getProperties()));
+    }
+    return payloadStore;
+
+  }
 
   /**
    * The outbox configuration (<code>vanillabp.outbox.*</code>), loaded lazily so
@@ -268,11 +287,13 @@ public class JdbcPhaseTwoOutboxDispatcher {
 
     if (properties.isCreateSchema()) {
       createTableIfNotExists();
+      getPayloadStore().createSchemaIfNotExists();
     } else {
       // the application creates its schema itself - a missing table is then a
       // deployment which forgot to apply the migration, and it is said at startup instead of at
       // the first workflow start
       validateTableExists();
+      getPayloadStore().validateSchemaExists();
     }
 
     poller = new DueEntryPoller(
@@ -621,12 +642,20 @@ public class JdbcPhaseTwoOutboxDispatcher {
       final Connection connection,
       final Entry entry) throws SQLException {
 
+    final var args = PhaseTwoCall.deserializeArgs(entry.serializedArgs());
+    final var payloadReference = args.get(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
     try {
       // entry.attempts() holds the count BEFORE this claim - a value > 0 means the
       // entry was dispatched before (recovered/retried): the router then runs the
       // START re-dispatch mitigation. The operation travels as its persisted name -
       // the router resolves it in the operation registry (an unknown name yields a
       // guiding error and leaves the entry for operations)
+      //
+      // reading the payload is the one extra read this form costs, and only for an
+      // entry which names one: a lookup by primary key, once per dispatch attempt
+      final var payload = payloadReference == null
+          ? null
+          : getPayloadStore().read(payloadReference);
       phaseTwoRouter
           .get()
           .dispatch(
@@ -634,8 +663,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
                   .forDispatch(
                       entry.operation(), entry.workflowModuleId(), entry.bpmnProcessId(), entry
                           .aggregateId(),
-                      entry.adapterId(), PhaseTwoCall
-                          .deserializeArgs(entry.serializedArgs())),
+                      entry.adapterId(), args, payload),
               entry.attempts() > 0);
     } catch (Exception e) {
       // the adapter said that repeating cannot help - blocked right away
@@ -728,6 +756,12 @@ public class JdbcPhaseTwoOutboxDispatcher {
       statement.setString(2, entry.id());
       statement.executeUpdate();
     }
+    // the entry is dispatched, so its bytes have done their work. Removed AFTER the
+    // entry was marked, never before: a crash in between leaves a row the housekeeping
+    // deletes, while the other order would leave an entry whose payload is gone
+    if (payloadReference != null) {
+      getPayloadStore().remove(payloadReference);
+    }
 
   }
 
@@ -750,18 +784,23 @@ public class JdbcPhaseTwoOutboxDispatcher {
   }
 
   /**
-   * Deletes successfully dispatched (DONE) entries whose retention period passed -
-   * the asynchronous cleanup of the "DONE instead of delete" contract.
+   * Deletes successfully dispatched (DONE) entries whose retention period passed - the
+   * asynchronous cleanup of the "DONE instead of delete" contract - and the payloads
+   * which outlived the same period.
    *
    * @param connection The connection to be used
    */
   private void cleanupDoneEntries(
       final Connection connection) throws SQLException {
 
+    final var expiredBefore = Instant.now().minus(properties.getRetention());
     try (var statement = connection.prepareStatement(deleteExpiredDoneEntries)) {
-      statement.setTimestamp(1, Timestamp.from(Instant.now().minus(properties.getRetention())));
+      statement.setTimestamp(1, Timestamp.from(expiredBefore));
       statement.executeUpdate();
     }
+    // what a crash between the two writes of a schedule left behind, and the payload of
+    // an entry blocked longer than the retention. Both are rows nobody will read again
+    getPayloadStore().removeOlderThan(expiredBefore);
 
   }
 

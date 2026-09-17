@@ -136,9 +136,33 @@ public class SampleExtension {
       final String workflowAggregateId,
       final String event) {
 
+    return call(workflowModuleId, bpmnProcessId, workflowAggregateId, event, null);
+
+  }
+
+  /**
+   * Builds a call of this extension's operation which carries the state the extension
+   * saw when it planned the call - what a sync to the Business Cockpit passes.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param workflowAggregateId The aggregate's ID in serialized form
+   * @param event The event to be published
+   * @param payload The bytes to carry, or <code>null</code>
+   * @return The call to be scheduled
+   */
+  public static PhaseTwoCall call(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final String event,
+      final byte[] payload) {
+
     return PhaseTwoCall
         .of(
-            OPERATION, workflowModuleId, bpmnProcessId, workflowAggregateId, null, Map.of(ARG_EVENT, event));
+            OPERATION, workflowModuleId, bpmnProcessId, workflowAggregateId, null, Map
+                .of(ARG_EVENT, event),
+            payload);
 
   }
 
