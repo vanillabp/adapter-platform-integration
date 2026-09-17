@@ -2116,6 +2116,7 @@ that bites. Nothing about that rule changed, it just has more places to apply to
 `WorkflowModuleConfigLocationsTest` holds what the Quarkus config sources read, one test per
 place. `ModuleFileInEachOfTheFourPlacesTest` holds the same for Spring Boot, and
 `TheSameFileInTwoPlacesTest` of each platform holds the refusal.
+
 ### 66. Sharing a whole workflow aggregate is allowed at the workflow and nowhere else
 
 An aggregate which carries no `@NoSyncWithBPMS` anywhere hands every attribute it reaches to the
