@@ -121,6 +121,47 @@ public class OutboxSleepsWhileNothingIsDueTest {
 
   }
 
+  /**
+   * How long the pool has to stay untouched before the work counts as over. Below the
+   * three seconds the silence is measured over, so a poller asking on a rhythm shorter
+   * than that is caught by the wait rather than passing through it.
+   */
+  private static final long QUIET_FOR_MS = 500;
+
+  /**
+   * Waits until the poll which brought the store into the state above has stopped taking
+   * connections.
+   * <p>
+   * Nothing left to dispatch is not the end of that poll. It looks for the next due
+   * entry, deletes what the retention lets go and reads when to wake up again, and those
+   * statements run AFTER the wait above has returned. Setting the counter back to zero
+   * in between is what turns a test of this shape red once in a while on a run where
+   * nothing was wrong.
+   * <p>
+   * The wait reads the counter and asks the database nothing itself, because a question
+   * of its own would be the traffic it is waiting out. A store which never goes quiet is
+   * the very thing these tests are about, so the deadline says that instead of timing
+   * out without a word.
+   */
+  private void awaitTheWorkWentQuiet() throws Exception {
+
+    final var deadline = System.currentTimeMillis() + 30000;
+    var takenSeen = connectionsTaken.get();
+    var quietSince = System.currentTimeMillis();
+    while ((System.currentTimeMillis() - quietSince) < QUIET_FOR_MS) {
+      assertTrue(
+          System.currentTimeMillis() < deadline,
+          "connections were taken over and over while nothing was due");
+      Thread.sleep(20);
+      final var takenNow = connectionsTaken.get();
+      if (takenNow != takenSeen) {
+        takenSeen = takenNow;
+        quietSince = System.currentTimeMillis();
+      }
+    }
+
+  }
+
   private long count(
       final DataSource dataSource,
       final String query) throws Exception {
@@ -146,6 +187,7 @@ public class OutboxSleepsWhileNothingIsDueTest {
       // connection at all
       assertTrue(connectionsTaken.get() > 0, "the pool has to report what this test itself took");
 
+      awaitTheWorkWentQuiet();
       connectionsTaken.set(0);
       Thread.sleep(3000);
 
@@ -178,6 +220,7 @@ public class OutboxSleepsWhileNothingIsDueTest {
       }
       assertTrue(connectionsTaken.get() > 0, "the pool has to report what this test itself took");
 
+      awaitTheWorkWentQuiet();
       connectionsTaken.set(0);
       Thread.sleep(3000);
 

@@ -99,6 +99,46 @@ public class OutboxSleepsWhileNothingIsDueTest {
 
   }
 
+  /**
+   * How long the pool has to stay untouched before the dispatch counts as over. Below
+   * the three seconds the silence is measured over, so a poller asking on a rhythm
+   * shorter than that is caught by the wait rather than passing through it.
+   */
+  private static final long QUIET_FOR_MS = 500;
+
+  /**
+   * Waits until the dispatch which emptied the store has stopped taking connections.
+   * <p>
+   * Nothing left OPEN is not the end of that dispatch. The poll which marked the entry
+   * looks for the next due one, deletes what the retention lets go and reads when to
+   * wake up again, and those statements run AFTER the wait above has returned.
+   * Forgetting what was taken in between is what turns a test of this shape red once in
+   * a while on a run where nothing was wrong.
+   * <p>
+   * The wait reads the counter and asks the database nothing itself, because a question
+   * of its own would be the traffic it is waiting out. A store which never goes quiet is
+   * the very thing this test is about, so the deadline says that instead of timing out
+   * without a word.
+   */
+  private void awaitTheDispatchWentQuiet() throws Exception {
+
+    final var deadline = System.currentTimeMillis() + 30_000;
+    var acquiredSeen = CountingPoolInterceptor.acquired();
+    var quietSince = System.currentTimeMillis();
+    while ((System.currentTimeMillis() - quietSince) < QUIET_FOR_MS) {
+      assertTrue(
+          System.currentTimeMillis() < deadline,
+          "connections were taken over and over while nothing was due");
+      Thread.sleep(20);
+      final var acquiredNow = CountingPoolInterceptor.acquired();
+      if (acquiredNow != acquiredSeen) {
+        acquiredSeen = acquiredNow;
+        quietSince = System.currentTimeMillis();
+      }
+    }
+
+  }
+
   private long countOpenEntries() throws Exception {
 
     try (var connection = dataSource.getConnection(); var statement = connection
@@ -120,6 +160,7 @@ public class OutboxSleepsWhileNothingIsDueTest {
     // the zero below a measurement rather than a silence
     assertTrue(CountingPoolInterceptor.acquired() > 0);
 
+    awaitTheDispatchWentQuiet();
     CountingPoolInterceptor.forgetWhatWasAcquired();
     Thread.sleep(3000);
 
