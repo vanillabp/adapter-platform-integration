@@ -502,8 +502,12 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
     if (workflowAggregateClass == null) {
       return;
     }
-    final var defects = new LinkedList<String>();
-    validateType(workflowAggregateClass, 0, new java.util.HashSet<>(), defects);
+    // a set, because a type reachable over more than one path is looked at once per
+    // path and the same defect must not be said twice
+    final var defects = new java.util.LinkedHashSet<String>();
+    // the walk starts out sharing: FULL is the default of every adapter, so an aggregate
+    // which annotates nothing is shared as a whole (see AggregateSyncMode)
+    validateType(workflowAggregateClass, true, 0, new java.util.HashMap<>(), defects);
     if (defects.isEmpty()) {
       return;
     }
@@ -517,25 +521,47 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
    * every gap it can detect).
    *
    * @param clazz The type to validate
+   * @param sharedUnlessAnnotated Whether the attributes of this type reach the BPMS as
+   *          long as they carry no annotation of their own
    * @param depth The current nesting depth
-   * @param visited The types already validated (cyclic type graphs)
+   * @param visited The types already validated, each with whether that happened on a
+   *          path sharing them (cyclic type graphs). A type first reached through an
+   *          attribute nobody shares is looked at again once a shared path leads to it,
+   *          because what is refused depends on whether the attribute travels
    * @param defects Collects the guiding messages
    */
   private void validateType(
       final Class<?> clazz,
+      final boolean sharedUnlessAnnotated,
       final int depth,
-      final java.util.Set<Class<?>> visited,
-      final List<String> defects) {
+      final Map<Class<?>, Boolean> visited,
+      final java.util.Set<String> defects) {
 
-    if (!visited.add(clazz)) {
+    Boolean ownMode = null;
+    IllegalStateException modeCannotBeDerived = null;
+    try {
+      ownMode = baseModeOf(clazz);
+    } catch (final IllegalStateException e) {
+      modeCannotBeDerived = e;
+    }
+    // a type states its own mode where it has one and inherits from the attribute
+    // holding it where it has none - the chain a sync point walks in valuesOf
+    final var shared = ownMode != null
+        ? ownMode
+        : sharedUnlessAnnotated;
+    final var validatedBefore = visited.get(clazz);
+    if (validatedBefore == null) {
+      if (modeCannotBeDerived != null) {
+        defects.add(modeCannotBeDerived.getMessage());
+      }
+      reportAttributesNothingReadsBack(clazz);
+    } else if (validatedBefore || !shared) {
+      // a second look adds nothing: either the shared path is walked already, or this
+      // path shares no more than the path which was
       return;
     }
-    try {
-      baseModeOf(clazz);
-    } catch (final IllegalStateException e) {
-      defects.add(e.getMessage());
-    }
-    reportAttributesNothingReadsBack(clazz);
+    visited.put(clazz, shared);
+    refuseAttributesWhoseTextIsNoValue(clazz, shared, defects);
     if (depth >= MAX_DEPTH) {
       // the documented limit: nested types are followed at most MAX_DEPTH levels
       // deep. A type reached only deeper (or only at runtime, e.g. a subclass
@@ -549,11 +575,67 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
           MAX_DEPTH);
       return;
     }
-    propertiesOf(clazz)
-        .stream()
-        .flatMap(property -> attributeTypes(property.getter().getGenericReturnType()))
-        .distinct()
-        .forEach(attributeType -> validateType(attributeType, depth + 1, visited, defects));
+    for (final var property : propertiesOf(clazz)) {
+      // a nested type inherits from the attribute holding it, so the walk carries down
+      // what that attribute says about sharing
+      final var sharedBelow = property.synced() != null
+          ? property.synced()
+          : shared;
+      attributeTypes(property.getter().getGenericReturnType())
+          .distinct()
+          .forEach(attributeType -> validateType(attributeType, sharedBelow, depth + 1, visited, defects));
+    }
+
+  }
+
+  /**
+   * Refuses an attribute which is shared with the BPMS although its text is no value at
+   * all: a {@link java.util.Calendar} travels as the debug form of its implementation,
+   * several hundred characters naming every field of it.
+   * <p>
+   * The boot fails here instead of the attribute being left out quietly. An attribute
+   * which stopped being a process variable would make a model read null and take a
+   * branch nobody chose, so the application either declares a type which travels or says
+   * that this attribute does not.
+   * <p>
+   * Unlike the warning of {@link #reportAttributesNothingReadsBack(Class)} this asks
+   * whether the attribute really is shared, along the chain a sync point walks. A boot
+   * which fails may not rest on a guess, and the one thing left to guess is the
+   * adapter's default, which is FULL for every adapter there is.
+   *
+   * @param clazz The type whose attributes are looked at
+   * @param sharedUnlessAnnotated Whether its attributes reach the BPMS as long as they
+   *          carry no annotation of their own
+   * @param defects Collects the guiding messages
+   */
+  private void refuseAttributesWhoseTextIsNoValue(
+      final Class<?> clazz,
+      final boolean sharedUnlessAnnotated,
+      final java.util.Set<String> defects) {
+
+    for (final var property : propertiesOf(clazz)) {
+      final var shared = property.synced() != null
+          ? property.synced()
+          : sharedUnlessAnnotated;
+      if (!shared) {
+        continue;
+      }
+      typesOfAnAttribute(property.getter().getGenericReturnType())
+          .filter(TextValueTypes::isRefusedOnTheWayOut)
+          .distinct()
+          .forEach(type -> defects
+              .add(
+                  """
+                      The attribute '%s' of '%s' is a '%s'. %s The application does not boot with \
+                      such an attribute, because sharing it is refused and leaving it out would \
+                      make a model read null and take a branch nobody chose. Annotate the \
+                      attribute @NoSyncWithBPMS where no model needs it."""
+                      .formatted(
+                          property.name(),
+                          clazz.getName(),
+                          type.getName(),
+                          TextValueTypes.adviceFor(type))));
+    }
 
   }
 
@@ -567,6 +649,10 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
    * default decides that, and it is not known here), and an aggregate whose values only
    * ever travel outwards is a normal application. An attribute the application marked
    * {@code @NoSyncWithBPMS} is left out, because that one is certain never to travel.
+   * <p>
+   * A type refused on the way out is not named here.
+   * {@link #refuseAttributesWhoseTextIsNoValue(Class, boolean, java.util.Set)} says that
+   * case, and it says it as a failed boot.
    *
    * @param clazz The type whose attributes are looked at
    */
@@ -579,6 +665,7 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
       }
       typesOfAnAttribute(property.getter().getGenericReturnType())
           .filter(AggregateSyncSupport::isTextNothingReadsBack)
+          .filter(type -> !TextValueTypes.isRefusedOnTheWayOut(type))
           .distinct()
           .forEach(type -> log.warn(
               """

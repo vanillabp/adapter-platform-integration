@@ -51,6 +51,11 @@ public interface WorkflowAggregateSync {
    * intent has to be unambiguous - attributes annotated BOTH ways without the class
    * stating its own mode cannot be interpreted.
    * <p>
+   * It also refuses an attribute which is shared although its type reaches the BPMS as
+   * a text carrying no value at all. A {@code java.util.Calendar} is such a type: it
+   * travels as the debug form of its implementation, which no model reads and no
+   * operator understands.
+   * <p>
    * Called by the PLATFORM INTEGRATION at startup, once per registered
    * workflow-aggregate class (not by adapters): a defect must abort the boot, not
    * surface at the first sync point. Types reachable only at runtime (e.g. a
@@ -59,8 +64,9 @@ public interface WorkflowAggregateSync {
    *
    * @param workflowAggregateClass The workflow-aggregate class (may be
    *          <code>null</code>)
-   * @throws IllegalStateException Naming every ambiguous class, its conflicting
-   *           attributes and the fix
+   * @throws IllegalStateException Naming every defect found: an ambiguous class with
+   *           its conflicting attributes, an attribute the BPMS may not be given, and
+   *           the fix for each of them
    */
   void validateSyncModel(
       Class<?> workflowAggregateClass);

@@ -1839,3 +1839,42 @@ aggregate whose values only ever travel outwards is an ordinary application. An 
 marked `@NoSyncWithBPMS` is left out of it, because that one is certain never to travel.
 `AggregateSyncSupportTest#whatCannotComeBackIsSaidAtStartup` holds the message, and
 `TextValueRoundTripTest` holds both ways against each other for every type in the list.
+
+What happens to a `Calendar` is decided by entry 59, which supersedes the two paragraphs
+above in that one respect: such an attribute stops the boot instead of earning a warning,
+and no sync point gets the chance to write it. Everything else here stands, the warning
+for every other type included.
+
+### 59. A Calendar the BPMS would be given stops the boot
+
+Decision 58 named a `Calendar` attribute while the application boots and left the sync
+point alone, so the BPMS kept being given the debug form of the implementation. That text
+is 769 characters long, measured on 2026-09-17 against Java 21, and it is written again at
+every sync point. It says nothing to a model and nothing to an operator. This is to be
+prevented rather than reported (Stephan, 2026-09-17), so `validateSyncModel` collects such
+an attribute as a defect and the application does not boot.
+
+Leaving the attribute out of what is shared was the other way and was refused. A process
+variable which quietly stopped being written would make a model read null and take a branch
+nobody chose. So the application either declares a type which travels, an `Instant` for the
+point in time and a `TimeZone` or a `ZoneId` next to it where the zone matters too, or it
+says with `@NoSyncWithBPMS` that this attribute stays at home.
+
+`Calendar` is the only type refused this way. Everything else decision 58 named keeps its
+warning, a `java.util.Locale` and a `java.net.URI` among them: their text carries no value
+back into a declared type, but it is text a person can read and work with, and a boot which
+fails over it would cost more than it saves.
+
+A boot which fails may not rest on a guess, which is why the refusal asks whether the
+attribute really is shared, along the same chain a sync point walks. A class states its own
+mode or inherits from the attribute holding it, and an attribute may state its own. Only
+what is shared at the end of that chain is refused. What remains unknown is the adapter's
+default, and the walk starts out sharing because `FULL` is the default of every adapter
+there is (see `AggregateSyncMode`, whose `NONE` is meant for an adapter whose BPMS is fed
+by something else entirely). The warning of decision 58 stays as loose as it was, because a
+warning which is wrong costs a log line.
+
+One consequence is worth naming: a type is now validated once per path leading to it rather
+than once in total, because the same class may be shared below one attribute and hidden
+below another. `AggregateSyncSupportTest#aSharedCalendarStopsTheBoot` holds the message,
+and the tests next to it hold the aggregates which still boot.
