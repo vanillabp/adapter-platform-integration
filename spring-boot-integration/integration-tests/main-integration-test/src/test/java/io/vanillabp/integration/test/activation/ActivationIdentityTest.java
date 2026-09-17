@@ -221,6 +221,9 @@ public class ActivationIdentityTest {
             adapters:
               test:
                 resources-location: classpath*:activation-module/processes
+            workflows:
+              ActivationProcess:
+                allow-full-sync-with-bpms: true
       """;
 
   private ConfigurableApplicationContext runTestApplication(

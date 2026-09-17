@@ -16,6 +16,13 @@ vanillabp:
       adapters:
         test:
           resources-location: classpath*:test-module/processes/dummy
+      workflows:
+        HotSampleWorkflowService:
+          allow-full-sync-with-bpms: true
+        JpaSampleWorkflowService:
+          allow-full-sync-with-bpms: true
+        MongoSampleWorkflowService:
+          allow-full-sync-with-bpms: true
   outbox:
     poll-interval: PT0.5S
     attempt-frequency: PT0.5S

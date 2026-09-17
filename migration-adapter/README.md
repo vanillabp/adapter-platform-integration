@@ -1341,6 +1341,28 @@ about the type a value IS rather than about the package its class sits in is
 [decision 58](../DECISIONS.md), and the refused `Calendar` is
 [decision 59](../DECISIONS.md).
 
+**An aggregate which shares EVERYTHING does not boot either, unless its workflow says
+so.** An aggregate carrying no `@NoSyncWithBPMS` anywhere hands every attribute it reaches
+to the BPMS, and nobody decided that: it is where an application lands by doing nothing.
+`FullSyncCheck` asks the sync model once per registered workflow, through
+`WorkflowAggregateSync.everythingSharedWithBpms`, and the answer is the attributes of the
+aggregate itself where nothing at all is held back, and empty otherwise. The message names
+the workflow, the aggregate and those attributes, and it offers the two ways on: say what
+the models need, or write the permission at the workflow.
+
+```
+vanillabp.workflow-modules.<workflow-module>.workflows.<bpmn-process-id>.allow-full-sync-with-bpms: true
+```
+
+The permission is read at the workflow and at no other level, which is the one exception
+from the resolution of [decision 7](../DECISIONS.md). An inherited permission would cover
+the workflow somebody adds next week. The key is bound at the application, at a workflow
+module and in an adapter section as well, and `MigrationAdapterProperties` refuses it there
+with a message naming where it belongs, so nobody is left believing it was given. The ID
+attribute is not counted: it travels whatever the sync model says, so an aggregate made of
+nothing but its ID starts. A secondary BPMN process is covered by the permission of the
+process it belongs to. The reasoning is [decision 66](../DECISIONS.md).
+
 **What to share, and as what.** A workflow aggregate carries the results a model decides on
 and the values an operator reads, not every field of a business object. So a `@TaskParam`
 reads a decision or a number somebody looks at, and the types worth declaring are the ones

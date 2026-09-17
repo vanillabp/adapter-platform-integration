@@ -6,6 +6,42 @@ applications built on VanillaBP). What an application on Camunda 7 has to config
 this is in
 [that adapter's own file](https://github.com/vanillabp/camunda7-adapter/blob/main/UPGRADE.md).
 
+## An aggregate which shares everything has to say so (2026-09-17)
+
+A workflow aggregate which carries no `@NoSyncWithBPMS` anywhere hands every attribute to the
+BPMS, at every sync point, and everything hanging on those attributes with it. Version 1 had no
+such model and Camunda 7 read the aggregate live, so an application which upgrades and has
+annotated nothing lands exactly there.
+
+Version 2 does not start such a workflow any more. The message names the workflow, the aggregate
+and the attributes which travel, and it offers the two ways on.
+
+The first way is the recommended one. Say what the models really need: `@NoSyncWithBPMS` on the
+aggregate class, `@SyncWithBPMS` on each attribute a BPMN expression reads. An aggregate which
+keeps a single attribute back starts without anything else.
+
+The second way is the permission, for the case where the models really may read everything:
+
+```yaml
+vanillabp:
+  workflow-modules:
+    my-module:
+      workflows:
+        MyProcess:
+          allow-full-sync-with-bpms: true
+```
+
+Write it before you upgrade and the upgrade does not begin with a failed startup. It belongs to
+the workflow and is not inherited: the same line at a workflow module, at the application or in an
+adapter section is refused with a message saying where it goes. A permission from above would
+cover the next workflow somebody adds, and that is the workflow nobody looked at.
+
+An aggregate holding nothing but its ID needs neither of the two. That value reaches the BPMS in
+any case, so there is nothing to give away. A secondary BPMN process is covered by the permission
+of the process it belongs to.
+
+The reasoning is decision 66 in [`DECISIONS.md`](./DECISIONS.md).
+
 ## An adapter which keeps no version catalog says so (2026-09-17)
 
 A BPMS which counts no versions of its processes registers no `ProcessVersionCatalog`, and that

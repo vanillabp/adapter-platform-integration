@@ -8,5 +8,30 @@ vanillabp:
       adapters:
         test:
           resources-location: classpath*:test-module/processes/dummy
+      workflows:
+        AppTxProcess:
+          allow-full-sync-with-bpms: true
+        ClassVersionedProcess:
+          allow-full-sync-with-bpms: true
+        DeliveryProcess:
+          allow-full-sync-with-bpms: true
+        DummyProcess:
+          allow-full-sync-with-bpms: true
+        InheritedProcess:
+          allow-full-sync-with-bpms: true
+        InheritingWorkflowService:
+          allow-full-sync-with-bpms: true
+        InvisibleHandlers:
+          allow-full-sync-with-bpms: true
+        LibraryProcess:
+          allow-full-sync-with-bpms: true
+        SharedProcess:
+          allow-full-sync-with-bpms: true
+        TimerProcess:
+          allow-full-sync-with-bpms: true
+        TransactionProcess:
+          allow-full-sync-with-bpms: true
+        VersionedProcess:
+          allow-full-sync-with-bpms: true
 test-module:
   nothing: there

@@ -15,6 +15,14 @@ import lombok.experimental.SuperBuilder;
 public class AdapterProperties {
 
   /**
+   * Refused here on purpose: the permission to share a whole workflow aggregate belongs
+   * to the single workflow (see decision 66 in the repository's DECISIONS.md). It is
+   * bound at this level so that a line written here is answered with a message saying
+   * where it belongs, instead of being ignored.
+   */
+  private Boolean allowFullSyncWithBpms;
+
+  /**
    * Where to load BPMN files from, which are specific to the adapter
    */
   private String resourcesLocation;

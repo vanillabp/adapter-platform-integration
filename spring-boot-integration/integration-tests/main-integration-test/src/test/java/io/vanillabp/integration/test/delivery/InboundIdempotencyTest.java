@@ -182,6 +182,7 @@ public class InboundIdempotencyTest {
                 resources-location: classpath*:test-module/processes/delivery
             workflows:
               DeliveryProcess:
+                allow-full-sync-with-bpms: true
                 tasks:
                   undeduplicatedTask:
                     adapters:

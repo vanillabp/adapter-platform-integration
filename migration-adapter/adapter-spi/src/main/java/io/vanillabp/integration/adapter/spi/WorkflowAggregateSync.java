@@ -90,6 +90,38 @@ public interface WorkflowAggregateSync {
   }
 
   /**
+   * The attributes a workflow aggregate hands to the BPMS where its sync model holds
+   * NOTHING back: no {@code @NoSyncWithBPMS} anywhere in the graph of types reachable
+   * from it, and no type in that graph which shares only the attributes it names.
+   * <p>
+   * The answer is empty wherever something IS held back, which is the ordinary case of
+   * an application which said what its models need. It is empty as well where the
+   * aggregate carries nothing but its ID: that attribute reaches the BPMS whatever the
+   * sync model says (see the type comment), so an aggregate made of it alone gives
+   * nothing away by sharing everything.
+   * <p>
+   * The platform integration asks this at startup, for every workflow it registers, and
+   * refuses to start where the answer is not empty and the workflow did not allow it.
+   * Sharing everything is where an application lands by doing nothing, and on a remote
+   * BPMS that means every attribute leaves the application.
+   *
+   * @param workflowAggregateClass The workflow-aggregate class (may be
+   *          <code>null</code>)
+   * @param aggregateIdAttribute The name of the aggregate's ID attribute, or
+   *          <code>null</code> where the persistence does not name one
+   * @return The attributes of the aggregate itself, in the order they are shared in, and
+   *         empty where anything at all is held back; the default implementation answers
+   *         nothing
+   */
+  default List<String> everythingSharedWithBpms(
+      final Class<?> workflowAggregateClass,
+      final String aggregateIdAttribute) {
+
+    return List.of();
+
+  }
+
+  /**
    * Whether that attribute is SHARED with the BPMS, which is what decides whether an
    * expression reading it finds a value or always <code>null</code>.
    *

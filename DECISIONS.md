@@ -2117,6 +2117,45 @@ that bites. Nothing about that rule changed, it just has more places to apply to
 place. `ModuleFileInEachOfTheFourPlacesTest` holds the same for Spring Boot, and
 `TheSameFileInTwoPlacesTest` of each platform holds the refusal.
 
+### 66. Sharing a whole workflow aggregate is allowed at the workflow and nowhere else
+
+An aggregate which carries no `@NoSyncWithBPMS` anywhere hands every attribute it reaches to the
+BPMS, at every sync point, and decision 10 says why those values are pushed at all. The price of
+that starting point is the application which never thought about it. It writes an aggregate,
+annotates nothing, and the card number travels to a cluster outside the application together with
+the rest. Nobody chose that. It is where an application lands by doing nothing.
+
+So the startup ends there. `FullSyncCheck` asks the sync model, once per registered workflow, what
+the aggregate gives away if nothing at all is held back, and the message names the workflow, the
+aggregate and those attributes. It offers two ways on. The first is to tell the aggregate what the
+models really need, which is the recommendation anyway. The second is a permission at the
+workflow:
+
+```
+vanillabp.workflow-modules.<workflow-module>.workflows.<bpmn-process-id>.allow-full-sync-with-bpms: true
+```
+
+The permission is read at the workflow and nowhere else. That is a deliberate exception from the
+resolution over four levels of decision 7, and the reason is what an inherited permission would
+do: it covers the workflow somebody adds to the module next week, and that is the workflow nobody
+looked at. The key is bound at the application, at a workflow module and in an adapter section as
+well, but only so that a line written there is answered with a message naming the place it
+belongs. Ignoring it would leave somebody believing the permission was given.
+
+What "everything" means is asked of the code which later decides what is written, so the check
+cannot invent an answer of its own. The aggregate's ID attribute is left out of it: that value
+reaches the BPMS whatever the sync model says, so an aggregate made of nothing but its ID gives
+nothing away and starts without a permission. The persistence names that attribute, and where it
+does not, the conventional name `id` stands in - an aggregate must not be refused because nobody
+could name its ID. A secondary BPMN process is not asked either. It
+runs on the workflow of the primary process, and the primary id is the one the configuration
+knows.
+
+The cost is one failed startup for every application which upgrades from version 1 without having
+annotated anything, and that was weighed against a warning. A warning is read once and then
+scrolls past, and what it is about is data leaving the application. `UPGRADE.md` names the
+property so the upgrade does not have to begin with a startup error.
+
 ### 67. A delivery is routed by both wiring keys, because the boot accepts both
 
 A `@WorkflowTask` method is wired by one of two keys and says which: `taskDefinition` names what
@@ -2227,3 +2266,4 @@ called, and only the state was wrong. That is the one ending this must not have.
 
 Nothing is written in `UPGRADE.md`. The outbox of version 2 has not reached a release, so
 there is no behaviour a version-1 application could be upgrading from.
+

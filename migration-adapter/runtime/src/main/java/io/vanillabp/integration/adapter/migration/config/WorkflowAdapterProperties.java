@@ -46,6 +46,14 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   private Map<String, Map<String, String>> extensions = Map.of();
 
   /**
+   * Whether this workflow may hand its ENTIRE workflow aggregate to the BPMS - the one
+   * place this permission may be written, see decision 66 in the repository's
+   * DECISIONS.md. An aggregate which keeps nothing back ends the startup until this
+   * stands at the workflow it is about.
+   */
+  private Boolean allowFullSyncWithBpms;
+
+  /**
    * Overrides <code>vanillabp.delivery</code> for this workflow. Only the settings which
    * belong to a single workflow are read here - the maximum age of an open task, since
    * one process may wait for a partner for weeks while every other one is done in

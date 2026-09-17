@@ -52,6 +52,7 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
 
   @Mapping(target = "prioritizedAdapters", qualifiedByName = "unwrapStringList")
   @Mapping(target = "retiredAdapters", qualifiedByName = "unwrapStringList")
+  @Mapping(target = "allowFullSyncWithBpms", qualifiedByName = "unwrapBoolean")
   // derived from the classpath facts by MigrationAdapterProperties#normalize, not
   // bound from properties (the resources-location convention)
   @Mapping(target = "conventionalResourcesLocations", ignore = true)
@@ -89,21 +90,25 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
       QuarkusMigrationAdapterProperties.MetricsProperties metricsProperties);
 
   @Mapping(target = "outfadedVersions", qualifiedByName = "unwrapOutfadedVersions")
+  @Mapping(target = "allowFullSyncWithBpms", qualifiedByName = "unwrapBoolean")
   AdapterConfigProperties toCore(
       QuarkusMigrationAdapterProperties.AdapterConfiguration adapterConfiguration);
 
   @Mapping(target = "outfadedVersions", qualifiedByName = "unwrapOutfadedVersions")
+  @Mapping(target = "allowFullSyncWithBpms", qualifiedByName = "unwrapBoolean")
   AdapterProperties toCore(
       QuarkusMigrationAdapterProperties.AdapterProperties adapterProperties);
 
   @Mapping(target = "workflowModuleId", ignore = true)
   @Mapping(target = "prioritizedAdapters", qualifiedByName = "unwrapStringList")
+  @Mapping(target = "allowFullSyncWithBpms", qualifiedByName = "unwrapBoolean")
   WorkflowModuleAdapterProperties toCore(
       QuarkusMigrationAdapterProperties.WorkflowModuleProperties workflowModuleProperties);
 
   @Mapping(target = "bpmnProcessId", ignore = true)
   @Mapping(target = "workflowModule", ignore = true)
   @Mapping(target = "prioritizedAdapters", qualifiedByName = "unwrapStringList")
+  @Mapping(target = "allowFullSyncWithBpms", qualifiedByName = "unwrapBoolean")
   WorkflowAdapterProperties toCore(
       QuarkusMigrationAdapterProperties.WorkflowProperties workflowProperties);
 

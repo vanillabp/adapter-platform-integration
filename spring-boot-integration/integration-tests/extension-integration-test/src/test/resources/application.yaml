@@ -46,6 +46,7 @@ vanillabp:
           position: workflow-module
       workflows:
         DummyProcess:
+          allow-full-sync-with-bpms: true
           adapters:
             the-bpms:
               extensions:
@@ -74,5 +75,7 @@ vanillabp:
                 sample:
                   greeting: Moin
                   position: task
+        UnnotedProcess:
+          allow-full-sync-with-bpms: true
 extension-module:
   nothing: there

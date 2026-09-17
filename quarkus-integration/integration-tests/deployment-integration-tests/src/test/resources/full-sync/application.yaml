@@ -1,3 +1,8 @@
+quarkus:
+  datasource:
+    db-kind: h2
+    jdbc:
+      url: jdbc:h2:mem:full-sync;DB_CLOSE_DELAY=-1
 vanillabp:
   adapters:
     demo1:
@@ -9,5 +14,5 @@ vanillabp:
         demo1:
           resources-location: classpath:processes/dummy
       workflows:
-        TestProcess:
+        FullSyncProcess:
           allow-full-sync-with-bpms: true

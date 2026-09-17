@@ -101,6 +101,14 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   private PhaseTwoOutboxProperties outbox = new PhaseTwoOutboxProperties();
 
   /**
+   * Refused here on purpose: the permission to share a whole workflow aggregate belongs
+   * to the single workflow (see decision 66 in the repository's DECISIONS.md). It is
+   * bound at this level so that a line written here is answered with a message saying
+   * where it belongs, instead of being ignored.
+   */
+  private Boolean allowFullSyncWithBpms;
+
+  /**
    * Configuration of the default election cache
    * {@link io.vanillabp.integration.spi.WorkflowAdapterCache} (properties section
    * <code>vanillabp.workflow-adapter-cache</code>).
@@ -1207,6 +1215,118 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
+   * Whether that workflow may hand its entire workflow aggregate to the BPMS
+   * (<code>vanillabp.workflow-modules.&lt;id&gt;.workflows.&lt;bpmn-process-id&gt;.allow-full-sync-with-bpms</code>).
+   * <p>
+   * Read at the workflow and nowhere else. Every other property of a workflow falls back
+   * to the levels above it, this one does not: a permission inherited from a workflow
+   * module would cover the workflow somebody adds next week, and that is the workflow
+   * nobody looked at. See decision 66 in the repository's DECISIONS.md.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @return Whether this workflow allows sharing its aggregate as a whole
+   */
+  public boolean allowsFullSyncWithBpms(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    final var module = workflowModuleId != null
+        ? workflowModules.get(workflowModuleId)
+        : null;
+    if (module == null) {
+      return false;
+    }
+    final var workflow = bpmnProcessId != null
+        ? module
+            .getWorkflows()
+            .get(bpmnProcessId)
+        : null;
+    return (workflow != null) && Boolean.TRUE.equals(workflow.getAllowFullSyncWithBpms());
+
+  }
+
+  /**
+   * The property allowing what {@link #allowsFullSyncWithBpms(String, String)} decides,
+   * for the message which has to hand the developer a line to copy.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @return The property key at the workflow
+   */
+  public static String allowFullSyncWithBpmsProperty(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return "%s.workflow-modules.%s.workflows.%s.allow-full-sync-with-bpms"
+        .formatted(PREFIX, workflowModuleId, bpmnProcessId);
+
+  }
+
+  /**
+   * Refuses the permission of {@link #allowsFullSyncWithBpms(String, String)} wherever it
+   * stands somewhere else than at a workflow. Every level it can be written at is bound,
+   * so the line is answered rather than ignored, and the answer says where it belongs.
+   *
+   * @throws IllegalStateException Naming the place the permission was written at and the
+   *           key it belongs under
+   */
+  private void refuseFullSyncPermissionsOutsideAWorkflow() {
+
+    final var misplaced = new java.util.LinkedList<String>();
+    if (allowFullSyncWithBpms != null) {
+      misplaced.add("%s.allow-full-sync-with-bpms".formatted(PREFIX));
+    }
+    adapters
+        .entrySet()
+        .stream()
+        .filter(adapter -> adapter.getValue().getAllowFullSyncWithBpms() != null)
+        .forEach(adapter -> misplaced
+            .add("%s.adapters.%s.allow-full-sync-with-bpms".formatted(PREFIX, adapter.getKey())));
+    workflowModules.forEach((
+        moduleId,
+        module) -> {
+      if (module.getAllowFullSyncWithBpms() != null) {
+        misplaced.add("%s.workflow-modules.%s.allow-full-sync-with-bpms".formatted(PREFIX, moduleId));
+      }
+      module
+          .getAdapters()
+          .entrySet()
+          .stream()
+          .filter(adapter -> adapter.getValue().getAllowFullSyncWithBpms() != null)
+          .forEach(adapter -> misplaced
+              .add("%s.workflow-modules.%s.adapters.%s.allow-full-sync-with-bpms"
+                  .formatted(PREFIX, moduleId, adapter.getKey())));
+      module
+          .getWorkflows()
+          .forEach((
+              processId,
+              workflow) -> workflow
+                  .getAdapters()
+                  .entrySet()
+                  .stream()
+                  .filter(adapter -> adapter.getValue().getAllowFullSyncWithBpms() != null)
+                  .forEach(adapter -> misplaced
+                      .add("%s.workflow-modules.%s.workflows.%s.adapters.%s.allow-full-sync-with-bpms"
+                          .formatted(PREFIX, moduleId, processId, adapter.getKey()))));
+    });
+    if (misplaced.isEmpty()) {
+      return;
+    }
+    throw new IllegalStateException(
+        """
+            Sharing a whole workflow aggregate is allowed at the workflow and nowhere else, \
+            but it is configured at:
+              %s
+            Move each of them to the workflow it is meant for:
+              %s.workflow-modules.<workflow-module>.workflows.<bpmn-process-id>.allow-full-sync-with-bpms: true
+            An inherited permission would cover the next workflow somebody adds to the module \
+            as well, and that is the workflow nobody looked at."""
+            .formatted(String.join("\n  ", misplaced), PREFIX));
+
+  }
+
+  /**
    * Whether the given workflow module accepts a prioritized adapter which cannot
    * locate workflows next to other adapters
    * (<code>vanillabp.election.guessing-adapters</code>, overridable as
@@ -1619,6 +1739,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     }
     metrics.validate();
     validateMaxTaskAge();
+    refuseFullSyncPermissionsOutsideAWorkflow();
     reportRetentionSplit();
     reportWhatStaysAwake();
 

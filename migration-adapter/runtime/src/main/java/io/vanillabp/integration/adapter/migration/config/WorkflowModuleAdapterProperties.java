@@ -29,6 +29,14 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
   private Map<String, WorkflowAdapterProperties> workflows = Map.of();
 
   /**
+   * Refused here on purpose: the permission to share a whole workflow aggregate belongs
+   * to the single workflow (see decision 66 in the repository's DECISIONS.md). It is
+   * bound at this level so that a line written here is answered with a message saying
+   * where it belongs, instead of being ignored.
+   */
+  private Boolean allowFullSyncWithBpms;
+
+  /**
    * Overrides <code>vanillabp.transactions</code> for this workflow module. A setting
    * left undefined here means the global one applies, so a single module can accept
    * unguarded writes while every other one keeps failing the startup check.

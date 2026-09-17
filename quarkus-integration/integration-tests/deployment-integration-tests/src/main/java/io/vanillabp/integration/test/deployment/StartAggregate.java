@@ -1,5 +1,7 @@
 package io.vanillabp.integration.test.deployment;
 
+import io.vanillabp.spi.service.NoSyncWithBPMS;
+
 /**
  * The aggregate of the acceptance test of workflows the BPMS starts on its own. Its
  * ID is a String, so a timer's trigger time can be its identity.
@@ -16,6 +18,8 @@ public class StartAggregate {
    * Set by the <code>&#64;WorkflowStartedByBpms</code> method, so a test can tell
    * whether the application had its say or VanillaBP built the aggregate alone.
    */
+  // the test reads this, no BPMN model does - so it stays out of the BPMS
+  @NoSyncWithBPMS
   private String startedBy;
 
   public String getId() {

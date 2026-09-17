@@ -52,6 +52,15 @@ public interface QuarkusMigrationAdapterProperties {
   Optional<List<String>> retiredAdapters();
 
   /**
+   * Bound although it is refused here: the permission to share a whole workflow
+   * aggregate belongs to the single workflow, and a line written at this level is
+   * answered by the core with a message saying where it belongs.
+   *
+   * @return The misplaced permission, if somebody wrote one
+   */
+  Optional<Boolean> allowFullSyncWithBpms();
+
+  /**
    * Where to load VanillaBP BPMN files from, which are NOT specific to any adapter.
    */
   Optional<String> resourcesLocation();
@@ -159,6 +168,15 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<DeploymentFailurePolicy> deploymentFailure();
 
     /**
+     * Bound although it is refused here: the permission to share a whole workflow
+     * aggregate belongs to the single workflow, and a line written at this level is
+     * answered by the core with a message saying where it belongs.
+     *
+     * @return The misplaced permission, if somebody wrote one
+     */
+    Optional<Boolean> allowFullSyncWithBpms();
+
+    /**
      * Where to load BPMN files from, which are specific to the adapter. This
      * section is the least specific level of the most-specific-wins resolution of
      * adapter-scoped properties, so it carries the same per-level keys as the
@@ -235,6 +253,15 @@ public interface QuarkusMigrationAdapterProperties {
    * adapter-scoped properties (workflow module, workflow or task).
    */
   interface AdapterProperties {
+
+    /**
+     * Bound although it is refused here: the permission to share a whole workflow
+     * aggregate belongs to the single workflow, and a line written at this level is
+     * answered by the core with a message saying where it belongs.
+     *
+     * @return The misplaced permission, if somebody wrote one
+     */
+    Optional<Boolean> allowFullSyncWithBpms();
 
     /**
      * Where to load BPMN files from, which are specific to the adapter. Optional:
@@ -555,6 +582,15 @@ public interface QuarkusMigrationAdapterProperties {
     Map<String, WorkflowProperties> workflows();
 
     /**
+     * Bound although it is refused here: the permission to share a whole workflow
+     * aggregate belongs to the single workflow, and a line written at this level is
+     * answered by the core with a message saying where it belongs.
+     *
+     * @return The misplaced permission, if somebody wrote one
+     */
+    Optional<Boolean> allowFullSyncWithBpms();
+
+    /**
      * Overrides <code>vanillabp.transactions</code> for this workflow module.
      *
      * @return The transaction configuration of this workflow module
@@ -677,6 +713,14 @@ public interface QuarkusMigrationAdapterProperties {
      * no consumer yet.
      */
     Map<String, TaskProperties> tasks();
+
+    /**
+     * Whether this workflow may hand its ENTIRE workflow aggregate to the BPMS. The one
+     * level this permission may be written at - it is not inherited from anywhere.
+     *
+     * @return The permission, an empty Optional meaning "not allowed"
+     */
+    Optional<Boolean> allowFullSyncWithBpms();
 
     /**
      * Overrides <code>vanillabp.delivery</code> for this workflow.
