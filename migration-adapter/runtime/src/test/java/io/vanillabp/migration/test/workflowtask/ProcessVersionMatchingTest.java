@@ -545,11 +545,55 @@ public class ProcessVersionMatchingTest {
     assertEquals("tagged", persistence.aggregates.get("4711").servedBy);
     assertEquals(1, catalog.fetches);
 
-    // ANOTHER cluster node deployed version 3 while this one is running: the version
-    // is unknown here, so the BPMS is asked on demand
+    // ANOTHER cluster node deployed version 3 while this one is running, and the
+    // open end of the second method serves it
     catalog.versions.add(DeployedProcessVersion.of("3", "release-2025"));
     testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", "3"));
     assertEquals("afterTheTag", persistence.aggregates.get("4711").servedBy);
+    // whether that delivery ASKED the BPMS is not decided here. Both methods are
+    // offered it, the first one which matches serves it, and only the one naming the
+    // tag has to place version 3 to answer. Which of the two is offered it first comes
+    // from reflection over the class, which orders nothing, so the question belongs to
+    // aVersionDeployedElsewhereIsLookedUpOnDemand, where one method is the only
+    // candidate
+
+  }
+
+  static class TagMovedToALaterVersionService {
+
+    @WorkflowTask(taskDefinition = "task", version = "release-2024")
+    public void tagged(
+        final Aggregate aggregate) {
+
+      aggregate.servedBy = "tagged";
+
+    }
+
+  }
+
+  @Test
+  @DisplayName("A version another node deployed is looked up when a delivery carries it")
+  public void aVersionDeployedElsewhereIsLookedUpOnDemand() {
+
+    // one method, so the delivery below has exactly one candidate: what this test
+    // measures is whether the BPMS is asked, and a second candidate matching earlier
+    // would leave the first one unasked without saying so
+    final var testee = registry(TagMovedToALaterVersionService.class, TagMovedToALaterVersionService::new);
+    final var catalog = new RecordingCatalog();
+    catalog.versions.add(DeployedProcessVersion.of("1", null));
+    catalog.versions.add(DeployedProcessVersion.of("2", "release-2024"));
+    testee.registerProcessVersions(ADAPTER, MODULE, PROCESS, catalog);
+    testee.resolveProcessVersions(MODULE);
+    storeAggregate("4711");
+
+    // the startup resolution asked the BPMS once
+    assertEquals(1, catalog.fetches);
+
+    // ANOTHER cluster node deployed version 3 and moved the tag to it. This node knows
+    // neither, so serving the delivery is only possible after asking the BPMS
+    catalog.versions.add(DeployedProcessVersion.of("3", "release-2024"));
+    testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", "3"));
+    assertEquals("tagged", persistence.aggregates.get("4711").servedBy);
     assertTrue(catalog.fetches > 1, "the version deployed elsewhere was looked up on demand");
 
   }
