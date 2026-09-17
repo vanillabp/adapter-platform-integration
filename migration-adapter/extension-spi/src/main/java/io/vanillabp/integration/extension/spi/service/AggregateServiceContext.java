@@ -46,57 +46,6 @@ public interface AggregateServiceContext {
       Object workflowAggregateId);
 
   /**
-   * Which state of the given aggregate is the current one, as the application's own
-   * auditing names it. Ask for it while the transaction which changed the aggregate is
-   * still open, and carry it in the phase-two call your extension plans there
-   * (<code>PhaseTwoCall#askingForTheStateOfTheEvent</code>): the dispatch of that call
-   * then reads the aggregate as it was at this moment instead of as it is then.
-   * <p>
-   * The answer is <code>null</code> where the application keeps no history of its
-   * aggregates, which is the normal case. A call carrying <code>null</code> is a call
-   * asking for nothing, so an extension may always ask and pass on what it gets.
-   * <p>
-   * The default answers <code>null</code>, so a context of somebody's own keeps working
-   * unchanged.
-   *
-   * @param workflowAggregate The aggregate whose current state is to be named
-   * @return The auditing id, or <code>null</code> where there is no auditing
-   */
-  default String getAuditingId(
-      final Object workflowAggregate) {
-
-    return null;
-
-  }
-
-  /**
-   * The aggregate as it was when the given auditing id was the current one - what an
-   * extension loads while it dispatches a call which asked for the state of its event.
-   * <p>
-   * An auditing id of <code>null</code>, and an application which keeps no history,
-   * both give the aggregate as it is now. Where the old state is gone because the
-   * auditing was cleaned up, the current one is answered and VanillaBP writes a warning
-   * naming the aggregate and the id: a report carrying newer values is better than no
-   * report.
-   * <p>
-   * The default ignores the auditing id, so a context of somebody's own keeps working
-   * unchanged.
-   *
-   * @param workflowAggregateId The ID of a workflow aggregate, in its own type or
-   *          serialized
-   * @param auditingId The auditing id of the wanted state, or <code>null</code> for the
-   *          state of this moment
-   * @return The aggregate, or <code>null</code> if the store holds none of that ID
-   */
-  default Object loadWorkflowAggregate(
-      final Object workflowAggregateId,
-      final String auditingId) {
-
-    return loadWorkflowAggregate(workflowAggregateId);
-
-  }
-
-  /**
    * Saves an aggregate through the persistence VanillaBP resolved for it.
    *
    * @param workflowAggregate The aggregate to save

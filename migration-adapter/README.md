@@ -2638,19 +2638,6 @@ itself; the implementation with the most specific generic type for the aggregate
 It is the single canonical interface used on all platforms — business code implements
 it regardless of running on Spring Boot or Quarkus.
 
-Two of its methods are about an aggregate's PAST, and both defaults keep what an
-application without an auditing has. `getAuditingId(aggregate)` names the state the
-aggregate stands at, as the application's own auditing names it, and answers `null`
-where there is no auditing. `loadByIdAndAuditingId(id, auditingId)` reads that state
-back, and its default ignores the id and loads the current state. They exist for the
-outbox: an entry which reports may say which state it means when it is planned
-(`PhaseTwoCall#askingForTheStateOfTheEvent`), and its dispatch is then served with that
-state through `MigrationProcessService#loadWorkflowAggregateById(id, auditingId)`, which
-falls back to the current state with a warning where the auditing no longer has it. An
-extension reaches it through `AggregateServiceContext`, whose two new methods pass both
-questions on. Why the choice belongs to the call and not to the application is
-decision 63 in the repository's `DECISIONS.md`.
-
 ### What the platform hands a process service (`MigrationProcessService.Builder`)
 
 One process service exists per workflow module and BPMN process, and it is built rather
