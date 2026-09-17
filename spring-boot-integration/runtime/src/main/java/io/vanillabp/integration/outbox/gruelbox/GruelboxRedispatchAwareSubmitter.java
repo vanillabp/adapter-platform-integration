@@ -48,6 +48,23 @@ public final class GruelboxRedispatchAwareSubmitter implements Submitter {
 
   private static final ThreadLocal<Boolean> PREVIOUSLY_ATTEMPTED = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
+  /**
+   * The entries this application is dispatching right now. gruelbox locks the row of
+   * an entry it dispatches (<code>SELECT ... FOR UPDATE</code>) and keeps that lock
+   * until the handler returned, so any write to such a row waits for a remote call to
+   * come back - which is what an outbox exists to keep out of a business transaction.
+   * The store therefore asks HERE before it replaces an entry, and this is the one
+   * hook which knows: gruelbox hands an entry to its submitter before it invokes
+   * anything.
+   * <p>
+   * It answers for this application only, and that is enough for the case it is
+   * needed in: gruelbox submits an entry directly on the instance whose transaction
+   * committed it, and every OTHER way into a dispatch goes through a flush, which
+   * counts the entry's version up and is therefore visible to every instance. See
+   * {@code GruelboxPhaseTwoOutbox} for the residual this leaves.
+   */
+  private static final java.util.Set<String> BEING_DISPATCHED = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
   private final Submitter delegate;
 
   /**
@@ -71,6 +88,19 @@ public final class GruelboxRedispatchAwareSubmitter implements Submitter {
   public static boolean isPreviouslyAttempted() {
 
     return PREVIOUSLY_ATTEMPTED.get();
+
+  }
+
+  /**
+   * Whether this application is dispatching the entry of that id right now.
+   *
+   * @param entryId The id of the entry, as gruelbox stores it
+   * @return Whether a dispatch holds it
+   */
+  public static boolean isBeingDispatched(
+      final String entryId) {
+
+    return BEING_DISPATCHED.contains(entryId);
 
   }
 
@@ -113,9 +143,11 @@ public final class GruelboxRedispatchAwareSubmitter implements Submitter {
         entryOnWorkerThread -> {
           PREVIOUSLY_ATTEMPTED.set(
               (entryOnWorkerThread.getAttempts() > 0) || (entryOnWorkerThread.getLastAttemptTime() != null));
+          BEING_DISPATCHED.add(entryOnWorkerThread.getId());
           try {
             localExecutor.accept(entryOnWorkerThread);
           } finally {
+            BEING_DISPATCHED.remove(entryOnWorkerThread.getId());
             PREVIOUSLY_ATTEMPTED.remove();
           }
         });

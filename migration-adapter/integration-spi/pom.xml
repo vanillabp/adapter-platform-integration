@@ -34,5 +34,9 @@
       <groupId>io.vanillabp</groupId>
       <artifactId>spi-for-java</artifactId>
     </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+    </dependency>
   </dependencies>
 </project>

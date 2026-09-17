@@ -204,7 +204,28 @@ of 16 MB per document is never reached.
 The payload is removed when its entry is marked dispatched. What a crash between the two
 writes leaves behind, and the payload of an entry blocked longer than
 `vanillabp.outbox.retention`, is removed by the age sweep which rides the housekeeping of
-each store.
+each store. A payload is removed earlier in one case: where a younger call replaced the
+entry which named it, see below.
+
+### A younger call which takes the waiting entry's place
+
+A call carrying a payload carries a state, and a state goes stale. So such a call may ask
+to take the place of the entry of its key which is still waiting, instead of being dropped
+against it: `outbox.scheduleReplacingWhatIsStillWaiting(call.replacingWhatIsStillWaiting())`.
+The entry keeps its key, gets everything the dispatch reads, and the payload it named before
+is removed in the same transaction. Decision 68 in `DECISIONS.md` says why the direction
+turned and why the mark hangs on the call.
+
+Both stores of this module refuse to replace an entry a dispatch has already taken; the
+younger call becomes an entry of its own then, holding no key. On MongoDB that is the
+`attempts` field, which the dispatcher counts up when it claims a document. On gruelbox it
+takes two answers, because gruelbox reaches a dispatch two ways: an entry a flush picked up
+was pushed back first and carries `version > 0`, while an entry submitted right after its
+commit still reads as untouched although gruelbox holds its row with `SELECT ... FOR UPDATE`
+until the handler returns. The second case is asked of `GruelboxRedispatchAwareSubmitter`,
+which sees every entry before its invocation and keeps the ids it is dispatching. Without
+that question a delete would wait for the lock, and with it a business transaction would wait
+for a remote call.
 
 This module provides two
 default implementations, both configured by the `vanillabp.outbox.*` properties

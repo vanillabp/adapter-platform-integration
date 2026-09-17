@@ -71,6 +71,19 @@ public class ExtensionOperationDispatchTest {
 
   private static final String COUNT_PAYLOADS = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_PAYLOAD";
 
+  /**
+   * The entries of one key which still wait, addressed the way the store deduplicates
+   * them.
+   */
+  private static final String COUNT_ENTRIES_OF_KEY = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX "
+      + "WHERE DEDUP_KEY = '%s'";
+
+  /**
+   * The entries an aggregate has waiting, whatever they deduplicate against.
+   */
+  private static final String COUNT_OPEN_ENTRIES_OF_AGGREGATE = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX "
+      + "WHERE AGGREGATE_ID = '%s' AND STATUS = 'OPEN'";
+
   @Inject
   WorkflowService workflowService;
 
@@ -142,6 +155,149 @@ public class ExtensionOperationDispatchTest {
     }
     userTransaction.commit();
     return attached;
+
+  }
+
+  private static byte[] payloadOf(
+      final String content) {
+
+    return content.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+
+  }
+
+  @Test
+  @DisplayName("The younger report replaces the waiting one, and only it is dispatched")
+  public void theYoungerReportReplacesTheWaitingOne() throws Exception {
+
+    // both ride ONE transaction on purpose: nothing is dispatched before it commits,
+    // so the second call meets an entry which is certainly still waiting
+    userTransaction.begin();
+    final var aggregate = workflowService.startWorkflow("replace-jdbc");
+    final var first = SampleExtension
+        .call("test-module", "dummy", aggregate.getId().toString(), "replaced", payloadOf("{\"amount\":1}"));
+    assertTrue(outbox.scheduleReplacingWhatIsStillWaiting(first));
+    final var second = SampleExtension
+        .call("test-module", "dummy", aggregate.getId().toString(), "replaced", payloadOf("{\"amount\":2}"));
+    assertTrue(outbox.scheduleReplacingWhatIsStillWaiting(second));
+
+    // one entry under that key, and the bytes of the replaced call are gone before
+    // this transaction commits
+    assertEquals(1L, count(COUNT_ENTRIES_OF_KEY.formatted(first.idempotencyKey().orElseThrow())));
+    assertEquals(0L, count(COUNT_PAYLOAD_OF_REFERENCE.formatted(first.payloadReference())));
+    assertEquals(1L, count(COUNT_PAYLOAD_OF_REFERENCE.formatted(second.payloadReference())));
+    userTransaction.commit();
+
+    final var dispatched = extension.awaitDispatched(1, 10000);
+    assertArrayEquals(payloadOf("{\"amount\":2}"), dispatched.getFirst().payload());
+    assertEquals(second.payloadReference(), dispatched.getFirst().payloadReference());
+
+    // and the one which was dispatched is the only one there ever was
+    Thread.sleep(1500);
+    assertEquals(1, extension.getDispatched().size());
+
+  }
+
+  @Test
+  @DisplayName("Without the word the older report stays and the younger one is dropped")
+  public void withoutTheWordTheOlderReportStays() throws Exception {
+
+    userTransaction.begin();
+    final var aggregate = workflowService.startWorkflow("no-replace-jdbc");
+    final var first = SampleExtension
+        .call("test-module", "dummy", aggregate.getId().toString(), "kept", payloadOf("{\"amount\":1}"));
+    assertTrue(outbox.schedule(first));
+    final var second = SampleExtension
+        .call("test-module", "dummy", aggregate.getId().toString(), "kept", payloadOf("{\"amount\":2}"));
+    assertFalse(outbox.schedule(second));
+    // a schedule which was discarded leaves nothing behind
+    assertEquals(0L, count(COUNT_PAYLOAD_OF_REFERENCE.formatted(second.payloadReference())));
+    userTransaction.commit();
+
+    final var dispatched = extension.awaitDispatched(1, 10000);
+    assertArrayEquals(payloadOf("{\"amount\":1}"), dispatched.getFirst().payload());
+    assertEquals(first.payloadReference(), dispatched.getFirst().payloadReference());
+
+  }
+
+  @Test
+  @DisplayName("An entry a dispatch has taken is not replaced - the younger call becomes a second one")
+  public void anEntryADispatchHasTakenIsNotReplaced() throws Exception {
+
+    extension.holdNextDispatch();
+    try {
+      userTransaction.begin();
+      final var aggregate = workflowService.startWorkflow("claimed-jdbc");
+      assertTrue(
+          outbox
+              .scheduleReplacingWhatIsStillWaiting(
+                  SampleExtension
+                      .call(
+                          "test-module",
+                          "dummy",
+                          aggregate.getId().toString(),
+                          "claimed",
+                          payloadOf("{\"amount\":1}"))));
+      userTransaction.commit();
+
+      // the entry is claimed and its dispatch stands inside the handler
+      extension.awaitHeldDispatchEntered(10000);
+
+      userTransaction.begin();
+      assertTrue(
+          outbox
+              .scheduleReplacingWhatIsStillWaiting(
+                  SampleExtension
+                      .call(
+                          "test-module",
+                          "dummy",
+                          aggregate.getId().toString(),
+                          "claimed",
+                          payloadOf("{\"amount\":2}"))));
+      userTransaction.commit();
+
+      // two entries wait now: the one which is on its way and the one this call became
+      assertEquals(2L, count(COUNT_OPEN_ENTRIES_OF_AGGREGATE.formatted(aggregate.getId())));
+    } finally {
+      extension.releaseHeldDispatch();
+    }
+
+    // both reach the handler - which of them first is the dispatcher's business
+    final var payloads = extension
+        .awaitDispatched(2, 10000)
+        .stream()
+        .map(call -> new String(call.payload(), java.nio.charset.StandardCharsets.UTF_8))
+        .toList();
+    assertTrue(payloads.contains("{\"amount\":1}"), payloads.toString());
+    assertTrue(payloads.contains("{\"amount\":2}"), payloads.toString());
+
+  }
+
+  @Test
+  @DisplayName("A rolled-back replacement leaves neither entry nor payload behind")
+  public void aRolledBackReplacementLeavesNothing() throws Exception {
+
+    // the replaced entry has to be committed for this to be a replacement at all, and
+    // the only moment it is certainly still waiting is before the transaction commits
+    // which wrote it - so both calls ride the transaction which rolls back. What it
+    // proves is that all three writes of a replacement enlist: the entry, the younger
+    // payload, and the removal of the payload which was replaced
+    userTransaction.begin();
+    final var aggregate = workflowService.startWorkflow("rollback-jdbc");
+    final var first = SampleExtension
+        .call("test-module", "dummy", aggregate.getId().toString(), "rolled-back", payloadOf("{\"amount\":1}"));
+    assertTrue(outbox.scheduleReplacingWhatIsStillWaiting(first));
+    final var second = SampleExtension
+        .call("test-module", "dummy", aggregate.getId().toString(), "rolled-back", payloadOf("{\"amount\":2}"));
+    assertTrue(outbox.scheduleReplacingWhatIsStillWaiting(second));
+    userTransaction.rollback();
+
+    assertEquals(0L, count(COUNT_ENTRIES_OF_KEY.formatted(first.idempotencyKey().orElseThrow())));
+    assertEquals(0L, count(COUNT_PAYLOAD_OF_REFERENCE.formatted(first.payloadReference())));
+    assertEquals(0L, count(COUNT_PAYLOAD_OF_REFERENCE.formatted(second.payloadReference())));
+
+    // wait longer than the poll interval: nothing of that transaction may be dispatched
+    Thread.sleep(1500);
+    assertTrue(extension.getDispatched().isEmpty());
 
   }
 
