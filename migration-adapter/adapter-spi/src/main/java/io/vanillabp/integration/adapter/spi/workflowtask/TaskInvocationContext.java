@@ -41,16 +41,20 @@ public interface TaskInvocationContext {
    * calls the element of the model.
    * <p>
    * {@link #getTaskDefinition()} carries the same text only where the BPMN task names no
-   * task definition, because a handler is resolved by either of the two; a Camunda 8 job
-   * type or a Camunda 7 topic is reported there otherwise. So this is the answer to "which
-   * element of the model is this", and that one is the answer to "which method serves it".
+   * task definition; a Camunda 8 job type or a Camunda 7 topic is reported there otherwise.
+   * So the two are different answers, and the core needs both to find the method serving
+   * the delivery: a method is wired by one of them
+   * (<code>&#64;WorkflowTask(taskDefinition = ...)</code> respectively
+   * <code>&#64;WorkflowTask(id = ...)</code>), and an application which wires by the element
+   * id is reached through this value alone.
    * <p>
-   * The core writes it into the delivery record
+   * The core also writes it into the delivery record
    * ({@link io.vanillabp.integration.spi.TaskDelivery#bpmnElementId()}), where it is what an
-   * extension addresses a task in the model by. Nothing VanillaBP decides depends on it.
+   * extension addresses a task in the model by.
    * <p>
-   * The default is <code>null</code>, which means "this adapter does not name one": the
-   * record then carries no element id, exactly as every record written before this existed.
+   * The default is <code>null</code>, which means "this adapter does not name one". Such an
+   * adapter serves a method wired by the element id only where its task definition IS that
+   * id, and its delivery records carry no element id.
    *
    * @return The BPMN element's id or <code>null</code>
    */
