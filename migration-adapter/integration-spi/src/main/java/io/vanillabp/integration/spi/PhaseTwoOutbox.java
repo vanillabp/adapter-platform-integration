@@ -72,10 +72,12 @@ import org.slf4j.LoggerFactory;
  * never taking work away from a dispatch which may have reached the BPMS already.
  * <p>
  * <strong>What the dispatch reads is what was written last.</strong> Removing the
- * replaced payload, writing the younger one and pointing the entry at it happen in the
- * one transaction the call was scheduled in, so no reader ever meets an entry whose
- * payload is gone. A rollback leaves the replaced entry and its payload exactly as they
- * were.
+ * replaced payload, writing the younger one and pointing the entry at it belong to the
+ * transaction the call was scheduled in, exactly as the entry itself does, so no reader
+ * meets an entry whose payload is gone and a rollback leaves the replaced entry and its
+ * payload as they were. Where a store cannot enlist at all - the MongoDB stores without
+ * a replica set say so in their own javadoc - a replacement is best-effort in the way
+ * an insert is there.
  * <p>
  * What the narrowed window does NOT protect against is two entries planned in the same
  * batch of work: multi-instance siblings of one aggregate share module, process and
