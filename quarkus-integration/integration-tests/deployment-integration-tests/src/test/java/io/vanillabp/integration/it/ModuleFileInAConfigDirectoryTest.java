@@ -58,7 +58,7 @@ public class ModuleFileInAConfigDirectoryTest {
   public void theSettingsOfTheFileAreNotThere() {
 
     Assertions.assertTrue(
-        config.getOptionalValue("test-module.from-a-config-directory", String.class).isEmpty(),
+        config.getOptionalValue("test-module.a-setting", String.class).isEmpty(),
         "Quarkus read the file after all");
 
   }

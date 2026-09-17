@@ -20,7 +20,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * not loaded anywhere else. Measured on 2026-09-17 against SmallRye 3.17.2, the version
  * Quarkus 3.39 brings. Should SmallRye ever pair the two differently, this test says so
  * first, and the report of
- * {@code WorkflowModuleBuildStepProcessor#reportProfileFilesWithoutTheirPlainFile} has
+ * {@code WorkflowModuleBuildStepProcessor#reportConfigFilesWhichStayUnread} has
  * lost its reason.
  */
 @ExtendWith(SuppressOutputExtension.class)

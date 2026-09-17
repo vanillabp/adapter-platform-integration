@@ -423,8 +423,7 @@ public class WorkflowModuleBuildStepProcessor {
     watchedFiles
         .produce(HotDeploymentWatchedFileBuildItem
             .builder()
-            .setLocationPredicate(relativePath -> isWorkflowModuleConfigFile.test(relativePath) || isInAConfigDirectory
-                .test(relativePath))
+            .setLocationPredicate(isWorkflowModuleConfigFile.or(isInAConfigDirectory))
             .build());
 
     workflowModuleSpecificConfigFiles(applicationArchives, isWorkflowModuleConfigFile)
@@ -477,7 +476,10 @@ public class WorkflowModuleBuildStepProcessor {
     messageAboutFilesInAConfigDirectory(
         workflowModuleSpecificConfigFiles(
             applicationArchives,
-            workflowModuleConfigFileInAConfigDirectoryRule(allWorkflowModules)))
+            workflowModuleConfigFileInAConfigDirectoryRule(allWorkflowModules)
+                // a workflow module whose ID is "config" reads "config/config.yaml" itself,
+                // and a file which is read is not reported
+                .and(workflowModuleSpecificConfigFileRule(allWorkflowModules).negate())))
         .ifPresent(recorder::report);
 
     return new WorkflowModuleConfigFilesReportedBuildItem();
@@ -500,7 +502,8 @@ public class WorkflowModuleBuildStepProcessor {
     }
 
     return Optional.of("""
-        Configuration files of workflow modules which this application does not read:
+        Configuration files of workflow modules which lie in a 'config' directory and are \
+        therefore not read:
           %s
         Quarkus reads a workflow module's configuration at the classpath root and in a \
         directory named after the workflow module. A 'config' directory is neither, so none \
@@ -526,7 +529,7 @@ public class WorkflowModuleBuildStepProcessor {
     final var lastSlash = configFile.lastIndexOf('/');
     final var filename = configFile.substring(lastSlash + 1);
     // the rule matched the file, so its directory is "config" or "<module-id>/config"
-    final var directory = configFile.substring(0, lastSlash);
+    final var directory = configFile.substring(0, Math.max(lastSlash, 0));
     return directory.substring(0, directory.lastIndexOf('/') + 1) + filename;
 
   }

@@ -224,13 +224,13 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
    * there. Moving the file one directory up makes it work on both, which is why every line
    * names the place it belongs at (see decision 65 in the repository's DECISIONS.md).
    *
-   * @param configFiles The files of one workflow module found in the classpath
+   * @param filesOfTheModule The files of one workflow module found in the classpath
    * @return The warning, or nothing where no file of that module lies in such a directory
    */
   private static Optional<String> messageAboutFilesInAConfigDirectory(
-      final List<ConfigFile> configFiles) {
+      final List<ConfigFile> filesOfTheModule) {
 
-    final var filesInAConfigDirectory = configFiles
+    final var filesInAConfigDirectory = filesOfTheModule
         .stream()
         .filter(ConfigFile::liesInAConfigDirectory)
         .map(ConfigFile::describeWhereItBelongs)
@@ -242,7 +242,8 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
     }
 
     return Optional.of("""
-        Configuration files of workflow modules which a Quarkus application would not read:
+        Configuration files of workflow modules which lie in a 'config' directory, which a \
+        Quarkus application does not read:
           %s
         Spring Boot searches a 'config' directory, Quarkus reads a workflow module's \
         configuration at the classpath root and in a directory named after the module. \
@@ -378,6 +379,11 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
      */
     boolean liesInAConfigDirectory() {
 
+      if (location.equals("%s/%s".formatted(moduleId, filename()))) {
+        // a workflow module whose ID is "config" reads "config/<filename>" itself,
+        // and a file which both platforms read is not reported
+        return false;
+      }
       return location.startsWith("config/") || location.startsWith("%s/config/".formatted(moduleId));
 
     }
@@ -388,12 +394,21 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
      */
     String describeWhereItBelongs() {
 
-      final var filename = location.substring(location.lastIndexOf('/') + 1);
-      final var directory = location.substring(0, location.lastIndexOf('/'));
+      final var lastSlash = location.lastIndexOf('/');
       // the file lies in a config directory, so what is left of the directory above it
       // is either nothing or the name of the workflow module
-      final var whereItBelongs = directory.substring(0, directory.lastIndexOf('/') + 1) + filename;
+      final var directory = location.substring(0, Math.max(lastSlash, 0));
+      final var whereItBelongs = directory.substring(0, directory.lastIndexOf('/') + 1) + filename();
       return "%s, which belongs at '%s'".formatted(url().orElse(location), whereItBelongs);
+
+    }
+
+    /**
+     * @return The name of the file, without the classpath location it was found at
+     */
+    private String filename() {
+
+      return location.substring(location.lastIndexOf('/') + 1);
 
     }
 

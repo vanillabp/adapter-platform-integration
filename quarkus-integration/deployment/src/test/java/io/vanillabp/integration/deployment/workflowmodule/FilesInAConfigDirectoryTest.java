@@ -21,7 +21,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 public class FilesInAConfigDirectoryTest {
 
   @Test
-  @DisplayName("A file at the classpath root belongs one directory up")
+  @DisplayName("A file in 'config/' belongs at the classpath root")
   public void aFileInTheConfigDirectoryIsReported() {
 
     final var warning = WorkflowModuleBuildStepProcessor
@@ -37,6 +37,9 @@ public class FilesInAConfigDirectoryTest {
     Assertions.assertTrue(
         warning.contains("Spring Boot"),
         "the platform which does read the file is not named: %s".formatted(warning));
+    Assertions.assertTrue(
+        warning.contains("'config' directory"),
+        "the headline does not say why the files are not read: %s".formatted(warning));
 
   }
 

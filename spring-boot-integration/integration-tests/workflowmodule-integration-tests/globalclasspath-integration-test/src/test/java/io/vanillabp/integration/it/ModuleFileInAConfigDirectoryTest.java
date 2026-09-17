@@ -25,7 +25,7 @@ public class ModuleFileInAConfigDirectoryTest {
 
   private static final byte[] FILE = """
       test-module:
-        from-a-config-directory: it-is-read
+        a-setting: from-the-file
       """.getBytes(StandardCharsets.UTF_8);
 
   @Test
@@ -34,12 +34,11 @@ public class ModuleFileInAConfigDirectoryTest {
       final CapturedOutput output) throws Exception {
 
     assertEquals(
-        "it-is-read",
+        "from-the-file",
         valueOfAModuleShipping("config/test-module.yaml"));
 
     assertTrue(
-        output.getAll().contains("config/test-module.yaml") && output.getAll()
-            .contains("which belongs at 'test-module.yaml'"),
+        output.getAll().contains("config/test-module.yaml, which belongs at 'test-module.yaml'"),
         "the boot does not name the file nor the place it belongs at");
 
   }
@@ -50,7 +49,7 @@ public class ModuleFileInAConfigDirectoryTest {
       final CapturedOutput output) throws Exception {
 
     assertEquals(
-        "it-is-read",
+        "from-the-file",
         valueOfAModuleShipping("test-module/config/test-module.yaml"));
 
     assertTrue(
@@ -70,7 +69,7 @@ public class ModuleFileInAConfigDirectoryTest {
           .applicationBuilder(TestApplication.class)
           .run();
       try {
-        return context.getEnvironment().getProperty("test-module.from-a-config-directory");
+        return context.getEnvironment().getProperty("test-module.a-setting");
       } finally {
         context.close();
       }

@@ -24,7 +24,7 @@ public class ModuleFileOutsideAConfigDirectoryTest {
 
   private static final byte[] FILE = """
       test-module:
-        from-a-config-directory: it-is-read
+        a-setting: from-the-file
       """.getBytes(StandardCharsets.UTF_8);
 
   @Test
@@ -41,8 +41,8 @@ public class ModuleFileOutsideAConfigDirectoryTest {
           .run();
       try {
         assertEquals(
-            "it-is-read",
-            context.getEnvironment().getProperty("test-module.from-a-config-directory"));
+            "from-the-file",
+            context.getEnvironment().getProperty("test-module.a-setting"));
       } finally {
         context.close();
       }

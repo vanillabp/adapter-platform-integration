@@ -122,9 +122,10 @@ as possible at **build time**, following Quarkus' extension philosophy:
    with its file where nobody looks. The same report names such a file and the place it
    belongs at, which is its own path without the `config` directory
    (`messageAboutFilesInAConfigDirectory`, decision 65). Dev mode watches those files
-   although nothing reads them, because adding one is the mistake being reported and
-   without the restart the developer sees neither the settings nor the report; the native
-   image gets only the files which are read.
+   although nothing reads them: adding one is the mistake being reported, and without the
+   restart the developer sees neither the settings nor the report. The native image gets
+   only the files which are read. A workflow module whose ID is `config` reads
+   `config/config.yaml` itself, so the report leaves out whatever the read rule matches.
    `ModuleFileInAConfigDirectoryTest` and `ModuleFileInTheModulesConfigDirectoryTest` of
    `deployment-integration-tests` hold both places.
    The application's own `application-<profile>.yaml` is a different animal and stays
