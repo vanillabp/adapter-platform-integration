@@ -193,6 +193,16 @@ public class BpmsInitiatedStartHandler {
   }
 
   /**
+   * @return What this handler serves, for a question the version specifications
+   *         answer on their own
+   */
+  io.vanillabp.integration.adapter.migration.workflowtask.ServedVersions servedVersions() {
+
+    return versions;
+
+  }
+
+  /**
    * Invokes the method with bound parameters. Runtime exceptions of the method
    * propagate unchanged - the transaction of the start rolls back, so no aggregate
    * exists and the BPMS retries.

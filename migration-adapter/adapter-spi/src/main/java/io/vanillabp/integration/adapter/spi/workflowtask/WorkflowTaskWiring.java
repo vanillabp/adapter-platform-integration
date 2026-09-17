@@ -33,6 +33,8 @@ import java.util.Collection;
  * which can put a second token into a workflow;</li>
  * <li>{@link #registerProcessVersions(String, String, String, ProcessVersionCatalog)} -
  * only where your BPMS can place version tags;</li>
+ * <li>{@link #reportNoProcessVersionCatalog(String, String, String, io.vanillabp.integration.adapter.spi.version.ReportedProcessVersion)} -
+ * where it cannot, and there is nothing to place them in;</li>
  * <li>{@link #unsharedWorkflowAggregateProperties(String, String, Collection, io.vanillabp.integration.adapter.spi.AggregateSyncMode)} -
  * what a model reads but the aggregate does not share.</li>
  * </ul>
@@ -457,6 +459,39 @@ public interface WorkflowTaskWiring {
       final String workflowModuleId,
       final String bpmnProcessId,
       final io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog catalog) {
+
+  }
+
+  /**
+   * Says that this BPMS keeps no catalog of the deployed versions of that BPMN process,
+   * called during <code>wireBpmn</code> in the place
+   * {@link #registerProcessVersions(String, String, String, io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog)}
+   * would be called in.
+   * <p>
+   * Registering nothing and saying this are two different statements. An adapter which
+   * registers nothing may simply not have been asked yet, so the core keeps quiet about
+   * the methods of that process. An adapter which says this has answered: there is no
+   * version to be had here, and a method waiting for one waits forever. The core then
+   * names those methods while the application boots, which is the only moment somebody
+   * can still do something about them.
+   * <p>
+   * What such a delivery DOES carry is the second half of the answer, and it decides
+   * which methods are named: a version tag lets a method naming exactly that tag run,
+   * and nothing at all leaves only the methods naming no version.
+   * <p>
+   * Say it for every BPMN process you wire. The core says nothing where a second adapter
+   * serves the same process with a catalog, because the method runs on that BPMS then.
+   *
+   * @param adapterId The adapter ID (the statement is about THIS BPMS)
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The PLAIN BPMN process ID
+   * @param reported What a delivery of this BPMS carries as its process version
+   */
+  default void reportNoProcessVersionCatalog(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final io.vanillabp.integration.adapter.spi.version.ReportedProcessVersion reported) {
 
   }
 
