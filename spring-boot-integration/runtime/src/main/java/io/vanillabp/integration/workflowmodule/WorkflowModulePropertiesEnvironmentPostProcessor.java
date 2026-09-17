@@ -4,7 +4,11 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import org.apache.commons.logging.Log;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.EnvironmentPostProcessor;
 import org.springframework.boot.SpringApplication;
@@ -12,6 +16,7 @@ import org.springframework.boot.context.config.ConfigDataEnvironmentPostProcesso
 import org.springframework.boot.env.PropertiesPropertySourceLoader;
 import org.springframework.boot.env.PropertySourceLoader;
 import org.springframework.boot.env.YamlPropertySourceLoader;
+import org.springframework.boot.logging.DeferredLogFactory;
 import org.springframework.core.Ordered;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.PropertySource;
@@ -63,6 +68,11 @@ import org.springframework.core.io.support.ResourcePatternUtils;
  * The end of the list is the only position which stays correct whatever the
  * application brings.
  *
+ * <p>A file named after a profile is read here also where the file without the
+ * profile is missing. Quarkus reads it only where the two lie next to each other, so
+ * such a file is named at startup together with the file which would make Quarkus read
+ * it (see decision 61 in the repository's DECISIONS.md).
+ *
  * <p><b>Limitation:</b> Multi-document YAML using
  * {@code spring.config.activate.on-profile} is not supported inside workflow
  * module config files — profile-specific values must be placed in files using
@@ -74,6 +84,19 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
 
   private final PropertiesPropertySourceLoader propertiesLoader = new PropertiesPropertySourceLoader();
   private final YamlPropertySourceLoader yamlLoader = new YamlPropertySourceLoader();
+
+  /**
+   * An environment post processor runs before the logging system is up, so its lines are
+   * collected and replayed once it is. Spring Boot hands the factory to the constructor.
+   */
+  private final Log log;
+
+  public WorkflowModulePropertiesEnvironmentPostProcessor(
+      final DeferredLogFactory logFactory) {
+
+    this.log = logFactory.getLog(WorkflowModulePropertiesEnvironmentPostProcessor.class);
+
+  }
 
   /**
    * Run after {@link ConfigDataEnvironmentPostProcessor} so that
@@ -110,30 +133,78 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
         .getResourcePatternResolver(resourceLoader);
 
     for (final var moduleId : workflowModuleIds) {
-      // collect property sources ordered by priority (highest first):
-      // profile-specific files (last active profile first) before base files,
-      // YAML before .properties for the same base name
-      final var propertySources = new LinkedList<PropertySource<?>>();
+      // collect the files ordered by priority (highest first): profile-specific
+      // files (last active profile first) before plain files, YAML before
+      // .properties for the same base name
+      final var profileFiles = new LinkedList<ConfigFile>();
       for (var i = activeProfiles.length - 1; i >= 0; --i) {
-        propertySources.addAll(load(resolver, moduleId, activeProfiles[i]));
+        profileFiles.addAll(configFiles(resolver, moduleId, activeProfiles[i]));
       }
-      propertySources.addAll(load(resolver, moduleId, null));
+      final var plainFiles = configFiles(resolver, moduleId, null);
 
       // append below every source the application brings: adding in the order
       // collected above keeps the priority order among the module's own files,
       // and the end of the list needs no assumption about what the application
       // put into its environment
-      propertySources
+      Stream
+          .concat(profileFiles.stream(), plainFiles.stream())
+          .flatMap(ConfigFile::load)
           .forEach(propertySource -> environment.getPropertySources().addLast(propertySource));
+
+      messageAboutProfileFilesQuarkusWouldNotRead(profileFiles, plainFiles)
+          .ifPresent(log::warn);
     }
 
   }
 
   /**
-   * Load property sources for a given module ID and optional profile,
-   * ordered by priority (highest first): YAML before .properties.
+   * Reports the files of a workflow module which this application reads and a Quarkus
+   * application would not.
+   * <p>
+   * SmallRye, and with it Quarkus, loads {@code id-{profile}.yaml} only where {@code id.yaml}
+   * lies in the same place, while Spring Boot reads every file it finds by name. A workflow
+   * module is a library and ends up on either platform, so a module which ships a file for one
+   * profile and nothing else works here and quietly ships nothing there. Saying it where the
+   * module is built is the cheapest place to learn it (see decision 61 in the repository's
+   * DECISIONS.md).
+   *
+   * @param profileFiles The profile-specific files of one workflow module found in the classpath
+   * @param plainFiles The files without a profile of the same workflow module
+   * @return The warning, or nothing where every profile-specific file has its plain file
    */
-  private List<PropertySource<?>> load(
+  private static Optional<String> messageAboutProfileFilesQuarkusWouldNotRead(
+      final List<ConfigFile> profileFiles,
+      final List<ConfigFile> plainFiles) {
+
+    final var filesWithoutTheirPlainFile = profileFiles
+        .stream()
+        .filter(profileFile -> plainFiles
+            .stream()
+            .noneMatch(profileFile::liesNextTo))
+        .map(ConfigFile::describeTheMissingPlainFile)
+        .flatMap(Optional::stream)
+        .distinct()
+        .sorted()
+        .toList();
+    if (filesWithoutTheirPlainFile.isEmpty()) {
+      return Optional.empty();
+    }
+
+    return Optional.of("""
+        Configuration files of workflow modules which a Quarkus application would not read:
+          %s
+        Spring Boot reads them, Quarkus reads a file carrying a profile in its name only \
+        where the file without the profile lies in the same place. Add the file each line \
+        asks for, in the same workflow module, and the module works on both platforms. An \
+        empty file is enough.""".formatted(String.join("\n  ", filesWithoutTheirPlainFile)));
+
+  }
+
+  /**
+   * Find the files of a given module ID and optional profile, ordered by
+   * priority (highest first): YAML before .properties.
+   */
+  private List<ConfigFile> configFiles(
       final ResourcePatternResolver resolver,
       final String moduleId,
       @Nullable final String profile) {
@@ -142,19 +213,19 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
         ? "%s-%s".formatted(moduleId, profile)
         : moduleId;
 
-    final var result = new LinkedList<PropertySource<?>>();
-    result.addAll(loadResources(resolver, moduleId, baseName, yamlLoader));
-    result.addAll(loadResources(resolver, moduleId, baseName, propertiesLoader));
+    final var result = new LinkedList<ConfigFile>();
+    result.addAll(findResources(resolver, moduleId, baseName, yamlLoader));
+    result.addAll(findResources(resolver, moduleId, baseName, propertiesLoader));
     return result;
 
   }
 
   /**
-   * Load all property sources for files matching the given base name
-   * using the given loader. Files are searched in multiple classpath
-   * locations: root, config/, {moduleId}/, and {moduleId}/config/.
+   * Find all files matching the given base name for the given loader. Files are
+   * searched in multiple classpath locations: root, config/, {moduleId}/, and
+   * {moduleId}/config/.
    */
-  private List<PropertySource<?>> loadResources(
+  private List<ConfigFile> findResources(
       final ResourcePatternResolver resolver,
       final String moduleId,
       final String baseName,
@@ -179,21 +250,100 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
                       CLASSPATH_PATTERN.formatted(location));
                   return Arrays.stream(resources)
                       .filter(Resource::exists)
-                      .flatMap(resource -> {
-                        try {
-                          return loader
-                              .load("workflowmodule:%s".formatted(location), resource)
-                              .stream();
-                        } catch (IOException e) {
-                          return java.util.stream.Stream.empty();
-                        }
-                      });
+                      .map(resource -> new ConfigFile(moduleId, location, resource, loader));
                 } catch (IOException e) {
-                  return java.util.stream.Stream.empty();
+                  return Stream.<ConfigFile>empty();
                 }
               });
         })
         .toList();
+
+  }
+
+  /**
+   * A configuration file of a workflow module found in the classpath, together with the
+   * loader which reads its extension. Two files are read by the same loader when they are
+   * both YAML or both {@code .properties}, and only such a pair counts for the rule Quarkus
+   * applies.
+   *
+   * @param moduleId The ID of the workflow module the file belongs to
+   * @param location The classpath location the file was found at
+   * @param resource The file itself
+   * @param loader The loader reading this kind of file
+   */
+  private record ConfigFile(
+                            String moduleId,
+                            String location,
+                            Resource resource,
+                            PropertySourceLoader loader) {
+
+    /**
+     * @return The property sources of this file, none where it cannot be read
+     */
+    Stream<PropertySource<?>> load() {
+
+      try {
+        return loader
+            .load("workflowmodule:%s".formatted(location), resource)
+            .stream();
+      } catch (IOException e) {
+        return Stream.empty();
+      }
+
+    }
+
+    /**
+     * @param plainFile A file of the same workflow module which carries no profile
+     * @return Whether that file is the one Quarkus would pair this one with: same directory,
+     *         same archive, and an extension of the same loader
+     */
+    boolean liesNextTo(
+        final ConfigFile plainFile) {
+
+      final var directory = directory();
+      return loader.equals(plainFile.loader()) && directory.isPresent() && directory.equals(plainFile.directory());
+
+    }
+
+    /**
+     * @return The file and the plain files which would make Quarkus read it, or nothing
+     *         where its location cannot be named
+     */
+    Optional<String> describeTheMissingPlainFile() {
+
+      return directory()
+          .map(directory -> "%s, which needs %s next to it".formatted(
+              url().orElse(location),
+              Arrays
+                  .stream(loader.getFileExtensions())
+                  .map(extension -> "'%s.%s'".formatted(moduleId, extension))
+                  .collect(Collectors.joining(" or "))));
+
+    }
+
+    /**
+     * @return The place the file lies in, which is its URL up to and including the last
+     *         slash, so that a file in a jar is not taken for one in a directory
+     */
+    private Optional<String> directory() {
+
+      return url()
+          .map(url -> url.substring(0, url.lastIndexOf('/') + 1));
+
+    }
+
+    /**
+     * @return The URL of the file, nothing where the resource cannot name one
+     */
+    private Optional<String> url() {
+
+      try {
+        return Optional.of(resource.getURL().toString());
+      } catch (IOException e) {
+        return Optional.empty();
+      }
+
+    }
 
   }
 
