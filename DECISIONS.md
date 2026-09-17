@@ -2150,3 +2150,80 @@ method under a name their model does not carry, which is what made the Camunda 8
 a cluster to understand.
 
 `WorkflowTaskRoutingTest` holds both wirings, the adapter which names no element, and the message.
+
+### 68. The youngest call replaces the one still waiting, and only where it says so
+
+The outbox deduplicates a call against the entries still waiting for their dispatch, and the
+older entry used to win: the younger call was dropped and `schedule` answered `false`
+(decision 22). That was right as long as a call carried the intention and the dispatch read
+the state fresh. The entry which waited would have read the same state a moment later, so
+which of the two survived made no difference.
+
+Decision 62 changed what a call is. A call may carry the state its caller saw, and the
+Business Cockpit will do exactly that: the report is built at the event and travels with the
+call. Now the older entry holds the older report, and dropping the younger one means a user
+sees the first state of a step instead of the last. The worse the backlog, the more reports
+wait and the further behind the one is which survives. So the direction turns: the youngest
+call takes the waiting entry's place, payload included, in the transaction it was planned in.
+
+The key stays what it is. Putting the process step into it was the other way to think about
+this, and it produces the flood the collapsing was meant to prevent: every step would be an
+entry of its own, and a cockpit which stood for ten minutes would hand the user ten messages
+per workflow. While the outbox keeps up, a step's report is dispatched before the next one is
+planned anyway, so the key never collapses anything a user wanted to see.
+
+The call says the word, not a setting. `PhaseTwoCall.replacingWhatIsStillWaiting()` marks one
+call, and nothing existing says it, so nothing existing changes. A setting would decide for
+callers whose author never thought about the question, and it is not a matter of taste:
+whether an older state may win follows from whether the call carries a state at all, which
+only its author knows. The mark belongs to the planning and not to the entry, so no store
+persists it, and it is added after the idempotency key was derived, where no derivation rule
+can see it.
+
+Only an extension may ask for it. What VanillaBP plans itself writes into the BPMS and reads
+what it needs at dispatch time, so a younger call has nothing to bring along for it. Asking is
+refused where it was asked, with a message naming the operation.
+
+An entry a dispatch has taken is not replaced. It runs to its end and the younger call becomes
+an entry of its own, which takes no part in the deduplication of that key, because the key
+belongs to the entry on its way. Two reports then reach the handler where one was asked for.
+That is the price of never taking work away from a dispatch which may have reached its
+receiver already. A receiver which cannot take two reports of one state keeps the younger one
+by its timestamp, which is what the Business Cockpit does.
+
+**The payload of the replaced entry is removed in the same transaction, and the rule about a
+claimed entry is what makes that safe.** An entry no dispatch has taken is an entry whose
+payload no dispatch has read, so removing it takes nothing away from a reader, and a rollback
+takes the removal with it. Leaving it to the age sweep was the alternative and it is the wrong
+one here: the backlog this story is about would pile up an orphan of up to a mebibyte per
+replaced report and keep every one of them for the retention, seven days by default.
+
+Each store recognises a claimed entry by what its own dispatcher writes. The two stores
+VanillaBP wrote itself count an attempt when they claim an entry, so `ATTEMPTS = 0` says that
+nobody has read it, and the update which replaces carries that condition and is therefore the
+very optimistic lock the claim is. On the JDBC store the claim now reads its row once more,
+because the row may have been replaced since the select of the due entries, and dispatching
+the entry as it read then would hand the handler a payload reference which is gone. MongoDB
+needs no such read: its claim is one atomic `findOneAndUpdate` and answers with the document
+as of that moment.
+
+Gruelbox has no API for replacing, so there the row goes: the waiting entry is deleted and the
+younger call is scheduled under the same `uniqueRequestId`, in the caller's transaction. Two
+things have to agree that no dispatch holds it. `version = 0` is gruelbox' own optimistic lock
+and covers every entry a flush picked up, on any instance. A commit, though, submits its entry
+straight away and writes nothing, so the row still reads as untouched while gruelbox holds it
+with `SELECT ... FOR UPDATE`, and a delete meeting that lock would make the application's
+transaction wait for a remote call - which is what an outbox exists to prevent. That case is
+asked of a register the submitter keeps, which is where gruelbox already hands every entry
+over before it invokes anything. The register answers for its own instance. What it leaves is
+one instance dispatching an entry while another replaces it, which means two instances writing
+one workflow at once, and VanillaBP names that the application's own business anyway.
+
+A store which never learned any of this says so.
+`PhaseTwoOutbox.scheduleReplacingWhatIsStillWaiting` has a default which discards the call the
+way that store always did and writes a WARN naming its class. Without it a store written
+outside VanillaBP would keep the older state quietly: the call went through, the handler was
+called, and only the state was wrong. That is the one ending this must not have.
+
+Nothing is written in `UPGRADE.md`. The outbox of version 2 has not reached a release, so
+there is no behaviour a version-1 application could be upgrading from.

@@ -55,6 +55,25 @@ public class SampleExtension {
   private final List<PhaseTwoCall> dispatched = new CopyOnWriteArrayList<>();
 
   private volatile int failNextDispatches;
+  /**
+   * Counts down when a held dispatch entered the handler, so a test knows the entry is
+   * claimed.
+   */
+  private volatile java.util.concurrent.CountDownLatch dispatchEntered;
+
+  /**
+   * What a held dispatch waits for. A test which plans against an entry a dispatch has
+   * ALREADY taken needs that dispatch to stand still while it plans, and there is no
+   * other way to be sure the claim happened.
+   */
+  private volatile java.util.concurrent.CountDownLatch releaseDispatch;
+
+  /**
+   * Whether a dispatch is still to be held. Only the FIRST dispatch after
+   * {@link #holdNextDispatch()} waits, and this is what takes the hold away from the
+   * ones which follow.
+   */
+  private final java.util.concurrent.atomic.AtomicBoolean holdArmed = new java.util.concurrent.atomic.AtomicBoolean();
 
   void onStart(
       @Observes final StartupEvent event) {
@@ -65,6 +84,7 @@ public class SampleExtension {
             (
                 call,
                 previouslyAttempted) -> {
+              holdWhereATestAskedForIt();
               if (failNextDispatches > 0) {
                 failNextDispatches--;
                 throw new RuntimeException("test dispatch failure");
@@ -130,6 +150,66 @@ public class SampleExtension {
 
     dispatched.clear();
     failNextDispatches = 0;
+    holdArmed.set(false);
+
+  }
+
+  /**
+   * Makes the next dispatch stop inside the handler until
+   * {@link #releaseHeldDispatch()} lets it go. The entry is claimed by then, which is
+   * the state a test about a claimed entry needs.
+   */
+  public void holdNextDispatch() {
+
+    dispatchEntered = new java.util.concurrent.CountDownLatch(1);
+    releaseDispatch = new java.util.concurrent.CountDownLatch(1);
+    holdArmed.set(true);
+
+  }
+
+  /**
+   * Waits until the held dispatch entered the handler.
+   *
+   * @param timeoutMillis The maximum time to wait
+   * @throws InterruptedException If interrupted while waiting
+   */
+  public void awaitHeldDispatchEntered(
+      final long timeoutMillis) throws InterruptedException {
+
+    if (!dispatchEntered.await(timeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+      throw new AssertionError("no dispatch entered the handler");
+    }
+
+  }
+
+  /**
+   * Lets the held dispatch finish.
+   */
+  public void releaseHeldDispatch() {
+
+    holdArmed.set(false);
+    final var release = releaseDispatch;
+    if (release != null) {
+      release.countDown();
+    }
+
+  }
+
+  /**
+   * Stops the dispatch which entered first, where a test asked for it.
+   */
+  private void holdWhereATestAskedForIt() {
+
+    if (!holdArmed.compareAndSet(true, false)) {
+      return;
+    }
+    final var release = releaseDispatch;
+    dispatchEntered.countDown();
+    try {
+      release.await(30, java.util.concurrent.TimeUnit.SECONDS);
+    } catch (final InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
 
   }
 

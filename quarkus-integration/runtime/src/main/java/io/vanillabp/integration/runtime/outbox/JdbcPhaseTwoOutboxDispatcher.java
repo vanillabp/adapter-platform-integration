@@ -116,6 +116,14 @@ public class JdbcPhaseTwoOutboxDispatcher {
       WHERE ID = ? AND ATTEMPTS = ?""";
 
   /**
+   * What the claim won, read again by its ID - see {@link #claim(Connection, Entry)}
+   * for why the row is not the one the select of the due entries returned.
+   */
+  private static final String SELECT_CLAIMED_ENTRY = """
+      SELECT WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, AGGREGATE_ID, ADAPTER_ID, ARGS \
+      FROM %s WHERE ID = ?""";
+
+  /**
    * Marking an entry DONE closes its deduplication window: DEDUP_KEY takes the entry's
    * own ID, so a repetition of the same operation can be planned again, while
    * IDEMPOTENCY_KEY keeps the key readable for whoever reads the table during support.
@@ -161,6 +169,8 @@ public class JdbcPhaseTwoOutboxDispatcher {
   private String selectOldestDone;
 
   private String claimEntry;
+
+  private String selectClaimedEntry;
 
   private String markEntryDone;
 
@@ -280,6 +290,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
     selectNextAttempt = SELECT_NEXT_ATTEMPT.formatted(tableName, STATUS_OPEN);
     selectOldestDone = SELECT_OLDEST_DONE.formatted(tableName, STATUS_DONE);
     claimEntry = CLAIM_ENTRY.formatted(tableName);
+    selectClaimedEntry = SELECT_CLAIMED_ENTRY.formatted(tableName);
     markEntryDone = MARK_ENTRY_DONE.formatted(tableName, STATUS_DONE);
     markEntryBlocked = MARK_ENTRY_BLOCKED.formatted(tableName, STATUS_BLOCKED);
     rescheduleEntry = RESCHEDULE_ENTRY.formatted(tableName);
@@ -574,8 +585,9 @@ public class JdbcPhaseTwoOutboxDispatcher {
 
     try (var connection = dataSource.get().getConnection()) {
       for (final var entry : loadDueEntries(connection)) {
-        if (claim(connection, entry)) {
-          dispatch(connection, entry);
+        final var claimed = claim(connection, entry);
+        if (claimed != null) {
+          dispatch(connection, claimed);
         }
       }
       cleanupDoneEntries(connection);
@@ -608,12 +620,21 @@ public class JdbcPhaseTwoOutboxDispatcher {
    * Claims an entry using an optimistic update: incrementing the number of attempts
    * and setting the backoff makes concurrent pollers (or other instances) skip the
    * entry, and a failed dispatch is retried automatically once the backoff elapsed.
+   * <p>
+   * What the claim won is then READ AGAIN, and the dispatch works with that. Between
+   * the select of the due entries and this update the row may have been replaced by a
+   * younger call ({@link JdbcPhaseTwoOutbox}), and the entry read a moment ago names
+   * the payload that call removed - a dispatch built from it would hand the handler
+   * nothing where bytes were promised. It is one read by primary key per dispatch
+   * attempt, which is the cost of the rule that a dispatch reads what was written
+   * last.
    *
    * @param connection The connection to be used
    * @param entry The entry to be claimed
-   * @return Whether the entry was claimed by this poller
+   * @return The entry as it stands now, or <code>null</code> where another poller won
+   *         it
    */
-  private boolean claim(
+  private Entry claim(
       final Connection connection,
       final Entry entry) throws SQLException {
 
@@ -625,7 +646,19 @@ public class JdbcPhaseTwoOutboxDispatcher {
       statement.setTimestamp(1, Timestamp.from(Instant.now().plus(properties.getAttemptFrequency())));
       statement.setString(2, entry.id());
       statement.setInt(3, entry.attempts());
-      return statement.executeUpdate() == 1;
+      if (statement.executeUpdate() != 1) {
+        return null;
+      }
+    }
+    try (var statement = connection.prepareStatement(selectClaimedEntry)) {
+      statement.setString(1, entry.id());
+      try (var resultSet = statement.executeQuery()) {
+        return resultSet.next()
+            ? new Entry(
+                entry.id(), resultSet.getString(1), resultSet.getString(2), resultSet.getString(3), resultSet
+                    .getString(4), resultSet.getString(5), resultSet.getString(6), entry.attempts())
+            : null;
+      }
     }
 
   }

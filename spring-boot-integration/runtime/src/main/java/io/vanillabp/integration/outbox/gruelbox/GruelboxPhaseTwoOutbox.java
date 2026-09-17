@@ -38,6 +38,19 @@ import lombok.extern.slf4j.Slf4j;
  * discarded. Both happen in the caller's transaction, on the connection
  * {@code DataSourceUtils} binds to it, so a rollback takes the release with it.
  * <p>
+ * <strong>A younger call may take the waiting entry's place</strong> instead of being
+ * discarded against it, where it says so
+ * ({@link PhaseTwoCall#replacingWhatIsStillWaiting()}). Replacing is not in gruelbox'
+ * API, so it is the row which goes: the waiting entry is DELETED and the younger call
+ * is scheduled under the same unique request ID, in the caller's transaction, and the
+ * payload of the entry which went is removed with it. What decides is gruelbox'
+ * <code>version</code> column together with the register of
+ * {@link GruelboxRedispatchAwareSubmitter}, and a dispatch is never waited for: see
+ * {@link #deleteEntryNoDispatchHasTaken(PhaseTwoCall, WaitingEntry)} for why it takes
+ * both. Where one of them says that a dispatch has the entry, the younger call is
+ * scheduled with NO unique request ID, because the key belongs to the entry on its
+ * way, and two calls then reach the handler where one was asked for.
+ * <p>
  * The at-least-once guarantee is not weakened by that: a redispatch reads the very row
  * which is not processed yet, so gruelbox' own attempt bookkeeping carries it - never
  * the unique request ID. Which is also why the key VanillaBP derives is bounded to
@@ -61,6 +74,15 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
+
+  /**
+   * Reads back what gruelbox wrote into its <code>invocation</code> column. gruelbox
+   * builds the same one unless an application replaces the serializer of its persistor,
+   * and where it did, an unreadable invocation costs a payload row the age sweep takes
+   * (see {@link #payloadReferenceOf(String)}).
+   */
+  private static final com.gruelbox.transactionoutbox.InvocationSerializer INVOCATION_SERIALIZER = com.gruelbox.transactionoutbox.InvocationSerializer
+      .createDefaultJsonSerializer();
 
   private final TransactionOutbox transactionOutbox;
 
@@ -240,14 +262,31 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
     final var idempotencyKey = call
         .idempotencyKey()
         .orElse(null);
-    if ((idempotencyKey != null) && !releaseDispatchedEntry(call, idempotencyKey)) {
-      logDiscardedSchedule(call);
-      return false;
+    // the key of the entry this call ends up carrying: its own, unless an entry a
+    // dispatch has taken still holds it - then this call takes no part in the
+    // deduplication of that key, the way a call without one does not
+    var uniqueRequestId = idempotencyKey;
+    String replacedPayloadReference = null;
+    if (idempotencyKey != null) {
+      final var waiting = entryStillWaiting(call, idempotencyKey);
+      if (waiting != null) {
+        if (!call.replacesWhatIsStillWaiting()) {
+          logDiscardedSchedule(call);
+          return false;
+        }
+        if (deleteEntryNoDispatchHasTaken(call, waiting)) {
+          replacedPayloadReference = waiting.payloadReference();
+          logReplacedEntry(call);
+        } else {
+          logSecondEntryBesideAClaimedOne(call);
+          uniqueRequestId = null;
+        }
+      }
     }
     try {
       transactionOutbox
           .with()
-          .uniqueRequestId(idempotencyKey)
+          .uniqueRequestId(uniqueRequestId)
           .schedule(GruelboxPhaseTwoDispatch.class)
           .dispatch(
               call.operation(),
@@ -262,6 +301,11 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
       if (call.hasPayload()) {
         requirePayloadStore(call).write(call);
       }
+      // and the bytes of the entry which was replaced have no reader left: the entry
+      // is gone, and no dispatch had ever taken it
+      if (replacedPayloadReference != null) {
+        requirePayloadStore(call).remove(replacedPayloadReference);
+      }
       return true;
     } catch (AlreadyScheduledException e) {
       // two nodes scheduling the same operation at the same moment, or a store which
@@ -269,6 +313,19 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
       logDiscardedSchedule(call);
       return false;
     }
+
+  }
+
+  /**
+   * A call which replaces goes the same way as any other, and this is the one method
+   * which says so - the mark travels in the call, so {@link #schedule(PhaseTwoCall)}
+   * reads it where the entry is written.
+   */
+  @Override
+  public boolean scheduleReplacingWhatIsStillWaiting(
+      final PhaseTwoCall call) {
+
+    return schedule(call.replacingWhatIsStillWaiting());
 
   }
 
@@ -294,36 +351,44 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
   }
 
   /**
-   * Frees the unique request ID of an entry which was dispatched already, so the
-   * operation can be planned again.
+   * The entry of this unique request ID which is still waiting for its dispatch, or
+   * <code>null</code> where the key is free for a new one.
+   * <p>
+   * An entry gruelbox already processed is DELETED here - it has done its work, and its
+   * trail ends there, which is the price of gruelbox owning the table - so the key is
+   * free and this answers <code>null</code>.
    *
-   * @return Whether the key is free now - <code>false</code> if an entry of that key is
-   *         still waiting for its dispatch
+   * @return The waiting entry or <code>null</code>
    */
-  private boolean releaseDispatchedEntry(
+  private WaitingEntry entryStillWaiting(
       final PhaseTwoCall call,
       final String idempotencyKey) {
 
     if ((dataSource == null) || (tableName == null)) {
-      // no way to look at gruelbox' processed flag: gruelbox answers instead, which
-      // deduplicates the retained entries as well
-      return true;
+      // no way to look at gruelbox' own columns: gruelbox answers instead, which
+      // deduplicates the retained entries as well and replaces nothing
+      return null;
     }
-    final var selectEntry = "SELECT id, processed FROM %s WHERE uniqueRequestId = ?".formatted(tableName);
+    final var selectEntry = "SELECT id, processed, version, invocation FROM %s WHERE uniqueRequestId = ?"
+        .formatted(tableName);
     final var connection = DataSourceUtils.getConnection(dataSource);
     try {
       final String entryId;
+      final WaitingEntry waiting;
       try (var statement = connection.prepareStatement(selectEntry)) {
         statement.setString(1, idempotencyKey);
         try (var resultSet = statement.executeQuery()) {
           if (!resultSet.next()) {
-            return true;
-          }
-          if (!resultSet.getBoolean(2)) {
-            return false;
+            return null;
           }
           entryId = resultSet.getString(1);
+          waiting = resultSet.getBoolean(2)
+              ? null
+              : new WaitingEntry(entryId, resultSet.getInt(3), payloadReferenceOf(resultSet.getString(4)));
         }
+      }
+      if (waiting != null) {
+        return waiting;
       }
       final var deleteEntry = "DELETE FROM %s WHERE id = ? AND processed = ?".formatted(tableName);
       try (var statement = connection.prepareStatement(deleteEntry)) {
@@ -340,7 +405,7 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
           call.bpmnProcessId(),
           call.workflowModuleId(),
           call.workflowAggregateId());
-      return true;
+      return null;
     } catch (final java.sql.SQLException e) {
       throw new IllegalStateException(
           """
@@ -350,6 +415,143 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
     } finally {
       DataSourceUtils.releaseConnection(connection, dataSource);
     }
+
+  }
+
+  /**
+   * Deletes the entry a younger call replaces, so its unique request ID is free for
+   * that call - which is what replacing means on a store whose API does not know it.
+   * <p>
+   * Two things have to say that no dispatch has taken the entry, because gruelbox
+   * reaches a dispatch two ways. A FLUSH pushes the entry back first, which counts
+   * gruelbox' <code>version</code> up, and the delete carries <code>version = 0</code>
+   * - gruelbox' own optimistic lock, so this is the very race the flush runs, decided
+   * by the same column. A commit, on the other hand, submits the entry straight away
+   * and writes nothing, so the row still reads as untouched while the dispatch holds
+   * it; that one is asked of
+   * {@link GruelboxRedispatchAwareSubmitter#isBeingDispatched(String)}.
+   * <p>
+   * Asking matters because gruelbox locks the row of an entry it dispatches and keeps
+   * the lock until the handler returned: a delete which met it would make the
+   * application's transaction wait for a remote call. The register answers for this
+   * application, and the residual is an instance which dispatches an entry another
+   * instance replaces in that window - a workflow written by two instances at once,
+   * which VanillaBP names as the application's own business anyway.
+   *
+   * @return Whether the entry was deleted
+   */
+  private boolean deleteEntryNoDispatchHasTaken(
+      final PhaseTwoCall call,
+      final WaitingEntry waiting) {
+
+    if ((waiting.version() > 0) || GruelboxRedispatchAwareSubmitter.isBeingDispatched(waiting.id())) {
+      return false;
+    }
+    final var deleteEntry = "DELETE FROM %s WHERE id = ? AND version = 0 AND processed = ?".formatted(tableName);
+    final var connection = DataSourceUtils.getConnection(dataSource);
+    try (var statement = connection.prepareStatement(deleteEntry)) {
+      statement.setString(1, waiting.id());
+      statement.setBoolean(2, false);
+      return statement.executeUpdate() == 1;
+    } catch (final java.sql.SQLException e) {
+      throw new IllegalStateException(
+          """
+              Could not replace the phase-two outbox entry of BPMN process '%s' of workflow module \
+              '%s' in gruelbox' table '%s'!"""
+              .formatted(call.bpmnProcessId(), call.workflowModuleId(), tableName), e);
+    } finally {
+      DataSourceUtils.releaseConnection(connection, dataSource);
+    }
+
+  }
+
+  /**
+   * The payload reference an entry of this store names, read out of the invocation
+   * gruelbox serialized. There is no column for it: gruelbox keeps a call as one
+   * serialized invocation, and the arguments of that invocation are the six strings
+   * {@link GruelboxPhaseTwoDispatch#dispatch} takes, the last of them being the
+   * serialized {@link PhaseTwoCall#args()}.
+   * <p>
+   * Read with gruelbox' own serializer, which is what wrote it. An entry this store did
+   * not write, or one written by a persistor built with a serializer of the
+   * application's own, is not understood here - the reference then stays unknown, the
+   * replaced payload is left to the age sweep of the payload store, and nothing else
+   * changes.
+   *
+   * @param invocation The serialized invocation of the entry
+   * @return The reference or <code>null</code> where the entry names none
+   */
+  private String payloadReferenceOf(
+      final String invocation) {
+
+    if (invocation == null) {
+      return null;
+    }
+    try (var reader = new java.io.StringReader(invocation)) {
+      final var args = INVOCATION_SERIALIZER.deserializeInvocation(reader).getArgs();
+      if ((args == null) || (args.length < 6) || !(args[5] instanceof final String serializedArgs)) {
+        return null;
+      }
+      return PhaseTwoCall.deserializeArgs(serializedArgs).get(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
+    } catch (final Exception e) {
+      log
+          .debug(
+              "Could not read the payload reference of a phase-two outbox entry of gruelbox' table "
+                  + "'{}' - a payload of that entry is left to the age sweep of the payload store",
+              tableName,
+              e);
+      return null;
+    }
+
+  }
+
+  /**
+   * What this store needs to know about the entry a younger call meets: which row it
+   * is, whether a dispatch has taken it (gruelbox counts the version up when it does),
+   * and which payload it names.
+   *
+   * @param id The entry's own id
+   * @param version gruelbox' optimistic-lock counter - zero means untouched
+   * @param payloadReference The reference of its payload, or <code>null</code>
+   */
+  private record WaitingEntry(String id, int version, String payloadReference) {
+  }
+
+  /**
+   * A younger call took the place of the entry which was waiting. At DEBUG for the
+   * reason a discard is: it is what the caller asked for, and under a backlog it
+   * happens as often as reports are planned.
+   */
+  private static void logReplacedEntry(
+      final PhaseTwoCall call) {
+
+    log.debug(
+        "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' replaced the "
+            + "entry which was waiting for its dispatch",
+        call.operation(),
+        call.bpmnProcessId(),
+        call.workflowModuleId(),
+        call.workflowAggregateId());
+
+  }
+
+  /**
+   * A younger call could not take the place of the entry it meant to replace, because a
+   * dispatch had claimed it. It becomes an entry of its own, so the handler is called
+   * twice - worth a line, because an application counting its reports finds the second
+   * one here.
+   */
+  private static void logSecondEntryBesideAClaimedOne(
+      final PhaseTwoCall call) {
+
+    log.debug(
+        "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' asked to "
+            + "replace an entry a dispatch had already taken - that one runs to its end and this "
+            + "call becomes an entry of its own",
+        call.operation(),
+        call.bpmnProcessId(),
+        call.workflowModuleId(),
+        call.workflowAggregateId());
 
   }
 

@@ -156,7 +156,30 @@ of 16 MB per document is never reached.
 The payload is removed when its entry is marked dispatched. What a crash between the two
 writes leaves behind, and the payload of an entry blocked longer than
 `vanillabp.outbox.retention`, is removed by the age sweep which rides the housekeeping of
-each store.
+each store. A payload is removed earlier in one case: where a younger call replaced the
+entry which named it, see below.
+
+### A younger call which takes the waiting entry's place
+
+A call carrying a payload carries a state, and a state goes stale. So such a call may ask
+to take the place of the entry of its key which is still waiting, instead of being dropped
+against it: `outbox.scheduleReplacingWhatIsStillWaiting(call.replacingWhatIsStillWaiting())`.
+The entry keeps its id and its key, gets everything the dispatch reads, and the payload it
+named before is removed in the same transaction. Decision 68 in `DECISIONS.md` says why the
+direction turned and why the mark hangs on the call.
+
+Both stores of this module refuse to replace an entry a dispatch has already taken; the
+younger call becomes an entry of its own then, with its `DEDUP_KEY` respectively `dedupKey`
+set to its own id, because the key belongs to the entry on its way. What says whether a
+dispatch has taken an entry is the attempts counter both dispatchers write when they claim
+one, and the update which replaces carries `ATTEMPTS = 0` respectively `attempts: 0` - the
+same optimistic lock the claim is, so the two can never both win.
+
+On the JDBC store the claim reads its row once more after it won it. The select of the due
+entries happens before the claim, and between the two the row may have been replaced, so the
+entry read then would send the dispatch to a payload reference which is gone. MongoDB needs
+no such read: its claim is one `findOneAndUpdate` and answers with the document as of that
+moment.
 
 |                  |           JDBC outbox (Agroal)           |       MongoDB outbox (`quarkus-mongodb-client`)       |
 |------------------|------------------------------------------|-------------------------------------------------------|
