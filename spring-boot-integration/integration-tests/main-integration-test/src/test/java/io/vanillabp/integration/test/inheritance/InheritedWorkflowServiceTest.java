@@ -337,6 +337,13 @@ public class InheritedWorkflowServiceTest {
               adapters:
                 test:
                   resources-location: classpath*:test-module/processes/%s
+              workflows:
+                InheritingWorkflowService:
+                  allow-full-sync-with-bpms: true
+                InvisibleHandlers:
+                  allow-full-sync-with-bpms: true
+                SharedProcess:
+                  allow-full-sync-with-bpms: true
         """
         .formatted(resourcesLocation);
 

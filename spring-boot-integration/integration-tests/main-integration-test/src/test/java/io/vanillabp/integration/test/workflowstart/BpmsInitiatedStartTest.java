@@ -196,6 +196,9 @@ public class BpmsInitiatedStartTest {
             adapters:
               test:
                 resources-location: classpath*:test-module/processes/workflowstart
+            workflows:
+              TimerProcess:
+                allow-full-sync-with-bpms: true
       """;
 
   private ConfigurableApplicationContext runTestApplication(

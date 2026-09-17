@@ -255,6 +255,9 @@ public class UnclaimedBpmnProcessTest {
             adapters:
               test:
                 resources-location: classpath*:test-module/processes/unclaimed
+            workflows:
+              Calling:
+                allow-full-sync-with-bpms: true
       """;
 
   private SpringBootTestApplication buildTestApp() throws IOException {

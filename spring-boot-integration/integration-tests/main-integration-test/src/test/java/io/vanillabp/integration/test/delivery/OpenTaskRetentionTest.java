@@ -168,6 +168,9 @@ public class OpenTaskRetentionTest {
             adapters:
               test:
                 resources-location: classpath*:test-module/processes/delivery
+            workflows:
+              DeliveryProcess:
+                allow-full-sync-with-bpms: true
       """;
 
   private ConfigurableApplicationContext runTestApplication(

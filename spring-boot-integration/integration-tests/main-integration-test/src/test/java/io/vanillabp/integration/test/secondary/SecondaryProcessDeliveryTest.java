@@ -256,6 +256,9 @@ public class SecondaryProcessDeliveryTest {
             adapters:
               test:
                 resources-location: classpath*:test-module/processes/secondary
+            workflows:
+              Ordering:
+                allow-full-sync-with-bpms: true
       """;
 
   private SpringBootTestApplication buildTestApp() throws IOException {

@@ -166,6 +166,9 @@ public class ProcessVersionsTest {
             adapters:
               test:
                 resources-location: classpath*:test-module/processes/workflowversion
+            workflows:
+              VersionedProcess:
+                allow-full-sync-with-bpms: true
       """;
 
   private ConfigurableApplicationContext runTestApplication(

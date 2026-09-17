@@ -157,6 +157,12 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
       .newKeySet();
 
   /**
+   * The refusal to start a workflow which hands its entire aggregate to the BPMS without
+   * saying so.
+   */
+  private final io.vanillabp.integration.adapter.migration.sync.FullSyncCheck fullSyncCheck;
+
+  /**
    * The process versions this application declares obsolete.
    */
   private final OutfadedProcessVersions outfadedVersions;
@@ -223,6 +229,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     this.aggregateSync = aggregateSync;
     this.transactionAnnotations = transactionAnnotations;
     this.properties = properties;
+    this.fullSyncCheck = new io.vanillabp.integration.adapter.migration.sync.FullSyncCheck(aggregateSync, properties);
     this.outfadedVersions = new OutfadedProcessVersions(properties);
     this.deployedVersionsCheck = new DeployedProcessVersionsCheck(
         processVersions, outfadedVersions, this::tasksNotServedInVersion, this::handlersNotServingAnyVersion, this, this::reportConcurrentTokenElementsOfHeldVersions, scoping == null
@@ -235,6 +242,31 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
         .filter(java.util.Objects::nonNull)
         .distinct()
         .toList();
+
+  }
+
+  /**
+   * The name of the aggregate's ID attribute, which an application's own persistence
+   * does not have to answer: the name is needed by adapters storing the ID in a process
+   * variable, and an application not using one never implements it. Asked here so that
+   * the full-sync check can leave the ID out of what an aggregate gives away - it
+   * reaches the BPMS whatever the sync model says.
+   *
+   * @param processService The process service of the BPMN process
+   * @return The name, or <code>null</code> where the persistence does not answer one
+   */
+  private static String aggregateIdAttributeOf(
+      final MigrationProcessService<?> processService) {
+
+    try {
+      return processService.getAggregateIdName();
+    } catch (final RuntimeException persistenceDoesNotNameIt) {
+      log.debug(
+          "The persistence of '{}' does not name the aggregate's ID attribute: {}",
+          processService.getWorkflowAggregateClass().getName(),
+          persistenceDoesNotNameIt.getMessage());
+      return null;
+    }
 
   }
 
@@ -269,6 +301,14 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     if (aggregateSync != null) {
       aggregateSync.validateSyncModel(processService.getWorkflowAggregateClass());
     }
+    // the second half of the same moment: an aggregate which keeps NOTHING back hands
+    // every attribute to the BPMS, and this workflow has to have said that it may
+    fullSyncCheck.refuseSharingEverythingUnlessAllowed(
+        workflowModuleId,
+        bpmnProcessId,
+        workflowServiceClass,
+        processService.getWorkflowAggregateClass(),
+        aggregateIdAttributeOf(processService));
 
     reportHandlerMethodsNobodySees(workflowServiceClass);
 

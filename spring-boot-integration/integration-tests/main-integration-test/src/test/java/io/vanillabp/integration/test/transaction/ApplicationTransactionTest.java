@@ -69,6 +69,9 @@ public class ApplicationTransactionTest {
             adapters:
               test:
                 resources-location: classpath*:test-module/processes/transaction
+            workflows:
+              TransactionProcess:
+                allow-full-sync-with-bpms: true
       """;
 
   @Configuration

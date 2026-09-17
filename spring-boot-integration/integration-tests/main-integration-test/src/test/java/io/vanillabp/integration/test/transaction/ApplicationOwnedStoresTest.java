@@ -379,6 +379,9 @@ public class ApplicationOwnedStoresTest {
             adapters:
               test:
                 resources-location: classpath*:test-module/processes/apptransaction
+            workflows:
+              AppTxProcess:
+                allow-full-sync-with-bpms: true
       """;
 
   private ConfigurableApplicationContext runTestApplication(

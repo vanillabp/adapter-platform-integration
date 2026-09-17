@@ -45,6 +45,18 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                       Map<String, Map<String, String>> extensions) implements QuarkusMigrationAdapterProperties.AdapterConfiguration {
 
     /**
+     * None of these fixtures writes the permission to share a whole aggregate. It belongs
+     * to a workflow anyway, and the core refuses it at every other level.
+     */
+    @Override
+    public Optional<Boolean> allowFullSyncWithBpms() {
+
+      return Optional.empty();
+
+    }
+
+
+    /**
      * Without extension settings, which is what most of these fixtures need.
      */
     private AdapterConfiguration(
@@ -73,6 +85,18 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                    Optional<List<String>> outfadedVersions,
                                    Optional<OutfadedVersionsInUsePolicy> outfadedVersionsInUse,
                                    Map<String, Map<String, String>> extensions) implements QuarkusMigrationAdapterProperties.AdapterProperties {
+
+    /**
+     * None of these fixtures writes the permission to share a whole aggregate. It belongs
+     * to a workflow anyway, and the core refuses it at every other level.
+     */
+    @Override
+    public Optional<Boolean> allowFullSyncWithBpms() {
+
+      return Optional.empty();
+
+    }
+
 
     /**
      * Without extension settings, which is what most of these fixtures need.
@@ -129,6 +153,18 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                     Map<String, Map<String, String>> extensions) implements QuarkusMigrationAdapterProperties.WorkflowProperties {
 
     /**
+     * None of these fixtures writes the permission to share a whole aggregate. It belongs
+     * to a workflow anyway, and the core refuses it at every other level.
+     */
+    @Override
+    public Optional<Boolean> allowFullSyncWithBpms() {
+
+      return Optional.empty();
+
+    }
+
+
+    /**
      * Without extension settings, which is what most of these fixtures need.
      */
     private WorkflowProperties(
@@ -161,6 +197,18 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                           Map<String, QuarkusMigrationAdapterProperties.WorkflowProperties> workflows,
                                           QuarkusMigrationAdapterProperties.TransactionsProperties transactions,
                                           QuarkusMigrationAdapterProperties.DeliveryProperties delivery) implements QuarkusMigrationAdapterProperties.WorkflowModuleProperties {
+
+    /**
+     * None of these fixtures writes the permission to share a whole aggregate. It belongs
+     * to a workflow anyway, and the core refuses it at every other level.
+     */
+    @Override
+    public Optional<Boolean> allowFullSyncWithBpms() {
+
+      return Optional.empty();
+
+    }
+
 
     /**
      * None of these fixtures configures the election, so the module inherits whatever
@@ -289,6 +337,18 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                             QuarkusMigrationAdapterProperties.TransactionsProperties transactions,
                             QuarkusMigrationAdapterProperties.DeliveryProperties delivery,
                             QuarkusMigrationAdapterProperties.MetricsProperties metrics) implements QuarkusMigrationAdapterProperties {
+
+    /**
+     * None of these fixtures writes the permission to share a whole aggregate. It belongs
+     * to a workflow anyway, and the core refuses it at every other level.
+     */
+    @Override
+    public Optional<Boolean> allowFullSyncWithBpms() {
+
+      return Optional.empty();
+
+    }
+
 
     /**
      * None of these fixtures configures the election - the mapper's job here is the rest

@@ -229,6 +229,79 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   }
 
   @Override
+  public List<String> everythingSharedWithBpms(
+      final Class<?> workflowAggregateClass,
+      final String aggregateIdAttribute) {
+
+    if (workflowAggregateClass == null) {
+      return List.of();
+    }
+    // FULL is the default of every adapter, so an aggregate which annotates nothing
+    // shares as a whole - the same starting point validateSyncModel walks from
+    if (!nothingIsHeldBack(workflowAggregateClass, 0, new java.util.HashSet<>())) {
+      return List.of();
+    }
+    // nothing is held back, so every attribute travels; the ID travels anyway (see the
+    // SPI), which is why an aggregate made of it alone answers an empty list here
+    return propertiesOf(workflowAggregateClass)
+        .stream()
+        .map(Property::name)
+        .filter(name -> !name.equals(aggregateIdAttribute))
+        .toList();
+
+  }
+
+  /**
+   * Whether the sync model of that type and of every type reachable from its attributes
+   * keeps not a single attribute from the BPMS.
+   *
+   * @param clazz The type, reached on a path which shares everything above it
+   * @param depth The current nesting depth
+   * @param visited The types walked already (cyclic type graphs); a second look adds
+   *          nothing, because the first one was on a path sharing everything too
+   * @return Whether everything of it travels
+   */
+  private boolean nothingIsHeldBack(
+      final Class<?> clazz,
+      final int depth,
+      final java.util.Set<Class<?>> visited) {
+
+    Boolean ownMode;
+    try {
+      ownMode = baseModeOf(clazz);
+    } catch (final IllegalStateException ambiguousSyncModel) {
+      // an aggregate whose sync model cannot be interpreted ends the boot in
+      // validateSyncModel, and a second report of the same defect helps nobody
+      return false;
+    }
+    if (Boolean.FALSE.equals(ownMode)) {
+      // the type shares only the attributes it names, so something stays at home
+      return false;
+    }
+    if (!visited.add(clazz)) {
+      return true;
+    }
+    if (depth >= MAX_DEPTH) {
+      // the documented limit cuts the VALUES, not the sync model - what the
+      // application annotated is what this question is about
+      return true;
+    }
+    for (final var property : propertiesOf(clazz)) {
+      if (Boolean.FALSE.equals(property.synced())) {
+        return false;
+      }
+      final var everythingBelowTravels = attributeTypes(property.getter().getGenericReturnType())
+          .distinct()
+          .allMatch(attributeType -> nothingIsHeldBack(attributeType, depth + 1, visited));
+      if (!everythingBelowTravels) {
+        return false;
+      }
+    }
+    return true;
+
+  }
+
+  @Override
   public boolean isSharedWithBpms(
       final Class<?> workflowAggregateClass,
       final String propertyName,
