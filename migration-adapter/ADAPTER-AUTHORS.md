@@ -203,18 +203,6 @@ says so. Read it if your BPMS deduplicates messages in a net of its own: three e
 multi-instance call activity reach the outbox as three operations and would reach such a BPMS as
 one message otherwise, and VanillaBP cannot repair that from its side.
 
-`auditingId()` is the other one, and for your operations it is always `null`. An entry may ask to
-see the aggregate as it was when the entry was planned rather than as it is at the dispatch, and
-the operations of VanillaBP are refused that: you write to the BPMS, the BPMS is where the case
-goes on, and it hears what the aggregate says now. So load with `loadById` as you always did. An
-operation an extension contributed may ask, and if such an operation reaches a handler of yours,
-`loadByIdAndAuditingId(id, auditingId)` is the load which serves it - it answers the current state
-anyway in an application which keeps no history of its aggregates.
-
-What none of this covers is your own data. Who a user task is assigned to, when it is due: that
-lives in your BPMS, it has no auditing VanillaBP could ask, and what you read while you dispatch
-is the state of that moment.
-
 What your BPMS is asked about are the four awareness probes and the read-only viewer methods.
 The probes are section 4. The viewer methods, `getProcessDefinitions`, `getBpmnXml` and
 `getWorkflowHistory`, have no phases and no transaction; their defaults throw a guiding message,

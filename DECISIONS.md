@@ -1983,6 +1983,10 @@ an age sweep riding the housekeeping each store already runs.
 
 ### 63. An entry which reports says which state it means, an entry which writes never does
 
+*Withdrawn on 2026-09-17, see decision 64: the report is built at the event and travels
+as the payload of decision 62, so nothing asked for an older state any more and the seam
+went out again.*
+
 An outbox entry is written in the transaction of an event and dispatched afterwards. The
 aggregate it reads at the dispatch is the aggregate of that moment, not of the event.
 Milliseconds while everything works, and days once a receiver is gone or a dispatch keeps
@@ -2029,3 +2033,43 @@ each other. A payload is exact and needs no auditing, and it costs space. Loadin
 as it was costs no space and needs an auditing, and it reconstructs rather than remembers. An
 extension which can pass a payload passes one; this is for the case where the state is large or
 expensive to build.
+
+### 64. A report is built at the event, so the platform asks the application for no older state
+
+Decision 63 gave the platform a seam: an outbox entry could say that it means the state of its
+event, the application answered an id for that state and read it back at the dispatch. It was
+built for one reader, a report to the Business Cockpit which is written at an event and sent
+later.
+
+The premise fell on 2026-09-17. A report does not have to be built at the dispatch at all.
+Everything it carries is there at the event which triggers it, so it is built there and travels
+as the payload of decision 62. What the BPMS knows about a user task is a copy of what the
+application decided. The truth stays in the application, and a copy taken at the event is the
+copy the event had.
+
+What was measured that day:
+
+- The Process-Engine-API adapter already builds the whole prefill when the task is delivered,
+  stores it and reads only from that store when it sends.
+- The Camunda 7 cockpit listeners are built-in task listeners running inside the engine command,
+  where every field of the prefill is at hand and no query is needed.
+- `ActivatedJob.getUserTask()` of the Camunda 8 client 8.9.6 carries assignee, candidates,
+  `dueDate` and `followUpDate`.
+- A `UserTaskEvent` with every field filled is about 1078 bytes as JSON. The payload limit is a
+  mebibyte.
+
+That left the seam without a caller in any of the ten repositories of the workspace. An additive
+SPI which nobody calls still costs documentation and tests, and everyone who reads the interface
+has to be told what it is for. So it goes out rather than staying as a switch nobody flips.
+
+Removed with this: `PhaseTwoCall#askingForTheStateOfTheEvent` and the auditing id it carried,
+`PhaseTwoRequest#auditingId`, the two defaults `getAuditingId` and `loadByIdAndAuditingId` on
+`AggregatePersistenceAware`, the two defaults on `AggregateServiceContext`, and the load by id
+plus the fallback warning in `MigrationProcessService` and `ExtensionAggregateServiceContext`.
+
+Decision 62 stays and now carries this case alone. Auditing itself stays a matter of the
+application: the blueprint `persistence-audited-aggregate` shows how an application revisions its
+aggregates and reads an old state back, and VanillaBP takes no part in it.
+
+Nothing is written in `UPGRADE.md`. The seam never reached a release. It lived one day in a
+snapshot, so there is no step from version 1 to describe.
