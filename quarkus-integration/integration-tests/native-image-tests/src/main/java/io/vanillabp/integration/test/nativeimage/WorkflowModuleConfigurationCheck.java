@@ -10,10 +10,12 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 /**
  * Reads back the configuration the two workflow modules of this application ship, once for
- * every place such a file may sit: at the classpath root and inside a directory named after
- * the workflow module ID, as YAML and as properties, in the application's own archive and in
- * a dependency JAR. Every one of them exists twice, plain and named after the profile
- * <code>tenant</code>, so the value read says which of the two files won.
+ * every place such a file may sit: at the classpath root, in a <code>config</code>
+ * directory, inside a directory named after the workflow module ID, and in a
+ * <code>config</code> directory of that one. The places are split over the two modules,
+ * because the same file may lie in one place only, and over both formats and both archives:
+ * the application's own and a dependency JAR. Every file exists twice, plain and named after
+ * the profile <code>tenant</code>, so the value read says which of the two won.
  * <p>
  * On the JVM the profile variant wins wherever the profile is active. A native image carries
  * only the resources it was told about, so the same is true of a binary only because the
@@ -35,13 +37,9 @@ public class WorkflowModuleConfigurationCheck {
 
   private static final List<String> KEYS_THE_MODULES_CONFIGURE = List.of(
       "native-image-test.test-module-root-yaml",
-      "native-image-test.test-module-root-properties",
-      "native-image-test.test-module-subdirectory-yaml",
-      "native-image-test.test-module-subdirectory-properties",
-      "native-image-test.jar-module-root-yaml",
-      "native-image-test.jar-module-root-properties",
+      "native-image-test.test-module-config-properties",
       "native-image-test.jar-module-subdirectory-yaml",
-      "native-image-test.jar-module-subdirectory-properties",
+      "native-image-test.jar-module-config-properties",
       "native-image-test.application-profile-section");
 
   /**
