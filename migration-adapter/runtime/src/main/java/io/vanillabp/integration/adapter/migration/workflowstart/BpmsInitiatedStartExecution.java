@@ -7,6 +7,7 @@ import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.vanillabp.integration.adapter.migration.processservice.BusinessKeyCheck;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartContext;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartResult;
@@ -94,7 +95,7 @@ public final class BpmsInitiatedStartExecution {
                 processService.getBpmnProcessId(),
                 processService.getWorkflowModuleId(),
                 context.getStartEventId());
-        return result(processService, existing, false);
+        return result(processService, existing, false, context);
       }
     }
 
@@ -154,7 +155,7 @@ public final class BpmsInitiatedStartExecution {
                   processService.getWorkflowModuleId(),
                   context.getStartEventId()));
     }
-    return result(processService, attached, true);
+    return result(processService, attached, true, context);
 
   }
 
@@ -220,13 +221,33 @@ public final class BpmsInitiatedStartExecution {
 
   }
 
+  /**
+   * The aggregate's id and the variables the adapter writes back - and the last point at
+   * which a business key the instance already carries can still be refused for free.
+   * <p>
+   * The id is only final here: it may come from the derivation, from a
+   * <code>&#64;WorkflowStartedByBpms</code> method or from the persistence layer on save.
+   * Both ways out of {@code build} pass through this method, and both run inside the
+   * transaction the start opened, so a refusal takes the aggregate with it instead of
+   * leaving one behind which the instance does not name.
+   */
   private static <A> BpmsInitiatedStartResult result(
       final MigrationProcessService<A> processService,
       final A workflowAggregate,
-      final boolean created) {
+      final boolean created,
+      final BpmsInitiatedStartContext context) {
 
     final var aggregateIdName = processService.getAggregateIdName();
     final var serializedId = String.valueOf(processService.getWorkflowAggregateId(workflowAggregate));
+    BusinessKeyCheck
+        .refuseAKeyWhichIsNotTheAggregateId(
+            context.getBusinessKey(),
+            serializedId,
+            "The start of a workflow by start event '%s'".formatted(context.getStartEventId()),
+            processService.getWorkflowModuleId(),
+            processService.getBpmnProcessId(),
+            context.getAdapterId(),
+            context.getNativeInstanceId());
     final Map<String, Object> variables = new LinkedHashMap<>();
     variables.put(aggregateIdName, serializedId);
     return new BpmsInitiatedStartResult(serializedId, aggregateIdName, variables, created);

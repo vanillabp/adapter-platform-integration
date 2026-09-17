@@ -1105,6 +1105,32 @@ even though it is `default null`.
 it names both keys, because a reader who only sees the task definition looks for a method under a
 name their model does not carry.
 
+#### A business key which is not the aggregate's id (`BusinessKeyCheck`)
+
+VanillaBP names a workflow by its workflow aggregate and by nothing else. A BPMS which keeps a
+business key of its own gets that id written into it wherever VanillaBP starts the workflow:
+Camunda 7 always, Camunda 8 from cluster 8.10 on. A workflow started past VanillaBP can carry a
+key somebody else chose while it also carries the variable with the aggregate's id, and then two
+values say different things about one instance.
+
+An adapter reports what its BPMS keeps through `getBusinessKey()`, which exists on all three
+contexts the BPMS hands a workflow over with: `TaskInvocationContext`, `WorkflowEndedContext` and
+`BpmsInitiatedStartContext`. The core compares it against the aggregate's id and refuses the
+delivery where the two disagree. It raises no incident itself on any BPMS, here as everywhere: the
+invocation ends, and the BPMS applies what it applies to any failing handler, which is a retry and
+then an incident on both Camunda engines.
+
+A start the BPMS performed on its own has no aggregate yet, so the comparison happens where the
+id is final and still inside the transaction the start opened. A refusal there takes the aggregate
+with it rather than leaving one behind which the instance does not name.
+
+An absent or blank business key contradicts nothing and passes, which is the ordinary state of
+every Camunda 8 workflow up to cluster 8.9 and of every workflow on a BPMS without business keys.
+There is no way to switch the check off, because a disagreement is a defect in whatever started
+the workflow rather than a matter of taste. It is
+[decision 69](../DECISIONS.md), and `BusinessKeyIsTheAggregateIdTest` holds the three places, the
+empty key, the key which carries the id, and the start which leaves nothing behind.
+
 #### Deployment-failure policy
 
 By default, a failing deployment of any configured adapter aborts booting of the

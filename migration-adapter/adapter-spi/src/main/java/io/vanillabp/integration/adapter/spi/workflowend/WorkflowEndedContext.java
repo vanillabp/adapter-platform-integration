@@ -96,4 +96,24 @@ public interface WorkflowEndedContext {
 
   }
 
+
+  /**
+   * The business key the BPMS keeps for the ended workflow of its own accord, where the
+   * BPMS has such a thing at all. The contract is the one of
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext#getBusinessKey()}:
+   * a business key is only ever a copy of {@link #getWorkflowAggregateId()}, a key
+   * which says something else makes the workflow carry two identities at once, and the
+   * core refuses the notification rather than picking one of them.
+   * <p>
+   * The default is <code>null</code>, which means "this BPMS keeps no business key" and
+   * contradicts nothing.
+   *
+   * @return The BPMS' own business key of this workflow or <code>null</code>
+   */
+  default String getBusinessKey() {
+
+    return null;
+
+  }
+
 }
