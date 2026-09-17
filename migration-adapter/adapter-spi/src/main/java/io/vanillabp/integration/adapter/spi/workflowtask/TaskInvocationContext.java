@@ -342,6 +342,13 @@ public interface TaskInvocationContext {
    * That is the whole answer for Camunda 8 up to 8.9 and for the Process-Engine-API. An
    * adapter whose BPMS keeps the aggregate's id IN its business key reports it here as
    * well: the value costs nothing to pass on and the comparison then simply holds.
+   * <p>
+   * What says nothing does not contradict, and that holds for the other side too. Where
+   * {@link #getWorkflowAggregateId()} is absent there is nothing to compare against and
+   * nothing is refused. The case behind that rule is the workflow an application takes
+   * over after upgrading from version 1 on Camunda 7: version 1 wrote no process
+   * variables at all, so such an instance carries its identity in the business key and
+   * nowhere else.
    *
    * @return The BPMS' own business key of this workflow or <code>null</code>
    */

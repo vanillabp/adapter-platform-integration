@@ -1124,8 +1124,12 @@ A start the BPMS performed on its own has no aggregate yet, so the comparison ha
 id is final and still inside the transaction the start opened. A refusal there takes the aggregate
 with it rather than leaving one behind which the instance does not name.
 
-An absent or blank business key contradicts nothing and passes, which is the ordinary state of
-every Camunda 8 workflow up to cluster 8.9 and of every workflow on a BPMS without business keys.
+What says nothing does not contradict, on either side. An absent business key is the ordinary
+state of every Camunda 8 workflow up to cluster 8.9 and of every workflow on a BPMS without
+business keys. An absent aggregate id is the workflow an application takes over after upgrading
+from version 1 on Camunda 7: version 1 wrote no process variables there, so such an instance
+carries its identity in the business key and nowhere else, and reading a missing variable as a
+deviation would send every migrated workflow into an incident at its first delivery.
 There is no way to switch the check off, because a disagreement is a defect in whatever started
 the workflow rather than a matter of taste. It is
 [decision 69](../DECISIONS.md), and `BusinessKeyIsTheAggregateIdTest` holds the three places, the

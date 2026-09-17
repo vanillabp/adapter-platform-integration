@@ -20,8 +20,13 @@ package io.vanillabp.integration.adapter.migration.processservice;
  * engine's business. The outcome is the same everywhere: the workflow does not move on an
  * identity VanillaBP cannot vouch for, and the message names both values.
  * <p>
- * See decision 69 in the repository's DECISIONS.md, which also says why an empty business
- * key contradicts nothing and why there is no way to switch this off.
+ * What says nothing does not contradict. A deviation needs two values which both say
+ * something and disagree, so a missing business key, a missing aggregate id, or both, are
+ * silence. That is not a convenience, it is what keeps the upgrade from version 1 working,
+ * and the method below says why.
+ * <p>
+ * See decision 69 in the repository's DECISIONS.md, which also says why there is no way to
+ * switch this off.
  */
 public final class BusinessKeyCheck {
 
@@ -33,10 +38,17 @@ public final class BusinessKeyCheck {
    * Refuses what the BPMS handed over when its business key names something other than
    * the workflow aggregate.
    * <p>
-   * Nothing happens where either value is absent. An empty business key says nothing, so
-   * it cannot disagree, and that is the state of every Camunda 8 workflow up to cluster
-   * 8.9 and of every workflow on a BPMS which keeps no business key. An absent aggregate
-   * id is a different defect, reported where it is read.
+   * Nothing happens where either value is absent, and both halves of that are deliberate.
+   * <p>
+   * An absent business key is the state of every Camunda 8 workflow up to cluster 8.9 and
+   * of every workflow on a BPMS which keeps none.
+   * <p>
+   * An absent aggregate id is the workflow an application takes over after upgrading from
+   * version 1 on Camunda 7. Version 1 wrote NO process variables there, because the model
+   * read the workflow aggregate directly, so such an instance carries its identity in the
+   * business key and nowhere else. An adapter which reads the aggregate's id from the
+   * variable therefore finds none, and if that counted as a deviation every migrated
+   * workflow would run into an incident at its first delivery. It is silence instead.
    *
    * @param businessKey What the BPMS keeps as the workflow's business key, or
    *          <code>null</code> where it keeps none
@@ -59,9 +71,12 @@ public final class BusinessKeyCheck {
       final String workflowId) {
 
     if ((businessKey == null) || businessKey.isBlank()) {
+      // this BPMS keeps no business key for this workflow, so there is no second claim
       return;
     }
     if ((workflowAggregateId == null) || workflowAggregateId.isBlank()) {
+      // there is nothing on the other side to hold the key against. A workflow taken
+      // over from version 1 on Camunda 7 is exactly this: a business key and no variable
       return;
     }
     if (businessKey.equals(workflowAggregateId)) {

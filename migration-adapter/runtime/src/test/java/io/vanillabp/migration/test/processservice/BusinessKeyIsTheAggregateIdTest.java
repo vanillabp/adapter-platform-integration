@@ -1,5 +1,6 @@
 package io.vanillabp.migration.test.processservice;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.processservice.BusinessKeyCheck;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
@@ -398,6 +400,34 @@ public class BusinessKeyIsTheAggregateIdTest {
     testee.invokeWorkflowTask(MODULE, PROCESS, delivery("4713", "   "));
 
     assertEquals("assessRisk", aggregate.servedBy);
+
+  }
+
+  @Test
+  @DisplayName("A workflow taken over from version 1 carries a business key and no variable, which is silence")
+  public void aWorkflowTakenOverFromVersionOneIsNotADeviation() {
+
+    // Version 1 on Camunda 7 wrote no process variables at all: the model read the
+    // workflow aggregate directly, so such an instance carries its identity in the
+    // business key and nowhere else. An adapter which reads the id from the variable
+    // finds none, and this is the case which must not become an incident - otherwise
+    // every workflow an application takes over on its upgrade would fail at its first
+    // delivery.
+    assertDoesNotThrow(
+        () -> BusinessKeyCheck
+            .refuseAKeyWhichIsNotTheAggregateId(
+                "4711", null, "The delivery of task 'assessRisk'", MODULE, PROCESS, ADAPTER, null),
+        "a business key with nothing on the other side says nothing about a deviation");
+    assertDoesNotThrow(
+        () -> BusinessKeyCheck
+            .refuseAKeyWhichIsNotTheAggregateId(
+                "4711", "   ", "The delivery of task 'assessRisk'", MODULE, PROCESS, ADAPTER, null),
+        "and neither does one held against a value of nothing but spaces");
+    assertDoesNotThrow(
+        () -> BusinessKeyCheck
+            .refuseAKeyWhichIsNotTheAggregateId(
+                null, null, "The delivery of task 'assessRisk'", MODULE, PROCESS, ADAPTER, null),
+        "two absent values are two silences, not a disagreement");
 
   }
 
