@@ -12,7 +12,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
-import io.vanillabp.integration.adapter.migration.workflowtask.VersionRange;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartContext;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartResult;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartSpec;
@@ -199,22 +198,24 @@ public class BpmsInitiatedStarts {
 
   /**
    * The @WorkflowStartedByBpms methods registered for that BPMN process, each with the
-   * verdict whether it serves one of the given versions: the versions the BPMS holds, minus
-   * the ones the configuration faded out. A method serving none of them anywhere in its
-   * workflow module never runs, and the start says so - which of the two the registry
-   * decides, since a method is registered once per BPMN process its class declares.
+   * verdict whether its version specifications are worth keeping. A method worth keeping
+   * nowhere in its workflow module never runs, and the start says so - which of the two
+   * the registry decides, since a method is registered once per BPMN process its class
+   * declares.
+   * <p>
+   * What "worth keeping" means is the caller's question, and there are two of them: the
+   * versions the BPMS holds minus the ones the configuration faded out, and, where the
+   * BPMS keeps no catalog at all, whether a delivery there can meet the specification.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
-   * @param servableVersions The versions worth serving
-   * @param resolver Resolves version tags of that process
+   * @param serves Whether a method's version specifications are worth keeping
    * @return One verdict per registered method
    */
   public java.util.List<io.vanillabp.integration.adapter.migration.workflowtask.HandlerVersions> handlerVersions(
       final String workflowModuleId,
       final String bpmnProcessId,
-      final java.util.Collection<String> servableVersions,
-      final VersionRange.ProcessVersionResolver resolver) {
+      final java.util.function.Predicate<io.vanillabp.integration.adapter.migration.workflowtask.ServedVersions> serves) {
 
     final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
     if (entry == null) {
@@ -224,8 +225,8 @@ public class BpmsInitiatedStarts {
         .stream()
         .map(handler -> new io.vanillabp.integration.adapter.migration.workflowtask.HandlerVersions(
             handler.describe(), "@WorkflowStartedByBpms method '%s' (version %s)"
-                .formatted(handler.describe(), handler.describeVersionsWithOrigin()), servableVersions.stream()
-                    .anyMatch(version -> handler.matchesVersion(version, resolver))))
+                .formatted(handler.describe(),
+                    handler.describeVersionsWithOrigin()), serves.test(handler.servedVersions())))
         .toList();
 
   }

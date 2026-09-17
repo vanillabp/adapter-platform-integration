@@ -312,6 +312,16 @@ public class WorkflowTaskHandler {
   }
 
   /**
+   * @return What this handler serves, for a question the version specifications
+   *         answer on their own
+   */
+  ServedVersions servedVersions() {
+
+    return versions;
+
+  }
+
+  /**
    * Invokes the handler method with parameters bound from the aggregate and the
    * invocation context. {@link TaskException} and other
    * {@link RuntimeException}s of the method propagate unchanged; checked

@@ -6,6 +6,30 @@ applications built on VanillaBP). What an application on Camunda 7 has to config
 this is in
 [that adapter's own file](https://github.com/vanillabp/camunda7-adapter/blob/main/UPGRADE.md).
 
+## An adapter which keeps no version catalog says so (2026-09-17)
+
+A BPMS which counts no versions of its processes registers no `ProcessVersionCatalog`, and that
+looked exactly like an adapter which had not been asked yet. So the startup said nothing about the
+methods of such a process, and the two lines which did appear pointed the wrong way: one called a
+version tag unknown to every BPMS, on the engine where the tag is the one thing a delivery carries,
+the other said at a delivery that no adapter can be asked about the versions, which reads like a
+missing adapter.
+
+**Adapters** gain one optional report:
+`WorkflowTaskWiring#reportNoProcessVersionCatalog(adapterId, workflowModuleId, bpmnProcessId,
+reported)`, called during `wireBpmn` in the place `registerProcessVersions` would be called in. The
+new enum `ReportedProcessVersion` says what a delivery of that BPMS carries as its process version,
+`VERSION_TAG` or `NONE`. An adapter which registers a catalog changes nothing, and one which
+registers none and says nothing keeps the behaviour it had.
+
+**Applications** see one new message where an adapter reports this, and two old ones rewritten. The
+new one is a WARN per BPMN process which names the methods whose version a delivery of that BPMS can
+never meet, with what still works there and what to do about them. A method naming no version serves
+every delivery, and on a BPMS reporting a version tag a version naming exactly that tag is met too.
+The boot goes on: the same method can be the right one on another BPMS of the prioritized list, and
+refusing to start over the half which is idle would make a migration impossible. The reasoning is
+decision 60 in [`DECISIONS.md`](./DECISIONS.md).
+
 ## An aggregate which shares a Calendar does not start (2026-09-17)
 
 An attribute of type `java.util.Calendar` reached the BPMS as the text a `Calendar` prints, and that

@@ -258,6 +258,32 @@ public class VersionRange {
   }
 
   /**
+   * Whether this specification can be met at all on a BPMS which keeps no catalog of
+   * its deployed versions (see
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#reportNoProcessVersionCatalog}).
+   * <p>
+   * Without a catalog nothing can be placed in the order the versions were deployed
+   * in, so a range is never met. What is left is a plain comparison against the value
+   * the delivery carries: <code>*</code> takes any of them, and a single version tag is
+   * met by a delivery carrying that tag.
+   *
+   * @param reported What a delivery of that BPMS carries as its process version
+   * @return Whether a delivery can meet this specification there
+   */
+  public boolean canBeMetWithoutACatalog(
+      final io.vanillabp.integration.adapter.spi.version.ReportedProcessVersion reported) {
+
+    return switch (kind) {
+      case ALL -> true;
+      case EXACT ->
+        (reported == io.vanillabp.integration.adapter.spi.version.ReportedProcessVersion.VERSION_TAG) && !isNumeric(
+            lower);
+      default -> false;
+    };
+
+  }
+
+  /**
    * @return Whether this specification covers every version - what a
    *         <code>version</code> attribute nobody wrote parses to, and what makes a
    *         handler method inherit the range of its class

@@ -1819,7 +1819,16 @@ The `version` attribute of `@WorkflowTask`, `@WorkflowStartedByBpms` and
   of `deployResources`, resolves the tags the application names while the application
   STARTS - the deployment has happened, so a tag deployed by this very start is
   included. A tag no BPMS knows is a WARN, never a boot failure: the tagged version may
-  arrive later, and the other methods have to keep serving.
+  arrive later, and the other methods have to keep serving;
+- an adapter whose BPMS counts no versions at all says so, with
+  `WorkflowTaskInvoker.reportNoProcessVersionCatalog(adapterId, module, process,
+  reported)`, and `ReportedProcessVersion` says what a delivery there carries instead, a
+  version tag or nothing. Registering no catalog is not that statement: it is what the
+  core sees before any adapter was asked. With the statement the core names the methods
+  whose version can never be met on that BPMS, once per process and naming the adapter,
+  and it writes its messages about an unknown version in the words of an engine which
+  counts none. A warning, so an application whose method is the right one on another
+  BPMS of its prioritized list keeps booting (decision 60).
 
 Two methods wired to the same BPMN element are ambiguous exactly when their ranges
 OVERLAP (`VersionRange.overlaps`, interval math). A range naming a tag cannot be placed
@@ -1828,7 +1837,9 @@ decidable without a BPMS, and again during `resolveProcessVersions`. Both times 
 the boot naming both methods. `ProcessVersionMatchingTest` holds the grammar and both
 checks (`numericRanges`, `versionTagsAreResolvedByTheBpms`,
 `overlappingTagRangesFailAfterTheDeployment`, `unknownVersionTagIsReported`,
-`recordedVersionsAvoidQueries`).
+`recordedVersionsAvoidQueries`); its nested `WithoutAVersionCatalog` holds what a BPMS
+counting no versions is told about its methods, and that an adapter which only stays
+silent is still answered with silence.
 
 ### Two-phase workflow start (`PhaseTwoOutbox` SPI)
 
