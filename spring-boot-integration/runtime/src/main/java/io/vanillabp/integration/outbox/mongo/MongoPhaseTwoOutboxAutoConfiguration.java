@@ -127,6 +127,14 @@ public class MongoPhaseTwoOutboxAutoConfiguration {
           .createIndex(new Index()
               .on("status", Sort.Direction.ASC)
               .on("doneAt", Sort.Direction.ASC));
+      // what the housekeeping of the payloads deletes along - without it that delete
+      // reads every payload ever written
+      mongoTemplate
+          .indexOps(vanillaBpProperties
+              .getOutbox()
+              .getMongo()
+              .getPayloadCollection())
+          .createIndex(new Index().on("createdAt", Sort.Direction.ASC));
       dropLegacyIdempotencyKeyIndex(mongoTemplate, collection);
     }
     return new MongoPhaseTwoOutbox(mongoTemplate, dispatcher, collection);

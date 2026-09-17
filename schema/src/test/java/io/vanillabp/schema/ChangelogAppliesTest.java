@@ -85,8 +85,8 @@ public class ChangelogAppliesTest {
   }
 
   @Test
-  @DisplayName("The changelog creates both tables with the columns of the runtime's DDL")
-  public void bothTablesAreCreated() throws Exception {
+  @DisplayName("The changelog creates all three tables with the columns of the runtime's DDL")
+  public void allTablesAreCreated() throws Exception {
 
     try (var connection = applyTo("changelog", Map.of())) {
       final var outbox = columnsOf(connection, "VANILLABP_PHASE_TWO_OUTBOX");
@@ -107,6 +107,12 @@ public class ChangelogAppliesTest {
                   "RECORDED_AT", "LAST_SEEN_AT", "TASK_ID", "TASK_CLOSED_AT", "BPMN_ELEMENT_ID",
                   "WORKFLOW_ID"),
           java.util.List.copyOf(delivery.keySet()));
+
+      final var payload = columnsOf(connection, "VANILLABP_PHASE_TWO_PAYLOAD");
+      assertEquals(
+          java.util.List
+              .of("REFERENCE", "WORKFLOW_MODULE_ID", "BPMN_PROCESS_ID", "OPERATION", "PAYLOAD", "CREATED_AT"),
+          java.util.List.copyOf(payload.keySet()));
 
     }
 
@@ -168,6 +174,13 @@ public class ChangelogAppliesTest {
           delivery.get("VANILLABP_TASK_DELIVERY_OPEN"),
           "an extension reads the open tasks of one workflow aggregate per screen it builds: "
               + delivery);
+
+      final var payload = indexesOf(connection, "VANILLABP_PHASE_TWO_PAYLOAD");
+      assertEquals(
+          java.util.List.of("CREATED_AT"),
+          payload.get("VANILLABP_PHASE_TWO_PAYLOAD_AGE"),
+          "the housekeeping deletes by the moment a payload was written: "
+              + payload);
     }
 
   }
@@ -214,9 +227,14 @@ public class ChangelogAppliesTest {
 
     try (var connection = applyTo(
         "renamed",
-        Map.of("vanillabp.outbox.table", "MY_OUTBOX", "vanillabp.delivery.table", "MY_DELIVERIES"))) {
+        Map
+            .of(
+                "vanillabp.outbox.table", "MY_OUTBOX",
+                "vanillabp.delivery.table", "MY_DELIVERIES",
+                "vanillabp.payload.table", "MY_PAYLOADS"))) {
       assertTrue(columnsOf(connection, "MY_OUTBOX").containsKey("DEDUP_KEY"));
       assertTrue(columnsOf(connection, "MY_DELIVERIES").containsKey("DELIVERY_KEY"));
+      assertTrue(columnsOf(connection, "MY_PAYLOADS").containsKey("PAYLOAD"));
       assertTrue(columnsOf(connection, "VANILLABP_PHASE_TWO_OUTBOX").isEmpty());
     }
 

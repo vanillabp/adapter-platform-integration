@@ -184,6 +184,16 @@ public class PhaseTwoOutboxProperties {
     @Builder.Default
     private String table = null;
 
+    /**
+     * The name of the table storing the payloads of phase-two calls which carry one
+     * (see {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}). One table per
+     * outbox, for the reason the outbox itself has one: two applications sharing it
+     * would house-keep each other's rows. <code>null</code> means
+     * <code>VANILLABP_PHASE_TWO_PAYLOAD</code>.
+     */
+    @Builder.Default
+    private String payloadTable = null;
+
   }
 
   @Getter
@@ -208,6 +218,14 @@ public class PhaseTwoOutboxProperties {
      */
     @Builder.Default
     private String collection = "vanillabp-phase-two-outbox";
+
+    /**
+     * The name of the collection storing the payloads of phase-two calls which carry
+     * one (see {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}). One
+     * collection per outbox, for the reason the outbox itself has one.
+     */
+    @Builder.Default
+    private String payloadCollection = "vanillabp-phase-two-payloads";
 
   }
 

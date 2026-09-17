@@ -416,6 +416,15 @@ public interface QuarkusMigrationAdapterProperties {
      */
     Optional<String> table();
 
+    /**
+     * The name of the table storing the payloads of phase-two calls which carry one
+     * (default <code>VANILLABP_PHASE_TWO_PAYLOAD</code>). One table per outbox, for
+     * the reason the outbox itself has one.
+     *
+     * @return The payload table name
+     */
+    Optional<String> payloadTable();
+
   }
 
   /**
@@ -445,6 +454,15 @@ public interface QuarkusMigrationAdapterProperties {
      */
     @WithDefault("vanillabp-phase-two-outbox")
     String collection();
+
+    /**
+     * The name of the collection storing the payloads of phase-two calls which carry
+     * one. One collection per outbox, for the reason the outbox itself has one.
+     *
+     * @return The payload collection name
+     */
+    @WithDefault("vanillabp-phase-two-payloads")
+    String payloadCollection();
 
   }
 

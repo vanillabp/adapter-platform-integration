@@ -1,5 +1,6 @@
 package io.vanillabp.integration.spi;
 
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;
@@ -43,6 +44,12 @@ import java.util.Optional;
  *        for operations which must not be deduplicated and for calls rebuilt by a
  *        store at dispatch time (where the key was persisted and is no longer
  *        needed)
+ * @param payload The bytes the caller wants the handler to see at dispatch time, or
+ *        <code>null</code> for a call without one. They do NOT travel in the outbox
+ *        entry: the store writes them into a {@link PhaseTwoPayloadStore} in the same
+ *        transaction and the entry names them by
+ *        {@link #ARG_PAYLOAD_REFERENCE}, which is what keeps an outbox entry a row of
+ *        identifiers
  */
 public record PhaseTwoCall(
                            String operation,
@@ -51,7 +58,8 @@ public record PhaseTwoCall(
                            String workflowAggregateId,
                            String adapterId,
                            Map<String, String> args,
-                           Optional<String> idempotencyKey) {
+                           Optional<String> idempotencyKey,
+                           byte[] payload) {
 
   /**
    * The number of characters an idempotency key may have before it is replaced by a
@@ -85,6 +93,19 @@ public record PhaseTwoCall(
    * in use happens to have.
    */
   public static final int MAX_ARGS_LENGTH = 2048;
+
+  /**
+   * The largest payload a call may carry, in bytes. One mebibyte, which is wide enough
+   * for the state of a workflow aggregate written as JSON and narrow enough that a
+   * database holding a backlog of them stays a database somebody can back up.
+   * <p>
+   * It stands HERE and in no store, so an application meets the same limit whichever
+   * store it runs and never discovers a narrower one by moving from one to the other -
+   * the reasoning that bounds the idempotency key at the smallest limit of the stores.
+   * MongoDB's own limit of 16 MB per document is far above it, and so is what a
+   * <code>BLOB</code> holds on every database VanillaBP ships statements for.
+   */
+  public static final int MAX_PAYLOAD_SIZE = 1024 * 1024;
 
   /**
    * The {@link #args()} key carrying the task ID of
@@ -123,6 +144,21 @@ public record PhaseTwoCall(
   public static final String ARG_SIGNAL_NAME = "signalName";
 
   /**
+   * The {@link #args()} key carrying the reference of the call's payload, written by
+   * {@link #of} where a payload was passed and absent where none was. Part of the
+   * persisted contract - never change the literal.
+   * <p>
+   * The reference and not the bytes: a payload lies in a store of its own
+   * ({@link PhaseTwoPayloadStore}) and the entry names it, so the columns an outbox
+   * entry is made of stay the identifiers they were meant to be. It travels in the
+   * args because that is what every store already persists and hands back at dispatch
+   * time, and because a reference IS an identifier. It is added AFTER the idempotency
+   * key was derived, so no derivation rule can ever see it - a fresh reference per call
+   * would otherwise make every call unique and deduplicate nothing.
+   */
+  public static final String ARG_PAYLOAD_REFERENCE = "payloadReference";
+
+  /**
    * The {@link #args()} key carrying the activation a
    * {@link PhaseOperation#CORRELATE_MESSAGE} was planned in, absent where it was
    * planned outside any ({@link RunningActivation}). Part of the persisted contract -
@@ -144,6 +180,119 @@ public record PhaseTwoCall(
     // aggregate ID (a broadcast signal)
     args = args == null ? Map.of() : Map.copyOf(args);
     idempotencyKey = Objects.requireNonNullElseGet(idempotencyKey, Optional::empty);
+    // copied on the way in and on the way out, so nobody changes bytes another thread
+    // is about to write to a database
+    payload = payload == null ? null : payload.clone();
+  }
+
+  /**
+   * The payload of this call, or <code>null</code> where it carries none.
+   *
+   * @return A copy of the bytes, so a caller reading them cannot change what the call
+   *         holds
+   */
+  public byte[] payload() {
+
+    return payload == null ? null : payload.clone();
+
+  }
+
+  /**
+   * Whether this call carries a payload.
+   *
+   * @return Whether there are bytes to store, respectively bytes to hand to the handler
+   */
+  public boolean hasPayload() {
+
+    return payload != null;
+
+  }
+
+  /**
+   * The reference the payload of this call is stored under, or <code>null</code> where
+   * the call carries none. It is what a {@link PhaseTwoPayloadStore} is asked with at
+   * dispatch time.
+   *
+   * @return The reference or <code>null</code>
+   */
+  public String payloadReference() {
+
+    return args.get(ARG_PAYLOAD_REFERENCE);
+
+  }
+
+  /**
+   * The same call carrying the bytes a store read for its reference - what a store
+   * builds at dispatch time once it looked the payload up.
+   *
+   * @param payload The bytes read from the payload store
+   * @return A copy of this call carrying them
+   */
+  public PhaseTwoCall withPayload(
+      final byte[] payload) {
+
+    return new PhaseTwoCall(
+        operation, workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, args, idempotencyKey, payload);
+
+  }
+
+  /**
+   * Two calls are the same call when they describe the same operation with the same
+   * bytes. Written out because the equality a record generates compares an array by its
+   * identity, which would make two calls carrying the very same payload unequal.
+   */
+  @Override
+  public boolean equals(
+      final Object other) {
+
+    if (this == other) {
+      return true;
+    }
+    if (!(other instanceof final PhaseTwoCall call)) {
+      return false;
+    }
+    return Objects.equals(operation, call.operation) && Objects.equals(workflowModuleId,
+        call.workflowModuleId) && Objects.equals(bpmnProcessId, call.bpmnProcessId) && Objects
+            .equals(workflowAggregateId, call.workflowAggregateId) && Objects.equals(adapterId,
+                call.adapterId) && Objects.equals(args, call.args) && Objects.equals(idempotencyKey,
+                    call.idempotencyKey) && Arrays.equals(payload, call.payload);
+
+  }
+
+  @Override
+  public int hashCode() {
+
+    return Objects
+        .hash(
+            operation,
+            workflowModuleId,
+            bpmnProcessId,
+            workflowAggregateId,
+            adapterId,
+            args,
+            idempotencyKey,
+            Arrays.hashCode(payload));
+
+  }
+
+  /**
+   * Names the payload by its length and not by its bytes: the bytes belong to the
+   * application, and a log line printing them is a log line leaking them.
+   */
+  @Override
+  public String toString() {
+
+    return "PhaseTwoCall[operation=%s, workflowModuleId=%s, bpmnProcessId=%s, workflowAggregateId=%s, adapterId=%s, args=%s, idempotencyKey=%s, payload=%s]"
+        .formatted(
+            operation,
+            workflowModuleId,
+            bpmnProcessId,
+            workflowAggregateId,
+            adapterId,
+            args,
+            idempotencyKey,
+            payload == null ? "none" : "%d bytes".formatted(payload.length));
+
   }
 
   /**
@@ -170,12 +319,51 @@ public record PhaseTwoCall(
       final String adapterId,
       final Map<String, String> args) {
 
+    return of(operation, workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, args, null);
+
+  }
+
+  /**
+   * Builds a call to be scheduled which carries a payload: the state its caller saw at
+   * the moment it planned the operation. The bytes are stored beside the entry and the
+   * entry names them, so what the caller passes here reaches the handler at dispatch
+   * time unchanged.
+   * <p>
+   * The format is the caller's: VanillaBP carries bytes and reads none of them. A call
+   * without a payload writes no row in the payload store and reads none at its
+   * dispatch, so passing <code>null</code> costs exactly what it did before payloads
+   * existed.
+   *
+   * @param operation The operation to execute
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param workflowAggregateId The workflow-aggregate ID in serialized form
+   * @param adapterId The ID of the elected BPMS adapter or <code>null</code>
+   * @param args Additional operation-specific arguments (may be <code>null</code>)
+   * @param payload The bytes to carry, or <code>null</code> for a call without one
+   * @return The call, ready to be handed to {@link PhaseTwoOutbox#schedule}
+   * @throws IllegalArgumentException If the aggregate ID is longer than
+   *         {@link #MAX_AGGREGATE_ID_LENGTH} characters, if the serialized args are
+   *         longer than {@link #MAX_ARGS_LENGTH} characters, or if the payload is
+   *         larger than {@link #MAX_PAYLOAD_SIZE} bytes (guiding message)
+   */
+  public static PhaseTwoCall of(
+      final PhaseOperation operation,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final String adapterId,
+      final Map<String, String> args,
+      final byte[] payload) {
+
     validateAggregateIdLength(operation, workflowModuleId, bpmnProcessId, workflowAggregateId);
     validateArgsLength(operation, workflowModuleId, bpmnProcessId, args);
+    validatePayloadSize(operation, workflowModuleId, bpmnProcessId, payload);
     // the key is derived from the call itself, so the call is built twice: once
     // to derive from, once carrying the result
     final var withoutKey = new PhaseTwoCall(
-        operation.name(), workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, args, Optional.empty());
+        operation
+            .name(), workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, args, Optional.empty(), null);
     // bounded HERE and not in the derivation rules, so no operation added later can
     // forget it - a key too long for the store fails the application's own
     // transaction, at the moment it starts a workflow or correlates a message
@@ -186,7 +374,58 @@ public record PhaseTwoCall(
     return new PhaseTwoCall(
         withoutKey.operation(), withoutKey.workflowModuleId(), withoutKey.bpmnProcessId(), withoutKey
             .workflowAggregateId(), withoutKey
-                .adapterId(), withoutKey.args(), boundedKey);
+                .adapterId(), withPayloadReference(withoutKey.args(), payload), boundedKey, payload);
+
+  }
+
+  /**
+   * Adds the reference of a payload to the arguments the entry persists. Called after
+   * the idempotency key was derived, see {@link #ARG_PAYLOAD_REFERENCE}.
+   *
+   * @param args The arguments of the call
+   * @param payload The payload or <code>null</code>
+   * @return The arguments, unchanged where there is no payload
+   */
+  private static Map<String, String> withPayloadReference(
+      final Map<String, String> args,
+      final byte[] payload) {
+
+    if (payload == null) {
+      return args;
+    }
+    final var withReference = new java.util.LinkedHashMap<>(args);
+    withReference.put(ARG_PAYLOAD_REFERENCE, java.util.UUID.randomUUID().toString());
+    return withReference;
+
+  }
+
+  /**
+   * Refuses a payload no store should be asked to hold. It sits next to the other two
+   * guards and for the same reason: this is where the bytes are still at hand and where
+   * the stack trace still points at the code which passed them.
+   */
+  private static void validatePayloadSize(
+      final PhaseOperation operation,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final byte[] payload) {
+
+    if ((payload == null) || (payload.length <= MAX_PAYLOAD_SIZE)) {
+      return;
+    }
+    throw new IllegalArgumentException(
+        """
+            The payload of operation '%s' of BPMN process '%s' of workflow module '%s' is %d bytes \
+            long, and a phase-two call carries at most %d bytes. The payload is what the caller saw \
+            at the moment it planned the operation, so it is meant to be a state somebody reads, not \
+            a file somebody transfers. Pass less of it - a selection of the fields the receiver \
+            needs - or store the large part where it belongs and pass what points at it."""
+            .formatted(
+                operation.name(),
+                bpmnProcessId,
+                workflowModuleId,
+                payload.length,
+                MAX_PAYLOAD_SIZE));
 
   }
 
@@ -287,8 +526,36 @@ public record PhaseTwoCall(
       final String adapterId,
       final Map<String, String> args) {
 
+    return forDispatch(operation, workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, args, null);
+
+  }
+
+  /**
+   * Rebuilds a call from a persisted outbox entry, carrying the payload the store read
+   * for the entry's {@link #ARG_PAYLOAD_REFERENCE}.
+   *
+   * @param operation The persisted operation NAME
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param workflowAggregateId The workflow-aggregate ID in serialized form
+   * @param adapterId The persisted adapter ID or <code>null</code>
+   * @param args The persisted arguments (may be <code>null</code>)
+   * @param payload The bytes read from the payload store, or <code>null</code> where
+   *        the entry names none
+   * @return The call, ready to be handed to the core's router
+   */
+  public static PhaseTwoCall forDispatch(
+      final String operation,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final String adapterId,
+      final Map<String, String> args,
+      final byte[] payload) {
+
     return new PhaseTwoCall(
-        operation, workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, args, Optional.empty());
+        operation, workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, args, Optional
+            .empty(), payload);
 
   }
 

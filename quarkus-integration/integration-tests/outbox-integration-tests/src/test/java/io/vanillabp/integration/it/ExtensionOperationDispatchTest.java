@@ -1,8 +1,10 @@
 package io.vanillabp.integration.it;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import javax.sql.DataSource;
@@ -60,6 +62,14 @@ public class ExtensionOperationDispatchTest {
       + "WHERE OPERATION = '"
       + SampleExtension.OPERATION_NAME
       + "' AND AGGREGATE_ID = '%s' AND STATUS <> 'DONE'";
+
+  /**
+   * The payload of one call, addressed by the reference its entry names.
+   */
+  private static final String COUNT_PAYLOAD_OF_REFERENCE = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_PAYLOAD "
+      + "WHERE REFERENCE = '%s'";
+
+  private static final String COUNT_PAYLOADS = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_PAYLOAD";
 
   @Inject
   WorkflowService workflowService;
@@ -132,6 +142,54 @@ public class ExtensionOperationDispatchTest {
     }
     userTransaction.commit();
     return attached;
+
+  }
+
+  @Test
+  @DisplayName("A payload travels by reference and is gone once the entry was dispatched")
+  public void aPayloadTravelsByReference() throws Exception {
+
+    final var state = "{\"amount\":42}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+
+    userTransaction.begin();
+    final var aggregate = workflowService.startWorkflow("extension-payload");
+    final var scheduled = SampleExtension
+        .call("test-module", "dummy", aggregate.getId().toString(), "created", state);
+    outbox.schedule(scheduled);
+    // the bytes ride the very transaction the aggregate rides: they are there already,
+    // and a rollback would take them with it
+    assertEquals(1L, count(COUNT_PAYLOAD_OF_REFERENCE.formatted(scheduled.payloadReference())));
+    userTransaction.commit();
+
+    final var dispatched = extension.awaitDispatched(1, 10000);
+    final var call = dispatched.getFirst();
+    assertArrayEquals(state, call.payload());
+    assertEquals(scheduled.payloadReference(), call.payloadReference());
+
+    // the entry was dispatched, so the bytes are gone
+    final var deadline = System.currentTimeMillis() + 10000;
+    while (count(COUNT_PAYLOAD_OF_REFERENCE.formatted(scheduled.payloadReference())) > 0) {
+      assertTrue(
+          System.currentTimeMillis() < deadline,
+          "the payload '%s' was never removed".formatted(scheduled.payloadReference()));
+      Thread.sleep(50);
+    }
+
+  }
+
+  @Test
+  @DisplayName("A call without a payload writes no row into the payload table")
+  public void aCallWithoutAPayloadStoresNothing() throws Exception {
+
+    final var before = count(COUNT_PAYLOADS);
+
+    final var aggregate = startWorkflowAndSchedule("extension-no-payload", "created");
+    assertNotNull(aggregate.getId());
+    final var dispatched = extension.awaitDispatched(1, 10000);
+    assertFalse(dispatched.getFirst().hasPayload());
+    assertNull(dispatched.getFirst().payloadReference());
+
+    assertEquals(before, count(COUNT_PAYLOADS));
 
   }
 

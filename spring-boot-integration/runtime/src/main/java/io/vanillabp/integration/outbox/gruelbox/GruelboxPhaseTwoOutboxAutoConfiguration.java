@@ -1,5 +1,6 @@
 package io.vanillabp.integration.outbox.gruelbox;
 
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Map;
 
@@ -17,6 +18,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.jdbc.datasource.DataSourceUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import com.gruelbox.transactionoutbox.DefaultPersistor;
@@ -28,7 +30,9 @@ import com.gruelbox.transactionoutbox.TransactionOutboxListener;
 import com.gruelbox.transactionoutbox.spring.SpringInstantiator;
 import com.gruelbox.transactionoutbox.spring.SpringTransactionManager;
 
+import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
 import io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema;
+import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 import io.vanillabp.integration.spi.PhaseTwoCall;
@@ -119,6 +123,13 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
    * it is the one which holds entries back until dispatching starts.
    */
   public static final String DEFAULT_SUBMITTER_BEAN_NAME = "vanillaBpGruelboxSubmitter";
+
+  /**
+   * The name of the store holding the payloads of the calls which carry one. A bean of
+   * its own so the outbox, the dispatch and the housekeeping all use the same one, and
+   * so an application may replace it.
+   */
+  public static final String DEFAULT_PAYLOAD_STORE_BEAN_NAME = "vanillaBpGruelboxPhaseTwoPayloadStore";
 
   /**
    * The table gruelbox stores outbox entries in unless
@@ -245,18 +256,78 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
   }
 
   /**
+   * Where the payload of a phase-two call which carries one is stored while its
+   * gruelbox entry waits. gruelbox keeps a call as one serialized invocation and its
+   * table belongs to gruelbox, so the bytes cannot travel in the entry - they lie in a
+   * table of VanillaBP's own and the entry names them (see decision 62 in the
+   * repository's DECISIONS.md).
+   * <p>
+   * The connection is the one Spring binds to the running transaction, so a payload
+   * becomes visible exactly when the entry does. The table is created at startup unless
+   * <code>vanillabp.outbox.create-schema</code> is disabled, in which case its
+   * existence is verified instead.
+   *
+   * @param dataSource The data source the payload table lives in
+   * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree, naming the
+   *          table where the application configured one of its own
+   * @return The payload store of the default gruelbox outbox
+   */
+  @Bean(DEFAULT_PAYLOAD_STORE_BEAN_NAME)
+  @ConditionalOnMissingBean(name = DEFAULT_PAYLOAD_STORE_BEAN_NAME)
+  public JdbcPhaseTwoPayloadStore vanillaBpGruelboxPhaseTwoPayloadStore(
+      final DataSource dataSource,
+      final VanillaBpConfigurationProperties vanillaBpProperties) {
+
+    final var customTable = vanillaBpProperties
+        .getOutbox()
+        .getJdbc()
+        .getPayloadTable();
+    final var store = new JdbcPhaseTwoPayloadStore(
+        new JdbcConnectionAccess() {
+          @Override
+          public Connection acquire() {
+
+            // bound to the Spring-managed transaction if one is running (which the
+            // write requires) - a plain connection of the pool otherwise, used by the
+            // reads of the dispatch and by the housekeeping
+            return DataSourceUtils.getConnection(dataSource);
+
+          }
+
+          @Override
+          public void release(
+              final Connection connection) {
+
+            DataSourceUtils.releaseConnection(connection, dataSource);
+
+          }
+        }, customTable == null
+            ? JdbcPhaseTwoPayloadStore.DEFAULT_TABLE_NAME
+            : customTable);
+    if (vanillaBpProperties.getOutbox().isCreateSchema()) {
+      store.createSchemaIfNotExists();
+    } else {
+      store.validateSchemaExists();
+    }
+    return store;
+
+  }
+
+  /**
    * @param transactionOutbox The gruelbox transaction outbox
    * @param dataSource The data source holding gruelbox' table, used to count the
    *          entries waiting for their dispatch
    * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree, naming the
    *          table where the application configured one of its own
+   * @param payloadStore Where the payload of a call which carries one is written
    * @return The {@link PhaseTwoOutbox} used by the process services
    */
   @Bean(DEFAULT_OUTBOX_BEAN_NAME)
   public GruelboxPhaseTwoOutbox vanillaBpGruelboxPhaseTwoOutbox(
       @Qualifier(DEFAULT_TRANSACTION_OUTBOX_BEAN_NAME) final TransactionOutbox transactionOutbox,
       final DataSource dataSource,
-      final VanillaBpConfigurationProperties vanillaBpProperties) {
+      final VanillaBpConfigurationProperties vanillaBpProperties,
+      @Qualifier(DEFAULT_PAYLOAD_STORE_BEAN_NAME) final JdbcPhaseTwoPayloadStore payloadStore) {
 
     final var customTable = vanillaBpProperties
         .getOutbox()
@@ -265,7 +336,7 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
     return new GruelboxPhaseTwoOutbox(
         transactionOutbox, dataSource, customTable == null
             ? DEFAULT_OUTBOX_TABLE_NAME
-            : customTable);
+            : customTable, payloadStore);
 
   }
 
@@ -280,7 +351,8 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
    */
   @Bean
   public GruelboxPhaseTwoDispatch vanillaBpGruelboxPhaseTwoDispatch(
-      final ObjectProvider<PhaseTwoRouter> phaseTwoRouter) {
+      final ObjectProvider<PhaseTwoRouter> phaseTwoRouter,
+      @Qualifier(DEFAULT_PAYLOAD_STORE_BEAN_NAME) final ObjectProvider<JdbcPhaseTwoPayloadStore> payloadStore) {
 
     return (
         operation,
@@ -288,7 +360,8 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
         bpmnProcessId,
         workflowAggregateId,
         adapterId,
-        serializedArgs) -> new GruelboxPhaseTwoDispatchBean(phaseTwoRouter.getObject())
+        serializedArgs) -> new GruelboxPhaseTwoDispatchBean(
+            phaseTwoRouter.getObject(), payloadStore.getObject())
             .dispatch(
                 operation, workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, serializedArgs);
 
@@ -312,10 +385,11 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
       @Qualifier(DEFAULT_TRANSACTION_OUTBOX_BEAN_NAME) final TransactionOutbox transactionOutbox,
       final VanillaBpConfigurationProperties vanillaBpProperties,
       @Qualifier(DEFAULT_SUBMITTER_BEAN_NAME) final GruelboxRedispatchAwareSubmitter submitter,
-      @Qualifier(DEFAULT_OUTBOX_BEAN_NAME) final GruelboxPhaseTwoOutbox outbox) {
+      @Qualifier(DEFAULT_OUTBOX_BEAN_NAME) final GruelboxPhaseTwoOutbox outbox,
+      @Qualifier(DEFAULT_PAYLOAD_STORE_BEAN_NAME) final JdbcPhaseTwoPayloadStore payloadStore) {
 
     return new GruelboxPhaseTwoOutboxDispatcher(
-        transactionOutbox, vanillaBpProperties.getOutbox(), submitter, outbox);
+        transactionOutbox, vanillaBpProperties.getOutbox(), submitter, outbox, payloadStore);
 
   }
 
