@@ -179,6 +179,16 @@ public class WorkflowEndedHandler {
   }
 
   /**
+   * @return What this handler serves, for a question the version specifications
+   *         answer on their own
+   */
+  io.vanillabp.integration.adapter.migration.workflowtask.ServedVersions servedVersions() {
+
+    return versions;
+
+  }
+
+  /**
    * Invokes the method with bound parameters. Runtime exceptions propagate - the
    * transaction rolls back and the BPMS applies its retry semantics.
    *

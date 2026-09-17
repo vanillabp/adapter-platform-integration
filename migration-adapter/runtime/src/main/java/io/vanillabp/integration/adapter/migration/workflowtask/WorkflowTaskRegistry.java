@@ -813,6 +813,17 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   @Override
+  public void reportNoProcessVersionCatalog(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final io.vanillabp.integration.adapter.spi.version.ReportedProcessVersion reported) {
+
+    processVersions.registerWithoutACatalog(adapterId, workflowModuleId, bpmnProcessId, reported);
+
+  }
+
+  @Override
   public void resolveProcessVersions(
       final String workflowModuleId) {
 
@@ -823,6 +834,14 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
         .forEach(entry -> {
           final var bpmnProcessId = entry.getKey().bpmnProcessId();
           final var registryEntry = entry.getValue();
+          // a BPMS which said it keeps no catalog has answered every version question of
+          // this process, so the methods waiting for an answer are named here and the
+          // messages about an unknown version stay out of it
+          processVersions
+              .reportMethodsWhichNeverRun(
+                  workflowModuleId,
+                  bpmnProcessId,
+                  this::handlersNeverRunningWithoutAVersionCatalog);
           final var tagsUsed = registryEntry.handlers
               .stream()
               .anyMatch(handler -> !handler.versionTags().isEmpty());
@@ -1126,24 +1145,84 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
       final String bpmnProcessId,
       final Map<String, Collection<String>> servableVersionsByProcess) {
 
-    return java.util.stream.Stream.<java.util.function.BiFunction<String, Collection<String>, List<HandlerVersions>>>of(
-        (
-            process,
-            versions) -> workflowTaskHandlerVersions(workflowModuleId, process, versions),
-        (
-            process,
-            versions) -> bpmsInitiatedStarts.handlerVersions(workflowModuleId, process, versions,
-                processVersions.resolverFor(workflowModuleId, process)),
-        (
-            process,
-            versions) -> workflowEndedHandlers.handlerVersions(workflowModuleId, process, versions,
-                processVersions.resolverFor(workflowModuleId, process)),
-        (
-            process,
-            versions) -> extensionHandlers.handlerVersions(workflowModuleId, process, versions,
-                processVersions.resolverFor(workflowModuleId, process)))
-        .flatMap(handlersOf -> deadIn(bpmnProcessId, servableVersionsByProcess, handlersOf).stream())
+    return handlerWalksOf(workflowModuleId)
+        .stream()
+        .flatMap(handlersOf -> deadIn(workflowModuleId, bpmnProcessId, servableVersionsByProcess, handlersOf).stream())
         .toList();
+
+  }
+
+  /**
+   * The methods registered for that BPMN process which a delivery of a BPMS without a
+   * version catalog can never reach - the version half of
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#reportNoProcessVersionCatalog}.
+   * <p>
+   * Same four kinds of handler as {@link #handlersNotServingAnyVersion}, same walk, and
+   * a different question asked of each method: not "which of the versions the BPMS holds
+   * does it serve", because there are none to hold, but "can a delivery of this BPMS meet
+   * its specification at all".
+   * <p>
+   * The verdict is per BPMN process rather than per workflow module, unlike the one about
+   * dead methods. What is reported here is true of THIS BPMS, and the message says so, so
+   * a method which is the right one on a BPMS the application also runs on is named
+   * without being called dead.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @param reported What a delivery of that BPMS carries as its process version
+   * @return One description per method which never runs there
+   */
+  public List<String> handlersNeverRunningWithoutAVersionCatalog(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final io.vanillabp.integration.adapter.spi.version.ReportedProcessVersion reported) {
+
+    return handlerWalksOf(workflowModuleId)
+        .stream()
+        .flatMap(
+            handlersOf -> handlersOf.of(bpmnProcessId, served -> served.canBeMetWithoutACatalog(reported)).stream())
+        .filter(handler -> !handler.servesAVersion())
+        .map(HandlerVersions::description)
+        .toList();
+
+  }
+
+  /**
+   * A walk over the methods of ONE kind of handler registered for one BPMN process,
+   * answering the question it is handed about each of them.
+   */
+  @FunctionalInterface
+  private interface HandlerWalk {
+
+    List<HandlerVersions> of(
+        String bpmnProcessId,
+        java.util.function.Predicate<ServedVersions> serves);
+
+  }
+
+  /**
+   * The four kinds of handler carrying a <code>version</code> attribute, each as a walk
+   * over the methods of one BPMN process of the given workflow module.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @return One walk per kind of handler
+   */
+  private List<HandlerWalk> handlerWalksOf(
+      final String workflowModuleId) {
+
+    return List.of(
+        (
+            process,
+            serves) -> workflowTaskHandlerVersions(workflowModuleId, process, serves),
+        (
+            process,
+            serves) -> bpmsInitiatedStarts.handlerVersions(workflowModuleId, process, serves),
+        (
+            process,
+            serves) -> workflowEndedHandlers.handlerVersions(workflowModuleId, process, serves),
+        (
+            process,
+            serves) -> extensionHandlers.handlerVersions(workflowModuleId, process, serves));
 
   }
 
@@ -1154,16 +1233,20 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
    *
    * @param bpmnProcessId The BPMN process the methods are reported for
    * @param servableVersionsByProcess The versions worth serving, per BPMN process
-   * @param handlersOf The handlers of one (BPMN process, versions worth serving)
+   * @param handlersOf The walk over one kind of handler
    * @return One description per dead method
    */
-  private static List<String> deadIn(
+  private List<String> deadIn(
+      final String workflowModuleId,
       final String bpmnProcessId,
       final Map<String, Collection<String>> servableVersionsByProcess,
-      final java.util.function.BiFunction<String, Collection<String>, List<HandlerVersions>> handlersOf) {
+      final HandlerWalk handlersOf) {
 
     final var candidates = handlersOf
-        .apply(bpmnProcessId, servableVersionsByProcess.getOrDefault(bpmnProcessId, List.of()))
+        .of(
+            bpmnProcessId,
+            servesOneOf(workflowModuleId, bpmnProcessId, servableVersionsByProcess.getOrDefault(bpmnProcessId, List
+                .of())))
         .stream()
         .filter(handler -> !handler.servesAVersion())
         .toList();
@@ -1174,7 +1257,9 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
         .entrySet()
         .stream()
         .filter(process -> !process.getKey().equals(bpmnProcessId))
-        .flatMap(process -> handlersOf.apply(process.getKey(), process.getValue()).stream())
+        .flatMap(process -> handlersOf
+            .of(process.getKey(), servesOneOf(workflowModuleId, process.getKey(), process.getValue()))
+            .stream())
         .filter(HandlerVersions::servesAVersion)
         .map(HandlerVersions::method)
         .collect(Collectors.toSet());
@@ -1187,26 +1272,46 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * The <code>&#64;WorkflowTask</code> methods registered for one BPMN process and
-   * whether each of them serves one of the given versions.
+   * Whether a method serves one of the versions worth serving in a BPMN process - the
+   * question behind the report about methods which never run.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID whose version tags are resolved
+   * @param servableVersions The versions worth serving there
+   * @return The question, ready to be handed to a walk over the methods
+   */
+  private java.util.function.Predicate<ServedVersions> servesOneOf(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Collection<String> servableVersions) {
+
+    final var resolver = processVersions.resolverFor(workflowModuleId, bpmnProcessId);
+    return served -> servableVersions
+        .stream()
+        .anyMatch(version -> served.matches(version, resolver));
+
+  }
+
+  /**
+   * The <code>&#64;WorkflowTask</code> methods registered for one BPMN process, each with
+   * the verdict the given question reaches about its version specifications.
    */
   private List<HandlerVersions> workflowTaskHandlerVersions(
       final String workflowModuleId,
       final String bpmnProcessId,
-      final Collection<String> servableVersions) {
+      final java.util.function.Predicate<ServedVersions> serves) {
 
     final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
     if (entry == null) {
       return List.of();
     }
-    final var resolver = processVersions.resolverFor(workflowModuleId, bpmnProcessId);
     return List
         .copyOf(entry.handlers)
         .stream()
         .map(handler -> new HandlerVersions(
             handler.describe(), "@WorkflowTask method '%s' (version %s)"
-                .formatted(handler.describe(), handler.describeVersionsWithOrigin()), servableVersions.stream()
-                    .anyMatch(version -> handler.matchesVersion(version, resolver))))
+                .formatted(handler.describe(),
+                    handler.describeVersionsWithOrigin()), serves.test(handler.servedVersions())))
         .toList();
 
   }

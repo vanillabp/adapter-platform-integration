@@ -22,7 +22,7 @@ package io.vanillabp.integration.spi;
  * the identifiers ({@link PhaseTwoCall#payload()}), and a store has to keep them until
  * the call is dispatched, in the same transaction as the entry. The stores VanillaBP
  * ships put them into a {@link PhaseTwoPayloadStore} beside the entry and persist only
- * the reference, which is what keeps an entry a row of identifiers (decision 60 in the
+ * the reference, which is what keeps an entry a row of identifiers (decision 62 in the
  * repository's DECISIONS.md). A store of an application's own is free to do it
  * differently - one which keeps the whole call in memory until the commit already
  * carries the bytes and has nothing to add. What no store may do is drop them: a

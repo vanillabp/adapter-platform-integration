@@ -259,7 +259,7 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
    * Where the payload of a phase-two call which carries one is stored while its
    * gruelbox entry waits. gruelbox keeps a call as one serialized invocation and its
    * table belongs to gruelbox, so the bytes cannot travel in the entry - they lie in a
-   * table of VanillaBP's own and the entry names them (see decision 60 in the
+   * table of VanillaBP's own and the entry names them (see decision 62 in the
    * repository's DECISIONS.md).
    * <p>
    * The connection is the one Spring binds to the running transaction, so a payload

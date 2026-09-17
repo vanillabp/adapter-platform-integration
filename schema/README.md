@@ -30,7 +30,7 @@ carry one (`VANILLABP_PHASE_TWO_PAYLOAD`). Not described: `TXNO_OUTBOX` of the S
 integration - that schema belongs to gruelbox and its own migrator.
 
 The payload table is needed by every JDBC-backed outbox, gruelbox included: a call which carries
-bytes stores them there and its entry names the row (see decision 60 in `DECISIONS.md`). An
+bytes stores them there and its entry names the row (see decision 62 in `DECISIONS.md`). An
 application whose extensions pass no payload never writes a row into it, and the table stays empty.
 
 ## Why the SQL is generated and not written

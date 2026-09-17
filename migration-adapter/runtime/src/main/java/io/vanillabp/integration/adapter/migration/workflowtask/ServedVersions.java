@@ -118,6 +118,23 @@ public final class ServedVersions {
   }
 
   /**
+   * Whether a delivery of a BPMS which keeps no catalog of its deployed versions can
+   * ever reach this method - see {@link VersionRange#canBeMetWithoutACatalog}. A method serves
+   * a version ANY of its specifications covers, so one which can be met is enough.
+   *
+   * @param reported What a delivery of that BPMS carries as its process version
+   * @return Whether such a delivery can reach this method
+   */
+  public boolean canBeMetWithoutACatalog(
+      final io.vanillabp.integration.adapter.spi.version.ReportedProcessVersion reported) {
+
+    return ranges
+        .stream()
+        .anyMatch(range -> range.canBeMetWithoutACatalog(reported));
+
+  }
+
+  /**
    * @param processVersion The version the BPMS reported
    * @return Whether this method serves it, decided without asking a BPMS
    */

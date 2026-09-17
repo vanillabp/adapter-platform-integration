@@ -496,9 +496,9 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
 
   /**
    * The methods of the extensions registered for one BPMN process, each with the verdict
-   * whether it serves one of the given versions - the same answer the three registries of
-   * the core give about their own methods, so a method of an extension which serves no
-   * version the BPMS holds is reported by the same startup check.
+   * whether its version specifications are worth keeping - the same answer the three
+   * registries of the core give about their own methods, so a method of an extension is
+   * reported by the same startup check.
    * <p>
    * A contract which reports no process version with its calls is left out: its methods
    * are judged by {@link #reportVersionsNobodyReports}, and saying the same thing twice
@@ -506,15 +506,13 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
-   * @param servableVersions The versions worth serving
-   * @param resolver Resolves version tags of that process
+   * @param serves Whether a method's version specifications are worth keeping
    * @return One verdict per registered method
    */
   public List<HandlerVersions> handlerVersions(
       final String workflowModuleId,
       final String bpmnProcessId,
-      final Collection<String> servableVersions,
-      final VersionRange.ProcessVersionResolver resolver) {
+      final java.util.function.Predicate<io.vanillabp.integration.adapter.migration.workflowtask.ServedVersions> serves) {
 
     return methods
         .entrySet()
@@ -532,9 +530,7 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
                     method.describeAnnotation(),
                     method.describe(),
                     method.getExtensionId(),
-                    method.describeVersions()), servableVersions
-                        .stream()
-                        .anyMatch(version -> method.matchesVersion(version, resolver))))
+                    method.describeVersions()), serves.test(method.servedVersions())))
         .toList();
 
   }

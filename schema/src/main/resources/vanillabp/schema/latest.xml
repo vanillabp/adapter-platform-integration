@@ -228,7 +228,7 @@
       one writes a row here in the same transaction which writes the entry, the entry names the row
       by its REFERENCE, and the dispatch reads it back. A table of its own and not a column of the
       outbox: the columns of an entry hold identifiers, one of the four stores does not own its
-      table at all (gruelbox), and a call without a payload writes nothing here - see decision 60 of
+      table at all (gruelbox), and a call without a payload writes nothing here - see decision 62 of
       the repository. CREATED_AT is what the housekeeping deletes by, which is how a row written by
       a process that died before it wrote its entry disappears again.
     </comment>

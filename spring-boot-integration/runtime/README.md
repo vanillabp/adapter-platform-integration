@@ -184,7 +184,7 @@ it saw at its sync point passes bytes as well:
 `PhaseTwoCall.of(operation, module, process, aggregateId, adapterId, args, payload)`. The
 bytes do not travel in the outbox entry. They are written into a store of their own, in the
 same transaction, and the entry names them by a reference in its arguments - the reasoning
-is decision 60 in `DECISIONS.md`.
+is decision 62 in `DECISIONS.md`.
 
 The store is a table `VANILLABP_PHASE_TWO_PAYLOAD` for the JDBC-backed outboxes
 (`vanillabp.outbox.jdbc.payload-table`) and a collection `vanillabp-phase-two-payloads` for

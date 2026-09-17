@@ -9,7 +9,7 @@ import java.time.Instant;
  * <p>
  * A payload is the state the caller saw at the moment it planned the operation, and it
  * is bytes to VanillaBP: whoever passes it decides the format, and nothing here reads
- * it. Why it lies beside the entry instead of in it is decision 60 in the repository's
+ * it. Why it lies beside the entry instead of in it is decision 62 in the repository's
  * DECISIONS.md - in short, an outbox entry is a row of identifiers, and one of the four
  * stores VanillaBP ships owns neither its table nor the room in it.
  * <p>

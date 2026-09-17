@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog;
+import io.vanillabp.integration.adapter.spi.version.ReportedProcessVersion;
 
 /**
  * What the BPMS of every adapter knows about the deployed versions of the BPMN
@@ -55,7 +56,26 @@ public class ProcessVersions {
                                String bpmnProcessId) {
   }
 
+  /**
+   * One BPMS which said it keeps no catalog for one BPMN process.
+   *
+   * @param adapterId The adapter ID
+   * @param reported What a delivery of that BPMS carries as its process version
+   */
+  private record WithoutACatalog(
+                                 String adapterId,
+                                 ReportedProcessVersion reported) {
+  }
+
   private final Map<RegistryKey, List<RegisteredCatalog>> catalogs = new ConcurrentHashMap<>();
+
+  /**
+   * The BPMS which said there is nothing to ask them about - see
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#reportNoProcessVersionCatalog}.
+   * An adapter which says nothing is not in here, and that is the difference every
+   * message below rests on.
+   */
+  private final Map<RegistryKey, List<WithoutACatalog>> withoutACatalog = new ConcurrentHashMap<>();
 
   /**
    * The version each adapter deployed during THIS boot - the border between
@@ -64,8 +84,9 @@ public class ProcessVersions {
   private final Map<DeploymentKey, String> deployedVersions = new ConcurrentHashMap<>();
 
   /**
-   * The version identifiers and tags already reported as unknown - a task delivery
-   * must not log the same message over and over.
+   * What was reported already, so a task delivery does not log the same message over and
+   * over: the version identifiers and tags nobody could place, and the BPMN processes
+   * whose BPMS keeps no catalog at all.
    */
   private final java.util.Set<String> reportedAsUnknown = ConcurrentHashMap.newKeySet();
 
@@ -97,6 +118,77 @@ public class ProcessVersions {
         .noneMatch(existing -> existing.adapterId().equals(adapterId) && (existing.catalog() == catalog))) {
       registered.add(new RegisteredCatalog(adapterId, catalog));
     }
+
+  }
+
+  /**
+   * Remembers that one BPMS keeps no catalog for one BPMN process, which is a statement
+   * and not the absence of one.
+   *
+   * @param adapterId The adapter ID
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @param reported What a delivery of that BPMS carries as its process version
+   */
+  public void registerWithoutACatalog(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final ReportedProcessVersion reported) {
+
+    if (reported == null) {
+      return;
+    }
+    final var declared = withoutACatalog
+        .computeIfAbsent(
+            new RegistryKey(workflowModuleId, bpmnProcessId),
+            key -> new CopyOnWriteArrayList<>());
+    if (declared
+        .stream()
+        .noneMatch(existing -> existing.adapterId().equals(adapterId) && (existing.reported() == reported))) {
+      declared.add(new WithoutACatalog(adapterId, reported));
+    }
+
+  }
+
+  /**
+   * What the BPMS of that process said about their missing catalog, and only where NONE
+   * of them registered one. A process a second BPMS can be asked about is served by that
+   * BPMS, so nothing is reported about the first.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @return The statements, empty where a catalog exists or nobody said anything
+   */
+  private List<WithoutACatalog> onlyWithoutACatalog(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    final var key = new RegistryKey(workflowModuleId, bpmnProcessId);
+    final var registered = catalogs.get(key);
+    if ((registered != null) && !registered.isEmpty()) {
+      return List.of();
+    }
+    final var declared = withoutACatalog.get(key);
+    return declared == null
+        ? List.of()
+        : List.copyOf(declared);
+
+  }
+
+  /**
+   * What a delivery of the BPMS serving that process can carry as its process version -
+   * the most a method can hope for, so two BPMS which answer differently leave the
+   * method with the wider answer.
+   */
+  private static ReportedProcessVersion widestOf(
+      final List<WithoutACatalog> declared) {
+
+    return declared
+        .stream()
+        .anyMatch(statement -> statement.reported() == ReportedProcessVersion.VERSION_TAG)
+            ? ReportedProcessVersion.VERSION_TAG
+            : ReportedProcessVersion.NONE;
 
   }
 
@@ -175,8 +267,7 @@ public class ProcessVersions {
     if (resolved != null) {
       return resolved;
     }
-    final var registered = catalogs.get(new RegistryKey(workflowModuleId, bpmnProcessId));
-    reportUnknown(workflowModuleId, bpmnProcessId, versionOrVersionTag, (registered == null) || registered.isEmpty());
+    reportUnknown(workflowModuleId, bpmnProcessId, versionOrVersionTag);
     return null;
 
   }
@@ -260,6 +351,12 @@ public class ProcessVersions {
     if (lookup(workflowModuleId, bpmnProcessId, versionTag) != null) {
       return;
     }
+    if (!onlyWithoutACatalog(workflowModuleId, bpmnProcessId).isEmpty()) {
+      // "no BPMS knows that tag" reads as a typo, and on a BPMS which counts no
+      // versions the tag is the one thing a delivery can carry. What such a process
+      // needs to hear is said by reportMethodsWhichNeverRun, in its own words
+      return;
+    }
     log.warn(
         """
             The version specification '{}' of {} names a version tag no BPMS knows for BPMN \
@@ -277,14 +374,31 @@ public class ProcessVersions {
   private void reportUnknown(
       final String workflowModuleId,
       final String bpmnProcessId,
-      final String versionOrVersionTag,
-      final boolean withoutCatalog) {
+      final String versionOrVersionTag) {
 
     final var key = "%s|%s|%s".formatted(workflowModuleId, bpmnProcessId, versionOrVersionTag);
     if (!reportedAsUnknown.add(key)) {
       return;
     }
-    if (withoutCatalog) {
+    final var declared = onlyWithoutACatalog(workflowModuleId, bpmnProcessId);
+    if (!declared.isEmpty()) {
+      // the BPMS answered this while it was wired: there is no catalog to ask. Saying
+      // that nobody can be asked would send the developer looking for an adapter which
+      // was never missing
+      log.warn(
+          """
+              The version specifications of the methods serving BPMN process '{}' of workflow \
+              module '{}' name '{}', and the BPMS of adapter {} keeps no catalog of the versions \
+              of that process. {}""",
+          bpmnProcessId,
+          workflowModuleId,
+          versionOrVersionTag,
+          adapterIdsOf(declared),
+          whatSuchADeliveryCarries(widestOf(declared)));
+      return;
+    }
+    final var registered = catalogs.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    if ((registered == null) || registered.isEmpty()) {
       // saying "no versions are deployed" here would be wrong: the BPMS may well hold
       // versions of this process - what is missing is an adapter able to ASK about
       // them, which is a different defect with a different remedy
@@ -308,6 +422,113 @@ public class ProcessVersions {
         versionOrVersionTag,
         bpmnProcessId,
         workflowModuleId);
+
+  }
+
+  /**
+   * Which methods of one BPMN process never run because the BPMS serving it keeps no
+   * catalog of its versions - answered by the {@link WorkflowTaskRegistry}, the only
+   * place knowing the methods and their specifications.
+   */
+  @FunctionalInterface
+  public interface MethodsWhichNeverRun {
+
+    List<String> of(
+        String workflowModuleId,
+        String bpmnProcessId,
+        ReportedProcessVersion reported);
+
+  }
+
+  /**
+   * Names the methods of one BPMN process which never run because no BPMS serving it
+   * keeps a catalog of its versions, ONCE per process, and says what would make them run.
+   * <p>
+   * Only a BPMS which SAID so gets here. Where an adapter simply registered no catalog,
+   * nothing is reported: the two look the same from the core and they are not the same
+   * thing, which is what
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#reportNoProcessVersionCatalog}
+   * exists for.
+   * <p>
+   * A warning rather than the end of the boot: a method named here can be the right one
+   * on another BPMS the application runs on, and the same code then serves both. Why the
+   * core warns instead of refusing is decision 60 in the repository's DECISIONS.md.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @param methods Which methods never run there
+   */
+  public void reportMethodsWhichNeverRun(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final MethodsWhichNeverRun methods) {
+
+    final var declared = onlyWithoutACatalog(workflowModuleId, bpmnProcessId);
+    if (declared.isEmpty()) {
+      return;
+    }
+    final var reported = widestOf(declared);
+    final var neverRunning = methods.of(workflowModuleId, bpmnProcessId, reported);
+    if ((neverRunning == null) || neverRunning.isEmpty()) {
+      return;
+    }
+    if (!reportedAsUnknown.add("%s|%s|no-catalog".formatted(workflowModuleId, bpmnProcessId))) {
+      return;
+    }
+    log.warn(
+        """
+            The BPMS of adapter {} keeps no catalog of the deployed versions of BPMN process '{}' \
+            (workflow module '{}'), and no other BPMS of that process has one either. So {} never \
+            run there: {}. {} A method naming no version serves every delivery, which is the short \
+            way out. Keep the method where this application also runs on a BPMS counting versions: \
+            it runs there, and this line stays a warning rather than the end of the boot.""",
+        adapterIdsOf(declared),
+        bpmnProcessId,
+        workflowModuleId,
+        neverRunning.size() == 1
+            ? "this method does"
+            : "these %d methods do".formatted(neverRunning.size()),
+        String.join(", ", neverRunning),
+        whatSuchADeliveryCarries(reported));
+
+  }
+
+  /**
+   * What a delivery of a BPMS without a version catalog carries, written for the
+   * developer reading either message about such a BPMS - the one at the start about the
+   * methods which never run, and the one at a delivery naming a version nobody can place.
+   * One wording, so the two cannot start contradicting each other.
+   *
+   * @param reported What such a delivery carries as its process version
+   * @return The sentences saying what still works
+   */
+  private static String whatSuchADeliveryCarries(
+      final ReportedProcessVersion reported) {
+
+    return reported == ReportedProcessVersion.VERSION_TAG
+        ? """
+            A delivery of that BPMS carries the version tag of its model, where the engine fills \
+            it. A version naming exactly that tag is met by such a delivery (e.g. version = \
+            "release-2024"). A range is not: placing a version in a range needs the order the \
+            versions were deployed in, and that order is what a catalog holds."""
+        : """
+            A delivery of that BPMS carries no process version at all, so a method naming any \
+            version waits for something which never arrives.""";
+
+  }
+
+  /**
+   * The adapters which answered, quoted for a message which names them.
+   */
+  private static String adapterIdsOf(
+      final List<WithoutACatalog> declared) {
+
+    return declared
+        .stream()
+        .map(WithoutACatalog::adapterId)
+        .distinct()
+        .map("'%s'"::formatted)
+        .collect(java.util.stream.Collectors.joining(", "));
 
   }
 
