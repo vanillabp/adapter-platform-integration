@@ -169,4 +169,29 @@ public interface BpmsInitiatedStartContext {
 
   }
 
+
+  /**
+   * The business key the started instance ALREADY carries, where the BPMS keeps such a
+   * thing at all. The workflow aggregate does not exist yet at this point, so this is
+   * the one value which can contradict the id VanillaBP is about to give it.
+   * <p>
+   * The contract is the one of
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext#getBusinessKey()}:
+   * a business key is only ever a copy of the workflow aggregate's id, and a key which
+   * says something else makes the workflow carry two identities at once. The core
+   * refuses the start rather than building an aggregate the instance does not name.
+   * <p>
+   * The default is <code>null</code>, and on today's BPMS that is what an adapter
+   * reports: a timer, a signal or a condition starts an instance nobody gave a business
+   * key to. The question is asked all the same, because the adapter of a BPMS which
+   * lets a caller schedule a start WITH one has nowhere else to put it.
+   *
+   * @return The business key the instance already carries or <code>null</code>
+   */
+  default String getBusinessKey() {
+
+    return null;
+
+  }
+
 }

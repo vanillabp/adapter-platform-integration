@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.vanillabp.integration.adapter.migration.processservice.BusinessKeyCheck;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.workflowend.WorkflowEndedHandlers;
 import io.vanillabp.integration.adapter.migration.workflowstart.BpmsInitiatedStarts;
@@ -839,6 +840,18 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
       final String bpmnProcessId,
       final TaskInvocationContext context) {
 
+    // asked before anything else is done with this delivery: a workflow which names
+    // itself twice is not served, whichever method would have served it
+    BusinessKeyCheck
+        .refuseAKeyWhichIsNotTheAggregateId(
+            context.getBusinessKey(),
+            context.getWorkflowAggregateId(),
+            "The delivery of task '%s'".formatted(context.getTaskDefinition()),
+            workflowModuleId,
+            bpmnProcessId,
+            context.getAdapterId(),
+            context.getWorkflowId());
+
     final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
     if (entry == null) {
       throw new IllegalStateException(
@@ -1073,6 +1086,16 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
       final String workflowModuleId,
       final String bpmnProcessId,
       final WorkflowEndedContext context) {
+
+    BusinessKeyCheck
+        .refuseAKeyWhichIsNotTheAggregateId(
+            context.getBusinessKey(),
+            context.getWorkflowAggregateId(),
+            "The notification that a workflow ended",
+            workflowModuleId,
+            bpmnProcessId,
+            context.getAdapterId(),
+            null);
 
     final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
     if ((entry == null) || (entry.processService == null)) {

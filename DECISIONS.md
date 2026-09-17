@@ -2267,3 +2267,71 @@ called, and only the state was wrong. That is the one ending this must not have.
 Nothing is written in `UPGRADE.md`. The outbox of version 2 has not reached a release, so
 there is no behaviour a version-1 application could be upgrading from.
 
+### 69. A business key counts only where it carries the workflow aggregate's id
+
+VanillaBP names a workflow by its workflow aggregate and by nothing else. A BPMS which keeps a
+business key of its own gets that id written into it wherever VanillaBP starts the workflow:
+Camunda 7 has done so from the beginning, and Camunda 8 does it from cluster 8.10, the first line
+with a `businessId` on an instance. A workflow started past VanillaBP can carry a key somebody
+else chose and the variable with the aggregate's id as well, and then two values say different
+things about one instance.
+
+Nobody noticed that before, and the reason is worth writing down: **there was no channel for a
+business key at all.** Every inbound contract named the workflow with a single string, and the
+javadoc of `TaskInvocationContext.getWorkflowAggregateId()` equated "the Camunda 7 business key"
+with "the Camunda 8 aggregate-ID process variable". An adapter whose BPMS keeps a second value had
+nowhere to put it. So this is an addition to the adapter SPI, not the repair of a check which was
+wrong.
+
+The rule is one sentence: a business key counts only where it carries the workflow aggregate's id.
+A key which says something else is not a second identity, it is a defect in whatever started that
+workflow.
+
+Three places take a workflow over from the BPMS, and the check sits at all three. A task delivery
+and the notification that a workflow ended both report the aggregate's id, so the comparison is
+free. A start the BPMS performed on its own has no aggregate yet, so the key the instance already
+carries is compared against the id VanillaBP gives the aggregate, at the point where that id is
+final and still inside the transaction the start opened. A refusal there takes the aggregate with
+it instead of leaving one behind which the instance does not name.
+
+The election is not a fourth place. The awareness probes send the aggregate's id out and get a
+`WorkflowAwareness` back, so a workflow another adapter now holds is taken over at its next
+delivery, which is the first of the three. The same holds for a workflow taken over from
+version 1.
+
+What a disagreement produces is a refusal, and VanillaBP raises no incident of its own. It ends
+the invocation the way it ends one for a task nobody serves, and each BPMS then applies what
+it applies to any failing handler: Camunda 7 retries the job as configured and raises an incident
+afterwards, Camunda 8 counts the job's retries down and raises one afterwards, and behind the
+Process-Engine-API it is that engine's business. The outcome is the same everywhere. The workflow
+does not move on an identity VanillaBP cannot vouch for, and the message names both values, the
+workflow module, the BPMN process, the adapter and the BPMS' own instance.
+
+What says nothing does not contradict. A deviation needs two values which both say something and
+disagree, so a missing business key, a missing aggregate id, or both, are silence.
+
+An absent business key is the state of every Camunda 8 workflow up to cluster 8.9, of every
+workflow on the Process-Engine-API, and of every workflow a timer started.
+
+An absent aggregate id is the sentence which keeps the upgrade from version 1 working, and it is
+the one somebody could "tighten" away later. Version 1 on Camunda 7 wrote NO process variables at
+all, because the model read the workflow aggregate directly. A workflow which was running when the
+application was upgraded therefore carries its identity in the business key and nowhere else, so
+an adapter which reads the id from the variable finds none. If a missing variable counted as a
+deviation, every migrated workflow would run into an incident at its first delivery, which is the
+worst way an upgrade can break. The rule is written so that this is silence rather than conflict,
+and `aWorkflowTakenOverFromVersionOneIsNotADeviation` holds it.
+
+There is no way to switch the check off. Two values naming one instance differently are a defect
+in the integration rather than a matter of taste, so a property would only let an application
+keep running on an identity nobody can vouch for. There is nothing to trade off either: the check
+compares two strings the delivery already carries, with no question to the BPMS.
+
+`BusinessKeyIsTheAggregateIdTest` holds all three places, the empty key, the key which carries the
+id, and that a refused start leaves no aggregate behind.
+
+Nothing is written in `UPGRADE.md`, and the reason is sharper than "version 1 filled the business
+key from the aggregate's id as well". A version-1 instance on Camunda 7 carries a business key and
+no variable, and the rule reads that as silence rather than as conflict. Version 1 on Camunda 8
+had no business key at all. So no workflow which ran under version 1 becomes a refusal here, on
+either engine.

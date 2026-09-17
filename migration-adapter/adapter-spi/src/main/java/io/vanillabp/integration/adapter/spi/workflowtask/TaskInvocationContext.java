@@ -322,4 +322,40 @@ public interface TaskInvocationContext {
 
   }
 
+
+  /**
+   * The business key the BPMS keeps for this workflow of its own accord, where the BPMS
+   * has such a thing at all: the Camunda 7 business key, the business id of a
+   * Camunda 8 cluster from 8.10 on, whatever a BPMS calls the one value an operator
+   * recognizes an instance by in its own tooling.
+   * <p>
+   * VanillaBP names a workflow by its workflow aggregate and by nothing else, so a
+   * business key is only ever a COPY of {@link #getWorkflowAggregateId()}. Where
+   * VanillaBP starts the workflow it writes that copy itself. Where somebody else
+   * started it, the two values can say different things about one instance, and then
+   * the workflow carries two identities at once. The core refuses such a delivery
+   * instead of picking one of them, and the BPMS does with the refusal what it does
+   * with any failing task. Why that is a refusal, and why an empty answer contradicts
+   * nothing, is decision 69 in the repository's DECISIONS.md.
+   * <p>
+   * The default is <code>null</code>, which means "this BPMS keeps no business key".
+   * That is the whole answer for Camunda 8 up to 8.9 and for the Process-Engine-API. An
+   * adapter whose BPMS keeps the aggregate's id IN its business key reports it here as
+   * well: the value costs nothing to pass on and the comparison then simply holds.
+   * <p>
+   * What says nothing does not contradict, and that holds for the other side too. Where
+   * {@link #getWorkflowAggregateId()} is absent there is nothing to compare against and
+   * nothing is refused. The case behind that rule is the workflow an application takes
+   * over after upgrading from version 1 on Camunda 7: version 1 wrote no process
+   * variables at all, so such an instance carries its identity in the business key and
+   * nowhere else.
+   *
+   * @return The BPMS' own business key of this workflow or <code>null</code>
+   */
+  default String getBusinessKey() {
+
+    return null;
+
+  }
+
 }
