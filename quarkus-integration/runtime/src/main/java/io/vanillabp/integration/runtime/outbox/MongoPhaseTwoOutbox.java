@@ -214,6 +214,13 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
       throw e;
     }
 
+    // the entry is in, so the bytes it names may follow - in the same session where
+    // there is one, and only now, because a schedule discarded as a duplicate must
+    // leave nothing behind
+    if (call.hasPayload()) {
+      dispatcher.getPayloadStore().write(call);
+    }
+
     if (txRegistry.getTransactionKey() != null) {
       // dispatch right after the commit; on rollback delete the entry best-effort
       // (see the class javadoc for the remaining crash windows)
@@ -233,6 +240,9 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
             // with a session the abort of that transaction removed it already
             try {
               collection.deleteOne(new Document("_id", entryId));
+              if (call.hasPayload()) {
+                dispatcher.getPayloadStore().remove(call.payloadReference());
+              }
             } catch (final RuntimeException e) {
               log.warn(
                   "Could not delete the phase-two outbox entry '{}' after the rollback of the local "

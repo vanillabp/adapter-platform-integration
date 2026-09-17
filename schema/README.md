@@ -24,9 +24,14 @@ the JAR from the classpath.
 | `vanillabp/schema/latest.xml`                                         | the changesets of the version under development              |
 | `vanillabp/schema/flyway/<database>/V<version>__vanillabp_schema.sql` | the same statements as SQL, generated at build time          |
 
-Two tables are described: the phase-two outbox (`VANILLABP_PHASE_TWO_OUTBOX`) and the log of
-processed task deliveries (`VANILLABP_TASK_DELIVERY`). Not described: `TXNO_OUTBOX` of the Spring
-Boot integration - that schema belongs to gruelbox and its own migrator.
+Three tables are described: the phase-two outbox (`VANILLABP_PHASE_TWO_OUTBOX`), the log of
+processed task deliveries (`VANILLABP_TASK_DELIVERY`) and the payloads of the phase-two calls which
+carry one (`VANILLABP_PHASE_TWO_PAYLOAD`). Not described: `TXNO_OUTBOX` of the Spring Boot
+integration - that schema belongs to gruelbox and its own migrator.
+
+The payload table is needed by every JDBC-backed outbox, gruelbox included: a call which carries
+bytes stores them there and its entry names the row (see decision 62 in `DECISIONS.md`). An
+application whose extensions pass no payload never writes a row into it, and the table stays empty.
 
 ## Why the SQL is generated and not written
 
@@ -101,6 +106,6 @@ schema/bin/schema-version.sh open 2.1.0    # a new, empty latest.xml, included a
 A build therefore always regenerates the SQL from the changelog. The SQL is not committed, so it
 cannot drift away from the changelog - the changelog is what a reviewer reads.
 
-`ChangelogAppliesTest` applies the changelog to H2 and checks both tables and the unique
-index, and `GeneratedSqlOnPostgresIT#postgresAcceptsTheGeneratedSql` runs the generated
+`ChangelogAppliesTest` applies the changelog to H2 and checks all three tables, their indexes and
+the unique index, and `GeneratedSqlOnPostgresIT#postgresAcceptsTheGeneratedSql` runs the generated
 statements against a PostgreSQL container.

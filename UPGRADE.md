@@ -1057,9 +1057,11 @@ stores are empty, which reads like a clean result. It is one: the check asks abo
 adapter id, and version 1 persisted none - it had one adapter and its id was its type.
 
 **The schema is created for you.** `vanillabp.outbox.create-schema` defaults to `true`, so an
-upgrading application which configures nothing gets `VANILLABP_PHASE_TWO_OUTBOX` and
-`VANILLABP_TASK_DELIVERY` on its first boot. Where the application applies its own schema, both
-missing-table messages name the artifact, the changelog and the property.
+upgrading application which configures nothing gets `VANILLABP_PHASE_TWO_OUTBOX`,
+`VANILLABP_TASK_DELIVERY` and `VANILLABP_PHASE_TWO_PAYLOAD` on its first boot. Where the
+application applies its own schema, every missing-table message names the artifact, the changelog
+and the property. The third table holds the payload of a phase-two call which carries one, and it
+stays empty in an application whose extensions pass none.
 
 **The outbox needs no adoption.** Entries are written per operation, so a workflow started under
 version 1 needs none, and the absence of a store is reported at startup rather than at the first

@@ -1936,3 +1936,47 @@ up on is not the one it was built on.
 `WorkflowModuleProfileFileNeedsItsPlainFileTest` holds the rule this rests on, measured against
 SmallRye 3.17.2. `ProfileFilesWithoutTheirPlainFileTest` holds which files are picked and what
 the message offers, and one test per platform boots an application with such a module.
+
+### 62. A payload lies beside the outbox entry and the entry names it
+
+A phase-two call used to carry identifiers and nothing else. A sync to the Business Cockpit
+wants to hand over the state the application saw at its sync point, and that is a payload.
+
+The obvious place was the `ARGS` column, and it is the wrong one. Decision 22 and the story
+behind it settled what that column is for: a correlation id names something, it does not
+carry something. Widening it to a CLOB would put payloads into a column meant for keys, and
+the same values would then travel through our own store and through MongoDB as well. The
+limit is ours, not gruelbox's: gruelbox writes its invocation into a `TEXT` column and has
+no such bound.
+
+So a payload lies in a store of its own, one row per call which carries one, written in the
+transaction which writes the entry and read back at the dispatch. The entry names the row by
+`PhaseTwoCall.ARG_PAYLOAD_REFERENCE`, which is an identifier and therefore belongs exactly
+where identifiers belong. The reference is added after the idempotency key was derived, so
+no derivation rule ever sees it - a fresh reference per call would otherwise make every call
+unique and deduplicate nothing.
+
+One form for all four stores. Gruelbox owns its table, so a column there was never an option,
+and a second form for the three stores which could take one would mean two lifecycles to get
+right instead of one. Decision 47 weighed a table of VanillaBP's own for a different question
+and refused it, because it would have added a table to the one setup chosen for bringing none.
+That argument does not carry here: a call without a payload writes no row, so an application
+which passes none keeps the setup it had, and one which passes payloads has asked for the
+table.
+
+The price is named rather than hidden: one extra read per dispatch attempt of a call which
+carries a payload, by primary key, and none at all for a call which carries none.
+
+The bytes belong to whoever passes them. VanillaBP stores and returns them and reads nothing,
+which keeps the format a matter between an extension and its own receiver. The size limit sits
+in one place, `PhaseTwoCall.MAX_PAYLOAD_SIZE`, and is a mebibyte - wide enough for the state
+of a workflow aggregate written as JSON, far below what MongoDB holds in one document and
+below what a `BLOB` holds anywhere. It is enforced for every store, for the reason the
+idempotency key is bounded at the smallest limit of the stores: an application must not
+discover a narrower one by moving from one store to another.
+
+A payload is removed where its entry is finished, which is the update marking the entry
+dispatched. Removing it before that would leave an entry whose payload is gone, so the order
+is fixed and errs towards keeping a payload too long. What a crash between the two writes
+leaves behind, and the payload of an entry blocked longer than the retention, is removed by
+an age sweep riding the housekeeping each store already runs.

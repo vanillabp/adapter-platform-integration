@@ -247,12 +247,14 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
 
   private record JdbcOutboxProperties(
                                       boolean enabled,
-                                      Optional<String> table) implements QuarkusMigrationAdapterProperties.JdbcOutboxProperties {
+                                      Optional<String> table,
+                                      Optional<String> payloadTable) implements QuarkusMigrationAdapterProperties.JdbcOutboxProperties {
   }
 
   private record MongoOutboxProperties(
                                        boolean enabled,
-                                       String collection) implements QuarkusMigrationAdapterProperties.MongoOutboxProperties {
+                                       String collection,
+                                       String payloadCollection) implements QuarkusMigrationAdapterProperties.MongoOutboxProperties {
   }
 
   private record OutboxProperties(
@@ -423,13 +425,15 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                                                                                                                                         20), 3, false, Duration
                                                                                                                                                             .ofDays(
                                                                                                                                                                 1), new JdbcOutboxProperties(false, Optional
-                                                                                                                                                                    .of("HOT_OUTBOX")), new MongoOutboxProperties(
-                                                                                                                                                                        false, "hot-outbox")), new WorkflowAdapterCacheProperties(
-                                                                                                                                                                            50_000, Duration
-                                                                                                                                                                                .ofMinutes(
-                                                                                                                                                                                    30), Duration
+                                                                                                                                                                    .of("HOT_OUTBOX"), Optional
+                                                                                                                                                                        .of(
+                                                                                                                                                                            "HOT_PAYLOAD")), new MongoOutboxProperties(
+                                                                                                                                                                                false, "hot-outbox", "hot-payloads")), new WorkflowAdapterCacheProperties(
+                                                                                                                                                                                    50_000, Duration
                                                                                                                                                                                         .ofMinutes(
-                                                                                                                                                                                            2), true));
+                                                                                                                                                                                            30), Duration
+                                                                                                                                                                                                .ofMinutes(
+                                                                                                                                                                                                    2), true));
 
     final var core = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(properties);
 
@@ -490,8 +494,10 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     assertEquals(Duration.ofDays(1), core.getOutbox().getRetention());
     assertFalse(core.getOutbox().getJdbc().isEnabled());
     assertEquals("HOT_OUTBOX", core.getOutbox().getJdbc().getTable());
+    assertEquals("HOT_PAYLOAD", core.getOutbox().getJdbc().getPayloadTable());
     assertFalse(core.getOutbox().getMongo().isEnabled());
     assertEquals("hot-outbox", core.getOutbox().getMongo().getCollection());
+    assertEquals("hot-payloads", core.getOutbox().getMongo().getPayloadCollection());
 
     assertEquals(50_000, core.getWorkflowAdapterCache().getMaxEntries());
     assertEquals(Duration.ofMinutes(30), core.getWorkflowAdapterCache().getTimeToLive());
@@ -576,8 +582,12 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     assertEquals(coreDefaults.getRetention(), mappedDefaults.getRetention());
     assertEquals(coreDefaults.getJdbc().isEnabled(), mappedDefaults.getJdbc().isEnabled());
     assertEquals(coreDefaults.getJdbc().getTable(), mappedDefaults.getJdbc().getTable());
+    assertEquals(coreDefaults.getJdbc().getPayloadTable(), mappedDefaults.getJdbc().getPayloadTable());
     assertEquals(coreDefaults.getMongo().isEnabled(), mappedDefaults.getMongo().isEnabled());
     assertEquals(coreDefaults.getMongo().getCollection(), mappedDefaults.getMongo().getCollection());
+    assertEquals(
+        coreDefaults.getMongo().getPayloadCollection(),
+        mappedDefaults.getMongo().getPayloadCollection());
 
   }
 

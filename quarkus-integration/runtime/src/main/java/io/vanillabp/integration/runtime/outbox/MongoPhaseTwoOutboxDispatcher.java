@@ -88,7 +88,12 @@ public class MongoPhaseTwoOutboxDispatcher {
   @Inject
   Instance<io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics> vanillaBpMetrics;
 
+  @Inject
+  jakarta.transaction.TransactionSynchronizationRegistry txRegistry;
+
   private volatile PhaseTwoOutboxProperties properties;
+
+  private volatile MongoPhaseTwoPayloadStore payloadStore;
 
   /**
    * The outbox configuration (<code>vanillabp.outbox.*</code>), loaded lazily so
@@ -148,6 +153,9 @@ public class MongoPhaseTwoOutboxDispatcher {
       // longer the application has been running
       outboxCollection().createIndex(Indexes.ascending("status", "nextAttemptAt"));
       outboxCollection().createIndex(Indexes.ascending("status", "doneAt"));
+      // what the housekeeping of the payloads deletes along - without it that delete
+      // reads every payload ever written
+      payloadCollection().createIndex(Indexes.ascending("createdAt"));
       dropLegacyIdempotencyKeyIndex();
     }
 
@@ -278,19 +286,62 @@ public class MongoPhaseTwoOutboxDispatcher {
    */
   MongoCollection<Document> outboxCollection() {
 
-    final var database = ConfigProvider
+    return mongoClient
+        .get()
+        .getDatabase(databaseName())
+        .getCollection(getProperties()
+            .getMongo()
+            .getCollection());
+
+  }
+
+  /**
+   * The database the outbox and its payloads live in - the one the workflow aggregates
+   * live in.
+   *
+   * @return The configured database name
+   */
+  private static String databaseName() {
+
+    return ConfigProvider
         .getConfig()
         .getOptionalValue("quarkus.mongodb.database", String.class)
         .orElseThrow(() -> new IllegalStateException(
             """
                 The MongoDB-based phase-two outbox needs the database name! Set the property \
                 'quarkus.mongodb.database' (the same database the workflow aggregates live in)."""));
+
+  }
+
+  /**
+   * The collection the payloads of the calls which carry one live in
+   * (<code>vanillabp.outbox.mongo.payload-collection</code>), in the database
+   * configured by <code>quarkus.mongodb.database</code>.
+   *
+   * @return The payload collection
+   */
+  MongoCollection<Document> payloadCollection() {
+
     return mongoClient
         .get()
-        .getDatabase(database)
+        .getDatabase(databaseName())
         .getCollection(getProperties()
             .getMongo()
-            .getCollection());
+            .getPayloadCollection());
+
+  }
+
+  /**
+   * Where the bytes of a call which carries a payload lie while its entry waits.
+   *
+   * @return The payload store of this outbox
+   */
+  MongoPhaseTwoPayloadStore getPayloadStore() {
+
+    if (payloadStore == null) {
+      payloadStore = new MongoPhaseTwoPayloadStore(this::payloadCollection, txRegistry);
+    }
+    return payloadStore;
 
   }
 
@@ -324,6 +375,9 @@ public class MongoPhaseTwoOutboxDispatcher {
           Filters.and(
               Filters.eq("status", MongoPhaseTwoOutbox.STATUS_DONE),
               Filters.lt("doneAt", Date.from(Instant.now().minus(properties.getRetention())))));
+      // what a rollback without a MongoDB transaction left behind, and the payload of
+      // an entry blocked longer than the retention. Both are documents nobody reads again
+      getPayloadStore().removeOlderThan(Instant.now().minus(properties.getRetention()));
     } catch (final RuntimeException e) {
       log.error("Polling the VanillaBP phase-two outbox failed - will retry", e);
     }
@@ -355,6 +409,12 @@ public class MongoPhaseTwoOutboxDispatcher {
       // means the entry was dispatched before (recovered/retried): the router
       // then runs the START re-dispatch mitigation. The operation travels as its
       // persisted name and is resolved by the router's operation registry
+      // the one extra read this form costs, and only for an entry which names a
+      // payload: a lookup by _id, once per dispatch attempt
+      final var payloadReference = args.get(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
+      final var payload = payloadReference == null
+          ? null
+          : getPayloadStore().read(payloadReference);
       phaseTwoRouter
           .get()
           .dispatch(
@@ -364,7 +424,7 @@ public class MongoPhaseTwoOutboxDispatcher {
                           .getString("bpmnProcessId"),
                       entry.getString("aggregateId"), entry
                           .getString("adapterId"),
-                      args),
+                      args, payload),
               entry.getInteger("attempts") > 0);
       collection.updateOne(
           Filters.eq("_id", entryId),
@@ -374,6 +434,13 @@ public class MongoPhaseTwoOutboxDispatcher {
               // the deduplication window ends with the dispatch: the entry's own id
               // takes the place of the key, which stays readable in idempotencyKey
               Updates.set("dedupKey", entryId)));
+      // the entry is dispatched, so its bytes have done their work. Removed AFTER the
+      // entry was marked, never before: a crash in between leaves a document the
+      // housekeeping deletes, while the other order would leave an entry whose payload
+      // is gone
+      if (payloadReference != null) {
+        getPayloadStore().remove(payloadReference);
+      }
     } catch (final RuntimeException e) {
       // the adapter said that repeating cannot help - blocked right away
       // instead of after the configured attempts

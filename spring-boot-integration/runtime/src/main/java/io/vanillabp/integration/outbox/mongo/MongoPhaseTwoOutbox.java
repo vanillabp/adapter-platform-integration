@@ -136,6 +136,13 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
       return false;
     }
 
+    // the entry is in, so the bytes it names may follow - through the same template,
+    // and only now, because a schedule discarded as a duplicate must leave nothing
+    // behind
+    if (call.hasPayload()) {
+      dispatcher.getPayloadStore().write(call);
+    }
+
     // dispatch the entry right after the transaction was committed; recovery after a
     // crash is covered by the dispatcher's fixed-delay poller
     if (TransactionSynchronizationManager.isSynchronizationActive()) {

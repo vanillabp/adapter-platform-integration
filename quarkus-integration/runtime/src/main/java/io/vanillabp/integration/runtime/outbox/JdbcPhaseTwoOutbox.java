@@ -78,6 +78,26 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
       SELECT ID FROM %s WHERE DEDUP_KEY = ?""";
 
   /**
+   * Resolves the configured name of the payload table
+   * (<code>vanillabp.outbox.jdbc.payload-table</code>, falling back to
+   * {@link io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore#DEFAULT_TABLE_NAME}).
+   *
+   * @param properties The outbox configuration
+   * @return The table name
+   */
+  static String payloadTableName(
+      final io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties properties) {
+
+    final var table = properties
+        .getJdbc()
+        .getPayloadTable();
+    return table == null
+        ? io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore.DEFAULT_TABLE_NAME
+        : table;
+
+  }
+
+  /**
    * Resolves the configured table name (<code>vanillabp.outbox.jdbc.table</code>,
    * falling back to {@link #DEFAULT_TABLE_NAME}).
    *
@@ -257,6 +277,12 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
       throw new RuntimeException(
           "Could not write the phase-two outbox entry for BPMN process '%s' of workflow module '%s'!"
               .formatted(call.bpmnProcessId(), call.workflowModuleId()), e);
+    }
+
+    // the entry is in, so the bytes it names may follow - in this very transaction, and
+    // only now, because a schedule discarded as a duplicate must leave nothing behind
+    if (call.hasPayload()) {
+      dispatcher.getPayloadStore().write(call);
     }
 
     // dispatch the entry right after the transaction was committed; recovery after a

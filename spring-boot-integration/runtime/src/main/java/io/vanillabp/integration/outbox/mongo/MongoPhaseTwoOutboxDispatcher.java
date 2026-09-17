@@ -74,6 +74,11 @@ public class MongoPhaseTwoOutboxDispatcher {
   private final DueEntryPoller poller;
 
   /**
+   * Where the bytes of a call which carries a payload lie while its entry waits.
+   */
+  private final MongoPhaseTwoPayloadStore payloadStore;
+
+  /**
    * @param mongoTemplate The template writing and reading the entries
    * @param phaseTwoRouter Provider of the router dispatched to
    * @param properties The bound <code>vanillabp.outbox</code> section
@@ -92,6 +97,8 @@ public class MongoPhaseTwoOutboxDispatcher {
     this.properties = properties;
     this.collection = collection;
     this.metrics = metrics;
+    this.payloadStore = new MongoPhaseTwoPayloadStore(
+        mongoTemplate, properties.getMongo().getPayloadCollection());
     this.poller = new DueEntryPoller(
         "vanillabp-outbox", properties.getPollInterval(), this::poll, this::earliestDueAt);
 
@@ -243,6 +250,14 @@ public class MongoPhaseTwoOutboxDispatcher {
       // the entry was dispatched before (recovered/retried): the router then runs
       // the START re-dispatch mitigation. The operation travels as its persisted
       // name and is resolved by the router's operation registry
+      // the one extra read this form costs, and only for an entry which names a
+      // payload: a lookup by _id, once per dispatch attempt
+      final var payloadReference = entry.getArgs() == null
+          ? null
+          : entry.getArgs().get(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
+      final var payload = payloadReference == null
+          ? null
+          : payloadStore.read(payloadReference);
       phaseTwoRouter
           .getObject()
           .dispatch(
@@ -250,7 +265,7 @@ public class MongoPhaseTwoOutboxDispatcher {
                   .forDispatch(
                       entry.getOperation(), entry.getWorkflowModuleId(), entry.getBpmnProcessId(), entry
                           .getAggregateId(),
-                      entry.getAdapterId(), entry.getArgs()),
+                      entry.getAdapterId(), entry.getArgs(), payload),
               entry.getAttempts() > 0);
       mongoTemplate.updateFirst(
           Query.query(Criteria.where("_id").is(entry.getId())),
@@ -261,6 +276,13 @@ public class MongoPhaseTwoOutboxDispatcher {
               // takes the place of the key, which stays readable in idempotencyKey
               .set("dedupKey", entry.getId()),
           collection);
+      // the entry is dispatched, so its bytes have done their work. Removed AFTER the
+      // entry was marked, never before: a crash in between leaves a document the
+      // housekeeping deletes, while the other order would leave an entry whose payload
+      // is gone
+      if (payloadReference != null) {
+        payloadStore.remove(payloadReference);
+      }
     } catch (Exception e) {
       // the adapter said that repeating cannot help - blocked right away
       // instead of after the configured attempts
@@ -388,18 +410,35 @@ public class MongoPhaseTwoOutboxDispatcher {
   }
 
   /**
-   * Deletes successfully dispatched (DONE) entries whose retention period passed -
-   * the asynchronous cleanup of the "DONE instead of delete" contract.
+   * Deletes successfully dispatched (DONE) entries whose retention period passed - the
+   * asynchronous cleanup of the "DONE instead of delete" contract - and the payloads
+   * which outlived the same period.
    */
   private void cleanupDoneEntries() {
 
+    final var expiredBefore = Instant.now().minus(properties.getRetention());
     mongoTemplate.remove(
         Query.query(Criteria
             .where("status")
             .is(PhaseTwoOutboxEntry.STATUS_DONE)
             .and("doneAt")
-            .lt(Instant.now().minus(properties.getRetention()))),
+            .lt(expiredBefore)),
         collection);
+    // what a rollback without a MongoDB transaction left behind, and the payload of an
+    // entry blocked longer than the retention. Both are documents nobody reads again
+    payloadStore.removeOlderThan(expiredBefore);
+
+  }
+
+  /**
+   * Where the bytes of a call which carries a payload lie - what the store writing an
+   * entry writes them into, in the same transaction.
+   *
+   * @return The payload store of this outbox
+   */
+  MongoPhaseTwoPayloadStore getPayloadStore() {
+
+    return payloadStore;
 
   }
 
