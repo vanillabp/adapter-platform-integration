@@ -614,7 +614,7 @@ sequenceDiagram
   participant WE as WorkflowEndedInvoker
   participant EXT as ExtensionWiringService (0..n)
 
-  P->>AD: constructor — AdapterPlatformVersion.requireCompatiblePlatform(type, class)
+  P->>AD: constructor — VanillaBpParts.requireAdapterFitsPlatform(type, class)
   P->>DS: deploy(module)
   DS->>DS: adapters = prioritized(module) ∪ every workflow-level override
   DS->>AD: validateDistinctAdapterInstances(ids)  [does nothing by default, asked when more than one id has this type]
@@ -3229,39 +3229,54 @@ platform — an extension built like the Business Cockpit, in miniature, whose d
 are half the point: the two SPI artifacts and the platform-neutral core, and no platform
 integration.
 
-### Adapter/platform version guard (`AdapterPlatformVersion`)
+### Parts which do not belong together (`VanillaBpParts`)
 
-Applications pin the VanillaBP versions themselves, usually by importing
-`io.vanillabp:vanillabp-bom`. Maven resolves a version managed by the application
-*before* the version an adapter requires transitively, silently and even if that means a
-DOWNGRADE — no conflict is reported and the build stays green. An adapter newer than the
-platform integration then fails at runtime with `NoSuchMethodError` /
-`NoClassDefFoundError` deep inside the adapter.
+An application puts together artifacts of several release cycles: the platform integration,
+the BPMS adapters, and the extensions it uses. Each is released at its own pace, so an
+update can easily leave a pair behind which was never built and never tested together.
+Neither Maven nor Gradle reports it: a version the application manages wins over the version
+a dependency asks for, silently and even if that means a downgrade. The build stays green
+and the mismatch shows up while the application runs, as a `NoSuchMethodError` or a
+`NoClassDefFoundError` in a place which seems to have nothing to do with the update.
 
-Two consequences shape the guard:
+Such an application does not start. What the rule is and why is decision 71, the mechanism
+is `VanillaBpParts` in `integration-spi`, which is the module both adapters and extensions
+have.
 
-- **The check belongs to the ADAPTER, not to the platform integration.** Only the adapter
-  knows the platform version it was compiled against, and a too old platform integration
-  cannot contain a check that was added later. The platform side only provides the
-  mechanism.
-- **The version numbers have to travel in the JARs.** `vanillabp-adapter-spi` carries
-  `META-INF/vanillabp/platform-version.properties` (filled by resource filtering), each
-  adapter core carries `META-INF/vanillabp/adapter-<adapter-type>.properties` with its own
-  version and the platform version it was built against
-  (`platform.version=${adapter-platform.version}`). The per-adapter-type file name keeps
-  the descriptors apart when several adapters are on the classpath — the normal case
-  during a BPMS migration.
+The numbers travel in the JARs. `vanillabp-integration-spi` carries
+`META-INF/vanillabp/platform-version.properties` with its own version and with the oldest
+part it still serves. Every part carries `META-INF/vanillabp/adapter-<type>.properties`
+respectively `META-INF/vanillabp/extension-<name>.properties` with `part.version`,
+`part.artifact` and the `platform.version` it was built against. All of them are filled by
+resource filtering. The name of the part is in the file name, which keeps the descriptors
+apart when several adapters are on the classpath, the normal case during a BPMS migration.
 
-Adapters call `AdapterPlatformVersion.requireCompatiblePlatform(adapterType, someCoreClass)`
-in the constructor of their `AdapterDeploymentService` implementation, which runs once per
-configured adapter id on both platforms; results are cached per adapter type, failures are
-not. Versions are compared by their numeric parts with the qualifier ignored, so
-`2.0.0-SNAPSHOT` satisfies a required `2.0.0`; versions that cannot be parsed count as
-compatible — the guard must never break a build it does not understand. When it does fail,
-the message names the required version and every artifact to raise (starting with the
-BOM), following the [configuration/error-message principle](#features) of guiding the
-developer instead of just reporting. The comparison and both escape hatches are `AdapterPlatformVersionTest`:
-`testQualifiersAreIgnored`, `testUnparseableVersions` and `testFailureIsNotCached`.
+The core asks, and the adapter asks too. The core judges every adapter and every extension
+it knows at the start of `DeploymentService#deployResources`, before anything is deployed,
+and reports everything it found in one boot. An adapter asks for itself as well, in the
+constructor of its deployment service. That is not a repetition: a platform integration
+older than the check cannot contain the check, so an adapter is the only part able to
+report a platform which is too old.
+
+Quarkus asks while it builds. `PartVersionsBuildStepProcessor` walks the archives of the
+application, judges every descriptor it finds and ends the build. It also registers the
+descriptors as native-image resources, without which a native image would find no
+descriptor at all and turn every pair into an unknown one.
+
+A part built against a newer platform integration ends the boot, and so does a part older
+than the oldest one the platform serves. A part which ships no descriptor, ships an
+incomplete one or names a version this check cannot compare only warns, once, and says that
+the pair is unknown. Versions are compared by their numeric parts with the qualifier
+ignored, so `2.0.0-SNAPSHOT` satisfies a required `2.0.0`.
+
+The oldest part served is one number, `vanillabp.oldest-part.version` in the root
+`pom.xml`, set deliberately with every release. A list of known pairs would have to name
+versions which do not exist yet.
+
+The messages are what the tests pin, not just the failure: `VanillaBpPartsTest` walks every
+case, and `PartsWhichDoNotBelongTogetherTest` (Spring Boot, `main-integration-test`) boots an
+application with an adapter from the future and holds on to the text it stops with, down to
+the artifacts the developer has to raise.
 
 ## The older versions a BPMS still holds
 
@@ -3599,8 +3614,9 @@ The window, the serialized collectors and the failure which does not stay are
    The adapter-facing SPI to be implemented by BPMS adapters and platform
    integrations: `AdapterDeploymentService` (extends `ExtensionWiringService`) and
    `MigratableProcessService` (incl. `WorkflowAwareness`). Adapters report BPMN parsing
-   errors using `BpmnParseException` and guard themselves against a too old platform
-   integration using [`AdapterPlatformVersion`](#adapterplatform-version-guard-adapterplatformversion).
+   errors using `BpmnParseException` and guard themselves against a platform integration
+   they do not belong to using [`VanillaBpParts`](#parts-which-do-not-belong-together-vanillabpparts),
+   which lives in `integration-spi` because extensions use it as well.
    Depends on `extension-spi` (the interface `AdapterDeploymentService` extends) and on
    `integration-spi` (uses `AggregatePersistenceAware` in signatures).
 4. **runtime:**<br>

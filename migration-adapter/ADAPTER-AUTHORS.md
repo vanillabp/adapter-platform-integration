@@ -144,10 +144,22 @@ down. Throwing is all you do. The policy is the core's
 (`DeploymentFailureFailTest`, `DeploymentFailureWarnTest`).
 
 In your constructor, call
-`AdapterPlatformVersion.requireCompatiblePlatform(adapterType, aClassOfYourCore)` and ship a
-descriptor `META-INF/vanillabp/adapter-<type>.properties` naming the platform version you were
-built against. Without it, an application combining your adapter with an older platform fails with
-a `NoSuchMethodError` somewhere inside your code instead of a message naming both versions.
+`VanillaBpParts.requireAdapterFitsPlatform(adapterType, aClassOfYourCore)` and ship a descriptor
+`META-INF/vanillabp/adapter-<type>.properties` filled by resource filtering:
+
+```
+part.version=${project.version}
+part.artifact=${project.groupId}:${project.artifactId}
+platform.version=${the property naming the VanillaBP platform you build against}
+```
+
+The platform reads the same file while it boots and ends the boot of an application whose parts
+do not belong together, naming both versions and the dependency to change. Without the descriptor
+nothing can be judged, the boot says so once, and an application combining your adapter with a
+platform integration it was not built for fails with a `NoSuchMethodError` somewhere inside your
+code instead. The call in your constructor stays worth making even so: a platform integration
+older than the check cannot contain the check, so your adapter is the only part able to report
+it.
 
 ### 2.2 The runtime service
 

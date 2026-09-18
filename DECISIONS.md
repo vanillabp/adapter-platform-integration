@@ -2370,3 +2370,48 @@ from cluster 8.10 on and carries the aggregate's id in a process variable, so bo
 there and the comparison has something to do. The adapter reports neither today, on any line, so
 the check is dormant until the line built against 8.10 reports the value. The wiki says so on both
 sides rather than describing the end state as if it were here.
+
+### 71. Parts which do not belong together stop the boot, and an unknown pair only warns
+
+An application runs the platform integration, one or more BPMS adapters and its extensions, and
+all of them are released at their own pace. A dependency update therefore produces pairs which
+were never built and never tested together, and neither Maven nor Gradle says a word about it: a
+version the application manages wins over the version a dependency asks for, even if that means a
+downgrade. The failure arrives much later, as a `NoSuchMethodError` or a `NoClassDefFoundError`
+somewhere which looks unrelated to the update. We have had this in our own house, where an old
+adapter snapshot against a newer platform took the blueprint CI apart.
+
+The rule is comparison against two numbers, not a list of known pairs. Every part says which
+platform integration it was built against, and the platform integration says the oldest part it
+still serves. A part built against a newer platform integration than the one it runs on stops the
+boot, and so does a part older than the oldest one served. Everything in between starts. A list of
+pairs was dropped because it would have to name versions which do not exist yet, and because every
+release of any part would have to touch it.
+
+The oldest part served is one maintained number, `vanillabp.oldest-part.version` in the root
+`pom.xml`. Raising it is a decision of its own, taken when a release drops something adapters
+older than that relied on, and it ends the boot of every application still using such a part.
+
+What we cannot judge only warns, once per part, and says that this pair is unknown: a part which
+ships no version descriptor, one whose descriptor is incomplete, and versions which cannot be
+compared, which is what a build of one's own looks like. Refusing to start there would punish
+setups we have no reason to distrust, and saying nothing would hide the one hint the developer
+gets when the runtime failure finally arrives.
+
+An extension is judged by the name it gives itself, and one which gives none is not judged. The
+boot could only name the class behind it, and the developer reading the log cannot act on a class
+name of somebody else's library. An adapter always has a name, its adapter type, so this gap is
+the extension's alone and closes as soon as the extension answers.
+
+The mechanism lives once, in `integration-spi`, which is the module both adapters and extensions
+depend on. The core judges every adapter and every extension at the start of the deployment, and
+on Quarkus the extension judges them again while it builds, which is earlier still. An adapter
+also asks for itself in its constructor, and that is not a repetition: a platform integration
+older than the check cannot contain the check, so the part is the only one able to report a
+platform which is too old.
+
+The numbers travel as a properties file per part, filled by resource filtering, and not as the
+JAR manifest or `META-INF/maven/.../pom.properties`. A file of our own survives a Spring Boot fat
+jar and a shaded jar, and its name carries the part, so several adapters on one classpath do not
+overwrite each other. In a native image it survives because the Quarkus extension registers every
+descriptor it finds while building.

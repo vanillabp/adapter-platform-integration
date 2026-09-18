@@ -17,6 +17,7 @@ import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.vanillabp.integration.adapter.migration.deployment.DeploymentService;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
+import io.vanillabp.integration.deployment.parts.PartsCheckedBuildItem;
 import io.vanillabp.integration.deployment.workflowmodule.VanillaBpWorkflowModulesBuildItem;
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
 import io.vanillabp.integration.runtime.deployment.BpmsResourceIndex;
@@ -121,6 +122,8 @@ public class DeploymentPipelineBuildStepProcessor {
    *
    * @param applicationArchives The archives of this Quarkus build
    * @param workflowModulesFound Information about all workflow modules found
+   * @param partsChecked Waited for, so a build whose VanillaBP parts do not belong together ends
+   *     before anything is indexed
    * @param watchedFiles Producer registering the file extensions for dev-mode hot deployment
    * @param nativeImageResources Producer putting the files into the native image
    * @param syntheticBeans Producer used to register the recorded index as a bean
@@ -131,6 +134,7 @@ public class DeploymentPipelineBuildStepProcessor {
   void indexBpmsResources(
       final ApplicationArchivesBuildItem applicationArchives,
       final VanillaBpWorkflowModulesBuildItem workflowModulesFound,
+      final PartsCheckedBuildItem partsChecked,
       final BuildProducer<HotDeploymentWatchedFileBuildItem> watchedFiles,
       final BuildProducer<NativeImageResourceBuildItem> nativeImageResources,
       final BuildProducer<SyntheticBeanBuildItem> syntheticBeans,

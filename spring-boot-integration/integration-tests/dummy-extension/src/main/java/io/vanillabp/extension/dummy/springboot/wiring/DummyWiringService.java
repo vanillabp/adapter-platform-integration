@@ -11,6 +11,17 @@ public class DummyWiringService implements ExtensionWiringService<Object, Object
 
   private final MigrationAdapterProperties properties;
 
+  /**
+   * An extension says which VanillaBP platform integration it was built against, and the name it
+   * answers here is where the boot looks: <code>META-INF/vanillabp/extension-dummy.properties</code>.
+   */
+  @Override
+  public String getExtensionName() {
+
+    return "dummy";
+
+  }
+
   @Override
   public Class<Object> getModelType() {
 

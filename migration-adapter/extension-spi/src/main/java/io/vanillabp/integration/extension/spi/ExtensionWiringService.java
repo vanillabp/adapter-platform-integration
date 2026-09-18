@@ -53,6 +53,26 @@ public interface ExtensionWiringService<BPMN, PC> {
   }
 
   /**
+   * Names this extension, e.g. <code>business-cockpit</code>. The name is how the boot finds the
+   * version descriptor <code>META-INF/vanillabp/extension-&lt;name&gt;.properties</code> the
+   * extension ships, which says which VanillaBP platform integration the extension was built
+   * against. An extension which names itself and ships that file is kept from running against a
+   * platform integration it does not belong to. One which names itself and ships no file starts
+   * anyway, and the boot says once that this pair is unknown. One which does not name itself is
+   * not judged at all, because the only thing the boot could say about it is the name of a class
+   * (see decision 71 in the repository's DECISIONS.md).
+   * <p>
+   * A BPMS adapter does not answer this question: it is found by its adapter type instead.
+   *
+   * @return The name of this extension, or <code>null</code> if it does not say
+   */
+  default String getExtensionName() {
+
+    return null;
+
+  }
+
+  /**
    * Wires the given model with the business code.
    *
    * @param workflowModuleId The workflow module ID

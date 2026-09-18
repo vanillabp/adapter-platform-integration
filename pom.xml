@@ -66,6 +66,10 @@
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <!-- Keep in sync with the property 'spi-for-java.version' of bom/pom.xml. -->
     <vanillabp.version>1.2.0-SNAPSHOT</vanillabp.version>
+    <!-- The oldest BPMS adapter and the oldest extension this platform integration still
+         serves. Set it deliberately with every release: raising it stops the boot of every
+         application still using an older part (see decision 71 in DECISIONS.md). -->
+    <vanillabp.oldest-part.version>2.0.0</vanillabp.oldest-part.version>
     <version.java>21</version.java>
     <!-- the platform versions live here because two trees build against them: the two
          platform integrations and the BPMS double, which is a module tree of its own -->
