@@ -1,5 +1,12 @@
 # Contributing
 
+This repository is the platform integration of VanillaBP: the platform neutral core which turns the
+annotations of [`spi-for-java`](https://github.com/vanillabp/spi-for-java) into calls to a BPMS, plus
+the Spring Boot and Quarkus glue around it. The BPMS adapters live in repositories of their own and
+plug in here. What VanillaBP does for the people using it is described in the
+[wiki](https://github.com/vanillabp/adapter-platform-integration/wiki); this file is for somebody
+changing the code.
+
 The rules a change to this repository follows are in
 [`README.md`](./README.md#rules-and-decisions-worth-knowing-before-contributing): where a feature
 belongs, which SPI it may touch, how configuration is validated, what the tests have to prove, and
@@ -26,8 +33,47 @@ the picture was, and both times that happened here nobody saw it for weeks. The 
 of the Maven build: it pulls a headless browser on first use, and a local build has to work without
 a network.
 
-Two of those rules are easy to lose sight of while writing code, so they are spelled out here as
-well.
+## Building and testing
+
+Java 21, and `spi-for-java` installed into the local Maven repository first. Then, from the root of
+this repository:
+
+```bash
+./mvnw spotless:apply
+./mvnw install
+```
+
+`install` and not `package`: the Quarkus tests load their modules from the local Maven repository, so
+a module which was only packaged is the one from the run before. `install` alone and never
+`install verify`, because `install` already runs every phase `verify` has and naming both reports
+every compiler warning twice. [`README.md`](./README.md#building) says the same with the reasoning
+around it, and the modules are described in the `README.md` of each module.
+
+Docker is needed for the tests which start a database in a container, MongoDB above all. The rest
+runs without it. A feature is proven by an acceptance test per platform, against the published
+[BPMS double](./bpms-double), and coverage is measured separately per platform because a Spring test
+never covers Quarkus code. `test-coverage-report/coverage-gate` is the last module of the reactor and
+fails below 85 percent of covered instructions, while the rule is 90.
+
+## How we write
+
+Most people who read this repository read English as a second language, and so does the maintainer.
+Long sentences, rare words and stacked nouns slow them down. Write so that nobody has to read a
+sentence twice.
+
+Short main sentences, one thought each. One subordinate clause is enough. Active voice. The common
+word instead of the rare one: `use` instead of `leverage`, `about` instead of `regarding`, `so`
+instead of `consequently`. A technical term stays a technical term, but say what it means the first
+time it turns up, and write an abbreviation out once. If a sentence trips you up when you read it
+aloud, rewrite it.
+
+This holds for every English text here, the javadoc, the commit message and the pull request
+included. Nothing a program reads is renamed for the sake of language: type and method names,
+configuration keys and artifact coordinates stay as they are, because code in other repositories
+points at them.
+
+Two of the rules named above are easy to lose sight of while writing code, so they are spelled out
+here as well.
 
 ## A promise is part of the behavior
 
@@ -87,3 +133,30 @@ keeps the trail intact.
 The mirror image is just as much a finding: an entry which nothing cites, or one whose reasoning
 fits into a comment at the single place which needs it. A decision earns a number when several
 places rely on it and copying the explanation to each of them would rot.
+
+## Opening a pull request
+
+Work on a branch of your own and keep one subject per pull request. Fill in the
+[template](./.github/pull_request_template.md), the line `wiki pages re-read:` included. It takes
+`none` where your change touched nothing a wiki page states, and an unanswered line is not an answer.
+
+Check the numbers your branch hands out before you open it. Another branch may have taken the
+decision number you used while you were writing, and once a pull request is merged a
+`see decision 7` in a Java file can no longer be corrected on GitHub:
+
+```bash
+bin/check-decision-numbers.sh
+```
+
+Two workflows answer a pull request. *Publish to GitHub Packages* builds and tests everything and
+publishes nothing from a branch, which is deliberate: there is one `2.0.0-SNAPSHOT` per module, so a
+branch which published would overwrite what `main` published. *Checks* runs where a Markdown file
+changed and renders every Mermaid block of the repository, because a block which does not parse
+shows an error message where the picture should be. A red check is a finding about your change. Read the
+log and fix what it says rather than pushing again to see whether it goes away.
+
+## License
+
+VanillaBP is published under the [Apache License, Version 2.0](./LICENSE), and by contributing you
+agree that your contribution is licensed the same way. [`NOTICE`](./NOTICE) names who holds the
+copyright.
