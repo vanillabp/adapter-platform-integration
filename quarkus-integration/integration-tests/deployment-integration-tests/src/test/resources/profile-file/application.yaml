@@ -1,6 +1,4 @@
 quarkus:
-  http:
-    test-port: 0
   datasource:
     db-kind: h2
     jdbc:

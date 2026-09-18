@@ -58,6 +58,16 @@
                    reaches the capture either and a failing class replays nothing worth
                    reading. -->
               <quarkus.log.level>INFO</quarkus.log.level>
+              <!-- Zero lets the operating system pick the port. Every test which boots an
+                   application binds 'quarkus.http.test-port', and the default of that key
+                   is 8081, so two builds on one machine end each other's run with
+                   "Port already bound: 8081". It cost two agents a fifteen-minute build on
+                   2026-09-17 and it hides in CI, where a runner builds alone. A test which
+                   has to know the port reads this key back: Quarkus writes the port it
+                   really bound into it once the application listens, and sets up
+                   RestAssured from it. See "Ports during tests" in the README next to
+                   this file. -->
+              <quarkus.http.test-port>0</quarkus.http.test-port>
               <maven.home>${maven.home}</maven.home>
               <maven.repo>${settings.localRepository}</maven.repo>
               <!--suppress UnresolvedMavenProperty - filled by goal jacoco-maven-plugin:prepare-agent in root pom.xml -->
@@ -71,6 +81,12 @@
           <configuration>
             <systemPropertyVariables>
               <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+              <!-- Zero lets the operating system pick the port. The default of this key is
+                   8081, so two builds on one machine end each other's run with
+                   "Port already bound: 8081". A '@QuarkusIntegrationTest' launches its
+                   application as a process of its own, hands it this port and reads the
+                   port that process really bound from its log. -->
+              <quarkus.http.test-port>0</quarkus.http.test-port>
               <maven.home>${maven.home}</maven.home>
               <maven.repo>${settings.localRepository}</maven.repo>
               <!--suppress UnresolvedMavenProperty -->
