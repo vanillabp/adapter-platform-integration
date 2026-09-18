@@ -12,7 +12,7 @@ import io.restassured.RestAssured;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Like {@link ConfigWatcherInDevModeIT} but for a workflow-module-specific config file
+ * Like {@link ConfigWatcherInDevModeTest} but for a workflow-module-specific config file
  * placed in a subdirectory named after the workflow module ID
  * (<code>test-module/test-module.yaml</code>): modifying such a file has to trigger a
  * dev-mode reload as well, so the file has to be watched using its relative path, not

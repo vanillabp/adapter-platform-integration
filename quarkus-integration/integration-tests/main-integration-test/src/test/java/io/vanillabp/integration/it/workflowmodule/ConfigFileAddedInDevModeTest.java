@@ -25,7 +25,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * nothing, and a configuration file which is there and changes still restarts the
  * application, which is what carries the changed value into the running one.
  *
- * @see ConfigWatcherInDevModeIT
+ * @see ConfigWatcherInDevModeTest
  * @see ConfigWatcherForSubdirectoryConfigInDevModeTest
  */
 @ExtendWith(SuppressOutputExtension.class)
