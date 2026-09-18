@@ -2004,7 +2004,7 @@ public class WorkflowTaskRegistryTest {
 
     @Test
     @DisplayName("An attribute is announced through its getter, its boolean getter or its field")
-    @SuppressWarnings("removal") // the fallback under test, gone in 2.1
+    @SuppressWarnings("removal") // the fallback under test, which will be removed
     public void anAttributeIsAnnouncedThroughGetterBooleanGetterOrField() {
 
       assertTrue(registry.workflowAggregateHasProperty(MODULE, PROCESS, "processedBy"), "getter");
@@ -2019,7 +2019,7 @@ public class WorkflowTaskRegistryTest {
 
     @Test
     @DisplayName("An unknown BPMN process announces no attribute and reads none, instead of failing the expression")
-    @SuppressWarnings("removal") // the fallback under test, gone in 2.1
+    @SuppressWarnings("removal") // the fallback under test, which will be removed
     public void anUnknownProcessAnnouncesNoAttribute() {
 
       // the expression may name something entirely unrelated to VanillaBP - saying
@@ -2031,7 +2031,7 @@ public class WorkflowTaskRegistryTest {
 
     @Test
     @DisplayName("The value comes from the getter, the boolean getter or the field - the base class included")
-    @SuppressWarnings("removal") // the fallback under test, gone in 2.1
+    @SuppressWarnings("removal") // the fallback under test, which will be removed
     public void theValueIsReadInTheDocumentedOrder() {
 
       final var aggregate = persistence.aggregates.get("4711");
@@ -2052,7 +2052,7 @@ public class WorkflowTaskRegistryTest {
 
     @Test
     @DisplayName("An unknown attribute and a missing aggregate read as null")
-    @SuppressWarnings("removal") // the fallback under test, gone in 2.1
+    @SuppressWarnings("removal") // the fallback under test, which will be removed
     public void anUnknownAttributeAndAMissingAggregateReadAsNull() {
 
       assertNull(registry.resolveWorkflowAggregateProperty(MODULE, PROCESS, "4711", "somethingElse"));
@@ -2062,7 +2062,7 @@ public class WorkflowTaskRegistryTest {
 
     @Test
     @DisplayName("A getter which throws is reported and read as null, not thrown into the engine transaction")
-    @SuppressWarnings("removal") // the fallback under test, gone in 2.1
+    @SuppressWarnings("removal") // the fallback under test, which will be removed
     public void aThrowingGetterIsReportedAndReadAsNull() {
 
       final var broken = new BrokenGetterAggregate();

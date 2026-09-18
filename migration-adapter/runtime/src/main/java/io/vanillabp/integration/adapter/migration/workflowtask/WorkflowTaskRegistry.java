@@ -1711,7 +1711,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
   // the suppression is not a doubt about the deprecation, it is what keeps it quiet:
   // 'forRemoval' raises the mandatory 'removal' lint at every implementation, and
-  // @Deprecated on the override does not silence it. Goes with the fallback in 2.1.
+  // @Deprecated on the override does not silence it. Goes when the fallback goes.
   @Deprecated(forRemoval = true)
   @SuppressWarnings("removal")
   @Override
