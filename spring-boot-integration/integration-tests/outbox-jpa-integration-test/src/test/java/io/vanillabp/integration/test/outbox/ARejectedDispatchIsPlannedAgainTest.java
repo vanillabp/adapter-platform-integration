@@ -36,9 +36,9 @@ import io.vanillabp.spi.process.ProcessService;
  * went back with the transaction. The entry came again afterwards and the consumer got the
  * same call twice.
  */
-@SpringBootTest(classes = TestApplication.class)
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
+@SpringBootTest(classes = TestApplication.class)
 public class ARejectedDispatchIsPlannedAgainTest {
 
   /**

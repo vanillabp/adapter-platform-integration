@@ -22,8 +22,8 @@ import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
-@ExtendWith(MockitoExtension.class)
 @ExtendWith(SuppressOutputExtension.class)
+@ExtendWith(MockitoExtension.class)
 public class PhaseTwoRouterTest {
 
   @Mock

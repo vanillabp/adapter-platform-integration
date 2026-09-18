@@ -23,10 +23,10 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * and <i>config/application.yaml</i> next to the runner, which is this Maven
  * module's directory while its tests run.
  */
+@ExtendWith(SuppressOutputExtension.class)
 @SpringBootTest(classes = {
     TestApplication.class, WorkflowModuleConfigurationIsADefaultTest.BindWorkflowModuleProperties.class
 })
-@ExtendWith(SuppressOutputExtension.class)
 public class WorkflowModuleConfigurationIsADefaultTest {
 
   @Configuration

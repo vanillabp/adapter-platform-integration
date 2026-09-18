@@ -19,12 +19,12 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.process.ProcessService;
 
+@ExtendWith(SuppressOutputExtension.class)
 @SpringBootTest(
     classes = {
         DummyAdapterConfiguration.class, DummyAdapterProcessServiceConfiguration.class, WorkflowModuleAutoConfiguration.class, SpringBootMigrationAdapterAutoConfiguration.class, TestPersistenceConfiguration.class, TestPhaseTwoOutboxConfiguration.class, TestTransactionRunnerConfiguration.class, io.vanillabp.integration.test.sample.SampleWorkflowService.class, SampleWorkflowService.class, WorkflowModuleConfiguration.class
     }
 )
-@ExtendWith(SuppressOutputExtension.class)
 public class BeanInstantiationTest {
 
   @Autowired

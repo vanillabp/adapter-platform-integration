@@ -29,9 +29,9 @@ import io.vanillabp.spi.process.ProcessService;
  * the same unique request ID - and the payload of the entry which went is removed in the
  * same transaction, because no dispatch had ever read it.
  */
-@SpringBootTest(classes = TestApplication.class)
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
+@SpringBootTest(classes = TestApplication.class)
 public class AYoungerCallReplacesTheWaitingOneTest {
 
   private static final String COUNT_ENTRIES_OF_KEY = "select count(*) from TXNO_OUTBOX where uniqueRequestId = ?";

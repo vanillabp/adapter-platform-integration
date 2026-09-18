@@ -34,9 +34,9 @@ import io.vanillabp.spi.process.TaskNotFoundException;
  * <li>a task reported COMPLETED is an idempotent no-op (no outbox entry).</li>
  * </ul>
  */
-@SpringBootTest(classes = TestApplication.class)
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
+@SpringBootTest(classes = TestApplication.class)
 public class TaskOperationsDispatchTest {
 
   @Autowired

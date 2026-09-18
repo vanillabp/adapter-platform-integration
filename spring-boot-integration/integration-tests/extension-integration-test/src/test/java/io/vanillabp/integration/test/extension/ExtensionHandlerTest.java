@@ -23,8 +23,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * contract allows, and what they return is handed back - the mechanics of
  * <code>&#64;WorkflowTask</code>, without a line of extension-specific code in the core.
  */
-@SpringBootTest(classes = TestApplication.class)
 @ExtendWith(SuppressOutputExtension.class)
+@SpringBootTest(classes = TestApplication.class)
 public class ExtensionHandlerTest {
 
   @Autowired

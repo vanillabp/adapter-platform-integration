@@ -30,9 +30,9 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * message names it, and the exception reaches the adapter unchanged, which is what
  * lets the BPMS apply its retry semantics.
  */
-@SpringBootTest(classes = TestApplication.class)
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
+@SpringBootTest(classes = TestApplication.class)
 public class AggregateWriteConflictTest {
 
   private static final String MODULE = "test-module";

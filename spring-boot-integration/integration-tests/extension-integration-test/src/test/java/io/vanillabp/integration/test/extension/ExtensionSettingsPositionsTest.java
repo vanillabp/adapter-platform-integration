@@ -22,8 +22,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * Measured on Spring Boot here and on Quarkus by the test of the same name there: that
  * the core resolves the positions says nothing about a platform binding all of them.
  */
-@SpringBootTest(classes = TestApplication.class)
 @ExtendWith(SuppressOutputExtension.class)
+@SpringBootTest(classes = TestApplication.class)
 public class ExtensionSettingsPositionsTest {
 
   private static final String MODULE = "extension-module";

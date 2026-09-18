@@ -267,6 +267,14 @@ Three things, and each one is there for a reason that was measured:
 1. `@ExtendWith(SuppressOutputExtension.class)` on every test class buffers what the class
    prints and writes it out when a test fails. That includes what is logged
    through JBoss LogManager, which the swap of `System.out` alone never reached.
+   It has to be the FIRST class-level annotation which registers an extension. JUnit
+   registers declarative extensions in the order they are written, and an extension written
+   above the suppression prints past it: `@Testcontainers` starts and logs its container,
+   `@SpringBootTest` boots a context, and neither is captured yet. The annotations which
+   register an extension without saying so are the ones to watch, because they read like
+   configuration: `@SpringBootTest`, `@DataJpaTest` and `@QuarkusTest` all carry an
+   `@ExtendWith` of their own. `TestClassConventions` of `test-utils` fails a build where the
+   suppression stands below `@Testcontainers`; the other annotations are a matter of review.
 2. `<quarkus.log.level>INFO</quarkus.log.level>`, not `ERROR` as before: a record dropped
    by its level reaches no handler, so it never reaches the capture either, and a failing
    class then replays nothing worth reading.

@@ -27,9 +27,9 @@ import io.vanillabp.spi.process.ProcessService;
  * own idempotency key and retried when the handler fails - the same guarantees the
  * core operations get, without any core code knowing the operation.
  */
-@SpringBootTest(classes = TestApplication.class)
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
+@SpringBootTest(classes = TestApplication.class)
 public class ExtensionOperationDispatchTest {
 
   /**

@@ -24,8 +24,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.utils.SpringDataUtil;
 import io.vanillabp.integration.utils.impl.SpringDataUtilBasedAggregatePersistenceSupport;
 
-@ExtendWith(MockitoExtension.class)
 @ExtendWith(SuppressOutputExtension.class)
+@ExtendWith(MockitoExtension.class)
 public class SpringDataUtilBasedAggregatePersistenceSupportTest {
 
   @Captor
