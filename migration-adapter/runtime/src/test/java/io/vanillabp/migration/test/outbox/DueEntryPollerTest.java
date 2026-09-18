@@ -7,6 +7,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -28,6 +29,19 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class DueEntryPollerTest {
+
+  /**
+   * How long a wait for polls goes on before the test gives up. It guards against a poller
+   * which stopped and it measures nothing: every timing this class claims is read from the
+   * moments the polls happened, so a slow machine makes a test slower rather than red.
+   * <p>
+   * Five seconds did not do that job. A machine carrying five builds can leave the test JVM
+   * without a turn for five seconds. The wait then ends with one poll in hand while the
+   * poller has done nothing wrong. Measured on 2026-09-18, with the test JVM stopped for 4.6
+   * seconds at a time: the five second wait was red in seven of ten runs of this class, this
+   * wait in none of them.
+   */
+  private static final long UNTIL_A_POLLER_COUNTS_AS_STOPPED = 30000;
 
   private DueEntryPoller poller;
 
@@ -60,13 +74,32 @@ public class DueEntryPollerTest {
   private void awaitPolls(
       final int count) throws InterruptedException {
 
-    final var deadline = System.currentTimeMillis() + 5000;
+    final var deadline = System.currentTimeMillis() + UNTIL_A_POLLER_COUNTS_AS_STOPPED;
     while (polls.size() < count) {
       assertTrue(
           System.currentTimeMillis() < deadline,
-          "expected at least %d poll(s) but got %d".formatted(count, polls.size()));
+          "expected at least %d poll(s), saw %s".formatted(count, whenThePollsHappened()));
       Thread.sleep(10);
     }
+
+  }
+
+  /**
+   * How far each poll was from the first one, so a red run says what the poller did rather
+   * than only how many times it did it.
+   *
+   * @return The moments, relative to the first poll
+   */
+  private String whenThePollsHappened() {
+
+    if (polls.isEmpty()) {
+      return "no poll at all";
+    }
+    final var first = polls.get(0);
+    return polls
+        .stream()
+        .map(poll -> "+%dms".formatted(Duration.between(first, poll).toMillis()))
+        .collect(Collectors.joining(", "));
 
   }
 
@@ -151,8 +184,9 @@ public class DueEntryPollerTest {
   @DisplayName("A store which cannot answer is asked again after the cap")
   public void aStoreWhichThrowsIsAskedAgainAfterTheCap() throws Exception {
 
+    final var cap = Duration.ofMillis(300);
     poller = new DueEntryPoller(
-        "vanillabp-outbox-test", Duration.ofMillis(300), () -> polls.add(Instant.now()), () -> {
+        "vanillabp-outbox-test", cap, () -> polls.add(Instant.now()), () -> {
           throw new IllegalStateException("the store cannot be reached");
         });
     poller.start();
@@ -160,6 +194,18 @@ public class DueEntryPollerTest {
     // the cap is what keeps a store with a broken connection being looked at, and the
     // poll itself is where that failure is reported
     awaitPolls(3);
+
+    // the cap has to be what brings the poller back, not the failure: a store which cannot
+    // answer would otherwise be asked as fast as the thread can ask. How much later than the
+    // cap it came back is not claimed here. A wall clock cannot tell those two apart, a
+    // poller which slept too long and a test JVM which did not run at all. The distance is
+    // made of two clock readings and comes out a millisecond short of the cap, so the check
+    // allows fifty milliseconds of slack
+    final var afterTheFirstThrow = Duration.between(polls.get(0), polls.get(1));
+    assertTrue(
+        afterTheFirstThrow.compareTo(cap.minusMillis(50)) >= 0,
+        "the poller came back %dms after the failed question, which is sooner than the cap of %dms"
+            .formatted(afterTheFirstThrow.toMillis(), cap.toMillis()));
 
   }
 
