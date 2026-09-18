@@ -187,7 +187,7 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
         .anyMatch(property -> property.name().equals(propertyName))) {
       return true;
     }
-    // MIGRATION (to be removed in 2.1 together with the Camunda 7 EL
+    // MIGRATION (to be removed together with the Camunda 7 EL
     // resolver's fallback): what VanillaBP 1 resolved and the sync model does not is an
     // attribute of the aggregate as well, and it is the case which has to be named
     // loudest - a model relying on such a name breaks silently. Neither of the two can

@@ -90,7 +90,8 @@ public interface WorkflowTaskInvoker {
    *             method serves the MIGRATION fallback of the Camunda 7 adapter only (an
    *             application upgrading from version 1 has no variables in its running
    *             workflows yet, and version 1 also resolved attributes without a getter),
-   *             and it is removed in 2.1 together with that fallback.
+   *             and it goes away together with that fallback. No version is named for the
+   *             removal, so ask the VanillaBP team if you need a date.
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
    * @param propertyName The attribute's name
@@ -107,7 +108,7 @@ public interface WorkflowTaskInvoker {
    * Reads an attribute of the workflow aggregate identified by the given serialized ID,
    * within the CALLER's transaction - getter, boolean getter or field, in this order.
    *
-   * @deprecated The migration fallback, removed in 2.1 - see
+   * @deprecated The migration fallback, which will be removed - see
    *             {@link #workflowAggregateHasProperty(String, String, String)}.
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
