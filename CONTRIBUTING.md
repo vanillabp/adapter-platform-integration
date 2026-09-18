@@ -10,7 +10,8 @@ changing the code.
 The rules a change to this repository follows are in
 [`README.md`](./README.md#rules-and-decisions-worth-knowing-before-contributing): where a feature
 belongs, which SPI it may touch, how configuration is validated, what the tests have to prove, and
-how to build. Breaking changes and their reasoning are recorded in [`UPGRADE.md`](./UPGRADE.md).
+how to build. [`UPGRADE.md`](./UPGRADE.md) says what an application upgrading from VanillaBP 1
+has to do, and a change between two snapshots of 2.0 earns no entry there.
 
 [`DECISIONS.md`](./DECISIONS.md) holds the decisions several places rely on, and it is the only
 thing the code is allowed to cite. Read it before you change behaviour, and where your change would

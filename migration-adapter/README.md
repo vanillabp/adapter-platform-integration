@@ -680,8 +680,7 @@ adapter as a platform bean).
 
 Without any configuration the ADAPTER's default applies
 (`AdapterDeploymentService#defaultNameClashAvoidance`, `BY_ADAPTER` unless
-overridden). No shipped adapter overrides it: all three answer `BY_ADAPTER` since
-2026-08-22 (`UPGRADE.md`, "name-clash-avoidance is `by-adapter` again"), because that
+overridden). No shipped adapter overrides it: all three answer `BY_ADAPTER`, because that
 is what VanillaBP 1 deployed and an upgraded application has to find its workflows in
 their tenants. Both Camunda adapters answered `NONE` for eleven days, which is what a
 Camunda 8 cluster from the stock image needs - it has multi-tenancy switched off and
