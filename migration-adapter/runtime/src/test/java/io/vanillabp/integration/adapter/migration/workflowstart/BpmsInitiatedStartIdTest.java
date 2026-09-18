@@ -69,6 +69,41 @@ public class BpmsInitiatedStartIdTest {
   }
 
   @Test
+  @DisplayName("A name the instance already carries becomes the ID wherever it fits the ID type")
+  public void aReportedNameIsTakenOverWhereItFits() {
+
+    final var uuid = UUID.randomUUID();
+    assertEquals(
+        uuid,
+        BpmsInitiatedStartId
+            .derive(BpmsStartTrigger.Kind.CONDITIONAL, TRIGGER_TIME, uuid.toString(), UUID.class, Object.class)
+            .orElseThrow());
+    assertEquals(
+        Integer.valueOf(4711),
+        BpmsInitiatedStartId
+            .derive(BpmsStartTrigger.Kind.SIGNAL, TRIGGER_TIME, "4711", Integer.class, Object.class)
+            .orElseThrow());
+    assertEquals(
+        new java.math.BigInteger("4711"),
+        BpmsInitiatedStartId
+            .derive(
+                BpmsStartTrigger.Kind.SIGNAL,
+                TRIGGER_TIME,
+                "4711",
+                java.math.BigInteger.class,
+                Object.class)
+            .orElseThrow());
+    // a business key somebody chose is a text, and a UUID ID cannot carry it - so the
+    // start gets an ID of its own rather than a failing conversion
+    final var whereItDoesNotFit = BpmsInitiatedStartId
+        .derive(BpmsStartTrigger.Kind.CONDITIONAL, TRIGGER_TIME, "ORDER-4711", UUID.class, Object.class)
+        .orElseThrow();
+    assertInstanceOf(UUID.class, whereItDoesNotFit);
+    assertFalse("ORDER-4711".equals(whereItDoesNotFit.toString()), "the text is no UUID");
+
+  }
+
+  @Test
   @DisplayName("A timer's ID is its trigger time, in whatever type the aggregate uses")
   public void triggerTimeIsConvertedToTheIdType() {
 

@@ -54,6 +54,14 @@ public interface BpmsInitiatedStartContext {
    * An adapter whose notification cannot repeat once the aggregate is committed
    * (an embedded engine writing both in one transaction) reports nothing here, and
    * the aggregate's ID becomes the meaningful one: a timer's trigger time.
+   * <p>
+   * There is a second reason to report a value, and a BPMS keeping a business key has
+   * it: the name the instance ALREADY goes by. Where such a key is the place the
+   * workflow aggregate's id lives (Camunda 7 keeps it there and nowhere else), the key
+   * of a workflow somebody started past VanillaBP belongs here, so the aggregate is
+   * built under the name that workflow was started with instead of being renamed. The
+   * value is taken over only where it fits the type of the aggregate's id attribute,
+   * and where it does not, the rules above decide the id.
    *
    * @return The BPMS' identity of this start or <code>null</code>
    */
