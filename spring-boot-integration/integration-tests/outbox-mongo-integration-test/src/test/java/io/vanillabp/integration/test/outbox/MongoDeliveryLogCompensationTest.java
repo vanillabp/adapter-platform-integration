@@ -26,6 +26,7 @@ import com.mongodb.ConnectionString;
 
 import io.vanillabp.integration.delivery.MongoTaskDeliveryLog;
 import io.vanillabp.integration.spi.TaskDelivery;
+import io.vanillabp.integration.test.utils.ContainerImages;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
@@ -50,7 +51,7 @@ public class MongoDeliveryLogCompensationTest {
   private static final String DELIVERY_COLLECTION = "vanillabp-task-deliveries";
 
   @Container
-  static MongoDBContainer mongoDb = new MongoDBContainer(DockerImageName.parse("mongo:5.0"))
+  static MongoDBContainer mongoDb = new MongoDBContainer(DockerImageName.parse(ContainerImages.MONGODB))
       .withReplicaSet()
       .waitingFor(Wait.forLogMessage(".*Waiting for connections.*", 1))
       .withExposedPorts(27017);
