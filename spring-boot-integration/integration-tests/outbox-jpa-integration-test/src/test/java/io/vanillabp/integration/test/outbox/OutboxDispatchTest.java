@@ -34,6 +34,17 @@ import io.vanillabp.spi.process.ProcessService;
 @SpringBootTest(classes = TestApplication.class)
 public class OutboxDispatchTest {
 
+  /**
+   * How long a test waits before it says that nothing more happened. The application
+   * dispatches every <code>vanillabp.outbox.attempt-frequency</code>, which these tests
+   * configure as half a second, so this is three of those windows.
+   * <p>
+   * It is a guard and not a measurement of speed: a machine which leaves this JVM without
+   * a turn only makes the wait longer, and what is asserted afterwards is a count which
+   * did not grow.
+   */
+  private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
+
   private static final String COUNT_OUTBOX_ENTRIES = "select count(*) from TXNO_OUTBOX";
 
   /**
@@ -115,7 +126,7 @@ public class OutboxDispatchTest {
     assertEquals(entriesBefore, countOutboxEntries());
 
     // wait longer than the poll interval: phase two must never be dispatched
-    Thread.sleep(1500);
+    Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
     assertTrue(listener.getInvocations().isEmpty());
 
   }
@@ -202,7 +213,7 @@ public class OutboxDispatchTest {
       }
     }
     try {
-      Thread.sleep(1500);
+      Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new IllegalStateException(e);

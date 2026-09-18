@@ -76,8 +76,10 @@ public class OutboxRedispatchMitigationTest {
         });
         assertNotNull(attachedAggregate);
         listener.awaitInvocations(1, 10000);
-        // give the outbox time to persist the failed attempt before "crashing"
-        Thread.sleep(1000);
+        // the entry has to carry the failed attempt before the context goes away: the
+        // mitigation reads that counter, so a context closed sooner would leave an entry
+        // the second context recovers as a first dispatch
+        FailedAttempts.awaitWrittenDown(context, 1);
       }
 
       // second context: the recovery poll picks the entry up; the mitigation

@@ -33,6 +33,17 @@ import io.vanillabp.spi.process.ProcessService;
 public class ExtensionOperationDispatchTest {
 
   /**
+   * How long a test waits before it says that nothing more happened. The application
+   * dispatches every <code>vanillabp.outbox.attempt-frequency</code>, which these tests
+   * configure as half a second, so this is three of those windows.
+   * <p>
+   * It is a guard and not a measurement of speed: a machine which leaves this JVM without
+   * a turn only makes the wait longer, and what is asserted afterwards is a count which
+   * did not grow.
+   */
+  private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
+
+  /**
    * One entry, addressed by the key gruelbox stores it under, and only once gruelbox
    * marked it processed - the state in which that key stops deduplicating.
    */
@@ -273,7 +284,7 @@ public class ExtensionOperationDispatchTest {
 
     // wait longer than the poll interval: the entry rode the rolled-back
     // transaction, so nothing may ever be dispatched
-    Thread.sleep(1500);
+    Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
     assertTrue(extension.getDispatched().isEmpty());
 
   }

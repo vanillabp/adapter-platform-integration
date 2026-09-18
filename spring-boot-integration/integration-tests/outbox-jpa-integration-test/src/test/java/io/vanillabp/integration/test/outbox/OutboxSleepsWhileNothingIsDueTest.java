@@ -122,9 +122,21 @@ public class OutboxSleepsWhileNothingIsDueTest {
   }
 
   /**
-   * How long the pool has to stay untouched before the work counts as over. Below the
-   * three seconds the silence is measured over, so a poller asking on a rhythm shorter
-   * than that is caught by the wait rather than passing through it.
+   * How long the store is watched after it went quiet. Three seconds, which is long enough
+   * for a poller sleeping on a rhythm of its own to come back at least once: the shortest
+   * rhythm anything here has is the half second of
+   * <code>vanillabp.outbox.attempt-frequency</code>.
+   * <p>
+   * The number is not a budget anybody has to be faster than: what is asserted afterwards
+   * is that nothing was asked at all, and a machine which leaves this JVM without a turn
+   * only makes the silence longer.
+   */
+  private static final long SILENCE_MEASURED_OVER_MS = 3000;
+
+  /**
+   * How long the pool has to stay untouched before the work counts as over. Below
+   * {@link #SILENCE_MEASURED_OVER_MS}, so a poller asking on a rhythm shorter than that is
+   * caught by the wait rather than passing through it.
    */
   private static final long QUIET_FOR_MS = 500;
 
@@ -189,7 +201,7 @@ public class OutboxSleepsWhileNothingIsDueTest {
 
       awaitTheWorkWentQuiet();
       connectionsTaken.set(0);
-      Thread.sleep(3000);
+      Thread.sleep(SILENCE_MEASURED_OVER_MS);
 
       assertEquals(
           0L,
@@ -222,7 +234,7 @@ public class OutboxSleepsWhileNothingIsDueTest {
 
       awaitTheWorkWentQuiet();
       connectionsTaken.set(0);
-      Thread.sleep(3000);
+      Thread.sleep(SILENCE_MEASURED_OVER_MS);
 
       assertEquals(
           0L,

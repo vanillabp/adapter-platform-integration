@@ -2,7 +2,6 @@ package io.vanillabp.migration.test.processservice;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -74,6 +73,13 @@ public class NotVisibleWorkflowDoesNotStallDispatchTest {
 
     private final List<String> correlated = new ArrayList<>();
 
+    /**
+     * How often the BPMS was asked about the workflow it has not caught up with. Waiting
+     * for that workflow means asking again every twenty milliseconds, so this number is
+     * what says whether anybody waited.
+     */
+    private final java.util.concurrent.atomic.AtomicInteger probesOfTheLaggingWorkflow = new java.util.concurrent.atomic.AtomicInteger();
+
     @Override
     public String getAdapterId() {
       return ADAPTER;
@@ -90,9 +96,11 @@ public class NotVisibleWorkflowDoesNotStallDispatchTest {
         final AggregatePersistenceAware<Object> aggregatePersistence,
         final Object workflowAggregateId) {
 
-      return FINDABLE.equals(workflowAggregateId)
-          ? WorkflowAwareness.ACTIVE
-          : WorkflowAwareness.UNKNOWN_TO_BPMS;
+      if (FINDABLE.equals(workflowAggregateId)) {
+        return WorkflowAwareness.ACTIVE;
+      }
+      probesOfTheLaggingWorkflow.incrementAndGet();
+      return WorkflowAwareness.UNKNOWN_TO_BPMS;
 
     }
 
@@ -205,8 +213,6 @@ public class NotVisibleWorkflowDoesNotStallDispatchTest {
     final var adapter = new LaggingAdapter();
     final var service = serviceKnowingBothWorkflows(adapter);
 
-    final var startedAt = System.nanoTime();
-
     final var retryLater = assertThrows(
         PhaseTwoRetryLater.class,
         () -> dispatchCorrelation(service, NOT_VISIBLE_YET),
@@ -217,13 +223,15 @@ public class NotVisibleWorkflowDoesNotStallDispatchTest {
     // the very next entry, of a workflow the same BPMS reports, on the same thread
     dispatchCorrelation(service, FINDABLE);
 
-    final var elapsed = Duration.ofNanos(System.nanoTime() - startedAt);
     assertEquals(List.of(FINDABLE), adapter.correlated);
-    assertTrue(
-        elapsed.compareTo(WINDOW.dividedBy(2)) < 0,
-        "dispatching both entries took %s, which is the window of the workflow nobody can find yet - "
-            .formatted(elapsed)
-            + "the thread waited instead of giving the entry back");
+    // a thread waiting out the window would have asked the BPMS a hundred times, once
+    // every twenty milliseconds. A wall clock would be the same claim read from a worse
+    // instrument: a machine carrying several builds stops this JVM for seconds at a time,
+    // and a stopped JVM looks like a thread which waited
+    assertEquals(
+        1,
+        adapter.probesOfTheLaggingWorkflow.get(),
+        "the dispatch asks once and gives the entry back instead of waiting for the read model");
 
   }
 

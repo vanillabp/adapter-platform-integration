@@ -55,6 +55,17 @@ import io.vanillabp.spi.process.ProcessService;
 @Testcontainers
 public class MixedPersistenceOutboxTest {
 
+  /**
+   * How long a test waits before it says that nothing more happened. The application
+   * dispatches every <code>vanillabp.outbox.attempt-frequency</code>, which these tests
+   * configure as half a second, so this is three of those windows.
+   * <p>
+   * It is a guard and not a measurement of speed: a machine which leaves this JVM without
+   * a turn only makes the wait longer, and what is asserted afterwards is a count which
+   * did not grow.
+   */
+  private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
+
   private static final String COUNT_JDBC_OUTBOX_ENTRIES = "select count(*) from TXNO_OUTBOX";
 
   private static final String COUNT_HOT_OUTBOX_ENTRIES = "select count(*) from HOT_OUTBOX";
@@ -232,7 +243,7 @@ public class MixedPersistenceOutboxTest {
     // the entry was enlisted in the rolled-back JPA transaction
     assertEquals(jdbcBefore, countJdbcEntries());
 
-    Thread.sleep(1500);
+    Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
     assertTrue(listener.getInvocations().isEmpty());
 
   }
@@ -256,7 +267,7 @@ public class MixedPersistenceOutboxTest {
     // the entry was enlisted in the rolled-back MongoDB transaction
     assertEquals(mongoBefore, countMongoEntries());
 
-    Thread.sleep(1500);
+    Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
     assertTrue(listener.getInvocations().isEmpty());
 
   }

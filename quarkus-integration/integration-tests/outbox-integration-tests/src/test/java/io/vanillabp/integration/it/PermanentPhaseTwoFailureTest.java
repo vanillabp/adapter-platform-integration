@@ -34,6 +34,17 @@ import jakarta.transaction.UserTransaction;
 @ExtendWith(SuppressOutputExtension.class)
 public class PermanentPhaseTwoFailureTest {
 
+  /**
+   * How long a test waits before it says that nothing more happened. The application
+   * dispatches every <code>vanillabp.outbox.attempt-frequency</code>, which these tests
+   * configure as half a second, so this is three of those windows.
+   * <p>
+   * It is a guard and not a measurement of speed: a machine which leaves this JVM without
+   * a turn only makes the wait longer, and what is asserted afterwards is a count which
+   * did not grow.
+   */
+  private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
+
   @RegisterExtension
   static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .withApplicationRoot(jar -> jar
@@ -109,7 +120,7 @@ public class PermanentPhaseTwoFailureTest {
 
     // exactly one attempt, and nothing retries a blocked entry
     assertEquals(1, count(ATTEMPTS_OF_AGGREGATE.formatted(attachedAggregate.getId())));
-    Thread.sleep(1500);
+    Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
     assertEquals(1, count(ATTEMPTS_OF_AGGREGATE.formatted(attachedAggregate.getId())));
     assertEquals(
         1,

@@ -28,9 +28,52 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 public class CachedGaugeValueTest {
 
   /**
+   * How long a wait for collectors goes on before the test gives up. It guards against a
+   * thread which never got its turn and it measures nothing: what the concurrency test
+   * claims is read from the state of the collectors, so a loaded machine makes it slower
+   * rather than red.
+   */
+  private static final long UNTIL_A_COLLECTOR_COUNTS_AS_STUCK = 30000;
+
+  /**
    * A clock the test moves itself, so no window has to be waited out.
    */
   private final AtomicLong nanos = new AtomicLong();
+
+  /**
+   * Waits until the given number of collectors wait for the measurement one of them is
+   * taking. A thread queued on the lock of the held value is parked, so
+   * {@link Thread.State#WAITING} is how that shows from the outside. The collector
+   * INSIDE the measurement waits with a timeout and is therefore
+   * {@link Thread.State#TIMED_WAITING}, which keeps the two apart.
+   *
+   * @param collectors The threads which asked the held value
+   * @param parked How many of them have to be waiting for the measurement
+   */
+  private static void awaitCollectorsParkedOnTheMeasurement(
+      final java.util.Collection<Thread> collectors,
+      final int parked) throws Exception {
+
+    final var deadline = System.currentTimeMillis() + UNTIL_A_COLLECTOR_COUNTS_AS_STUCK;
+    while (waitingCollectors(collectors) < parked) {
+      assertTrue(
+          System.currentTimeMillis() < deadline,
+          "expected %d collectors waiting for the measurement, saw %d"
+              .formatted(parked, waitingCollectors(collectors)));
+      Thread.sleep(10);
+    }
+
+  }
+
+  private static long waitingCollectors(
+      final java.util.Collection<Thread> collectors) {
+
+    return collectors
+        .stream()
+        .filter(collector -> collector.getState() == Thread.State.WAITING)
+        .count();
+
+  }
 
   private CachedGaugeValue held(
       final Duration timeToLive,
@@ -133,7 +176,7 @@ public class CachedGaugeValueTest {
   @DisplayName("Collectors arriving at the same moment produce one measurement, not one each")
   public void concurrentCollectorsShareOneMeasurement() throws Exception {
 
-    final var collectors = 8;
+    final var howManyCollectors = 8;
     final var measurements = new AtomicInteger();
     final var insideTheMeasurement = new CountDownLatch(1);
     final var value = held(
@@ -142,7 +185,7 @@ public class CachedGaugeValueTest {
           measurements.incrementAndGet();
           try {
             // hold the first measurement open so the others really are concurrent
-            insideTheMeasurement.await(5, TimeUnit.SECONDS);
+            insideTheMeasurement.await(UNTIL_A_COLLECTOR_COUNTS_AS_STUCK, TimeUnit.MILLISECONDS);
           } catch (final InterruptedException e) {
             Thread
                 .currentThread()
@@ -151,13 +194,13 @@ public class CachedGaugeValueTest {
           return OptionalLong.of(7);
         });
 
-    final var allReady = new CountDownLatch(collectors);
-    final var allDone = new CountDownLatch(collectors);
-    try (var collecting = Executors.newFixedThreadPool(collectors)) {
-      for (var collector = 0; collector < collectors; ++collector) {
+    final var collectors = java.util.concurrent.ConcurrentHashMap.<Thread>newKeySet();
+    final var allDone = new CountDownLatch(howManyCollectors);
+    try (var collecting = Executors.newFixedThreadPool(howManyCollectors)) {
+      for (var collector = 0; collector < howManyCollectors; ++collector) {
         collecting
             .execute(() -> {
-              allReady.countDown();
+              collectors.add(Thread.currentThread());
               try {
                 assertEquals(OptionalLong.of(7), value.get());
               } finally {
@@ -165,11 +208,15 @@ public class CachedGaugeValueTest {
               }
             });
       }
-      assertTrue(allReady.await(5, TimeUnit.SECONDS));
-      // the first collector is now inside the measurement, the others are queued
-      Thread.sleep(100);
+      // the others are concurrent once they are parked on the lock the first one holds,
+      // and that is what the wait below reads. A wait of a fixed length would only guess
+      // at it: on a machine carrying several builds eight threads need longer to get
+      // going than any number somebody writes here
+      awaitCollectorsParkedOnTheMeasurement(collectors, howManyCollectors - 1);
       insideTheMeasurement.countDown();
-      assertTrue(allDone.await(10, TimeUnit.SECONDS));
+      assertTrue(
+          allDone.await(UNTIL_A_COLLECTOR_COUNTS_AS_STUCK, TimeUnit.MILLISECONDS),
+          "a collector never came back from the measurement");
     }
 
     assertEquals(
