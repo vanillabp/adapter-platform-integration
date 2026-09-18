@@ -327,13 +327,18 @@ in version 1 no more than now, and the report names the method and says what to 
 
 `@SyncWithBPMS` and `@NoSyncWithBPMS` are real now. Version 1 documented them and never shipped
 them, so an aggregate carrying no annotation hands every attribute to the BPMS, and everything
-hanging on those attributes with it.
+hanging on those attributes with it. That is what your application brings with it: no annotations,
+so everything is shared.
 
-Version 2 does not start such a workflow. The message names the workflow, the aggregate and the
-attributes which would travel, and it offers two ways on. The recommended one is to say what the
-models really need: `@NoSyncWithBPMS` on the aggregate class, `@SyncWithBPMS` on each attribute a
-BPMN expression reads. An aggregate which keeps a single attribute back starts without anything
-else. The other way is the permission, for the case where the models really may read everything:
+What is shared by default has not changed. Every adapter still shares everything an aggregate holds
+unless the aggregate says otherwise, so you do not have to touch your Java code for this.
+
+What is new is that version 2 does not start such a workflow before you have said so. The message
+names the workflow, the aggregate and the attributes which would travel, and it offers two ways on.
+The recommended one is to say what the models really need: `@NoSyncWithBPMS` on the aggregate class,
+`@SyncWithBPMS` on each attribute a BPMN expression reads. An aggregate which keeps a single
+attribute back starts without anything else. The other way is the permission, for the case where the
+models really may read everything:
 
 ```yaml
 vanillabp:
@@ -344,12 +349,14 @@ vanillabp:
           allow-full-sync-with-bpms: true
 ```
 
-Write it before you upgrade and the upgrade does not begin with a failed start. It belongs to the
-workflow and is not inherited: the same line at a workflow module, at the application or in an
-adapter section is refused with a message saying where it goes. A permission from above would cover
-the next workflow somebody adds, and that is the workflow nobody looked at. An aggregate holding
-nothing but its id needs neither way, because that value reaches the BPMS in any case. The reasoning
-is decision 66 in [`DECISIONS.md`](./DECISIONS.md).
+Write it before you upgrade and the upgrade does not begin with a failed start. It is one line of
+configuration. An application which is happy to share everything keeps its code as it is and says so
+once per workflow. The permission belongs to the workflow and is not inherited: the same line at a
+workflow module, at the application or in an adapter section is refused with a message saying where
+it goes. A permission from above would cover the next workflow somebody adds, and that is the
+workflow nobody looked at. An aggregate holding nothing but its id needs neither way, because that
+value reaches the BPMS in any case. The reasoning is decision 66 in
+[`DECISIONS.md`](./DECISIONS.md).
 
 Two rules are worth knowing before you annotate the first attribute. Every attribute inherits the
 behaviour of its owner until it says otherwise, and the class mode is derived from the attributes
