@@ -257,10 +257,11 @@ Three things, and each one is there for a reason that was measured:
    by its level reaches no handler, so it never reaches the capture either, and a failing
    class then replays nothing worth reading.
 3. `redirectTestOutputToFile`, because the tests of these modules boot their application IN
-   the test JVM and Quarkus logs that boot into a log context of its own. It happens in the
-   Quarkus extension's `beforeAll`, after ours and before our first `beforeEach`, so nothing
-   captures it: 311 lines in a green run of `deployment-integration-tests` without the
-   redirection.
+   the test JVM and Quarkus logs that boot into a log context of its own, which the capture
+   never sees: 311 lines in a green run of `deployment-integration-tests` without the
+   redirection. The boot runs in the Quarkus extension's `beforeAll`, after ours and before
+   our first `beforeEach`. What is written to `System.out` in that window is kept now and
+   replayed in front of a failing test, but those lines are not written there.
 
 The price of the third one is that the replay of a failing class lands in
 `target/failsafe-reports/<class>-output.txt` and Surefire prints only its last line. The
