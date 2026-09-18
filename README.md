@@ -37,6 +37,9 @@ them itself.
 
 ## Contribution
 
+[`CONTRIBUTING.md`](./CONTRIBUTING.md) says how to build this repository, how we write, and what a
+pull request is expected to carry.
+
 Developers who want to contribute to VanillaBP should familiarize themselves with the implementation details by
 reading the `README.md` files of the respective submodules. Please create an [issue](./issues) first to let other
 contributors know what you are working on.
