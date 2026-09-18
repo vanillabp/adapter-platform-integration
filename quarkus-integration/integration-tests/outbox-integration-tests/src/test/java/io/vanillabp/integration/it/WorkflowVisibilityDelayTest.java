@@ -1,5 +1,6 @@
 package io.vanillabp.integration.it;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -54,6 +55,12 @@ public class WorkflowVisibilityDelayTest {
       .overrideRuntimeConfigKey("quarkus.datasource.jdbc.url",
           "jdbc:h2:mem:workflow-visibility-delay-it;DB_CLOSE_DELAY=-1");
 
+  /**
+   * How many probes report the workflow as not visible yet in the test below. Three, so
+   * that one probe used up and three probes left over are two different numbers.
+   */
+  private static final int INVISIBLE_PROBES = 3;
+
   @Inject
   WorkflowService workflowService;
 
@@ -105,27 +112,30 @@ public class WorkflowVisibilityDelayTest {
     // probes - what an exporter-fed read model does right after a start. Each dispatch
     // asks once and gives the entry back due in the window, so three probes are three
     // attempts: the window is what decides how long the correlation takes
-    awareness.becomeVisibleAfter(3, Duration.ofSeconds(1));
+    awareness.becomeVisibleAfter(INVISIBLE_PROBES, Duration.ofSeconds(1));
 
-    final var startedAt = System.nanoTime();
+    // the number of probes left over is read INSIDE the transaction, because the dispatch
+    // begins right after the commit and probes as well
+    final int probesLeftByPhaseOne;
     userTransaction.begin();
     try {
       workflowService.correlateMessage(aggregate, "PaymentReceived");
+      probesLeftByPhaseOne = awareness.remainingInvisibleProbes();
       userTransaction.commit();
     } catch (final Exception e) {
       userTransaction.rollback();
       throw e;
     }
-    final var elapsed = Duration.ofNanos(System.nanoTime() - startedAt);
 
     // the point of the story: the caller's transaction holds a database connection
-    // and the locks on the aggregate, so nothing sleeps in it
-    assertTrue(
-        elapsed.toMillis() < 1000,
-        "the caller must not wait for the BPMS to catch up, but took "
-            + elapsed);
-    assertTrue(
-        awareness.remainingInvisibleProbes() > 0,
+    // and the locks on the aggregate, so nothing sleeps in it. Waiting for the BPMS
+    // means asking again every twenty milliseconds, so the probes phase one used up
+    // are what says whether it waited. The seconds the call took would not: a machine
+    // carrying several builds leaves this JVM without a turn for seconds at a time, and
+    // a wall clock cannot tell that apart from a caller sitting out the window
+    assertEquals(
+        INVISIBLE_PROBES - 1,
+        probesLeftByPhaseOne,
         "phase one asks once and leaves asking again to the dispatch");
 
     final var deadline = System.currentTimeMillis() + 30_000;
@@ -167,6 +177,9 @@ public class WorkflowVisibilityDelayTest {
     }
     final var elapsed = Duration.ofNanos(System.nanoTime() - startedAt);
 
+    // thirty seconds against a window of five minutes: the call is either refused at once
+    // or it sits out the window, and nothing a loaded machine does to this JVM falls
+    // between the two. A tighter number would only turn a stalled JVM into a red test
     assertTrue(
         elapsed.toSeconds() < 30,
         "an unknown workflow must fail without waiting, but took "

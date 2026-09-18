@@ -3,7 +3,6 @@ package io.vanillabp.integration.outbox.gruelbox;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.doAnswer;
@@ -56,19 +55,17 @@ public class GruelboxGivesBackWhatItCannotDispatchYetTest {
         .when(router)
         .dispatch(any(), anyBoolean());
 
-    final var startedAt = System.nanoTime();
     final var thrown = assertThrows(
         PhaseTwoRetryLater.class,
         () -> new GruelboxPhaseTwoDispatchBean(router)
             .dispatch("CORRELATE_MESSAGE", "loan-approval", "loan_approval", "4711", null, ARGS));
-    final var took = Duration.ofNanos(System.nanoTime() - startedAt);
 
+    // waiting here would mean dispatching again, so one attempt is what says that the
+    // thread gave the entry back. How long the call took would not: a machine carrying
+    // several builds stops this JVM for seconds at a time, and a wall clock cannot tell
+    // that apart from a thread which waited
     assertEquals(1, attempts.get(), "the entry goes back instead of being attempted again in here");
     assertSame(rejection, thrown, "the window the adapter named has to reach the store unchanged");
-    assertTrue(
-        took.compareTo(Duration.ofSeconds(1)) < 0,
-        "nothing is waited out on the dispatching thread: "
-            + took);
 
   }
 

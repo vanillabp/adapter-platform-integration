@@ -39,6 +39,17 @@ import io.vanillabp.spi.process.TaskNotFoundException;
 @SpringBootTest(classes = TestApplication.class)
 public class TaskOperationsDispatchTest {
 
+  /**
+   * How long a test waits before it says that nothing more happened. The application
+   * dispatches every <code>vanillabp.outbox.attempt-frequency</code>, which these tests
+   * configure as half a second, so this is three of those windows.
+   * <p>
+   * It is a guard and not a measurement of speed: a machine which leaves this JVM without
+   * a turn only makes the wait longer, and what is asserted afterwards is a count which
+   * did not grow.
+   */
+  private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
+
   @Autowired
   private ProcessService<Aggregate> processService;
 
@@ -284,7 +295,7 @@ public class TaskOperationsDispatchTest {
               + listener.getCorrelatedMessages());
       Thread.sleep(50);
     }
-    Thread.sleep(1500);
+    Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
     final var pings = listener
         .getCorrelatedMessages()
         .stream()
@@ -363,7 +374,7 @@ public class TaskOperationsDispatchTest {
     transactionTemplate.executeWithoutResult(status -> processService
         .correlateMessage(aggregate, "PaymentReceived"));
 
-    Thread.sleep(1500);
+    Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
     assertTrue(listener.getCorrelatedMessages().isEmpty());
 
   }
@@ -408,7 +419,7 @@ public class TaskOperationsDispatchTest {
         }));
     assertEquals("test rollback", exception.getMessage());
 
-    Thread.sleep(1500);
+    Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
     assertTrue(listener.getCompletedTasks().isEmpty(), "phase two must never run after a rollback");
 
   }
@@ -444,7 +455,7 @@ public class TaskOperationsDispatchTest {
         .completeTask(aggregate, "task-80"));
 
     assertNotNull(result);
-    Thread.sleep(1500);
+    Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
     assertTrue(listener.getCompletedTasks().isEmpty(), "an already-completed task must not dispatch");
 
   }

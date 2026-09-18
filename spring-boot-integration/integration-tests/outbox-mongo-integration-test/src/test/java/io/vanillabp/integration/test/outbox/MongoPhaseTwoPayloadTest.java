@@ -49,6 +49,17 @@ import io.vanillabp.spi.process.ProcessService;
 @DirtiesContext
 public class MongoPhaseTwoPayloadTest {
 
+  /**
+   * How long a test waits before it says that nothing more happened. The application
+   * dispatches every <code>vanillabp.outbox.attempt-frequency</code>, which these tests
+   * configure as half a second, so this is three of those windows.
+   * <p>
+   * It is a guard and not a measurement of speed: a machine which leaves this JVM without
+   * a turn only makes the wait longer, and what is asserted afterwards is a count which
+   * did not grow.
+   */
+  private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
+
   private static final String PAYLOAD_COLLECTION = "vanillabp-phase-two-payloads";
 
   private static final String OUTBOX_COLLECTION = "vanillabp-phase-two-outbox";
@@ -169,8 +180,8 @@ public class MongoPhaseTwoPayloadTest {
     assertEquals(younger.get(), dispatched.getFirst().payloadReference());
 
     // and the one which was dispatched is the only one there ever was
-    Thread.sleep(1500);
-    assertEquals(1, extension.awaitDispatched(1, 1000).size());
+    Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
+    assertEquals(1, extension.dispatched().size());
 
   }
 

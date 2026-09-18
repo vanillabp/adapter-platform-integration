@@ -463,16 +463,14 @@ public class WorkflowLocatorTest {
     final var remote = new ProbeAdapter("remote", WorkflowAwareness.UNKNOWN_TO_BPMS)
         .waitingFor(java.time.Duration.ofSeconds(30));
 
-    final var startedAt = System.nanoTime();
     final var location = locate(new InMemoryWorkflowAdapterCache(), remote);
-    final var elapsed = java.time.Duration.ofNanos(System.nanoTime() - startedAt);
 
     assertEquals(WorkflowAwareness.UNKNOWN_TO_BPMS, location.awareness());
+    // waiting out the window means asking again every twenty milliseconds, so the number
+    // of probes is what says whether the walk waited. A wall clock would be the same
+    // claim read from a worse instrument: a machine carrying several builds stops this
+    // JVM for seconds at a time, and a stopped JVM looks like a walk which waited
     assertEquals(1, remote.probes.get(), "the adapter is asked exactly once");
-    assertTrue(
-        elapsed.toSeconds() < 5,
-        "the walk must not wait for the window, but took "
-            + elapsed);
 
   }
 
@@ -519,17 +517,12 @@ public class WorkflowLocatorTest {
 
     final var down = new ProbeAdapter("down-adapter", WorkflowAwareness.BPMS_UNAVAILABLE);
 
-    final var startedAt = System.nanoTime();
     final var failure = assertThrows(
         IllegalStateException.class,
         () -> locate(null, WorkflowLocator.Patience.NONE, down));
-    final var elapsed = java.time.Duration.ofNanos(System.nanoTime() - startedAt);
 
+    // a retry sleeps and then asks again, so one probe is what says that nothing slept
     assertEquals(1, down.probes.get(), "the adapter is asked exactly once");
-    assertTrue(
-        elapsed.toMillis() < WorkflowLocator.UNAVAILABLE_RETRY_DELAY_MILLIS,
-        "nothing may sleep here, but the walk took "
-            + elapsed);
     assertTrue(failure.getMessage().contains("down-adapter"), failure.getMessage());
 
   }
@@ -543,16 +536,11 @@ public class WorkflowLocatorTest {
     final var remote = new ProbeAdapter("remote", WorkflowAwareness.UNKNOWN_TO_BPMS)
         .waitingFor(java.time.Duration.ofSeconds(30));
 
-    final var startedAt = System.nanoTime();
     final var location = locate(cache, WorkflowLocator.Patience.NONE, remote);
-    final var elapsed = java.time.Duration.ofNanos(System.nanoTime() - startedAt);
 
     assertEquals(WorkflowAwareness.UNKNOWN_TO_BPMS, location.awareness());
+    // one probe is what says that the caller's transaction did not sit out the window
     assertEquals(1, remote.probes.get(), "the adapter is asked exactly once");
-    assertTrue(
-        elapsed.toSeconds() < 5,
-        "the caller's transaction must not wait for the window, but the walk took "
-            + elapsed);
     // what the caller needs to tell "not visible yet" from "nobody knows it"
     assertTrue(location.isUnknownButExpected());
     assertEquals("remote", location.hintedAdapterId());
@@ -586,14 +574,11 @@ public class WorkflowLocatorTest {
     final var remote = new ProbeAdapter("remote", WorkflowAwareness.UNKNOWN_TO_BPMS)
         .waitingFor(java.time.Duration.ofSeconds(30));
 
-    final var startedAt = System.nanoTime();
     final var location = locate(cache, WorkflowLocator.Patience.RETRY_UNAVAILABLE, remote);
-    final var elapsed = java.time.Duration.ofNanos(System.nanoTime() - startedAt);
 
     assertEquals(WorkflowAwareness.UNKNOWN_TO_BPMS, location.awareness());
+    // one probe is what says that nothing waited for the read model
     assertEquals(1, remote.probes.get(), "a task the BPMS does not know stays unknown");
-    assertTrue(elapsed.toSeconds() < 5, "nothing waits for a read model here, but it took "
-        + elapsed);
 
   }
 

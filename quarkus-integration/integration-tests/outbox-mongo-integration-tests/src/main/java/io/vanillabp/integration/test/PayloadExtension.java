@@ -84,6 +84,17 @@ public class PayloadExtension {
   }
 
   /**
+   * What was dispatched up to now, without waiting for anything.
+   *
+   * @return The dispatched calls
+   */
+  public List<PhaseTwoCall> dispatched() {
+
+    return List.copyOf(dispatched);
+
+  }
+
+  /**
    * Waits until the given number of calls was dispatched.
    *
    * @param count The number of calls awaited

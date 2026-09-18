@@ -66,6 +66,15 @@ A feature is proven by an acceptance test per platform, against the published
 never covers Quarkus code. `test-coverage-report/coverage-gate` is the last module of the reactor and
 fails below 85 percent of covered instructions, while the rule is 90.
 
+A test waits as a guard, never as its assertion. A machine carrying a few builds at once leaves a
+test JVM without a turn for seconds at a time, so no fixed window can show that something was fast
+enough. A test reads what the code promises from a fact instead, such as the moments a poller polled
+or the number of probes an adapter answered. The wait around that fact is then generous, and a slow
+machine makes a test slower rather than red.
+[`DueEntryPollerTest`](./migration-adapter/runtime/src/test/java/io/vanillabp/migration/test/outbox/DueEntryPollerTest.java)
+is the shape to copy. Where a number really does say something, a line next to it says what: which
+configured interval it is three of, or which window it stays below.
+
 ## How we write
 
 Most people who read this repository read English as a second language, and so does the maintainer.

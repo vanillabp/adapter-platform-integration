@@ -45,6 +45,13 @@ public class StaleAdapterIdNamedAtDispatchTest {
   private static final String STALE_ADAPTER = "old-bpms";
 
   /**
+   * How often the entry has to be attempted before the count of reports is asked for.
+   * Four, because the first attempt is the one which reports and three more of them are
+   * enough to show that the report does not come back with every attempt.
+   */
+  private static final int ATTEMPTS_WORTH_ONE_REPORT = 4;
+
+  /**
    * What the report names, which is the adapter id and the reading an application has to
    * choose between.
    */
@@ -140,8 +147,9 @@ public class StaleAdapterIdNamedAtDispatchTest {
       });
       assertNotNull(attachedAggregate);
       listener.awaitInvocations(1, 10000);
-      // let the failed attempt be written before the context goes away
-      Thread.sleep(1000);
+      // the failed attempt has to be written before the context goes away, otherwise the
+      // second context meets an entry which was never dispatched
+      FailedAttempts.awaitWrittenDown(context, 1);
       assertEquals(
           0,
           occurrencesOf(THE_REPORT_NAMING_IT, output),
@@ -166,8 +174,11 @@ public class StaleAdapterIdNamedAtDispatchTest {
           "and it names what is left over, as a boot of the other stores does");
 
       // the entry is attempted again every 'attempt-frequency', so a report per attempt
-      // would be a line every half second for as long as the application runs
-      Thread.sleep(2000);
+      // would be a line every half second for as long as the application runs. The
+      // attempts are read from the store instead of waited for: a wait would pass on a
+      // machine where the dispatcher never came back, which is the one case this must
+      // not call green
+      FailedAttempts.awaitAttemptsOfAWaitingEntry(context, ATTEMPTS_WORTH_ONE_REPORT);
       assertEquals(
           1,
           occurrencesOf(THE_REPORT_NAMING_IT, output),

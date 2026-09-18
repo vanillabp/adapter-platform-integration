@@ -37,6 +37,17 @@ import jakarta.transaction.UserTransaction;
 @ExtendWith(SuppressOutputExtension.class)
 public class TaskOperationsDispatchTest {
 
+  /**
+   * How long a test waits before it says that nothing more happened. The application
+   * dispatches every <code>vanillabp.outbox.attempt-frequency</code>, which these tests
+   * configure as half a second, so this is three of those windows.
+   * <p>
+   * It is a guard and not a measurement of speed: a machine which leaves this JVM without
+   * a turn only makes the wait longer, and what is asserted afterwards is a count which
+   * did not grow.
+   */
+  private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
+
   @RegisterExtension
   static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .setArchiveProducer(() -> ShrinkWrap
@@ -258,7 +269,7 @@ public class TaskOperationsDispatchTest {
               + listener.getCorrelatedMessages());
       Thread.sleep(50);
     }
-    Thread.sleep(1500);
+    Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
     assertEquals(
         2,
         listener
@@ -359,7 +370,7 @@ public class TaskOperationsDispatchTest {
       throw e;
     }
 
-    Thread.sleep(1500);
+    Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
     assertTrue(listener.getCorrelatedMessages().isEmpty());
 
   }
@@ -403,7 +414,7 @@ public class TaskOperationsDispatchTest {
     workflowService.completeTask(aggregate, "task-93");
     userTransaction.rollback();
 
-    Thread.sleep(1500);
+    Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
     assertTrue(listener.getCompletedTasks().isEmpty(), "phase two must never run after a rollback");
 
     awareness.answerWith(WorkflowAwareness.UNKNOWN_TO_BPMS);

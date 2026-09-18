@@ -81,8 +81,7 @@ public class OutboxRecoveryTest {
       // wait for the (failing) immediate post-commit dispatch, so the entry's next
       // attempt is scheduled before the context is closed
       listener.awaitInvocations(1, 10000);
-      // give the outbox time to persist the failed attempt before "crashing"
-      Thread.sleep(1000);
+      FailedAttempts.awaitWrittenDown(context, 1);
     }
 
     // second context: the initial poll on startup has to recover the entry
@@ -133,7 +132,9 @@ public class OutboxRecoveryTest {
         listener.awaitInvocations(1, 10000);
         transactionTemplate.executeWithoutResult(status -> processService
             .completeTask(attachedAggregate, "task-recovered"));
-        Thread.sleep(1000);
+        // both the start and the completion have to carry their failed attempt before
+        // the context goes away, otherwise this is a test of something else
+        FailedAttempts.awaitWrittenDown(context, 2);
       }
 
       // second context: BOTH the old (START_WORKFLOW) and the new (COMPLETE_TASK)
