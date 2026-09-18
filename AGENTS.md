@@ -5,14 +5,32 @@ is implemented in `migration-adapter` and reaches both platforms from there.
 
 Read [`README.md`](./README.md) first: it says which module a change belongs in, which SPI it may
 touch, and how to build. [`CONTRIBUTING.md`](./CONTRIBUTING.md) carries the one rule which is easy
-to lose sight of while writing code, and [`UPGRADE.md`](./UPGRADE.md) records every breaking change
-with its reasoning.
+to lose sight of while writing code, and [`UPGRADE.md`](./UPGRADE.md) says what an application
+upgrading from VanillaBP 1 has to do.
 
 Changing the adapter SPI touches a second document:
 [`migration-adapter/ADAPTER-AUTHORS.md`](./migration-adapter/ADAPTER-AUTHORS.md) is what an adapter
 team outside this workspace implements against. It is the guide such a team is handed, so a change
 to what an adapter implements, calls back or promises is not finished until that document says the
 new thing.
+
+## What belongs in `UPGRADE.md`
+
+[`UPGRADE.md`](./UPGRADE.md) describes the step from VanillaBP 1 to the 2.0 release and nothing
+else. An entry is owed where a version-1 application behaves differently or has to change
+something. A change between two snapshots of 2.0 earns no entry, however much work it was: it would
+ask the reader to follow how the release was built instead of carrying out their own upgrade, and
+git holds that history anyway.
+
+What does not go there still has a place. The end state of a new feature belongs in the wiki, which
+is where users read. A reasoning several places in this repository rely on belongs in
+[`DECISIONS.md`](./DECISIONS.md). What is neither belongs nowhere, and the commit message is where
+it is said.
+
+The file is organised per version line and then per topic, and no heading carries a date. Its
+user-facing half is the wiki page
+[Migrating from version 1](https://github.com/vanillabp/adapter-platform-integration/wiki/Migrating-from-version-1),
+which wins where the two disagree.
 
 ## The decision log is binding
 

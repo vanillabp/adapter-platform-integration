@@ -892,8 +892,9 @@ an older release still points at it.
 Name what your BPMS cannot do, in a `GAPS.md` or on a deviations page, and let the deployment fail
 where a missing capability would otherwise produce a workflow without an aggregate.
 
-`UPGRADE.md` records every breaking change with the reasoning behind it, so an application knows
-what a version bump costs.
+`UPGRADE.md` says what an application upgrading from VanillaBP 1 to your adapter's 2.0 has to do.
+A change between two snapshots earns no entry there: the end state of it belongs in your wiki, and a
+reasoning several places rely on in your `DECISIONS.md`.
 
 Release lines are needed only where the client library you compile against decides the lowest BPMS
 version your build accepts. Camunda 8 is that case: the client is the minimum cluster version, so

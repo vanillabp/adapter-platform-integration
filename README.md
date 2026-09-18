@@ -28,7 +28,7 @@ It contains conceptual documentation as well as platform-specific details.
 
 The versions this release is built and tested against are Spring Boot **4.1.0**, Quarkus **3.37.1** and Java **21**.
 Applications on a newer patch or minor of either platform are expected to work and are not tested here; a new major
-is an upgrade of VanillaBP itself, and `UPGRADE.md` says what it took. There are no release lines per platform
+is an upgrade of VanillaBP itself, and `UPGRADE.md` names the minimum an application needs. There are no release lines per platform
 version, unlike the
 [Camunda 8 adapter](https://github.com/camunda-community-hub/vanillabp-camunda8-adapter#release-lines), whose
 artifacts carry the cluster minor: Camunda 8 forces that because the client a build was compiled against is the
@@ -149,8 +149,9 @@ This repository contains the following VanillaBP functionality:
 ### Rules and decisions worth knowing before contributing
 
 These are the conventions the current implementation follows. Keeping to them is what makes a new feature reach all
-platforms at once — the details and their reasoning are in each module's `README.md` and in
-[`UPGRADE.md`](./UPGRADE.md), which records every breaking change and why it was made.
+platforms at once — the details and their reasoning are in each module's `README.md`.
+[`UPGRADE.md`](./UPGRADE.md) is a different thing: it says what an application upgrading from
+VanillaBP 1 has to do.
 They are not the citation targets of the code: what a comment points at is an entry of the
 [decision log](./DECISIONS.md).
 
