@@ -105,6 +105,10 @@ Top-level modules (by directory name) are:
    so a report between the two passes the build and still names a gap somebody owes a test for.
    It reports what it measured on every run, green ones included, and is the one test class in VanillaBP
    which prints while it passes (`@PrintsWhenPassing`).
+   The Quarkus number includes what runs in a forked application. A prod-mode test hands the JaCoCo agent to
+   the JVM it forks, and the class ids of that run match the class files the report analyses, so none of it
+   is dropped. This was measured in `camunda7-adapter` on 2026-09-18. The javadoc of `TestCoverageUtils` has
+   the numbers and names the one case where Quarkus does change a class id.
 6. **test-utils:**<br>
    A small module providing utilities used by tests across all platforms.
 7. **bpms-double:**<br>

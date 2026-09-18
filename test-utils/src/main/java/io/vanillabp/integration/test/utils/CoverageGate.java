@@ -23,6 +23,10 @@ import java.util.stream.Stream;
  * That is why {@link #modulesMissingFromAggregates} comes first - a threshold checked
  * against an incomplete aggregate fails builds for coverage which exists and is only
  * not counted, and no test can fix that.
+ * <p>
+ * The aggregate was doubted a second time, over what a Quarkus prod-mode test in a
+ * forked JVM contributes. That one was measured and refuted, and the numbers are in the
+ * javadoc of {@link TestCoverageUtils}.
  */
 public final class CoverageGate {
 
