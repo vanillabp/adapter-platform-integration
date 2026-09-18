@@ -28,10 +28,10 @@ import io.vanillabp.integration.utils.SpringDataUtil;
 import io.vanillabp.integration.utils.config.JpaSpringDataUtilConfiguration;
 import io.vanillabp.integration.utils.impl.JpaSpringDataUtil;
 
+@ExtendWith(SuppressOutputExtension.class)
 @DataJpaTest
 @ContextConfiguration(classes = JpaSpringDataUtilTest.JpaTestBootConfiguration.class)
 @ImportAutoConfiguration(JpaSpringDataUtilConfiguration.class)
-@ExtendWith(SuppressOutputExtension.class)
 class JpaSpringDataUtilTest {
 
   @EnableAutoConfiguration

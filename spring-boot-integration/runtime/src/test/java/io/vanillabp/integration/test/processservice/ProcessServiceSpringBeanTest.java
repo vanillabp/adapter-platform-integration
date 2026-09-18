@@ -25,8 +25,8 @@ import io.vanillabp.integration.processservice.ProcessServiceSpringBean;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
-@ExtendWith(MockitoExtension.class)
 @ExtendWith(SuppressOutputExtension.class)
+@ExtendWith(MockitoExtension.class)
 public class ProcessServiceSpringBeanTest {
 
   /**

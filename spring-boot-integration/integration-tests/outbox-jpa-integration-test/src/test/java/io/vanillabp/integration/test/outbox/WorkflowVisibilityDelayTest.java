@@ -33,9 +33,9 @@ import io.vanillabp.spi.process.WorkflowNotFoundException;
  * of holding its thread. A workflow nobody ever started has no such record and
  * still fails immediately, inside the call.
  */
-@SpringBootTest(classes = TestApplication.class)
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
+@SpringBootTest(classes = TestApplication.class)
 public class WorkflowVisibilityDelayTest {
 
   @Autowired

@@ -23,6 +23,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * suppress or hijack) any {@link TaskScheduler} bean even with the outbox on the
  * classpath.
  */
+@ExtendWith(SuppressOutputExtension.class)
+@SuppressOutputExtension.SuppressBackgroundOutput
 @SpringBootTest(
     classes = {
         TestApplication.class, EnableSchedulingRegressionTest.SchedulingConfiguration.class
@@ -30,8 +32,6 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
     // own H2 database: this context's outbox poller must not steal dispatches from
     // the entries written by the other test contexts sharing the default database
     properties = "spring.datasource.url=jdbc:h2:mem:outbox-scheduling-it;DB_CLOSE_DELAY=-1")
-@ExtendWith(SuppressOutputExtension.class)
-@SuppressOutputExtension.SuppressBackgroundOutput
 public class EnableSchedulingRegressionTest {
 
   @Configuration

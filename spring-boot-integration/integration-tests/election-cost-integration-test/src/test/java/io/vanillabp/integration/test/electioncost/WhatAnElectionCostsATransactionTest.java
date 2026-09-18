@@ -46,8 +46,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * numbers for the window a Camunda 8 adapter really reports are in
  * {@code migration-adapter/README.md}, from a run with ten seconds.
  */
-@SpringBootTest(classes = TestApplication.class)
 @ExtendWith(SuppressOutputExtension.class)
+@SpringBootTest(classes = TestApplication.class)
 public class WhatAnElectionCostsATransactionTest {
 
   private static final String MODULE = "election-cost-module";

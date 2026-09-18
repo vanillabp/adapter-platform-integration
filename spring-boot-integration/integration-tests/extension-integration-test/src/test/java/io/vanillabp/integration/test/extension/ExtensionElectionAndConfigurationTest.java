@@ -24,8 +24,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * The other things an extension gets: which BPMS holds a workflow right now, a place of
  * its own in the configuration, and the log it reads what a workflow is waiting for from.
  */
-@SpringBootTest(classes = TestApplication.class)
 @ExtendWith(SuppressOutputExtension.class)
+@SpringBootTest(classes = TestApplication.class)
 public class ExtensionElectionAndConfigurationTest {
 
   private static final String MODULE = "extension-module";

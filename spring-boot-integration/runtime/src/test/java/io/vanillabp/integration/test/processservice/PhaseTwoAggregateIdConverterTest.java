@@ -32,8 +32,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * {@code null}) have the serialized String passed through instead of blocking the
  * outbox entry permanently; an ID type known to not round-trip fails at startup.
  */
-@ExtendWith(MockitoExtension.class)
 @ExtendWith(SuppressOutputExtension.class)
+@ExtendWith(MockitoExtension.class)
 public class PhaseTwoAggregateIdConverterTest {
 
   @Mock

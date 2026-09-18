@@ -26,6 +26,7 @@ import org.testcontainers.utility.DockerImageName;
 
 import com.mongodb.ConnectionString;
 
+import io.vanillabp.integration.test.utils.ContainerImages;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.ProcessService;
 
@@ -52,7 +53,7 @@ public class MongoOutboxSleepsWhileNothingIsDueTest {
   private static final String OUTBOX_COLLECTION = "vanillabp-phase-two-outbox";
 
   @Container
-  static MongoDBContainer mongoDb = new MongoDBContainer(DockerImageName.parse("mongo:5.0"))
+  static MongoDBContainer mongoDb = new MongoDBContainer(DockerImageName.parse(ContainerImages.MONGODB))
       // MongoDB transactions require a replica set
       .withReplicaSet()
       .waitingFor(Wait.forLogMessage(".*Waiting for connections.*", 1))

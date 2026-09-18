@@ -22,9 +22,9 @@ import io.vanillabp.spi.process.ProcessService;
  * has no API for its backlog, so the number is read off its own table - which is why
  * this test runs against the real store rather than a double.
  */
-@SpringBootTest(classes = TestApplication.class)
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
+@SpringBootTest(classes = TestApplication.class)
 public class OutboxMetricsTest {
 
   @Autowired

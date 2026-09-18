@@ -52,8 +52,8 @@ import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
-@ExtendWith(MockitoExtension.class)
 @ExtendWith(SuppressOutputExtension.class)
+@ExtendWith(MockitoExtension.class)
 public class DeploymentServiceTest {
 
   private ListAppender<ILoggingEvent> logWatcher;

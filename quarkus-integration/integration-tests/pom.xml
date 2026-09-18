@@ -47,9 +47,22 @@
 
   <build>
     <plugins>
-      <!-- run integration tests in every sub-module -->
+      <!-- run integration tests in every sub-module. The goals have to be named: a
+           plugin declared without executions binds nothing to a phase, and Surefire
+           skips '*IT' classes, so such a class reads like a test and runs in no build
+           at all. This declaration had no goals until 2026-09-18 and the two '*IT'
+           classes below it had never run. The same shape is in schema/pom.xml and in
+           the Spring Boot integration tests. -->
       <plugin>
         <artifactId>maven-failsafe-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>

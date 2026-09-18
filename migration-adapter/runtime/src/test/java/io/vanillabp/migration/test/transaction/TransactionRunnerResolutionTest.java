@@ -32,8 +32,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * Which transaction the work on a workflow aggregate runs in, and
  * what the startup check makes of what the platform reports about it.
  */
-@ExtendWith(MockitoExtension.class)
 @ExtendWith(SuppressOutputExtension.class)
+@ExtendWith(MockitoExtension.class)
 public class TransactionRunnerResolutionTest {
 
   @Mock

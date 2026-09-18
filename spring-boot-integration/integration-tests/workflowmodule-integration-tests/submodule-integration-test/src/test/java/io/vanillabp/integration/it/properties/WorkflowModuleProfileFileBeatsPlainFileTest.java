@@ -19,11 +19,11 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * its files below the application - <i>test-module-testprofile.yaml</i> beats
  * <i>test-module.yaml</i>, and both still lose against the application.
  */
+@ExtendWith(SuppressOutputExtension.class)
 @SpringBootTest(classes = {
     TestApplication.class, WorkflowModuleProfileFileBeatsPlainFileTest.BindWorkflowModuleProperties.class
 })
 @ActiveProfiles("testprofile")
-@ExtendWith(SuppressOutputExtension.class)
 public class WorkflowModuleProfileFileBeatsPlainFileTest {
 
   @Configuration

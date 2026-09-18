@@ -29,9 +29,9 @@ import io.vanillabp.spi.process.ProcessService;
  * and the one which used to retry such an entry fifty times. The Quarkus side has the
  * same test for the stores VanillaBP writes itself.
  */
-@SpringBootTest(classes = TestApplication.class)
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
+@SpringBootTest(classes = TestApplication.class)
 public class PermanentPhaseTwoFailureTest {
 
   /**

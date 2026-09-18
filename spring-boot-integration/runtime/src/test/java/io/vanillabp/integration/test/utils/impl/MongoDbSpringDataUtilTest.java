@@ -30,6 +30,7 @@ import org.testcontainers.utility.DockerImageName;
 import com.mongodb.ConnectionString;
 
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
+import io.vanillabp.integration.test.utils.ContainerImages;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.impl.jpa.BaseEntity;
 import io.vanillabp.integration.test.utils.impl.mongodb.DerivedEntity;
@@ -50,7 +51,7 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 class MongoDbSpringDataUtilTest {
 
   @Container
-  static MongoDBContainer mongoDb = new MongoDBContainer(DockerImageName.parse("mongo:5.0"))
+  static MongoDBContainer mongoDb = new MongoDBContainer(DockerImageName.parse(ContainerImages.MONGODB))
       //.withLogConsumer(frame -> System.out.println(frame.getUtf8String()))
       .waitingFor(Wait.forLogMessage(".*Waiting for connections.*", 1))
       .withExposedPorts(27017);

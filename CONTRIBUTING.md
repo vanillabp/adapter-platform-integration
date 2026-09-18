@@ -50,7 +50,17 @@ every compiler warning twice. [`README.md`](./README.md#building) says the same 
 around it, and the modules are described in the `README.md` of each module.
 
 Docker is needed for the tests which start a database in a container, MongoDB above all. The rest
-runs without it. A feature is proven by an acceptance test per platform, against the published
+runs without it. The version of such an image is pinned, so a run says what it ran against and a new
+release of the image cannot change a result overnight. The pins live in
+`ContainerImages` of [`test-utils`](./test-utils), one field per image, and a test reads the field
+instead of writing a version into its own source. MongoDB is `mongo:8.2` there. It is not 8.0,
+because 8.0 refuses to start on a Linux kernel 6.19 or newer
+([SERVER-121912](https://jira.mongodb.org/browse/SERVER-121912)), and the container then ends
+right after it started while the failing test says nothing about the reason. A machine which needs
+another version passes `-Dmongodb.image=mongo:7.0` and leaves the sources alone. The blueprints
+repository reads its images the same way.
+
+A feature is proven by an acceptance test per platform, against the published
 [BPMS double](./bpms-double), and coverage is measured separately per platform because a Spring test
 never covers Quarkus code. `test-coverage-report/coverage-gate` is the last module of the reactor and
 fails below 85 percent of covered instructions, while the rule is 90.

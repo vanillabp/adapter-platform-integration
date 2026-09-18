@@ -27,9 +27,9 @@ import io.vanillabp.spi.process.ProcessService;
  * Two transactions would have left the change of the failed attempt in the database, and
  * the next attempt would have reported on top of its own half-finished work.
  */
-@SpringBootTest(classes = TestApplication.class)
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
+@SpringBootTest(classes = TestApplication.class)
 public class AHandlersWriteRidesTheDispatchTest {
 
   /**

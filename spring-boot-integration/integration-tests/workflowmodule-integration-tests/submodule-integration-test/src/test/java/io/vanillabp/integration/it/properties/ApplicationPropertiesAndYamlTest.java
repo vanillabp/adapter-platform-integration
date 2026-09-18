@@ -18,8 +18,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * than {@code application.yaml}. For workflow module files, YAML has higher
  * priority than {@code .properties} (matching the Quarkus behavior).
  */
-@SpringBootTest(classes = TestApplication.class)
 @ExtendWith(SuppressOutputExtension.class)
+@SpringBootTest(classes = TestApplication.class)
 public class ApplicationPropertiesAndYamlTest {
 
   @Value("${test-module.test:-1}")

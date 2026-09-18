@@ -29,9 +29,9 @@ import io.vanillabp.spi.process.ProcessService;
  *   <li>a failing dispatch is retried.</li>
  * </ul>
  */
-@SpringBootTest(classes = TestApplication.class)
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
+@SpringBootTest(classes = TestApplication.class)
 public class OutboxDispatchTest {
 
   private static final String COUNT_OUTBOX_ENTRIES = "select count(*) from TXNO_OUTBOX";

@@ -14,8 +14,8 @@ import io.vanillabp.integration.test.sample.Aggregate;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.ProcessService;
 
-@SpringBootTest(classes = TestApplication.class)
 @ExtendWith(SuppressOutputExtension.class)
+@SpringBootTest(classes = TestApplication.class)
 public class MultipleWorkflowServicesTest {
 
   @Autowired

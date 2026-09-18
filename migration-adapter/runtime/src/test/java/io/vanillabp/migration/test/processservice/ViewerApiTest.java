@@ -45,8 +45,8 @@ import io.vanillabp.spi.process.WorkflowNotFoundException;
  * holding the workflow, namespacing the adapter-native process definition ids and
  * the guiding errors of the two SPI exceptions.
  */
-@ExtendWith(MockitoExtension.class)
 @ExtendWith(SuppressOutputExtension.class)
+@ExtendWith(MockitoExtension.class)
 public class ViewerApiTest {
 
   /**

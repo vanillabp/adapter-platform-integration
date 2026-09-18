@@ -25,8 +25,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * Two methods for one element are told apart by the versions they name, and an element
  * nobody serves in that version answers with nothing.
  */
-@SpringBootTest(classes = TestApplication.class)
 @ExtendWith(SuppressOutputExtension.class)
+@SpringBootTest(classes = TestApplication.class)
 public class ExtensionHandlerVersionsTest {
 
   private static final String ELEMENT = "Activity_TwoGenerations";
