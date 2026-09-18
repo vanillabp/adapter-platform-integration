@@ -257,10 +257,11 @@ Three things, and each one is there for a reason that was measured:
    by its level reaches no handler, so it never reaches the capture either, and a failing
    class then replays nothing worth reading.
 3. `redirectTestOutputToFile`, because the tests of these modules boot their application IN
-   the test JVM and Quarkus logs that boot into a log context of its own. It happens in the
-   Quarkus extension's `beforeAll`, after ours and before our first `beforeEach`, so nothing
-   captures it: 311 lines in a green run of `deployment-integration-tests` without the
-   redirection.
+   the test JVM and Quarkus logs that boot into a log context of its own, which the capture
+   never sees: 311 lines in a green run of `deployment-integration-tests` without the
+   redirection. The boot runs in the Quarkus extension's `beforeAll`, after ours and before
+   our first `beforeEach`. What is written to `System.out` in that window is kept now and
+   replayed in front of a failing test, but those lines are not written there.
 
 The price of the third one is that the replay of a failing class lands in
 `target/failsafe-reports/<class>-output.txt` and Surefire prints only its last line. The
@@ -288,6 +289,39 @@ initializer which starts a container is the case in the Camunda 8 adapter, and o
 configuration reaches that. `JbossLogManagerCaptureTest` in
 `integration-tests/deployment-integration-tests` holds the mechanism; removing the
 redirection makes it fail with the marker printed to the console.
+
+### Ports during tests
+
+Every test which boots a Quarkus application binds `quarkus.http.test-port`, and the
+default of that key is 8081. Two builds on one machine therefore fight over one port, and
+the one which starts second dies:
+
+```
+io.quarkus.runtime.QuarkusBindException: Port already bound: 8081: Address already in use
+```
+
+That happened twice on 2026-09-17, while two agents built the platform at the same time.
+The class which died was whichever started while the other build held the port, so the
+error reads like a defect of whichever build was unlucky. A CI runner builds alone, which
+is why nothing there shows it.
+
+The Surefire and Failsafe configuration in `quarkus-integration/pom.xml` therefore sets the
+key to `0` for every module below it. Zero means the operating system picks a free port, so
+no test ever asks for one which is taken. Do not write a port number into a test
+application's `application.yaml` and do not override the key on a `QuarkusExtensionTest`. A
+number written anywhere brings the clash back, and `HttpTestPortIsFreeTest` in
+`integration-tests/deployment-integration-tests` fails when the setting is gone from the
+build.
+
+A test which has to know the port does not need to pin one. Quarkus writes the port it
+really bound back into `quarkus.http.test-port` once the application listens, and sets up
+RestAssured from it. The dev-mode tests in `integration-tests/main-integration-test` call
+their endpoints that way, with a port no file names.
+
+A `QuarkusProdModeTest` is the one case the property does not reach, because it forks its
+application and passes `quarkus.http.port` instead. Those tests take their port from
+`FreePortUtil`, which picks one free port per test JVM. `MultipleWorkflowServicesTest` in
+`integration-tests/workflowmodule-integration-tests` is the example.
 
 ## The store of processed task deliveries
 

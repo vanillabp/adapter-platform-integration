@@ -46,6 +46,8 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
   private ByteArrayOutputStream classLevelOutBuffer;
   private ByteArrayOutputStream classLevelErrBuffer;
   private CapturedOutput capturedOutput;
+  private boolean theFirstTestHasBegun;
+  private String outputBeforeTheFirstTest;
 
   @Override
   public void beforeAll(
@@ -55,6 +57,8 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
     classLevelAllBuffer = new ByteArrayOutputStream();
     classLevelOutBuffer = new ByteArrayOutputStream();
     classLevelErrBuffer = new ByteArrayOutputStream();
+    theFirstTestHasBegun = false;
+    outputBeforeTheFirstTest = null;
     readAnnotations(context);
     startCapture(context);
 
@@ -94,7 +98,36 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
   public void beforeEach(
       final ExtensionContext context) {
 
+    keepWhatWasPrintedBeforeTheFirstTest();
     startCapture(context);
+
+  }
+
+  /**
+   * Takes the output of the window between beforeAll and the first test out of the
+   * buffer the next test is about to replace.
+   * <p>
+   * A {@code @SpringBootTest} starts its application context in that window, and the
+   * lines it writes there often say why a test of the class went red. They used to be
+   * dropped, because each test starts with fresh buffers. They now go into the buffers
+   * of the class, so {@link CapturedOutput} shows them, and they are replayed in front
+   * of every failing test of the class.
+   * <p>
+   * Registering the extension per test method leaves the class buffers unused, so there
+   * is no such window and nothing to keep.
+   */
+  private void keepWhatWasPrintedBeforeTheFirstTest() {
+
+    if (theFirstTestHasBegun) {
+      return;
+    }
+    theFirstTestHasBegun = true;
+    if (allBuffer == null) {
+      return;
+    }
+    outputBeforeTheFirstTest = allBuffer.toString();
+    carryOverToClassLevelBuffers();
+    resetTestLevelBuffers();
 
   }
 
@@ -167,27 +200,66 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
       final ExtensionContext context,
       final boolean classLevel) {
 
-    // Append to class level buffers before potentially resetting
-    if (classLevelAllBuffer != null && allBuffer != null) {
-      try {
-        classLevelAllBuffer.write(allBuffer.toByteArray());
-        classLevelOutBuffer.write(outBuffer.toByteArray());
-        classLevelErrBuffer.write(errBuffer.toByteArray());
-      } catch (Exception e) {
-        // Ignore
-      }
-    }
+    carryOverToClassLevelBuffers();
 
     if (context.getExecutionException().isPresent()) {
       final var console = consoleBehind(originalOut);
       if (classLevel) {
+        // beforeAll or afterAll went wrong, which belongs to no single test: everything
+        // the class printed is a candidate for the reason
         console.println("---- Captured Output (class level) ----");
+        console.println(classLevelAllBuffer.toString());
       } else {
         console.println("----------- Captured Output -----------");
+        replayWhatWasPrintedBeforeTheFirstTest(console);
+        console.println(allBuffer.toString());
       }
-      console.println(allBuffer.toString());
       console.println("---------------------------------------");
     }
+
+    if (!classLevel) {
+      // what a test printed is kept by the class buffers now, and whatever is printed
+      // after the last test must not repeat the last test
+      resetTestLevelBuffers();
+    }
+
+  }
+
+  private void replayWhatWasPrintedBeforeTheFirstTest(
+      final PrintStream console) {
+
+    if ((outputBeforeTheFirstTest == null) || outputBeforeTheFirstTest.isEmpty()) {
+      return;
+    }
+    console.println("--- printed before the first test of this class ---");
+    console.println(outputBeforeTheFirstTest);
+    console.println("--- printed while this test ran ---");
+
+  }
+
+  private void carryOverToClassLevelBuffers() {
+
+    if ((classLevelAllBuffer == null) || (allBuffer == null)) {
+      return;
+    }
+    try {
+      classLevelAllBuffer.write(allBuffer.toByteArray());
+      classLevelOutBuffer.write(outBuffer.toByteArray());
+      classLevelErrBuffer.write(errBuffer.toByteArray());
+    } catch (Exception e) {
+      // Ignore
+    }
+
+  }
+
+  private void resetTestLevelBuffers() {
+
+    if (allBuffer == null) {
+      return;
+    }
+    allBuffer.reset();
+    outBuffer.reset();
+    errBuffer.reset();
 
   }
 
