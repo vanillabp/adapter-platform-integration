@@ -43,4 +43,14 @@
       <version>${project.version}</version>
     </dependency>
   </dependencies>
+
+  <build>
+    <resources>
+      <!-- 'extension-dummy.properties' carries the versions into the JAR -->
+      <resource>
+        <filtering>true</filtering>
+        <directory>src/main/resources</directory>
+      </resource>
+    </resources>
+  </build>
 </project>

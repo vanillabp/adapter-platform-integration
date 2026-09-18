@@ -11,11 +11,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiFunction;
+import java.util.stream.Stream;
 
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
+import io.vanillabp.integration.spi.parts.PartKind;
+import io.vanillabp.integration.spi.parts.VanillaBpParts;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
@@ -198,6 +201,10 @@ public class DeploymentService {
   public <PC> void deployResources(
       final List<String> workflowModuleIds,
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader) {
+
+    // artifacts of several release cycles meet in one application, and a pair which was
+    // never built together has to be found before anything runs
+    checkPartsBelongTogether();
 
     // several ids of one adapter type only make sense if they address DIFFERENT
     // systems - which the ADAPTER decides
@@ -423,6 +430,56 @@ public class DeploymentService {
                       .map(AdapterDeploymentService::getAdapterId)
                       .toList());
     });
+
+  }
+
+  /**
+   * Judges every adapter and every extension against the platform integration they run
+   * on, and ends the boot of an application whose parts do not belong together. The rule
+   * and the messages are {@link VanillaBpParts}, which is also what an adapter calls for
+   * itself; what the rule is and why is decision 71 in the repository's
+   * <code>DECISIONS.md</code>.
+   * <p>
+   * Every part is judged before the first one is reported, so a developer who put two
+   * things wrong learns both in one boot instead of one per restart.
+   * <p>
+   * An extension is only judged if it names itself
+   * ({@link ExtensionWiringService#getExtensionName()}). An extension which does not is
+   * left alone: the only thing the boot could say about it is the name of a class, and
+   * the application developer reading the log cannot do anything with that.
+   */
+  private void checkPartsBelongTogether() {
+
+    final var reasonsNotToBoot = new LinkedList<String>();
+
+    Stream
+        .concat(
+            deploymentServices
+                .stream()
+                .map(adapter -> VanillaBpParts.judge(
+                    PartKind.ADAPTER,
+                    adapter.getAdapterType(),
+                    adapter.getClass())),
+            wiringServices
+                .stream()
+                .filter(extension -> extension.getExtensionName() != null)
+                .map(extension -> VanillaBpParts.judge(
+                    PartKind.EXTENSION,
+                    extension.getExtensionName(),
+                    extension.getClass())))
+        .flatMap(Optional::stream)
+        .forEach(verdict -> {
+          if (verdict.stopsTheBoot()) {
+            reasonsNotToBoot.add(verdict.message());
+          } else {
+            log.warn(verdict.message());
+          }
+        });
+
+    if (!reasonsNotToBoot.isEmpty()) {
+      throw new IllegalStateException(String.join(System.lineSeparator() + System.lineSeparator(),
+          reasonsNotToBoot));
+    }
 
   }
 
