@@ -2335,3 +2335,38 @@ key from the aggregate's id as well". A version-1 instance on Camunda 7 carries 
 no variable, and the rule reads that as silence rather than as conflict. Version 1 on Camunda 8
 had no business key at all. So no workflow which ran under version 1 becomes a refusal here, on
 either engine.
+
+### 70. On Camunda 7 the business key is the only name, so nothing there can disagree
+
+Decision 69 gave the adapter SPI a channel for a business key and a check which refuses a key
+saying something other than the workflow aggregate's id. Reading the adapters afterwards showed
+that the check cannot reach Camunda 7 at all, and that this is right rather than a gap.
+
+Camunda 7 keeps one name and VanillaBP uses it. `Camunda7ProcessService` writes the aggregate's id
+into the business key at the start, and `Camunda7WorkflowTaskBehavior`, `Camunda7UserTaskEventListener`
+and `Camunda7TaskELResolver` read that same key back as `getWorkflowAggregateId()`. The adapter
+writes no separate variable for the id either: `sharedValues` carries the attributes the sync model
+shares and nothing else. So the key is not a second claim about the instance, it IS the id, and
+`getBusinessKey()` stays at its default of `null` there. The check sees an empty key and returns,
+which is what it should do.
+
+What follows is where the case goes instead. A workflow somebody started past VanillaBP on
+Camunda 7 carries the key that somebody chose, VanillaBP reads it as an aggregate's id, and there
+is no aggregate of that name. That is the same shape as a start the engine performs on its own,
+and it is decided by the rule Stephan set for it: an own start is recognised by the fact that the
+id has no aggregate. Camunda 7 therefore needs no work for decision 69, and the foreign-start case
+belongs to that rule and to the story which builds it.
+
+One risk stays and is accepted with open eyes. A key somebody chose which happens to look like an
+id an aggregate already has is attached to that workflow without a word. A key comparison would
+have caught it, and on Camunda 7 nothing can, because catching it needs two values and there is
+one. Giving Camunda 7 a second value, an aggregate-id variable next to the key, was weighed and
+dropped: it is a new promise rather than a repair, it costs a variable at every sync point, it
+departs from what version 1 did, and it would only report earlier what the missing aggregate
+reports anyway.
+
+Where the check does work is a BPMS which keeps both. Camunda 8 has a `businessId` on an instance
+from cluster 8.10 on and carries the aggregate's id in a process variable, so both values exist
+there and the comparison has something to do. The adapter reports neither today, on any line, so
+the check is dormant until the line built against 8.10 reports the value. The wiki says so on both
+sides rather than describing the end state as if it were here.
