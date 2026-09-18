@@ -2,6 +2,7 @@ package io.vanillabp.integration.adapter.migration.processservice;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -91,33 +92,68 @@ public final class AggregateIdRoundTrip {
     if ((serializedAggregateId == null) || (aggregateIdType == null)) {
       return serializedAggregateId;
     }
-    try {
-      return switch (aggregateIdType.getName()) {
-        case "java.lang.String" -> serializedAggregateId;
-        case "java.lang.Long", "long" -> Long.valueOf(serializedAggregateId);
-        case "java.lang.Integer", "int" -> Integer.valueOf(serializedAggregateId);
-        case "java.lang.Short", "short" -> Short.valueOf(serializedAggregateId);
-        case "java.lang.Byte", "byte" -> Byte.valueOf(serializedAggregateId);
-        case "java.lang.Double", "double" -> Double.valueOf(serializedAggregateId);
-        case "java.lang.Float", "float" -> Float.valueOf(serializedAggregateId);
-        case "java.lang.Boolean", "boolean" -> Boolean.valueOf(serializedAggregateId);
-        case "java.math.BigInteger" -> new BigInteger(serializedAggregateId);
-        case "java.math.BigDecimal" -> new BigDecimal(serializedAggregateId);
-        case "java.util.UUID" -> UUID.fromString(serializedAggregateId);
-        default -> {
-          log.debug(
-              "Unsupported workflow-aggregate ID type '{}' - passing the serialized ID through as a string",
-              aggregateIdType.getName());
-          yield serializedAggregateId;
-        }
-      };
-    } catch (IllegalArgumentException e) {
+    final var converted = convertIfItFits(serializedAggregateId, aggregateIdType);
+    if (converted.isPresent()) {
+      return converted.get();
+    }
+    if (SUPPORTED_ID_TYPES.contains(aggregateIdType.getName())) {
       log.warn(
           "Could not convert workflow-aggregate ID '{}' to type '{}' - passing it through as a string!",
           serializedAggregateId,
-          aggregateIdType.getName(),
-          e);
-      return serializedAggregateId;
+          aggregateIdType.getName());
+    } else {
+      log.debug(
+          "Unsupported workflow-aggregate ID type '{}' - passing the serialized ID through as a string",
+          aggregateIdType.getName());
+    }
+    return serializedAggregateId;
+
+  }
+
+  /**
+   * Converts the serialized aggregate ID to the given target type, and answers EMPTY
+   * where the value does not fit that type - a text where a number or a UUID is
+   * expected, or a type this class does not know.
+   * <p>
+   * This is the answer a caller needs which has a string and a question rather than a
+   * string it already knows to be an ID: a business key somebody else chose is looked up
+   * as an aggregate's ID, and where it cannot be one, the lookup has to end with "there
+   * is none" instead of a failing query or an invented ID (see
+   * {@link io.vanillabp.integration.adapter.migration.workflowstart.BpmsInitiatedStartId}).
+   *
+   * @param serializedAggregateId The aggregate ID in serialized form
+   * @param aggregateIdType The type the aggregate ID should be converted to, or
+   *          <code>null</code> if the persistence layer owns the serialized form
+   * @return The converted ID, or {@link Optional#empty()} if the value cannot be one
+   */
+  public static Optional<Object> convertIfItFits(
+      final String serializedAggregateId,
+      final Class<?> aggregateIdType) {
+
+    if (serializedAggregateId == null) {
+      return Optional.empty();
+    }
+    if (aggregateIdType == null) {
+      // the persistence layer owns the serialized form, so the string is the ID
+      return Optional.of(serializedAggregateId);
+    }
+    try {
+      return switch (aggregateIdType.getName()) {
+        case "java.lang.String" -> Optional.of(serializedAggregateId);
+        case "java.lang.Long", "long" -> Optional.of(Long.valueOf(serializedAggregateId));
+        case "java.lang.Integer", "int" -> Optional.of(Integer.valueOf(serializedAggregateId));
+        case "java.lang.Short", "short" -> Optional.of(Short.valueOf(serializedAggregateId));
+        case "java.lang.Byte", "byte" -> Optional.of(Byte.valueOf(serializedAggregateId));
+        case "java.lang.Double", "double" -> Optional.of(Double.valueOf(serializedAggregateId));
+        case "java.lang.Float", "float" -> Optional.of(Float.valueOf(serializedAggregateId));
+        case "java.lang.Boolean", "boolean" -> Optional.of(Boolean.valueOf(serializedAggregateId));
+        case "java.math.BigInteger" -> Optional.of(new BigInteger(serializedAggregateId));
+        case "java.math.BigDecimal" -> Optional.of(new BigDecimal(serializedAggregateId));
+        case "java.util.UUID" -> Optional.of(UUID.fromString(serializedAggregateId));
+        default -> Optional.empty();
+      };
+    } catch (final IllegalArgumentException e) {
+      return Optional.empty();
     }
 
   }

@@ -11,6 +11,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.vanillabp.integration.adapter.migration.processservice.AggregateIdRoundTrip;
 import io.vanillabp.spi.service.BpmsStartTrigger;
 
 /**
@@ -20,7 +21,11 @@ import io.vanillabp.spi.service.BpmsStartTrigger;
  * <p>
  * <strong>What the BPMS itself identifies the start by wins.</strong> A remote BPMS
  * reports its process instance key, and using it as the aggregate's ID is what makes
- * a redelivered notification harmless: the aggregate is found, not built again.
+ * a redelivered notification harmless: the aggregate is found, not built again. An
+ * engine which keeps a business key reports the key the instance already carries, so a
+ * workflow somebody started past VanillaBP keeps the name it was started under. Either
+ * way the reported value is taken over only where it fits the type of the aggregate's ID
+ * attribute.
  * <p>
  * <strong>Otherwise a timer's ID is its trigger time.</strong> That is not cosmetic: a cyclic
  * timer firing the same instant twice - a retried listener job, an engine
@@ -95,21 +100,17 @@ final class BpmsInitiatedStartId {
 
   }
 
+  /**
+   * The identity the BPMS reports is a string, and the aggregate's ID attribute has a
+   * type of its own, so the two only meet where the string fits that type. Where it does
+   * not - a text against a numeric ID, a business key somebody chose against a UUID - the
+   * answer is empty and the caller falls back to the trigger rules.
+   */
   private static Optional<Object> ofNaturalIdentity(
       final String naturalIdentity,
       final Class<?> aggregateIdType) {
 
-    if ((aggregateIdType == null) || aggregateIdType.equals(String.class)) {
-      return Optional.of(naturalIdentity);
-    }
-    if (aggregateIdType.equals(Long.class) || aggregateIdType.equals(long.class)) {
-      try {
-        return Optional.of(Long.valueOf(naturalIdentity));
-      } catch (final NumberFormatException e) {
-        return Optional.empty();
-      }
-    }
-    return Optional.empty();
+    return AggregateIdRoundTrip.convertIfItFits(naturalIdentity, aggregateIdType);
 
   }
 

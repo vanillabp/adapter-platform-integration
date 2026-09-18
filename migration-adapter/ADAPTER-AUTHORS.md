@@ -574,6 +574,13 @@ method's name does not then contradict you. If your notification can repeat afte
 committed, report a natural identity, because that is what keeps a repeated notification from
 building a second aggregate.
 
+Report one as well where your BPMS keeps a business key and that key is where the workflow
+aggregate's id lives. A key then says which aggregate the workflow means, not who started the
+workflow, so the core looks for an aggregate of that id: one which exists makes this the
+application's own start, and one which does not makes it a workflow somebody started past
+VanillaBP, which is built under the key it was started with. Your adapter learns which of the two
+it was from `BpmsInitiatedStartResult#created()`.
+
 ## 4. The promises a probe makes
 
 The election walks the prioritized adapters and stops at the first `ACTIVE`, so it is exactly as
