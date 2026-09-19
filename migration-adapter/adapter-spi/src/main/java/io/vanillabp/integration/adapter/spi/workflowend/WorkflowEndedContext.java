@@ -98,6 +98,46 @@ public interface WorkflowEndedContext {
 
 
   /**
+   * The BPMS' own id of the workflow which ended: the process instance key of Camunda 8,
+   * the process instance id of an embedded engine, whatever the BPMS talks about a running
+   * instance in. The same value and the same word as
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext#getWorkflowId()},
+   * which is what the core wrote into the record of every task of that workflow.
+   *
+   * <h4>What naming it buys</h4>
+   *
+   * The core reads the tasks it still believes are open in that workflow and reports every
+   * one of them to the application as
+   * {@link io.vanillabp.spi.service.TaskEvent.Event#CANCELED}, before it calls
+   * <code>&#64;WorkflowEnded</code>. A workflow which ended has nothing open any more, so
+   * this is knowledge rather than a guess - and on a BPMS which cannot say per element what
+   * it took away, it is the only way the application hears about those tasks at all.
+   * <p>
+   * The KIND of the end does not decide it. A terminate end event and an interrupting event
+   * subprocess end a Camunda 8 instance as {@link WorkflowEnd.Kind#COMPLETED} while both of
+   * them can take an open task away on the way out, so reading the kind first would skip
+   * exactly those. Why is decision 73 in the repository's DECISIONS.md.
+   *
+   * <h4>Which adapter leaves it empty on purpose</h4>
+   *
+   * An adapter whose BPMS cancels each element by itself. Camunda 7 fires an END execution
+   * listener per element, process termination included, so it delivers
+   * <code>CANCELED</code> out of the engine's own cancellation transaction - a derivation on
+   * top would report the same task twice. Such an adapter names no workflow here, and says
+   * so in its documentation.
+   * <p>
+   * The default is <code>null</code>, which derives nothing: an adapter written before this
+   * existed reports the end exactly as it does today.
+   *
+   * @return The workflow's id in the BPMS or <code>null</code>
+   */
+  default String getWorkflowId() {
+
+    return null;
+
+  }
+
+  /**
    * The business key the BPMS keeps for the ended workflow of its own accord, where the
    * BPMS has such a thing at all. The contract is the one of
    * {@link io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext#getBusinessKey()}:

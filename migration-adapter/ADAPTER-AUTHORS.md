@@ -575,6 +575,21 @@ Two more inbound notifications exist, and both are optional because not every BP
 them. `WorkflowEndedInvoker.workflowEnded(...)` reports that a workflow ended, as completed or as
 terminated; report the weaker fact rather than inventing the distinction where your BPMS cannot
 tell the two apart, and treat a missing aggregate as something to skip rather than an error.
+
+Name the workflow in that notification (`WorkflowEndedContext.getWorkflowId()`) and you get one
+thing for free: the core reads the tasks it still believes are open in that workflow and reports
+every one of them to the application as `TaskEvent.Event.CANCELED`, before `@WorkflowEnded` runs.
+That is the only way an application hears about those tasks on a BPMS which cannot say per element
+what it took away. Use the same value you report in `TaskInvocationContext.getWorkflowId()`, since
+that is what the core wrote into the records.
+
+Leave it empty where your BPMS cancels each element by itself, and say so in your documentation.
+Camunda 7 fires an END execution listener per element, process termination included, so it
+delivers the cancellation out of the engine's own transaction and a derivation on top would report
+the same task twice. The kind of the end plays no part in this on either side: on Camunda 8 a
+terminate end event ends the instance as COMPLETED while taking an open task with it, so the core
+does not read the kind before it derives (decision 73).
+
 `BpmsInitiatedStartInvoker.startWorkflowByBpms(...)` reports a workflow your BPMS started on its
 own, through a timer, a signal or a conditional start event, and the core builds the aggregate for
 it. The id it derives comes from your `getNaturalIdentity()` first, then from `getStartInstant()`,

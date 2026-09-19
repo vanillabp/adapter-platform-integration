@@ -51,7 +51,8 @@ import java.util.Collection;
  * <b>What the core does on its own</b>, once the last adapter of a workflow module
  * finished deploying: {@link #validateNoUnwiredWorkflowTaskMethods(String)},
  * {@link #registerVersionsOfProcessesNobodyDeployed(String, String, java.util.function.BiFunction)},
- * {@link #resolveProcessVersions(String)}, {@link #reportExtensionHandlerWiring(String)}
+ * {@link #resolveProcessVersions(String)}, {@link #reportExtensionHandlerWiring(String)},
+ * {@link #reportWhatACancelationCannotCarry(String)}
  * and the report about the processes
  * {@link #bpmnProcessesWithoutWorkflowService(String)} names. All of them are module-level
  * and answered from what the application declared next to what the adapters wired, so the
@@ -155,6 +156,27 @@ public interface WorkflowTaskWiring {
    */
   void validateNoUnwiredWorkflowTaskMethods(
       String workflowModuleId);
+
+  /**
+   * Names the <code>&#64;WorkflowTask</code> methods which would be called with values
+   * missing where VanillaBP works a cancellation out for itself, so a developer reads it at
+   * the boot rather than in production.
+   * <p>
+   * A cancellation VanillaBP derives carries no job: the element is gone by the time
+   * anybody notices, so
+   * {@link TaskInvocationContext#getTaskParameter(String)} and
+   * {@link TaskInvocationContext#getMultiInstances()} have nothing to answer from. A method
+   * which binds neither is not affected and is not named. Called by the CORE once the module
+   * is deployed; an adapter must not call it.
+   * <p>
+   * The default does nothing, which keeps a test double of this SPI compiling.
+   *
+   * @param workflowModuleId The workflow module which finished deploying
+   */
+  default void reportWhatACancelationCannotCarry(
+      final String workflowModuleId) {
+
+  }
 
   /**
    * Writes what the handler methods of the extensions were wired to in this workflow

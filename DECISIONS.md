@@ -2441,3 +2441,31 @@ second write conflicts and the retry finds the filter no longer matching.
 A record which was closed before keeps the moment it was closed at, which is why the filter
 demands an absent closing moment. The age of an open task is measured against such a fixed moment
 elsewhere in the same record.
+
+### 73. The end of a workflow cancels what it was waiting for, whatever kind of end it was
+
+An adapter which names the workflow in its end notification lets the core derive a cancellation
+for every task it still believes is open in that workflow. The kind of the end does not decide
+whether it derives.
+
+The reason is measured. On Camunda 8 a terminate end event and an interrupting event subprocess
+end the instance as COMPLETED rather than as a cancellation, and both of them can take an open
+task away on the way out. Reading the kind first would skip exactly those two, which are the
+cases the derivation exists for.
+
+The price is a race. A task the application completed a few milliseconds ago is gone as well, so
+an end which arrives in the window between the dispatch of the completion and the mark on the
+record reads a completed task as canceled. The compare and set of `markTaskClosed` shrinks that
+window and does not close it. We take the race rather than a second index, because the outbox
+offers no read by task id and a task reported as canceled once too often is the smaller harm than
+a task the application never hears about.
+
+What decides is the workflow id, and that is the adapter's call. An adapter whose BPMS cancels
+each element by itself names none and nothing is derived for it: Camunda 7 fires an END execution
+listener per element, process termination included, so a derivation on top would report the same
+task twice. Camunda 8 fills it.
+
+A derived cancellation carries no job of the element, so a `@TaskParam` and a multi-instance value
+reach the method as `null`. The boot names the methods which really declare one, and says nothing
+about the rest. A value which is silently absent is what an application finds out in production;
+a warning on every derived delivery would be noise for the models nobody cancels.

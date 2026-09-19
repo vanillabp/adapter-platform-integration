@@ -27,6 +27,7 @@ import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring;
+import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.spi.TransactionRunner;
 
 /**
@@ -653,6 +654,75 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
   }
 
+  /**
+   * Says once per workflow module which <code>&#64;WorkflowTask</code> methods would be
+   * called with values missing where VanillaBP works a cancellation out for itself.
+   * <p>
+   * A derived cancellation carries no job of the element, because the element is gone by
+   * the time anybody notices it. So a <code>&#64;TaskParam</code> and a multi-instance value
+   * reach such a method as <code>null</code>, and a value which is silently absent is the
+   * kind of thing an application finds out in production. Only the methods which really
+   * declare one are named, and only those which asked for the event at all - a method
+   * without a <code>&#64;TaskEvent</code> parameter never sees a cancellation and has
+   * nothing to read here.
+   */
+  @Override
+  public void reportWhatACancelationCannotCarry(
+      final String workflowModuleId) {
+
+    final var affected = new java.util.LinkedHashMap<String, WorkflowTaskHandler>();
+    entries
+        .entrySet()
+        .stream()
+        .filter(entry -> entry.getKey().workflowModuleId().equals(workflowModuleId))
+        .forEach(entry -> entry
+            .getValue().handlers
+            .stream()
+            .filter(handler -> handler.acceptsEvent(io.vanillabp.spi.service.TaskEvent.Event.CANCELED))
+            .filter(handler -> !handler.getTaskParameters().isEmpty() || !handler
+                .getMultiInstanceElementNames()
+                .isEmpty())
+            .forEach(handler -> affected.putIfAbsent(handler.describe(), handler)));
+    if (affected.isEmpty()) {
+      return;
+    }
+    final var message = new StringBuilder(
+        ("These @WorkflowTask methods of workflow module '%s' subscribe to "
+            + "TaskEvent.Event.CANCELED and read values of the task they are called for. Where "
+            + "VanillaBP works the cancellation out itself - the workflow ended, or the BPMS does "
+            + "not have the task any more - the element is gone and those values reach the method "
+            + "as null:").formatted(workflowModuleId));
+    affected
+        .values()
+        .forEach(handler -> message.append(
+            ("%n  - method '%s' reads %s. Check for null there, or read what you need from the "
+                + "workflow aggregate, which a cancellation always carries.")
+                .formatted(handler.describe(), whatItReads(handler))));
+    log.info(message.toString());
+
+  }
+
+  /**
+   * What a method reads of the task it is called for, in the words of its annotations.
+   */
+  private static String whatItReads(
+      final WorkflowTaskHandler handler) {
+
+    final var reads = new java.util.LinkedList<String>();
+    if (!handler.getTaskParameters().isEmpty()) {
+      reads
+          .add("@TaskParam %s".formatted(String.join(", ", handler.getTaskParameters())));
+    }
+    if (!handler.getMultiInstanceElementNames().isEmpty()) {
+      reads
+          .add(
+              "the value of multi-instance element %s"
+                  .formatted(String.join(", ", handler.getMultiInstanceElementNames())));
+    }
+    return String.join(" and ", reads);
+
+  }
+
   @Override
   public void reportExtensionHandlerWiring(
       final String workflowModuleId) {
@@ -1114,8 +1184,60 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
                       .collect(Collectors.joining(", "))));
     }
 
+    // the tasks first, each in a transaction of its own, then the end: a workflow which
+    // ended has nothing open any more, so everything the application still believes is
+    // open in it is gone and is reported as canceled
+    reportTheTasksTheEndedWorkflowTookAway(workflowModuleId, entry, context);
+
     workflowEndedHandlers
         .workflowEnded(entry.processService, context, entry.processService.getTransactionRunner(transactionRunner));
+
+  }
+
+  /**
+   * Reports every task the core still believes is open in the ended workflow as
+   * {@link io.vanillabp.spi.service.TaskEvent.Event#CANCELED}, before the end itself is
+   * reported.
+   * <p>
+   * Only where the adapter named the workflow
+   * ({@link WorkflowEndedContext#getWorkflowId()}). An adapter which names none keeps
+   * behaving exactly as it did, which is what an adapter whose BPMS cancels each element by
+   * itself wants - Camunda 7 would otherwise report the same task twice.
+   * <p>
+   * A record of ANOTHER adapter is left alone. {@link TaskDelivery#adapterId()} says who
+   * delivered the task, so nothing has to be asked: during a migration one aggregate may
+   * carry work of two BPMS, and the end this adapter reports says nothing about the other
+   * one.
+   */
+  private void reportTheTasksTheEndedWorkflowTookAway(
+      final String workflowModuleId,
+      final RegistryEntry entry,
+      final WorkflowEndedContext context) {
+
+    final var workflowId = context.getWorkflowId();
+    if ((workflowId == null) || workflowId.isBlank()) {
+      return;
+    }
+    final var deliveryLog = entry.processService.resolveTaskDeliveryLog();
+    if (deliveryLog == null) {
+      return;
+    }
+    final var openRecords = deliveryLog
+        .openTasksOfWorkflow(workflowModuleId, workflowId)
+        .stream()
+        .filter(record -> (context.getAdapterId() == null) || context.getAdapterId().equals(record.adapterId()))
+        .toList();
+    if (openRecords.isEmpty()) {
+      return;
+    }
+    DerivedCancelations
+        .reportAsCanceled(
+            openRecords,
+            deliveryLog,
+            entry.processService.getTransactionRunner(transactionRunner),
+            workflowModuleId,
+            this,
+            "was still open when its workflow ended");
 
   }
 

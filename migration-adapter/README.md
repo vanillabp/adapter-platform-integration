@@ -1065,6 +1065,7 @@ classDiagram
     +getProcessVersion() String
     +runInCurrentTransaction() boolean
     +getAdapterId() String
+    +getWorkflowId() String  «default null · names the workflow, so its open tasks are canceled»
   }
   WorkflowTaskInvoker ..> TaskInvocationContext
   WorkflowTaskInvoker ..> WorkflowTaskOutcome
@@ -1873,10 +1874,10 @@ target instance holding three open tasks:
 
 | concurrently open tasks in the installation | read by aggregate, without an index over it | read by `WORKFLOW_ID`, with one |
 |--------------------------------------------:|--------------------------------------------:|--------------------------------:|
-|                                          503 |                                     0.107 ms |                        0.029 ms |
-|                                        5 003 |                                     0.490 ms |                        0.009 ms |
-|                                       50 003 |                                     4.582 ms |                        0.010 ms |
-|                                      500 003 |                                    49.975 ms |                        0.010 ms |
+|                                         503 |                                    0.107 ms |                        0.029 ms |
+|                                       5 003 |                                    0.490 ms |                        0.009 ms |
+|                                      50 003 |                                    4.582 ms |                        0.010 ms |
+|                                     500 003 |                                   49.975 ms |                        0.010 ms |
 
 The read by aggregate follows what the whole installation has open, because the index it uses
 says only what "open" means. The read by workflow does not move at all.
@@ -2550,6 +2551,43 @@ point is that nothing depends on it:
 
 `WorkflowEndedTest` holds all four bullets, `withoutAMethodNothingHappens` for the question
 asked while wiring and `aDeletedAggregateIsNoError` for the aggregate which is gone.
+
+#### A workflow which is gone cancels what it was waiting for
+
+Where the notification NAMES the workflow (`WorkflowEndedContext.getWorkflowId()`), the core
+reads the tasks it still believes are open in that workflow and reports every one of them to the
+application as `TaskEvent.Event.CANCELED`. Then `@WorkflowEnded` runs. A workflow which ended has
+nothing open any more, so this is knowledge rather than a guess.
+
+- The read is `TaskDeliveryLog.openTasksOfWorkflow`, which costs 0.01 ms with the index over
+  `WORKFLOW_ID`.
+- A record naming ANOTHER adapter is left alone. `TaskDelivery.adapterId()` says who delivered
+  the task, so nothing has to be asked: during a migration one aggregate may carry work of two
+  BPMS, and this end says nothing about the other one.
+- Each record is handled in a transaction of its own, and in that order: the record is CLAIMED
+  with `markTaskClosed`, and the delivery follows only where the claim took. That is what makes
+  two application instances safe, and it is decision 72. A handler which throws rolls its
+  transaction back, the claim goes with it, and the task is derived again the next time somebody
+  looks - at-least-once, like everything else here. The failure stays with that one record: the
+  end of the workflow is reported either way.
+- The KIND of the end does not decide it, which is decision 73. A terminate end event and an
+  interrupting event subprocess end a Camunda 8 instance as COMPLETED while taking an open task
+  with them, so reading the kind first would skip exactly those.
+- An adapter whose BPMS cancels each element by itself names no workflow here and nothing is
+  derived. Camunda 7 fires an END execution listener per element, process termination included,
+  so a derivation on top would report the same task twice.
+- A derived delivery carries no job of the element, so a `@TaskParam` and a multi-instance value
+  reach the method as `null`. The boot names the methods which really declare one
+  (`WorkflowTaskRegistry.reportWhatACancelationCannotCarry`) and says nothing about the rest.
+
+The race this accepts: a task the application completed a few milliseconds ago is gone as well,
+so an end arriving between the dispatch of that completion and the mark on its record reads a
+completed task as canceled. The compare and set shrinks that window and does not close it.
+
+`DerivedCancelationTest` holds it on both platforms: two open tasks reported oldest first with the
+end after them, an end naming no workflow deriving nothing, a record of another adapter left
+alone, a handler which throws leaving its record open, and the boot naming the method a derived
+cancellation cannot fill.
 
 ### Broadcasting signals
 

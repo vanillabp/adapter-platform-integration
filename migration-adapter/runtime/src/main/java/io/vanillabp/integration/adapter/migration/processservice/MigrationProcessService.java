@@ -856,6 +856,18 @@ public class MigrationProcessService<A> {
   }
 
   /**
+   * The store holding the delivery records of this workflow aggregate, resolved once and
+   * kept - what the derivation of a cancellation reads and claims in.
+   *
+   * @return The store or <code>null</code> where the application has none
+   */
+  public TaskDeliveryLog resolveTaskDeliveryLog() {
+
+    return deliveryRecords.resolveLog();
+
+  }
+
+  /**
    * Whether an ended workflow of this BPMN process releases the records of its processed
    * task deliveries (<code>vanillabp.delivery.release-on-workflow-end</code>, overridable
    * per workflow module). Asked by the end-of-workflow path, and by the adapters through
