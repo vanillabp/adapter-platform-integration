@@ -209,6 +209,25 @@ of the core's README has the numbers.
 `ExtensionElectionAndConfigurationTest#theElectionAnswersTheExtension` on Spring Boot and
 `ExtensionEnablementTest` on Quarkus run this against a booted application.
 
+`WorkflowElection#locationOfWorkflow` answers the same election as a `WorkflowLocation`: the
+adapter id and, next to it, the BPMS' own id of the workflow. Both stand in the same row -
+VanillaBP writes a record per task delivery which keeps the workflow id next to the adapter id -
+so you get the whole row instead of half of it. It runs exactly the election above and costs
+exactly the same.
+
+`null` as the workflow id is a regular answer: nothing VanillaBP holds knew one, because no
+delivery was recorded for that workflow or its record expired.
+
+What you may do with the id: write it into your own records, print it in a log line beside ours,
+and hand it back to VanillaBP later, which is what lets an adapter ask its engine by key instead
+of waiting for a read model. What you may not do: address the BPMS with it - the shape of that id
+belongs to the adapter, and sending commands to an engine behind the adapter's back is outside
+everything this platform promises - and read a non-null id as "this workflow is still running".
+The record is history, the election is the answer about now.
+
+`DerivedCancelationTest#theElectionCarriesTheWorkflowId` runs it against a booted application on
+both platforms.
+
 ## 4. Where your settings live
 
 Your settings are written at four levels, and each level has two positions: what the level says, and

@@ -31,6 +31,16 @@ public final class ExtensionWorkflowElection implements WorkflowElection {
       final String bpmnProcessId,
       final Object workflowAggregateId) {
 
+    return locationOfWorkflow(workflowModuleId, bpmnProcessId, workflowAggregateId).adapterId();
+
+  }
+
+  @Override
+  public io.vanillabp.integration.extension.spi.election.WorkflowLocation locationOfWorkflow(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Object workflowAggregateId) {
+
     final var processService = router.processServiceOf(workflowModuleId, bpmnProcessId);
     if (processService == null) {
       throw new IllegalStateException(
@@ -43,7 +53,7 @@ public final class ExtensionWorkflowElection implements WorkflowElection {
                   workflowModuleId,
                   String.join(", ", router.registeredWorkflows())));
     }
-    return processService.adapterIdOfWorkflow(workflowAggregateId);
+    return processService.locationOfWorkflow(workflowAggregateId);
 
   }
 

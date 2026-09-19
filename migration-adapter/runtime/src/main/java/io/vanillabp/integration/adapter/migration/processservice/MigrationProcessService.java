@@ -776,7 +776,8 @@ public class MigrationProcessService<A> {
 
     // a delivery proves which BPMS holds this workflow - recorded before anything
     // else, so it also holds for a delivery the handler does not subscribe to
-    rememberWorkflowAdapter(context.getWorkflowAggregateId(), context.getAdapterId());
+    rememberWorkflowAdapter(
+        context.getWorkflowAggregateId(), context.getAdapterId(), context.getWorkflowId());
 
     // lifecycle-event filter: a delivery of an event the method does not
     // subscribe to (e.g. CANCELED to a method without a @TaskEvent parameter) is
@@ -1096,6 +1097,23 @@ public class MigrationProcessService<A> {
       final String adapterId) {
 
     workflowLocator.remember(workflowAggregateId, adapterId);
+
+  }
+
+  /**
+   * The same, with the BPMS' own id of the workflow where the moment knew one. A delivery
+   * carries it, which is why the hint of a workflow VanillaBP ever heard from names both.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param adapterId The ID of the adapter holding the workflow or <code>null</code>
+   * @param workflowId The BPMS' own id of the workflow or <code>null</code>
+   */
+  public void rememberWorkflowAdapter(
+      final Object workflowAggregateId,
+      final String adapterId,
+      final String workflowId) {
+
+    workflowLocator.remember(workflowAggregateId, adapterId, workflowId);
 
   }
 
@@ -2078,12 +2096,36 @@ public class MigrationProcessService<A> {
   public String adapterIdOfWorkflow(
       final Object workflowAggregateId) {
 
+    return locationOfWorkflow(workflowAggregateId).adapterId();
+
+  }
+
+  /**
+   * The same election, answering the adapter id AND the BPMS' own id of the workflow - see
+   * {@link io.vanillabp.integration.extension.spi.election.WorkflowElection#locationOfWorkflow}.
+   * <p>
+   * Both values stand in the same place, so handing back only one of them and making the
+   * caller ask again would be the odd design. The id is read from what VanillaBP already
+   * holds and nothing new is asked of any BPMS for it: the record of a task delivery of
+   * that workflow first, then the election cache. A <code>null</code> id is a regular
+   * answer.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @return Where the workflow is
+   * @throws IllegalStateException If no configured BPMS knows the workflow, or if the
+   *           BPMS which should hold it is unreachable
+   */
+  public io.vanillabp.integration.extension.spi.election.WorkflowLocation locationOfWorkflow(
+      final Object workflowAggregateId) {
+
     final var subject = subjectOf(workflowAggregateId);
+    final var workflowId = workflowIdKnownFor(workflowAggregateId);
     final var location = workflowLocator
         .locate(
             adapterProcessServices,
             adapter -> adapter
-                .awarenessOfWorkflow(workflowScope(), aggregatePersistenceSupport, workflowAggregateId),
+                .awarenessOfWorkflow(
+                    workflowScope(), aggregatePersistenceSupport, workflowAggregateId, workflowId),
             workflowAggregateId,
             subject,
             WorkflowLocator.Patience.WAIT_FOR_VISIBILITY);
@@ -2104,9 +2146,36 @@ public class MigrationProcessService<A> {
                           .formatted(location.hintedAdapterId())
                       : ""));
     }
-    return location
-        .adapter()
-        .getAdapterId();
+    return new io.vanillabp.integration.extension.spi.election.WorkflowLocation(
+        location
+            .adapter()
+            .getAdapterId(), workflowId);
+
+  }
+
+  /**
+   * The BPMS' own id of the given workflow, as far as VanillaBP holds one - a hint handed
+   * to an adapter so it can ask its engine by key instead of searching a read model, and
+   * handed to an extension which asked where a workflow is.
+   * <p>
+   * Two sources, in this order. The record of a task delivery of that workflow is the first
+   * one: it is written per delivery, it survives a restart and it names the id the BPMS
+   * reported. The election cache is the second: it is free to read but bounded and
+   * expiring, so it knows less. Nothing new is asked of any BPMS.
+   * <p>
+   * <code>null</code> where neither knew one, which is what an adapter which reports no
+   * workflow id and a workflow nobody ever delivered anything for both look like.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @return The workflow's id in the BPMS or <code>null</code>
+   */
+  private String workflowIdKnownFor(
+      final Object workflowAggregateId) {
+
+    final var recorded = deliveryRecords.workflowIdOf(workflowAggregateId);
+    return recorded != null
+        ? recorded
+        : workflowLocator.rememberedWorkflowId(workflowAggregateId);
 
   }
 

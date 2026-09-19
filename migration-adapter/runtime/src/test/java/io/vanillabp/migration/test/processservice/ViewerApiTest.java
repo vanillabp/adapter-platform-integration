@@ -123,9 +123,10 @@ public class ViewerApiTest {
     final var processService = createProcessService();
     when(aggregatePersistence.getAggregateId(aggregate)).thenReturn("42");
     // the first adapter does not know the workflow, the second one runs it
-    when(firstAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42"))
+    when(firstAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42", null))
         .thenReturn(WorkflowAwareness.UNKNOWN_TO_BPMS);
-    when(secondAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42")).thenReturn(WorkflowAwareness.ACTIVE);
+    when(secondAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42", null))
+        .thenReturn(WorkflowAwareness.ACTIVE);
     when(secondAdapter.getProcessDefinitions(
         eq("test-module"), eq("TestProcess"), any(), eq("42"), eq(null)))
         .thenReturn(
@@ -150,7 +151,8 @@ public class ViewerApiTest {
 
     final var processService = createProcessService();
     when(aggregatePersistence.getAggregateId(aggregate)).thenReturn("42");
-    when(firstAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42")).thenReturn(WorkflowAwareness.COMPLETED);
+    when(firstAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42", null))
+        .thenReturn(WorkflowAwareness.COMPLETED);
     when(firstAdapter.getWorkflowHistory(
         eq("test-module"), eq("TestProcess"), any(), eq("42"), eq(null)))
         .thenReturn(
@@ -175,13 +177,13 @@ public class ViewerApiTest {
     processService.rememberWorkflowAdapter("42", "first-adapter");
     when(firstAdapter.workflowVisibilityDelay())
         .thenReturn(new WorkflowVisibilityDelay(Duration.ofSeconds(5), Duration.ofMillis(20)));
-    when(firstAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42"))
+    when(firstAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42", null))
         .thenReturn(WorkflowAwareness.UNKNOWN_TO_BPMS)
         .thenReturn(WorkflowAwareness.UNKNOWN_TO_BPMS)
         .thenReturn(WorkflowAwareness.ACTIVE);
     // a read which does not wait ends up here and fails - the answer this test is about
     lenient()
-        .when(secondAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42"))
+        .when(secondAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42", null))
         .thenReturn(WorkflowAwareness.UNKNOWN_TO_BPMS);
     when(firstAdapter.getWorkflowHistory(
         eq("test-module"), eq("TestProcess"), any(), eq("42"), eq(null)))
@@ -207,9 +209,9 @@ public class ViewerApiTest {
     lenient()
         .when(firstAdapter.workflowVisibilityDelay())
         .thenReturn(new WorkflowVisibilityDelay(Duration.ofMillis(100), Duration.ofMillis(20)));
-    when(firstAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42"))
+    when(firstAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42", null))
         .thenReturn(WorkflowAwareness.UNKNOWN_TO_BPMS);
-    when(secondAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42"))
+    when(secondAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42", null))
         .thenReturn(WorkflowAwareness.UNKNOWN_TO_BPMS);
 
     final var exception = assertThrowsExactly(
@@ -218,7 +220,7 @@ public class ViewerApiTest {
 
     // the hinted adapter was asked more than once: the read used up the window before
     // giving up, which is the difference to an adapter nobody expects anything from
-    verify(firstAdapter, atLeast(2)).awarenessOfWorkflow(SCOPE, aggregatePersistence, "42");
+    verify(firstAdapter, atLeast(2)).awarenessOfWorkflow(SCOPE, aggregatePersistence, "42", null);
     // an exporter which stopped looks exactly like one which is behind, so the message
     // says which adapter was expected to answer and that its window has passed
     assertTrue(exception.getMessage().contains("first-adapter"));
@@ -232,9 +234,9 @@ public class ViewerApiTest {
 
     final var processService = createProcessService();
     when(aggregatePersistence.getAggregateId(aggregate)).thenReturn("42");
-    when(firstAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42"))
+    when(firstAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42", null))
         .thenReturn(WorkflowAwareness.UNKNOWN_TO_BPMS);
-    when(secondAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42"))
+    when(secondAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42", null))
         .thenReturn(WorkflowAwareness.UNKNOWN_TO_BPMS);
 
     final var exception = assertThrowsExactly(
@@ -254,7 +256,8 @@ public class ViewerApiTest {
 
     final var processService = createProcessService();
     when(aggregatePersistence.getAggregateId(aggregate)).thenReturn("42");
-    when(firstAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42")).thenReturn(WorkflowAwareness.ACTIVE);
+    when(firstAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42", null))
+        .thenReturn(WorkflowAwareness.ACTIVE);
     when(firstAdapter.getWorkflowHistory(
         eq("test-module"), eq("TestProcess"), any(), eq("42"), eq("some-context")))
         .thenReturn(null);

@@ -45,6 +45,77 @@ public interface WorkflowAdapterCache {
       String workflowAggregateId);
 
   /**
+   * What a cache entry knows: which adapter held the workflow, and what that BPMS calls
+   * the workflow itself.
+   *
+   * @param adapterId The ID of the adapter which held the workflow at the time the entry
+   *          was put
+   * @param workflowId The BPMS' own id of the workflow, or <code>null</code> where nothing
+   *          knew it when the entry was written. It is a HINT like the adapter id: it may
+   *          be missing, and it says what was true then rather than what is true now
+   */
+  record Hint(
+              String adapterId,
+              String workflowId) {
+  }
+
+  /**
+   * Look up the whole entry of a workflow, which is {@link #get} plus the BPMS' own id of
+   * the workflow.
+   * <p>
+   * One call and not two, because both values sit in one entry and a shared cache charges a
+   * round trip per read. The default answers what {@link #get} answers and leaves the
+   * workflow id empty, which is what a cache written before this existed knows - a caller
+   * then behaves as it did before the id travelled at all.
+   *
+   * @param workflowModuleId The ID of the workflow module
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param workflowAggregateId The workflow-aggregate ID in serialized form
+   * @return The entry, or {@link Optional#empty()} if not cached (or expired)
+   */
+  default Optional<Hint> hintOf(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId) {
+
+    return get(workflowModuleId, bpmnProcessId, workflowAggregateId)
+        .map(adapterId -> new Hint(adapterId, null));
+
+  }
+
+  /**
+   * Store the adapter elected for a workflow together with the BPMS' own id of that
+   * workflow, where VanillaBP learned one. Everything
+   * {@link #put(String, String, String, String)} says holds here as well.
+   * <p>
+   * What the id is good for: the paths which WAIT for an eventually consistent BPMS hand it
+   * to the adapter, which can then ask its engine by key instead of searching its read
+   * model - measured on Camunda 8, the engine answers after about 20 ms while the search
+   * needs up to two seconds. An extension may also ask for it
+   * (<code>WorkflowElection</code>).
+   * <p>
+   * The default drops the id and stores the adapter alone, which is what every cache
+   * written before this method existed does.
+   *
+   * @param workflowModuleId The ID of the workflow module
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param workflowAggregateId The workflow-aggregate ID in serialized form
+   * @param adapterId The ID of the elected adapter
+   * @param workflowId The BPMS' own id of the workflow, or <code>null</code> where nobody
+   *          named one
+   */
+  default void put(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final String adapterId,
+      final String workflowId) {
+
+    put(workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId);
+
+  }
+
+  /**
    * Store the adapter elected for a workflow. Called after every successful
    * election (an adapter answered ACTIVE).
    *

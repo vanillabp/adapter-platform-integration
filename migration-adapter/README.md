@@ -544,6 +544,34 @@ key, so a workflow is started at most once per aggregate whichever of the two ca
 and the read path is `ViewerApiTest#readWaitsForAnEventuallyConsistentAdapterToCatchUp`
 together with `#readFailsAfterTheVisibilityWindowPassed`.
 
+### The election may carry the BPMS' own id of the workflow
+
+`MigratableProcessService.awarenessOfWorkflow` has a fourth argument, and the paths which WAIT
+pass it: the election an extension asks for, and the read of the viewer API. It is the BPMS' own
+id of the workflow, `null` where VanillaBP holds none.
+
+Why it is worth passing, measured on three Camunda 8 clusters in September 2026: the engine
+knows a new instance 16 to 19 ms after the create was sent, while the search which
+`awarenessOfWorkflow` uses finds it after 167 to 1324 ms. After a cancellation the engine says
+"gone" after 21 ms and the search needs 176 to 2068 ms to agree. So the engine answers far
+earlier than its index, and every command which asks it addresses a key.
+
+- An adapter may SHORTEN A YES with it: ask the engine by the key and answer `ACTIVE` without
+  waiting for the read model.
+- It may NOT turn a negative answer into `UNKNOWN_TO_BPMS`. An engine forgets a workflow the
+  moment it ends, so an unknown key does not tell `COMPLETED` from `UNKNOWN_TO_BPMS`, and only
+  the second of the two lets the election move on to the next BPMS. In a migration setup that
+  would send the next operation to the wrong BPMS.
+- The default drops the id and calls the three-argument question, so every adapter written
+  before this keeps compiling and behaving (`ElectionWithAWorkflowIdDefaultTest`).
+- Where the core takes the id from: the open delivery records of that aggregate first, then the
+  election cache, which keeps the id next to the adapter id since it learns both from every
+  delivery. Nothing new is asked of any BPMS for it.
+
+`WorkflowAdapterCache.hintOf` is what reads both in one call, because a shared cache charges a
+round trip per read; `put(..., adapterId, workflowId)` is what writes them. Both are `default`
+methods, so a cache an application wrote stays valid and simply keeps no id.
+
 ### Deployment pipeline
 
 `DeploymentService` orchestrates deployment per workflow module:
@@ -3300,6 +3328,25 @@ out of a service task, and the entry it writes belongs to the transaction which 
 change. The wait then holds that transaction open, with the connection and the locks that
 come with it. The section "What an election costs a caller which holds a transaction"
 above has the numbers.
+
+`WorkflowElection#locationOfWorkflow` is the same election answering both halves of what
+VanillaBP knows: the adapter id AND the BPMS' own id of the workflow, as a `WorkflowLocation`.
+Both stand in the same row - the record of a task delivery keeps `WORKFLOW_ID` next to
+`ADAPTER_ID` - so handing back the adapter id alone and making an extension ask again would be
+the odd design.
+
+- It runs exactly the election the older call runs and costs exactly the same. The workflow id
+  rides along, it does not replace the question. A variant answering from the record without
+  asking anybody would be fast and sometimes wrong, and it is deliberately not here.
+- Where the id comes from, in this order and without asking any BPMS: the open delivery records
+  of that aggregate, then the election cache. A `null` id is a regular answer and means nobody
+  knew one.
+- What an extension may do with it: write it into its own records, print it beside ours, and
+  hand it back to VanillaBP later. What it may not do: address the BPMS with it - the shape of
+  that id belongs to the adapter - and read a non-null id as "this workflow still runs". The
+  record is history, the election is the answer about now.
+- The older call stays and keeps its meaning, so an extension written against 2.0 keeps
+  compiling. Its default implementation delegates and leaves the id empty.
 
 #### The extension's own configuration
 

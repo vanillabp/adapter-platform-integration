@@ -1,6 +1,7 @@
 package io.vanillabp.migration.test.processservice;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
@@ -41,6 +42,31 @@ public class InMemoryWorkflowAdapterCacheTest {
     assertTrue(cache.get(MODULE, PROCESS, "42").isEmpty());
     // invalidating an absent entry is a no-op
     cache.invalidate(MODULE, PROCESS, "42");
+
+  }
+
+  @Test
+  @DisplayName("The entry keeps the BPMS' own id of the workflow next to the adapter id")
+  public void theWorkflowIdTravelsWithTheHint() {
+
+    final var cache = new InMemoryWorkflowAdapterCache();
+
+    cache.put(MODULE, PROCESS, "42", "adapter-a", "2251799813685249");
+
+    final var hint = cache.hintOf(MODULE, PROCESS, "42").orElseThrow();
+    assertEquals("adapter-a", hint.adapterId());
+    assertEquals("2251799813685249", hint.workflowId());
+    assertEquals("adapter-a", cache.get(MODULE, PROCESS, "42").orElseThrow(), "and the old read still answers");
+
+    // the end of a workflow marks the entry and keeps what it knew: the workflow is over,
+    // its id was not wrong
+    cache.putEnded(MODULE, PROCESS, "42", "adapter-a");
+    assertEquals("2251799813685249", cache.hintOf(MODULE, PROCESS, "42").orElseThrow().workflowId());
+
+    // a caller which names no id writes none, and reading it back says so
+    cache.put(MODULE, PROCESS, "43", "adapter-a");
+    assertNull(cache.hintOf(MODULE, PROCESS, "43").orElseThrow().workflowId());
+    assertTrue(cache.hintOf(MODULE, PROCESS, "44").isEmpty(), "an entry nobody wrote answers nothing");
 
   }
 

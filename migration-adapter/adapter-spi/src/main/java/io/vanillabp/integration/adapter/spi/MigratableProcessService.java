@@ -180,6 +180,60 @@ public interface MigratableProcessService<A> {
       Object workflowAggregateId);
 
   /**
+   * The same question, with the BPMS' own id of the workflow where VanillaBP holds one -
+   * what the election passes on the paths which WAIT for an eventually consistent BPMS.
+   *
+   * <h4>Why the id is worth having</h4>
+   *
+   * Measured on three Camunda 8 clusters in September 2026: the engine knows a new instance
+   * 16 to 19 ms after the create was sent, while the search which
+   * {@link #awarenessOfWorkflow(WorkflowScope, AggregatePersistenceAware, Object)} uses
+   * finds it after 167 to 1324 ms. After a cancellation the engine says "gone" after 21 ms
+   * and the search needs 176 to 2068 ms to agree. So an engine answers far earlier than its
+   * index, and every command which asks it addresses a KEY. VanillaBP keeps that key next
+   * to the workflow it belongs to, in the record of a delivery and in the election cache,
+   * and hands it here.
+   *
+   * <h4>What you may do with it, and what you may not</h4>
+   *
+   * You may SHORTEN A YES: ask your engine by the key, and answer
+   * {@link WorkflowAwareness#ACTIVE} where it says the workflow runs, without waiting for
+   * your read model.
+   * <p>
+   * You may NOT turn a negative answer into {@link WorkflowAwareness#UNKNOWN_TO_BPMS}. An
+   * engine forgets a workflow the moment it ends, so "the key is unknown to the engine"
+   * does not tell {@link WorkflowAwareness#COMPLETED} from
+   * {@link WorkflowAwareness#UNKNOWN_TO_BPMS}, and only the second of the two lets the
+   * election move on to the next BPMS. In a migration setup, reading an ended workflow as
+   * unknown sends the next operation to the wrong BPMS. Where the key answers nothing, fall
+   * back to the answer you would have given without it.
+   * <p>
+   * The id is a HINT and may be wrong: it says what was true when VanillaBP learned it, not
+   * what is true now, and <code>null</code> means nobody knew one. An adapter which cannot
+   * use it does not implement this method at all - the default drops the id and answers
+   * exactly as
+   * {@link #awarenessOfWorkflow(WorkflowScope, AggregatePersistenceAware, Object)} does, so
+   * every adapter written before this keeps compiling and behaving.
+   *
+   * @param scope The workflow module and BPMN processes being asked about
+   * @param aggregatePersistence The workflow aggregate's persistence support
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param workflowId The BPMS' own id of the workflow, or <code>null</code> where
+   *          VanillaBP holds none
+   * @return The BPMS' awareness of the workflow within that scope (see the election
+   *         contract in the type javadoc)
+   */
+  default WorkflowAwareness awarenessOfWorkflow(
+      final WorkflowScope scope,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String workflowId) {
+
+    return awarenessOfWorkflow(scope, aggregatePersistence, workflowAggregateId);
+
+  }
+
+  /**
    * Determine whether the target BPMS is aware of the workflow belonging to the
    * given workflow aggregate, asked ONLY before re-dispatching a recovered or
    * retried two-phase START outbox entry (the at-least-once mitigation: if the

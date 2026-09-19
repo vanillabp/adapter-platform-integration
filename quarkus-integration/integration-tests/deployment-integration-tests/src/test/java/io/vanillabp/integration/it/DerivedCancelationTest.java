@@ -1,6 +1,7 @@
 package io.vanillabp.integration.it;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.sql.SQLException;
 import java.time.Instant;
@@ -25,6 +26,7 @@ import io.vanillabp.integration.runtime.delivery.JdbcTaskDeliveryLog;
 import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.test.cancelation.CancelAggregate;
 import io.vanillabp.integration.test.cancelation.CancelAggregatePersistence;
+import io.vanillabp.integration.test.cancelation.CancelAwarenessSource;
 import io.vanillabp.integration.test.cancelation.CancelProcessWiringSource;
 import io.vanillabp.integration.test.cancelation.CancelWorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
@@ -60,6 +62,7 @@ public class DerivedCancelationTest {
           .addClass(CancelAggregatePersistence.class)
           .addClass(CancelWorkflowService.class)
           .addClass(CancelProcessWiringSource.class)
+          .addClass(CancelAwarenessSource.class)
           .addAsResource("bpmn/first.bpmn", "processes/dummy/CancelProcess.bpmn")
           .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"));
 
@@ -74,6 +77,12 @@ public class DerivedCancelationTest {
 
   @Inject
   UserTransaction userTransaction;
+
+  @Inject
+  CancelAwarenessSource awarenessSource;
+
+  @Inject
+  io.vanillabp.integration.extension.spi.election.WorkflowElection election;
 
   @Inject
   @Any
@@ -315,6 +324,50 @@ public class DerivedCancelationTest {
         persistence.get("4715").getWhatArrived(),
         "only the task the BPMS does not have reaches the application");
     assertEquals(2, openRecordCount("4715"), "its record is closed, the two others stay open");
+
+  }
+
+  /**
+   * What an extension asks for, and what the election hands the adapter on the way: both
+   * come out of the same row the delivery record wrote.
+   */
+  @Test
+  @DisplayName("The election carries the workflow id, and an extension gets it back")
+  public void theElectionCarriesTheWorkflowId() {
+
+    CancelWorkflowService.CANCELATIONS_WHICH_FAIL.set(0);
+    awarenessSource.forgetWhatWasAsked();
+    final var dummyAdapter = dummyAdapter();
+
+    // a task was delivered for this workflow, so its record knows what the BPMS calls it
+    persistence.store("4716");
+    dummyAdapter.invokeTask(MODULE, PROCESS, delivery("awaitSignature", "4716", "task-10"));
+
+    final var located = election.locationOfWorkflow(MODULE, PROCESS, "4716");
+    assertEquals(ADAPTER, located.adapterId());
+    assertEquals(
+        "workflow-of-4716",
+        located.workflowId(),
+        "the id stands in the same row as the adapter id, so both come back");
+    assertEquals(
+        List.of("workflow-of-4716"),
+        awarenessSource.getWorkflowIdsTheElectionPassed(),
+        "and the adapter saw it while it was asked");
+
+    // the old call still answers its string
+    assertEquals(ADAPTER, election.adapterIdOfWorkflow(MODULE, PROCESS, "4716"));
+
+    // a workflow nobody delivered anything for: the adapter id and no workflow id, which
+    // is a regular answer
+    awarenessSource.forgetWhatWasAsked();
+    persistence.store("4717");
+    final var withoutAnId = election.locationOfWorkflow(MODULE, PROCESS, "4717");
+    assertEquals(ADAPTER, withoutAnId.adapterId());
+    assertNull(withoutAnId.workflowId());
+    assertEquals(
+        List.of("null"),
+        awarenessSource.getWorkflowIdsTheElectionPassed(),
+        "the adapter is asked without an id and answers as it always did");
 
   }
 

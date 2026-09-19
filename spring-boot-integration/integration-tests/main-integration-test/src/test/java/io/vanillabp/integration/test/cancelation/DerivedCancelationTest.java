@@ -140,6 +140,38 @@ public class DerivedCancelationTest {
 
     }
 
+    /**
+     * The BPMS this test elects: it knows every workflow it is asked about, and it writes
+     * down which id the election passed it.
+     */
+    static final java.util.List<String> WORKFLOW_IDS_THE_ELECTION_PASSED = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    @Bean
+    io.vanillabp.bpmsdouble.DummyTaskAwarenessSource cancelAwarenessSource() {
+
+      return new io.vanillabp.bpmsdouble.DummyTaskAwarenessSource() {
+
+        @Override
+        public io.vanillabp.integration.adapter.spi.WorkflowAwareness awarenessOfTask(
+            final String adapterId,
+            final Object workflowAggregateId,
+            final String taskId) {
+          return io.vanillabp.integration.adapter.spi.WorkflowAwareness.ACTIVE;
+        }
+
+        @Override
+        public io.vanillabp.integration.adapter.spi.WorkflowAwareness awarenessOfWorkflow(
+            final String adapterId,
+            final Object workflowAggregateId,
+            final String workflowId) {
+          WORKFLOW_IDS_THE_ELECTION_PASSED.add(String.valueOf(workflowId));
+          return io.vanillabp.integration.adapter.spi.WorkflowAwareness.ACTIVE;
+        }
+
+      };
+
+    }
+
     @Bean
     DummyTaskWiringSource cancelTaskWiringSource() {
 
@@ -466,6 +498,61 @@ public class DerivedCancelationTest {
               2,
               openRecordCount(context, "4715"),
               "its record is closed, the two others stay open");
+
+    }
+
+  }
+
+  /**
+   * What an extension asks for, and what the election hands the adapter on the way: both
+   * come out of the same row the delivery record wrote.
+   */
+  @Test
+  @DisplayName("The election carries the workflow id, and an extension gets it back")
+  public void theElectionCarriesTheWorkflowId() throws IOException {
+
+    CancelConfiguration.AGGREGATES.clear();
+    CancelConfiguration.WORKFLOW_IDS_THE_ELECTION_PASSED.clear();
+    CancelWorkflowService.CANCELATIONS_WHICH_FAIL.set(0);
+
+    try (var testApp = buildTestApp(); var context = runTestApplication(testApp)) {
+
+      final var dummyAdapter = context.getBean("DummyAdapter_DeploymentService_test", DummyDeploymentService.class);
+      final var election = context
+          .getBean(io.vanillabp.integration.extension.spi.election.WorkflowElection.class);
+
+      // a task was delivered for this workflow, so its record knows what the BPMS calls it
+      storeAggregate("4716");
+      dummyAdapter.invokeTask(MODULE, PROCESS, delivery("awaitSignature", "4716", "task-10"));
+
+      final var located = election.locationOfWorkflow(MODULE, PROCESS, "4716");
+      Assertions.assertEquals(ADAPTER, located.adapterId());
+      Assertions
+          .assertEquals(
+              "workflow-of-4716",
+              located.workflowId(),
+              "the id stands in the same row as the adapter id, so both come back");
+      Assertions
+          .assertEquals(
+              List.of("workflow-of-4716"),
+              CancelConfiguration.WORKFLOW_IDS_THE_ELECTION_PASSED,
+              "and the adapter saw it while it was asked");
+
+      // the old call still answers its string
+      Assertions.assertEquals(ADAPTER, election.adapterIdOfWorkflow(MODULE, PROCESS, "4716"));
+
+      // a workflow nobody delivered anything for: the adapter id and no workflow id, which
+      // is a regular answer
+      CancelConfiguration.WORKFLOW_IDS_THE_ELECTION_PASSED.clear();
+      storeAggregate("4717");
+      final var withoutAnId = election.locationOfWorkflow(MODULE, PROCESS, "4717");
+      Assertions.assertEquals(ADAPTER, withoutAnId.adapterId());
+      Assertions.assertNull(withoutAnId.workflowId());
+      Assertions
+          .assertEquals(
+              List.of("null"),
+              CancelConfiguration.WORKFLOW_IDS_THE_ELECTION_PASSED,
+              "the adapter is asked without an id and answers as it always did");
 
     }
 

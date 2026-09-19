@@ -740,6 +740,27 @@ own probe finds no BPMS holding the task, so an application catches one type whi
 answered. Your check is often the only thing which can find out: VanillaBP writes the closing mark
 itself, so a task somebody completed outside VanillaBP still has a record saying it is open.
 
+### 4.1 The election may hand you the workflow's own id
+
+`awarenessOfWorkflow` has a fourth argument, and the two paths which WAIT for an eventually
+consistent BPMS pass it: the election an extension asks for, and a read of the viewer API. It is
+your BPMS' own id of the workflow, taken from what VanillaBP already holds - the record of a task
+delivery and the election cache - and `null` where nobody knew one. Nothing new is asked of your
+BPMS for it.
+
+Implement it where your engine answers by key faster than your read model does. On a Camunda 8
+cluster that is the difference between 20 ms and up to two seconds.
+
+One rule, and it is the whole contract: you may shorten a YES, and you may not turn a negative
+answer into `UNKNOWN_TO_BPMS`. An engine forgets a workflow the moment it ends, so "the key is
+unknown to the engine" does not tell `COMPLETED` from `UNKNOWN_TO_BPMS` - and only the second of
+the two lets the election move on to the next BPMS, which in a migration setup sends the next
+operation to the wrong one. Where the key answers nothing, fall back to the answer you would have
+given without it.
+
+Do not implement it and nothing changes: the default drops the id and calls the question you
+already answer.
+
 ## 5. What you must never assume
 
 Every line here is a mistake an adapter has made or nearly made.

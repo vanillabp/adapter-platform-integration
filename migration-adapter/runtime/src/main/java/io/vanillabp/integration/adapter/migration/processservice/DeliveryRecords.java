@@ -970,6 +970,60 @@ public final class DeliveryRecords {
   }
 
   /**
+   * The BPMS' own id of the workflow of the given aggregate, as far as a record knows one.
+   * <p>
+   * Read from the OPEN records of that aggregate, under every BPMN process id this workflow
+   * service serves: a record is written per delivery and the adapter names the workflow in
+   * it, so a workflow VanillaBP ever heard from is named here even after a restart, which
+   * the election cache cannot promise. The first record naming a workflow answers - the
+   * records of one aggregate and one BPMN process belong to one workflow.
+   * <p>
+   * A hint and never an answer. It says what was true when the delivery ran, not whether the
+   * workflow still runs, and an adapter which reports no workflow id leaves nothing here.
+   *
+   * @param workflowAggregateId The workflow aggregate the caller is asking about
+   * @return The workflow's id in the BPMS, or <code>null</code> where no record knows one
+   */
+  public String workflowIdOf(
+      final Object workflowAggregateId) {
+
+    if (workflowAggregateId == null) {
+      return null;
+    }
+    final var deliveryLog = resolveLog();
+    if (deliveryLog == null) {
+      return null;
+    }
+    try {
+      for (final var candidate : bpmnProcessIdsToReadUnder) {
+        final var known = deliveryLog
+            .openTasksOfAggregate(workflowModuleId, candidate, workflowAggregateId.toString())
+            .stream()
+            .map(TaskDelivery::workflowId)
+            .filter(java.util.Objects::nonNull)
+            .findFirst()
+            .orElse(null);
+        if (known != null) {
+          return known;
+        }
+      }
+    } catch (final RuntimeException e) {
+      // a hint nobody can read is a hint nobody has: the election runs either way, one
+      // round trip slower
+      log
+          .debug(
+              "Could not read which workflow of the BPMS aggregate '{}' (BPMN process '{}' of "
+                  + "workflow module '{}') belongs to",
+              workflowAggregateId,
+              bpmnProcessId,
+              workflowModuleId,
+              e);
+    }
+    return null;
+
+  }
+
+  /**
    * The record of the given task, looked for under every BPMN process id this workflow
    * service serves, the own id first. The first one found wins: a task id belongs to one
    * activation of one process, so there is nothing to choose between.

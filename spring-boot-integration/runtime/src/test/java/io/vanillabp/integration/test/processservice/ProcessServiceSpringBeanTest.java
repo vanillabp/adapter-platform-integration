@@ -102,7 +102,7 @@ public class ProcessServiceSpringBeanTest {
 
     final var aggregate = new Object();
     when(aggregatePersistenceAware.getAggregateId(aggregate)).thenReturn("4711");
-    when(migratableProcessService.awarenessOfWorkflow(SCOPE, aggregatePersistenceAware, "4711"))
+    when(migratableProcessService.awarenessOfWorkflow(SCOPE, aggregatePersistenceAware, "4711", null))
         .thenReturn(io.vanillabp.integration.adapter.spi.WorkflowAwareness.UNKNOWN_TO_BPMS);
 
     // no transaction is active (see cleanupTransactionState) - reads must not
