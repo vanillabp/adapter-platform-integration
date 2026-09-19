@@ -343,7 +343,15 @@ public class JdbcTaskDeliverySchemaTest {
     assertTrue(
         second.getMessage().contains("ALTER TABLE VANILLABP_TASK_DELIVERY ADD WORKFLOW_ID VARCHAR(255)"),
         second.getMessage());
-    // nothing reads a record by these two, so no index is asked for
+    // the core reads the open tasks of one workflow by WORKFLOW_ID on every wake-up, so the
+    // remedy names the index that read needs
+    assertTrue(
+        second
+            .getMessage()
+            .contains("CREATE INDEX VANILLABP_TASK_DELIVERY_WORKFLOW ON VANILLABP_TASK_DELIVERY (WORKFLOW_ID)"),
+        second.getMessage());
+    assertTrue(second.getMessage().contains("still believes are open"), second.getMessage());
+    // nothing reads a record by the element it came from, so no index is asked for there
     assertFalse(failure.getMessage().contains("CREATE INDEX"), failure.getMessage());
     assertTrue(failure.getMessage().contains("which element of the model"), failure.getMessage());
 

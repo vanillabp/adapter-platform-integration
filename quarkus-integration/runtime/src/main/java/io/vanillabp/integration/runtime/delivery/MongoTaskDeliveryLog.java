@@ -184,6 +184,9 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
       // builds, and MongoDB knows no key-length limit, so the aggregate id itself is the
       // index here - unlike in the SQL table, whose column is too wide for one
       deliveryCollection().createIndex(Indexes.ascending("aggregateId"));
+      // the core asks for the open tasks of ONE workflow of the BPMS on every wake-up of
+      // that workflow, which is far more often than an extension builds a screen
+      deliveryCollection().createIndex(Indexes.ascending("workflowId"));
     }
     retentionCleanup = new TaskDeliveryRetentionCleanup(
         DEFAULT_COLLECTION_NAME, getDeliveryRetention(), this::cleanUpExpiredRecords);
@@ -453,6 +456,35 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
     final var filter = new Document("workflowModuleId", workflowModuleId)
         .append("bpmnProcessId", bpmnProcessId)
         .append("aggregateId", workflowAggregateId)
+        .append("outcome", COMPLETION_PENDING)
+        .append("taskClosedAt", null);
+    final var oldestFirst = new Document("recordedAt", 1);
+    final var records = new java.util.ArrayList<TaskDelivery>();
+    (session != null
+        ? collection.find(session, filter)
+        : collection.find(filter))
+        .sort(oldestFirst)
+        .forEach(document -> records.add(recordOf(document)));
+    return java.util.List.copyOf(records);
+
+  }
+
+  /**
+   * The open tasks of one workflow of the BPMS (see
+   * {@link TaskDeliveryLog#openTasksOfWorkflow}), oldest first. Read through the session of
+   * the running transaction where there is one, and served by the index over
+   * <code>workflowId</code> the startup creates.
+   */
+  @Override
+  public java.util.List<TaskDelivery> openTasksOfWorkflow(
+      final String workflowModuleId,
+      final String workflowId) {
+
+    final var session = io.vanillabp.integration.runtime.mongo.MongoSessions
+        .activeSession(txRegistry);
+    final var collection = deliveryCollection();
+    final var filter = new Document("workflowModuleId", workflowModuleId)
+        .append("workflowId", workflowId)
         .append("outcome", COMPLETION_PENDING)
         .append("taskClosedAt", null);
     final var oldestFirst = new Document("recordedAt", 1);

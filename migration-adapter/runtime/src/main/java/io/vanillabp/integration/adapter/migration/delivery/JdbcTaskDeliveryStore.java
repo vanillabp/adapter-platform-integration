@@ -131,6 +131,36 @@ public class JdbcTaskDeliveryStore {
   private static final String INDEX_OF_OPEN_RECORDS = "CREATE INDEX %s_OPEN ON %s (OUTCOME, TASK_CLOSED_AT)";
 
   /**
+   * The OPEN records of ONE workflow of the BPMS, read on every wake-up of that workflow.
+   * Ordered oldest first, which is the order the tasks were handed out in and the order the
+   * probes of a wake-up follow.
+   * <p>
+   * WORKFLOW_ID carries an index of its own ({@link #INDEX_OF_WORKFLOW}), unlike AGGREGATE_ID:
+   * the column is VARCHAR(255) and stays inside the key-length limit of every database this
+   * runs on, the same way TASK_ID does. What that buys is measured in this module's README -
+   * the read by aggregate grows with the number of tasks open in the whole installation, this
+   * one does not.
+   * <p>
+   * The BPMN process is NOT part of the question. A workflow of the BPMS is one instance, and
+   * a task a called process handed out carries the secondary process id while belonging to
+   * the same instance - so narrowing by process would drop exactly those.
+   */
+  private static final String SELECT_OPEN_TASKS_OF_WORKFLOW = """
+      SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
+      TASK_DEFINITION, BPMN_ELEMENT_ID, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, \
+      TASK_CLOSED_AT \
+      FROM %s \
+      WHERE WORKFLOW_MODULE_ID = ? AND WORKFLOW_ID = ? \
+      AND OUTCOME = ? AND TASK_CLOSED_AT IS NULL \
+      ORDER BY RECORDED_AT ASC""";
+
+  /**
+   * The statement creating the index the open tasks of one workflow are read through. Two
+   * placeholders for the table name, like every other DDL of this class.
+   */
+  private static final String INDEX_OF_WORKFLOW = "CREATE INDEX %s_WORKFLOW ON %s (WORKFLOW_ID)";
+
+  /**
    * The adapter ids the OPEN records of one BPMN process belong to. Asked once
    * per BPMN process at startup, never at runtime, and answered from the same index the
    * cleanup uses; a record written before ADAPTER_ID existed carries none and is skipped.
@@ -232,6 +262,8 @@ public class JdbcTaskDeliveryStore {
 
   private final String selectOpenTasksOfAggregate;
 
+  private final String selectOpenTasksOfWorkflow;
+
   private final OpenTaskTouches touches;
 
   public JdbcTaskDeliveryStore(
@@ -250,6 +282,7 @@ public class JdbcTaskDeliveryStore {
     this.selectAdapterIdsOfOpenTasks = SELECT_ADAPTER_IDS_OF_OPEN_TASKS.formatted(tableName);
     this.selectAnyOpenRecord = SELECT_ANY_OPEN_RECORD.formatted(tableName);
     this.selectOpenTasksOfAggregate = SELECT_OPEN_TASKS_OF_AGGREGATE.formatted(tableName);
+    this.selectOpenTasksOfWorkflow = SELECT_OPEN_TASKS_OF_WORKFLOW.formatted(tableName);
     this.touches = new OpenTaskTouches(tableName, this::refreshLastSeen);
 
   }
@@ -385,6 +418,49 @@ public class JdbcTaskDeliveryStore {
               Could not read the open tasks of workflow '%s' (BPMN process '%s' of workflow \
               module '%s') from table '%s'!"""
               .formatted(workflowAggregateId, bpmnProcessId, workflowModuleId, tableName), e);
+    } finally {
+      release(connection);
+    }
+
+  }
+
+  /**
+   * The open tasks of one workflow of the BPMS (see
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLog#openTasksOfWorkflow}), oldest first.
+   * <p>
+   * A failure is NOT swallowed, for the reason the read by aggregate does not swallow one: a
+   * caller reading an empty answer would derive nothing and nobody would notice the table is
+   * broken.
+   *
+   * @param workflowModuleId The workflow module of the workflow
+   * @param workflowId The BPMS' own id of the workflow
+   * @return The open records, oldest first
+   */
+  public List<TaskDelivery> openTasksOfWorkflow(
+      final String workflowModuleId,
+      final String workflowId) {
+
+    Connection connection = null;
+    try {
+      connection = connectionAccess.acquire();
+      try (var statement = connection.prepareStatement(selectOpenTasksOfWorkflow)) {
+        statement.setString(1, workflowModuleId);
+        statement.setString(2, workflowId);
+        statement.setString(3, COMPLETION_PENDING);
+        try (var resultSet = statement.executeQuery()) {
+          final var records = new java.util.ArrayList<TaskDelivery>();
+          while (resultSet.next()) {
+            records.add(readRecord(resultSet));
+          }
+          return List.copyOf(records);
+        }
+      }
+    } catch (final SQLException e) {
+      throw new RuntimeException(
+          """
+              Could not read the open tasks of workflow '%s' of workflow module '%s' from table \
+              '%s'!"""
+              .formatted(workflowId, workflowModuleId, tableName), e);
     } finally {
       release(connection);
     }
@@ -730,7 +806,7 @@ public class JdbcTaskDeliveryStore {
           new AddedColumn(
               "BPMN_ELEMENT_ID", "VARCHAR(255) (nullable: a record written before the column existed names no element)", "a record does not say which element of the model it belongs to, so an extension listing the open tasks of a workflow cannot find the part of the model each of them stands for", null),
           new AddedColumn(
-              "WORKFLOW_ID", "VARCHAR(255) (nullable: a record written before the column existed names no workflow)", "a record does not say which workflow of the BPMS it belongs to, so nobody can follow a task into the tooling of that BPMS", null));
+              "WORKFLOW_ID", "VARCHAR(255) (nullable: a record written before the column existed names no workflow)", "a record does not say which workflow of the BPMS it belongs to, so nobody can follow a task into the tooling of that BPMS and VanillaBP cannot read the other tasks it still believes are open in that workflow", INDEX_OF_WORKFLOW));
 
   /**
    * A column a later version of VanillaBP added: its name, the statement which adds it and
@@ -785,6 +861,11 @@ public class JdbcTaskDeliveryStore {
         // characters wide and would exceed the key-length limit of MySQL and of DB2 with
         // 4K pages - see SELECT_OPEN_TASKS_OF_AGGREGATE
         statement.executeUpdate(INDEX_OF_OPEN_RECORDS.formatted(tableName, tableName));
+        // the open tasks of ONE workflow of the BPMS are read once per wake-up of that
+        // workflow, which is far more often than an extension builds a screen. WORKFLOW_ID
+        // is VARCHAR(255) and selective, so it carries an index of its own - what
+        // AGGREGATE_ID cannot - see SELECT_OPEN_TASKS_OF_WORKFLOW
+        statement.executeUpdate(INDEX_OF_WORKFLOW.formatted(tableName, tableName));
       }
     } catch (final SQLException e) {
       if (createdConcurrently()) {
@@ -902,7 +983,7 @@ public class JdbcTaskDeliveryStore {
                   .definition(),
                   column.indexStatement() == null
                       ? ""
-                      : " It is read per task operation, so add the index it is looked up by as well: %s."
+                      : " It is read on a path which must not scan the table, so add the index it is looked up by as well: %s."
                           .formatted(column.indexStatement().formatted(tableName, tableName))));
     }
 

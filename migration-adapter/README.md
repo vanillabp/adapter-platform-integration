@@ -1846,6 +1846,59 @@ stores.
 (`anAnswerFromTheRecordIsCounted`); `TaskRecordLookupTest` holds the store side of it and
 `MicrometerVanillaBpMetricsTest#electionsAnsweredFromTheRecordAreCounted` the meter.
 
+##### The open tasks of one workflow of the BPMS
+
+`TaskDeliveryLog.openTasksOfWorkflow(module, workflowId)` answers the same records by another
+key: the BPMS' own id of the running instance. The question above is the one an extension asks,
+which holds an aggregate and wants everything waiting for somebody. This one is the question a
+delivery raises, because what else is open IN THAT WORKFLOW is what the core may probe.
+
+Three things follow from the different key.
+
+- An aggregate may carry a second workflow, and that one is not in this answer.
+- A task a called process handed out carries the secondary BPMN process id while belonging to
+  the same instance, so the BPMN process is not part of the question. The read by aggregate has
+  to be repeated per BPMN process the workflow service serves; this one covers them in one go.
+- A record whose adapter named no workflow is invisible here, and so is a record written before
+  `WORKFLOW_ID` existed. The Camunda 7, Camunda 8 and Process-Engine-API adapters all report the
+  id.
+
+`WORKFLOW_ID` carries an index of its own, `<table>_WORKFLOW`, which `AGGREGATE_ID` cannot: the
+column is `VARCHAR(255)` and stays inside the key-length limit of every database this runs on,
+the same way `TASK_ID` does. The MongoDB stores index `workflowId` next to `aggregateId`.
+
+What the index buys, measured on PostgreSQL 16.15 in September 2026 with the table as
+`JdbcTaskDeliveryStore.createTable` builds it, 1.5 million closed records as history and the
+target instance holding three open tasks:
+
+| concurrently open tasks in the installation | read by aggregate, without an index over it | read by `WORKFLOW_ID`, with one |
+|--------------------------------------------:|--------------------------------------------:|--------------------------------:|
+|                                          503 |                                     0.107 ms |                        0.029 ms |
+|                                        5 003 |                                     0.490 ms |                        0.009 ms |
+|                                       50 003 |                                     4.582 ms |                        0.010 ms |
+|                                      500 003 |                                    49.975 ms |                        0.010 ms |
+
+The read by aggregate follows what the whole installation has open, because the index it uses
+says only what "open" means. The read by workflow does not move at all.
+
+The write side pays for the index: a bulk insert of 200000 records took 2.63 s with it and
+1.03 s without, so about 8 microseconds per record. That is the trade, and it is worth taking
+here - a record is written once per delivery, and this read happens once per wake-up of a
+workflow whose BPMN process has an asynchronous task at all.
+
+MongoDB was not measured. Both MongoDB stores index `aggregateId` already and answer in 0.27 ms
+at every size, so an index over `workflowId` is the same move there.
+
+The index ships in the runtime DDL of all three stores which build their own storage and in the
+changeset `vanillabp-task-delivery-workflow-2.0.0` of `io.vanillabp:vanillabp-schema`. An
+application which created its table before the index existed is told at startup which statement
+adds it, the way it is told about a missing column.
+
+`OpenTasksOfWorkflowTest` holds the SQL and reads the plan the database prints, so a statement
+which stops using the index fails there rather than in an installation with many open tasks. The
+two `OpenTaskRetentionTest` classes hold it through a booted application on both platforms, and
+the two `MongoTaskDeliveryLogTest` classes hold the MongoDB stores.
+
 ##### What a record says about the element and the workflow
 
 Two more fields travel with every record: `bpmnElementId`, the `id` attribute a modeller wrote on

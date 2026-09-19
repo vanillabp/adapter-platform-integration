@@ -178,6 +178,19 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
 
   }
 
+  /**
+   * The open tasks of one workflow of the BPMS - read within the caller's transaction,
+   * through the connection bound to it.
+   */
+  @Override
+  public java.util.List<TaskDelivery> openTasksOfWorkflow(
+      final String workflowModuleId,
+      final String workflowId) {
+
+    return store.openTasksOfWorkflow(workflowModuleId, workflowId);
+
+  }
+
   @Override
   public int markTaskClosed(
       final String workflowModuleId,

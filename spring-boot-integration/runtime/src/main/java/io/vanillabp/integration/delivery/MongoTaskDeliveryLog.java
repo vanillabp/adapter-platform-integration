@@ -250,6 +250,38 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
   }
 
   /**
+   * The open tasks of one workflow of the BPMS (see
+   * {@link TaskDeliveryLog#openTasksOfWorkflow}), oldest first. Read through the template of
+   * the running transaction, and served by the index over <code>workflowId</code> the startup
+   * creates.
+   */
+  @Override
+  public java.util.List<TaskDelivery> openTasksOfWorkflow(
+      final String workflowModuleId,
+      final String workflowId) {
+
+    final var query = Query
+        .query(
+            Criteria
+                .where("workflowModuleId")
+                .is(workflowModuleId)
+                .and("workflowId")
+                .is(workflowId)
+                .and("outcome")
+                .is(COMPLETION_PENDING)
+                .and("taskClosedAt")
+                .is(null))
+        .with(
+            org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.ASC, "recordedAt"));
+    return mongoTemplate
+        .find(query, TaskDeliveryDocument.class, collection)
+        .stream()
+        .map(MongoTaskDeliveryLog::recordOf)
+        .toList();
+
+  }
+
+  /**
    * Writes down that one task is over. The filter demands an absent
    * <code>taskClosedAt</code>, so a repeated dispatch does not move the moment the task was
    * closed.

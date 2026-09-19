@@ -143,6 +143,54 @@ public class MongoTaskDeliveryLogTest {
   }
 
   @Test
+  @DisplayName("The open tasks of one workflow of the BPMS ignore the aggregate and the process")
+  public void theOpenTasksOfOneWorkflowAreAnswered() throws Exception {
+
+    final var now = java.time.Instant.now();
+    userTransaction.begin();
+    deliveryLog
+        .record(
+            new TaskDelivery("w-2", "test-adapter", "test-module", "TestProcess", "4711", "workflow-1", "awaitCompletion", null, "task-2", "COMPLETION_PENDING", null, null, now, null));
+    // a task a called process handed out: another BPMN process, the same workflow
+    deliveryLog
+        .record(
+            new TaskDelivery("w-1", "test-adapter", "test-module", "CalledProcess", "4711", "workflow-1", "awaitCompletion", null, "task-1", "COMPLETION_PENDING", null, null, now
+                .minusSeconds(600), null));
+    // another workflow, and a record whose adapter named none
+    deliveryLog
+        .record(
+            new TaskDelivery("w-other", "test-adapter", "test-module", "TestProcess", "4712", "workflow-2", "awaitCompletion", null, "task-3", "COMPLETION_PENDING", null, null, now, null));
+    deliveryLog
+        .record(
+            new TaskDelivery("w-none", "test-adapter", "test-module", "TestProcess", "4713", null, "awaitCompletion", null, "task-4", "COMPLETION_PENDING", null, null, now, null));
+    userTransaction.commit();
+
+    assertEquals(
+        java.util.List.of("task-1", "task-2"),
+        deliveryLog
+            .openTasksOfWorkflow("test-module", "workflow-1")
+            .stream()
+            .map(TaskDelivery::taskId)
+            .toList(),
+        "oldest first, and a called process belongs to the same workflow");
+    assertTrue(deliveryLog.openTasksOfWorkflow("test-module", "no-such-workflow").isEmpty());
+    assertTrue(
+        deliveryLog.openTasksOfWorkflow("other-module", "workflow-1").isEmpty(),
+        "the workflow module is part of the question");
+
+    deliveryLog.markTaskClosed("test-module", "CalledProcess", "4711", "task-1");
+
+    assertEquals(
+        java.util.List.of("task-2"),
+        deliveryLog
+            .openTasksOfWorkflow("test-module", "workflow-1")
+            .stream()
+            .map(TaskDelivery::taskId)
+            .toList());
+
+  }
+
+  @Test
   @DisplayName("Every record naming one task is closed, not only the newest one")
   public void everyRecordOfTheTaskIsClosed() throws Exception {
 

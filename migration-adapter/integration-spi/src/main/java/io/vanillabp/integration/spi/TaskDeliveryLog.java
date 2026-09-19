@@ -341,6 +341,59 @@ public interface TaskDeliveryLog {
   }
 
   /**
+   * The open tasks of ONE workflow of the BPMS - what the core reads on every wake-up to see
+   * which other tasks of that workflow it still believes are open.
+   *
+   * <h4>How this differs from {@link #openTasksOfAggregate}</h4>
+   *
+   * The question is the same, the key is not. That one is keyed by workflow module, BPMN
+   * process and aggregate, which is the question an extension asks: it holds an aggregate and
+   * wants everything waiting for somebody. This one is keyed by the BPMS' own id of the
+   * running instance, which is the question a delivery raises: a job arrived for one workflow,
+   * and what else is open IN THAT WORKFLOW decides what may be probed.
+   * <p>
+   * Three things follow from the different key. An aggregate may carry a second workflow, and
+   * that one is not in this answer. A task a called process handed out carries the secondary
+   * BPMN process id, so a read by aggregate has to be repeated per BPMN process the workflow
+   * service serves while this one covers them in one go. And this read is cheap: the id is
+   * {@code VARCHAR(255)} and indexed, while the aggregate's id holds up to 1024 characters and
+   * carries no portable index.
+   *
+   * <h4>Which records are invisible to it</h4>
+   *
+   * A record whose adapter named no workflow. {@link TaskDelivery#workflowId()} is filled from
+   * what the adapter reports, and an adapter which reports none leaves the column empty - the
+   * records of such an adapter are not in this answer and never will be. So is a record
+   * written before the column existed. The Camunda 7, Camunda 8 and Process-Engine-API adapters
+   * VanillaBP ships all report the id.
+   * <p>
+   * What "open" means, which tasks are in it at all, the ordering and the absent limit are
+   * exactly what {@link #openTasksOfAggregate} describes.
+   *
+   * <h4>What it costs</h4>
+   *
+   * This is asked once per delivery of a workflow whose BPMN process has an asynchronous task
+   * at all, on the thread of the delivery, so it has to be an indexed read. The stores
+   * VanillaBP ships index the workflow id and say so in their own documentation.
+   * <p>
+   * The default answers an empty list, which is what a store written before this existed
+   * answers. A caller then derives nothing, which is the behaviour of every VanillaBP before
+   * this read existed.
+   *
+   * @param workflowModuleId The workflow module of the workflow
+   * @param workflowId The BPMS' own id of the workflow (see {@link TaskDelivery#workflowId()})
+   * @return The open records, oldest first, empty where there are none or this store cannot
+   *         say
+   */
+  default List<TaskDelivery> openTasksOfWorkflow(
+      final String workflowModuleId,
+      final String workflowId) {
+
+    return List.of();
+
+  }
+
+  /**
    * Whether this store holds an OPEN record for the given BPMN process at all - a record
    * whose outcome is <code>COMPLETION_PENDING</code>.
    *

@@ -104,6 +104,12 @@ public class MongoTaskDeliveryLogAutoConfiguration {
             .indexOps(MongoTaskDeliveryLog.DEFAULT_COLLECTION_NAME)
             .createIndex(new Index()
                 .on("aggregateId", Sort.Direction.ASC));
+        // the core asks for the open tasks of ONE workflow of the BPMS on every wake-up
+        // of that workflow, which is far more often than an extension builds a screen
+        mongoTemplate
+            .indexOps(MongoTaskDeliveryLog.DEFAULT_COLLECTION_NAME)
+            .createIndex(new Index()
+                .on("workflowId", Sort.Direction.ASC));
       }
       deliveryLog.start();
     };
