@@ -2589,6 +2589,48 @@ end after them, an end naming no workflow deriving nothing, a record of another 
 alone, a handler which throws leaving its record open, and the boot naming the method a derived
 cancellation cannot fill.
 
+### The core probes what it still believes is open
+
+An application on a remote BPMS learns nothing on its own. `WorkflowTaskInvoker`
+`.reportTasksTheBpmsNoLongerHas(module, process, wakeUp, probe)` is what an adapter calls after
+it handed a delivery over: the core looks at the other tasks it believes are open in the SAME
+workflow, asks the probe whether they still exist, and reports the ones which are gone as
+`TaskEvent.Event.CANCELED`. The scope is the one workflow the wake-up belongs to, never the tree
+of workflows an aggregate owns.
+
+The blindness is not one BPMS' trait, which is why the loop is here and not in an adapter. The
+Process-Engine-API has it as well, and an embedded engine does not, because it says per element
+what it took away. So the core runs the loop and the adapter answers one question.
+
+What one call does, in the order which makes it cheap:
+
+1. a BPMN process without an asynchronous task returns at once. The core knows that from the
+   deployment, and most applications are that case, so most applications pay nothing.
+2. a scope whose `vanillabp.delivery.check-open-tasks-on-delivery` is `false`, or whose
+   `vanillabp.delivery.max-open-tasks-checked` is zero, returns as well. Both are resolvable per
+   workflow module, per workflow and per task.
+3. the open records of that workflow are read with `TaskDeliveryLog.openTasksOfWorkflow`, which
+   is 0.01 ms with the index over `WORKFLOW_ID`.
+4. the record of the task which woke us up is dropped by its own task id, and so is every record
+   another adapter wrote.
+5. the rest is probed, oldest record first, up to ten per wake-up. What is not reached this time
+   is reached at the next one.
+6. every task the probe calls gone goes through the derivation of the ended workflow: a
+   transaction of its own, the claim with `markTaskClosed`, the delivery in the same transaction.
+   That code is written once (`DerivedCancelations`).
+
+The probe has three answers and only `GONE` cancels, which is decision 74. A probe which cannot
+say is not a probe which said no, and a probe which throws is read as "cannot say" and reported
+once - the delivery which led there is done and must not be lost over it.
+
+What this does not promise: a workflow which walks into a timer or a message wait after the
+boundary event produces no job, so nothing wakes the application up and the cancellation waits.
+Three things catch it later - the next job of that workflow, the end of the workflow, and the next
+operation which names the task.
+
+`OtherOpenTasksOfAWakeUpTest` holds the six steps, the three answers and the probe which throws;
+`DerivedCancelationTest` holds the booted path on both platforms.
+
 ### Broadcasting signals
 
 A signal is the one BPMS operation which is not about a workflow, so it is the one

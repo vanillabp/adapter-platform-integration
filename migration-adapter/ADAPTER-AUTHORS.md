@@ -608,6 +608,44 @@ application's own start, and one which does not makes it a workflow somebody sta
 VanillaBP, which is built under the key it was started with. Your adapter learns which of the two
 it was from `BpmsInitiatedStartResult#created()`.
 
+### 3.4 Letting the core work cancellations out for you
+
+A remote BPMS usually cannot say per element what it took away. Your adapter then calls
+`reportTasksTheBpmsNoLongerHas(module, process, wakeUp, probe)` right after it handed a delivery
+over, and the core does the rest: it reads the tasks it still believes are open in the SAME
+workflow, asks your probe about them and reports the ones which are gone to the application as
+`TaskEvent.Event.CANCELED`. Nothing else in VanillaBP ever tells such an application about those
+tasks.
+
+Your probe answers one question about one task, and it has three answers:
+
+|    Answer     |               What it means               |                              What follows                              |
+|---------------|-------------------------------------------|------------------------------------------------------------------------|
+| `GONE`        | the BPMS does not have this task any more | the application is told the task was canceled and its record is closed |
+| `STILL_THERE` | the BPMS still has it                     | nothing                                                                |
+| `CANNOT_SAY`  | you cannot tell a refusal from an outage  | nothing                                                                |
+
+The third one is the one which matters. Answer it wherever your API leaves you guessing, and do
+not fold a failure into "gone": that would cancel every open task of an instance whenever your
+engine hiccups. An adapter whose API has no typed exceptions answers `CANNOT_SAY` for every
+failure, which costs nothing, because "still there" and "cannot say" lead to the same nothing
+(decision 74).
+
+What you owe the call, and what it owes you:
+
+- the question has to be ONE round trip which names the task. It runs on the thread of the
+  delivery, and up to `vanillabp.delivery.max-open-tasks-checked` times per wake-up, so a search
+  against a read model is the wrong answer here;
+- the core never probes the task of the wake-up itself, never a record another adapter wrote, and
+  never anything at all for a BPMN process without an asynchronous task;
+- a probe which throws is read as "cannot say" and reported once. The delivery which led there is
+  done, and it is not lost over a question nobody asked for;
+- supply no probe and nothing changes. Every adapter written before this keeps behaving exactly as
+  it does, which is what makes the call additive.
+
+Do not call it from an adapter whose BPMS cancels each element by itself. The application would
+hear about the same task twice.
+
 ## 4. The promises a probe makes
 
 The election walks the prioritized adapters and stops at the first `ACTIVE`, so it is exactly as

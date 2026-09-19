@@ -414,6 +414,64 @@ public class DerivedCancelationTest {
   }
 
   /**
+   * The other half of the same mechanism: nothing ended, the BPMS simply does not have a
+   * task any more, and a wake-up of that workflow is what finds out.
+   */
+  @Test
+  @DisplayName("A wake-up reports the other tasks the BPMS does not have, and leaves the rest alone")
+  public void aWakeUpProbesWhatItStillBelievesIsOpen() throws IOException {
+
+    CancelConfiguration.AGGREGATES.clear();
+    CancelWorkflowService.CANCELATIONS_WHICH_FAIL.set(0);
+
+    try (var testApp = buildTestApp(); var context = runTestApplication(testApp)) {
+
+      final var dummyAdapter = context.getBean("DummyAdapter_DeploymentService_test", DummyDeploymentService.class);
+
+      storeAggregate("4715");
+      dummyAdapter.invokeTask(MODULE, PROCESS, delivery("awaitSignature", "4715", "task-7"));
+      dummyAdapter.invokeTask(MODULE, PROCESS, delivery("awaitApproval", "4715", "task-8"));
+      dummyAdapter.invokeTask(MODULE, PROCESS, delivery("awaitDelivery", "4715", "task-9"));
+      Assertions.assertEquals(3, openRecordCount(context, "4715"));
+
+      // task-9 is the job being worked on. Of the other two the BPMS has one and not the
+      // other, and it cannot say about nothing here
+      final var probed = new java.util.ArrayList<String>();
+      dummyAdapter
+          .reportTasksTheBpmsNoLongerHas(
+              MODULE,
+              PROCESS,
+              delivery("awaitDelivery", "4715", "task-9"),
+              (
+                  workflowId,
+                  taskId) -> {
+                probed.add(taskId);
+                return "task-7".equals(taskId)
+                    ? io.vanillabp.integration.adapter.spi.workflowtask.TaskExistence.GONE
+                    : io.vanillabp.integration.adapter.spi.workflowtask.TaskExistence.STILL_THERE;
+              });
+
+      Assertions
+          .assertEquals(
+              List.of("task-7", "task-8"),
+              probed,
+              "the task of the wake-up itself is never probed, and the others come oldest first");
+      Assertions
+          .assertEquals(
+              "task-7",
+              CancelConfiguration.AGGREGATES.get("4715").getWhatArrived(),
+              "only the task the BPMS does not have reaches the application");
+      Assertions
+          .assertEquals(
+              2,
+              openRecordCount(context, "4715"),
+              "its record is closed, the two others stay open");
+
+    }
+
+  }
+
+  /**
    * A derived cancellation carries no job of the element, so a value the method reads
    * from it is absent. The boot names exactly the methods which read one, because a value
    * which is silently missing is what an application finds out in production.

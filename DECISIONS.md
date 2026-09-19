@@ -2469,3 +2469,34 @@ A derived cancellation carries no job of the element, so a `@TaskParam` and a mu
 reach the method as `null`. The boot names the methods which really declare one, and says nothing
 about the rest. A value which is silently absent is what an application finds out in production;
 a warning on every derived delivery would be noise for the models nobody cancels.
+
+### 74. The probe of an open task has three answers, and only "gone" cancels
+
+Whenever a BPMS hands the application a job, the core looks at the other tasks it still
+believes are open in the same workflow and asks the adapter whether they still exist. That
+question is answered with `GONE`, `STILL_THERE` or `CANNOT_SAY`, and a cancellation follows only
+on the first one.
+
+The third answer is the whole point. An adapter which cannot tell a refusal from an outage would
+otherwise have to guess, and a guess in the "gone" direction cancels every open task of an
+instance whenever the engine hiccups. The Process-Engine-API is the case we have: it probes with
+a `PREFLIGHT_CHECK` completion, its API has no typed exceptions, and every failure there means
+the same thing to the caller. Such an adapter answers `CANNOT_SAY` and nothing happens, which is
+exactly what happens on `STILL_THERE` - the two differ in what they mean, not in what follows,
+so being honest costs an adapter nothing.
+
+An adapter which supplies no probe at all keeps behaving as it does today. That is what makes the
+whole mechanism additive for every adapter written against the current SPI.
+
+`WorkflowAwareness` is not this probe and must not be reused as one. It answers the election's
+question - which of the configured BPMS holds this task - and folds "not mine" into
+`UNKNOWN_TO_BPMS`, which read as "gone" would cancel the open work of a workflow whenever the
+wrong adapter is asked.
+
+The check is on by default, against the rule that defaults stay compatible with version 1. What
+changes is that a method carrying `@TaskEvent(CANCELED)` starts being called where it never was,
+and only such a method is affected: the wiki told people the event never arrives on a remote BPMS,
+and that sentence is what was wrong. The property
+`vanillabp.delivery.check-open-tasks-on-delivery` switches it off for an application which does
+not want the new calls, and `vanillabp.delivery.max-open-tasks-checked` caps the round trips per
+wake-up at ten until somebody measures a better number.

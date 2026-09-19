@@ -1480,6 +1480,94 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
+   * How many of the OTHER tasks open in a workflow one delivery probes
+   * (<code>vanillabp.delivery.max-open-tasks-checked</code>, overridable per workflow
+   * module, per workflow and per task). The most specific level which configured a value
+   * wins, the same way {@link #maxTaskAge(String, String, String)} resolves.
+   * <p>
+   * Zero means the probing is off for that scope, and so does
+   * <code>check-open-tasks-on-delivery: false</code>.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID or <code>null</code>
+   * @param taskDefinition The task definition or <code>null</code>
+   * @return How many tasks one delivery may probe, never negative
+   */
+  public int maxOpenTasksChecked(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String taskDefinition) {
+
+    if (!checksOpenTasksOnDelivery(workflowModuleId, bpmnProcessId, taskDefinition)) {
+      return 0;
+    }
+    final var configured = deliveryLevelsOf(workflowModuleId, bpmnProcessId, taskDefinition)
+        .map(DeliveryProperties::getMaxOpenTasksChecked)
+        .filter(java.util.Objects::nonNull)
+        .findFirst()
+        .orElse(DeliveryProperties.DEFAULT_MAX_OPEN_TASKS_CHECKED);
+    return Math.max(0, configured);
+
+  }
+
+  /**
+   * Whether a delivery of the given scope looks at the other tasks open in its workflow at
+   * all (<code>vanillabp.delivery.check-open-tasks-on-delivery</code>, overridable per
+   * workflow module, per workflow and per task). Defaults to <code>true</code>.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID or <code>null</code>
+   * @param taskDefinition The task definition or <code>null</code>
+   * @return Whether the other open tasks are probed
+   */
+  public boolean checksOpenTasksOnDelivery(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String taskDefinition) {
+
+    return deliveryLevelsOf(workflowModuleId, bpmnProcessId, taskDefinition)
+        .map(DeliveryProperties::getCheckOpenTasksOnDelivery)
+        .filter(java.util.Objects::nonNull)
+        .findFirst()
+        .orElse(Boolean.TRUE);
+
+  }
+
+  /**
+   * The <code>delivery</code> sections which may answer a question about one task, most
+   * specific first: the task, its workflow, its workflow module and the global one. Each of
+   * them may be absent, which is what "whatever the next less specific level says" means.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID or <code>null</code>
+   * @param taskDefinition The task definition or <code>null</code>
+   * @return The sections which exist, most specific first
+   */
+  private Stream<DeliveryProperties> deliveryLevelsOf(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String taskDefinition) {
+
+    final var module = workflowModuleId != null
+        ? workflowModules.get(workflowModuleId)
+        : null;
+    final var workflow = (module != null) && (bpmnProcessId != null)
+        ? module.getWorkflows().get(bpmnProcessId)
+        : null;
+    final var task = (workflow != null) && (taskDefinition != null)
+        ? workflow.getTasks().get(taskDefinition)
+        : null;
+    return Stream
+        .of(
+            task != null ? task.getDelivery() : null,
+            workflow != null ? workflow.getDelivery() : null,
+            module != null ? module.getDelivery() : null,
+            delivery)
+        .filter(java.util.Objects::nonNull);
+
+  }
+
+  /**
    * The property naming the decision of {@link #maxTaskAge(String, String, String)},
    * for the message which reports a task older than it.
    *

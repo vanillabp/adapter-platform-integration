@@ -23,6 +23,8 @@ import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvo
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartResult;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartSpec;
 import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
+import io.vanillabp.integration.adapter.spi.workflowtask.OpenTaskProbe;
+import io.vanillabp.integration.adapter.spi.workflowtask.TaskExistence;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
@@ -972,6 +974,119 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
         context,
         transactionRunner,
         rollbackRuleRemedies);
+
+  }
+
+  /**
+   * Reports the tasks the BPMS does not have any more, asked by an adapter after it handed
+   * a delivery over - see
+   * {@link WorkflowTaskInvoker#reportTasksTheBpmsNoLongerHas(String, String, TaskInvocationContext, OpenTaskProbe)}.
+   * <p>
+   * What it skips, and in this order, because each step is cheaper than the next: a BPMN
+   * process with no asynchronous task at all, which most applications are and which then
+   * pay nothing; a scope whose configuration switched the probing off; a delivery which
+   * names no workflow; and an application without a delivery log.
+   * <p>
+   * Nothing here may cost the caller its own work. The delivery is done by the time an
+   * adapter asks, and a probe which throws or a derived cancellation which fails must not
+   * turn a finished job into a failed one, so both stay inside this call.
+   */
+  @Override
+  public void reportTasksTheBpmsNoLongerHas(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final TaskInvocationContext wakeUp,
+      final OpenTaskProbe probe) {
+
+    if ((probe == null) || (wakeUp == null)) {
+      return;
+    }
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    if ((entry == null) || (entry.processService == null)) {
+      return;
+    }
+    // a BPMN process whose methods all complete when they return leaves no task open, so
+    // there is nothing this could ever find - and that is most applications
+    if (entry.handlers.stream().noneMatch(WorkflowTaskHandler::isAsynchronousTask)) {
+      return;
+    }
+    final var howMany = properties == null
+        ? io.vanillabp.integration.adapter.migration.config.DeliveryProperties.DEFAULT_MAX_OPEN_TASKS_CHECKED
+        : properties.maxOpenTasksChecked(workflowModuleId, bpmnProcessId, wakeUp.getTaskDefinition());
+    if (howMany == 0) {
+      return;
+    }
+    final var workflowId = wakeUp.getWorkflowId();
+    if ((workflowId == null) || workflowId.isBlank()) {
+      return;
+    }
+    final var deliveryLog = entry.processService.resolveTaskDeliveryLog();
+    if (deliveryLog == null) {
+      return;
+    }
+
+    final var candidates = deliveryLog
+        .openTasksOfWorkflow(workflowModuleId, workflowId)
+        .stream()
+        // the task being worked on right now is not a candidate: it is open because this
+        // very delivery left it open
+        .filter(record -> !java.util.Objects.equals(record.taskId(), wakeUp.getTaskId()))
+        // and a record another BPMS wrote belongs to that BPMS, whose tasks this probe
+        // knows nothing about
+        .filter(record -> (wakeUp.getAdapterId() == null) || wakeUp.getAdapterId().equals(record.adapterId()))
+        .filter(record -> record.taskId() != null)
+        .limit(howMany)
+        .toList();
+    if (candidates.isEmpty()) {
+      return;
+    }
+
+    final var gone = candidates
+        .stream()
+        .filter(record -> theBpmsNoLongerHas(record, probe))
+        .toList();
+    if (gone.isEmpty()) {
+      return;
+    }
+    DerivedCancelations
+        .reportAsCanceled(
+            gone,
+            deliveryLog,
+            entry.processService.getTransactionRunner(transactionRunner),
+            workflowModuleId,
+            this,
+            "is gone in its BPMS");
+
+  }
+
+  /**
+   * Asks the probe about one record. Only {@link TaskExistence#GONE} produces a
+   * cancellation: a probe which cannot say is not a probe which said no, which is the one
+   * thing which keeps this safe for a BPMS whose API cannot tell a refusal from an outage
+   * (see decision 74 in the repository's DECISIONS.md).
+   * <p>
+   * A probe which throws is read as "cannot say" and reported once. The delivery which led
+   * here is done, and an adapter whose BPMS hiccups must not lose it over a question nobody
+   * asked for.
+   */
+  private static boolean theBpmsNoLongerHas(
+      final TaskDelivery record,
+      final OpenTaskProbe probe) {
+
+    final TaskExistence answer;
+    try {
+      answer = probe.stillExists(record.workflowId(), record.taskId());
+    } catch (final RuntimeException failure) {
+      log
+          .debug(
+              "Asking whether task '{}' of workflow '{}' still exists failed - it is left alone "
+                  + "and the next wake-up of that workflow asks again",
+              record.taskId(),
+              record.workflowId(),
+              failure);
+      return false;
+    }
+    return answer == TaskExistence.GONE;
 
   }
 

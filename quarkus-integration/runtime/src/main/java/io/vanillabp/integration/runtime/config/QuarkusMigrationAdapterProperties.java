@@ -679,6 +679,27 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<Duration> maxTaskAge();
 
     /**
+     * Whether a delivery looks at the other tasks VanillaBP believes are open in the same
+     * workflow of the BPMS and reports the ones which are gone as canceled. The default is
+     * <code>true</code>, see the core's
+     * {@link io.vanillabp.integration.adapter.migration.config.DeliveryProperties#getCheckOpenTasksOnDelivery()}.
+     *
+     * @return The setting, an empty Optional meaning "whatever the next less specific
+     *         level says"
+     */
+    Optional<Boolean> checkOpenTasksOnDelivery();
+
+    /**
+     * How many other open tasks one delivery probes at most. The default is ten, see the
+     * core's
+     * {@link io.vanillabp.integration.adapter.migration.config.DeliveryProperties#getMaxOpenTasksChecked()}.
+     *
+     * @return The setting, an empty Optional meaning "whatever the next less specific
+     *         level says"
+     */
+    Optional<Integer> maxOpenTasksChecked();
+
+    /**
      * How long the record of a processed task delivery is kept. Read GLOBALLY only (see
      * the core's
      * {@link io.vanillabp.integration.adapter.migration.config.DeliveryProperties#getRetention()}),
