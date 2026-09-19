@@ -18,4 +18,11 @@ public class DeliveryAggregate {
 
   private int invocations;
 
+  /**
+   * The tasks the application was told a cancellation of, in the order they arrived and
+   * separated by a comma. A test reads it to see which cancellations really reached a
+   * <code>&#64;WorkflowTask</code> method.
+   */
+  private String canceledTasks;
+
 }

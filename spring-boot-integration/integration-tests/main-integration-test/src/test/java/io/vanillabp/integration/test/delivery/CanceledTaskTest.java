@@ -1,9 +1,6 @@
 package io.vanillabp.integration.test.delivery;
 
 import java.io.IOException;
-import java.sql.Timestamp;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -42,20 +39,20 @@ import io.vanillabp.integration.test.deployment.DeploymentTest;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.springboot.SpringBootTestApplication;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
+import io.vanillabp.spi.service.TaskEvent;
 
 /**
- * Acceptance test on Spring Boot, with the default JDBC-based delivery log: the
- * record which answers the redeliveries of an OPEN task outlives the retention as long as
- * the BPMS keeps redelivering that task, while the record of a task nobody hands out any
- * more expires as it always did.
+ * Acceptance test on Spring Boot, with the default JDBC-based delivery log: a task the
+ * BPMS cancels leaves ONE record and that record is closed.
  * <p>
- * The second half is that nothing of this moves the age of the open task: it
- * keeps being measured from the moment the handler ran, so
- * <code>vanillabp.delivery.max-task-age</code> still fires. Both are asserted on records
- * backdated in the database rather than waited for.
+ * Both halves of it are read from the table. The record the task left open is stamped by
+ * the cancelling delivery itself, and that delivery writes no second OPEN record although
+ * the method carries a <code>&#64;TaskId</code> parameter. A method which does not
+ * subscribe to the cancellation is the case which must not change: its record stays open,
+ * because nothing told it the task is over.
  */
 @ExtendWith(SuppressOutputExtension.class)
-public class OpenTaskRetentionTest {
+public class CanceledTaskTest {
 
   private static final String MODULE = "test-module";
 
@@ -65,10 +62,10 @@ public class OpenTaskRetentionTest {
 
   /**
    * In-memory persistence of the test aggregate plus the H2 database the delivery log
-   * writes its records into - the same shape the inbound-idempotency test uses.
+   * writes its records into - the shape the other delivery tests use.
    */
   @Configuration
-  static class OpenTaskConfiguration {
+  static class CancelConfiguration {
 
     static final Map<String, DeliveryAggregate> AGGREGATES = new ConcurrentHashMap<>();
 
@@ -150,16 +147,8 @@ public class OpenTaskRetentionTest {
 
   }
 
-  /**
-   * An hour of retention and an hour of maximum age: the records are backdated by two, so
-   * both boundaries are crossed without waiting for anything.
-   */
   private static final String APPLICATION_YAML = """
       vanillabp:
-        outbox:
-          retention: PT1H
-        delivery:
-          max-task-age: PT1H
         adapters:
           test:
             type: dummy
@@ -186,7 +175,7 @@ public class OpenTaskRetentionTest {
             TestPersistenceConfiguration.class, TestPhaseTwoOutboxConfiguration.class,
             DeliveryWorkflowService.class,
             WorkflowModuleConfiguration.class,
-            OpenTaskConfiguration.class,
+            CancelConfiguration.class,
             JdbcTaskDeliveryLogAutoConfiguration.class,
             DeploymentTest.TestConfig.class)
         .run();
@@ -204,10 +193,15 @@ public class OpenTaskRetentionTest {
 
   }
 
+  /**
+   * One delivery of one task. The delivery id carries the event as well, the way an
+   * adapter which activates a job per event builds it.
+   */
   private TaskInvocationContext delivery(
       final String taskDefinition,
       final String aggregateId,
-      final String deliveryId) {
+      final String taskId,
+      final TaskEvent.Event event) {
 
     return new TaskInvocationContext() {
 
@@ -228,18 +222,17 @@ public class OpenTaskRetentionTest {
 
       @Override
       public String getTaskId() {
-        return deliveryId;
+        return taskId;
       }
 
       @Override
       public String getDeliveryId() {
-        return deliveryId;
+        return taskId;
       }
 
       @Override
-      public String getBpmnElementId() {
-        return "Activity_"
-            + taskDefinition;
+      public TaskEvent.Event getTaskEvent() {
+        return event;
       }
 
       @Override
@@ -258,7 +251,7 @@ public class OpenTaskRetentionTest {
     final var aggregate = new DeliveryAggregate();
     aggregate.setId(id);
     aggregate.setStatus("new");
-    OpenTaskConfiguration.AGGREGATES.put(id, aggregate);
+    CancelConfiguration.AGGREGATES.put(id, aggregate);
 
   }
 
@@ -281,123 +274,173 @@ public class OpenTaskRetentionTest {
 
   }
 
-  /**
-   * Moves every record of the table back in time, both of its timestamps - a database two
-   * hours older than the application which reads it.
-   */
-  private void backdateEveryRecordBy(
-      final ConfigurableApplicationContext context,
-      final Duration age) {
-
-    final var moment = Timestamp.from(Instant.now().minus(age));
-    jdbc(context)
-        .update(
-            "UPDATE %s SET RECORDED_AT = ?, LAST_SEEN_AT = ?"
-                .formatted(JdbcTaskDeliveryStore.DEFAULT_TABLE_NAME),
-            moment,
-            moment);
-
-  }
-
-  private Timestamp lastSeenAt(
+  private int openRecordCount(
       final ConfigurableApplicationContext context,
       final String aggregateId) {
 
     return jdbc(context)
         .queryForObject(
-            "SELECT LAST_SEEN_AT FROM %s WHERE AGGREGATE_ID = ?"
+            """
+                SELECT COUNT(*) FROM %s WHERE AGGREGATE_ID = ? AND OUTCOME = 'COMPLETION_PENDING' \
+                AND TASK_CLOSED_AT IS NULL"""
                 .formatted(JdbcTaskDeliveryStore.DEFAULT_TABLE_NAME),
-            Timestamp.class,
+            Integer.class,
+            aggregateId);
+
+  }
+
+  private int recordsWithoutAClosingMoment(
+      final ConfigurableApplicationContext context,
+      final String aggregateId) {
+
+    return jdbc(context)
+        .queryForObject(
+            "SELECT COUNT(*) FROM %s WHERE AGGREGATE_ID = ? AND TASK_CLOSED_AT IS NULL"
+                .formatted(JdbcTaskDeliveryStore.DEFAULT_TABLE_NAME),
+            Integer.class,
             aggregateId);
 
   }
 
   @Test
-  @DisplayName("The record of an open task survives the retention, the record of a finished one does not")
-  public void theRecordOfAnOpenTaskSurvivesTheRetention() throws IOException {
+  @DisplayName("A task the BPMS cancels leaves one closed record, and a method not asking for the event does not")
+  public void aCancellationClosesTheRecordOfItsTask() throws IOException {
 
-    OpenTaskConfiguration.AGGREGATES.clear();
+    CancelConfiguration.AGGREGATES.clear();
 
     try (var testApp = buildTestApp(); var context = runTestApplication(testApp)) {
 
       final var dummyAdapter = context.getBean("DummyAdapter_DeploymentService_test", DummyDeploymentService.class);
       final var deliveryLog = context.getBean(JdbcTaskDeliveryLog.class);
 
-      // an asynchronous task the application never completes, and an ordinary one which is
-      // done the moment its handler returns
+      // (a) a user task handed to the application, which leaves it open
       storeAggregate("4711");
-      storeAggregate("4712");
-      final var opened = dummyAdapter.invokeTask(MODULE, PROCESS, delivery("awaitCompletion", "4711", "job-1"));
-      dummyAdapter.invokeTask(MODULE, PROCESS, delivery("processTask", "4712", "job-2"));
-      Assertions.assertEquals(WorkflowTaskOutcome.Kind.COMPLETION_PENDING, opened.kind());
-      Assertions.assertEquals(1, recordCount(context, "4711"));
-      Assertions.assertEquals(1, recordCount(context, "4712"));
+      final var created = dummyAdapter
+          .invokeTask(MODULE, PROCESS, delivery("cancelableTask", "4711", "task-1", TaskEvent.Event.CREATED));
+      Assertions.assertEquals(WorkflowTaskOutcome.Kind.COMPLETION_PENDING, created.kind());
+      Assertions.assertEquals(1, openRecordCount(context, "4711"));
 
-      // what an extension reads before it shows what a workflow is waiting for: the task
-      // the application has not completed, and only that one
-      final var openTasks = deliveryLog.openTasksOfAggregate(MODULE, PROCESS, "4711");
-      Assertions.assertEquals(1, openTasks.size(), openTasks::toString);
-      Assertions.assertEquals("job-1", openTasks.getFirst().taskId());
-      Assertions.assertEquals("awaitCompletion", openTasks.getFirst().taskDefinition());
-      // the element of the model and the workflow of the BPMS come back out of the table
-      // the way the adapter named them - what an extension addresses this task by
-      Assertions.assertEquals("Activity_awaitCompletion", openTasks.getFirst().bpmnElementId());
-      Assertions.assertEquals("workflow-of-4711", openTasks.getFirst().workflowId());
-      Assertions
-          .assertTrue(
-              deliveryLog.openTasksOfAggregate(MODULE, PROCESS, "4712").isEmpty(),
-              "a task whose handler finished it was never open");
-
-      // two hours later, an hour past the retention and past the maximum age
-      backdateEveryRecordBy(context, Duration.ofHours(2));
-      final var backdated = lastSeenAt(context, "4711");
-
-      // the BPMS renews the lock of the task nobody completed, which is a redelivery
-      final var redelivered = dummyAdapter.invokeTask(MODULE, PROCESS, delivery("awaitCompletion", "4711", "job-1"));
-      Assertions.assertEquals(WorkflowTaskOutcome.Kind.COMPLETION_PENDING, redelivered.kind());
+      // (b) the BPMS takes the task away and says so
+      final var canceled = dummyAdapter
+          .invokeTask(MODULE, PROCESS, delivery("cancelableTask", "4711", "task-1", TaskEvent.Event.CANCELED));
       Assertions
           .assertEquals(
-              1,
-              OpenTaskConfiguration.AGGREGATES.get("4711").getInvocations(),
-              "the redelivery is answered from the record, the handler ran once");
-      Assertions
-          .assertTrue(
-              redelivered.openFor().compareTo(Duration.ofHours(2)) >= 0,
-              "the age is still measured from the moment the handler ran: "
-                  + redelivered.openFor());
-      Assertions
-          .assertTrue(
-              redelivered.maxAgeExceeded(),
-              "so a task open longer than 'vanillabp.delivery.max-task-age' is still reported");
-
-      // the cleanup writes what the redelivery collected and then deletes what nobody saw.
-      // What it left behind is read back from the table rather than counted: the cleanup
-      // running in the background deletes the same records, and a count would say who got
-      // there first rather than what is left
-      deliveryLog.cleanUpExpiredRecords();
-
+              WorkflowTaskOutcome.Kind.COMPLETED,
+              canceled.kind(),
+              "a canceled task is over, whatever the @TaskId parameter of the method promised");
       Assertions
           .assertEquals(
-              1,
-              recordCount(context, "4711"),
-              "the task is still being redelivered, so the record answering it stays");
+              "task-1",
+              CancelConfiguration.AGGREGATES.get("4711").getCanceledTasks(),
+              "the method asked for the event, so it was called with it");
+
+      // what the table says afterwards: no open record left, and every record naming that
+      // task carries the moment it was closed. Two rows, one per delivery: the
+      // cancellation keeps a record of its own so a BPMS repeating it does not run the
+      // method a second time
       Assertions
           .assertEquals(
               0,
-              recordCount(context, "4712"),
-              "nobody redelivers a task which is done - its record expires as it always did");
+              openRecordCount(context, "4711"),
+              "the record the task left open is closed by the cancelling delivery");
+      Assertions.assertEquals(2, recordCount(context, "4711"), "one record per delivery");
+      Assertions
+          .assertEquals(
+              0,
+              recordsWithoutAClosingMoment(context, "4711"),
+              "and both of them carry the moment the task was closed");
       Assertions
           .assertTrue(
-              lastSeenAt(context, "4711").after(backdated),
-              "the moment the record was last seen moved forward");
+              deliveryLog.openTasksOfAggregate(MODULE, PROCESS, "4711").isEmpty(),
+              "so nothing reads that workflow as waiting for a task any more");
 
-      // and the record kept alive still does its job
-      dummyAdapter.invokeTask(MODULE, PROCESS, delivery("awaitCompletion", "4711", "job-1"));
+      // (c) a method which never asked for the event: the delivery is skipped and the
+      // record it left open stays exactly as it was
+      storeAggregate("4712");
+      dummyAdapter.invokeTask(MODULE, PROCESS, delivery("awaitCompletion", "4712", "task-2", TaskEvent.Event.CREATED));
+      Assertions.assertEquals(1, openRecordCount(context, "4712"));
+      dummyAdapter.invokeTask(MODULE, PROCESS, delivery("awaitCompletion", "4712", "task-2", TaskEvent.Event.CANCELED));
       Assertions
           .assertEquals(
               1,
-              OpenTaskConfiguration.AGGREGATES.get("4711").getInvocations(),
-              "which is the whole point: the handler of an open task must not run twice");
+              recordCount(context, "4712"),
+              "a delivery nobody subscribed to is skipped before anything is written");
+      Assertions
+          .assertEquals(
+              1,
+              openRecordCount(context, "4712"),
+              "so the record of that task stays open, and the next wake-up is what closes it");
+
+    }
+
+  }
+
+  /**
+   * The second record of one task is what {@code markTaskClosed} has to close as well:
+   * a task cancelled after a record was written for it by another delivery id leaves two
+   * rows naming the same task, and a row left open keeps the task alive for everything
+   * which reads the open work.
+   */
+  @Test
+  @DisplayName("Every record naming the task is closed, not only the newest one")
+  public void everyRecordOfTheTaskIsClosed() throws IOException {
+
+    CancelConfiguration.AGGREGATES.clear();
+
+    try (var testApp = buildTestApp(); var context = runTestApplication(testApp)) {
+
+      final var dummyAdapter = context.getBean("DummyAdapter_DeploymentService_test", DummyDeploymentService.class);
+      final var deliveryLog = context.getBean(JdbcTaskDeliveryLog.class);
+
+      // two deliveries of ONE task, under two delivery ids - which is what a BPMS
+      // handing the same task out under a new job key produces
+      storeAggregate("4713");
+      dummyAdapter.invokeTask(MODULE, PROCESS, delivery("awaitCompletion", "4713", "task-3", TaskEvent.Event.CREATED));
+      dummyAdapter
+          .invokeTask(
+              MODULE,
+              PROCESS,
+              new TaskInvocationContext() {
+
+                @Override
+                public String getAdapterId() {
+                  return ADAPTER;
+                }
+
+                @Override
+                public String getTaskDefinition() {
+                  return "awaitCompletion";
+                }
+
+                @Override
+                public String getWorkflowAggregateId() {
+                  return "4713";
+                }
+
+                @Override
+                public String getTaskId() {
+                  return "task-3";
+                }
+
+                @Override
+                public String getDeliveryId() {
+                  return "another-job-of-task-3";
+                }
+
+              });
+      Assertions.assertEquals(2, openRecordCount(context, "4713"), "two records name the same task");
+
+      Assertions
+          .assertEquals(
+              2,
+              deliveryLog.markTaskClosed(MODULE, PROCESS, "4713", "task-3"),
+              "both of them are closed by one call, and the count says how many it closed");
+      Assertions.assertEquals(0, openRecordCount(context, "4713"));
+      Assertions
+          .assertEquals(
+              0,
+              deliveryLog.markTaskClosed(MODULE, PROCESS, "4713", "task-3"),
+              "a second call finds nothing left to close, which is what lets a caller claim a task");
 
     }
 

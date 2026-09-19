@@ -392,19 +392,21 @@ public class JdbcTaskDeliveryStore {
   }
 
   /**
-   * Writes down that the application's completion or cancellation of one task reached the
-   * BPMS (see {@link io.vanillabp.integration.spi.TaskDeliveryLog#markTaskClosed}). Runs
-   * where the dispatch of phase two runs, so it commits with whatever that thread commits.
+   * Writes down that one task is over (see
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLog#markTaskClosed}). Runs in the
+   * transaction of whoever calls it, so it commits with whatever that thread commits.
    * <p>
    * <code>TASK_CLOSED_AT IS NULL</code> keeps a repeated dispatch from moving the moment: the
    * task was closed when it was first closed, and the age of an open task is measured
-   * against exactly such a fixed moment elsewhere in this table.
+   * against exactly such a fixed moment elsewhere in this table. The statement carries no
+   * row limit, so every record naming that task is closed, which is decision 72 in the
+   * repository's DECISIONS.md.
    *
    * @param workflowModuleId The workflow module of the workflow
    * @param bpmnProcessId The BPMN process of the workflow
    * @param workflowAggregateId The workflow aggregate's ID in serialized form
    * @param taskId The BPMS' identity of the closed task
-   * @return The number of records marked
+   * @return The number of records this call marked
    */
   public int markTaskClosed(
       final String workflowModuleId,

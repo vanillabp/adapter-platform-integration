@@ -37,6 +37,7 @@ import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.PhaseTwoPermanentFailure;
 import io.vanillabp.integration.spi.PhaseTwoRetryLater;
 import io.vanillabp.integration.spi.RunningActivation;
+import io.vanillabp.integration.spi.TaskDeliveryLog;
 import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.spi.WorkflowAdapterCache;
 import io.vanillabp.spi.process.ProcessDefinition;
@@ -693,6 +694,76 @@ public class MigrationProcessService<A> {
 
   }
 
+  /**
+   * What a delivery is answered with where the handler did not raise a BPMN error: the task
+   * stays open where the method promised to complete it later, and it is over otherwise.
+   * <p>
+   * A delivery which reports that the BPMS took the task away is over whatever the method
+   * promised. {@code isAsynchronousTask} is true for every method with a
+   * <code>&#64;TaskId</code> parameter, a user-task method included, so answering by the
+   * method alone wrote a second OPEN record for a task which nobody can complete any more -
+   * and the election then read the younger of the two.
+   *
+   * @param handler The method serving the delivery
+   * @param context The invocation context of the delivery
+   * @return The outcome reported to the adapter
+   */
+  private static WorkflowTaskOutcome outcomeOf(
+      final WorkflowTaskHandler handler,
+      final TaskInvocationContext context) {
+
+    if (theBpmsEndedTheTask(context)) {
+      return WorkflowTaskOutcome.completed();
+    }
+    return handler.isAsynchronousTask()
+        ? WorkflowTaskOutcome.completionPending()
+        : WorkflowTaskOutcome.completed();
+
+  }
+
+  /**
+   * Whether this delivery says that the BPMS ended the task by itself, which is what a
+   * cancellation is: a boundary event fired, the scope around the task was left, or the
+   * workflow was terminated.
+   *
+   * @param context The invocation context of the delivery
+   * @return Whether the task is over because the BPMS took it away
+   */
+  private static boolean theBpmsEndedTheTask(
+      final TaskInvocationContext context) {
+
+    return context.getTaskEvent() == io.vanillabp.spi.service.TaskEvent.Event.CANCELED;
+
+  }
+
+  /**
+   * Remembers this delivery, and where it reported a cancellation closes the record the
+   * task had left open. Both writes belong to the transaction of the delivery, so a
+   * rollback takes them together.
+   * <p>
+   * The mark runs on the DELIVERY path and not where the application asks for something,
+   * because nobody in the application asked for this one. It is safe here for the reason it
+   * is not safe when a caller merely asks: a task the BPMS cancelled is never handed out
+   * again, so no redelivery is left which would need the record to renew its lock.
+   *
+   * @param deliveryLog The store to write to, <code>null</code> where there is none
+   * @param deliveryKey The identity of the delivery
+   * @param context The invocation context of the delivery
+   * @param outcome What the handler produced
+   */
+  private void recordTheDelivery(
+      final TaskDeliveryLog deliveryLog,
+      final String deliveryKey,
+      final TaskInvocationContext context,
+      final WorkflowTaskOutcome outcome) {
+
+    deliveryRecords.record(deliveryLog, deliveryKey, context, outcome);
+    if (theBpmsEndedTheTask(context)) {
+      deliveryRecords.writeDownThatTheBpmsEndedTheTask(deliveryLog, context);
+    }
+
+  }
+
   private WorkflowTaskOutcome deliverWorkflowTask(
       final WorkflowTaskHandler handler,
       final TaskInvocationContext context,
@@ -715,9 +786,7 @@ public class MigrationProcessService<A> {
           "Skipping delivery of task event '{}' to '{}': the method does not subscribe to it",
           context.getTaskEvent(),
           handler.describe());
-      return handler.isAsynchronousTask()
-          ? WorkflowTaskOutcome.completionPending()
-          : WorkflowTaskOutcome.completed();
+      return outcomeOf(handler, context);
     }
 
     // a BPMS repeating a delivery it never learned the result of must not run the
@@ -756,10 +825,8 @@ public class MigrationProcessService<A> {
       try {
         handler.invoke(workflowAggregate, context);
         aggregatePersistenceSupport.save(workflowAggregate);
-        final var outcome = handler.isAsynchronousTask()
-            ? WorkflowTaskOutcome.completionPending()
-            : WorkflowTaskOutcome.completed();
-        deliveryRecords.record(deliveryLog, deliveryKey, context, outcome);
+        final var outcome = outcomeOf(handler, context);
+        recordTheDelivery(deliveryLog, deliveryKey, context, outcome);
         failIfRollbackOnly(handler, context, runner, rollbackRuleRemedies);
         return outcome;
       } catch (final TaskException taskException) {
@@ -770,7 +837,7 @@ public class MigrationProcessService<A> {
         aggregatePersistenceSupport.save(workflowAggregate);
         final var outcome = WorkflowTaskOutcome
             .bpmnError(taskException.getErrorCode(), taskException.getErrorName());
-        deliveryRecords.record(deliveryLog, deliveryKey, context, outcome);
+        recordTheDelivery(deliveryLog, deliveryKey, context, outcome);
         failIfRollbackOnly(handler, context, runner, rollbackRuleRemedies);
         return outcome;
       }

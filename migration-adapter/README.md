@@ -1737,6 +1737,34 @@ the registry decision 25 rejected is decision 30.
   fallback would report a defect where there is none - the counter is read against how many task
   operations the application makes.
 
+##### A cancellation from the BPMS closes the record
+
+The note above is written where the APPLICATION asked for something. A task the BPMS takes away
+was asked for by nobody, so a second place writes it: the delivery of
+`TaskEvent.Event.CANCELED`.
+
+- The mark runs on the delivery path, inside the transaction of that delivery
+  (`MigrationProcessService.recordTheDelivery`). It is safe there for the reason it is not safe
+  when a caller merely asks: a task the BPMS cancelled is never handed out again, so no
+  redelivery is left which would need the record to renew its lock.
+- The cancelling delivery reports `COMPLETED` and never `COMPLETION_PENDING`.
+  `isAsynchronousTask` is true for every method with a `@TaskId` parameter, a user-task method
+  included, so answering by the method alone wrote a second OPEN record for a task nobody can
+  complete any more - and `recordOfTask` then answered with the younger of the two.
+- The cancellation keeps a record of its own, because the event is part of the delivery key and
+  a BPMS repeating the cancellation must not run the method a second time. That record is
+  written first and the mark follows, so every row naming the task carries the moment it was
+  closed.
+- A method which does NOT subscribe to `CANCELED` is untouched. Its delivery returns before the
+  transactional work and writes nothing, so the record of that task stays open until the next
+  wake-up of that workflow or the end of it closes it.
+- `markTaskClosed` closes EVERY record naming the task, in all four stores, which is decision 72
+  in the repository's `DECISIONS.md`. The count it returns is what it closed in that call, and
+  that is what lets two application instances claim one task against each other.
+
+`CanceledTaskTest` holds it on both platforms, and the two `MongoTaskDeliveryLogTest` classes
+hold the store side of closing every row.
+
 ##### The open tasks of one workflow aggregate
 
 `TaskDeliveryLog.openTasksOfAggregate(module, process, aggregateId)` answers the records of that

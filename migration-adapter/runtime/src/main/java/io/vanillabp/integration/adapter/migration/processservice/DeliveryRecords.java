@@ -928,6 +928,35 @@ public final class DeliveryRecords {
   }
 
   /**
+   * Writes into the record that the BPMS itself ended the task - the other half of
+   * {@link #writeDownThatTheTaskIsClosed(PhaseOperation, Object, Map, String)}, for the
+   * tasks nobody in the application asked to close.
+   * <p>
+   * Called on the DELIVERY path, inside the transaction of the delivery, and the mark is
+   * safe there for the reason it is not safe when a caller merely asks: a task the BPMS
+   * cancelled is never handed out again, so there is no lock left for a redelivery to
+   * renew. Without it the record of that task stays open until the retention deletes it,
+   * and everything which reads the open work of a workflow reads a task which is gone.
+   * <p>
+   * A failure is not swallowed. The mark and the record of this delivery are written in one
+   * transaction, and a delivery which cannot close the task it just reported cancelled would
+   * leave the store saying two different things about that task.
+   *
+   * @param deliveryLog The store to write to, <code>null</code> where there is none
+   * @param context The invocation context of the cancelling delivery
+   */
+  public void writeDownThatTheBpmsEndedTheTask(
+      final TaskDeliveryLog deliveryLog,
+      final TaskInvocationContext context) {
+
+    if ((deliveryLog == null) || (context.getTaskId() == null) || (context.getWorkflowAggregateId() == null)) {
+      return;
+    }
+    markTaskClosedWhereTheRecordSits(deliveryLog, context.getWorkflowAggregateId(), context.getTaskId());
+
+  }
+
+  /**
    * Whether the operation ENDS the task it names, which is what an operation elected by
    * whoever holds a task does: completing it or cancelling it. An operation elected by
    * whoever holds the WORKFLOW may name a task as well, and then it says where its values

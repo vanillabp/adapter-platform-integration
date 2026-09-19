@@ -143,6 +143,33 @@ public class MongoTaskDeliveryLogTest {
   }
 
   @Test
+  @DisplayName("Every record naming one task is closed, not only the newest one")
+  public void everyRecordOfTheTaskIsClosed() throws Exception {
+
+    final var now = java.time.Instant.now();
+    userTransaction.begin();
+    deliveryLog
+        .record(
+            new TaskDelivery("handed-out", "test-adapter", "test-module", "TestProcess", "4711", null, "awaitCompletion", null, "task-9", "COMPLETION_PENDING", null, null, now
+                .minusSeconds(60), null));
+    deliveryLog
+        .record(
+            new TaskDelivery("handed-out-again", "test-adapter", "test-module", "TestProcess", "4711", null, "awaitCompletion", null, "task-9", "COMPLETION_PENDING", null, null, now, null));
+    userTransaction.commit();
+
+    assertEquals(
+        2,
+        deliveryLog.openTasksOfAggregate("test-module", "TestProcess", "4711").size(),
+        "two records name the same task");
+    assertEquals(
+        2,
+        deliveryLog.markTaskClosed("test-module", "TestProcess", "4711", "task-9"),
+        "one call closes both - a row left open would keep the task alive");
+    assertTrue(deliveryLog.openTasksOfAggregate("test-module", "TestProcess", "4711").isEmpty());
+
+  }
+
+  @Test
   @DisplayName("The open tasks of one aggregate come oldest first, and a closed one is gone")
   public void theOpenTasksOfAnAggregateAreAnswered() throws Exception {
 

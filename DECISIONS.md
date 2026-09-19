@@ -2415,3 +2415,29 @@ JAR manifest or `META-INF/maven/.../pom.properties`. A file of our own survives 
 jar and a shaded jar, and its name carries the part, so several adapters on one classpath do not
 overwrite each other. In a native image it survives because the Quarkus extension registers every
 descriptor it finds while building.
+
+### 72. Closing a task closes every record naming it, and the count is what claims it
+
+`TaskDeliveryLog.markTaskClosed` said nothing about how many records it stamps, and the four
+stores disagreed: the SQL statement had no row limit and closed all of them, while the two
+MongoDB stores used `updateFirst` respectively `updateOne` and closed one.
+
+A task can carry more than one record, so the difference is real. The record of a delivery is
+keyed by the event as well, so the delivery which handed the task to the application and the
+delivery which reported its cancellation are two records naming one task. A BPMS which hands the
+same task out under a new job key produces two as well.
+
+All four stores now close every record naming the task. A record left open is what keeps a task
+alive for everything which reads the open work: the read of the open tasks of a workflow, the
+election of a later operation and the retention. Closing one row and leaving the other would show
+a task which is over as waiting, and the derived cancellation would then deliver it a second time.
+
+The number a store returns is what it closed in that call, and that is a second promise rather
+than a statistic. Two application instances deriving the same cancellation both call this, and
+only the one which reads a number above zero delivers the event. The compare and set is the whole
+claim: on SQL the second update waits on the row lock and reads zero afterwards, on MongoDB the
+second write conflicts and the retry finds the filter no longer matching.
+
+A record which was closed before keeps the moment it was closed at, which is why the filter
+demands an absent closing moment. The age of an open task is measured against such a fixed moment
+elsewhere in the same record.

@@ -90,6 +90,7 @@ public class DeliveryAggregatePersistence implements AggregatePersistenceAware<D
     copy.setId(aggregate.getId());
     copy.setStatus(aggregate.getStatus());
     copy.setInvocations(aggregate.getInvocations());
+    copy.setCanceledTasks(aggregate.getCanceledTasks());
     return copy;
 
   }

@@ -467,9 +467,14 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   }
 
   /**
-   * Writes down that the application's completion or cancellation of one task reached the
-   * BPMS. The filter demands an absent <code>taskClosedAt</code>, so a repeated dispatch
-   * does not move the moment the task was closed.
+   * Writes down that one task is over. The filter demands an absent
+   * <code>taskClosedAt</code>, so a repeated dispatch does not move the moment the task was
+   * closed.
+   * <p>
+   * <code>updateMany</code> and not <code>updateOne</code>: a task may carry more than one
+   * record, and a record left open keeps the task alive for everything which reads the open
+   * work (see {@link TaskDeliveryLog#markTaskClosed} and decision 72 in the repository's
+   * DECISIONS.md).
    */
   @Override
   public int markTaskClosed(
@@ -488,8 +493,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
         .append("taskClosedAt", null);
     final var closeIt = Updates.set("taskClosedAt", new Date());
     final var result = session != null
-        ? collection.updateOne(session, filter, closeIt)
-        : collection.updateOne(filter, closeIt);
+        ? collection.updateMany(session, filter, closeIt)
+        : collection.updateMany(filter, closeIt);
     return (int) result.getModifiedCount();
 
   }
