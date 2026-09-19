@@ -173,6 +173,34 @@ public class DummyProcessService<A> implements io.vanillabp.integration.adapter.
   }
 
   /**
+   * The same question with the BPMS' own id of the workflow, which the election passes
+   * where VanillaBP holds one. The dummy hands it to its hooks, so a test can show that a
+   * fake adapter really sees it.
+   */
+  @Override
+  public WorkflowAwareness awarenessOfWorkflow(
+      final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
+      final io.vanillabp.integration.spi.AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String workflowId) {
+
+    log
+        .info(
+            "Dummy-Adapter[{}]: Checking awareness of workflow '{}' of workflow aggregate '{}'",
+            adapterId,
+            workflowId,
+            workflowAggregateId);
+
+    return taskAwarenessSources
+        .all()
+        .map(source -> source.awarenessOfWorkflow(adapterId, workflowAggregateId, workflowId))
+        .filter(java.util.Objects::nonNull)
+        .findFirst()
+        .orElse(WorkflowAwareness.UNKNOWN_TO_BPMS);
+
+  }
+
+  /**
    * Whether this dummy stands in for a BPMS which can be asked whether it holds a
    * workflow - a test steers it through {@link DummyTaskAwarenessSource}, which is how
    * the core's refusal to combine a guessing adapter with a second one is exercised.

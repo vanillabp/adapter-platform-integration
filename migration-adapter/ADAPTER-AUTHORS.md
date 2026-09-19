@@ -575,6 +575,21 @@ Two more inbound notifications exist, and both are optional because not every BP
 them. `WorkflowEndedInvoker.workflowEnded(...)` reports that a workflow ended, as completed or as
 terminated; report the weaker fact rather than inventing the distinction where your BPMS cannot
 tell the two apart, and treat a missing aggregate as something to skip rather than an error.
+
+Name the workflow in that notification (`WorkflowEndedContext.getWorkflowId()`) and you get one
+thing for free: the core reads the tasks it still believes are open in that workflow and reports
+every one of them to the application as `TaskEvent.Event.CANCELED`, before `@WorkflowEnded` runs.
+That is the only way an application hears about those tasks on a BPMS which cannot say per element
+what it took away. Use the same value you report in `TaskInvocationContext.getWorkflowId()`, since
+that is what the core wrote into the records.
+
+Leave it empty where your BPMS cancels each element by itself, and say so in your documentation.
+Camunda 7 fires an END execution listener per element, process termination included, so it
+delivers the cancellation out of the engine's own transaction and a derivation on top would report
+the same task twice. The kind of the end plays no part in this on either side: on Camunda 8 a
+terminate end event ends the instance as COMPLETED while taking an open task with it, so the core
+does not read the kind before it derives (decision 73).
+
 `BpmsInitiatedStartInvoker.startWorkflowByBpms(...)` reports a workflow your BPMS started on its
 own, through a timer, a signal or a conditional start event, and the core builds the aggregate for
 it. The id it derives comes from your `getNaturalIdentity()` first, then from `getStartInstant()`,
@@ -592,6 +607,44 @@ workflow, so the core looks for an aggregate of that id: one which exists makes 
 application's own start, and one which does not makes it a workflow somebody started past
 VanillaBP, which is built under the key it was started with. Your adapter learns which of the two
 it was from `BpmsInitiatedStartResult#created()`.
+
+### 3.4 Letting the core work cancellations out for you
+
+A remote BPMS usually cannot say per element what it took away. Your adapter then calls
+`reportTasksTheBpmsNoLongerHas(module, process, wakeUp, probe)` right after it handed a delivery
+over, and the core does the rest: it reads the tasks it still believes are open in the SAME
+workflow, asks your probe about them and reports the ones which are gone to the application as
+`TaskEvent.Event.CANCELED`. Nothing else in VanillaBP ever tells such an application about those
+tasks.
+
+Your probe answers one question about one task, and it has three answers:
+
+|    Answer     |               What it means               |                              What follows                              |
+|---------------|-------------------------------------------|------------------------------------------------------------------------|
+| `GONE`        | the BPMS does not have this task any more | the application is told the task was canceled and its record is closed |
+| `STILL_THERE` | the BPMS still has it                     | nothing                                                                |
+| `CANNOT_SAY`  | you cannot tell a refusal from an outage  | nothing                                                                |
+
+The third one is the one which matters. Answer it wherever your API leaves you guessing, and do
+not fold a failure into "gone": that would cancel every open task of an instance whenever your
+engine hiccups. An adapter whose API has no typed exceptions answers `CANNOT_SAY` for every
+failure, which costs nothing, because "still there" and "cannot say" lead to the same nothing
+(decision 74).
+
+What you owe the call, and what it owes you:
+
+- the question has to be ONE round trip which names the task. It runs on the thread of the
+  delivery, and up to `vanillabp.delivery.max-open-tasks-checked` times per wake-up, so a search
+  against a read model is the wrong answer here;
+- the core never probes the task of the wake-up itself, never a record another adapter wrote, and
+  never anything at all for a BPMN process without an asynchronous task;
+- a probe which throws is read as "cannot say" and reported once. The delivery which led there is
+  done, and it is not lost over a question nobody asked for;
+- supply no probe and nothing changes. Every adapter written before this keeps behaving exactly as
+  it does, which is what makes the call additive.
+
+Do not call it from an adapter whose BPMS cancels each element by itself. The application would
+hear about the same task twice.
 
 ## 4. The promises a probe makes
 
@@ -686,6 +739,27 @@ gone, throw `io.vanillabp.spi.process.TaskNotFoundException`. The core raises th
 own probe finds no BPMS holding the task, so an application catches one type whichever of the two
 answered. Your check is often the only thing which can find out: VanillaBP writes the closing mark
 itself, so a task somebody completed outside VanillaBP still has a record saying it is open.
+
+### 4.1 The election may hand you the workflow's own id
+
+`awarenessOfWorkflow` has a fourth argument, and the two paths which WAIT for an eventually
+consistent BPMS pass it: the election an extension asks for, and a read of the viewer API. It is
+your BPMS' own id of the workflow, taken from what VanillaBP already holds - the record of a task
+delivery and the election cache - and `null` where nobody knew one. Nothing new is asked of your
+BPMS for it.
+
+Implement it where your engine answers by key faster than your read model does. On a Camunda 8
+cluster that is the difference between 20 ms and up to two seconds.
+
+One rule, and it is the whole contract: you may shorten a YES, and you may not turn a negative
+answer into `UNKNOWN_TO_BPMS`. An engine forgets a workflow the moment it ends, so "the key is
+unknown to the engine" does not tell `COMPLETED` from `UNKNOWN_TO_BPMS` - and only the second of
+the two lets the election move on to the next BPMS, which in a migration setup sends the next
+operation to the wrong one. Where the key answers nothing, fall back to the answer you would have
+given without it.
+
+Do not implement it and nothing changes: the default drops the id and calls the question you
+already answer.
 
 ## 5. What you must never assume
 

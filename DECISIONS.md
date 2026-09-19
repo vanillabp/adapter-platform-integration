@@ -2415,3 +2415,88 @@ JAR manifest or `META-INF/maven/.../pom.properties`. A file of our own survives 
 jar and a shaded jar, and its name carries the part, so several adapters on one classpath do not
 overwrite each other. In a native image it survives because the Quarkus extension registers every
 descriptor it finds while building.
+
+### 72. Closing a task closes every record naming it, and the count is what claims it
+
+`TaskDeliveryLog.markTaskClosed` said nothing about how many records it stamps, and the four
+stores disagreed: the SQL statement had no row limit and closed all of them, while the two
+MongoDB stores used `updateFirst` respectively `updateOne` and closed one.
+
+A task can carry more than one record, so the difference is real. The record of a delivery is
+keyed by the event as well, so the delivery which handed the task to the application and the
+delivery which reported its cancellation are two records naming one task. A BPMS which hands the
+same task out under a new job key produces two as well.
+
+All four stores now close every record naming the task. A record left open is what keeps a task
+alive for everything which reads the open work: the read of the open tasks of a workflow, the
+election of a later operation and the retention. Closing one row and leaving the other would show
+a task which is over as waiting, and the derived cancellation would then deliver it a second time.
+
+The number a store returns is what it closed in that call, and that is a second promise rather
+than a statistic. Two application instances deriving the same cancellation both call this, and
+only the one which reads a number above zero delivers the event. The compare and set is the whole
+claim: on SQL the second update waits on the row lock and reads zero afterwards, on MongoDB the
+second write conflicts and the retry finds the filter no longer matching.
+
+A record which was closed before keeps the moment it was closed at, which is why the filter
+demands an absent closing moment. The age of an open task is measured against such a fixed moment
+elsewhere in the same record.
+
+### 73. The end of a workflow cancels what it was waiting for, whatever kind of end it was
+
+An adapter which names the workflow in its end notification lets the core derive a cancellation
+for every task it still believes is open in that workflow. The kind of the end does not decide
+whether it derives.
+
+The reason is measured. On Camunda 8 a terminate end event and an interrupting event subprocess
+end the instance as COMPLETED rather than as a cancellation, and both of them can take an open
+task away on the way out. Reading the kind first would skip exactly those two, which are the
+cases the derivation exists for.
+
+The price is a race. A task the application completed a few milliseconds ago is gone as well, so
+an end which arrives in the window between the dispatch of the completion and the mark on the
+record reads a completed task as canceled. The compare and set of `markTaskClosed` shrinks that
+window and does not close it. We take the race rather than a second index, because the outbox
+offers no read by task id and a task reported as canceled once too often is the smaller harm than
+a task the application never hears about.
+
+What decides is the workflow id, and that is the adapter's call. An adapter whose BPMS cancels
+each element by itself names none and nothing is derived for it: Camunda 7 fires an END execution
+listener per element, process termination included, so a derivation on top would report the same
+task twice. Camunda 8 fills it.
+
+A derived cancellation carries no job of the element, so a `@TaskParam` and a multi-instance value
+reach the method as `null`. The boot names the methods which really declare one, and says nothing
+about the rest. A value which is silently absent is what an application finds out in production;
+a warning on every derived delivery would be noise for the models nobody cancels.
+
+### 74. The probe of an open task has three answers, and only "gone" cancels
+
+Whenever a BPMS hands the application a job, the core looks at the other tasks it still
+believes are open in the same workflow and asks the adapter whether they still exist. That
+question is answered with `GONE`, `STILL_THERE` or `CANNOT_SAY`, and a cancellation follows only
+on the first one.
+
+The third answer is the whole point. An adapter which cannot tell a refusal from an outage would
+otherwise have to guess, and a guess in the "gone" direction cancels every open task of an
+instance whenever the engine hiccups. The Process-Engine-API is the case we have: it probes with
+a `PREFLIGHT_CHECK` completion, its API has no typed exceptions, and every failure there means
+the same thing to the caller. Such an adapter answers `CANNOT_SAY` and nothing happens, which is
+exactly what happens on `STILL_THERE` - the two differ in what they mean, not in what follows,
+so being honest costs an adapter nothing.
+
+An adapter which supplies no probe at all keeps behaving as it does today. That is what makes the
+whole mechanism additive for every adapter written against the current SPI.
+
+`WorkflowAwareness` is not this probe and must not be reused as one. It answers the election's
+question - which of the configured BPMS holds this task - and folds "not mine" into
+`UNKNOWN_TO_BPMS`, which read as "gone" would cancel the open work of a workflow whenever the
+wrong adapter is asked.
+
+The check is on by default, against the rule that defaults stay compatible with version 1. What
+changes is that a method carrying `@TaskEvent(CANCELED)` starts being called where it never was,
+and only such a method is affected: the wiki told people the event never arrives on a remote BPMS,
+and that sentence is what was wrong. The property
+`vanillabp.delivery.check-open-tasks-on-delivery` switches it off for an application which does
+not want the new calls, and `vanillabp.delivery.max-open-tasks-checked` caps the round trips per
+wake-up at ten until somebody measures a better number.

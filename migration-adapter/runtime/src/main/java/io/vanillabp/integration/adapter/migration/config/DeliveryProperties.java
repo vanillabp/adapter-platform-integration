@@ -14,12 +14,14 @@ import lombok.experimental.SuperBuilder;
  * records of every BPMS live in the store of the workflow aggregate, so the question is
  * one of the application's data, not one of a BPMS.
  * <p>
- * Three settings live here: whether a workflow which ended releases its records
+ * What lives here: whether a workflow which ended releases its records
  * ({@link #releaseOnWorkflowEnd}), how long a task may stay open before VanillaBP says so
- * ({@link #maxTaskAge}), and how long a record is kept ({@link #retention}). The first
- * two are overridable per workflow module, and the age additionally per workflow and per
- * task, since how long a task may legitimately wait is a property of that task rather
- * than of the application.
+ * ({@link #maxTaskAge}), whether a delivery looks at the other tasks of its workflow
+ * ({@link #checkOpenTasksOnDelivery}) and how many of them it probes
+ * ({@link #maxOpenTasksChecked}), and how long a record is kept ({@link #retention}). The
+ * release is overridable per workflow module, and the other three additionally per workflow
+ * and per task, since how long a task may legitimately wait and what one delivery may cost
+ * are properties of that task rather than of the application.
  * <p>
  * The retention is the exception and is read globally only, which is decision 24 in the
  * repository's DECISIONS.md: what deletes the records is one cleanup per store,
@@ -69,6 +71,37 @@ public class DeliveryProperties {
    * tasks have no upper bound says so deliberately.
    */
   private Duration maxTaskAge;
+
+  /**
+   * Whether a delivery looks at the other tasks VanillaBP believes are open in the same
+   * workflow of the BPMS, asks that BPMS whether they still exist and reports the ones which
+   * are gone as canceled (see
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker#reportTasksTheBpmsNoLongerHas}).
+   * <p>
+   * Defaults to <code>true</code>. Only a method which asked for the event with a
+   * <code>&#64;TaskEvent</code> parameter is affected, and on a BPMS which cannot say per
+   * element what it took away this is the only way such a method is ever called. An
+   * application which does not want the new calls switches them off here.
+   * <p>
+   * An adapter which supplies no probe never asks anything, whatever this says.
+   * <code>null</code> at a level means "whatever the next less specific level says".
+   */
+  private Boolean checkOpenTasksOnDelivery;
+
+  /**
+   * How many other open tasks one delivery probes at most (see
+   * {@link #checkOpenTasksOnDelivery}). The oldest records first, and what is not reached
+   * this time is reached at the next wake-up of that workflow.
+   * <p>
+   * Defaults to {@value #DEFAULT_MAX_OPEN_TASKS_CHECKED}. Each probe is one round trip to
+   * the BPMS on the thread of the delivery, so a workflow with very many open tasks would
+   * otherwise hold an execution slot of the adapter for all of them at once. The number is
+   * a cap rather than a measurement; zero switches the probing off the same way
+   * {@link #checkOpenTasksOnDelivery} does.
+   * <p>
+   * <code>null</code> at a level means "whatever the next less specific level says".
+   */
+  private Integer maxOpenTasksChecked;
 
   /**
    * How long the record of a processed task delivery is kept, counted from the last
@@ -121,5 +154,10 @@ public class DeliveryProperties {
    * The default of {@link #maxTaskAge}: thirty days, report only.
    */
   public static final Duration DEFAULT_MAX_TASK_AGE = Duration.parse(DEFAULT_MAX_TASK_AGE_ISO);
+
+  /**
+   * The default of {@link #maxOpenTasksChecked}: ten probes per wake-up.
+   */
+  public static final int DEFAULT_MAX_OPEN_TASKS_CHECKED = 10;
 
 }

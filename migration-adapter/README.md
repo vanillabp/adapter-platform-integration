@@ -544,6 +544,34 @@ key, so a workflow is started at most once per aggregate whichever of the two ca
 and the read path is `ViewerApiTest#readWaitsForAnEventuallyConsistentAdapterToCatchUp`
 together with `#readFailsAfterTheVisibilityWindowPassed`.
 
+### The election may carry the BPMS' own id of the workflow
+
+`MigratableProcessService.awarenessOfWorkflow` has a fourth argument, and the paths which WAIT
+pass it: the election an extension asks for, and the read of the viewer API. It is the BPMS' own
+id of the workflow, `null` where VanillaBP holds none.
+
+Why it is worth passing, measured on three Camunda 8 clusters in September 2026: the engine
+knows a new instance 16 to 19 ms after the create was sent, while the search which
+`awarenessOfWorkflow` uses finds it after 167 to 1324 ms. After a cancellation the engine says
+"gone" after 21 ms and the search needs 176 to 2068 ms to agree. So the engine answers far
+earlier than its index, and every command which asks it addresses a key.
+
+- An adapter may SHORTEN A YES with it: ask the engine by the key and answer `ACTIVE` without
+  waiting for the read model.
+- It may NOT turn a negative answer into `UNKNOWN_TO_BPMS`. An engine forgets a workflow the
+  moment it ends, so an unknown key does not tell `COMPLETED` from `UNKNOWN_TO_BPMS`, and only
+  the second of the two lets the election move on to the next BPMS. In a migration setup that
+  would send the next operation to the wrong BPMS.
+- The default drops the id and calls the three-argument question, so every adapter written
+  before this keeps compiling and behaving (`ElectionWithAWorkflowIdDefaultTest`).
+- Where the core takes the id from: the open delivery records of that aggregate first, then the
+  election cache, which keeps the id next to the adapter id since it learns both from every
+  delivery. Nothing new is asked of any BPMS for it.
+
+`WorkflowAdapterCache.hintOf` is what reads both in one call, because a shared cache charges a
+round trip per read; `put(..., adapterId, workflowId)` is what writes them. Both are `default`
+methods, so a cache an application wrote stays valid and simply keeps no id.
+
 ### Deployment pipeline
 
 `DeploymentService` orchestrates deployment per workflow module:
@@ -1065,6 +1093,7 @@ classDiagram
     +getProcessVersion() String
     +runInCurrentTransaction() boolean
     +getAdapterId() String
+    +getWorkflowId() String  «default null · names the workflow, so its open tasks are canceled»
   }
   WorkflowTaskInvoker ..> TaskInvocationContext
   WorkflowTaskInvoker ..> WorkflowTaskOutcome
@@ -1737,6 +1766,34 @@ the registry decision 25 rejected is decision 30.
   fallback would report a defect where there is none - the counter is read against how many task
   operations the application makes.
 
+##### A cancellation from the BPMS closes the record
+
+The note above is written where the APPLICATION asked for something. A task the BPMS takes away
+was asked for by nobody, so a second place writes it: the delivery of
+`TaskEvent.Event.CANCELED`.
+
+- The mark runs on the delivery path, inside the transaction of that delivery
+  (`MigrationProcessService.recordTheDelivery`). It is safe there for the reason it is not safe
+  when a caller merely asks: a task the BPMS cancelled is never handed out again, so no
+  redelivery is left which would need the record to renew its lock.
+- The cancelling delivery reports `COMPLETED` and never `COMPLETION_PENDING`.
+  `isAsynchronousTask` is true for every method with a `@TaskId` parameter, a user-task method
+  included, so answering by the method alone wrote a second OPEN record for a task nobody can
+  complete any more - and `recordOfTask` then answered with the younger of the two.
+- The cancellation keeps a record of its own, because the event is part of the delivery key and
+  a BPMS repeating the cancellation must not run the method a second time. That record is
+  written first and the mark follows, so every row naming the task carries the moment it was
+  closed.
+- A method which does NOT subscribe to `CANCELED` is untouched. Its delivery returns before the
+  transactional work and writes nothing, so the record of that task stays open until the next
+  wake-up of that workflow or the end of it closes it.
+- `markTaskClosed` closes EVERY record naming the task, in all four stores, which is decision 72
+  in the repository's `DECISIONS.md`. The count it returns is what it closed in that call, and
+  that is what lets two application instances claim one task against each other.
+
+`CanceledTaskTest` holds it on both platforms, and the two `MongoTaskDeliveryLogTest` classes
+hold the store side of closing every row.
+
 ##### The open tasks of one workflow aggregate
 
 `TaskDeliveryLog.openTasksOfAggregate(module, process, aggregateId)` answers the records of that
@@ -1817,6 +1874,59 @@ stores.
 `theRecordOfACalledProcessIsClosedAfterPhaseTwo`) and the counter
 (`anAnswerFromTheRecordIsCounted`); `TaskRecordLookupTest` holds the store side of it and
 `MicrometerVanillaBpMetricsTest#electionsAnsweredFromTheRecordAreCounted` the meter.
+
+##### The open tasks of one workflow of the BPMS
+
+`TaskDeliveryLog.openTasksOfWorkflow(module, workflowId)` answers the same records by another
+key: the BPMS' own id of the running instance. The question above is the one an extension asks,
+which holds an aggregate and wants everything waiting for somebody. This one is the question a
+delivery raises, because what else is open IN THAT WORKFLOW is what the core may probe.
+
+Three things follow from the different key.
+
+- An aggregate may carry a second workflow, and that one is not in this answer.
+- A task a called process handed out carries the secondary BPMN process id while belonging to
+  the same instance, so the BPMN process is not part of the question. The read by aggregate has
+  to be repeated per BPMN process the workflow service serves; this one covers them in one go.
+- A record whose adapter named no workflow is invisible here, and so is a record written before
+  `WORKFLOW_ID` existed. The Camunda 7, Camunda 8 and Process-Engine-API adapters all report the
+  id.
+
+`WORKFLOW_ID` carries an index of its own, `<table>_WORKFLOW`, which `AGGREGATE_ID` cannot: the
+column is `VARCHAR(255)` and stays inside the key-length limit of every database this runs on,
+the same way `TASK_ID` does. The MongoDB stores index `workflowId` next to `aggregateId`.
+
+What the index buys, measured on PostgreSQL 16.15 in September 2026 with the table as
+`JdbcTaskDeliveryStore.createTable` builds it, 1.5 million closed records as history and the
+target instance holding three open tasks:
+
+| concurrently open tasks in the installation | read by aggregate, without an index over it | read by `WORKFLOW_ID`, with one |
+|--------------------------------------------:|--------------------------------------------:|--------------------------------:|
+|                                         503 |                                    0.107 ms |                        0.029 ms |
+|                                       5 003 |                                    0.490 ms |                        0.009 ms |
+|                                      50 003 |                                    4.582 ms |                        0.010 ms |
+|                                     500 003 |                                   49.975 ms |                        0.010 ms |
+
+The read by aggregate follows what the whole installation has open, because the index it uses
+says only what "open" means. The read by workflow does not move at all.
+
+The write side pays for the index: a bulk insert of 200000 records took 2.63 s with it and
+1.03 s without, so about 8 microseconds per record. That is the trade, and it is worth taking
+here - a record is written once per delivery, and this read happens once per wake-up of a
+workflow whose BPMN process has an asynchronous task at all.
+
+MongoDB was not measured. Both MongoDB stores index `aggregateId` already and answer in 0.27 ms
+at every size, so an index over `workflowId` is the same move there.
+
+The index ships in the runtime DDL of all three stores which build their own storage and in the
+changeset `vanillabp-task-delivery-workflow-2.0.0` of `io.vanillabp:vanillabp-schema`. An
+application which created its table before the index existed is told at startup which statement
+adds it, the way it is told about a missing column.
+
+`OpenTasksOfWorkflowTest` holds the SQL and reads the plan the database prints, so a statement
+which stops using the index fails there rather than in an installation with many open tasks. The
+two `OpenTaskRetentionTest` classes hold it through a booted application on both platforms, and
+the two `MongoTaskDeliveryLogTest` classes hold the MongoDB stores.
 
 ##### What a record says about the element and the workflow
 
@@ -2469,6 +2579,85 @@ point is that nothing depends on it:
 
 `WorkflowEndedTest` holds all four bullets, `withoutAMethodNothingHappens` for the question
 asked while wiring and `aDeletedAggregateIsNoError` for the aggregate which is gone.
+
+#### A workflow which is gone cancels what it was waiting for
+
+Where the notification NAMES the workflow (`WorkflowEndedContext.getWorkflowId()`), the core
+reads the tasks it still believes are open in that workflow and reports every one of them to the
+application as `TaskEvent.Event.CANCELED`. Then `@WorkflowEnded` runs. A workflow which ended has
+nothing open any more, so this is knowledge rather than a guess.
+
+- The read is `TaskDeliveryLog.openTasksOfWorkflow`, which costs 0.01 ms with the index over
+  `WORKFLOW_ID`.
+- A record naming ANOTHER adapter is left alone. `TaskDelivery.adapterId()` says who delivered
+  the task, so nothing has to be asked: during a migration one aggregate may carry work of two
+  BPMS, and this end says nothing about the other one.
+- Each record is handled in a transaction of its own, and in that order: the record is CLAIMED
+  with `markTaskClosed`, and the delivery follows only where the claim took. That is what makes
+  two application instances safe, and it is decision 72. A handler which throws rolls its
+  transaction back, the claim goes with it, and the task is derived again the next time somebody
+  looks - at-least-once, like everything else here. The failure stays with that one record: the
+  end of the workflow is reported either way.
+- The KIND of the end does not decide it, which is decision 73. A terminate end event and an
+  interrupting event subprocess end a Camunda 8 instance as COMPLETED while taking an open task
+  with them, so reading the kind first would skip exactly those.
+- An adapter whose BPMS cancels each element by itself names no workflow here and nothing is
+  derived. Camunda 7 fires an END execution listener per element, process termination included,
+  so a derivation on top would report the same task twice.
+- A derived delivery carries no job of the element, so a `@TaskParam` and a multi-instance value
+  reach the method as `null`. The boot names the methods which really declare one
+  (`WorkflowTaskRegistry.reportWhatACancelationCannotCarry`) and says nothing about the rest.
+
+The race this accepts: a task the application completed a few milliseconds ago is gone as well,
+so an end arriving between the dispatch of that completion and the mark on its record reads a
+completed task as canceled. The compare and set shrinks that window and does not close it.
+
+`DerivedCancelationTest` holds it on both platforms: two open tasks reported oldest first with the
+end after them, an end naming no workflow deriving nothing, a record of another adapter left
+alone, a handler which throws leaving its record open, and the boot naming the method a derived
+cancellation cannot fill.
+
+### The core probes what it still believes is open
+
+An application on a remote BPMS learns nothing on its own. `WorkflowTaskInvoker`
+`.reportTasksTheBpmsNoLongerHas(module, process, wakeUp, probe)` is what an adapter calls after
+it handed a delivery over: the core looks at the other tasks it believes are open in the SAME
+workflow, asks the probe whether they still exist, and reports the ones which are gone as
+`TaskEvent.Event.CANCELED`. The scope is the one workflow the wake-up belongs to, never the tree
+of workflows an aggregate owns.
+
+The blindness is not one BPMS' trait, which is why the loop is here and not in an adapter. The
+Process-Engine-API has it as well, and an embedded engine does not, because it says per element
+what it took away. So the core runs the loop and the adapter answers one question.
+
+What one call does, in the order which makes it cheap:
+
+1. a BPMN process without an asynchronous task returns at once. The core knows that from the
+   deployment, and most applications are that case, so most applications pay nothing.
+2. a scope whose `vanillabp.delivery.check-open-tasks-on-delivery` is `false`, or whose
+   `vanillabp.delivery.max-open-tasks-checked` is zero, returns as well. Both are resolvable per
+   workflow module, per workflow and per task.
+3. the open records of that workflow are read with `TaskDeliveryLog.openTasksOfWorkflow`, which
+   is 0.01 ms with the index over `WORKFLOW_ID`.
+4. the record of the task which woke us up is dropped by its own task id, and so is every record
+   another adapter wrote.
+5. the rest is probed, oldest record first, up to ten per wake-up. What is not reached this time
+   is reached at the next one.
+6. every task the probe calls gone goes through the derivation of the ended workflow: a
+   transaction of its own, the claim with `markTaskClosed`, the delivery in the same transaction.
+   That code is written once (`DerivedCancelations`).
+
+The probe has three answers and only `GONE` cancels, which is decision 74. A probe which cannot
+say is not a probe which said no, and a probe which throws is read as "cannot say" and reported
+once - the delivery which led there is done and must not be lost over it.
+
+What this does not promise: a workflow which walks into a timer or a message wait after the
+boundary event produces no job, so nothing wakes the application up and the cancellation waits.
+Three things catch it later - the next job of that workflow, the end of the workflow, and the next
+operation which names the task.
+
+`OtherOpenTasksOfAWakeUpTest` holds the six steps, the three answers and the probe which throws;
+`DerivedCancelationTest` holds the booted path on both platforms.
 
 ### Broadcasting signals
 
@@ -3139,6 +3328,25 @@ out of a service task, and the entry it writes belongs to the transaction which 
 change. The wait then holds that transaction open, with the connection and the locks that
 come with it. The section "What an election costs a caller which holds a transaction"
 above has the numbers.
+
+`WorkflowElection#locationOfWorkflow` is the same election answering both halves of what
+VanillaBP knows: the adapter id AND the BPMS' own id of the workflow, as a `WorkflowLocation`.
+Both stand in the same row - the record of a task delivery keeps `WORKFLOW_ID` next to
+`ADAPTER_ID` - so handing back the adapter id alone and making an extension ask again would be
+the odd design.
+
+- It runs exactly the election the older call runs and costs exactly the same. The workflow id
+  rides along, it does not replace the question. A variant answering from the record without
+  asking anybody would be fast and sometimes wrong, and it is deliberately not here.
+- Where the id comes from, in this order and without asking any BPMS: the open delivery records
+  of that aggregate, then the election cache. A `null` id is a regular answer and means nobody
+  knew one.
+- What an extension may do with it: write it into its own records, print it beside ours, and
+  hand it back to VanillaBP later. What it may not do: address the BPMS with it - the shape of
+  that id belongs to the adapter - and read a non-null id as "this workflow still runs". The
+  record is history, the election is the answer about now.
+- The older call stays and keeps its meaning, so an extension written against 2.0 keeps
+  compiling. Its default implementation delegates and leaves the id empty.
 
 #### The extension's own configuration
 

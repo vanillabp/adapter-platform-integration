@@ -928,6 +928,35 @@ public final class DeliveryRecords {
   }
 
   /**
+   * Writes into the record that the BPMS itself ended the task - the other half of
+   * {@link #writeDownThatTheTaskIsClosed(PhaseOperation, Object, Map, String)}, for the
+   * tasks nobody in the application asked to close.
+   * <p>
+   * Called on the DELIVERY path, inside the transaction of the delivery, and the mark is
+   * safe there for the reason it is not safe when a caller merely asks: a task the BPMS
+   * cancelled is never handed out again, so there is no lock left for a redelivery to
+   * renew. Without it the record of that task stays open until the retention deletes it,
+   * and everything which reads the open work of a workflow reads a task which is gone.
+   * <p>
+   * A failure is not swallowed. The mark and the record of this delivery are written in one
+   * transaction, and a delivery which cannot close the task it just reported cancelled would
+   * leave the store saying two different things about that task.
+   *
+   * @param deliveryLog The store to write to, <code>null</code> where there is none
+   * @param context The invocation context of the cancelling delivery
+   */
+  public void writeDownThatTheBpmsEndedTheTask(
+      final TaskDeliveryLog deliveryLog,
+      final TaskInvocationContext context) {
+
+    if ((deliveryLog == null) || (context.getTaskId() == null) || (context.getWorkflowAggregateId() == null)) {
+      return;
+    }
+    markTaskClosedWhereTheRecordSits(deliveryLog, context.getWorkflowAggregateId(), context.getTaskId());
+
+  }
+
+  /**
    * Whether the operation ENDS the task it names, which is what an operation elected by
    * whoever holds a task does: completing it or cancelling it. An operation elected by
    * whoever holds the WORKFLOW may name a task as well, and then it says where its values
@@ -937,6 +966,60 @@ public final class DeliveryRecords {
       final PhaseOperation operation) {
 
     return (operation.election() == Election.HOLDS_THE_TASK) || (operation.election() == Election.HOLDS_THE_USER_TASK);
+
+  }
+
+  /**
+   * The BPMS' own id of the workflow of the given aggregate, as far as a record knows one.
+   * <p>
+   * Read from the OPEN records of that aggregate, under every BPMN process id this workflow
+   * service serves: a record is written per delivery and the adapter names the workflow in
+   * it, so a workflow VanillaBP ever heard from is named here even after a restart, which
+   * the election cache cannot promise. The first record naming a workflow answers - the
+   * records of one aggregate and one BPMN process belong to one workflow.
+   * <p>
+   * A hint and never an answer. It says what was true when the delivery ran, not whether the
+   * workflow still runs, and an adapter which reports no workflow id leaves nothing here.
+   *
+   * @param workflowAggregateId The workflow aggregate the caller is asking about
+   * @return The workflow's id in the BPMS, or <code>null</code> where no record knows one
+   */
+  public String workflowIdOf(
+      final Object workflowAggregateId) {
+
+    if (workflowAggregateId == null) {
+      return null;
+    }
+    final var deliveryLog = resolveLog();
+    if (deliveryLog == null) {
+      return null;
+    }
+    try {
+      for (final var candidate : bpmnProcessIdsToReadUnder) {
+        final var known = deliveryLog
+            .openTasksOfAggregate(workflowModuleId, candidate, workflowAggregateId.toString())
+            .stream()
+            .map(TaskDelivery::workflowId)
+            .filter(java.util.Objects::nonNull)
+            .findFirst()
+            .orElse(null);
+        if (known != null) {
+          return known;
+        }
+      }
+    } catch (final RuntimeException e) {
+      // a hint nobody can read is a hint nobody has: the election runs either way, one
+      // round trip slower
+      log
+          .debug(
+              "Could not read which workflow of the BPMS aggregate '{}' (BPMN process '{}' of "
+                  + "workflow module '{}') belongs to",
+              workflowAggregateId,
+              bpmnProcessId,
+              workflowModuleId,
+              e);
+    }
+    return null;
 
   }
 

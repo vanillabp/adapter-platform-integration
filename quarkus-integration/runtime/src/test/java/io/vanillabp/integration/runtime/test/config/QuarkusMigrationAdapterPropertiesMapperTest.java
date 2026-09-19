@@ -266,6 +266,8 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
   private record DeliveryProperties(
                                     Optional<Boolean> releaseOnWorkflowEnd,
                                     Optional<Duration> maxTaskAge,
+                                    Optional<Boolean> checkOpenTasksOnDelivery,
+                                    Optional<Integer> maxOpenTasksChecked,
                                     Optional<Duration> retention) implements QuarkusMigrationAdapterProperties.DeliveryProperties {
 
     /**
@@ -288,6 +290,19 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
         final Optional<Duration> maxTaskAge) {
 
       this(releaseOnWorkflowEnd, maxTaskAge, Optional.empty());
+
+    }
+
+    /**
+     * The three settings which existed before a delivery looked at the other tasks of
+     * its workflow.
+     */
+    private DeliveryProperties(
+        final Optional<Boolean> releaseOnWorkflowEnd,
+        final Optional<Duration> maxTaskAge,
+        final Optional<Duration> retention) {
+
+      this(releaseOnWorkflowEnd, maxTaskAge, Optional.empty(), Optional.empty(), retention);
 
     }
 

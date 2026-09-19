@@ -43,6 +43,64 @@ public interface WorkflowTaskInvoker {
       TaskInvocationContext context);
 
   /**
+   * Reports the tasks the BPMS does not have any more - what an adapter calls after it
+   * handed a delivery over, so an application on a BPMS which reports no cancellation
+   * learns about them anyway.
+   *
+   * <h4>The principle</h4>
+   *
+   * An application on a remote BPMS learns nothing on its own. Whenever the BPMS hands it a
+   * job, this call looks at the other tasks VanillaBP believes are open in the SAME
+   * workflow, asks the given probe whether they still exist, and reports the ones which are
+   * gone to the application as
+   * {@link io.vanillabp.spi.service.TaskEvent.Event#CANCELED}. The scope is the one workflow
+   * the wake-up belongs to, never the tree of workflows an aggregate owns.
+   * <p>
+   * The blindness is not one BPMS' trait. An embedded engine which runs in the same JVM says
+   * per element what it took away and needs none of this, and an adapter of such a BPMS
+   * simply does not call it.
+   *
+   * <h4>What it costs</h4>
+   *
+   * One read of the delivery log, which is an indexed read of about 0.01 ms, and then one
+   * round trip per other open task, in sequence, on the thread this is called from. Zero
+   * round trips in the normal case, because most workflows have no second open task. A
+   * workflow with more open tasks than
+   * <code>vanillabp.delivery.max-open-tasks-checked</code> spreads its probes over several
+   * wake-ups, oldest record first, rather than holding an execution slot for all of them.
+   * <p>
+   * A BPMN process which has no asynchronous task at all pays nothing: the core knows that
+   * from the deployment and never reads the log for it.
+   * <p>
+   * An application which does not want the new calls switches them off with
+   * <code>vanillabp.delivery.check-open-tasks-on-delivery</code>.
+   *
+   * <h4>What it does not promise</h4>
+   *
+   * A workflow which walks into a timer or a message wait after a boundary event produces no
+   * job, so nothing wakes the application up and the cancellation waits. Three things catch
+   * it later: the next job of that workflow, the end of the workflow
+   * ({@link io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedContext#getWorkflowId()}),
+   * and the next operation which names the task.
+   * <p>
+   * The default does nothing, which keeps a test double of this SPI compiling.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID of the delivery which woke the application up
+   * @param wakeUp The context of that delivery: it names the adapter, the workflow, the
+   *          aggregate and the task which must not be probed, because it is the one being
+   *          worked on
+   * @param probe What asks the BPMS about one task
+   */
+  default void reportTasksTheBpmsNoLongerHas(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final TaskInvocationContext wakeUp,
+      final OpenTaskProbe probe) {
+
+  }
+
+  /**
    * The values shared with the BPMS, read within the transaction of the CALLER
    * instead of a new one - what an EMBEDDED engine needs.
    * <p>

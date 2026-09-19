@@ -23,10 +23,13 @@ import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvo
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartResult;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartSpec;
 import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
+import io.vanillabp.integration.adapter.spi.workflowtask.OpenTaskProbe;
+import io.vanillabp.integration.adapter.spi.workflowtask.TaskExistence;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring;
+import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.spi.TransactionRunner;
 
 /**
@@ -653,6 +656,75 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
   }
 
+  /**
+   * Says once per workflow module which <code>&#64;WorkflowTask</code> methods would be
+   * called with values missing where VanillaBP works a cancellation out for itself.
+   * <p>
+   * A derived cancellation carries no job of the element, because the element is gone by
+   * the time anybody notices it. So a <code>&#64;TaskParam</code> and a multi-instance value
+   * reach such a method as <code>null</code>, and a value which is silently absent is the
+   * kind of thing an application finds out in production. Only the methods which really
+   * declare one are named, and only those which asked for the event at all - a method
+   * without a <code>&#64;TaskEvent</code> parameter never sees a cancellation and has
+   * nothing to read here.
+   */
+  @Override
+  public void reportWhatACancelationCannotCarry(
+      final String workflowModuleId) {
+
+    final var affected = new java.util.LinkedHashMap<String, WorkflowTaskHandler>();
+    entries
+        .entrySet()
+        .stream()
+        .filter(entry -> entry.getKey().workflowModuleId().equals(workflowModuleId))
+        .forEach(entry -> entry
+            .getValue().handlers
+            .stream()
+            .filter(handler -> handler.acceptsEvent(io.vanillabp.spi.service.TaskEvent.Event.CANCELED))
+            .filter(handler -> !handler.getTaskParameters().isEmpty() || !handler
+                .getMultiInstanceElementNames()
+                .isEmpty())
+            .forEach(handler -> affected.putIfAbsent(handler.describe(), handler)));
+    if (affected.isEmpty()) {
+      return;
+    }
+    final var message = new StringBuilder(
+        ("These @WorkflowTask methods of workflow module '%s' subscribe to "
+            + "TaskEvent.Event.CANCELED and read values of the task they are called for. Where "
+            + "VanillaBP works the cancellation out itself - the workflow ended, or the BPMS does "
+            + "not have the task any more - the element is gone and those values reach the method "
+            + "as null:").formatted(workflowModuleId));
+    affected
+        .values()
+        .forEach(handler -> message.append(
+            ("%n  - method '%s' reads %s. Check for null there, or read what you need from the "
+                + "workflow aggregate, which a cancellation always carries.")
+                .formatted(handler.describe(), whatItReads(handler))));
+    log.info(message.toString());
+
+  }
+
+  /**
+   * What a method reads of the task it is called for, in the words of its annotations.
+   */
+  private static String whatItReads(
+      final WorkflowTaskHandler handler) {
+
+    final var reads = new java.util.LinkedList<String>();
+    if (!handler.getTaskParameters().isEmpty()) {
+      reads
+          .add("@TaskParam %s".formatted(String.join(", ", handler.getTaskParameters())));
+    }
+    if (!handler.getMultiInstanceElementNames().isEmpty()) {
+      reads
+          .add(
+              "the value of multi-instance element %s"
+                  .formatted(String.join(", ", handler.getMultiInstanceElementNames())));
+    }
+    return String.join(" and ", reads);
+
+  }
+
   @Override
   public void reportExtensionHandlerWiring(
       final String workflowModuleId) {
@@ -905,6 +977,119 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
   }
 
+  /**
+   * Reports the tasks the BPMS does not have any more, asked by an adapter after it handed
+   * a delivery over - see
+   * {@link WorkflowTaskInvoker#reportTasksTheBpmsNoLongerHas(String, String, TaskInvocationContext, OpenTaskProbe)}.
+   * <p>
+   * What it skips, and in this order, because each step is cheaper than the next: a BPMN
+   * process with no asynchronous task at all, which most applications are and which then
+   * pay nothing; a scope whose configuration switched the probing off; a delivery which
+   * names no workflow; and an application without a delivery log.
+   * <p>
+   * Nothing here may cost the caller its own work. The delivery is done by the time an
+   * adapter asks, and a probe which throws or a derived cancellation which fails must not
+   * turn a finished job into a failed one, so both stay inside this call.
+   */
+  @Override
+  public void reportTasksTheBpmsNoLongerHas(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final TaskInvocationContext wakeUp,
+      final OpenTaskProbe probe) {
+
+    if ((probe == null) || (wakeUp == null)) {
+      return;
+    }
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    if ((entry == null) || (entry.processService == null)) {
+      return;
+    }
+    // a BPMN process whose methods all complete when they return leaves no task open, so
+    // there is nothing this could ever find - and that is most applications
+    if (entry.handlers.stream().noneMatch(WorkflowTaskHandler::isAsynchronousTask)) {
+      return;
+    }
+    final var howMany = properties == null
+        ? io.vanillabp.integration.adapter.migration.config.DeliveryProperties.DEFAULT_MAX_OPEN_TASKS_CHECKED
+        : properties.maxOpenTasksChecked(workflowModuleId, bpmnProcessId, wakeUp.getTaskDefinition());
+    if (howMany == 0) {
+      return;
+    }
+    final var workflowId = wakeUp.getWorkflowId();
+    if ((workflowId == null) || workflowId.isBlank()) {
+      return;
+    }
+    final var deliveryLog = entry.processService.resolveTaskDeliveryLog();
+    if (deliveryLog == null) {
+      return;
+    }
+
+    final var candidates = deliveryLog
+        .openTasksOfWorkflow(workflowModuleId, workflowId)
+        .stream()
+        // the task being worked on right now is not a candidate: it is open because this
+        // very delivery left it open
+        .filter(record -> !java.util.Objects.equals(record.taskId(), wakeUp.getTaskId()))
+        // and a record another BPMS wrote belongs to that BPMS, whose tasks this probe
+        // knows nothing about
+        .filter(record -> (wakeUp.getAdapterId() == null) || wakeUp.getAdapterId().equals(record.adapterId()))
+        .filter(record -> record.taskId() != null)
+        .limit(howMany)
+        .toList();
+    if (candidates.isEmpty()) {
+      return;
+    }
+
+    final var gone = candidates
+        .stream()
+        .filter(record -> theBpmsNoLongerHas(record, probe))
+        .toList();
+    if (gone.isEmpty()) {
+      return;
+    }
+    DerivedCancelations
+        .reportAsCanceled(
+            gone,
+            deliveryLog,
+            entry.processService.getTransactionRunner(transactionRunner),
+            workflowModuleId,
+            this,
+            "is gone in its BPMS");
+
+  }
+
+  /**
+   * Asks the probe about one record. Only {@link TaskExistence#GONE} produces a
+   * cancellation: a probe which cannot say is not a probe which said no, which is the one
+   * thing which keeps this safe for a BPMS whose API cannot tell a refusal from an outage
+   * (see decision 74 in the repository's DECISIONS.md).
+   * <p>
+   * A probe which throws is read as "cannot say" and reported once. The delivery which led
+   * here is done, and an adapter whose BPMS hiccups must not lose it over a question nobody
+   * asked for.
+   */
+  private static boolean theBpmsNoLongerHas(
+      final TaskDelivery record,
+      final OpenTaskProbe probe) {
+
+    final TaskExistence answer;
+    try {
+      answer = probe.stillExists(record.workflowId(), record.taskId());
+    } catch (final RuntimeException failure) {
+      log
+          .debug(
+              "Asking whether task '{}' of workflow '{}' still exists failed - it is left alone "
+                  + "and the next wake-up of that workflow asks again",
+              record.taskId(),
+              record.workflowId(),
+              failure);
+      return false;
+    }
+    return answer == TaskExistence.GONE;
+
+  }
+
   @Override
   public void registerProcessVersions(
       final String adapterId,
@@ -1114,8 +1299,60 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
                       .collect(Collectors.joining(", "))));
     }
 
+    // the tasks first, each in a transaction of its own, then the end: a workflow which
+    // ended has nothing open any more, so everything the application still believes is
+    // open in it is gone and is reported as canceled
+    reportTheTasksTheEndedWorkflowTookAway(workflowModuleId, entry, context);
+
     workflowEndedHandlers
         .workflowEnded(entry.processService, context, entry.processService.getTransactionRunner(transactionRunner));
+
+  }
+
+  /**
+   * Reports every task the core still believes is open in the ended workflow as
+   * {@link io.vanillabp.spi.service.TaskEvent.Event#CANCELED}, before the end itself is
+   * reported.
+   * <p>
+   * Only where the adapter named the workflow
+   * ({@link WorkflowEndedContext#getWorkflowId()}). An adapter which names none keeps
+   * behaving exactly as it did, which is what an adapter whose BPMS cancels each element by
+   * itself wants - Camunda 7 would otherwise report the same task twice.
+   * <p>
+   * A record of ANOTHER adapter is left alone. {@link TaskDelivery#adapterId()} says who
+   * delivered the task, so nothing has to be asked: during a migration one aggregate may
+   * carry work of two BPMS, and the end this adapter reports says nothing about the other
+   * one.
+   */
+  private void reportTheTasksTheEndedWorkflowTookAway(
+      final String workflowModuleId,
+      final RegistryEntry entry,
+      final WorkflowEndedContext context) {
+
+    final var workflowId = context.getWorkflowId();
+    if ((workflowId == null) || workflowId.isBlank()) {
+      return;
+    }
+    final var deliveryLog = entry.processService.resolveTaskDeliveryLog();
+    if (deliveryLog == null) {
+      return;
+    }
+    final var openRecords = deliveryLog
+        .openTasksOfWorkflow(workflowModuleId, workflowId)
+        .stream()
+        .filter(record -> (context.getAdapterId() == null) || context.getAdapterId().equals(record.adapterId()))
+        .toList();
+    if (openRecords.isEmpty()) {
+      return;
+    }
+    DerivedCancelations
+        .reportAsCanceled(
+            openRecords,
+            deliveryLog,
+            entry.processService.getTransactionRunner(transactionRunner),
+            workflowModuleId,
+            this,
+            "was still open when its workflow ended");
 
   }
 

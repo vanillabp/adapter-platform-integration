@@ -118,6 +118,7 @@ public class InboundIdempotencyTest {
       copy.setId(aggregate.getId());
       copy.setStatus(aggregate.getStatus());
       copy.setInvocations(aggregate.getInvocations());
+      copy.setCanceledTasks(aggregate.getCanceledTasks());
       return copy;
 
     }
@@ -157,6 +158,7 @@ public class InboundIdempotencyTest {
                   new BpmnTaskSpec("Activity_Fail", "failTask"),
                   new BpmnTaskSpec("Activity_Undeduplicated", "undeduplicatedTask"),
                   new BpmnTaskSpec("Activity_Await", "awaitCompletion"),
+                  new BpmnTaskSpec("Activity_Cancelable", "cancelableTask"),
                   new BpmnTaskSpec("Activity_Concurrent", "concurrentTask"))
               : List.of();
 

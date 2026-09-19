@@ -3,6 +3,7 @@ package io.vanillabp.integration.test.delivery;
 import java.util.concurrent.atomic.AtomicReference;
 
 import io.vanillabp.spi.service.BpmnProcess;
+import io.vanillabp.spi.service.TaskEvent;
 import io.vanillabp.spi.service.TaskException;
 import io.vanillabp.spi.service.TaskId;
 import io.vanillabp.spi.service.WorkflowService;
@@ -59,6 +60,41 @@ public class DeliveryWorkflowService {
 
     aggregate.setInvocations(aggregate.getInvocations() + 1);
     aggregate.setStatus("awaiting-completion");
+
+  }
+
+
+  /**
+   * A task the application completes later and which asks to hear about its cancellation
+   * as well - the method a cancellation of the BPMS reaches. What the delivery of
+   * {@link io.vanillabp.spi.service.TaskEvent.Event#CANCELED} does to the record of that
+   * task is what the cancellation tests read.
+   *
+   * @param aggregate The workflow aggregate
+   * @param taskId The BPMS' identity of the task
+   * @param event Which of the two events this delivery is about
+   */
+  @WorkflowTask
+  public void cancelableTask(
+      final DeliveryAggregate aggregate,
+      @TaskId final String taskId,
+      @TaskEvent({
+          TaskEvent.Event.CREATED, TaskEvent.Event.CANCELED
+      }) final TaskEvent.Event event) {
+
+    aggregate.setInvocations(aggregate.getInvocations() + 1);
+    if (event != TaskEvent.Event.CANCELED) {
+      aggregate.setStatus("awaiting-completion");
+      return;
+    }
+    aggregate.setStatus("canceled");
+    aggregate
+        .setCanceledTasks(
+            aggregate.getCanceledTasks() == null
+                ? taskId
+                : aggregate.getCanceledTasks()
+                    + ","
+                    + taskId);
 
   }
 

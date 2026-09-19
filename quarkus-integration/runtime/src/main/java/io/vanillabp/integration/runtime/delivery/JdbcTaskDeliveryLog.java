@@ -301,6 +301,21 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
 
   }
 
+  /**
+   * The open tasks of one workflow of the BPMS - read within the caller's JTA transaction,
+   * through a connection Agroal enlists there.
+   */
+  @Override
+  public java.util.List<TaskDelivery> openTasksOfWorkflow(
+      final String workflowModuleId,
+      final String workflowId) {
+
+    return isAvailable()
+        ? getStore().openTasksOfWorkflow(workflowModuleId, workflowId)
+        : java.util.List.of();
+
+  }
+
   @Override
   public int markTaskClosed(
       final String workflowModuleId,

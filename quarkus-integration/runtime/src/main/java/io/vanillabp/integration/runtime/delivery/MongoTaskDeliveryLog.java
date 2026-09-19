@@ -184,6 +184,9 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
       // builds, and MongoDB knows no key-length limit, so the aggregate id itself is the
       // index here - unlike in the SQL table, whose column is too wide for one
       deliveryCollection().createIndex(Indexes.ascending("aggregateId"));
+      // the core asks for the open tasks of ONE workflow of the BPMS on every wake-up of
+      // that workflow, which is far more often than an extension builds a screen
+      deliveryCollection().createIndex(Indexes.ascending("workflowId"));
     }
     retentionCleanup = new TaskDeliveryRetentionCleanup(
         DEFAULT_COLLECTION_NAME, getDeliveryRetention(), this::cleanUpExpiredRecords);
@@ -467,9 +470,43 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   }
 
   /**
-   * Writes down that the application's completion or cancellation of one task reached the
-   * BPMS. The filter demands an absent <code>taskClosedAt</code>, so a repeated dispatch
-   * does not move the moment the task was closed.
+   * The open tasks of one workflow of the BPMS (see
+   * {@link TaskDeliveryLog#openTasksOfWorkflow}), oldest first. Read through the session of
+   * the running transaction where there is one, and served by the index over
+   * <code>workflowId</code> the startup creates.
+   */
+  @Override
+  public java.util.List<TaskDelivery> openTasksOfWorkflow(
+      final String workflowModuleId,
+      final String workflowId) {
+
+    final var session = io.vanillabp.integration.runtime.mongo.MongoSessions
+        .activeSession(txRegistry);
+    final var collection = deliveryCollection();
+    final var filter = new Document("workflowModuleId", workflowModuleId)
+        .append("workflowId", workflowId)
+        .append("outcome", COMPLETION_PENDING)
+        .append("taskClosedAt", null);
+    final var oldestFirst = new Document("recordedAt", 1);
+    final var records = new java.util.ArrayList<TaskDelivery>();
+    (session != null
+        ? collection.find(session, filter)
+        : collection.find(filter))
+        .sort(oldestFirst)
+        .forEach(document -> records.add(recordOf(document)));
+    return java.util.List.copyOf(records);
+
+  }
+
+  /**
+   * Writes down that one task is over. The filter demands an absent
+   * <code>taskClosedAt</code>, so a repeated dispatch does not move the moment the task was
+   * closed.
+   * <p>
+   * <code>updateMany</code> and not <code>updateOne</code>: a task may carry more than one
+   * record, and a record left open keeps the task alive for everything which reads the open
+   * work (see {@link TaskDeliveryLog#markTaskClosed} and decision 72 in the repository's
+   * DECISIONS.md).
    */
   @Override
   public int markTaskClosed(
@@ -488,8 +525,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
         .append("taskClosedAt", null);
     final var closeIt = Updates.set("taskClosedAt", new Date());
     final var result = session != null
-        ? collection.updateOne(session, filter, closeIt)
-        : collection.updateOne(filter, closeIt);
+        ? collection.updateMany(session, filter, closeIt)
+        : collection.updateMany(filter, closeIt);
     return (int) result.getModifiedCount();
 
   }

@@ -250,9 +250,46 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
   }
 
   /**
-   * Writes down that the application's completion or cancellation of one task reached the
-   * BPMS. The filter demands an absent <code>taskClosedAt</code>, so a repeated dispatch
-   * does not move the moment the task was closed.
+   * The open tasks of one workflow of the BPMS (see
+   * {@link TaskDeliveryLog#openTasksOfWorkflow}), oldest first. Read through the template of
+   * the running transaction, and served by the index over <code>workflowId</code> the startup
+   * creates.
+   */
+  @Override
+  public java.util.List<TaskDelivery> openTasksOfWorkflow(
+      final String workflowModuleId,
+      final String workflowId) {
+
+    final var query = Query
+        .query(
+            Criteria
+                .where("workflowModuleId")
+                .is(workflowModuleId)
+                .and("workflowId")
+                .is(workflowId)
+                .and("outcome")
+                .is(COMPLETION_PENDING)
+                .and("taskClosedAt")
+                .is(null))
+        .with(
+            org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.ASC, "recordedAt"));
+    return mongoTemplate
+        .find(query, TaskDeliveryDocument.class, collection)
+        .stream()
+        .map(MongoTaskDeliveryLog::recordOf)
+        .toList();
+
+  }
+
+  /**
+   * Writes down that one task is over. The filter demands an absent
+   * <code>taskClosedAt</code>, so a repeated dispatch does not move the moment the task was
+   * closed.
+   * <p>
+   * <code>updateMulti</code> and not <code>updateFirst</code>: a task may carry more than one
+   * record, and a record left open keeps the task alive for everything which reads the open
+   * work (see {@link TaskDeliveryLog#markTaskClosed} and decision 72 in the repository's
+   * DECISIONS.md).
    */
   @Override
   public int markTaskClosed(
@@ -262,7 +299,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
       final String taskId) {
 
     return (int) mongoTemplate
-        .updateFirst(
+        .updateMulti(
             Query
                 .query(
                     Criteria

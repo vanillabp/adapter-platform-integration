@@ -42,6 +42,27 @@ public interface DummyTaskAwarenessSource {
   }
 
   /**
+   * The awareness the dummy adapter reports for a WORKFLOW whose BPMS id VanillaBP holds -
+   * the shortcut an adapter of an eventually consistent BPMS uses to ask its engine by key
+   * instead of searching its read model. Defaults to the answer without the id, which is
+   * what an adapter that cannot use it does.
+   *
+   * @param adapterId The dummy adapter's ID
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param workflowId The BPMS' own id of the workflow, or <code>null</code> where
+   *          VanillaBP holds none
+   * @return The awareness or <code>null</code> to let another source answer
+   */
+  default WorkflowAwareness awarenessOfWorkflow(
+      final String adapterId,
+      final Object workflowAggregateId,
+      final String workflowId) {
+
+    return awarenessOfWorkflow(adapterId, workflowAggregateId);
+
+  }
+
+  /**
    * The awareness the dummy adapter reports for a USER task - defaults to the
    * service-task answer.
    *

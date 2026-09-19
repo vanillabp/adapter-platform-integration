@@ -292,9 +292,10 @@ public class DeploymentService {
    * {@code WorkflowTaskWiring#registerDeployedVersion}: only the adapter knows which
    * version its BPMS ended up with.
    * <p>
-   * The report about the handler methods of the extensions runs here as well. It judges
-   * nothing, it says what was wired, and this is the moment everything it names is
-   * known.
+   * Two reports run here as well. Both judge nothing and both need the moment everything
+   * they name is known: what the handler methods of the extensions were wired to, and which
+   * <code>&#64;WorkflowTask</code> methods would be called with values missing where
+   * VanillaBP works a cancellation out for itself.
    *
    * @param workflowModuleId The workflow module which finished deploying
    */
@@ -313,6 +314,9 @@ public class DeploymentService {
     // are placed
     workflowTaskWiring.validateNoUnwiredWorkflowTaskMethods(workflowModuleId);
     workflowTaskWiring.resolveProcessVersions(workflowModuleId);
+    // then what a cancellation VanillaBP works out for itself cannot carry, which needs
+    // the versions placed: the methods it names are the ones which really run
+    workflowTaskWiring.reportWhatACancelationCannotCarry(workflowModuleId);
     // and last what nothing is judged by: which method of an extension serves which key
     // of which process, so a developer whose method is not called has something to read
     workflowTaskWiring.reportExtensionHandlerWiring(workflowModuleId);

@@ -37,6 +37,7 @@ import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.PhaseTwoPermanentFailure;
 import io.vanillabp.integration.spi.PhaseTwoRetryLater;
 import io.vanillabp.integration.spi.RunningActivation;
+import io.vanillabp.integration.spi.TaskDeliveryLog;
 import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.spi.WorkflowAdapterCache;
 import io.vanillabp.spi.process.ProcessDefinition;
@@ -693,6 +694,76 @@ public class MigrationProcessService<A> {
 
   }
 
+  /**
+   * What a delivery is answered with where the handler did not raise a BPMN error: the task
+   * stays open where the method promised to complete it later, and it is over otherwise.
+   * <p>
+   * A delivery which reports that the BPMS took the task away is over whatever the method
+   * promised. {@code isAsynchronousTask} is true for every method with a
+   * <code>&#64;TaskId</code> parameter, a user-task method included, so answering by the
+   * method alone wrote a second OPEN record for a task which nobody can complete any more -
+   * and the election then read the younger of the two.
+   *
+   * @param handler The method serving the delivery
+   * @param context The invocation context of the delivery
+   * @return The outcome reported to the adapter
+   */
+  private static WorkflowTaskOutcome outcomeOf(
+      final WorkflowTaskHandler handler,
+      final TaskInvocationContext context) {
+
+    if (theBpmsEndedTheTask(context)) {
+      return WorkflowTaskOutcome.completed();
+    }
+    return handler.isAsynchronousTask()
+        ? WorkflowTaskOutcome.completionPending()
+        : WorkflowTaskOutcome.completed();
+
+  }
+
+  /**
+   * Whether this delivery says that the BPMS ended the task by itself, which is what a
+   * cancellation is: a boundary event fired, the scope around the task was left, or the
+   * workflow was terminated.
+   *
+   * @param context The invocation context of the delivery
+   * @return Whether the task is over because the BPMS took it away
+   */
+  private static boolean theBpmsEndedTheTask(
+      final TaskInvocationContext context) {
+
+    return context.getTaskEvent() == io.vanillabp.spi.service.TaskEvent.Event.CANCELED;
+
+  }
+
+  /**
+   * Remembers this delivery, and where it reported a cancellation closes the record the
+   * task had left open. Both writes belong to the transaction of the delivery, so a
+   * rollback takes them together.
+   * <p>
+   * The mark runs on the DELIVERY path and not where the application asks for something,
+   * because nobody in the application asked for this one. It is safe here for the reason it
+   * is not safe when a caller merely asks: a task the BPMS cancelled is never handed out
+   * again, so no redelivery is left which would need the record to renew its lock.
+   *
+   * @param deliveryLog The store to write to, <code>null</code> where there is none
+   * @param deliveryKey The identity of the delivery
+   * @param context The invocation context of the delivery
+   * @param outcome What the handler produced
+   */
+  private void recordTheDelivery(
+      final TaskDeliveryLog deliveryLog,
+      final String deliveryKey,
+      final TaskInvocationContext context,
+      final WorkflowTaskOutcome outcome) {
+
+    deliveryRecords.record(deliveryLog, deliveryKey, context, outcome);
+    if (theBpmsEndedTheTask(context)) {
+      deliveryRecords.writeDownThatTheBpmsEndedTheTask(deliveryLog, context);
+    }
+
+  }
+
   private WorkflowTaskOutcome deliverWorkflowTask(
       final WorkflowTaskHandler handler,
       final TaskInvocationContext context,
@@ -705,7 +776,8 @@ public class MigrationProcessService<A> {
 
     // a delivery proves which BPMS holds this workflow - recorded before anything
     // else, so it also holds for a delivery the handler does not subscribe to
-    rememberWorkflowAdapter(context.getWorkflowAggregateId(), context.getAdapterId());
+    rememberWorkflowAdapter(
+        context.getWorkflowAggregateId(), context.getAdapterId(), context.getWorkflowId());
 
     // lifecycle-event filter: a delivery of an event the method does not
     // subscribe to (e.g. CANCELED to a method without a @TaskEvent parameter) is
@@ -715,9 +787,7 @@ public class MigrationProcessService<A> {
           "Skipping delivery of task event '{}' to '{}': the method does not subscribe to it",
           context.getTaskEvent(),
           handler.describe());
-      return handler.isAsynchronousTask()
-          ? WorkflowTaskOutcome.completionPending()
-          : WorkflowTaskOutcome.completed();
+      return outcomeOf(handler, context);
     }
 
     // a BPMS repeating a delivery it never learned the result of must not run the
@@ -756,10 +826,8 @@ public class MigrationProcessService<A> {
       try {
         handler.invoke(workflowAggregate, context);
         aggregatePersistenceSupport.save(workflowAggregate);
-        final var outcome = handler.isAsynchronousTask()
-            ? WorkflowTaskOutcome.completionPending()
-            : WorkflowTaskOutcome.completed();
-        deliveryRecords.record(deliveryLog, deliveryKey, context, outcome);
+        final var outcome = outcomeOf(handler, context);
+        recordTheDelivery(deliveryLog, deliveryKey, context, outcome);
         failIfRollbackOnly(handler, context, runner, rollbackRuleRemedies);
         return outcome;
       } catch (final TaskException taskException) {
@@ -770,7 +838,7 @@ public class MigrationProcessService<A> {
         aggregatePersistenceSupport.save(workflowAggregate);
         final var outcome = WorkflowTaskOutcome
             .bpmnError(taskException.getErrorCode(), taskException.getErrorName());
-        deliveryRecords.record(deliveryLog, deliveryKey, context, outcome);
+        recordTheDelivery(deliveryLog, deliveryKey, context, outcome);
         failIfRollbackOnly(handler, context, runner, rollbackRuleRemedies);
         return outcome;
       }
@@ -785,6 +853,18 @@ public class MigrationProcessService<A> {
             context.getWorkflowAggregateId(),
             "processing task '%s'".formatted(context.getTaskDefinition()),
             transactionalWork);
+
+  }
+
+  /**
+   * The store holding the delivery records of this workflow aggregate, resolved once and
+   * kept - what the derivation of a cancellation reads and claims in.
+   *
+   * @return The store or <code>null</code> where the application has none
+   */
+  public TaskDeliveryLog resolveTaskDeliveryLog() {
+
+    return deliveryRecords.resolveLog();
 
   }
 
@@ -1017,6 +1097,23 @@ public class MigrationProcessService<A> {
       final String adapterId) {
 
     workflowLocator.remember(workflowAggregateId, adapterId);
+
+  }
+
+  /**
+   * The same, with the BPMS' own id of the workflow where the moment knew one. A delivery
+   * carries it, which is why the hint of a workflow VanillaBP ever heard from names both.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param adapterId The ID of the adapter holding the workflow or <code>null</code>
+   * @param workflowId The BPMS' own id of the workflow or <code>null</code>
+   */
+  public void rememberWorkflowAdapter(
+      final Object workflowAggregateId,
+      final String adapterId,
+      final String workflowId) {
+
+    workflowLocator.remember(workflowAggregateId, adapterId, workflowId);
 
   }
 
@@ -1999,12 +2096,36 @@ public class MigrationProcessService<A> {
   public String adapterIdOfWorkflow(
       final Object workflowAggregateId) {
 
+    return locationOfWorkflow(workflowAggregateId).adapterId();
+
+  }
+
+  /**
+   * The same election, answering the adapter id AND the BPMS' own id of the workflow - see
+   * {@link io.vanillabp.integration.extension.spi.election.WorkflowElection#locationOfWorkflow}.
+   * <p>
+   * Both values stand in the same place, so handing back only one of them and making the
+   * caller ask again would be the odd design. The id is read from what VanillaBP already
+   * holds and nothing new is asked of any BPMS for it: the record of a task delivery of
+   * that workflow first, then the election cache. A <code>null</code> id is a regular
+   * answer.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @return Where the workflow is
+   * @throws IllegalStateException If no configured BPMS knows the workflow, or if the
+   *           BPMS which should hold it is unreachable
+   */
+  public io.vanillabp.integration.extension.spi.election.WorkflowLocation locationOfWorkflow(
+      final Object workflowAggregateId) {
+
     final var subject = subjectOf(workflowAggregateId);
+    final var workflowId = workflowIdKnownFor(workflowAggregateId);
     final var location = workflowLocator
         .locate(
             adapterProcessServices,
             adapter -> adapter
-                .awarenessOfWorkflow(workflowScope(), aggregatePersistenceSupport, workflowAggregateId),
+                .awarenessOfWorkflow(
+                    workflowScope(), aggregatePersistenceSupport, workflowAggregateId, workflowId),
             workflowAggregateId,
             subject,
             WorkflowLocator.Patience.WAIT_FOR_VISIBILITY);
@@ -2025,9 +2146,36 @@ public class MigrationProcessService<A> {
                           .formatted(location.hintedAdapterId())
                       : ""));
     }
-    return location
-        .adapter()
-        .getAdapterId();
+    return new io.vanillabp.integration.extension.spi.election.WorkflowLocation(
+        location
+            .adapter()
+            .getAdapterId(), workflowId);
+
+  }
+
+  /**
+   * The BPMS' own id of the given workflow, as far as VanillaBP holds one - a hint handed
+   * to an adapter so it can ask its engine by key instead of searching a read model, and
+   * handed to an extension which asked where a workflow is.
+   * <p>
+   * Two sources, in this order. The record of a task delivery of that workflow is the first
+   * one: it is written per delivery, it survives a restart and it names the id the BPMS
+   * reported. The election cache is the second: it is free to read but bounded and
+   * expiring, so it knows less. Nothing new is asked of any BPMS.
+   * <p>
+   * <code>null</code> where neither knew one, which is what an adapter which reports no
+   * workflow id and a workflow nobody ever delivered anything for both look like.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @return The workflow's id in the BPMS or <code>null</code>
+   */
+  private String workflowIdKnownFor(
+      final Object workflowAggregateId) {
+
+    final var recorded = deliveryRecords.workflowIdOf(workflowAggregateId);
+    return recorded != null
+        ? recorded
+        : workflowLocator.rememberedWorkflowId(workflowAggregateId);
 
   }
 

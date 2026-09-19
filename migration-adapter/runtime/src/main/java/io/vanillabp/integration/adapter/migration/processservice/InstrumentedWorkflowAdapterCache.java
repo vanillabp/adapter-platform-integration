@@ -70,6 +70,22 @@ public class InstrumentedWorkflowAdapterCache implements WorkflowAdapterCache {
   }
 
   @Override
+  public Optional<Hint> hintOf(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId) {
+
+    final var hint = delegate.hintOf(workflowModuleId, bpmnProcessId, workflowAggregateId);
+    if (hint.isPresent()) {
+      statistics.recordHit();
+    } else {
+      statistics.recordMiss();
+    }
+    return hint;
+
+  }
+
+  @Override
   public void put(
       final String workflowModuleId,
       final String bpmnProcessId,
@@ -77,6 +93,18 @@ public class InstrumentedWorkflowAdapterCache implements WorkflowAdapterCache {
       final String adapterId) {
 
     delegate.put(workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId);
+
+  }
+
+  @Override
+  public void put(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final String adapterId,
+      final String workflowId) {
+
+    delegate.put(workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, workflowId);
 
   }
 

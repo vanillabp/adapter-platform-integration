@@ -219,10 +219,56 @@ public final class WorkflowLocator {
       final Object workflowAggregateId,
       final String adapterId) {
 
+    remember(workflowAggregateId, adapterId, null);
+
+  }
+
+  /**
+   * The same, with the BPMS' own id of the workflow where the moment knew one - a delivery
+   * carries it, and a start learns it from the adapter which created the instance.
+   * <p>
+   * What it buys is the paths which WAIT: an adapter given the key can ask its engine
+   * directly instead of searching a read model which has not caught up. The id is a hint
+   * like the adapter id, so a cache which drops it costs a slower answer and nothing else.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate (any type - its
+   *        serialized form is the key)
+   * @param adapterId The ID of the adapter holding the workflow
+   * @param workflowId The BPMS' own id of the workflow or <code>null</code>
+   */
+  public void remember(
+      final Object workflowAggregateId,
+      final String adapterId,
+      final String workflowId) {
+
     if ((cache == null) || (workflowAggregateId == null) || (adapterId == null)) {
       return;
     }
-    cache.put(workflowModuleId, bpmnProcessId, workflowAggregateId.toString(), adapterId);
+    cache.put(workflowModuleId, bpmnProcessId, workflowAggregateId.toString(), adapterId, workflowId);
+
+  }
+
+  /**
+   * What the cache knows about the BPMS' own id of this workflow, looked for under every
+   * BPMN process id this workflow service serves.
+   * <p>
+   * A hint and never an answer: it may be absent, it may be stale, and it says nothing
+   * about whether the workflow still runs. What reads it hands it to an adapter as a
+   * shortcut, and an adapter which cannot use it ignores it.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @return The workflow's id in the BPMS, or <code>null</code> where nothing knows one
+   */
+  public String rememberedWorkflowId(
+      final Object workflowAggregateId) {
+
+    if ((cache == null) || (workflowAggregateId == null)) {
+      return null;
+    }
+    final var hint = hintOf(workflowAggregateId.toString());
+    return hint == null
+        ? null
+        : hint.workflowId();
 
   }
 
@@ -360,7 +406,8 @@ public final class WorkflowLocator {
    */
   private record Hint(
                       String bpmnProcessId,
-                      String adapterId) {
+                      String adapterId,
+                      String workflowId) {
   }
 
   /**
@@ -372,11 +419,11 @@ public final class WorkflowLocator {
       final String serializedAggregateId) {
 
     for (final var candidate : bpmnProcessIdsToReadUnder) {
-      final var adapterId = cache
-          .get(workflowModuleId, candidate, serializedAggregateId)
+      final var entry = cache
+          .hintOf(workflowModuleId, candidate, serializedAggregateId)
           .orElse(null);
-      if (adapterId != null) {
-        return new Hint(candidate, adapterId);
+      if (entry != null) {
+        return new Hint(candidate, entry.adapterId(), entry.workflowId());
       }
     }
     return null;

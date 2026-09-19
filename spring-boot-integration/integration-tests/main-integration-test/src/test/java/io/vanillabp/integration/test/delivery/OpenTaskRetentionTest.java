@@ -142,6 +142,7 @@ public class OpenTaskRetentionTest {
                       new BpmnTaskSpec("Activity_Fail", "failTask"),
                       new BpmnTaskSpec("Activity_Undeduplicated", "undeduplicatedTask"),
                       new BpmnTaskSpec("Activity_Await", "awaitCompletion"),
+                      new BpmnTaskSpec("Activity_Cancelable", "cancelableTask"),
                       new BpmnTaskSpec("Activity_Concurrent", "concurrentTask"))
               : List.of();
 
@@ -346,6 +347,16 @@ public class OpenTaskRetentionTest {
           .assertTrue(
               deliveryLog.openTasksOfAggregate(MODULE, PROCESS, "4712").isEmpty(),
               "a task whose handler finished it was never open");
+
+      // the same records read by the workflow of the BPMS instead of by the aggregate,
+      // which is what the core asks on every wake-up
+      final var openInTheWorkflow = deliveryLog.openTasksOfWorkflow(MODULE, "workflow-of-4711");
+      Assertions.assertEquals(1, openInTheWorkflow.size(), openInTheWorkflow::toString);
+      Assertions.assertEquals("job-1", openInTheWorkflow.getFirst().taskId());
+      Assertions
+          .assertTrue(
+              deliveryLog.openTasksOfWorkflow(MODULE, "no-such-workflow").isEmpty(),
+              "a workflow nobody delivered anything for has nothing open");
 
       // two hours later, an hour past the retention and past the maximum age
       backdateEveryRecordBy(context, Duration.ofHours(2));

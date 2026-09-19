@@ -228,16 +228,30 @@ public interface TaskDeliveryLog {
   }
 
   /**
-   * Writes down that the application's completion or cancellation of this task reached the
-   * BPMS, so the next operation on it is answered as a no-op without asking anybody.
+   * Writes down that this task is over, so the next operation on it is answered as a no-op
+   * without asking anybody.
    * <p>
-   * Called AFTER phase two succeeded, on the thread dispatching it. Not when the caller
-   * asked: until phase two ran, the task is still open for the BPMS, and on a BPMS which
-   * hands a task out again to renew its lock it is exactly this record which answers those
-   * redeliveries. A second call in that window is already refused by the outbox' idempotency
-   * key (see decision 22 in the repository's DECISIONS.md), which is the gap this closes:
-   * the key is free again once the entry was dispatched, and from there on the record
-   * answers.
+   * Two moments call it. The application's completion or cancellation calls it AFTER phase
+   * two succeeded, on the thread dispatching it, and not when the caller asked: until phase
+   * two ran, the task is still open for the BPMS, and on a BPMS which hands a task out again
+   * to renew its lock it is exactly this record which answers those redeliveries. A second
+   * call in that window is already refused by the outbox' idempotency key (see decision 22 in
+   * the repository's DECISIONS.md), which is the gap this closes: the key is free again once
+   * the entry was dispatched, and from there on the record answers. The BPMS calls it through
+   * a delivery of {@link io.vanillabp.spi.service.TaskEvent.Event#CANCELED}, and that one
+   * closes the record straight away: a task the BPMS took away is never handed out again, so
+   * there is no lock left to renew.
+   * <p>
+   * <b>Every</b> record naming that task is closed, not only the newest one. A task may carry
+   * more than one record - the delivery which handed it to the application and the delivery
+   * which reported its cancelation share a task id - and a record left open keeps the task
+   * alive for everything which reads the open work. Why all of them rather than one is
+   * decision 72 in the repository's DECISIONS.md.
+   * <p>
+   * A record which was closed before keeps the moment it was closed at. The count therefore
+   * says how many records this call closed, which is what lets a caller claim a task: two
+   * application instances deriving the same cancelation both call this, and only one of them
+   * reads a number above zero.
    * <p>
    * A store which cannot do it does nothing, which is what the default does: the election
    * then probes for a task which is gone and gets the same no-op one round trip later.
@@ -246,7 +260,7 @@ public interface TaskDeliveryLog {
    * @param bpmnProcessId The BPMN process of the workflow
    * @param workflowAggregateId The workflow aggregate's ID in serialized form
    * @param taskId The BPMS' identity of the closed task
-   * @return The number of records marked
+   * @return The number of records this call marked
    */
   default int markTaskClosed(
       final String workflowModuleId,
@@ -321,6 +335,59 @@ public interface TaskDeliveryLog {
       final String workflowModuleId,
       final String bpmnProcessId,
       final String workflowAggregateId) {
+
+    return List.of();
+
+  }
+
+  /**
+   * The open tasks of ONE workflow of the BPMS - what the core reads on every wake-up to see
+   * which other tasks of that workflow it still believes are open.
+   *
+   * <h4>How this differs from {@link #openTasksOfAggregate}</h4>
+   *
+   * The question is the same, the key is not. That one is keyed by workflow module, BPMN
+   * process and aggregate, which is the question an extension asks: it holds an aggregate and
+   * wants everything waiting for somebody. This one is keyed by the BPMS' own id of the
+   * running instance, which is the question a delivery raises: a job arrived for one workflow,
+   * and what else is open IN THAT WORKFLOW decides what may be probed.
+   * <p>
+   * Three things follow from the different key. An aggregate may carry a second workflow, and
+   * that one is not in this answer. A task a called process handed out carries the secondary
+   * BPMN process id, so a read by aggregate has to be repeated per BPMN process the workflow
+   * service serves while this one covers them in one go. And this read is cheap: the id is
+   * {@code VARCHAR(255)} and indexed, while the aggregate's id holds up to 1024 characters and
+   * carries no portable index.
+   *
+   * <h4>Which records are invisible to it</h4>
+   *
+   * A record whose adapter named no workflow. {@link TaskDelivery#workflowId()} is filled from
+   * what the adapter reports, and an adapter which reports none leaves the column empty - the
+   * records of such an adapter are not in this answer and never will be. So is a record
+   * written before the column existed. The Camunda 7, Camunda 8 and Process-Engine-API adapters
+   * VanillaBP ships all report the id.
+   * <p>
+   * What "open" means, which tasks are in it at all, the ordering and the absent limit are
+   * exactly what {@link #openTasksOfAggregate} describes.
+   *
+   * <h4>What it costs</h4>
+   *
+   * This is asked once per delivery of a workflow whose BPMN process has an asynchronous task
+   * at all, on the thread of the delivery, so it has to be an indexed read. The stores
+   * VanillaBP ships index the workflow id and say so in their own documentation.
+   * <p>
+   * The default answers an empty list, which is what a store written before this existed
+   * answers. A caller then derives nothing, which is the behaviour of every VanillaBP before
+   * this read existed.
+   *
+   * @param workflowModuleId The workflow module of the workflow
+   * @param workflowId The BPMS' own id of the workflow (see {@link TaskDelivery#workflowId()})
+   * @return The open records, oldest first, empty where there are none or this store cannot
+   *         say
+   */
+  default List<TaskDelivery> openTasksOfWorkflow(
+      final String workflowModuleId,
+      final String workflowId) {
 
     return List.of();
 

@@ -223,9 +223,14 @@ public final class WorkflowViewer<A> {
     // the hint is what buys the waiting: it says the workflow exists, so an adapter not
     // reporting it yet is asked again until its visibility window is used up. Nothing
     // repeats a read later, so this is the only place it can happen
+    final var workflowId = workflowLocator.rememberedWorkflowId(aggregateId);
     final var location = workflowLocator.locate(
         adapterProcessServices,
-        adapter -> adapter.awarenessOfWorkflow(scope.get(), aggregatePersistenceSupport, aggregateId),
+        // the id VanillaBP holds rides along: this read waits out the visibility window of
+        // an eventually consistent BPMS, and an adapter which can ask its engine by key
+        // answers before its read model does
+        adapter -> adapter
+            .awarenessOfWorkflow(scope.get(), aggregatePersistenceSupport, aggregateId, workflowId),
         aggregateId,
         subject,
         WorkflowLocator.Patience.WAIT_FOR_VISIBILITY);

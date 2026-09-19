@@ -219,6 +219,35 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
 
   }
 
+  /**
+   * Asks the core to look at the other tasks it believes are open in the workflow of the
+   * given delivery, the way an adapter of a remote BPMS does after it handed a delivery
+   * over. Triggered by integration tests, which supply the probe themselves.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param wakeUp The delivery which woke the application up
+   * @param probe What answers whether one task still exists
+   */
+  public void reportTasksTheBpmsNoLongerHas(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final TaskInvocationContext wakeUp,
+      final io.vanillabp.integration.adapter.spi.workflowtask.OpenTaskProbe probe) {
+
+    log
+        .info(
+            "Dummy-Adapter[{}]: Looking at the other tasks open in workflow '{}' of {}",
+            adapterId,
+            wakeUp.getWorkflowId(),
+            workflowModuleId);
+
+    collaborators
+        .workflowTaskInvoker()
+        .reportTasksTheBpmsNoLongerHas(workflowModuleId, bpmnProcessId, wakeUp, probe);
+
+  }
+
   @Override
   public Class<Object> getModelType() {
 

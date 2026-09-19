@@ -54,6 +54,12 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
 
     private final String adapterId;
 
+    /**
+     * The BPMS' own id of the workflow, where VanillaBP learned one - a hint like the
+     * adapter id and possibly absent.
+     */
+    private final String workflowId;
+
     private final long expiresAtMillis;
 
     /**
@@ -66,10 +72,12 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
 
     private Entry(
         final String adapterId,
+        final String workflowId,
         final long expiresAtMillis,
         final boolean ended) {
 
       this.adapterId = adapterId;
+      this.workflowId = workflowId;
       this.expiresAtMillis = expiresAtMillis;
       this.ended = ended;
 
@@ -217,8 +225,19 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
       final String bpmnProcessId,
       final String workflowAggregateId) {
 
+    return hintOf(workflowModuleId, bpmnProcessId, workflowAggregateId)
+        .map(Hint::adapterId);
+
+  }
+
+  @Override
+  public Optional<Hint> hintOf(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId) {
+
     final var key = new Key(workflowModuleId, bpmnProcessId, workflowAggregateId);
-    final String adapterId;
+    final Hint hint;
     synchronized (entries) {
       final var entry = entries.get(key);
       if ((entry == null) || (entry.expiresAtMillis < System.currentTimeMillis())) {
@@ -229,21 +248,21 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
             --endedEntries;
           }
         }
-        adapterId = null;
+        hint = null;
       } else {
         entry.used = true;
-        adapterId = entry.adapterId;
+        hint = new Hint(entry.adapterId, entry.workflowId);
       }
     }
 
-    if (adapterId == null) {
+    if (hint == null) {
       // outside the lock: judging a miss takes a lock of its own and may log, and the
       // election is waiting for this map
       statistics.recordLookupMiss(workflowModuleId, bpmnProcessId, workflowAggregateId);
       return Optional.empty();
     }
 
-    return Optional.of(adapterId);
+    return Optional.of(hint);
 
   }
 
@@ -254,8 +273,20 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
       final String workflowAggregateId,
       final String adapterId) {
 
+    put(workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, null);
+
+  }
+
+  @Override
+  public void put(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final String adapterId,
+      final String workflowId) {
+
     final var key = new Key(workflowModuleId, bpmnProcessId, workflowAggregateId);
-    final var entry = new Entry(adapterId, System.currentTimeMillis() + timeToLiveMillis, false);
+    final var entry = new Entry(adapterId, workflowId, System.currentTimeMillis() + timeToLiveMillis, false);
     synchronized (entries) {
       final var replaced = entries.put(key, entry);
       if ((replaced != null) && replaced.ended) {
@@ -273,9 +304,14 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
       final String adapterId) {
 
     final var key = new Key(workflowModuleId, bpmnProcessId, workflowAggregateId);
-    final var entry = new Entry(adapterId, System.currentTimeMillis() + endedTimeToLiveMillis, true);
     synchronized (entries) {
       final var current = entries.get(key);
+      // the mark keeps what the entry knew about the workflow: the end says the workflow
+      // is over, not that its id was wrong
+      final var entry = new Entry(
+          adapterId, current == null
+              ? null
+              : current.workflowId, System.currentTimeMillis() + endedTimeToLiveMillis, true);
       // an entry which is only waiting to be dropped on the next read says nothing
       // about anybody
       final var currentIsAlive = (current != null) && (current.expiresAtMillis >= System.currentTimeMillis());
