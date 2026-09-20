@@ -30,6 +30,11 @@
 
   <dependencies>
     <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
       <groupId>io.vanillabp</groupId>
       <artifactId>vanillabp-spring-boot-support</artifactId>
       <version>${project.version}</version>
@@ -53,7 +58,8 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-autoconfigure-processor</artifactId>
-      <optional>true</optional>
+      <!-- an annotation processor, so 'provided' for the same reason Lombok is -->
+      <scope>provided</scope>
     </dependency>
     <!-- optional: the election cache's meters are registered only if the
          application brings Micrometer (see WorkflowAdapterCacheMeters) -->

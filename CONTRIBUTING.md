@@ -113,6 +113,22 @@ machine makes a test slower rather than red.
 is the shape to copy. Where a number really does say something, a line next to it says what: which
 configured interval it is three of, or which window it stays below.
 
+## What a POM hands an application
+
+A tool which only translates our source belongs in scope `provided`, and the scope stands at the
+declaration in the module which uses the tool. Lombok is such a tool, an annotation processor is
+another. An application asked for a workflow engine, and every jar it did not ask for is one more
+thing to ship and to answer a CVE report about.
+
+Writing `<optional>true</optional>` in a `dependencyManagement` does not do it. Maven copies a
+managed version, scope and exclusions into a dependency and leaves the optional flag behind, so the
+POM we publish says nothing at all about that dependency. Lombok reached the runtime classpath of
+every application that way. It stayed invisible here because most modules which use Lombok declared
+none themselves and compiled against the copy another module passed on.
+[`PublishedPomsTest`](./migration-adapter/runtime/src/test/java/io/vanillabp/migration/test/PublishedPomsTest.java)
+reads the POMs of this repository, which are the files we publish, and fails when a tool of the
+build is declared so an application gets it.
+
 ## How we write
 
 Most people who read this repository read English as a second language, and so does the maintainer.
