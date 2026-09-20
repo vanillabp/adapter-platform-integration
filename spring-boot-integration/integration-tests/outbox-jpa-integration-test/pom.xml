@@ -29,6 +29,11 @@
 
   <dependencies>
     <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
       <!-- the outbox' own meters exist where the application brings
            Micrometer -->
       <groupId>io.micrometer</groupId>

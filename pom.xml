@@ -107,10 +107,17 @@
         <version>${vanillabp.version}</version>
       </dependency>
       <dependency>
+        <!-- 'provided' here and again at every single declaration: Lombok translates the
+             source and has no work left once the class file exists, so no application
+             using our artifacts may find it on its runtime classpath. Writing 'optional'
+             here did not do that. Maven copies a managed version, scope and exclusions
+             into a dependency, but not the optional flag, so the POMs we publish said
+             nothing and an application whose own BOM names Lombok, which both platform
+             BOMs do, resolved it at compile scope. -->
         <groupId>org.projectlombok</groupId>
         <artifactId>lombok</artifactId>
         <version>${lombok.version}</version>
-        <optional>true</optional>
+        <scope>provided</scope>
       </dependency>
       <dependency>
         <groupId>org.slf4j</groupId>
