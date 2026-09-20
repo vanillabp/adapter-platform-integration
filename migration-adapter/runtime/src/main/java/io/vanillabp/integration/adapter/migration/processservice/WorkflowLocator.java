@@ -465,7 +465,7 @@ public final class WorkflowLocator {
     }
 
     final var awareness = patience == Patience.WAIT_FOR_VISIBILITY
-        ? probeUntilVisible(cachedAdapter, probe, subject)
+        ? probeUntilVisible(cachedAdapter, probe, subject, hint.workflowId())
         : probeWithRetry(cachedAdapter, probe, subject, patience);
     switch (awareness) {
       case ACTIVE -> {
@@ -567,18 +567,27 @@ public final class WorkflowLocator {
    * and the caller has to be one which has nobody to ask the question again for it
    * ({@link Patience#WAIT_FOR_VISIBILITY} - a read of the viewer API, or the election
    * an extension asks for).
+   * <p>
+   * The window is asked for THIS workflow, with the id the hint carries. An adapter which
+   * knows the workflow by that id can name a shorter window than the one a freshly started
+   * workflow needs, and an adapter which cannot use the id answers its one window through
+   * the default, exactly as it did before the id travelled.
+   *
+   * @param workflowId The BPMS' own id of the workflow as the hint kept it, or
+   *          <code>null</code> where the hint carried none
    */
   private static <A> WorkflowAwareness probeUntilVisible(
       final MigratableProcessService<A> adapter,
       final Function<MigratableProcessService<A>, WorkflowAwareness> probe,
-      final String subject) {
+      final String subject,
+      final String workflowId) {
 
     var awareness = probeWithRetry(adapter, probe, subject, Patience.WAIT_FOR_VISIBILITY);
     if (awareness != WorkflowAwareness.UNKNOWN_TO_BPMS) {
       return awareness;
     }
 
-    final var delay = adapter.workflowVisibilityDelay();
+    final var delay = adapter.workflowVisibilityDelay(workflowId);
     if ((delay == null) || !delay.isWaiting()) {
       return awareness;
     }

@@ -7,9 +7,11 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Immutable description of the second phase of a two-phase committed BPMS call,
- * scheduled via {@link PhaseTwoOutbox#schedule(PhaseTwoCall)} within the local
- * transaction and dispatched after that transaction was committed.
+ * Immutable description of one piece of phase-two work, scheduled via
+ * {@link PhaseTwoOutbox#schedule(PhaseTwoCall)} within the local transaction and
+ * dispatched after that transaction was committed. That is the second phase of a
+ * two-phase committed BPMS call, and equally an operation an extension registered for
+ * itself: the type says WHEN the work runs, not who runs it.
  * <p>
  * The workflow-aggregate ID is carried in its serialized {@link String} form - the
  * serialized form is the ONLY form in transport. Conversion back to the aggregate's

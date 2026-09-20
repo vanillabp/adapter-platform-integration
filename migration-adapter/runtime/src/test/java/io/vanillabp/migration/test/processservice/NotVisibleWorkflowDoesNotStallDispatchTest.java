@@ -69,9 +69,14 @@ public class NotVisibleWorkflowDoesNotStallDispatchTest {
    * An eventually consistent BPMS: it reports the workflow of {@link #FINDABLE} and
    * has not caught up with the one of {@link #NOT_VISIBLE_YET}, whatever it is asked.
    */
-  private static final class LaggingAdapter implements MigratableProcessService<Object> {
+  private static class LaggingAdapter implements MigratableProcessService<Object> {
 
     private final List<String> correlated = new ArrayList<>();
+
+    /**
+     * Which workflow id the core handed to the window question, in the order it asked.
+     */
+    protected final List<String> askedAbout = new ArrayList<>();
 
     /**
      * How often the BPMS was asked about the workflow it has not caught up with. Waiting
@@ -153,12 +158,25 @@ public class NotVisibleWorkflowDoesNotStallDispatchTest {
   private static MigrationProcessService<Object> serviceKnowingBothWorkflows(
       final LaggingAdapter adapter) {
 
+    return serviceKnowingBothWorkflows(adapter, null);
+
+  }
+
+  /**
+   * The same, with the BPMS' own id of the workflow which is not visible yet written into
+   * the hint - what a delivery or a start leaves behind, and what lets the adapter answer
+   * its window for that one workflow.
+   */
+  private static MigrationProcessService<Object> serviceKnowingBothWorkflows(
+      final LaggingAdapter adapter,
+      final String workflowIdOfTheLaggingOne) {
+
     @SuppressWarnings("unchecked")
     final AggregatePersistenceAware<Object> persistence = mock(AggregatePersistenceAware.class);
     lenient().when(persistence.getAggregateId(any())).thenReturn(NOT_VISIBLE_YET);
 
     final var cache = new InMemoryWorkflowAdapterCache();
-    cache.put(MODULE, PROCESS, NOT_VISIBLE_YET, ADAPTER);
+    cache.put(MODULE, PROCESS, NOT_VISIBLE_YET, ADAPTER, workflowIdOfTheLaggingOne);
     cache.put(MODULE, PROCESS, FINDABLE, ADAPTER);
 
     final PhaseTwoOutboxResolver resolver = new PhaseTwoOutboxResolver() {
@@ -232,6 +250,45 @@ public class NotVisibleWorkflowDoesNotStallDispatchTest {
         1,
         adapter.probesOfTheLaggingWorkflow.get(),
         "the dispatch asks once and gives the entry back instead of waiting for the read model");
+
+  }
+
+  @Test
+  @DisplayName("An adapter answering per workflow decides how soon its entry comes back")
+  public void theDueTimeIsTheWindowOfThatWorkflow() {
+
+    // the adapter knows this workflow by its own id and its engine says the workflow is
+    // gone, so nothing is served by giving the read model the window a young workflow
+    // needs
+    final var shortWindow = Duration.ofMillis(900);
+    final var adapter = new LaggingAdapter() {
+
+      @Override
+      public WorkflowVisibilityDelay workflowVisibilityDelay(
+          final String workflowId) {
+
+        askedAbout.add(workflowId);
+        return "workflow-77".equals(workflowId)
+            ? new WorkflowVisibilityDelay(shortWindow, Duration.ofMillis(20))
+            : super.workflowVisibilityDelay(workflowId);
+
+      }
+
+    };
+    final var service = serviceKnowingBothWorkflows(adapter, "workflow-77");
+
+    final var retryLater = assertThrows(
+        PhaseTwoRetryLater.class,
+        () -> dispatchCorrelation(service, NOT_VISIBLE_YET));
+
+    assertEquals(
+        shortWindow,
+        retryLater.getRetryAfter(),
+        "the entry comes back when this workflow is worth asking about again");
+    assertEquals(
+        List.of("workflow-77"),
+        adapter.askedAbout,
+        "and the adapter was told which workflow the window is for");
 
   }
 

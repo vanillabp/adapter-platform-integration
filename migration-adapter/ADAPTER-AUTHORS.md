@@ -227,13 +227,14 @@ that history as `null`, which is an answer and not an error.
 The remaining methods are switches. Each of them is small and each of them changes what the core
 does:
 
-|                  Method                  | Default |                                                                                                                                                                                                                                   What it decides                                                                                                                                                                                                                                    |
-|------------------------------------------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `deliversTasksAtLeastOnce()`             | `false` | say `true` where your BPMS learns a task's outcome only AFTER the application committed locally, which is every remote BPMS and an embedded one on a datasource of its own. The default is right only where the delivery shares the application's transaction, because a repeated delivery there proves nothing was committed. What it decides is whether a missing delivery log is worth a guiding message at startup. It does not switch deduplication on; `getDeliveryId()` does. |
-| `isPhaseTwoFailureRepeatable(Throwable)` | `true`  | a `false` blocks the outbox entry after one attempt instead of retrying it. Say it only for what your BPMS answers identically every time, a malformed request or an identifier which does not exist. Keep that list short: repeating is the safe answer.                                                                                                                                                                                                                            |
-| `workflowVisibilityDelay()`              | none    | how long an `UNKNOWN_TO_BPMS` of your BPMS may still turn into `ACTIVE`. Report a window where your probe reads a model which lags behind the engine, and no longer than it honestly needs: it is the due time an outbox entry gets before it asks again, and every one of those costs the entry an attempt.                                                                                                                                                                         |
-| `canLocateWorkflows()`                   | `true`  | whether your workflow probe asks your BPMS or guesses. See section 4.                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `openTaskCount(module, process)`         | `null`  | how many tasks of a process your BPMS holds open, asked once at startup so an upgraded application learns how long its unrecorded deliveries can still surprise it. Answer only if your BPMS counts and you read the number; fetching the tasks to count them makes the boot grow with the years the application ran (decision 19).                                                                                                                                                  |
+|                  Method                  |    Default    |                                                                                                                                                                                                                                   What it decides                                                                                                                                                                                                                                    |
+|------------------------------------------|---------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `deliversTasksAtLeastOnce()`             | `false`       | say `true` where your BPMS learns a task's outcome only AFTER the application committed locally, which is every remote BPMS and an embedded one on a datasource of its own. The default is right only where the delivery shares the application's transaction, because a repeated delivery there proves nothing was committed. What it decides is whether a missing delivery log is worth a guiding message at startup. It does not switch deduplication on; `getDeliveryId()` does. |
+| `isPhaseTwoFailureRepeatable(Throwable)` | `true`        | a `false` blocks the outbox entry after one attempt instead of retrying it. Say it only for what your BPMS answers identically every time, a malformed request or an identifier which does not exist. Keep that list short: repeating is the safe answer.                                                                                                                                                                                                                            |
+| `workflowVisibilityDelay()`              | none          | how long an `UNKNOWN_TO_BPMS` of your BPMS may still turn into `ACTIVE`. Report a window where your probe reads a model which lags behind the engine, and no longer than it honestly needs: it is the due time an outbox entry gets before it asks again, and every one of those costs the entry an attempt.                                                                                                                                                                         |
+| `workflowVisibilityDelay(workflowId)`    | the one above | the same window asked for ONE workflow, and the question the core actually asks. See section 4.2.                                                                                                                                                                                                                                                                                                                                                                                    |
+| `canLocateWorkflows()`                   | `true`        | whether your workflow probe asks your BPMS or guesses. See section 4.                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `openTaskCount(module, process)`         | `null`        | how many tasks of a process your BPMS holds open, asked once at startup so an upgraded application learns how long its unrecorded deliveries can still surprise it. Answer only if your BPMS counts and you read the number; fetching the tasks to count them makes the boot grow with the years the application ran (decision 19).                                                                                                                                                  |
 
 ## 3. What the core hands you, and what you have to hand back
 
@@ -617,7 +618,8 @@ workflow, asks your probe about them and reports the ones which are gone to the 
 `TaskEvent.Event.CANCELED`. Nothing else in VanillaBP ever tells such an application about those
 tasks.
 
-Your probe answers one question about one task, and it has three answers:
+Your probe is asked `stillExists(workflowId, taskId, taskDefinition)`, and it has three answers
+about one task:
 
 |    Answer     |               What it means               |                              What follows                              |
 |---------------|-------------------------------------------|------------------------------------------------------------------------|
@@ -642,6 +644,21 @@ What you owe the call, and what it owes you:
   done, and it is not lost over a question nobody asked for;
 - supply no probe and nothing changes. Every adapter written before this keeps behaving exactly as
   it does, which is what makes the call additive.
+
+The third argument is what lets you refuse per record instead of per BPMN process. Some BPMS
+answer about some kinds of task and not about others: on Camunda 8 a user task the engine manages
+lives in a namespace of its own, and its key handed to a job command answers "not found" for a
+task which is perfectly alive. The two ids alone do not say which kind of record you are being
+asked about, so an adapter without the task definition has to answer `CANNOT_SAY` for every record
+of a process which holds one such user task, and the plain service tasks of that same process lose
+their derived cancellation with it. With the definition you answer `CANNOT_SAY` for the elements
+you cannot ask about and ask your BPMS for the rest. A probe which implements
+`stillExists(workflowId, taskId)` alone is asked through the default and decides as it always did.
+
+What you may not do with it is read a negative answer as more than it is. `GONE` is the only
+answer which cancels the application's task, and the same rule holds for the election next door: a
+workflow which ended is `COMPLETED` and never `UNKNOWN_TO_BPMS`, because the unknown answer is what
+sends the next operation of a migration to the wrong BPMS.
 
 Do not call it from an adapter whose BPMS cancels each element by itself. The application would
 hear about the same task twice.
@@ -701,7 +718,8 @@ variant.
 
 Report a visibility delay where your reads lag. A remote BPMS whose probe reads an exported read
 model answers "unknown" for a workflow which exists, and that is what the read model knows rather
-than a defect to hide. `workflowVisibilityDelay()` is how you say so.
+than a defect to hide. `workflowVisibilityDelay()` is how you say so, and
+[4.2](#42-the-window-may-be-answered-per-workflow) is how you say it per workflow.
 
 Where the core waits and where it does not is decision 27, and it is worth knowing because it
 explains what your answers cost:
@@ -760,6 +778,29 @@ given without it.
 
 Do not implement it and nothing changes: the default drops the id and calls the question you
 already answer.
+
+### 4.2 The window may be answered per workflow
+
+`workflowVisibilityDelay(workflowId)` is the same window asked for one workflow, and the core
+calls it wherever it waits. The id comes from what VanillaBP already holds, and `null` means
+nobody knew one, which is a regular answer.
+
+One window for everything has to be the longest one you ever need, and that is the wrong price for
+most of what is waited for. The window exists for workflows which were just started: measured on
+three Camunda 8 clusters in September 2026, the engine knows a new instance after 16 to 19 ms while
+the search finds it after 167 to 1324 ms. Those are the workflows your probe ends up answering
+`ACTIVE` for. A workflow the engine no longer holds is the other case, and it is old enough to be
+in the read model long since. Asked once for the whole adapter, a case which needs a second waits
+the ten seconds a young workflow may need.
+
+You may shorten the wait for a workflow you already know something about, and answer today's window
+for the rest. You may not let a shorter window change what you answer afterwards. Shortening only
+ends the waiting sooner, and the answer which comes out of it is the honest one: a workflow which
+ended is `COMPLETED` and never `UNKNOWN_TO_BPMS`, because reading an ended workflow as unknown
+sends the next operation of a migration to the wrong BPMS.
+
+Do not implement it and nothing changes: the default drops the id and answers what
+`workflowVisibilityDelay()` answers.
 
 ## 5. What you must never assume
 

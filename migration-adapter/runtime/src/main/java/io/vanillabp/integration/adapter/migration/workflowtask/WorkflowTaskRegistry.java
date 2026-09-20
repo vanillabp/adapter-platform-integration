@@ -1068,6 +1068,11 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
    * A probe which throws is read as "cannot say" and reported once. The delivery which led
    * here is done, and an adapter whose BPMS hiccups must not lose it over a question nobody
    * asked for.
+   * <p>
+   * The record's task definition travels with the question, because the two ids do not say
+   * which kind of task is being asked about and some BPMS answer only for some kinds. A
+   * probe which implements the two-argument method alone gets it through the default and
+   * decides exactly as it did before.
    */
   private static boolean theBpmsNoLongerHas(
       final TaskDelivery record,
@@ -1075,7 +1080,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
     final TaskExistence answer;
     try {
-      answer = probe.stillExists(record.workflowId(), record.taskId());
+      answer = probe.stillExists(record.workflowId(), record.taskId(), record.taskDefinition());
     } catch (final RuntimeException failure) {
       log
           .debug(

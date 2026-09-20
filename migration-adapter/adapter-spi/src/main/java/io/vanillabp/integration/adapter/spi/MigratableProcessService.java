@@ -326,6 +326,53 @@ public interface MigratableProcessService<A> {
   }
 
   /**
+   * The same window, asked for ONE workflow - what the core calls, so an adapter can be
+   * patient where patience buys something and quick where it buys nothing.
+   *
+   * <h4>Why one window for everything is too coarse</h4>
+   *
+   * The window exists for workflows which were just started: measured on three Camunda 8
+   * clusters in September 2026, the engine knows a new instance after 16 to 19 ms while
+   * the search {@link #awarenessOfWorkflow(WorkflowScope, AggregatePersistenceAware, Object)}
+   * uses finds it after 167 to 1324 ms. Those are the workflows the probe ends up
+   * answering {@link WorkflowAwareness#ACTIVE} for. A workflow the engine no longer holds
+   * is a different case: it is old enough to be in the read model long since, and after
+   * its end that model needs 176 to 2068 ms to agree. Asked once for the whole adapter,
+   * the window has to be the long one, so the case which needs a second waits the ten
+   * seconds a young workflow may need.
+   *
+   * <h4>What you may do with it, and what you may not</h4>
+   *
+   * You may SHORTEN THE WAIT for a workflow you already know something about - one your
+   * own probe just reported as gone, for instance - and answer today's window for
+   * everything else.
+   * <p>
+   * You may NOT let a shorter window change WHAT you answer afterwards. Shortening it only
+   * ends the waiting sooner; the answer which comes out of it is still the honest one.
+   * Above all, a workflow which ENDED is {@link WorkflowAwareness#COMPLETED} and never
+   * {@link WorkflowAwareness#UNKNOWN_TO_BPMS}: only the unknown answer lets the election
+   * move on to the next BPMS, so an ended workflow read as unknown sends the next
+   * operation of a migration to the wrong BPMS.
+   * <p>
+   * The id is a HINT and may be wrong: it says what was true when VanillaBP learned it,
+   * not what is true now, and <code>null</code> means the caller holds none - which is a
+   * regular case and asks for the window of an adapter which knows nothing about this
+   * workflow. An adapter which cannot use the id does not implement this method at all:
+   * the default drops it and answers exactly what {@link #workflowVisibilityDelay()}
+   * answers, so every adapter written before this keeps compiling and behaving.
+   *
+   * @param workflowId The BPMS' own id of the workflow, or <code>null</code> where
+   *          VanillaBP holds none
+   * @return The delay - never <code>null</code>
+   */
+  default WorkflowVisibilityDelay workflowVisibilityDelay(
+      final String workflowId) {
+
+    return workflowVisibilityDelay();
+
+  }
+
+  /**
    * Determine whether the target BPMS is aware of the given USER task. Same
    * contract as {@link #awarenessOfTask(WorkflowScope, Object, String)} - user tasks have their
    * own probe because their IDs live in a different namespace than service-task
