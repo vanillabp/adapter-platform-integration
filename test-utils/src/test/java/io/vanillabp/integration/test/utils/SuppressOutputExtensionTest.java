@@ -29,6 +29,10 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackg
  * at the bottom are run through a launcher of their own, because both halves of that
  * promise depend on the order in which the classes and the tests of one fork run, and that
  * order is what a single test class cannot show.
+ * <p>
+ * A build narrowed down with {@code -Dtest} runs those classes on their own, and their
+ * failure then reads like a defect. Narrow a build down with {@code -pl} or {@code -rf}
+ * instead. {@code CONTRIBUTING.md} says why the filter behaves that way.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class SuppressOutputExtensionTest {

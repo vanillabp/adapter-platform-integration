@@ -77,6 +77,28 @@ holds and costs a single build no time worth measuring. It stays out of the poms
 runner has its machine to itself, and a test which one day needs more memory should not fail there
 for a reason which is not about the test.
 
+Narrow a build down with `-pl` or `-rf`, never with `-Dtest`. `-pl` names the modules to build and
+`-rf` restarts the reactor at one of them. A `-Dtest` filter works on something else. It reaches
+every module of the run, and inside a module it takes the place of the patterns Surefire scans by,
+which are `**/Test*.java`, `**/*Test.java`, `**/*Tests.java` and `**/*TestCase.java`. Every compiled
+class is then a candidate, a nested class as much as a top-level one, so a helper class which is
+written to fail runs on its own and turns the build red for something which is not a defect.
+
+`test-utils` shows it. `./mvnw test -pl test-utils -Dtest='!SomeTest'` ends with three errors in
+`SuppressOutputExtensionTest`, and each of the three is a nested class whose failure is what the
+tests around it measure. Drop the filter and the same module is green.
+
+Two ways of hiding those helpers from the filter were tried on 2026-09-20. Neither works. Moving
+them out of their test class, into top-level classes whose names the default patterns do not match,
+changes nothing: the filter has replaced those patterns, and what is left scans every class. A
+Surefire `<excludes>` changes nothing either, because `-Dtest` overrides the excludes together with
+the includes. The same exclude which empties the module without the filter is ignored with it.
+
+A JUnit tag on each helper plus `<excludedGroups>` does work, because that filter sits in JUnit and
+not in the scan. It was not taken. It asks every helper of this kind to carry the tag, nothing fails
+when the next one is written without it, and the filter keeps scanning every class of every module
+it reaches anyway.
+
 A feature is proven by an acceptance test per platform, against the published
 [BPMS double](./bpms-double), and coverage is measured separately per platform because a Spring test
 never covers Quarkus code. `test-coverage-report/coverage-gate` is the last module of the reactor and
