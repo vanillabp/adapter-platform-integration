@@ -34,9 +34,9 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * {@code dependencyManagement} alone: Maven copies a managed version, scope and
  * exclusions into a dependency, but not the {@code optional} flag. That is how Lombok
  * left the platform at compile scope for as long as it did. The flag sat in the root POM,
- * the four modules declared Lombok bare, and every application whose own BOM names
- * Lombok, which the Spring Boot BOM and the Quarkus BOM both do, resolved it and shipped
- * it. So the scope has to stand at the declaration, and this test reads the declarations.
+ * the modules declared Lombok bare, and every application whose own BOM names Lombok,
+ * which the Spring Boot BOM and the Quarkus BOM both do, resolved it and shipped it. So
+ * the scope has to stand at the declaration, and this test reads the declarations.
  * <p>
  * Entries below a {@code dependencyManagement} are left out on purpose. They declare
  * nothing; they say which version a declaration elsewhere gets. The BOM this repository
@@ -78,7 +78,7 @@ public class PublishedPomsTest {
           continue;
         }
         final var scope = textOf(declaration, "scope");
-        if (SCOPES_WHICH_REACH_NO_APPLICATION.contains(scope)) {
+        if ((scope != null) && SCOPES_WHICH_REACH_NO_APPLICATION.contains(scope)) {
           continue;
         }
         offenders
@@ -161,8 +161,8 @@ public class PublishedPomsTest {
   }
 
   /**
-   * The dependencies a POM declares, which is every {@code <dependency>} outside a
-   * {@code <dependencyManagement>}.
+   * The dependencies a POM declares for the module itself, which is every
+   * {@code <dependency>} outside a {@code <dependencyManagement>} and outside a plugin.
    */
   private List<Element> declaredDependencies(
       final Path pom) throws Exception {
@@ -183,7 +183,7 @@ public class PublishedPomsTest {
     final var declared = new ArrayList<Element>();
     for (var index = 0; index < dependencies.getLength(); index++) {
       final var dependency = (Element) dependencies.item(index);
-      if (!isManagement(dependency)) {
+      if (!belongsToSomethingElse(dependency)) {
         declared.add(dependency);
       }
     }
@@ -191,12 +191,17 @@ public class PublishedPomsTest {
 
   }
 
-  /** Whether a {@code <dependency>} sits below a {@code <dependencyManagement>}. */
-  private static boolean isManagement(
+  /**
+   * Whether a {@code <dependency>} belongs to something other than the module: a
+   * {@code <dependencyManagement>}, which declares nothing, or a plugin, which runs
+   * inside Maven and reaches no application either way.
+   */
+  private static boolean belongsToSomethingElse(
       final Element dependency) {
 
     for (Node node = dependency.getParentNode(); node != null; node = node.getParentNode()) {
-      if ("dependencyManagement".equals(node.getNodeName())) {
+      final var name = node.getNodeName();
+      if ("dependencyManagement".equals(name) || "plugin".equals(name)) {
         return true;
       }
     }
