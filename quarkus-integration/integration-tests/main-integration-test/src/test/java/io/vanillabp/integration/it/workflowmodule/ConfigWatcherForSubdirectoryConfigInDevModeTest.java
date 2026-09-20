@@ -9,6 +9,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusDevModeTest;
 import io.restassured.RestAssured;
+import io.vanillabp.integration.test.utils.FreePortUtil;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
@@ -21,10 +22,18 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 @ExtendWith(SuppressOutputExtension.class)
 public class ConfigWatcherForSubdirectoryConfigInDevModeTest {
 
+  // Dev mode reads 'quarkus.http.port', not the 'quarkus.http.test-port' which Surefire
+  // sets to zero, so this application needs a free port of its own. Without one it takes
+  // the default 8080 and a second build on the machine answers the requests below.
+  private static final int PORT = FreePortUtil.getFreePort();
+
   @RegisterExtension
   static final QuarkusDevModeTest test = new QuarkusDevModeTest()
       .withApplicationRoot(jar -> jar
           .addAsResource("application.yaml")
+          .add(new StringAsset("quarkus.http.port="
+              + PORT
+              + "\n"), "application.properties")
           .add(new StringAsset("test-module:\n  subdir-test: 1\n"), "test-module/test-module.yaml")
           .addAsResource("META-INF/workflow-module")
           .addClass(ConfigWatcherForSubdirectoryConfigInDevModeTestSupportingResource.class));
@@ -33,6 +42,8 @@ public class ConfigWatcherForSubdirectoryConfigInDevModeTest {
   public void testConfigReload() {
 
     RestAssured
+        .given()
+        .port(PORT)
         .when()
         .get("/subdir-test")
         .then()
@@ -44,6 +55,8 @@ public class ConfigWatcherForSubdirectoryConfigInDevModeTest {
         s -> s.replace("1", "2"));
 
     RestAssured
+        .given()
+        .port(PORT)
         .when()
         .get("/subdir-test")
         .then()

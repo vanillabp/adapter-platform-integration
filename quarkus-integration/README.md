@@ -337,13 +337,25 @@ build.
 
 A test which has to know the port does not need to pin one. Quarkus writes the port it
 really bound back into `quarkus.http.test-port` once the application listens, and sets up
-RestAssured from it. The dev-mode tests in `integration-tests/main-integration-test` call
-their endpoints that way, with a port no file names.
+RestAssured from it.
 
-A `QuarkusProdModeTest` is the one case the property does not reach, because it forks its
-application and passes `quarkus.http.port` instead. Those tests take their port from
-`FreePortUtil`, which picks one free port per test JVM. `MultipleWorkflowServicesTest` in
-`integration-tests/workflowmodule-integration-tests` is the example.
+Two kinds of test never see that key, and both have to ask for a port of their own.
+
+A `QuarkusDevModeTest` starts its application in dev mode, not in test mode, so the
+application reads `quarkus.http.port` and takes its default of 8080. Two builds on one
+machine then ask for the same port. The second application does not come up, and the first
+one answers the second build's requests, so the run reads like a test which got the wrong
+value rather than like a clash. Measured on 2026-09-20: two copies of
+`main-integration-test` built at the same time were red in two different classes, while
+the same four classes are green when the module builds alone. Each dev-mode test in
+`integration-tests/main-integration-test` therefore writes a port from `FreePortUtil` into
+the `application.properties` of the application it assembles, and asks RestAssured for that
+port.
+
+A `QuarkusProdModeTest` forks its application and passes `quarkus.http.port` to it. Those
+tests take their port from `FreePortUtil` as well, which picks one free port per test JVM.
+`MultipleWorkflowServicesTest` in `integration-tests/workflowmodule-integration-tests` is
+the example.
 
 ## The store of processed task deliveries
 

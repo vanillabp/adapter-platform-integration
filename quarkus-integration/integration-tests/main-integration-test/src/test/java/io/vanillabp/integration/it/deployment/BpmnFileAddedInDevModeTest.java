@@ -11,6 +11,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusDevModeTest;
 import io.restassured.RestAssured;
+import io.vanillabp.integration.test.utils.FreePortUtil;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
@@ -35,10 +36,18 @@ public class BpmnFileAddedInDevModeTest {
 
   private static final String SECOND_BPMN = "test-module/processes/dummy/second.bpmn";
 
+  // Dev mode reads 'quarkus.http.port', not the 'quarkus.http.test-port' which Surefire
+  // sets to zero, so this application needs a free port of its own. Without one it takes
+  // the default 8080 and a second build on the machine answers the requests below.
+  private static final int PORT = FreePortUtil.getFreePort();
+
   @RegisterExtension
   static final QuarkusDevModeTest test = new QuarkusDevModeTest()
       .withApplicationRoot(jar -> jar
           .addAsResource("application.yaml")
+          .add(new StringAsset("quarkus.http.port="
+              + PORT
+              + "\n"), "application.properties")
           .addAsResource("META-INF/workflow-module")
           .add(new StringAsset(BPMN), FIRST_BPMN)
           .addClass(BpmnFileAddedInDevModeSupportingResource.class));
@@ -47,6 +56,8 @@ public class BpmnFileAddedInDevModeTest {
       final String path) {
 
     return RestAssured
+        .given()
+        .port(PORT)
         .when()
         .get(path)
         .then()
