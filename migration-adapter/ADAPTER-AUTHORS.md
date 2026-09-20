@@ -574,7 +574,7 @@ APPLICATION rather than the open work of the workflow (decision 54).
 
 Two more inbound notifications exist, and both are optional because not every BPMS can produce
 them. `WorkflowEndedInvoker.workflowEnded(...)` reports that a workflow ended, as completed or as
-terminated; report the weaker fact rather than inventing the distinction where your BPMS cannot
+canceled; report the weaker fact rather than inventing the distinction where your BPMS cannot
 tell the two apart, and treat a missing aggregate as something to skip rather than an error.
 
 Name the workflow in that notification (`WorkflowEndedContext.getWorkflowId()`) and you get one

@@ -724,7 +724,7 @@ public class MigrationProcessService<A> {
   /**
    * Whether this delivery says that the BPMS ended the task by itself, which is what a
    * cancellation is: a boundary event fired, the scope around the task was left, or the
-   * workflow was terminated.
+   * workflow was canceled.
    *
    * @param context The invocation context of the delivery
    * @return Whether the task is over because the BPMS took it away
@@ -2079,7 +2079,7 @@ public class MigrationProcessService<A> {
   private static String likelyCausesOfUnknownTask() {
 
     return "the task ID is wrong or outdated, the task was already completed long ago, or the "
-        + "workflow was terminated. If a BPMS was reported unavailable, this operation would have "
+        + "workflow was canceled. If a BPMS was reported unavailable, this operation would have "
         + "failed differently - an unknown task is a definite answer of all adapters.";
 
   }

@@ -420,7 +420,7 @@ public class WorkflowEndedTest {
 
     testee
         .workflowEnded(
-            MODULE, PROCESS, context("4712", WorkflowEnd.Kind.TERMINATED, null, true));
+            MODULE, PROCESS, context("4712", WorkflowEnd.Kind.CANCELED, null, true));
 
     assertTrue(transactionRunner.inCurrentUsed);
     assertFalse(transactionRunner.requireNewUsed);

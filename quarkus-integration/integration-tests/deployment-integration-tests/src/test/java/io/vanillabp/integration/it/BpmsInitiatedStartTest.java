@@ -208,7 +208,7 @@ public class BpmsInitiatedStartTest {
 
               @Override
               public WorkflowEnd.Kind getKind() {
-                return WorkflowEnd.Kind.TERMINATED;
+                return WorkflowEnd.Kind.CANCELED;
               }
 
               @Override
@@ -228,7 +228,7 @@ public class BpmsInitiatedStartTest {
 
             });
 
-    assertEquals("ended:TERMINATED/null", persistence.stored("ended-4711").getStartedBy());
+    assertEquals("ended:CANCELED/null", persistence.stored("ended-4711").getStartedBy());
 
     // the notification proves which BPMS held the workflow AND that it is over: the
     // hint is marked rather than refreshed, so it leaves the cache long before a
