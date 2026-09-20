@@ -426,7 +426,9 @@ and one without says which class matters with an `AdditionalIndexedClassesBuildI
 ### Operations of your own in the outbox
 
 Work which has to happen after the application's transaction committed belongs in the outbox, the
-same one VanillaBP uses. Build the operation with `PhaseOperation.extensionOperation(name)`, which
+same one VanillaBP uses. Phase one is that transaction and phase two is the moment after its
+commit, so the names say when the work runs and not who runs it: a call to a BPMS is one kind of
+phase-two work and an operation of yours is another, and both are entries of the same store. Build the operation with `PhaseOperation.extensionOperation(name)`, which
 enforces a namespace of the form `my-extension:NOTIFY`, and register it together with your own
 dispatch on the `PhaseOperationRegistry`, a bean of both platforms. Scheduling then works as it does
 for a core operation: build the call with `PhaseTwoCall.of(operation, ...)` and hand it to the

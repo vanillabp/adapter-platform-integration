@@ -3,9 +3,15 @@ package io.vanillabp.integration.spi;
 import org.slf4j.LoggerFactory;
 
 /**
- * Transaction outbox used to reliably execute the second phase of two-phase committed
- * BPMS calls after the local transaction which persisted the workflow aggregate was
- * committed.
+ * Phase two is a MOMENT, not a kind of call: phase one is the caller's transaction, phase
+ * two is everything which runs after it committed, and this outbox carries whatever was
+ * planned for that moment - a call to a BPMS as much as an operation an extension
+ * registered for itself.
+ * <p>
+ * The case VanillaBP schedules here itself is the second phase of a two-phase committed
+ * BPMS call: a remote BPMS cannot take part in the local transaction which persisted the
+ * workflow aggregate, so the call is split in two and this store is what makes its second
+ * half reliable.
  * <p>
  * A store has to implement one method, {@link #schedule(PhaseTwoCall)}, and never
  * learns which operations exist: a call carries the operation's NAME, its arguments and

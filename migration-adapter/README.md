@@ -2043,7 +2043,17 @@ checks (`numericRanges`, `versionTagsAreResolvedByTheBpms`,
 counting no versions is told about its methods, and that an adapter which only stays
 silent is still answered with silence.
 
-### Two-phase workflow start (`PhaseTwoOutbox` SPI)
+### Phase one and phase two (`PhaseTwoOutbox` SPI)
+
+Phase one is the caller's transaction. Phase two is everything which runs after that transaction
+committed. The two names say WHEN work runs, not who runs it. A call to a BPMS is one kind of
+phase-two work, and an operation an extension registered for itself is another: the Business
+Cockpit writes its report that way, and such an operation never reaches a process service at all
+(see [Operations of your own in the outbox](./EXTENSION-AUTHORS.md#operations-of-your-own-in-the-outbox)).
+Whatever was planned for that moment travels in the same outbox, is written in the caller's
+transaction and runs once it committed.
+
+A workflow start is where the split reads most easily, so the rest of this section follows one.
 
 Starting a workflow must be atomic with the local database transaction that persists
 the workflow aggregate — otherwise a crash could produce a workflow in the BPMS without
@@ -2070,8 +2080,7 @@ phases:
   resolvable outbox cannot send anything to its BPMS, so the boot fails with a guiding
   message naming the remedies (the same message remains as a runtime backstop).
 
-Starting a workflow is the operation the two phases read most easily on, and the picture follows
-one start from the application's transaction to whichever of the three BPMS the module is
+The start goes from the application's transaction to whichever of the three BPMS the module is
 configured for.
 
 ```mermaid
@@ -3751,7 +3760,7 @@ does is inside it, and nothing had to be repeated per BPMS.
   legitimate operation of the same key loses everything and leaves a workflow waiting for a
   message nobody sends again. That is why it is a counter and not a log line alone. Alert on
   it, read the WARN it comes with, and where the cause is a repeating scope, vary the
-  correlation id per round or element (see [two-phase workflow start](#two-phase-workflow-start-phasetwooutbox-spi)).
+  correlation id per round or element (see [phase one and phase two](#phase-one-and-phase-two-phasetwooutbox-spi)).
   And `vanillabp.task.elections.from.record` says
   how often a call naming a task was routed without asking any BPMS, which is the number the next
   step of that feature is decided on, see [the record answers which BPMS holds a
