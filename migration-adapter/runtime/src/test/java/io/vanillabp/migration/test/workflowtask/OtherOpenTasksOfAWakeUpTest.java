@@ -101,6 +101,24 @@ public class OtherOpenTasksOfAWakeUpTest {
 
     }
 
+    /**
+     * A second open task of the same BPMN process, so a test can show a probe answering
+     * for one task definition and refusing for the other.
+     */
+    @WorkflowTask
+    public void countersign(
+        final Aggregate aggregate,
+        @TaskId final String taskId,
+        @TaskEvent({
+            TaskEvent.Event.CREATED, TaskEvent.Event.CANCELED
+        }) final TaskEvent.Event event) {
+
+      if (event == TaskEvent.Event.CANCELED) {
+        aggregate.wasCanceled(taskId);
+      }
+
+    }
+
   }
 
   /**
@@ -543,6 +561,104 @@ public class OtherOpenTasksOfAWakeUpTest {
 
     assertEquals(0, deliveryLog.readsOfTheWorkflow, "the log is not even read");
     assertEquals(2, openRecords());
+
+  }
+
+  @Test
+  @DisplayName("A probe written before the task definition travelled is asked through the default and still decides")
+  public void aProbeKnowingOnlyTheTwoIdsKeepsDeciding() {
+
+    final var properties = properties(null, null);
+    final var registry = registry(properties);
+    final var aggregate = storeAggregate();
+
+    registry.invokeWorkflowTask(MODULE, PROCESS, delivery(PROCESS, "awaitSignature", "task-1"));
+    registry.invokeWorkflowTask(MODULE, PROCESS, delivery(PROCESS, "awaitSignature", "task-2"));
+
+    // a probe implementing the two-argument method alone, which is every probe written
+    // before the definition travelled
+    final var asked = new java.util.ArrayList<String>();
+    registry
+        .reportTasksTheBpmsNoLongerHas(
+            MODULE,
+            PROCESS,
+            delivery(PROCESS, "awaitSignature", "task-2"),
+            (
+                workflowId,
+                taskId) -> {
+              asked
+                  .add(workflowId
+                      + "/"
+                      + taskId);
+              return TaskExistence.GONE;
+            });
+
+    assertEquals(List.of(WORKFLOW
+        + "/task-1"), asked, "it is still asked, with the two ids it always got");
+    assertEquals("task-1", aggregate.canceled, "and its answer still cancels");
+
+  }
+
+  @Test
+  @DisplayName("A probe is told the task definition of every record it is asked about")
+  public void aProbeLearnsWhichKindOfTaskItIsAskedAbout() {
+
+    final var properties = properties(null, null);
+    final var registry = registry(properties);
+    final var aggregate = storeAggregate();
+
+    registry.invokeWorkflowTask(MODULE, PROCESS, delivery(PROCESS, "awaitSignature", "task-1"));
+    registry.invokeWorkflowTask(MODULE, PROCESS, delivery(PROCESS, "countersign", "task-2"));
+    registry.invokeWorkflowTask(MODULE, PROCESS, delivery(PROCESS, "awaitSignature", "task-3"));
+
+    // what an adapter of a BPMS which answers for some kinds of task and not for others
+    // does: it refuses per record instead of per BPMN process
+    final var askedWithTheDefinition = new java.util.LinkedHashMap<String, String>();
+    final var askedWithoutIt = new java.util.ArrayList<String>();
+    registry
+        .reportTasksTheBpmsNoLongerHas(
+            MODULE,
+            PROCESS,
+            delivery(PROCESS, "awaitSignature", "task-3"),
+            new OpenTaskProbe() {
+
+              @Override
+              public TaskExistence stillExists(
+                  final String workflowId,
+                  final String taskId) {
+
+                askedWithoutIt.add(taskId);
+                return TaskExistence.CANNOT_SAY;
+
+              }
+
+              @Override
+              public TaskExistence stillExists(
+                  final String workflowId,
+                  final String taskId,
+                  final String taskDefinition) {
+
+                askedWithTheDefinition.put(taskId, taskDefinition);
+                return "countersign".equals(taskDefinition)
+                    ? TaskExistence.CANNOT_SAY
+                    : TaskExistence.GONE;
+
+              }
+
+            });
+
+    assertTrue(askedWithoutIt.isEmpty(), "the core asks the question which names the task definition");
+    assertEquals(
+        Map.of("task-1", "awaitSignature", "task-2", "countersign"),
+        askedWithTheDefinition,
+        "every record carries the definition it was delivered under");
+    // both facts in one assertion, so nobody can pass this by weakening the model: the
+    // task the probe could answer for is canceled and the one it refused is left alone
+    assertEquals(
+        "task-1",
+        aggregate.canceled,
+        "the refusal is per record, so the other task of the same workflow still decides");
+    assertEquals(2, openRecords(), "the refused task and the one of the wake-up stay open");
 
   }
 

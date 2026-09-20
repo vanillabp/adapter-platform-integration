@@ -63,6 +63,13 @@ public class WorkflowLocatorTest {
     final AtomicInteger probes = new AtomicInteger();
 
     /**
+     * How often the core asked this adapter for its window. An adapter which implements
+     * the question it always had is asked through the default, and this counter is what
+     * says so.
+     */
+    final AtomicInteger delayQuestions = new AtomicInteger();
+
+    /**
      * What this adapter reports as the window its BPMS needs before a workflow it
      * holds becomes findable - none unless a test sets one.
      */
@@ -89,6 +96,7 @@ public class WorkflowLocatorTest {
 
     @Override
     public io.vanillabp.integration.adapter.spi.WorkflowVisibilityDelay workflowVisibilityDelay() {
+      delayQuestions.incrementAndGet();
       return visibilityDelay;
     }
 
@@ -131,6 +139,44 @@ public class WorkflowLocatorTest {
         final Object workflowAggregateId,
         final String taskId) {
       return io.vanillabp.integration.adapter.spi.WorkflowAwareness.UNKNOWN_TO_BPMS;
+    }
+
+  }
+
+  /**
+   * An adapter which answers the window PER WORKFLOW: none at all for the one workflow it
+   * knows something about - its own probe reported that one gone moments ago, so there is
+   * nothing left to wait for - and its usual window for everything else.
+   */
+  static class AdapterAnsweringPerWorkflow extends ProbeAdapter {
+
+    /**
+     * Which workflow id the core handed over, in the order it asked. A <code>null</code>
+     * entry is a regular answer: the hint carried no id.
+     */
+    final List<String> askedAbout = new java.util.ArrayList<>();
+
+    private final String workflowItKnowsIsGone;
+
+    AdapterAnsweringPerWorkflow(
+        final String adapterId,
+        final String workflowItKnowsIsGone,
+        final WorkflowAwareness... answers) {
+
+      super(adapterId, answers);
+      this.workflowItKnowsIsGone = workflowItKnowsIsGone;
+
+    }
+
+    @Override
+    public io.vanillabp.integration.adapter.spi.WorkflowVisibilityDelay workflowVisibilityDelay(
+        final String workflowId) {
+
+      askedAbout.add(workflowId);
+      return (workflowId != null) && workflowId.equals(workflowItKnowsIsGone)
+          ? io.vanillabp.integration.adapter.spi.WorkflowVisibilityDelay.none()
+          : super.workflowVisibilityDelay(workflowId);
+
     }
 
   }
@@ -451,6 +497,74 @@ public class WorkflowLocatorTest {
     assertEquals(3, remote.probes.get(), "the probe is repeated until the workflow shows up");
     assertEquals(
         "remote", cache.get(MODULE, PROCESS, "42").orElseThrow(), "the hint stays");
+
+  }
+
+  @Test
+  @DisplayName("An adapter which answers one window for everything is asked through the default")
+  public void anAdapterWithOneWindowIsAskedThroughTheDefault() {
+
+    final var cache = new InMemoryWorkflowAdapterCache();
+    cache.put(MODULE, PROCESS, "42", "remote", "workflow-77");
+    final var remote = new ProbeAdapter(
+        "remote", WorkflowAwareness.UNKNOWN_TO_BPMS, WorkflowAwareness.UNKNOWN_TO_BPMS, WorkflowAwareness.ACTIVE)
+        .waitingFor(java.time.Duration.ofSeconds(2));
+
+    final var location = locate(cache, remote);
+
+    assertEquals(WorkflowAwareness.ACTIVE, location.awareness());
+    assertEquals(
+        1,
+        remote.delayQuestions.get(),
+        "an adapter which knows nothing of the workflow id answers the window it always had");
+
+  }
+
+  @Test
+  @DisplayName("An adapter which answers per workflow is told which workflow it is asked about")
+  public void anAdapterAnsweringPerWorkflowIsToldWhichWorkflow() {
+
+    // the workflow this adapter knows is gone: it holds no window for it, so the election
+    // answers at once instead of sitting out the window a freshly started workflow needs
+    final var cache = new InMemoryWorkflowAdapterCache();
+    cache.put(MODULE, PROCESS, "42", "remote", "workflow-77");
+    final var remote = new AdapterAnsweringPerWorkflow(
+        "remote", "workflow-77", WorkflowAwareness.UNKNOWN_TO_BPMS);
+    remote.waitingFor(java.time.Duration.ofSeconds(5));
+
+    final var location = locate(cache, remote);
+
+    assertEquals(WorkflowAwareness.UNKNOWN_TO_BPMS, location.awareness());
+    assertEquals(List.of("workflow-77"), remote.askedAbout, "the id the hint carries travels with the question");
+    // asking again every five milliseconds for five seconds is what the old answer costs,
+    // so the number of probes is what says that the shorter window was the one used
+    assertEquals(1, remote.probes.get(), "no window left to wait out, so the adapter is asked once");
+    assertEquals(
+        0,
+        remote.delayQuestions.get(),
+        "the adapter answered per workflow, so nothing fell back to its one window");
+
+  }
+
+  @Test
+  @DisplayName("A hint which carries no workflow id asks with null, and that is a regular answer")
+  public void aHintWithoutAWorkflowIdIsARegularAnswer() {
+
+    final var cache = new InMemoryWorkflowAdapterCache();
+    // a hint of a cache which does not keep workflow ids, or of a moment which knew none
+    cache.put(MODULE, PROCESS, "42", "remote");
+    final var remote = new AdapterAnsweringPerWorkflow(
+        "remote", "workflow-77", WorkflowAwareness.UNKNOWN_TO_BPMS, WorkflowAwareness.UNKNOWN_TO_BPMS, WorkflowAwareness.ACTIVE);
+    remote.waitingFor(java.time.Duration.ofSeconds(2));
+
+    final var location = locate(cache, remote);
+
+    assertEquals(WorkflowAwareness.ACTIVE, location.awareness());
+    assertEquals(
+        java.util.Collections.singletonList(null),
+        remote.askedAbout,
+        "a null id is what the core hands over where nobody knew one");
+    assertEquals(3, remote.probes.get(), "and the adapter's usual window is waited out, as it always was");
 
   }
 

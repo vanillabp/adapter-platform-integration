@@ -1263,16 +1263,23 @@ public class MigrationProcessService<A> {
    * <code>vanillabp.outbox.block-after-attempts</code> of them leave the entry blocked,
    * which is where an exporter nobody noticed becomes visible. The due time only
    * decides how often the question is asked in between.
+   * <p>
+   * The window is asked for THIS workflow: an adapter which knows the workflow by its
+   * own id may name a shorter one than a freshly started workflow needs, and the entry
+   * then comes back sooner.
    *
    * @param hintedAdapterId The adapter which should hold the workflow
    * @param subject The workflow the operation is about
    * @param operationDescription What could not be dispatched
+   * @param workflowId The BPMS' own id of the workflow, or <code>null</code> where
+   *          VanillaBP holds none
    * @return The failure to throw
    */
   private RuntimeException stillNotVisible(
       final String hintedAdapterId,
       final String subject,
-      final String operationDescription) {
+      final String operationDescription,
+      final String workflowId) {
 
     final var message = """
         Phase two of %s cannot run yet: adapter '%s' should hold the %s - VanillaBP started it \
@@ -1282,7 +1289,7 @@ public class MigrationProcessService<A> {
         what to look at first."""
         .formatted(operationDescription, hintedAdapterId, subject);
 
-    final var window = visibilityWindowOf(hintedAdapterId);
+    final var window = visibilityWindowOf(hintedAdapterId, workflowId);
     return window == null
         ? new IllegalStateException(message)
         : new PhaseTwoRetryLater(message, window);
@@ -1296,15 +1303,18 @@ public class MigrationProcessService<A> {
    * right answer for a failure nothing knows a better moment for.
    *
    * @param adapterId The adapter to ask
+   * @param workflowId The BPMS' own id of the workflow, or <code>null</code> where
+   *          VanillaBP holds none
    * @return The visibility window or <code>null</code>
    */
   private Duration visibilityWindowOf(
-      final String adapterId) {
+      final String adapterId,
+      final String workflowId) {
 
     return adapterProcessServices
         .stream()
         .filter(adapter -> adapter.getAdapterId().equals(adapterId))
-        .map(MigratableProcessService::workflowVisibilityDelay)
+        .map(adapter -> adapter.workflowVisibilityDelay(workflowId))
         .filter(delay -> (delay != null) && delay.isWaiting())
         .map(WorkflowVisibilityDelay::window)
         .findFirst()
@@ -1821,7 +1831,11 @@ public class MigrationProcessService<A> {
     switch (location.awareness()) {
       case UNKNOWN_TO_BPMS -> {
         if (addressesTheWorkflow(operation) && location.isUnknownButExpected()) {
-          throw stillNotVisible(location.hintedAdapterId(), subject, operation.describe(args));
+          throw stillNotVisible(
+              location.hintedAdapterId(),
+              subject,
+              operation.describe(args),
+              workflowIdKnownFor(workflowAggregateId));
         }
         log.warn(
             "Skipped phase two of {} of {}: no configured BPMS knows it any more (a stale outbox "
@@ -2472,7 +2486,8 @@ public class MigrationProcessService<A> {
     final var eventuallyConsistent = adapterProcessServices
         .stream()
         .anyMatch(adapter -> {
-          final var delay = adapter.workflowVisibilityDelay();
+          // no workflow to ask about: this message is written where nobody knows one
+          final var delay = adapter.workflowVisibilityDelay(null);
           return (delay != null) && delay.isWaiting();
         });
     return eventuallyConsistent

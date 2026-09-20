@@ -149,7 +149,7 @@ flowchart TB
   D["phase-two dispatch of the entry"] --> DR{"probe answers"}
   DR -->|ACTIVE| DO["run phase two"]
   DR -->|COMPLETED| DC["consume the entry (workflow ended)"]
-  DR -->|"UNKNOWN_TO_BPMS, hinted<br/>(workflow operation)"| DW["give the entry back, due in<br/>workflowVisibilityDelay()<br/>(C8: 10 s window)"] --> DRE["repeat the entry — blocked when the attempts are used up"]
+  DR -->|"UNKNOWN_TO_BPMS, hinted<br/>(workflow operation)"| DW["give the entry back, due in<br/>workflowVisibilityDelay(workflowId)<br/>(C8: 10 s window)"] --> DRE["repeat the entry — blocked when the attempts are used up"]
   DR -->|"UNKNOWN_TO_BPMS, no hint<br/>· or a task operation"| DS["consume the entry (stale)"]
   DR -->|BPMS_UNAVAILABLE| DU["retry 2× 500 ms apart"] --> DRE
 
@@ -366,7 +366,10 @@ Four pieces solve it, and the split matters:
    from the very transaction which created the instance and reports none; Camunda 8
    reports `vanillabp.adapters.<id>.workflow-visibility-timeout` (default 10 seconds,
    zero switches it off). Eventual consistency is the core's business, the timing is the
-   adapter's.
+   adapter's. What the core actually asks is `workflowVisibilityDelay(workflowId)`, the
+   same window for one workflow, so an adapter which knows that workflow can name a
+   shorter one; its default answers the window above, which is what every adapter written
+   before this does.
 2. **The waiting is bounded by a hint, never blanket.** VanillaBP waits only for an
    adapter the `WorkflowAdapterCache` names for that workflow. A workflow nobody ever
    heard of has no hint and fails immediately - which a wrong ID has to, since waiting
@@ -483,6 +486,13 @@ produce without any of them being unusual.
 shapes. It runs with a window of 1.5 seconds, because a build should not pay ten seconds
 twice for a number which is already written down here.
 
+The middle row of the first table is what an adapter can make smaller. The core asks
+`workflowVisibilityDelay(workflowId)` for the workflow it is waiting for, so an adapter which
+already knows something about that workflow may answer a shorter window than a freshly started
+one needs, and today's window for everything else. Shortening the wait is all it may do: the
+answer which comes out of the shorter window is still the honest one, and a workflow which ended
+is `COMPLETED` and never `UNKNOWN_TO_BPMS`.
+
 Correlating a message is the operation on which both patiences show up in one call, and the
 picture follows such a call from the caller's transaction to the BPMS: phase one asks the adapters
 once and lets the caller commit, the dispatch asks again and publishes the message as soon as
@@ -571,6 +581,11 @@ earlier than its index, and every command which asks it addresses a key.
 `WorkflowAdapterCache.hintOf` is what reads both in one call, because a shared cache charges a
 round trip per read; `put(..., adapterId, workflowId)` is what writes them. Both are `default`
 methods, so a cache an application wrote stays valid and simply keeps no id.
+
+The window the core waits out carries the same id: it asks `workflowVisibilityDelay(workflowId)`
+rather than the adapter's one window, so an adapter may be patient with a workflow which was
+started moments ago and quick with one it already knows is gone. The rules are the ones above,
+and the default answers `workflowVisibilityDelay()`.
 
 ### Deployment pipeline
 
@@ -2285,6 +2300,7 @@ classDiagram
     +deliversTasksAtLeastOnce() boolean  «default false · C8/PEA true · C7 true on an own engine datasource»
     +isPhaseTwoFailureRepeatable(Throwable) boolean  «default true · false ⇒ BLOCKED after one attempt»
     +workflowVisibilityDelay() WorkflowVisibilityDelay  «default none · C8: 10 s»
+    +workflowVisibilityDelay(workflowId) WorkflowVisibilityDelay  «what the core asks · default → the one above»
     +openTaskCount(module, process) Long  «default null»
     .. probes (phase one AND at dispatch) ..
     +awarenessOfTask(scope, aggregateId, taskId) WorkflowAwareness
@@ -2650,6 +2666,15 @@ What one call does, in the order which makes it cheap:
 The probe has three answers and only `GONE` cancels, which is decision 74. A probe which cannot
 say is not a probe which said no, and a probe which throws is read as "cannot say" and reported
 once - the delivery which led there is done and must not be lost over it.
+
+Every question names the task definition of the record, `stillExists(workflowId, taskId,
+taskDefinition)`. Some BPMS answer about some kinds of task and not about others, and the two ids
+alone do not say which kind is being asked about: on Camunda 8 a user task the engine manages
+lives in a namespace of its own, so an adapter without the definition has to refuse for every
+record of a process which holds one, and the plain service tasks of that process lose their
+derived cancellation with it. With the definition the refusal is per record. A probe which
+implements `stillExists(workflowId, taskId)` alone is asked through the default and decides as it
+always did.
 
 What this does not promise: a workflow which walks into a timer or a message wait after the
 boundary event produces no job, so nothing wakes the application up and the cancellation waits.

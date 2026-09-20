@@ -175,7 +175,7 @@ public class ViewerApiTest {
     // VanillaBP started this workflow there, which is why "not findable" is a read
     // model running behind rather than a workflow nobody ever heard of
     processService.rememberWorkflowAdapter("42", "first-adapter");
-    when(firstAdapter.workflowVisibilityDelay())
+    when(firstAdapter.workflowVisibilityDelay(null))
         .thenReturn(new WorkflowVisibilityDelay(Duration.ofSeconds(5), Duration.ofMillis(20)));
     when(firstAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42", null))
         .thenReturn(WorkflowAwareness.UNKNOWN_TO_BPMS)
@@ -207,7 +207,7 @@ public class ViewerApiTest {
     when(aggregatePersistence.getAggregateId(aggregate)).thenReturn("42");
     processService.rememberWorkflowAdapter("42", "first-adapter");
     lenient()
-        .when(firstAdapter.workflowVisibilityDelay())
+        .when(firstAdapter.workflowVisibilityDelay(null))
         .thenReturn(new WorkflowVisibilityDelay(Duration.ofMillis(100), Duration.ofMillis(20)));
     when(firstAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42", null))
         .thenReturn(WorkflowAwareness.UNKNOWN_TO_BPMS);
