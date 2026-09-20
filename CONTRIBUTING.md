@@ -184,12 +184,14 @@ What this asks for in practice:
 Measurements are not claims: a number is a statement about a measured past, so it needs its context
 (version, setup, date) rather than a test.
 
-One part of it is a machine's job after all: every module compiles with `-Xdoclint:reference`, so a
-`{@link}` pointing at a method which was renamed or removed fails the build and a parameter
-documented twice is warned about. What that check cannot see is the same name written as prose, and
-it says nothing about whether a sentence is true, so the rest stays deliberately without tooling. A
-lint over words like "never" or "always" produces noise and a false sense of safety, and the habit
-is what does the work.
+One part of it is a machine's job after all: every module compiles with `-Xdoclint:all,-missing`, so
+a `{@link}` pointing at a method which was renamed or removed fails the build, and so does a tag
+HTML no longer knows. Two tools share that work. The compiler reads every class, the package
+private ones included, while the javadoc plugin, which runs in every build here, reads what the
+published documentation shows and therefore starts at protected. What neither check can see is the same name
+written as prose, and neither says anything about whether a sentence is true, so the rest stays
+deliberately without tooling. A lint over words like "never" or "always" produces noise and a false
+sense of safety, and the habit is what does the work.
 
 ## A decision is superseded, never edited away
 

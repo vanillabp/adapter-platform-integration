@@ -164,10 +164,12 @@
             <parameters>true</parameters>
             <compilerArgs>
               <!-- a javadoc which names a method is checked like any other claim: a link
-                   the compiler cannot resolve is an error, a parameter documented twice a
-                   warning. Only the reference group is on, so wording and missing comments
-                   stay a matter of review. -->
-              <arg>-Xdoclint:reference</arg>
+                   the compiler cannot resolve, a tag which no longer exists in HTML or a
+                   heading out of order stops the build. javac is the half of the check
+                   which sees a package private class; the javadoc plugin only opens what
+                   the published documentation shows. 'missing' is the one group left out,
+                   because a comment nobody has written yet is a warning we live with. -->
+              <arg>-Xdoclint:all,-missing</arg>
             </compilerArgs>
             <annotationProcessorPaths>
               <path>

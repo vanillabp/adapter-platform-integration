@@ -136,55 +136,55 @@ public class WorkflowModuleBuildStepProcessor {
    *   <tbody>
    *     <tr>
    *       <td>System properties (e.g. <code>-Dfoo=bar</code>)</td>
-   *       <td><nobr>400</nobr></td>
+   *       <td style="white-space:nowrap;">400</td>
    *       <td>Highest priority (MicroProfile / SmallRye standard)</td>
    *     </tr>
    *     <tr>
    *       <td>Environment variables</td>
-   *       <td><nobr>300</nobr></td>
+   *       <td style="white-space:nowrap;">300</td>
    *       <td>Typical OS / container environment variables</td>
    *     </tr>
    *     <tr>
    *       <td><code>.env</code> file in the current working directory</td>
-   *       <td><nobr>295</nobr></td>
+   *       <td style="white-space:nowrap;">295</td>
    *       <td>Optional, if present Quarkus loads it automatically</td>
    *     </tr>
    *     <tr>
    *       <td><code>$PWD/config/application.yaml</code> (config directory, if <code>quarkus-config-yaml</code> is enabled)</td>
-   *       <td><nobr>265</nobr></td>
+   *       <td style="white-space:nowrap;">265</td>
    *       <td>Filesystem YAML has higher priority than classpath YAML</td>
    *     </tr>
    *     <tr>
    *       <td><code>$PWD/config/application.properties</code> (config directory next to runner)</td>
-   *       <td><nobr>260</nobr></td>
+   *       <td style="white-space:nowrap;">260</td>
    *       <td>External configuration file outside of the JAR</td>
    *     </tr>
    *     <tr>
    *       <td><code>application.yaml</code> (classpath, if <code>quarkus-config-yaml</code> is enabled)</td>
-   *       <td><nobr>255</nobr></td>
+   *       <td style="white-space:nowrap;">255</td>
    *       <td>YAML on classpath; Quarkus gives YAML higher priority than classpath properties</td>
    *     </tr>
    *     <tr>
    *       <td><code>application.properties</code> (classpath, e.g. <code>src/main/resources</code>)</td>
-   *       <td><nobr>250</nobr></td>
+   *       <td style="white-space:nowrap;">250</td>
    *       <td>Default classpath application.properties</td>
    *     </tr>
    *     <tr>
    *       <td><b><code>XXX.yaml</code> (classpath, if <code>quarkus-config-yaml</code> is enabled)</b></td>
-   *       <td><nobr><b>235</b></nobr></td>
+   *       <td style="white-space:nowrap;"><b>235</b></td>
    *       <td><b>YAML on the classpath specific to a certain workflow module having ID &quot;XXX&quot;.
    *       A workflow module ships defaults, so everything the application configures wins over it -
    *       its classpath files as much as a file next to the runner.</b></td>
    *     </tr>
    *     <tr>
    *       <td><b><code>XXX.properties</code> (classpath, e.g. <code>src/main/resources</code>)</b></td>
-   *       <td><nobr><b>230</b></nobr></td>
+   *       <td style="white-space:nowrap;"><b>230</b></td>
    *       <td><b>Properties on the classpath specific to a certain workflow module having ID &quot;XXX&quot;.
    *       Below the module's own YAML, mirroring the distance between the application's two files.</b></td>
    *     </tr>
    *     <tr>
    *       <td><code>META-INF/microprofile-config.properties</code> (classpath)</td>
-   *       <td><nobr>100</nobr></td>
+   *       <td style="white-space:nowrap;">100</td>
    *       <td>MicroProfile standard source (lowest practical priority)</td>
    *     </tr>
    *   </tbody>
@@ -292,7 +292,7 @@ public class WorkflowModuleBuildStepProcessor {
    *     protected int getOrdinal() {
    *          return 4711;
    *     }
-   *     protected List<String> getWorkflowModuleIds() {
+   *     protected List&lt;String&gt; getWorkflowModuleIds() {
    *          return List.of("id1", "id2", ...);
    *     }
    * }
