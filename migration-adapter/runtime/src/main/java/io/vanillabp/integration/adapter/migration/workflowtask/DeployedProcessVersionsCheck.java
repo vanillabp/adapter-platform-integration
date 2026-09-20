@@ -455,7 +455,7 @@ public class DeployedProcessVersionsCheck {
    * Says how many workflows still run on a version older than the one this boot
    * deployed, and what those workflows will not get.
    *
-   * <h2>Why this is worth a line even when everything is served</h2>
+   * <h4>Why this is worth a line even when everything is served</h4>
    *
    * The rest of this check reports a DEFECT: a task definition nobody serves, a version
    * faded out while workflows are on it. This reports the normal case right after an
@@ -466,7 +466,7 @@ public class DeployedProcessVersionsCheck {
    * zero on its own as those workflows end, which is exactly what makes it useful to an
    * operator on the day of an upgrade.
    *
-   * <h2>Why the number is trustworthy</h2>
+   * <h4>Why the number is trustworthy</h4>
    *
    * An older version exists only where the deployed model DIFFERS from what was deployed
    * before, and an adapter rewrites a model only to add something. So the same rewrite

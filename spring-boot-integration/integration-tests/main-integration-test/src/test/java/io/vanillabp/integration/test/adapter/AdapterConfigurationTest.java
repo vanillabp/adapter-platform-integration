@@ -39,7 +39,8 @@ public class AdapterConfigurationTest {
   private final ApplicationContextRunner contextRunner = new ApplicationContextRunner();
 
   /**
-   * ProcessService<Aggregate> should be created using dummy adapter configured in application.yaml
+   * {@code ProcessService<Aggregate>} should be created using dummy adapter configured in
+   * application.yaml
    */
   @Test
   @SuppressWarnings("unchecked")

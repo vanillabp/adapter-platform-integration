@@ -53,7 +53,8 @@ public class AdapterConfigurationTest {
   TestMigratableProcessService migratableProcessService;
 
   /**
-   * ProcessService<Aggregate> should be created using dummy adapter configured in application.yaml
+   * {@code ProcessService<Aggregate>} should be created using dummy adapter configured in
+   * application.yaml
    */
   @Test
   public void testAdapterConfiguration() throws Exception {
