@@ -248,8 +248,9 @@ where somebody asked for it, so this is the third consumer of that one signal ne
 `@WorkflowEnded` method and `vanillabp.delivery.release-on-workflow-end`, and switching it
 on attaches a listener respectively a worker to every deployed process of the module.
 Where one of the other two asked already, the cache is served at no extra cost. It stays
-best effort: the Process-Engine-API reports no end at all and Camunda 8 reports `COMPLETED`
-and never `TERMINATED`, so the lifetime remains the backstop rather than the exception.
+best effort: the Process-Engine-API reports no end at all and Camunda 8 reports a `CANCELED`
+workflow only from its 8.10 line on, so the lifetime remains the backstop rather than the
+exception.
 
 An application's own cache decides for itself: `putEnded` is a `default` method falling
 back to `put`, so a cache written before this existed compiles and behaves exactly as it
@@ -1102,7 +1103,7 @@ classDiagram
   }
   class WorkflowEndedContext {
     +getWorkflowAggregateId() String
-    +getKind() COMPLETED | TERMINATED  «C8 never sees TERMINATED»
+    +getKind() COMPLETED | CANCELED  «C8: CANCELED only from line 8.10 on»
     +getEndTime() Instant
     +getEndEventId() String  «default null · C8 always null»
     +getProcessVersion() String
