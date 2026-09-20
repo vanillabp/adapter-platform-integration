@@ -14,6 +14,14 @@ team outside this workspace implements against. It is the guide such a team is h
 to what an adapter implements, calls back or promises is not finished until that document says the
 new thing.
 
+## Before you start a full build
+
+You may not be alone on the machine. "Building and testing" in
+[`CONTRIBUTING.md`](./CONTRIBUTING.md#building-and-testing) says how many full builds it carries and
+what to hand Maven when it has to share, with the measurement behind both numbers. Read it before
+you start `./mvnw install` at the root, because the build which gets killed when the memory runs out
+is not always the one which started last.
+
 ## What belongs in `UPGRADE.md`
 
 [`UPGRADE.md`](./UPGRADE.md) describes the step from VanillaBP 1 to the 2.0 release and nothing

@@ -61,14 +61,30 @@ right after it started while the failing test says nothing about the reason. A m
 another version passes `-Dmongodb.image=mongo:7.0` and leaves the sources alone. The blueprints
 repository reads its images the same way.
 
+A full build is big, so count the builds a machine carries. Measured on 2026-09-20 in the
+development container, which has 16 GB of memory and 1 GB of swap: one `./mvnw test` over all 73
+modules held up to 6.3 GB across its Java processes and left 6.6 GB free. Two at once held 10.8 GB
+and used every megabyte of the swap. Three walked the machine down to 613 MB in ten minutes, and
+that is where the kernel starts killing whatever is largest, which is usually somebody else's build.
+So one full build at a time while a BPMS cluster runs anywhere on the machine, two when no cluster
+runs and whoever else works there knows about it, and never three. A build of a single module is
+small and does not count against this.
+
+Nothing caps the heap of a forked test JVM, so each one may grow to a quarter of the machine's
+memory, 3.9 GB in that container, long before it needs that much. Where a build has to share a
+machine, `MAVEN_OPTS=-Xmx1g _JAVA_OPTIONS=-XX:MaxRAMPercentage=10 ./mvnw test` halves what the build
+holds and costs a single build no time worth measuring. It stays out of the poms on purpose: a
+runner has its machine to itself, and a test which one day needs more memory should not fail there
+for a reason which is not about the test.
+
 A feature is proven by an acceptance test per platform, against the published
 [BPMS double](./bpms-double), and coverage is measured separately per platform because a Spring test
 never covers Quarkus code. `test-coverage-report/coverage-gate` is the last module of the reactor and
 fails below 85 percent of covered instructions, while the rule is 90.
 
-A test waits as a guard, never as its assertion. A machine carrying a few builds at once leaves a
-test JVM without a turn for seconds at a time, so no fixed window can show that something was fast
-enough. A test reads what the code promises from a fact instead, such as the moments a poller polled
+A test waits as a guard, never as its assertion. A machine carrying a few builds at once holds a
+test JVM back by a quarter of a second at a time, over and over, so no fixed window of a few hundred
+milliseconds can show that something was fast enough. A test reads what the code promises from a fact instead, such as the moments a poller polled
 or the number of probes an adapter answered. The wait around that fact is then generous, and a slow
 machine makes a test slower rather than red.
 [`DueEntryPollerTest`](./migration-adapter/runtime/src/test/java/io/vanillabp/migration/test/outbox/DueEntryPollerTest.java)
