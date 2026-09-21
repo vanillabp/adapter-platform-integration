@@ -13,6 +13,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnSingleCandidate;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationContext;
@@ -99,6 +100,7 @@ import jakarta.persistence.EntityManagerFactory;
     DataSource.class, PlatformTransactionManager.class
 })
 @ConditionalOnBooleanProperty(name = "vanillabp.outbox.jdbc.enabled", matchIfMissing = true)
+@ConditionalOnProperty(name = "vanillabp.outbox.gruelbox.enabled", havingValue = "true")
 @EnableConfigurationProperties(VanillaBpConfigurationProperties.class)
 public class GruelboxPhaseTwoOutboxAutoConfiguration {
 

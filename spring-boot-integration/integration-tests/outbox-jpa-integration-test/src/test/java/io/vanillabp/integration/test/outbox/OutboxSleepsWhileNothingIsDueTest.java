@@ -22,8 +22,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * What a quiet application costs on the gruelbox store, counted in connections rather than
- * measured in seconds. A flush is three database commands whether or not anything is
+ * What a quiet application costs on the JDBC store, counted in connections rather than
+ * measured in seconds. A poll is a few database commands whether or not anything is
  * waiting, and an application sitting in a timer used to pay for them every ten seconds.
  * <p>
  * Connections and not statements, because a connection is the claim from below: none taken is
@@ -103,10 +103,10 @@ public class OutboxSleepsWhileNothingIsDueTest {
   }
 
   /**
-   * Waits until gruelbox has dispatched everything it holds, which is the state "nothing is
-   * due" these tests start counting from.
+   * Waits until the outbox has dispatched everything it holds, which is the state "nothing
+   * is due" these tests start counting from.
    *
-   * @param dataSource Where gruelbox' table lives
+   * @param dataSource Where the outbox table lives
    */
   private void awaitNothingLeftUndone(
       final DataSource dataSource) throws Exception {
@@ -114,7 +114,7 @@ public class OutboxSleepsWhileNothingIsDueTest {
     final var deadline = System.currentTimeMillis() + 30000;
     while (count(
         dataSource,
-        "SELECT COUNT(*) FROM TXNO_OUTBOX WHERE processed = false AND blocked = false") > 0) {
+        "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX WHERE STATUS = 'OPEN'") > 0) {
       assertTrue(System.currentTimeMillis() < deadline, "an entry of the outbox was never dispatched");
       Thread.sleep(50);
     }
@@ -226,7 +226,7 @@ public class OutboxSleepsWhileNothingIsDueTest {
       startAWorkflow(context, "blocked-entry");
 
       final var deadline = System.currentTimeMillis() + 30000;
-      while (count(dataSource, "SELECT COUNT(*) FROM TXNO_OUTBOX WHERE blocked = true") == 0) {
+      while (count(dataSource, "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX WHERE STATUS = 'BLOCKED'") == 0) {
         assertTrue(System.currentTimeMillis() < deadline, "the entry was never blocked");
         Thread.sleep(50);
       }
@@ -264,8 +264,8 @@ public class OutboxSleepsWhileNothingIsDueTest {
           .createStatement()) {
         statement.executeUpdate(
             """
-                UPDATE TXNO_OUTBOX SET processed = false, attempts = 0, \
-                nextAttemptTime = DATEADD('SECOND', -60, CURRENT_TIMESTAMP)""");
+                UPDATE VANILLABP_PHASE_TWO_OUTBOX SET STATUS = 'OPEN', ATTEMPTS = 0, \
+                NEXT_ATTEMPT_AT = DATEADD('SECOND', -60, CURRENT_TIMESTAMP)""");
       }
 
       final var deadline = System.currentTimeMillis() + 30000;

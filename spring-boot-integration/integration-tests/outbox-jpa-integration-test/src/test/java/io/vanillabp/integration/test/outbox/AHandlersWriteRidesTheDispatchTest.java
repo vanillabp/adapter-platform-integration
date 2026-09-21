@@ -20,10 +20,10 @@ import io.vanillabp.spi.process.ProcessService;
 /**
  * What a handler wrote while an extension reported, when the report failed right behind it.
  * <p>
- * This is the whole point of one unit of work. gruelbox dispatches inside a transaction of
- * its own and ticks the entry off in it, so a dispatch which throws is repeated. The
+ * This is the whole point of one unit of work. A dispatch runs in the transaction of its
+ * aggregate, so a dispatch which throws is repeated and nothing it wrote is kept. The
  * handler takes part in that transaction, which means the aggregate it changed goes back
- * with the entry and the repetition starts from the state the first attempt started from.
+ * and the repetition starts from the state the first attempt started from.
  * Two transactions would have left the change of the failed attempt in the database, and
  * the next attempt would have reported on top of its own half-finished work.
  */

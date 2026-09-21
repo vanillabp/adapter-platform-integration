@@ -19,9 +19,9 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * What the phase-two outbox reports about itself on Spring Boot. gruelbox
- * has no API for its backlog, so the number is read off its own table - which is why
- * this test runs against the real store rather than a double.
+ * What the phase-two outbox reports about itself on Spring Boot. The backlog is read off
+ * the outbox table, which is why this test runs against the real store rather than a
+ * double.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
@@ -54,12 +54,12 @@ public class OutboxMetricsTest {
 
     final var pending = registry
         .get(VanillaBpMetrics.OUTBOX_PENDING)
-        .tag(VanillaBpMetrics.TAG_STORE, "GruelboxPhaseTwoOutbox")
+        .tag(VanillaBpMetrics.TAG_STORE, "JdbcPhaseTwoOutbox")
         .gauge();
     assertEquals(
         0.0,
         pending.value(),
-        "gruelbox marks a dispatched entry processed, so nothing of the earlier tests is waiting");
+        "a dispatched entry is marked DONE, so nothing of the earlier tests is waiting");
 
     transactionTemplate
         .execute(status -> {

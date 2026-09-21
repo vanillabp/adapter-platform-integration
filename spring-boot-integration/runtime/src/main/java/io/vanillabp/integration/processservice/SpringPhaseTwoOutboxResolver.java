@@ -13,6 +13,7 @@ import org.springframework.context.ApplicationContext;
 import io.vanillabp.integration.adapter.migration.processservice.AwareSelection;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxResolver;
 import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfiguration;
+import io.vanillabp.integration.outbox.jdbc.JdbcPhaseTwoOutboxAutoConfiguration;
 import io.vanillabp.integration.outbox.mongo.MongoPhaseTwoOutboxAutoConfiguration;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.PhaseTwoOutboxAware;
@@ -30,14 +31,24 @@ import io.vanillabp.integration.spi.PhaseTwoOutboxAware;
  * (that mismatch would break the outbox's atomicity guarantee and fails with a
  * guiding message instead),</li>
  * <li>with several outbox beans: the platform-default bean matching the persistence
- * technology managing the aggregate (JPA-managed → the gruelbox default,
- * Mongo-managed → the MongoDB default). The technology is detected from the
- * aggregate's Spring Data repository type.</li>
+ * technology managing the aggregate (JPA-managed → the JDBC default, Mongo-managed →
+ * the MongoDB default). The technology is detected from the aggregate's Spring Data
+ * repository type.</li>
  * </ol>
  * If no outbox can be attributed, a guiding {@link IllegalStateException} names the
  * beans found and the remedy (provide a {@link PhaseTwoOutboxAware} bean).
  */
 public class SpringPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
+
+  /**
+   * The names the JPA default goes by. Two of them, because an application may still run
+   * the gruelbox store instead of the one VanillaBP writes itself
+   * (<code>vanillabp.outbox.gruelbox.enabled</code>) - never both, the two
+   * auto-configurations exclude each other.
+   */
+  private static final Set<String> JPA_DEFAULT_OUTBOX_BEAN_NAMES = Set.of(
+      JdbcPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME,
+      GruelboxPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME);
 
   private final ApplicationContext applicationContext;
 
@@ -86,12 +97,10 @@ public class SpringPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
           .entrySet()
           .iterator()
           .next();
-      final var mismatch = ((technology == SpringPersistenceTechnology.Technology.MONGO) && entry
-          .getKey()
-          .equals(
-              GruelboxPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME)) || ((technology == SpringPersistenceTechnology.Technology.JPA) && entry
-                  .getKey()
-                  .equals(MongoPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME));
+      final var mismatch = ((technology == SpringPersistenceTechnology.Technology.MONGO) && JPA_DEFAULT_OUTBOX_BEAN_NAMES
+          .contains(entry.getKey())) || ((technology == SpringPersistenceTechnology.Technology.JPA) && entry
+              .getKey()
+              .equals(MongoPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME));
       if (mismatch) {
         throw new IllegalStateException(
             buildAttributionErrorMessage(workflowAggregateClass, technology, outboxes.keySet()));
@@ -101,14 +110,16 @@ public class SpringPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
 
     // 3. several outbox beans: attribute by the persistence technology managing
     // the aggregate - to THE platform-default bean of that technology
-    final var defaultBeanName = switch (technology) {
-      case JPA -> GruelboxPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME;
-      case MONGO -> MongoPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME;
-      case UNKNOWN -> null;
+    final var defaultOutbox = switch (technology) {
+      case JPA -> JPA_DEFAULT_OUTBOX_BEAN_NAMES
+          .stream()
+          .map(outboxes::get)
+          .filter(Objects::nonNull)
+          .findFirst();
+      case MONGO -> Optional.ofNullable(outboxes.get(MongoPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME));
+      case UNKNOWN -> Optional.<PhaseTwoOutbox>empty();
     };
-    return Optional
-        .ofNullable(defaultBeanName)
-        .map(outboxes::get)
+    return defaultOutbox
         .orElseThrow(() -> new IllegalStateException(
             buildAttributionErrorMessage(workflowAggregateClass, technology, outboxes.keySet())));
 
@@ -145,7 +156,7 @@ public class SpringPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
   public String remediesDescription() {
 
     return """
-        - add spring-boot-starter-data-jpa and configure a data source (enables the gruelbox-based default),
+        - add spring-boot-starter-data-jpa and configure a data source (enables the JDBC default),
         - add spring-boot-starter-data-mongodb and configure the MongoDB connection (enables the MongoDB default),
         - define a bean implementing io.vanillabp.integration.spi.PhaseTwoOutbox storing entries wherever your workflow aggregates live, or""";
 

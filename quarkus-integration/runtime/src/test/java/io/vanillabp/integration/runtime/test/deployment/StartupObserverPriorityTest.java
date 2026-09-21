@@ -13,7 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.quarkus.runtime.StartupEvent;
 import io.vanillabp.integration.runtime.deployment.VanillaBpDeploymentRunner;
-import io.vanillabp.integration.runtime.outbox.JdbcPhaseTwoOutboxDispatcher;
+import io.vanillabp.integration.runtime.outbox.JdbcPhaseTwoOutbox;
 import io.vanillabp.integration.runtime.outbox.MongoPhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.annotation.Priority;
@@ -69,7 +69,7 @@ public class StartupObserverPriorityTest {
   public void deploymentRunnerBeforeOutboxDispatchers() {
 
     final var runnerPriority = startupObserverPriority(VanillaBpDeploymentRunner.class);
-    final var jdbcDispatcherPriority = startupObserverPriority(JdbcPhaseTwoOutboxDispatcher.class);
+    final var jdbcDispatcherPriority = startupObserverPriority(JdbcPhaseTwoOutbox.class);
     final var mongoDispatcherPriority = startupObserverPriority(MongoPhaseTwoOutboxDispatcher.class);
 
     assertEquals(VanillaBpDeploymentRunner.STARTUP_PRIORITY, runnerPriority);

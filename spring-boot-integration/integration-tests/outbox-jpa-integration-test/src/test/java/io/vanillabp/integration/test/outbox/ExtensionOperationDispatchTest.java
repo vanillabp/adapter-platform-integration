@@ -44,11 +44,11 @@ public class ExtensionOperationDispatchTest {
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
   /**
-   * One entry, addressed by the key gruelbox stores it under, and only once gruelbox
-   * marked it processed - the state in which that key stops deduplicating.
+   * One entry, addressed by the key it was stored under, and only once it is marked DONE -
+   * the state in which that key stops deduplicating.
    */
-  private static final String COUNT_PROCESSED_ENTRY_OF_KEY = "select count(*) from TXNO_OUTBOX "
-      + "where processed = true and uniqueRequestId = ?";
+  private static final String COUNT_PROCESSED_ENTRY_OF_KEY = "select count(*) from VANILLABP_PHASE_TWO_OUTBOX "
+      + "where STATUS = 'DONE' and IDEMPOTENCY_KEY = ?";
 
   /**
    * The payload of one call, addressed by the reference its entry names.
@@ -235,8 +235,8 @@ public class ExtensionOperationDispatchTest {
     assertArrayEquals(state, call.payload());
     assertEquals(reference.get(), call.payloadReference());
 
-    // the entry was dispatched, so the bytes are gone - in the transaction gruelbox
-    // marked the entry processed in
+    // the entry was dispatched, so the bytes are gone - removed right after the entry was
+    // marked DONE
     final var deadline = System.currentTimeMillis() + 10000;
     while (jdbcTemplate.queryForObject(COUNT_PAYLOAD_OF_REFERENCE, Long.class, reference.get()) > 0) {
       assertTrue(

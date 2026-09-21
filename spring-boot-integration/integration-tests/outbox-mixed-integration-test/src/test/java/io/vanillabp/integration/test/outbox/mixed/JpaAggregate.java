@@ -9,7 +9,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * A JPA workflow aggregate: its outbox entries have to land in the JDBC (gruelbox)
+ * A JPA workflow aggregate: its outbox entries have to land in the JDBC
  * outbox, riding the JPA transaction.
  */
 @Entity

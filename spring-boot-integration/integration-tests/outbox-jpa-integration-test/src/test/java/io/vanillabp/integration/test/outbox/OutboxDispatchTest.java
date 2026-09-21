@@ -18,7 +18,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Integration test of the gruelbox-based JPA phase-two outbox using the dummy adapter
+ * Integration test of the JDBC phase-two outbox on JPA using the dummy adapter
  * forced to require a two-phase commit
  * (<code>dummy-adapter.at-least-once-delivery: true</code>):
  * <ul>
@@ -45,17 +45,17 @@ public class OutboxDispatchTest {
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
-  private static final String COUNT_OUTBOX_ENTRIES = "select count(*) from TXNO_OUTBOX";
+  private static final String COUNT_OUTBOX_ENTRIES = "select count(*) from VANILLABP_PHASE_TWO_OUTBOX";
 
   /**
-   * The entry of ONE aggregate, and only once gruelbox marked it processed - the state
-   * in which its key stops deduplicating. A count over the whole table would already be
+   * The entry of ONE aggregate, and only once it is marked DONE - the state in which its
+   * key stops deduplicating. A count over the whole table would already be
    * satisfied by a sibling test's entry, which is the same mistake in a hiding place.
    * The key of a start ends in the aggregate's ID (see
    * {@code PhaseOperation#START_WORKFLOW}).
    */
-  private static final String COUNT_PROCESSED_START_OF_AGGREGATE = "select count(*) from TXNO_OUTBOX "
-      + "where processed = true and uniqueRequestId like '%%|%s'";
+  private static final String COUNT_PROCESSED_START_OF_AGGREGATE = "select count(*) from VANILLABP_PHASE_TWO_OUTBOX "
+      + "where STATUS = 'DONE' and IDEMPOTENCY_KEY like '%%|%s'";
 
   @Autowired
   private ProcessService<Aggregate> processService;
@@ -91,9 +91,9 @@ public class OutboxDispatchTest {
       final var aggregate = new Aggregate();
       aggregate.setContent("commit-test");
       return processService.startWorkflow(aggregate);
-      // note: the outbox entry cannot be observed within the running transaction
-      // since gruelbox writes it in a JDBC batch right before the commit - the
-      // transactional enlisting is proven by the rollback test instead
+      // note: the entry is written on the connection of this very transaction, so
+      // nobody outside it can see it yet - the transactional enlisting is proven by the
+      // rollback test instead
     });
 
     assertNotNull(attachedAggregate);
@@ -141,8 +141,8 @@ public class OutboxDispatchTest {
       final var aggregate = new Aggregate();
       aggregate.setContent("dedup-pending");
       final var started = processService.startWorkflow(aggregate);
-      // the same idempotency key while nothing was dispatched: gruelbox' unique
-      // request ID makes it a no-op
+      // the same idempotency key while nothing was dispatched: the unique DEDUP_KEY
+      // of the waiting entry makes it a no-op
       return processService.startWorkflow(started);
     });
     assertNotNull(attachedAggregate);
@@ -164,8 +164,8 @@ public class OutboxDispatchTest {
     assertNotNull(attachedAggregate);
     listener.awaitInvocations(1, 10000);
 
-    // DONE instead of delete: gruelbox retains the processed entry (unique request
-    // ID + retention threshold), which used to keep the deduplication window open.
+    // DONE instead of delete: the dispatched entry stays in the table until the
+    // retention passes, and its key is released when it is marked DONE.
     // Waiting for the ENTRY and not for the listener is what makes the next schedule
     // meet the state this test is about - the listener runs inside the dispatch, before
     // the entry is processed

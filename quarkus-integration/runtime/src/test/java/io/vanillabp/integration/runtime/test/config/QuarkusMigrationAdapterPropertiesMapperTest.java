@@ -325,6 +325,7 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                   Duration attemptFrequency,
                                   Duration maxAttemptFrequency,
                                   int blockAfterAttempts,
+                                  int dispatchThreads,
                                   boolean createSchema,
                                   Duration retention,
                                   QuarkusMigrationAdapterProperties.JdbcOutboxProperties jdbc,
@@ -497,7 +498,7 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                                                                                                                             .ofSeconds(
                                                                                                                                                 2), Duration
                                                                                                                                                     .ofSeconds(
-                                                                                                                                                        20), 3, false, Duration
+                                                                                                                                                        20), 3, 2, false, Duration
                                                                                                                                                             .ofDays(
                                                                                                                                                                 1), new JdbcOutboxProperties(false, Optional
                                                                                                                                                                     .of("HOT_OUTBOX"), Optional
@@ -653,6 +654,7 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     assertEquals(coreDefaults.getAttemptFrequency(), mappedDefaults.getAttemptFrequency());
     assertEquals(coreDefaults.getMaxAttemptFrequency(), mappedDefaults.getMaxAttemptFrequency());
     assertEquals(coreDefaults.getBlockAfterAttempts(), mappedDefaults.getBlockAfterAttempts());
+    assertEquals(coreDefaults.getDispatchThreads(), mappedDefaults.getDispatchThreads());
     assertEquals(coreDefaults.isCreateSchema(), mappedDefaults.isCreateSchema());
     assertEquals(coreDefaults.getRetention(), mappedDefaults.getRetention());
     assertEquals(coreDefaults.getJdbc().isEnabled(), mappedDefaults.getJdbc().isEnabled());

@@ -1,53 +1,46 @@
-package io.vanillabp.integration.runtime.outbox;
+package io.vanillabp.integration.adapter.migration.outbox;
 
 import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 
-import javax.sql.DataSource;
-
-import org.eclipse.microprofile.config.ConfigProvider;
-
-import io.quarkus.runtime.StartupEvent;
-import io.smallrye.config.SmallRyeConfig;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
+import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
 import io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema;
+import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DispatchOutcome;
-import io.vanillabp.integration.adapter.migration.outbox.DueEntryPoller;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
-import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
-import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterPropertiesMapper;
-import io.vanillabp.integration.runtime.deployment.VanillaBpDeploymentRunner;
 import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.spi.PhaseTwoCall;
-import jakarta.annotation.PreDestroy;
-import jakarta.annotation.Priority;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Observes;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
+import io.vanillabp.integration.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.PhaseTwoPermanentFailure;
+import io.vanillabp.integration.spi.PhaseTwoRetryLater;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Dispatches committed-but-unprocessed entries of the JDBC-based phase-two outbox
- * (see {@link JdbcPhaseTwoOutbox}) through the core's {@link PhaseTwoRouter}:
+ * Dispatches committed-but-unprocessed entries of the JDBC phase-two outbox
+ * (see {@link JdbcPhaseTwoOutboxStore}) through the core's {@link PhaseTwoRouter}:
  * <ul>
- * <li>right after a commit (triggered by {@link JdbcPhaseTwoOutbox}) and</li>
- * <li>by a poller (crash recovery and retries) started on {@link StartupEvent}, which
- * sleeps until the earliest entry this store still owes something to is due rather than
- * polling on a rhythm - bounded by <code>vanillabp.outbox.poll-interval</code> for work
- * another node wrote down before it died (see {@link DueEntryPoller}).</li>
+ * <li>right after a commit (triggered by {@link JdbcPhaseTwoOutboxStore}) and</li>
+ * <li>by a poller (crash recovery and retries) started by the platform once its
+ * deployment is done, which sleeps until the earliest entry this store still owes
+ * something to is due rather than polling on a rhythm - bounded by
+ * <code>vanillabp.outbox.poll-interval</code> for work another node wrote down before it
+ * died (see {@link DueEntryPoller}).</li>
  * </ul>
- * The poller uses a plain scheduled executor, so the <code>quarkus-scheduler</code>
- * extension is not required. Due entries (status {@link #STATUS_OPEN}) are claimed
- * atomically (optimistic update incrementing the number of attempts and leasing the
- * entry for one <code>vanillabp.outbox.attempt-frequency</code>), so multiple instances
+ * The poller uses a plain scheduled executor, so no framework scheduler is registered or
+ * used and an application's own scheduling setup stays as it is. Due entries (status
+ * {@link #STATUS_OPEN}) are claimed atomically (optimistic update incrementing the number
+ * of attempts and leasing the entry for one
+ * <code>vanillabp.outbox.attempt-frequency</code>), so multiple instances
  * do not dispatch the same entry concurrently. A dispatch which FAILS writes the next
  * attempt itself, at the growing distance of
- * {@link io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties#attemptDelay(int)}
+ * {@link PhaseTwoOutboxProperties#attemptDelay(int)}
  * - doubling per attempt up to <code>vanillabp.outbox.max-attempt-frequency</code>, so
  * an outage of hours drains itself when the BPMS comes back. On successful dispatch the entry is
  * marked {@link #STATUS_DONE} - it stays in the table for support to read and is
@@ -55,6 +48,15 @@ import lombok.extern.slf4j.Slf4j;
  * <code>vanillabp.outbox.retention</code> passed. After
  * <code>vanillabp.outbox.block-after-attempts</code> failed attempts an entry is
  * marked {@link #STATUS_BLOCKED} and has to be cleaned up manually.
+ * <p>
+ * <strong>Several entries leave at the same time</strong>, and the workflow aggregate
+ * decides which of them may: the poller claims the due entries in the order they were
+ * written and hands each of them to the lane of its aggregate
+ * ({@link DispatchLanes}). Entries of one aggregate therefore keep their order while
+ * entries of different aggregates run at the same time. What this does not order is an
+ * entry which FAILED: it waits for its backoff, and the next entry of the same aggregate
+ * passes it meanwhile - the same as on a single thread, where a failed entry is put back
+ * as well.
  * <p>
  * <strong>Cluster safety:</strong> multiple application instances (pods) may poll
  * concurrently without any distributed lock: the SELECT may return the same due
@@ -68,14 +70,13 @@ import lombok.extern.slf4j.Slf4j;
  * schemas - in that case also create the unique constraint on
  * <code>DEDUP_KEY</code> yourself (the storage-level deduplication of the
  * outbox contract, spanning the entries still waiting for their dispatch; see
- * {@link JdbcPhaseTwoOutbox}). The DDL is kept portable: table existence is checked via JDBC
+ * {@link JdbcPhaseTwoOutboxStore}). The DDL is kept portable: table existence is checked via JDBC
  * metadata (<code>CREATE TABLE IF NOT EXISTS</code> is not supported by Oracle and
  * SQL Server), the timestamp type is chosen per database (SQL Server's
  * <code>TIMESTAMP</code> is a row version, MySQL's has auto-initialization quirks
  * and a 2038 range limit) and the idempotency key is limited to 512 characters so
  * MySQL's unique-index key-length limit (3072 bytes with utf8mb4) is respected.
  */
-@ApplicationScoped
 @Slf4j
 public class JdbcPhaseTwoOutboxDispatcher {
 
@@ -85,11 +86,17 @@ public class JdbcPhaseTwoOutboxDispatcher {
 
   public static final String STATUS_BLOCKED = "BLOCKED";
 
+  /**
+   * The due entries, oldest first. The order is what the lanes turn into the order of
+   * one aggregate: a lane runs what it is handed in the order it is handed, so the
+   * entries of one aggregate have to reach it the way they were written.
+   */
   private static final String SELECT_DUE_ENTRIES = """
       SELECT ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, AGGREGATE_ID, ADAPTER_ID, ARGS, ATTEMPTS, \
       CREATED_AT \
       FROM %s \
-      WHERE STATUS = '%s' AND NEXT_ATTEMPT_AT <= ? AND ATTEMPTS < ?""";
+      WHERE STATUS = '%s' AND NEXT_ATTEMPT_AT <= ? AND ATTEMPTS < ? \
+      ORDER BY CREATED_AT""";
 
   /**
    * When the earliest entry waiting for its dispatch wants to be looked at. It is the
@@ -162,25 +169,62 @@ public class JdbcPhaseTwoOutboxDispatcher {
       DELETE FROM %s \
       WHERE STATUS = '%s' AND DONE_AT < ?""";
 
-  private String tableName;
+  /**
+   * The index the poller asks its question along. STATUS first and the timestamp second, which is
+   * the order both the aggregate and the select of the due entries read them in.
+   */
+  private static final String CREATE_DUE_INDEX = "CREATE INDEX %s_DUE ON %s (STATUS, NEXT_ATTEMPT_AT)";
 
-  private String selectDueEntries;
+  /**
+   * The index the retention deletes along. A second one rather than more columns in the first,
+   * because the two questions filter the same STATUS and order by different timestamps.
+   */
+  private static final String CREATE_AGE_INDEX = "CREATE INDEX %s_AGE ON %s (STATUS, DONE_AT)";
 
-  private String selectNextAttempt;
+  private final JdbcConnectionAccess connections;
 
-  private String selectOldestDone;
+  private final PhaseTwoOutboxProperties properties;
 
-  private String claimEntry;
+  private final Supplier<PhaseTwoRouter> phaseTwoRouter;
 
-  private String selectClaimedEntry;
+  /**
+   * What a blocked entry is counted into. A supplier and not the value itself, because
+   * metrics are optional on both platforms and the bean may be resolved later than this
+   * dispatcher is built.
+   */
+  private final Supplier<VanillaBpMetrics> metrics;
 
-  private String markEntryDone;
+  /**
+   * Which store an operator reads in the meters of this dispatcher. The platform names
+   * its own class, because that is the bean an application sees.
+   */
+  private final String storeName;
 
-  private String markEntryBlocked;
+  private final JdbcPhaseTwoPayloadStore payloadStore;
 
-  private String rescheduleEntry;
+  private final String tableName;
 
-  private String deleteExpiredDoneEntries;
+  private final String selectDueEntries;
+
+  private final String selectNextAttempt;
+
+  private final String selectOldestDone;
+
+  private final String claimEntry;
+
+  private final String selectClaimedEntry;
+
+  private final String markEntryDone;
+
+  private final String markEntryBlocked;
+
+  private final String rescheduleEntry;
+
+  private final String deleteExpiredDoneEntries;
+
+  private final DueEntryPoller poller;
+
+  private final DispatchLanes lanes;
 
   /**
    * A due outbox entry read from the database.
@@ -191,6 +235,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
    * @param operation The name of the scheduled {@link PhaseOperation}
    * @param aggregateId The workflow aggregate's ID in serialized form
    * @param adapterId The ID of the elected BPMS adapter (may be <code>null</code>)
+   * @param serializedArgs The arguments the call was scheduled with
    * @param attempts The number of dispatch attempts so far
    * @param createdAt When the entry was written - a replacing call sets it anew,
    *          because the row then carries a younger operation
@@ -205,126 +250,112 @@ public class JdbcPhaseTwoOutboxDispatcher {
                        String serializedArgs,
                        int attempts,
                        Instant createdAt) {
-  }
 
-  @Inject
-  Instance<DataSource> dataSource;
+    /**
+     * What this entry is ordered by: its workflow aggregate. An entry which names none -
+     * a broadcast signal does not - is ordered by its BPMN process instead, so two
+     * signals of one process still leave in the order they were planned.
+     *
+     * @return The key deciding which lane dispatches this entry
+     */
+    String orderingKey() {
 
-  @Inject
-  Instance<PhaseTwoRouter> phaseTwoRouter;
+      return aggregateId == null
+          ? workflowModuleId
+              + "|"
+              + bpmnProcessId
+          : workflowModuleId
+              + "|"
+              + bpmnProcessId
+              + "|"
+              + aggregateId;
 
-  /**
-   * What a blocked entry is counted into. Unsatisfied where the application uses no
-   * Micrometer extension, which is why it is resolved through the producer's helper
-   * rather than injected directly.
-   */
-  @Inject
-  Instance<io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics> vanillaBpMetrics;
-
-  private volatile PhaseTwoOutboxProperties properties;
-
-  private volatile io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore payloadStore;
-
-  private volatile DueEntryPoller poller;
-
-  /**
-   * Where the bytes of a call which carries a payload lie while its entry waits. Built
-   * on demand like the properties, because the outbox writes into it during the
-   * application's own transaction and may get there before this dispatcher started.
-   *
-   * @return The payload store of this outbox
-   */
-  io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore getPayloadStore() {
-
-    if (payloadStore == null) {
-      payloadStore = new io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore(
-          () -> dataSource.get().getConnection(), JdbcPhaseTwoOutbox.payloadTableName(getProperties()));
     }
-    return payloadStore;
 
   }
 
   /**
-   * The outbox configuration (<code>vanillabp.outbox.*</code>), loaded lazily so
-   * {@link JdbcPhaseTwoOutbox} can resolve its table name even before the startup
-   * event was observed.
-   *
-   * @return The outbox configuration
+   * @param connections How this platform hands out a connection, used here outside any
+   *          transaction of the application
+   * @param properties The bound <code>vanillabp.outbox</code> section
+   * @param tableName The table polled - the one its store writes into
+   * @param payloadStore Where the bytes of a call which carries a payload lie
+   * @param phaseTwoRouter The router a claimed entry is handed to
+   * @param metrics What a blocked entry is counted into
+   * @param storeName Which store the meters of this dispatcher name
    */
-  PhaseTwoOutboxProperties getProperties() {
+  public JdbcPhaseTwoOutboxDispatcher(
+      final JdbcConnectionAccess connections,
+      final PhaseTwoOutboxProperties properties,
+      final String tableName,
+      final JdbcPhaseTwoPayloadStore payloadStore,
+      final Supplier<PhaseTwoRouter> phaseTwoRouter,
+      final Supplier<VanillaBpMetrics> metrics,
+      final String storeName) {
 
-    if (properties == null) {
-      properties = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(
-          ConfigProvider
-              .getConfig()
-              .unwrap(SmallRyeConfig.class)
-              .getConfigMapping(QuarkusMigrationAdapterProperties.class)
-              .outbox());
-    }
-    return properties;
+    this.connections = connections;
+    this.properties = properties;
+    this.tableName = tableName;
+    this.payloadStore = payloadStore;
+    this.phaseTwoRouter = phaseTwoRouter;
+    this.metrics = metrics;
+    this.storeName = storeName;
+    this.selectDueEntries = SELECT_DUE_ENTRIES.formatted(tableName, STATUS_OPEN);
+    this.selectNextAttempt = SELECT_NEXT_ATTEMPT.formatted(tableName, STATUS_OPEN);
+    this.selectOldestDone = SELECT_OLDEST_DONE.formatted(tableName, STATUS_DONE);
+    this.claimEntry = CLAIM_ENTRY.formatted(tableName);
+    this.selectClaimedEntry = SELECT_CLAIMED_ENTRY.formatted(tableName);
+    this.markEntryDone = MARK_ENTRY_DONE.formatted(tableName, STATUS_DONE);
+    this.markEntryBlocked = MARK_ENTRY_BLOCKED.formatted(tableName, STATUS_BLOCKED);
+    this.rescheduleEntry = RESCHEDULE_ENTRY.formatted(tableName);
+    this.deleteExpiredDoneEntries = DELETE_EXPIRED_DONE_ENTRIES.formatted(tableName, STATUS_DONE);
+    this.poller = new DueEntryPoller(
+        "vanillabp-outbox", properties.getPollInterval(), this::poll, this::earliestDueAt);
+    this.lanes = new DispatchLanes("vanillabp-outbox-dispatch", properties.getDispatchThreads());
 
   }
 
   /**
-   * Creates the outbox table (unless disabled) and starts the fixed-delay poller. The
-   * first run is executed immediately, dispatching committed-but-unprocessed entries
-   * of a previously crashed instance. The observer priority guarantees that the
-   * deployment pipeline deployed the BPMN resources and started workflow processing
-   * BEFORE any recovered entry is dispatched (see
-   * {@link VanillaBpDeploymentRunner#OUTBOX_DISPATCHER_STARTUP_PRIORITY}).
-   *
-   * @param event The startup event observed
+   * Creates the outbox table and the payload table (unless the application manages its
+   * schema itself, in which case their existence is verified instead).
+   * <p>
+   * Called by the platform BEFORE the deployment pipeline runs, because a workflow may
+   * be started as soon as the application is up and the entry needs its table.
    */
-  void onStart(
-      @Observes
-      @Priority(VanillaBpDeploymentRunner.OUTBOX_DISPATCHER_STARTUP_PRIORITY) final StartupEvent event) {
-
-    if (!dataSource.isResolvable()) {
-      log.debug("No datasource available - the JDBC-based phase-two outbox stays inactive");
-      return;
-    }
-
-    getProperties();
-    if (!properties.getJdbc().isEnabled()) {
-      log.debug("'vanillabp.outbox.jdbc.enabled' is false - the JDBC-based phase-two outbox stays inactive");
-      return;
-    }
-
-    tableName = JdbcPhaseTwoOutbox.tableName(properties);
-    selectDueEntries = SELECT_DUE_ENTRIES.formatted(tableName, STATUS_OPEN);
-    selectNextAttempt = SELECT_NEXT_ATTEMPT.formatted(tableName, STATUS_OPEN);
-    selectOldestDone = SELECT_OLDEST_DONE.formatted(tableName, STATUS_DONE);
-    claimEntry = CLAIM_ENTRY.formatted(tableName);
-    selectClaimedEntry = SELECT_CLAIMED_ENTRY.formatted(tableName);
-    markEntryDone = MARK_ENTRY_DONE.formatted(tableName, STATUS_DONE);
-    markEntryBlocked = MARK_ENTRY_BLOCKED.formatted(tableName, STATUS_BLOCKED);
-    rescheduleEntry = RESCHEDULE_ENTRY.formatted(tableName);
-    deleteExpiredDoneEntries = DELETE_EXPIRED_DONE_ENTRIES.formatted(tableName, STATUS_DONE);
+  public void prepareSchema() {
 
     if (properties.isCreateSchema()) {
       createTableIfNotExists();
-      getPayloadStore().createSchemaIfNotExists();
+      payloadStore.createSchemaIfNotExists();
     } else {
       // the application creates its schema itself - a missing table is then a
       // deployment which forgot to apply the migration, and it is said at startup instead of at
       // the first workflow start
       validateTableExists();
-      getPayloadStore().validateSchemaExists();
+      payloadStore.validateSchemaExists();
     }
 
-    poller = new DueEntryPoller(
-        "vanillabp-outbox", properties.getPollInterval(), this::poll, this::earliestDueAt);
+  }
+
+  /**
+   * Starts polling. The platform calls this once the BPMN resources are deployed and
+   * workflow processing has started, so nothing recovered is carried to a BPMS which has
+   * not seen the models yet.
+   */
+  public void start() {
+
     poller.start();
 
   }
 
-  @PreDestroy
-  void shutdown() {
+  /**
+   * Stops the poller and the lanes. What a lane was still holding stays OPEN in the
+   * table, so the next start of this node or a poll of another one takes it.
+   */
+  public void stop() {
 
-    if (poller != null) {
-      poller.stop();
-      poller = null;
-    }
+    poller.stop();
+    lanes.stop();
 
   }
 
@@ -334,10 +365,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
    */
   public void triggerPoll() {
 
-    final var running = poller;
-    if (running != null) {
-      running.somethingIsDueAt(Instant.now());
-    }
+    poller.somethingIsDueAt(Instant.now());
 
   }
 
@@ -352,7 +380,9 @@ public class JdbcPhaseTwoOutboxDispatcher {
    */
   private Instant earliestDueAt() {
 
-    try (var connection = dataSource.get().getConnection()) {
+    Connection connection = null;
+    try {
+      connection = connections.acquire();
       final var nextAttempt = earliest(connection, selectNextAttempt, properties.getBlockAfterAttempts());
       final var oldestDone = earliest(connection, selectOldestDone, null);
       final var retentionRunsOut = oldestDone == null
@@ -370,6 +400,8 @@ public class JdbcPhaseTwoOutboxDispatcher {
       // which stops asking is worse than one which asks at the configured cap
       log.debug("Could not read when the next phase-two outbox entry of table '{}' is due", tableName, e);
       return null;
+    } finally {
+      release(connection);
     }
 
   }
@@ -394,21 +426,11 @@ public class JdbcPhaseTwoOutboxDispatcher {
 
   }
 
-  /**
-   * The index the poller asks its question along. STATUS first and the timestamp second, which is
-   * the order both the aggregate and the select of the due entries read them in.
-   */
-  private static final String CREATE_DUE_INDEX = "CREATE INDEX %s_DUE ON %s (STATUS, NEXT_ATTEMPT_AT)";
-
-  /**
-   * The index the retention deletes along. A second one rather than more columns in the first,
-   * because the two questions filter the same STATUS and order by different timestamps.
-   */
-  private static final String CREATE_AGE_INDEX = "CREATE INDEX %s_AGE ON %s (STATUS, DONE_AT)";
-
   private void createTableIfNotExists() {
 
-    try (var connection = dataSource.get().getConnection()) {
+    Connection connection = null;
+    try {
+      connection = connections.acquire();
       // existence is checked via JDBC metadata since 'CREATE TABLE IF NOT EXISTS'
       // is not supported by all databases (e.g. Oracle, SQL Server)
       if (JdbcSchema.tableExists(connection, tableName)) {
@@ -420,7 +442,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
         statement.executeUpdate(CREATE_DUE_INDEX.formatted(tableName, tableName));
         statement.executeUpdate(CREATE_AGE_INDEX.formatted(tableName, tableName));
       }
-    } catch (SQLException e) {
+    } catch (final SQLException e) {
       if (createdConcurrently()) {
         return;
       }
@@ -429,6 +451,8 @@ public class JdbcPhaseTwoOutboxDispatcher {
               Could not create the phase-two outbox table '%s'! Set 'vanillabp.outbox.create-schema' \
               to 'false' and manage the schema manually if the DDL is not suitable for your database."""
               .formatted(tableName), e);
+    } finally {
+      release(connection);
     }
 
   }
@@ -443,7 +467,9 @@ public class JdbcPhaseTwoOutboxDispatcher {
    */
   private boolean createdConcurrently() {
 
-    try (var connection = dataSource.get().getConnection()) {
+    Connection connection = null;
+    try {
+      connection = connections.acquire();
       if (!JdbcSchema.tableExistsQuietly(connection, tableName)) {
         return false;
       }
@@ -453,6 +479,8 @@ public class JdbcPhaseTwoOutboxDispatcher {
       return true;
     } catch (final SQLException e) {
       return false;
+    } finally {
+      release(connection);
     }
 
   }
@@ -466,26 +494,30 @@ public class JdbcPhaseTwoOutboxDispatcher {
    */
   private void validateTableExists() {
 
-    try (var connection = dataSource.get().getConnection()) {
+    Connection connection = null;
+    try {
+      connection = connections.acquire();
       if (JdbcSchema.tableExists(connection, tableName)) {
         reportMissingIndexes(connection);
         return;
       }
-      throw new IllegalStateException(
-          """
-              The phase-two outbox table '%s' does not exist! Starting a workflow on a remote BPMS \
-              writes an entry into it inside the caller's transaction, so without the table nothing \
-              can be started. Either
-              - apply the schema of VanillaBP with your migration tool: the artifact \
-              'io.vanillabp:vanillabp-schema' ships the Liquibase changelog \
-              'vanillabp/schema/changelog.xml' and the SQL generated from it for Flyway, or
-              - let VanillaBP create the table by setting 'vanillabp.outbox.create-schema' to \
-              'true' (the default)."""
-              .formatted(tableName));
     } catch (final SQLException e) {
       throw new IllegalStateException(
           "Could not check whether the phase-two outbox table '%s' exists!".formatted(tableName), e);
+    } finally {
+      release(connection);
     }
+    throw new IllegalStateException(
+        """
+            The phase-two outbox table '%s' does not exist! Starting a workflow on a remote BPMS \
+            writes an entry into it inside the caller's transaction, so without the table nothing \
+            can be started. Either
+            - apply the schema of VanillaBP with your migration tool: the artifact \
+            'io.vanillabp:vanillabp-schema' ships the Liquibase changelog \
+            'vanillabp/schema/changelog.xml' and the SQL generated from it for Flyway, or
+            - let VanillaBP create the table by setting 'vanillabp.outbox.create-schema' to \
+            'true' (the default)."""
+            .formatted(tableName));
 
   }
 
@@ -540,6 +572,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
    * bytes.
    *
    * @param connection The connection used to detect the database
+   * @param tableName The table to create
    * @return The CREATE TABLE statement
    */
   private static String buildCreateTable(
@@ -583,21 +616,34 @@ public class JdbcPhaseTwoOutboxDispatcher {
   }
 
   /**
-   * Claims and dispatches all due entries, then deletes DONE entries whose retention
-   * passed. Exceptions are caught to keep the poller alive.
+   * Claims all due entries and hands each of them to the lane of its aggregate, then
+   * deletes DONE entries whose retention passed. Exceptions are caught to keep the
+   * poller alive.
+   * <p>
+   * The claim is what this thread does and the dispatch is what a lane does, and the
+   * order matters: an entry is claimed before it is handed over, so the claim of the
+   * next poll - here or on another node - finds it leased and leaves it alone.
+   * <p>
+   * A lane whose queue is full makes this thread wait, holding the connection it claims
+   * with. That is the back pressure of a backlog which arrives faster than it leaves, and
+   * waiting is what keeps the backlog in the table, where it can be read.
    */
   private synchronized void poll() {
 
-    try (var connection = dataSource.get().getConnection()) {
+    Connection connection = null;
+    try {
+      connection = connections.acquire();
       for (final var entry : loadDueEntries(connection)) {
         final var claimed = claim(connection, entry);
         if (claimed != null) {
-          dispatch(connection, claimed);
+          lanes.runInOrderOf(claimed.orderingKey(), () -> dispatch(claimed));
         }
       }
       cleanupDoneEntries(connection);
-    } catch (Exception e) {
+    } catch (final Exception e) {
       log.error("Polling the VanillaBP phase-two outbox failed - will retry", e);
+    } finally {
+      release(connection);
     }
 
   }
@@ -629,7 +675,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
    * <p>
    * What the claim won is then READ AGAIN, and the dispatch works with that. Between
    * the select of the due entries and this update the row may have been replaced by a
-   * younger call ({@link JdbcPhaseTwoOutbox}), and the entry read a moment ago names
+   * younger call ({@link JdbcPhaseTwoOutboxStore}), and the entry read a moment ago names
    * the payload that call removed - a dispatch built from it would hand the handler
    * nothing where bytes were promised. It is one read by primary key per dispatch
    * attempt, which is the cost of the rule that a dispatch reads what was written
@@ -674,13 +720,15 @@ public class JdbcPhaseTwoOutboxDispatcher {
    * Dispatches a single claimed entry through the core's {@link PhaseTwoRouter}. On
    * success the entry is marked DONE; on failure it stays claimed and is retried
    * after the configured backoff, until it is blocked.
+   * <p>
+   * This runs on the lane of the entry's aggregate, and it holds no connection while the
+   * router works: the dispatch calls a BPMS over the network, and a connection held for
+   * that long would make the pool the limit of how many entries may travel at once.
    *
-   * @param connection The connection used to update the entry
    * @param entry The claimed entry
    */
   private void dispatch(
-      final Connection connection,
-      final Entry entry) throws SQLException {
+      final Entry entry) {
 
     final var args = PhaseTwoCall.deserializeArgs(entry.serializedArgs());
     final var payloadReference = args.get(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
@@ -695,7 +743,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
       // entry which names one: a lookup by primary key, once per dispatch attempt
       final var payload = payloadReference == null
           ? null
-          : getPayloadStore().read(payloadReference);
+          : payloadStore.read(payloadReference);
       dispatchMeasuringTheWait(
           PhaseTwoCall
               .forDispatch(
@@ -704,111 +752,194 @@ public class JdbcPhaseTwoOutboxDispatcher {
                   entry.adapterId(), args, payload),
           entry.attempts() > 0,
           entry.createdAt());
-    } catch (Exception e) {
-      // the adapter said that repeating cannot help - blocked right away
-      // instead of after the configured attempts
-      if (io.vanillabp.integration.spi.PhaseTwoPermanentFailure.isPermanent(e)) {
-        try (var statement = connection.prepareStatement(markEntryBlocked)) {
-          statement.setString(1, entry.id());
-          statement.executeUpdate();
-        }
-        countBlockedEntry(entry.operation(), true);
-        log.error(
-            "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
-                + "failed for a reason repeating cannot fix - the outbox entry '{}' is blocked and has "
-                + "to be cleaned up manually!",
-            entry.operation(),
-            entry.bpmnProcessId(),
-            entry.workflowModuleId(),
-            entry.aggregateId(),
-            entry.id(),
-            e);
-        return;
-      }
-      if (entry.attempts() + 1 >= properties.getBlockAfterAttempts()) {
-        try (var statement = connection.prepareStatement(markEntryBlocked)) {
-          statement.setString(1, entry.id());
-          statement.executeUpdate();
-        }
-        countBlockedEntry(entry.operation(), false);
-        log.error(
-            "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
-                + "failed {} times - the outbox entry '{}' is now blocked and has to be cleaned up manually!",
-            entry.operation(),
-            entry.bpmnProcessId(),
-            entry.workflowModuleId(),
-            entry.aggregateId(),
-            entry.attempts() + 1,
-            entry.id(),
-            e);
-        return;
-      }
-      final var retryAfter = io.vanillabp.integration.spi.PhaseTwoRetryLater.retryAfter(e);
-      if (retryAfter != null) {
-        // the dispatch knows when asking again can help - a workflow the BPMS has not
-        // made searchable yet is the case - so the entry waits that long instead of the
-        // configured backoff. What ends a reason which never goes away is the attempts
-        // counted above, not this due time
-        try (var statement = connection.prepareStatement(rescheduleEntry)) {
-          statement.setTimestamp(1, Timestamp.from(Instant.now().plus(retryAfter)));
-          statement.setString(2, entry.id());
-          statement.executeUpdate();
-        }
-        log.info(
-            "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' cannot "
-                + "run yet - the outbox entry '{}' is dispatched again in {} ({} of {} attempts used): {}",
-            entry.operation(),
-            entry.bpmnProcessId(),
-            entry.workflowModuleId(),
-            entry.aggregateId(),
-            entry.id(),
-            retryAfter,
-            entry.attempts() + 1,
-            properties.getBlockAfterAttempts(),
-            e.getMessage());
-      } else {
-        // attempts() is the count BEFORE this claim, so attemptDelay(0) is the distance
-        // after the first failure: close, because most failures are momentary
-        final var retryIn = properties.attemptDelay(entry.attempts());
-        try (var statement = connection.prepareStatement(rescheduleEntry)) {
-          statement.setTimestamp(1, Timestamp.from(Instant.now().plus(retryIn)));
-          statement.setString(2, entry.id());
-          statement.executeUpdate();
-        }
-        log.warn(
-            "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
-                + "failed - the outbox entry '{}' is dispatched again in {} ({} of {} attempts used)",
-            entry.operation(),
-            entry.bpmnProcessId(),
-            entry.workflowModuleId(),
-            entry.aggregateId(),
-            entry.id(),
-            retryIn,
-            entry.attempts() + 1,
-            properties.getBlockAfterAttempts(),
-            e);
-      }
+    } catch (final Exception e) {
+      reportFailedDispatch(entry, e);
       return;
     }
-    try (var statement = connection.prepareStatement(markEntryDone)) {
-      statement.setTimestamp(1, Timestamp.from(Instant.now()));
-      statement.setString(2, entry.id());
-      statement.executeUpdate();
-    }
+    markDone(entry);
     // the entry is dispatched, so its bytes have done their work. Removed AFTER the
     // entry was marked, never before: a crash in between leaves a row the housekeeping
     // deletes, while the other order would leave an entry whose payload is gone
     if (payloadReference != null) {
-      getPayloadStore().remove(payloadReference);
+      payloadStore.remove(payloadReference);
     }
 
   }
 
   /**
+   * Writes down what a failed dispatch means for the entry: blocked where repeating
+   * cannot help or where the attempts are used up, and a new due time otherwise.
+   *
+   * @param entry The entry whose dispatch failed
+   * @param e What the dispatch threw
+   */
+  private void reportFailedDispatch(
+      final Entry entry,
+      final Exception e) {
+
+    // the adapter said that repeating cannot help - blocked right away
+    // instead of after the configured attempts
+    if (PhaseTwoPermanentFailure.isPermanent(e)) {
+      update(markEntryBlocked, statement -> statement.setString(1, entry.id()));
+      countBlockedEntry(entry.operation(), true);
+      log.error(
+          "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
+              + "failed for a reason repeating cannot fix - the outbox entry '{}' is blocked and has "
+              + "to be cleaned up manually!",
+          entry.operation(),
+          entry.bpmnProcessId(),
+          entry.workflowModuleId(),
+          entry.aggregateId(),
+          entry.id(),
+          e);
+      return;
+    }
+    if (entry.attempts() + 1 >= properties.getBlockAfterAttempts()) {
+      update(markEntryBlocked, statement -> statement.setString(1, entry.id()));
+      countBlockedEntry(entry.operation(), false);
+      log.error(
+          "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
+              + "failed {} times - the outbox entry '{}' is now blocked and has to be cleaned up manually!",
+          entry.operation(),
+          entry.bpmnProcessId(),
+          entry.workflowModuleId(),
+          entry.aggregateId(),
+          entry.attempts() + 1,
+          entry.id(),
+          e);
+      return;
+    }
+    final var retryAfter = PhaseTwoRetryLater.retryAfter(e);
+    if (retryAfter != null) {
+      // the dispatch knows when asking again can help - a workflow the BPMS has not
+      // made searchable yet is the case - so the entry waits that long instead of the
+      // configured backoff. What ends a reason which never goes away is the attempts
+      // counted above, not this due time
+      rescheduleAt(entry, Instant.now().plus(retryAfter));
+      log.info(
+          "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' cannot "
+              + "run yet - the outbox entry '{}' is dispatched again in {} ({} of {} attempts used): {}",
+          entry.operation(),
+          entry.bpmnProcessId(),
+          entry.workflowModuleId(),
+          entry.aggregateId(),
+          entry.id(),
+          retryAfter,
+          entry.attempts() + 1,
+          properties.getBlockAfterAttempts(),
+          e.getMessage());
+      return;
+    }
+    // attempts() is the count BEFORE this claim, so attemptDelay(0) is the distance
+    // after the first failure: close, because most failures are momentary
+    final var retryIn = properties.attemptDelay(entry.attempts());
+    rescheduleAt(entry, Instant.now().plus(retryIn));
+    log.warn(
+        "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
+            + "failed - the outbox entry '{}' is dispatched again in {} ({} of {} attempts used)",
+        entry.operation(),
+        entry.bpmnProcessId(),
+        entry.workflowModuleId(),
+        entry.aggregateId(),
+        entry.id(),
+        retryIn,
+        entry.attempts() + 1,
+        properties.getBlockAfterAttempts(),
+        e);
+
+  }
+
+  /**
+   * Ticks the entry off and tells the poller when the row may be deleted. The poller is
+   * told for the reason {@link #rescheduleAt(Entry, Instant)} tells it: the dispatch does
+   * not run on it, so what this write leaves behind is news to it.
+   *
+   * @param entry The entry which was dispatched
+   */
+  private void markDone(
+      final Entry entry) {
+
+    final var doneAt = Instant.now();
+    update(markEntryDone, statement -> {
+      statement.setTimestamp(1, Timestamp.from(doneAt));
+      statement.setString(2, entry.id());
+    });
+    poller.somethingIsDueAt(doneAt.plus(properties.getRetention()));
+
+  }
+
+  /**
+   * Writes when the next attempt of an entry is due, and tells the poller about it.
+   * <p>
+   * The poller has to be told because the dispatch does not run on it: it decided how long
+   * to rest as this attempt began, from the lease the claim wrote. A due time closer than
+   * that lease - the one an adapter names for a workflow its BPMS has not made searchable
+   * yet - would otherwise be waited out to the end of the lease.
+   *
+   * @param entry The entry whose dispatch failed
+   * @param nextAttempt When it is to be read again
+   */
+  private void rescheduleAt(
+      final Entry entry,
+      final Instant nextAttempt) {
+
+    update(rescheduleEntry, statement -> {
+      statement.setTimestamp(1, Timestamp.from(nextAttempt));
+      statement.setString(2, entry.id());
+    });
+    poller.somethingIsDueAt(nextAttempt);
+
+  }
+
+  /**
+   * Runs one statement on a connection of its own. A lane holds no connection between
+   * two entries, so every write of a dispatch borrows one for the moment it needs it.
+   * <p>
+   * A failure here is logged and not thrown: what it costs is a repetition of an entry
+   * whose dispatch already happened, which the contract of the outbox allows, and
+   * throwing would end the lane instead.
+   *
+   * @param sql The statement to run
+   * @param arguments What to put into it
+   */
+  private void update(
+      final String sql,
+      final StatementArguments arguments) {
+
+    Connection connection = null;
+    try {
+      connection = connections.acquire();
+      try (var statement = connection.prepareStatement(sql)) {
+        arguments.setOn(statement);
+        statement.executeUpdate();
+      }
+    } catch (final SQLException e) {
+      log.error("Could not update an entry of the phase-two outbox table '{}'", tableName, e);
+    } finally {
+      release(connection);
+    }
+
+  }
+
+  /**
+   * What a statement of this dispatcher needs beyond its text.
+   */
+  @FunctionalInterface
+  private interface StatementArguments {
+
+    void setOn(
+        java.sql.PreparedStatement statement) throws SQLException;
+
+  }
+
+  /**
    * Hands the call to the core's router and reports how long its entry waited for this
-   * attempt, whether the attempt succeeded or threw. The wait is counted from the
-   * moment the entry was written, so a repeated attempt reports the whole wait of the
-   * operation and not the distance since the last try.
+   * attempt, whether the attempt succeeded or threw. The wait is counted from the moment
+   * the entry was written, so a repeated attempt reports the whole wait of the operation
+   * and not the distance since the last try.
+   * <p>
+   * One report per entry, and the lanes change nothing about that: an entry which travels
+   * beside another one waited as long as its own row says.
    *
    * @param call The call to dispatch
    * @param previouslyAttempted Whether the entry was dispatched before
@@ -843,12 +974,12 @@ public class JdbcPhaseTwoOutboxDispatcher {
     if (writtenAt == null) {
       return;
     }
-    io.vanillabp.integration.runtime.processservice.PhaseTwoRouterProducer
-        .vanillaBpMetricsOf(vanillaBpMetrics)
+    metrics
+        .get()
         .outboxDispatchEnded(
-            JdbcPhaseTwoOutbox.class.getSimpleName(),
+            storeName,
             outcome,
-            io.vanillabp.integration.spi.PhaseTwoOutbox
+            PhaseTwoOutbox
                 .waitedSince(writtenAt)
                 .toNanos());
 
@@ -865,7 +996,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
    * @return The moment or <code>null</code>
    */
   private static Instant writtenAt(
-      final java.sql.ResultSet resultSet,
+      final ResultSet resultSet,
       final int column) throws SQLException {
 
     final var written = resultSet.getTimestamp(column);
@@ -885,9 +1016,9 @@ public class JdbcPhaseTwoOutboxDispatcher {
       final String operation,
       final boolean permanent) {
 
-    io.vanillabp.integration.runtime.processservice.PhaseTwoRouterProducer
-        .vanillaBpMetricsOf(vanillaBpMetrics)
-        .outboxEntryBlocked(JdbcPhaseTwoOutbox.class.getSimpleName(), operation, permanent);
+    metrics
+        .get()
+        .outboxEntryBlocked(storeName, operation, permanent);
 
   }
 
@@ -908,7 +1039,27 @@ public class JdbcPhaseTwoOutboxDispatcher {
     }
     // what a crash between the two writes of a schedule left behind, and the payload of
     // an entry blocked longer than the retention. Both are rows nobody will read again
-    getPayloadStore().removeOlderThan(expiredBefore);
+    payloadStore.removeOlderThan(expiredBefore);
+
+  }
+
+  /**
+   * Returns the connection to wherever it came from, see
+   * {@link JdbcConnectionAccess#release(Connection)}.
+   *
+   * @param connection The connection acquired before, may be <code>null</code>
+   */
+  private void release(
+      final Connection connection) {
+
+    if (connection == null) {
+      return;
+    }
+    try {
+      connections.release(connection);
+    } catch (final SQLException e) {
+      log.warn("Could not release the connection used for the phase-two outbox table '{}'", tableName, e);
+    }
 
   }
 

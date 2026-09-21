@@ -25,9 +25,8 @@ import io.vanillabp.spi.process.ProcessService;
  * so an adapter may say ({@code MigratableProcessService#isPhaseTwoFailureRepeatable})
  * that repeating cannot help, and the entry is then blocked after the first attempt.
  * <p>
- * The store here is gruelbox, which is the default of a Spring Boot application on JPA
- * and the one which used to retry such an entry fifty times. The Quarkus side has the
- * same test for the stores VanillaBP writes itself.
+ * The store here is the JDBC one, which is the default of a Spring Boot application on
+ * JPA. The Quarkus side has the same test, against the same store.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
@@ -50,11 +49,11 @@ public class PermanentPhaseTwoFailureTest {
    * {@code PhaseOperation#START_WORKFLOW}), and a count over the whole table would
    * already be satisfied by a sibling test's entry.
    */
-  private static final String BLOCKED_ENTRIES_OF_AGGREGATE = "select count(*) from TXNO_OUTBOX "
-      + "where blocked = true and uniqueRequestId like '%%|%s'";
+  private static final String BLOCKED_ENTRIES_OF_AGGREGATE = "select count(*) from VANILLABP_PHASE_TWO_OUTBOX "
+      + "where STATUS = 'BLOCKED' and IDEMPOTENCY_KEY like '%%|%s'";
 
-  private static final String ATTEMPTS_OF_AGGREGATE = "select max(attempts) from TXNO_OUTBOX "
-      + "where uniqueRequestId like '%%|%s'";
+  private static final String ATTEMPTS_OF_AGGREGATE = "select max(ATTEMPTS) from VANILLABP_PHASE_TWO_OUTBOX "
+      + "where IDEMPOTENCY_KEY like '%%|%s'";
 
   @Autowired
   private ProcessService<Aggregate> processService;
@@ -132,7 +131,7 @@ public class PermanentPhaseTwoFailureTest {
         1.0,
         registry
             .get(VanillaBpMetrics.OUTBOX_BLOCKED)
-            .tag(VanillaBpMetrics.TAG_STORE, "GruelboxPhaseTwoOutbox")
+            .tag(VanillaBpMetrics.TAG_STORE, "JdbcPhaseTwoOutbox")
             .tag(VanillaBpMetrics.TAG_OPERATION, PhaseOperation.START_WORKFLOW.name())
             .tag(VanillaBpMetrics.TAG_PERMANENT, "true")
             .counter()

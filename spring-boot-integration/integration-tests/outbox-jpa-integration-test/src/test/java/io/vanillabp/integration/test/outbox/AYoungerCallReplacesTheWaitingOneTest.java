@@ -23,11 +23,11 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * The whole way on gruelbox: two reports of one workflow are planned while the dispatch
- * stands, and the extension is called once, with the younger state. gruelbox has no API
- * for replacing, so the store deletes the waiting entry and plans the younger call under
- * the same unique request ID - and the payload of the entry which went is removed in the
- * same transaction, because no dispatch had ever read it.
+ * The whole way on Spring Boot: two reports of one workflow are planned while the
+ * dispatch stands, and the extension is called once, with the younger state. The younger
+ * call takes the row of the waiting entry, which keeps its id and its key, and the payload
+ * of the entry it replaced is removed in the same transaction, because no dispatch had
+ * ever read it (decision 68 in the repository's DECISIONS.md).
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
@@ -45,9 +45,9 @@ public class AYoungerCallReplacesTheWaitingOneTest {
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
-  private static final String COUNT_ENTRIES_OF_KEY = "select count(*) from TXNO_OUTBOX where uniqueRequestId = ?";
+  private static final String COUNT_ENTRIES_OF_KEY = "select count(*) from VANILLABP_PHASE_TWO_OUTBOX where IDEMPOTENCY_KEY = ?";
 
-  private static final String COUNT_UNPROCESSED_ENTRIES = "select count(*) from TXNO_OUTBOX where processed = false";
+  private static final String COUNT_UNPROCESSED_ENTRIES = "select count(*) from VANILLABP_PHASE_TWO_OUTBOX where STATUS = 'OPEN'";
 
   private static final String COUNT_PAYLOAD_OF_REFERENCE = "select count(*) from VANILLABP_PHASE_TWO_PAYLOAD "
       + "where REFERENCE = ?";
@@ -100,7 +100,7 @@ public class AYoungerCallReplacesTheWaitingOneTest {
     // so the second call meets an entry which is certainly still waiting
     final var aggregate = transactionTemplate.execute(status -> {
       final var newAggregate = new Aggregate();
-      newAggregate.setContent("replace-gruelbox");
+      newAggregate.setContent("replace-waiting");
       final var attached = processService.startWorkflow(newAggregate);
 
       final var first = SampleExtension
@@ -141,7 +141,7 @@ public class AYoungerCallReplacesTheWaitingOneTest {
 
     final var aggregate = transactionTemplate.execute(status -> {
       final var newAggregate = new Aggregate();
-      newAggregate.setContent("no-replace-gruelbox");
+      newAggregate.setContent("no-replace-waiting");
       final var attached = processService.startWorkflow(newAggregate);
 
       final var first = SampleExtension
@@ -172,7 +172,7 @@ public class AYoungerCallReplacesTheWaitingOneTest {
     try {
       final var aggregate = transactionTemplate.execute(status -> {
         final var newAggregate = new Aggregate();
-        newAggregate.setContent("claimed-gruelbox");
+        newAggregate.setContent("replace-claimed");
         final var attached = processService.startWorkflow(newAggregate);
         assertTrue(
             outbox
@@ -236,7 +236,7 @@ public class AYoungerCallReplacesTheWaitingOneTest {
     try {
       transactionTemplate.execute(status -> {
         final var newAggregate = new Aggregate();
-        newAggregate.setContent("rollback-gruelbox");
+        newAggregate.setContent("replace-rollback");
         final var attached = processService.startWorkflow(newAggregate);
 
         final var first = SampleExtension

@@ -11,9 +11,9 @@ import lombok.experimental.SuperBuilder;
 /**
  * Configuration of the default {@link io.vanillabp.integration.spi.PhaseTwoOutbox}
  * implementations (properties section <code>vanillabp.outbox</code>) - the single
- * source of truth for keys, defaults and documentation, used by all platform
- * implementations (Spring Boot: gruelbox-based JPA and MongoDB; Quarkus: JDBC/Agroal
- * and MongoDB).
+ * source of truth for keys, defaults and documentation, used by every store VanillaBP
+ * ships: the JDBC one both platforms run on a relational database, and the MongoDB one of
+ * each platform.
  */
 @Getter
 @Setter
@@ -79,9 +79,9 @@ public class PhaseTwoOutboxProperties {
    * longer buys nothing there.
    * <p>
    * The stores VanillaBP owns compute their next attempt with this method, so the
-   * curve is the same on every platform and on every persistence. Gruelbox brings a
-   * retry policy of its own which knows one fixed distance, so an application on that
-   * store keeps the behaviour it always had - the per-store table of the platform
+   * curve is the same on every platform and on every persistence. An application which
+   * kept gruelbox (<code>vanillabp.outbox.gruelbox.enabled</code>) gets the retry policy
+   * of that library, which knows one fixed distance - the per-store table of the platform
    * pages owns that difference.
    *
    * @param attemptsSoFar The number of attempts already made, zero before the first
@@ -104,6 +104,23 @@ public class PhaseTwoOutboxProperties {
     return doubled.compareTo(maxAttemptFrequency) > 0 ? maxAttemptFrequency : doubled;
 
   }
+
+  /**
+   * How many entries the JDBC outbox dispatches at the same time. Which of the threads
+   * takes an entry is decided by the workflow aggregate, so two operations of one
+   * workflow keep the order they were written in while operations of different workflows
+   * travel at the same time (see
+   * {@link io.vanillabp.integration.adapter.migration.outbox.DispatchLanes}).
+   * <p>
+   * Four of them, which is small on purpose. Everything a dispatch does costs a database
+   * connection and a call to the BPMS, so a large number here only moves the limit into
+   * the connection pool, where it is harder to see. Raise it where the BPMS is slow
+   * enough that the threads wait for it rather than for the database.
+   * <p>
+   * The MongoDB stores dispatch on one thread and are unaffected by this.
+   */
+  @Builder.Default
+  private int dispatchThreads = 4;
 
   /**
    * Whether the schema (table/collection) used to store outbox entries is created
@@ -140,10 +157,11 @@ public class PhaseTwoOutboxProperties {
   public static final Duration DEFAULT_RETENTION = Duration.ofDays(7);
 
   /**
-   * Configuration of the JDBC-based default outbox (Spring Boot: gruelbox over the
-   * data source; Quarkus: the Agroal/JDBC implementation). Both default outboxes
-   * (JDBC and MongoDB) may be active in the same application - each aggregate is
-   * served by the outbox matching its persistence.
+   * Configuration of the JDBC default outbox, which both platforms run: Spring Boot on
+   * the connection of its transaction manager, Quarkus on an Agroal connection of the
+   * running JTA transaction. Both default outboxes (JDBC and MongoDB) may be active in
+   * the same application - each aggregate is served by the outbox matching its
+   * persistence.
    */
   @Builder.Default
   private JdbcOutboxProperties jdbc = new JdbcOutboxProperties();
@@ -174,12 +192,12 @@ public class PhaseTwoOutboxProperties {
     /**
      * The name of the table storing outbox entries. Every outbox instance needs its
      * own store - two dispatchers polling the same table would compete and
-     * double-dispatch. <code>null</code> means the platform's default table name
-     * (Spring Boot/gruelbox: <code>TXNO_OUTBOX</code>; Quarkus:
-     * <code>VANILLABP_PHASE_TWO_OUTBOX</code>). NOTE: on Spring Boot the gruelbox
-     * schema migration always targets the default table - a custom name requires
-     * the table (structured like <code>TXNO_OUTBOX</code>) to be created manually,
-     * which is verified at startup.
+     * double-dispatch. <code>null</code> means
+     * <code>VANILLABP_PHASE_TWO_OUTBOX</code>, on both platforms. An application which
+     * kept gruelbox (<code>vanillabp.outbox.gruelbox.enabled</code>) reads this key as
+     * well, and there a name of its own switches the schema migration of that library
+     * off, because it only ever targets <code>TXNO_OUTBOX</code> - the table has to be
+     * created by hand then, which is verified at startup.
      */
     @Builder.Default
     private String table = null;

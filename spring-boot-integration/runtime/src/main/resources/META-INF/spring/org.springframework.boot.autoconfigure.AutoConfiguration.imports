@@ -1,7 +1,9 @@
 io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration
 io.vanillabp.integration.utils.config.JpaSpringDataUtilConfiguration
 io.vanillabp.integration.utils.config.MongoDbSpringDataUtilAutoConfiguration
+io.vanillabp.integration.outbox.jdbc.JdbcPhaseTwoOutboxAutoConfiguration
 io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfiguration
+io.vanillabp.integration.outbox.gruelbox.GruelboxMissingAutoConfiguration
 io.vanillabp.integration.outbox.mongo.MongoPhaseTwoOutboxAutoConfiguration
 io.vanillabp.integration.delivery.JdbcTaskDeliveryLogAutoConfiguration
 io.vanillabp.integration.delivery.MongoTaskDeliveryLogAutoConfiguration

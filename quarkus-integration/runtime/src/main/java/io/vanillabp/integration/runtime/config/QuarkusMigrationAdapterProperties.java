@@ -381,6 +381,18 @@ public interface QuarkusMigrationAdapterProperties {
     int blockAfterAttempts();
 
     /**
+     * How many entries the JDBC outbox dispatches at the same time. The workflow
+     * aggregate decides which thread takes an entry, so two operations of one workflow
+     * keep the order they were written in while operations of different workflows travel
+     * at the same time. Four of them, which is small on purpose: every dispatch costs a
+     * database connection and a call to the BPMS.
+     *
+     * @return The number of dispatch threads
+     */
+    @WithDefault("4")
+    int dispatchThreads();
+
+    /**
      * Whether the table used to store outbox entries is created automatically.
      * Disable this if the database schema is managed manually (e.g. by Flyway or
      * Liquibase).

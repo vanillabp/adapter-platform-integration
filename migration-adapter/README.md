@@ -427,9 +427,9 @@ prove "exactly the window we are waiting for". It was left out:
   been started by this VanillaBP: a version-1 application which migrated, a start by
   another system, a BPMS-initiated start (which writes no entry at all) and a cleaned-up
   `DONE` entry all leave the outbox silent while the workflow runs perfectly well;
-- it would need a new query method in EVERY store implementation (gruelbox, the Spring
-  and Quarkus JDBC stores, MongoDB, and any store an application wrote itself) - the SPI
-  `PhaseTwoOutbox` has exactly one method today, `schedule`;
+- it would need a new query method in EVERY store implementation (the JDBC store both
+  platforms run, the two MongoDB stores, gruelbox where an application still asks for it,
+  and any store an application wrote itself);
 - what it would buy over the cache is one case: the start ran on ANOTHER node of a
   cluster, whose in-memory cache the correlating node does not share. That case is the
   one the `WorkflowAdapterCache` bean exists for - an application running clustered
@@ -1514,8 +1514,8 @@ BPMN process is the process service's business, not the records'.
   `JdbcConnectionAccess`, the one piece which cannot be platform-neutral. Whether a
   table is there is asked of the JDBC metadata by `jdbc.JdbcSchema#tableExists`, used
   by every store which either creates its table or verifies that the application
-  created it - including the gruelbox outbox of the Spring Boot integration, whose
-  table is gruelbox's and therefore not shipped by `vanillabp-schema`.
+  created it - including the gruelbox outbox a Spring Boot application may opt into,
+  whose table is gruelbox's and therefore not shipped by `vanillabp-schema`.
 - The switch is the adapter-scoped `deduplicate-deliveries` (default `true`),
   resolvable per workflow module, workflow and task like every adapter-scoped key.
 - An adapter says whether it needs this at all:
@@ -1997,7 +1997,7 @@ aborted transaction where the pool does not commit each statement by itself). Is
 there, the loser has nothing left to do and says so on DEBUG; is it still missing, the DDL
 really failed and the message is the one it always was. Deliberately no SQL state: every
 database reports that collision differently, and the metadata question is the portable answer.
-The Quarkus phase-two outbox does the same for its own table. The MongoDB stores need nothing:
+The JDBC phase-two outbox does the same for its own table, on both platforms. The MongoDB stores need nothing:
 MongoDB answers a `createIndex` of an index which is already there with its name.
 `JdbcTaskDeliverySchemaTest#twoInstancesCreateTheSchemaAtOnce` is the race itself, and
 `#anUnanswerableMetadataQuestionIsANo` the second question failing.
@@ -2124,34 +2124,61 @@ without one by `OutboxStartupValidationTest`.
 application - a remote BPMS adapter loads the workflow aggregate to build what it
 sends to the BPMS - and it does so on the outbox dispatcher's own thread, where
 nothing the application relies on is active by itself. VanillaBP therefore provides
-it: the `PhaseTwoRouter` runs every dispatch through the platform's
+it: the `PhaseTwoRouter` runs every dispatch through
 `TransactionRunner.requireTransaction`, which joins a transaction the store already
 opened and starts one otherwise. On Quarkus that runner additionally activates the
 CDI request context, without which an entity manager cannot be touched at all. Since
 the guarantee sits in the router, an outbox contributed by an application gets it as
-well, and stores which dispatch inside their own transaction (gruelbox on Spring
-Boot) keep theirs. Spring Boot passes no runner today: gruelbox brings the
-transaction, and Spring Data opens what it needs per call - see the platform's
-wiki page for what an application may rely on.
+well, and stores which dispatch inside their own transaction (gruelbox, where an
+application still asks for it) keep theirs. Which runner it is belongs to the aggregate
+of the call: the router takes it from the process service the call routes to, on both
+platforms. Only where no process service is registered for the call's workflow module and
+BPMN process does the platform's own runner step in, and Spring Boot hands none in. See
+the platform's wiki page for what an application may rely on.
 `PhaseTwoRouterTest#dispatchRunsInsideTheProvidedTransaction` holds the transaction around a
 dispatch, `PhaseTwoJpaContextTest` and `PhaseTwoMongoContextTest` what an application may touch
 there.
 
-**What phase two must not do: wait.** One thread dispatches the entries of a store, so whatever
-an entry spends there is spent by every other entry of that node too, whatever workflow it
-belongs to. The case which used to spend the most is a workflow its BPMS has not made searchable
+**What phase two must not do: wait.** One thread dispatches the entries of one workflow
+aggregate, so whatever an entry spends there is spent by every other entry of that aggregate,
+and on the MongoDB stores by every entry of the node. The case which used to spend the most is a workflow its BPMS has not made searchable
 yet: the election waited out the adapter's `workflowVisibilityDelay`, ten seconds on Camunda 8,
 and a burst of "start, then correlate" pairs stalled in batches. Such an entry goes back to the
 store with that window as its due time (`PhaseTwoRetryLater`) and the thread takes the next one.
 The attempt is counted like any other, which is what ends a workflow that never becomes visible:
 after `vanillabp.outbox.block-after-attempts` attempts the entry is blocked. The gruelbox store
-on Spring Boot schedules every failed attempt from the one distance it knows, so the window is
+schedules every failed attempt from the one distance it knows, so the window is
 written onto its row afterwards, by the listener which also blocks a permanent failure: the entry is
 due there when it is due on the other stores, and the next poll picks it up.
 `NotVisibleWorkflowDoesNotStallDispatchTest` holds both halves: the entry of a findable workflow
 dispatched while the other one waits, and the bound which finally blocks it.
-`ARejectedDispatchIsPlannedAgainTest` holds the same for the gruelbox store, which used to ask again
+`ARejectedDispatchIsPlannedAgainTest` holds the same on Spring Boot, where a store used to ask again
 on the dispatching thread instead - what that cost is decision 49.
+
+**Several entries leave at the same time, and the workflow aggregate says on which thread.**
+The JDBC store dispatches on `vanillabp.outbox.dispatch-threads` threads, four of them by
+default, and `DispatchLanes` picks the one for an entry from the workflow module, the BPMN
+process and the aggregate ID. Two operations of one workflow therefore leave in the order they
+were written, while operations of different workflows leave at the same time. An entry which
+names no aggregate, as a broadcast signal does, is keyed by its BPMN process instead. Handing
+the next entry to whichever thread happens to be free would be simpler and would lose that
+order, and nothing downstream would notice until a customer did. The number of threads is
+bounded because an unbounded one only moves the limit into the connection pool, where it is
+harder to see. What this does NOT order is an entry whose dispatch failed: it waits for its
+backoff and the next entry of the same aggregate passes it in the meantime, exactly as it did
+while one thread dispatched everything. The MongoDB stores still dispatch on one thread.
+Decision 75 of this repository carries the reasoning, and `DispatchLanesTest` holds the order
+of one aggregate (`oneAggregateKeepsItsOrder`) next to two aggregates which really do run at
+the same time (`twoAggregatesRunAtTheSameTime`).
+
+What the threads bought, measured on 2026-09-21 in the development container of this
+repository: 200 entries of 40 workflow aggregates, written in one transaction against H2 in
+memory, with a handler which takes 20 milliseconds because that is what a call to a BPMS
+costs. One thread needed 4498 ms, two 2144 ms, four 1190 ms and eight 802 ms. The measurement
+says what a dispatch stage which is waiting for somebody else does with more threads, and it
+says nothing about a handler which is busy rather than waiting or about a database under load.
+A load test is where throughput is defended, and a run which is faster than this one proves
+nothing about the order.
 
 **What a failed dispatch costs, and why the numbers are what they are.** The distance to the
 next attempt grows: `PhaseTwoOutboxProperties#attemptDelay` returns `attempt-frequency` for the
@@ -2165,7 +2192,8 @@ comes back the first entry reaches it, the attempt budget decides which outage t
 survives alone, and blocking then means "this entry is broken" rather than "the BPMS was away
 for a while". The stores VanillaBP owns compute the distance with that one method, so the curve
 does not drift apart between platforms; gruelbox knows a single fixed distance and keeps it,
-which the per-store table of the wiki pages owns.
+so an application which opted into that store keeps the behaviour it always had, which the
+per-store table of the wiki pages owns.
 The distance is written where a dispatch FAILED, not when the entry is claimed: the claim leases
 the entry for one `attempt-frequency` so other pollers skip it, and a poller which dies
 mid-dispatch therefore does not leave the long distance of an attempt nobody made behind.
@@ -2405,9 +2433,10 @@ Stores never look into the registry: they persist name, args and key and stay
 operation-agnostic. `PhaseOperationRegistryTest` holds the rules the registry enforces, and
 `ExtensionOperationDispatchTest` runs an extension operation through both platforms.
 
-The core does not implement (or depend on) any outbox itself — it only defines the
-`PhaseTwoOutbox` contract (stores implement exactly one method,
-`schedule(PhaseTwoCall)`):
+The core defines the `PhaseTwoOutbox` contract, and since decision 75 of this repository it
+writes one store against it as well: the JDBC store both platforms run, which lives here and
+takes only its connection and its transaction from the platform. The contract holds for that
+store, for the MongoDB ones and for a store an application brings itself:
 
 - **Scheduling:** `schedule(call)` MUST be invoked within the still-running local
   transaction that persists the workflow aggregate and MUST enlist the outbox entry
@@ -2453,7 +2482,7 @@ The core does not implement (or depend on) any outbox itself — it only defines
   gruelbox entry submitted right after a commit was never pushed back and its row is
   locked by the dispatch. A store which never learned replacing inherits the default of
   `scheduleReplacingWhatIsStillWaiting`, which discards as before and writes a WARN naming
-  the store. Held by `AYoungerCallReplacesTheWaitingOneTest` (gruelbox),
+  the store. Held by `AYoungerCallReplacesTheWaitingOneTest` (JDBC on Spring Boot),
   `ExtensionOperationDispatchTest` (JDBC on Quarkus) and `MongoPhaseTwoPayloadTest` on
   both platforms.
 - **The activation which planned a correlation is part of its key**, and of no other key
@@ -2497,7 +2526,7 @@ The core does not implement (or depend on) any outbox itself — it only defines
   pass "this entry was dispatched before" to
   `PhaseTwoRouter.dispatch(call, previouslyAttempted)` (the JDBC/MongoDB defaults
   claim entries by incrementing their attempts counter BEFORE dispatching, so a
-  recovered/retried entry is recognized; the gruelbox default bridges its entry
+  recovered/retried entry is recognized; the gruelbox store bridges its entry
   state via a `Submitter` wrapper — there the counter is only incremented on
   FAILED attempts, so a hard crash still re-dispatches without the probe). A
   previously attempted START entry probes the recorded adapter's
@@ -2519,7 +2548,7 @@ sequenceDiagram
   participant PS as MigrationProcessService
   participant AD as Adapter handler (first prioritized)
   participant OB as PhaseTwoOutbox store
-  participant DP as Store dispatcher (own thread)
+  participant DP as Store dispatcher (the aggregate's lane)
   participant RT as PhaseTwoRouter
   participant BPMS
 
@@ -2535,7 +2564,7 @@ sequenceDiagram
 
   DP->>OB: claim due entry (JDBC/Mongo: attempts++ before dispatch · gruelbox: no claim)
   DP->>RT: dispatch(call, previouslyAttempted)
-  RT->>RT: requireTransaction (Quarkus) / gruelbox tx (Spring)
+  RT->>RT: requireTransaction with the aggregate's runner (gruelbox brings its own tx)
   RT->>PS: executePhaseTwo(START_WORKFLOW, id, adapterId, args, previouslyAttempted)
   alt previouslyAttempted
     PS->>AD: awarenessOfWorkflowForRedispatch(scope, persistence, id)
@@ -2579,11 +2608,12 @@ Default implementations are provided by the platform integrations (configured vi
 core class `PhaseTwoOutboxProperties`, bound as part of the `vanillabp.*` tree;
 applications may define their own `PhaseTwoOutbox` bean instead):
 
-|  Platform   |       Persistence        |                                      Implementation                                      |
-|-------------|--------------------------|------------------------------------------------------------------------------------------|
-| Spring Boot | JPA                      | based on `com.gruelbox:transactionoutbox` (`spring-boot-integration`)                    |
-| Spring Boot | MongoDB                  | own implementation using `MongoTemplate` (`spring-boot-integration`)                     |
-| Quarkus     | JDBC datasource (Agroal) | own JDBC/JTA-based implementation (`quarkus-integration`; gruelbox does not support JTA) |
+|  Platform   |       Persistence        |                                          Implementation                                           |
+|-------------|--------------------------|---------------------------------------------------------------------------------------------------|
+| Spring Boot | JPA                      | the core's `JdbcPhaseTwoOutboxStore`, with the connection and the transaction of `spring-boot-integration` |
+| Spring Boot | MongoDB                  | own implementation using `MongoTemplate` (`spring-boot-integration`)                              |
+| Quarkus     | JDBC datasource (Agroal) | the same core store, on an Agroal connection enlisted in the running JTA transaction              |
+| Spring Boot | JPA, opt-in              | based on `com.gruelbox:transactionoutbox`, switched on by `vanillabp.outbox.gruelbox.enabled`      |
 
 ### Telling the application that a workflow ended (`WorkflowEndedInvoker`)
 
@@ -3022,7 +3052,7 @@ flowchart TB
   QUARKUS --> PLATFORM
 
   subgraph BSPI["Integration SPI — implemented by the PLATFORM or the APPLICATION, never by an adapter"]
-    B1["PhaseTwoOutbox (+ Aware) — stores: gruelbox/JDBC/Mongo"]
+    B1["PhaseTwoOutbox (+ Aware) — stores: JDBC/Mongo, gruelbox on request"]
     B2["TaskDeliveryLog (+ Aware) — JDBC/Mongo"]
     B3["TransactionRunner (+ Aware)"]
     B4["AggregatePersistenceAware"]
@@ -3064,12 +3094,12 @@ flowchart TB
 
   C -->|"entry becomes visible"| D0
 
-  subgraph DISPATCH["Dispatcher thread, after the commit"]
+  subgraph DISPATCH["Dispatch lane of the aggregate, after the commit"]
     direction TB
     D0["store picks entry by due time<br/>(no ORDER BY)"] --> D1["PhaseTwoRouter.dispatch(call, previouslyAttempted)"]
-    D1 --> D2{"runner handed in?"}
-    D2 -->|"Quarkus: yes → requireTransaction + request context"| D3["MigrationProcessService.executePhaseTwo<br/>re-probe (the operations addressed to a running workflow) /<br/>redispatch probe (the operations which start one)"]
-    D2 -->|"Spring Boot: no → gruelbox's own transaction"| D3
+    D1 --> D2{"which runner?"}
+    D2 -->|"the aggregate's → requireTransaction<br/>(Quarkus additionally: request context)"| D3["MigrationProcessService.executePhaseTwo<br/>re-probe (the operations addressed to a running workflow) /<br/>redispatch probe (the operations which start one)"]
+    D2 -->|"none registered → the platform's, or the store's own<br/>transaction where it brings one (gruelbox)"| D3
     D3 --> D3a["what may take time here:<br/>unavailable BPMS 2×500 ms · a workflow which is not searchable<br/>yet costs the entry a due time, not this thread"]
     D3a --> D4["handler.phaseTwo(request)<br/>loads aggregate for the payload, acts on the BPMS"]
     D4 --> D5["entry DONE (or retry / BLOCKED)"]

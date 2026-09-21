@@ -78,5 +78,21 @@
       <groupId>io.vanillabp</groupId>
       <artifactId>test-utils</artifactId>
     </dependency>
+    <!--
+      The platform does not bring gruelbox along any more, and the tests of the store an
+      application may still opt into need it.
+    -->
+    <dependency>
+      <groupId>com.gruelbox</groupId>
+      <artifactId>transactionoutbox-core</artifactId>
+      <version>${transaction-outbox.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.gruelbox</groupId>
+      <artifactId>transactionoutbox-spring</artifactId>
+      <version>${transaction-outbox.version}</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 </project>

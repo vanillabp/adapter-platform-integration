@@ -59,8 +59,8 @@ public class OutboxRedispatchMitigationTest {
     SteerableTaskAwarenessSource.initialAnswer = WorkflowAwareness.ACTIVE;
     try {
 
-      // first context: the dispatch fails (BPMS "unreachable") - gruelbox
-      // persists the failed attempt, the entry stays pending with attempts > 0
+      // first context: the dispatch fails (BPMS "unreachable") - the store writes the
+      // failed attempt down, the entry stays OPEN with attempts > 0
       try (var context = runApplication("redispatch", "PT1H")) {
         final var listener = context.getBean(RecordingPhaseTwoListener.class);
         listener.failNextDispatches(Integer.MAX_VALUE);
