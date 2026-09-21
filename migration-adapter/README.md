@@ -2608,12 +2608,12 @@ Default implementations are provided by the platform integrations (configured vi
 core class `PhaseTwoOutboxProperties`, bound as part of the `vanillabp.*` tree;
 applications may define their own `PhaseTwoOutbox` bean instead):
 
-|  Platform   |       Persistence        |                                          Implementation                                           |
-|-------------|--------------------------|---------------------------------------------------------------------------------------------------|
+|  Platform   |       Persistence        |                                               Implementation                                               |
+|-------------|--------------------------|------------------------------------------------------------------------------------------------------------|
 | Spring Boot | JPA                      | the core's `JdbcPhaseTwoOutboxStore`, with the connection and the transaction of `spring-boot-integration` |
-| Spring Boot | MongoDB                  | own implementation using `MongoTemplate` (`spring-boot-integration`)                              |
-| Quarkus     | JDBC datasource (Agroal) | the same core store, on an Agroal connection enlisted in the running JTA transaction              |
-| Spring Boot | JPA, opt-in              | based on `com.gruelbox:transactionoutbox`, switched on by `vanillabp.outbox.gruelbox.enabled`      |
+| Spring Boot | MongoDB                  | own implementation using `MongoTemplate` (`spring-boot-integration`)                                       |
+| Quarkus     | JDBC datasource (Agroal) | the same core store, on an Agroal connection enlisted in the running JTA transaction                       |
+| Spring Boot | JPA, opt-in              | based on `com.gruelbox:transactionoutbox`, switched on by `vanillabp.outbox.gruelbox.enabled`              |
 
 ### Telling the application that a workflow ended (`WorkflowEndedInvoker`)
 
