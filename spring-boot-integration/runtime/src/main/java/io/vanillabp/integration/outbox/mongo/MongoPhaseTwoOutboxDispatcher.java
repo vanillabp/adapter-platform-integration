@@ -99,7 +99,7 @@ public class MongoPhaseTwoOutboxDispatcher {
     this.collection = collection;
     this.metrics = metrics;
     this.payloadStore = new MongoPhaseTwoPayloadStore(
-        mongoTemplate, properties.getMongo().getPayloadCollection());
+        mongoTemplate, properties.getMongo().payloadCollectionName());
     this.poller = new DueEntryPoller(
         "vanillabp-outbox", properties.getPollInterval(), this::poll, this::earliestDueAt);
 

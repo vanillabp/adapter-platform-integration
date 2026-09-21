@@ -53,10 +53,10 @@ public class ExtensionOperationDispatchTest {
   /**
    * The payload of one call, addressed by the reference its entry names.
    */
-  private static final String COUNT_PAYLOAD_OF_REFERENCE = "select count(*) from VANILLABP_PHASE_TWO_PAYLOAD "
+  private static final String COUNT_PAYLOAD_OF_REFERENCE = "select count(*) from VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD "
       + "where REFERENCE = ?";
 
-  private static final String COUNT_PAYLOADS = "select count(*) from VANILLABP_PHASE_TWO_PAYLOAD";
+  private static final String COUNT_PAYLOADS = "select count(*) from VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD";
 
   @Autowired
   private ProcessService<Aggregate> processService;

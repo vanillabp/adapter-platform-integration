@@ -54,7 +54,12 @@
     {
       "name": "vanillabp.outbox.jdbc.table",
       "type": "java.lang.String",
-      "description": "The name of the table storing outbox entries (default 'TXNO_OUTBOX'). NOTE: the automatic gruelbox schema migration always targets the default table - a custom name requires the table (structured like 'TXNO_OUTBOX') to be created manually. Every outbox instance needs its own store - two dispatchers polling the same table would compete and double-dispatch."
+      "description": "The name of the table storing outbox entries (default 'VANILLABP_PHASE_TWO_OUTBOX'). An application which kept gruelbox ('vanillabp.outbox.gruelbox.enabled') reads this key as well, and a name of its own switches the schema migration of that library off, because it only ever targets 'TXNO_OUTBOX'. Every outbox instance needs its own store - two dispatchers polling the same table would compete and double-dispatch."
+    },
+    {
+      "name": "vanillabp.outbox.jdbc.payload-table",
+      "type": "java.lang.String",
+      "description": "The name of the table storing the payloads of phase-two calls which carry one. Unset means the name of the outbox table plus '_PAYLOAD', so an application which renames the outbox renames the payloads with it. One table per outbox, for the reason the outbox itself has one: two applications sharing it would house-keep each other's rows."
     },
     {
       "name": "vanillabp.outbox.mongo.enabled",
@@ -67,6 +72,11 @@
       "type": "java.lang.String",
       "description": "The name of the collection storing outbox entries. Every outbox instance needs its own store - two dispatchers polling the same collection would compete and double-dispatch.",
       "defaultValue": "vanillabp-phase-two-outbox"
+    },
+    {
+      "name": "vanillabp.outbox.mongo.payload-collection",
+      "type": "java.lang.String",
+      "description": "The name of the collection storing the payloads of phase-two calls which carry one. Unset means the name of the outbox collection plus '-payloads', so an application which renames the outbox renames the payloads with it. One collection per outbox, for the reason the outbox itself has one."
     },
     {
       "name": "vanillabp.workflow-modules",

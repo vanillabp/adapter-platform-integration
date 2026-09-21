@@ -331,7 +331,7 @@ public class MongoPhaseTwoOutboxDispatcher {
         .getDatabase(databaseName())
         .getCollection(getProperties()
             .getMongo()
-            .getPayloadCollection());
+            .payloadCollectionName());
 
   }
 

@@ -52,9 +52,16 @@ public class MongoPhaseTwoPayloadTest {
 
   private static final String DATABASE = "outbox-payload-it";
 
-  private static final String PAYLOAD_COLLECTION = "vanillabp-phase-two-payloads";
-
   private static final String OUTBOX_COLLECTION = "vanillabp-phase-two-outbox";
+
+  /**
+   * The payload collection is named after the outbox it belongs to: VanillaBP appends
+   * <code>-payloads</code> to the name of the outbox collection where the application
+   * configures no name of its own. This test configures none, so the name is written
+   * here the way the rule builds it.
+   */
+  private static final String PAYLOAD_COLLECTION = OUTBOX_COLLECTION
+      + "-payloads";
 
   @RegisterExtension
   static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()

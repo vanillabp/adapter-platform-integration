@@ -33,6 +33,7 @@ import com.gruelbox.transactionoutbox.spring.SpringTransactionManager;
 
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
 import io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema;
+import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxStore;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
@@ -268,6 +269,12 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
    * becomes visible exactly when the entry does. The table is created at startup unless
    * <code>vanillabp.outbox.create-schema</code> is disabled, in which case its
    * existence is verified instead.
+   * <p>
+   * The name is resolved by {@link JdbcPhaseTwoOutboxStore#payloadTableName}, like the
+   * name of the payload table of VanillaBP's own JDBC outbox. So it follows
+   * <code>vanillabp.outbox.jdbc.table</code>, which gruelbox reads as well, and not
+   * gruelbox' own default <code>TXNO_OUTBOX</code>: that table belongs to the library,
+   * while this one belongs to VanillaBP.
    *
    * @param dataSource The data source the payload table lives in
    * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree, naming the
@@ -280,10 +287,7 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
       final DataSource dataSource,
       final VanillaBpConfigurationProperties vanillaBpProperties) {
 
-    final var customTable = vanillaBpProperties
-        .getOutbox()
-        .getJdbc()
-        .getPayloadTable();
+    final var payloadTable = JdbcPhaseTwoOutboxStore.payloadTableName(vanillaBpProperties.getOutbox());
     final var store = new JdbcPhaseTwoPayloadStore(
         new JdbcConnectionAccess() {
           @Override
@@ -303,9 +307,7 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
             DataSourceUtils.releaseConnection(connection, dataSource);
 
           }
-        }, customTable == null
-            ? JdbcPhaseTwoPayloadStore.DEFAULT_TABLE_NAME
-            : customTable);
+        }, payloadTable);
     if (vanillaBpProperties.getOutbox().isCreateSchema()) {
       store.createSchemaIfNotExists();
     } else {

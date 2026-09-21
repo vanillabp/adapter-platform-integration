@@ -116,9 +116,12 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
       WHERE ID = ? AND ATTEMPTS = 0""";
 
   /**
-   * Resolves the configured name of the payload table
-   * (<code>vanillabp.outbox.jdbc.payload-table</code>, falling back to
-   * {@link JdbcPhaseTwoPayloadStore#DEFAULT_TABLE_NAME}).
+   * Resolves the name of the payload table: the configured one
+   * (<code>vanillabp.outbox.jdbc.payload-table</code>) where there is one, and
+   * otherwise the name of the outbox table plus
+   * {@link JdbcPhaseTwoPayloadStore#TABLE_NAME_SUFFIX}. An application which renames
+   * the outbox to keep two deployments apart gets the payloads renamed with it, so the
+   * second deployment does not house-keep the rows of the first.
    *
    * @param properties The outbox configuration
    * @return The table name
@@ -129,7 +132,9 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
     final var table = properties
         .getJdbc()
         .getPayloadTable();
-    return table == null ? JdbcPhaseTwoPayloadStore.DEFAULT_TABLE_NAME : table;
+    return table == null
+        ? tableName(properties) + JdbcPhaseTwoPayloadStore.TABLE_NAME_SUFFIX
+        : table;
 
   }
 

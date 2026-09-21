@@ -456,9 +456,10 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<String> table();
 
     /**
-     * The name of the table storing the payloads of phase-two calls which carry one
-     * (default <code>VANILLABP_PHASE_TWO_PAYLOAD</code>). One table per outbox, for
-     * the reason the outbox itself has one.
+     * The name of the table storing the payloads of phase-two calls which carry one.
+     * One table per outbox, for the reason the outbox itself has one. Unset means the
+     * name of the outbox table plus <code>_PAYLOAD</code>, so an application which
+     * renames the outbox renames the payloads with it.
      *
      * @return The payload table name
      */
@@ -496,12 +497,14 @@ public interface QuarkusMigrationAdapterProperties {
 
     /**
      * The name of the collection storing the payloads of phase-two calls which carry
-     * one. One collection per outbox, for the reason the outbox itself has one.
+     * one. One collection per outbox, for the reason the outbox itself has one. Unset
+     * means the name of the outbox collection plus <code>-payloads</code>, so an
+     * application which renames the outbox renames the payloads with it. The core
+     * resolves it, which is why there is no <code>@WithDefault</code> here.
      *
      * @return The payload collection name
      */
-    @WithDefault("vanillabp-phase-two-payloads")
-    String payloadCollection();
+    Optional<String> payloadCollection();
 
   }
 

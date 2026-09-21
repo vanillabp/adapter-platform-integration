@@ -108,7 +108,7 @@ public class ChangelogAppliesTest {
                   "WORKFLOW_ID"),
           java.util.List.copyOf(delivery.keySet()));
 
-      final var payload = columnsOf(connection, "VANILLABP_PHASE_TWO_PAYLOAD");
+      final var payload = columnsOf(connection, "VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD");
       assertEquals(
           java.util.List
               .of("REFERENCE", "WORKFLOW_MODULE_ID", "BPMN_PROCESS_ID", "OPERATION", "PAYLOAD", "CREATED_AT"),
@@ -175,10 +175,10 @@ public class ChangelogAppliesTest {
           "an extension reads the open tasks of one workflow aggregate per screen it builds: "
               + delivery);
 
-      final var payload = indexesOf(connection, "VANILLABP_PHASE_TWO_PAYLOAD");
+      final var payload = indexesOf(connection, "VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD");
       assertEquals(
           java.util.List.of("CREATED_AT"),
-          payload.get("VANILLABP_PHASE_TWO_PAYLOAD_AGE"),
+          payload.get("VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD_AGE"),
           "the housekeeping deletes by the moment a payload was written: "
               + payload);
     }

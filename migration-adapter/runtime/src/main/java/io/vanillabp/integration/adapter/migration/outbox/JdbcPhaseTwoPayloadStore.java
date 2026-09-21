@@ -30,12 +30,24 @@ import lombok.extern.slf4j.Slf4j;
 public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
 
   /**
-   * The name of the table the payloads are stored in (override via
-   * <code>vanillabp.outbox.jdbc.payload-table</code>). One table per outbox, for the
-   * reason the outbox has one table per instance: two applications sharing it would
-   * house-keep each other's rows.
+   * What is appended to the name of the outbox table to get the name of the payload
+   * table. It is written the way a table is written here, in capitals with an
+   * underscore, while the MongoDB store appends
+   * {@link io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties.MongoOutboxProperties#PAYLOAD_COLLECTION_SUFFIX}
+   * in the way a collection is written. The two are the same idea in two spellings, so
+   * do not pull them together into one string.
    */
-  public static final String DEFAULT_TABLE_NAME = "VANILLABP_PHASE_TWO_PAYLOAD";
+  public static final String TABLE_NAME_SUFFIX = "_PAYLOAD";
+
+  /**
+   * The name of the table the payloads are stored in where the application configures
+   * neither name (override via <code>vanillabp.outbox.jdbc.payload-table</code>). One
+   * table per outbox, for the reason the outbox has one table per instance: two
+   * applications sharing it would house-keep each other's rows. That is also why the
+   * name follows the outbox table: an application which renames the outbox to keep two
+   * deployments apart would otherwise share the payloads it wanted to separate.
+   */
+  public static final String DEFAULT_TABLE_NAME = JdbcPhaseTwoOutboxStore.DEFAULT_TABLE_NAME + TABLE_NAME_SUFFIX;
 
   private static final String INSERT_PAYLOAD = """
       INSERT INTO %s \

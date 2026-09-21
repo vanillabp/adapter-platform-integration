@@ -145,7 +145,7 @@ public class MongoPhaseTwoOutboxAutoConfiguration {
           .indexOps(vanillaBpProperties
               .getOutbox()
               .getMongo()
-              .getPayloadCollection())
+              .payloadCollectionName())
           .createIndex(new Index().on("createdAt", Sort.Direction.ASC));
       dropLegacyIdempotencyKeyIndex(mongoTemplate, collection);
     }

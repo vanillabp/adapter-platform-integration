@@ -49,7 +49,7 @@ public class AYoungerCallReplacesTheWaitingOneTest {
 
   private static final String COUNT_UNPROCESSED_ENTRIES = "select count(*) from VANILLABP_PHASE_TWO_OUTBOX where STATUS = 'OPEN'";
 
-  private static final String COUNT_PAYLOAD_OF_REFERENCE = "select count(*) from VANILLABP_PHASE_TWO_PAYLOAD "
+  private static final String COUNT_PAYLOAD_OF_REFERENCE = "select count(*) from VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD "
       + "where REFERENCE = ?";
 
   @Autowired
