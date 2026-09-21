@@ -3827,11 +3827,12 @@ does is inside it, and nothing had to be repeated per BPMS.
   in seconds, read from `PhaseTwoOutbox#ageOfOldestPendingCall()`. An empty outbox answers
   zero, which is a measurement, and a store which cannot read its oldest entry answers empty,
   which leaves a gap. Both are the store's to report, because only the store knows when an
-  entry was written. gruelbox is the one store which publishes no age: it puts the moment of
-  writing into `nextAttemptTime` and overwrites it the first time a flush picks the entry up,
-  so the entries most likely to be old are exactly the ones which cannot say. Its wait is
-  measured for the entries which were submitted right after their commit, where the moment is
-  still there.
+  entry was written. Every store VanillaBP owns reads it from a column of its own, the JDBC one
+  from `CREATED_AT` on both platforms. Gruelbox, which an application may still opt into,
+  publishes no age: it puts the moment of writing into `nextAttemptTime` and overwrites it the
+  first time a flush picks the entry up, so the entries most likely to be old are exactly the
+  ones which cannot say. Its wait is measured for the entries which were submitted right after
+  their commit, where the moment is still there.
 
 `MicrometerVanillaBpMetricsTest` holds the counting, the tags, the two outbox meters above and
 the records dropped while no registry is bound; `AdapterHealthReportTest` holds the health verdicts including
