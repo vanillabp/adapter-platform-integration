@@ -208,15 +208,22 @@ out of the environment, so `${...}` and `@Value` could see them while `Environme
 
 An adapter whose BPMS is remote cannot take part in your local transaction, so a workflow is started
 in two phases through a transaction outbox. Coming from version 1 that is new, and it is asked of an
-application on Camunda 7 as well, which version 1 never did. Two tables are created in the database
-your workflow aggregates live in: the outbox store, and the log of processed task deliveries which
-keeps a redelivered task from running your handler twice.
+application on Camunda 7 as well, which version 1 never did. Three tables are created in the database
+your workflow aggregates live in: the outbox store, the payloads of the calls which carry one, and
+the log of processed task deliveries which keeps a redelivered task from running your handler twice.
+A payload lies beside its entry rather than inside it, which is why it has a table of its own.
 
 `vanillabp.outbox.create-schema` defaults to `true`, so an application which configures nothing gets
 its tables on the first boot. An application whose schema is a reviewed artifact sets the switch to
 `false` and applies the statements itself. They ship as `io.vanillabp:vanillabp-schema`, which holds
 a Liquibase changelog and generated Flyway scripts per database and pulls no runtime along. With the
 switch off the startup checks that the tables are there and names the one which is missing.
+
+The names are `VANILLABP_PHASE_TWO_OUTBOX`, `VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD` and
+`VANILLABP_TASK_DELIVERY`. An application which renames the outbox through
+`vanillabp.outbox.jdbc.table` renames the payload table with it, because that name is the outbox
+name plus a suffix unless `vanillabp.outbox.jdbc.payload-table` says otherwise. On MongoDB the
+same rule applies to the collections.
 
 Where the first adapter of the priority list needs the outbox and none can be resolved, the
 application does not boot and the message names what to add. The transaction the outbox entry rides
