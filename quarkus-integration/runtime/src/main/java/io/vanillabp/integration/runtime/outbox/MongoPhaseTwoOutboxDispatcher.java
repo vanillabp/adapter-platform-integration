@@ -19,6 +19,7 @@ import com.mongodb.client.model.Updates;
 import io.quarkus.runtime.StartupEvent;
 import io.smallrye.config.SmallRyeConfig;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
+import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DispatchOutcome;
 import io.vanillabp.integration.adapter.migration.outbox.DueEntryPoller;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
@@ -153,6 +154,9 @@ public class MongoPhaseTwoOutboxDispatcher {
       // longer the application has been running
       outboxCollection().createIndex(Indexes.ascending("status", "nextAttemptAt"));
       outboxCollection().createIndex(Indexes.ascending("status", "doneAt"));
+      // the third moment of the same shape: what the age of the oldest waiting entry is
+      // read by, once per collection of the metrics
+      outboxCollection().createIndex(Indexes.ascending("status", "createdAt"));
       // what the housekeeping of the payloads deletes along - without it that delete
       // reads every payload ever written
       payloadCollection().createIndex(Indexes.ascending("createdAt"));
@@ -259,7 +263,7 @@ public class MongoPhaseTwoOutboxDispatcher {
    * @param field The field to order by and to read
    * @return The value or <code>null</code> where nothing matches
    */
-  private Instant earliest(
+  Instant earliest(
       final MongoCollection<Document> collection,
       final org.bson.conversions.Bson filter,
       final String field) {
@@ -415,17 +419,16 @@ public class MongoPhaseTwoOutboxDispatcher {
       final var payload = payloadReference == null
           ? null
           : getPayloadStore().read(payloadReference);
-      phaseTwoRouter
-          .get()
-          .dispatch(
-              PhaseTwoCall
-                  .forDispatch(
-                      entry.getString("operation"), entry.getString("workflowModuleId"), entry
-                          .getString("bpmnProcessId"),
-                      entry.getString("aggregateId"), entry
-                          .getString("adapterId"),
-                      args, payload),
-              entry.getInteger("attempts") > 0);
+      dispatchMeasuringTheWait(
+          PhaseTwoCall
+              .forDispatch(
+                  entry.getString("operation"), entry.getString("workflowModuleId"), entry
+                      .getString("bpmnProcessId"),
+                  entry.getString("aggregateId"), entry
+                      .getString("adapterId"),
+                  args, payload),
+          entry.getInteger("attempts") > 0,
+          entry.getDate("createdAt"));
       collection.updateOne(
           Filters.eq("_id", entryId),
           Updates.combine(
@@ -521,6 +524,58 @@ public class MongoPhaseTwoOutboxDispatcher {
             e);
       }
     }
+
+  }
+
+  /**
+   * Hands the call to the core's router and reports how long its entry waited for this
+   * attempt, whether the attempt succeeded or threw. The wait is counted from the
+   * moment the entry was written, so a repeated attempt reports the whole wait of the
+   * operation and not the distance since the last try.
+   *
+   * @param call The call to dispatch
+   * @param previouslyAttempted Whether the entry was dispatched before
+   * @param writtenAt When the entry was written, or <code>null</code> where the
+   *          document carries no such moment
+   */
+  private void dispatchMeasuringTheWait(
+      final PhaseTwoCall call,
+      final boolean previouslyAttempted,
+      final Date writtenAt) {
+
+    try {
+      phaseTwoRouter
+          .get()
+          .dispatch(call, previouslyAttempted);
+    } catch (final RuntimeException e) {
+      reportWait(writtenAt, DispatchOutcome.FAILED);
+      throw e;
+    }
+    reportWait(writtenAt, DispatchOutcome.SUCCEEDED);
+
+  }
+
+  /**
+   * @param writtenAt When the entry was written - <code>null</code> only for a document
+   *          somebody else wrote into the collection without that field, whose attempt
+   *          is not measured rather than measured from now
+   * @param outcome How the attempt ended
+   */
+  private void reportWait(
+      final Date writtenAt,
+      final DispatchOutcome outcome) {
+
+    if (writtenAt == null) {
+      return;
+    }
+    io.vanillabp.integration.runtime.processservice.PhaseTwoRouterProducer
+        .vanillaBpMetricsOf(vanillaBpMetrics)
+        .outboxDispatchEnded(
+            MongoPhaseTwoOutbox.class.getSimpleName(),
+            outcome,
+            io.vanillabp.integration.spi.PhaseTwoOutbox
+                .waitedSince(writtenAt.toInstant())
+                .toNanos());
 
   }
 

@@ -1,5 +1,7 @@
 package io.vanillabp.integration.adapter.migration.observability;
 
+import java.time.Duration;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.function.Supplier;
 
@@ -130,6 +132,21 @@ public interface VanillaBpMetrics {
    */
   String OUTBOX_PENDING = "vanillabp.outbox.pending";
 
+  /**
+   * How long an outbox entry waited from the moment it was written to the moment its
+   * dispatch ended. It is the gap between the transaction which planned the operation
+   * and the BPMS hearing about it, which no counter of this interface shows.
+   */
+  String OUTBOX_DISPATCH_LAG = "vanillabp.outbox.dispatch.lag";
+
+  /**
+   * How long the oldest entry waiting for its dispatch has been waiting, in seconds
+   * ({@link io.vanillabp.integration.spi.PhaseTwoOutbox#ageOfOldestPendingCall()}). It
+   * is what tells a backlog which is being worked off from one which stands still:
+   * {@link #OUTBOX_PENDING} reads the same in both cases.
+   */
+  String OUTBOX_OLDEST_PENDING_AGE = "vanillabp.outbox.oldest.pending.age";
+
   String TAG_ADAPTER = "adapter";
 
   String TAG_WORKFLOW_MODULE = "workflow.module";
@@ -186,6 +203,39 @@ public interface VanillaBpMetrics {
     private final String tagValue;
 
     DeliveryOutcome(
+        final String tagValue) {
+
+      this.tagValue = tagValue;
+
+    }
+
+  }
+
+  /**
+   * How one attempt to dispatch an outbox entry ended, as the <code>outcome</code> tag
+   * of {@link #OUTBOX_DISPATCH_LAG} sees it. Whether repeating a failure can help is
+   * not repeated here - {@link #OUTBOX_FAILURES} carries that in its
+   * <code>permanent</code> tag, and this timer measures a wait rather than a verdict.
+   */
+  @Getter
+  enum DispatchOutcome {
+
+    /**
+     * The dispatch returned without an error, so the operation reached the BPMS or
+     * whoever else handles it.
+     */
+    SUCCEEDED("succeeded"),
+
+    /**
+     * The dispatch threw. The entry is dispatched again later, and that attempt is
+     * measured from the same moment this one was, because the wait of the operation
+     * did not start over.
+     */
+    FAILED("failed");
+
+    private final String tagValue;
+
+    DispatchOutcome(
         final String tagValue) {
 
       this.tagValue = tagValue;
@@ -341,6 +391,50 @@ public interface VanillaBpMetrics {
   default void registerPendingOutboxEntries(
       final String store,
       final Supplier<OptionalLong> pending) {
+
+  }
+
+  /**
+   * One attempt to dispatch an outbox entry ended, after the entry had waited.
+   * <p>
+   * Counted by the store which holds the entry, because only the store knows when the
+   * entry was written - {@link #outboxDispatchStarted(String, boolean)} is counted by
+   * the core instead. The wait is measured from that moment to the end of this attempt,
+   * so a failed attempt reports what the operation has been owed so far and the next
+   * attempt reports more.
+   *
+   * @param store The name of the outbox store, used as the <code>store</code> tag - the
+   *          same value its {@link #registerPendingOutboxEntries(String, Supplier)} uses
+   * @param outcome How this attempt ended
+   * @param waitedNanos How long the entry waited, from the moment it was written to the
+   *          end of this attempt
+   */
+  default void outboxDispatchEnded(
+      final String store,
+      final DispatchOutcome outcome,
+      final long waitedNanos) {
+
+  }
+
+  /**
+   * Registers where the age of the oldest waiting outbox entry is read from. Called
+   * once per outbox store by the platform integration, for the stores which can answer
+   * it.
+   * <p>
+   * Asking is a QUERY and a gauge is read on every collection, so the implementation
+   * holds one measurement for <code>vanillabp.metrics.gauge-cache</code>, exactly as
+   * {@link #registerPendingOutboxEntries(String, Supplier)} does. An age which could
+   * not be read stays {@link Optional#empty()} all the way to the backend,
+   * where it is a gap rather than a zero, while an outbox with nothing waiting reports
+   * {@link Duration#ZERO} - there the zero is the measurement.
+   *
+   * @param store The name of the outbox store, used as the <code>store</code> tag
+   * @param age Reports how long the oldest waiting entry has been waiting, empty where
+   *          the store cannot say
+   */
+  default void registerAgeOfOldestPendingOutboxEntry(
+      final String store,
+      final Supplier<Optional<Duration>> age) {
 
   }
 

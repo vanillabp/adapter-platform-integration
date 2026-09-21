@@ -36,6 +36,9 @@ public class MicrometerVanillaBpMetricsTest {
               metrics.outboxDispatchStarted("START_WORKFLOW", true);
               metrics.outboxDispatchFailed("START_WORKFLOW", false);
               metrics.outboxScheduleDiscarded("START_WORKFLOW");
+              metrics
+                  .outboxDispatchEnded(
+                      "JdbcPhaseTwoOutbox", VanillaBpMetrics.DispatchOutcome.SUCCEEDED, 1_000L);
               metrics.taskRedeliveryDeduplicated("c8", "module", "Process", "task");
             },
             "beans are built before the metrics infrastructure binds them");
@@ -159,6 +162,138 @@ public class MicrometerVanillaBpMetricsTest {
                 .counter()
                 .count(),
             "a failure repeating cannot fix is told apart from one which can");
+
+  }
+
+  @Test
+  @DisplayName("The wait of an entry is measured per store, and a failed attempt is measured too")
+  public void theWaitOfADispatchedEntryIsMeasured() {
+
+    final var registry = new SimpleMeterRegistry();
+    final var metrics = new MicrometerVanillaBpMetrics();
+    metrics.bindTo(registry);
+
+    metrics.outboxDispatchEnded("JdbcPhaseTwoOutbox", VanillaBpMetrics.DispatchOutcome.SUCCEEDED, 4_000_000L);
+    metrics.outboxDispatchEnded("JdbcPhaseTwoOutbox", VanillaBpMetrics.DispatchOutcome.SUCCEEDED, 6_000_000L);
+    metrics.outboxDispatchEnded("JdbcPhaseTwoOutbox", VanillaBpMetrics.DispatchOutcome.FAILED, 30_000_000L);
+    metrics.outboxDispatchEnded("MongoPhaseTwoOutbox", VanillaBpMetrics.DispatchOutcome.SUCCEEDED, 1_000_000L);
+
+    final var dispatched = registry
+        .get(VanillaBpMetrics.OUTBOX_DISPATCH_LAG)
+        .tag(VanillaBpMetrics.TAG_STORE, "JdbcPhaseTwoOutbox")
+        .tag(VanillaBpMetrics.TAG_OUTCOME, "succeeded")
+        .timer();
+    Assertions.assertEquals(2L, dispatched.count());
+    Assertions.assertEquals(10.0, dispatched.totalTime(TimeUnit.MILLISECONDS), 0.001);
+
+    Assertions
+        .assertEquals(
+            30.0,
+            registry
+                .get(VanillaBpMetrics.OUTBOX_DISPATCH_LAG)
+                .tag(VanillaBpMetrics.TAG_STORE, "JdbcPhaseTwoOutbox")
+                .tag(VanillaBpMetrics.TAG_OUTCOME, "failed")
+                .timer()
+                .totalTime(TimeUnit.MILLISECONDS),
+            0.001,
+            "an attempt which failed waited as long as it waited, and the operation is still owed");
+
+    Assertions
+        .assertEquals(
+            1L,
+            registry
+                .get(VanillaBpMetrics.OUTBOX_DISPATCH_LAG)
+                .tag(VanillaBpMetrics.TAG_STORE, "MongoPhaseTwoOutbox")
+                .timer()
+                .count(),
+            "an application running two stores sees which of them lets its entries wait");
+
+  }
+
+  @Test
+  @DisplayName("The age of the oldest waiting entry is a gauge in seconds")
+  public void theAgeOfTheOldestWaitingEntryIsGauged() {
+
+    final var oldest = new java.util.concurrent.atomic.AtomicReference<>(java.time.Duration.ofMillis(4_500));
+    // no holding period, so the test sees what the store says right now
+    final var metrics = new MicrometerVanillaBpMetrics(java.time.Duration.ZERO);
+
+    // registered BEFORE the registry exists - which is what a startup does
+    metrics
+        .registerAgeOfOldestPendingOutboxEntry(
+            "JdbcPhaseTwoOutbox",
+            () -> java.util.Optional.of(oldest.get()));
+
+    final var registry = new SimpleMeterRegistry();
+    metrics.bindTo(registry);
+
+    final var age = registry
+        .get(VanillaBpMetrics.OUTBOX_OLDEST_PENDING_AGE)
+        .tag(VanillaBpMetrics.TAG_STORE, "JdbcPhaseTwoOutbox")
+        .gauge();
+    Assertions
+        .assertEquals(
+            4.5,
+            age.value(),
+            0.001,
+            "seconds, and the part below a second is not rounded away");
+
+    oldest.set(java.time.Duration.ZERO);
+    Assertions
+        .assertEquals(
+            0.0,
+            age.value(),
+            "an outbox with nothing waiting owes nothing, and that zero is a measurement");
+
+  }
+
+  @Test
+  @DisplayName("A store which cannot say how old its oldest entry is leaves a gap")
+  public void anUnreadableAgeReportsNoMeasurement() {
+
+    final var metrics = new MicrometerVanillaBpMetrics(java.time.Duration.ZERO);
+    metrics.registerAgeOfOldestPendingOutboxEntry("JdbcPhaseTwoOutbox", java.util.Optional::empty);
+
+    final var registry = new SimpleMeterRegistry();
+    metrics.bindTo(registry);
+
+    Assertions
+        .assertTrue(
+            Double
+                .isNaN(registry
+                    .get(VanillaBpMetrics.OUTBOX_OLDEST_PENDING_AGE)
+                    .gauge()
+                    .value()),
+            "a zero would say the outbox is up to date");
+
+  }
+
+  @Test
+  @DisplayName("Reading the age gauge does not query the store on every collection")
+  public void theAgeGaugeIsHeldBetweenCollections() {
+
+    final var queries = new java.util.concurrent.atomic.AtomicInteger();
+    final var metrics = new MicrometerVanillaBpMetrics(java.time.Duration.ofMinutes(5));
+    metrics
+        .registerAgeOfOldestPendingOutboxEntry(
+            "JdbcPhaseTwoOutbox",
+            () -> java.util.Optional.of(java.time.Duration.ofSeconds(queries.incrementAndGet())));
+
+    final var registry = new SimpleMeterRegistry();
+    metrics.bindTo(registry);
+    final var gauge = registry
+        .get(VanillaBpMetrics.OUTBOX_OLDEST_PENDING_AGE)
+        .gauge();
+
+    Assertions.assertEquals(1.0, gauge.value());
+    Assertions.assertEquals(1.0, gauge.value());
+    Assertions.assertEquals(1.0, gauge.value());
+
+    Assertions
+        .assertEquals(
+            1,
+            queries.get(),
+            "asking a store for its oldest entry is a query, like counting the waiting ones");
 
   }
 

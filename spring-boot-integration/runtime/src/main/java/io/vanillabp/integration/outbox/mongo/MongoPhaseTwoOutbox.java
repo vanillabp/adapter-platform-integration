@@ -113,6 +113,39 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
 
   }
 
+  /**
+   * How long the oldest waiting entry has been waiting, read from its
+   * <code>createdAt</code> - the moment the entry was written, which a replacing call
+   * sets anew because the document then carries a younger operation. One document, read
+   * along the index over the status and that moment.
+   */
+  @Override
+  public java.util.Optional<java.time.Duration> ageOfOldestPendingCall() {
+
+    try {
+      final var oldest = mongoTemplate
+          .findOne(
+              Query
+                  .query(Criteria
+                      .where("status")
+                      .is(PhaseTwoOutboxEntry.STATUS_OPEN))
+                  .with(org.springframework.data.domain.Sort.by("createdAt"))
+                  .limit(1),
+              PhaseTwoOutboxEntry.class,
+              collection);
+      // nothing waiting means nothing is owed, and that zero is a measurement
+      return java.util.Optional
+          .of(((oldest == null) || (oldest.getCreatedAt() == null))
+              ? java.time.Duration.ZERO
+              : PhaseTwoOutbox.waitedSince(oldest.getCreatedAt()));
+    } catch (final RuntimeException e) {
+      // a metric must never be the reason an application fails
+      log.debug("Could not read the oldest pending entry of the MongoDB phase-two outbox", e);
+      return java.util.Optional.empty();
+    }
+
+  }
+
   @Override
   public boolean schedule(
       final PhaseTwoCall call) {

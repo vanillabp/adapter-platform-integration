@@ -127,6 +127,13 @@ public class MongoPhaseTwoOutboxAutoConfiguration {
           .createIndex(new Index()
               .on("status", Sort.Direction.ASC)
               .on("doneAt", Sort.Direction.ASC));
+      // the third moment of the same shape: what the age of the oldest waiting entry is
+      // read by, once per collection of the metrics
+      mongoTemplate
+          .indexOps(collection)
+          .createIndex(new Index()
+              .on("status", Sort.Direction.ASC)
+              .on("createdAt", Sort.Direction.ASC));
       // what the housekeeping of the payloads deletes along - without it that delete
       // reads every payload ever written
       mongoTemplate

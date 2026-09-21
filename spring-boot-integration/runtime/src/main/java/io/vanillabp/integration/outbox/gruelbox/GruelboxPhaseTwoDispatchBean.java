@@ -1,5 +1,6 @@
 package io.vanillabp.integration.outbox.gruelbox;
 
+import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DispatchOutcome;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoRetryLater;
@@ -48,6 +49,12 @@ public class GruelboxPhaseTwoDispatchBean implements GruelboxPhaseTwoDispatch {
    */
   private final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore;
 
+  /**
+   * What the wait of a dispatched entry is reported to. Micrometer is optional, so this
+   * is what an application without it uses.
+   */
+  private final io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics metrics;
+
   public GruelboxPhaseTwoDispatchBean(
       final PhaseTwoRouter phaseTwoRouter) {
 
@@ -63,8 +70,23 @@ public class GruelboxPhaseTwoDispatchBean implements GruelboxPhaseTwoDispatch {
       final PhaseTwoRouter phaseTwoRouter,
       final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore) {
 
+    this(phaseTwoRouter, payloadStore, io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.NONE);
+
+  }
+
+  /**
+   * @param phaseTwoRouter The router the rebuilt call is handed to
+   * @param payloadStore Where the payload of an entry which names one is read from
+   * @param metrics What the wait of the dispatched entry is reported to
+   */
+  public GruelboxPhaseTwoDispatchBean(
+      final PhaseTwoRouter phaseTwoRouter,
+      final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore,
+      final io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics metrics) {
+
     this.phaseTwoRouter = phaseTwoRouter;
     this.payloadStore = payloadStore;
+    this.metrics = metrics;
 
   }
 
@@ -97,7 +119,16 @@ public class GruelboxPhaseTwoDispatchBean implements GruelboxPhaseTwoDispatch {
     // re-dispatch mitigation
     final var previouslyAttempted = GruelboxRedispatchAwareSubmitter.isPreviouslyAttempted();
 
-    phaseTwoRouter.dispatch(call, previouslyAttempted);
+    // set by the submitter wrapper as well, and null for an entry gruelbox has already
+    // picked up once: it keeps no column for the moment an entry was written
+    final var writtenAt = GruelboxRedispatchAwareSubmitter.whenTheEntryWasWritten();
+    try {
+      phaseTwoRouter.dispatch(call, previouslyAttempted);
+    } catch (final RuntimeException e) {
+      reportWait(writtenAt, DispatchOutcome.FAILED);
+      throw e;
+    }
+    reportWait(writtenAt, DispatchOutcome.SUCCEEDED);
 
     // the bytes have done their work, and this runs in the transaction gruelbox opened
     // around the invocation - the same one it marks the entry processed in, so the two
@@ -105,6 +136,31 @@ public class GruelboxPhaseTwoDispatchBean implements GruelboxPhaseTwoDispatch {
     if ((payloadReference != null) && (payloadStore != null)) {
       payloadStore.remove(payloadReference);
     }
+
+  }
+
+  /**
+   * Reports how long the entry waited for this attempt, counted from the moment it was
+   * written.
+   *
+   * @param writtenAt When the entry was written, or <code>null</code> where gruelbox
+   *          cannot say - the attempt is then not measured rather than measured from now
+   * @param outcome How the attempt ended
+   */
+  private void reportWait(
+      final java.time.Instant writtenAt,
+      final DispatchOutcome outcome) {
+
+    if (writtenAt == null) {
+      return;
+    }
+    metrics
+        .outboxDispatchEnded(
+            GruelboxPhaseTwoOutbox.class.getSimpleName(),
+            outcome,
+            io.vanillabp.integration.spi.PhaseTwoOutbox
+                .waitedSince(writtenAt)
+                .toNanos());
 
   }
 
