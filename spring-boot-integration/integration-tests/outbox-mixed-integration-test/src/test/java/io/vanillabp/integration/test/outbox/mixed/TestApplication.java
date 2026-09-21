@@ -1,14 +1,13 @@
 package io.vanillabp.integration.test.outbox.mixed;
 
-import java.sql.SQLException;
 
 import javax.sql.DataSource;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.DependsOn;
 import org.springframework.context.annotation.Primary;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.MongoTransactionManager;
@@ -17,16 +16,11 @@ import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import com.gruelbox.transactionoutbox.DefaultPersistor;
-import com.gruelbox.transactionoutbox.Dialect;
-import com.gruelbox.transactionoutbox.TransactionOutbox;
-import com.gruelbox.transactionoutbox.spring.SpringInstantiator;
-import com.gruelbox.transactionoutbox.spring.SpringTransactionManager;
-
+import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
+import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore;
+import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
-import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutbox;
-import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfiguration;
-import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxDispatcher;
+import io.vanillabp.integration.outbox.jdbc.JdbcPhaseTwoOutbox;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.PhaseTwoOutboxAware;
@@ -48,16 +42,18 @@ import jakarta.persistence.EntityManagerFactory;
  * <li>the MongoDB aggregate gets a Spring-Data-based persistence explicitly (the
  * platform's fallback uses THE single {@code SpringDataUtil} bean, which is the JPA
  * one here);</li>
- * <li>the "hot" JPA aggregate gets a DEDICATED gruelbox outbox on its own table
- * ({@code HOT_OUTBOX}) via a {@link PhaseTwoOutboxAware} bean - the user-side recipe
- * for isolating a high-load process (own {@code TransactionOutbox} + own dispatcher +
- * the attribution bean).</li>
+ * <li>the "hot" JPA aggregate gets a DEDICATED outbox on tables of its own
+ * ({@code HOT_OUTBOX} and {@code HOT_PAYLOAD}) via a {@link PhaseTwoOutboxAware} bean -
+ * the user-side recipe for isolating a high-load process (an outbox of its own plus the
+ * attribution bean).</li>
  * </ul>
  */
 @SpringBootApplication
 public class TestApplication {
 
   public static final String HOT_OUTBOX_TABLE = "HOT_OUTBOX";
+
+  public static final String HOT_PAYLOAD_TABLE = "HOT_PAYLOAD";
 
   @Bean("transactionManager")
   @Primary
@@ -200,68 +196,34 @@ public class TestApplication {
   }
 
   /**
-   * The dedicated gruelbox instance for the "hot" process, writing to its own table
-   * {@link #HOT_OUTBOX_TABLE}. The gruelbox schema migration always targets the
-   * default table, so the dedicated table is created here (cloning the structure of
-   * the already-migrated default table) and the migration is disabled.
+   * The dedicated outbox for the "hot" process, writing its entries into
+   * {@link #HOT_OUTBOX_TABLE} and the payloads into {@link #HOT_PAYLOAD_TABLE}. It is the
+   * same store the platform default is, on tables nothing else writes into, and it creates
+   * them itself the way the default does.
    *
-   * @param applicationContext Used to resolve the scheduled bean at dispatch time
-   * @param transactionManager The JPA transaction manager (hot aggregates are JPA)
-   * @param dataSource The data source storing the outbox table
-   * @return The dedicated transaction outbox
+   * @param dataSource The data source holding the tables
+   * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree, whose outbox
+   *          settings this instance uses as well
+   * @param phaseTwoRouter Provider of the router dispatched to
+   * @param metrics Provider of what a blocked entry is counted into
+   * @return The dedicated outbox
    */
-  @Bean("hotTransactionOutbox")
-  @DependsOn(GruelboxPhaseTwoOutboxAutoConfiguration.DEFAULT_TRANSACTION_OUTBOX_BEAN_NAME)
-  public TransactionOutbox hotTransactionOutbox(
-      final ApplicationContext applicationContext,
-      @Qualifier("transactionManager") final PlatformTransactionManager transactionManager,
-      final DataSource dataSource,
-      final VanillaBpConfigurationProperties vanillaBpProperties) throws SQLException {
-
-    try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
-      statement.executeUpdate(
-          "CREATE TABLE IF NOT EXISTS %s AS (SELECT * FROM TXNO_OUTBOX) WITH NO DATA"
-              .formatted(HOT_OUTBOX_TABLE));
-    }
-    final var properties = vanillaBpProperties.getOutbox();
-    return TransactionOutbox
-        .builder()
-        .transactionManager(new SpringTransactionManager(transactionManager, dataSource))
-        .instantiator(new SpringInstantiator(applicationContext))
-        .persistor(DefaultPersistor
-            .builder()
-            .dialect(Dialect.H2)
-            .migrate(false)
-            .tableName(HOT_OUTBOX_TABLE)
-            .build())
-        .attemptFrequency(properties.getAttemptFrequency())
-        .blockAfterAttempts(properties.getBlockAfterAttempts())
-        .retentionThreshold(properties.getRetention())
-        .initializeImmediately(true)
-        .build();
-
-  }
-
   @Bean("hotPhaseTwoOutbox")
-  public GruelboxPhaseTwoOutbox hotPhaseTwoOutbox(
-      @Qualifier("hotTransactionOutbox") final TransactionOutbox transactionOutbox) {
+  public JdbcPhaseTwoOutbox hotPhaseTwoOutbox(
+      final DataSource dataSource,
+      final VanillaBpConfigurationProperties vanillaBpProperties,
+      final ObjectProvider<PhaseTwoRouter> phaseTwoRouter,
+      final ObjectProvider<VanillaBpMetrics> metrics) {
 
-    return new GruelboxPhaseTwoOutbox(transactionOutbox);
-
-  }
-
-  @Bean
-  public GruelboxPhaseTwoOutboxDispatcher hotPhaseTwoOutboxDispatcher(
-      @Qualifier("hotTransactionOutbox") final TransactionOutbox transactionOutbox,
-      final VanillaBpConfigurationProperties vanillaBpProperties) {
-
-    return new GruelboxPhaseTwoOutboxDispatcher(transactionOutbox, vanillaBpProperties.getOutbox());
+    return new JdbcPhaseTwoOutbox(
+        dataSource, vanillaBpProperties.getOutbox(), HOT_OUTBOX_TABLE, new JdbcPhaseTwoPayloadStore(
+            JdbcPhaseTwoOutbox.connectionsOf(dataSource), HOT_PAYLOAD_TABLE), phaseTwoRouter, metrics);
 
   }
 
   /**
    * Attributes the "hot" aggregate to its dedicated outbox - all other aggregates
-   * keep the platform-default selection (JPA aggregate → gruelbox default, MongoDB
+   * keep the platform-default selection (JPA aggregate → the JDBC default, MongoDB
    * aggregate → MongoDB default).
    *
    * @param hotPhaseTwoOutbox The dedicated outbox
@@ -269,7 +231,7 @@ public class TestApplication {
    */
   @Bean
   public PhaseTwoOutboxAware<HotAggregate> hotPhaseTwoOutboxAware(
-      @Qualifier("hotPhaseTwoOutbox") final GruelboxPhaseTwoOutbox hotPhaseTwoOutbox) {
+      @Qualifier("hotPhaseTwoOutbox") final JdbcPhaseTwoOutbox hotPhaseTwoOutbox) {
 
     return new PhaseTwoOutboxAware<>() {
 

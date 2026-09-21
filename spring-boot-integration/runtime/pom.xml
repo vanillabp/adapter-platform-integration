@@ -114,15 +114,22 @@
       <artifactId>spring-data-mongodb</artifactId>
       <optional>true</optional>
     </dependency>
+    <!--
+      Optional since the JDBC outbox VanillaBP writes itself became the default: an
+      application which keeps gruelbox ('vanillabp.outbox.gruelbox.enabled') adds these
+      two itself, and one which does not keeps them off its classpath.
+    -->
     <dependency>
       <groupId>com.gruelbox</groupId>
       <artifactId>transactionoutbox-core</artifactId>
       <version>${transaction-outbox.version}</version>
+      <optional>true</optional>
     </dependency>
     <dependency>
       <groupId>com.gruelbox</groupId>
       <artifactId>transactionoutbox-spring</artifactId>
       <version>${transaction-outbox.version}</version>
+      <optional>true</optional>
     </dependency>
     <dependency>
       <groupId>io.vanillabp.adapter</groupId>

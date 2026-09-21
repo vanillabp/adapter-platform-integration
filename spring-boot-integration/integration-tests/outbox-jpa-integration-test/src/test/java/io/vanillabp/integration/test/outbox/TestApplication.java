@@ -4,7 +4,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 
 /**
- * Test application for the gruelbox-based JPA {@link io.vanillabp.integration.spi.PhaseTwoOutbox}:
+ * Test application for the JDBC {@link io.vanillabp.integration.spi.PhaseTwoOutbox} on JPA:
  * the dummy adapter is forced to require a two-phase commit for starting workflows
  * (property <code>dummy-adapter.at-least-once-delivery</code>) and a
  * {@link RecordingPhaseTwoListener} observes (and optionally fails) phase two.

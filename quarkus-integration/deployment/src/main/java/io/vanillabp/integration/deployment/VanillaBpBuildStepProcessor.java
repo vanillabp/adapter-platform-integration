@@ -16,7 +16,6 @@ import io.vanillabp.integration.deployment.processservice.VanillaBpMigratablePro
 import io.vanillabp.integration.runtime.deployment.VanillaBpShutdownObserver;
 import io.vanillabp.integration.runtime.mongo.MongoClientDeploymentProbe;
 import io.vanillabp.integration.runtime.outbox.JdbcPhaseTwoOutbox;
-import io.vanillabp.integration.runtime.outbox.JdbcPhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.runtime.outbox.MongoPhaseTwoOutbox;
 import io.vanillabp.integration.runtime.outbox.MongoPhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.runtime.processservice.PhaseTwoOutboxResolverProducer;
@@ -292,8 +291,7 @@ public class VanillaBpBuildStepProcessor {
       additionalBeans.produce(AdditionalBeanBuildItem
           .builder()
           .addBeanClasses(
-              JdbcPhaseTwoOutbox.class,
-              JdbcPhaseTwoOutboxDispatcher.class)
+              JdbcPhaseTwoOutbox.class)
           .setUnremovable() // don't remove, since it is used under the hoods
           .build());
     }

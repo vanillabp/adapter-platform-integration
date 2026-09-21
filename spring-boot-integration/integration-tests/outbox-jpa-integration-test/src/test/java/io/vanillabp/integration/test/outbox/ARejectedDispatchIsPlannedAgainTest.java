@@ -29,8 +29,8 @@ import io.vanillabp.spi.process.ProcessService;
  * <p>
  * Such an attempt ENDS. The store gets the entry back, gives it the due time the adapter
  * named and dispatches it again, so the consumer sees the call once and the entry is ticked
- * off. Repeating the attempt on the spot was what this store used to do, and it could not
- * work: gruelbox dispatches inside a transaction of its own, the rejected attempt marked
+ * off. Repeating the attempt on the spot was what a store used to do, and it could not
+ * work: a dispatch runs in the transaction of its aggregate, the rejected attempt marked
  * that transaction rollback-only, and the attempt behind it reached the BPMS and then lost
  * its commit. The call went out while the entry stayed open, and what the handler had written
  * went back with the transaction. The entry came again afterwards and the consumer got the
@@ -96,9 +96,8 @@ public class ARejectedDispatchIsPlannedAgainTest {
   }
 
   /**
-   * The key the extension's operation derives, which is gruelbox' unique request id and
-   * therefore the one thing which finds the row of one aggregate among everything the shared
-   * table of this module holds.
+   * The key the extension's operation derives, which is the one thing which finds the row
+   * of one aggregate among everything the shared table of this module holds.
    */
   private static String idempotencyKeyOf(
       final Aggregate aggregate,
@@ -109,27 +108,26 @@ public class ARejectedDispatchIsPlannedAgainTest {
   }
 
   /**
-   * Whether the entry of that operation was ticked off: gruelbox marks a dispatched entry
-   * as processed and keeps it until its retention runs out.
+   * Whether the entry of that operation was ticked off: a dispatched entry is marked DONE
+   * and kept until its retention runs out.
    */
   private boolean isTickedOff(
       final String idempotencyKey) throws SQLException {
 
     try (var connection = dataSource.getConnection(); var statement = connection
-        .prepareStatement("SELECT processed FROM TXNO_OUTBOX WHERE uniqueRequestId = ?")) {
+        .prepareStatement("SELECT STATUS FROM VANILLABP_PHASE_TWO_OUTBOX WHERE IDEMPOTENCY_KEY = ?")) {
       statement.setString(1, idempotencyKey);
       try (var resultSet = statement.executeQuery()) {
-        return resultSet.next() && resultSet.getBoolean(1);
+        return resultSet.next() && "DONE".equals(resultSet.getString(1));
       }
     }
 
   }
 
   /**
-   * Waits until the entry of that operation is ticked off for good. The flag is asked twice
-   * because gruelbox writes it inside the transaction of the dispatch: a read may find it
-   * while that transaction is still open, and a dispatch which then loses its commit takes
-   * the flag with it.
+   * Waits until the entry of that operation is ticked off for good. The status is asked
+   * twice because the handler of the dispatch runs before the entry is marked: a read may
+   * find the mark of an attempt which is still running.
    */
   private void awaitTickedOff(
       final String idempotencyKey) throws Exception {
@@ -163,8 +161,8 @@ public class ARejectedDispatchIsPlannedAgainTest {
     final var key = idempotencyKeyOf(aggregate, "created");
 
     extension.awaitDispatched(1, PATIENCE);
-    // a ticked-off entry is one gruelbox never dispatches again, so this is what makes "once"
-    // an answer of the store rather than of a pause in this test
+    // an entry marked DONE is one no poll takes again, so this is what makes "once" an
+    // answer of the store rather than of a pause in this test
     awaitTickedOff(key);
 
     assertEquals(

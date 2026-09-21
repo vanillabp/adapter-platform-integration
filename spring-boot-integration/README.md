@@ -126,8 +126,8 @@ a workflow is waiting for asks the same object the process services write throug
 - `JdbcTaskDeliveryLog` writes through `DataSourceUtils.getConnection(dataSource)`, so
   the connection belongs to the Spring-managed transaction. The SQL and the portable DDL
   of table `VANILLABP_TASK_DELIVERY` live in the core (`JdbcTaskDeliveryStore`), shared
-  with Quarkus. Deliberately NOT gruelbox: gruelbox stores calls to be dispatched, a
-  delivery record is a fact to be read back. `recordOfTask` and `markTaskClosed` go to the
+  with Quarkus. Deliberately NOT a table of the outbox: an outbox stores calls to be
+  dispatched, a delivery record is a fact to be read back. `recordOfTask` and `markTaskClosed` go to the
   same store: they are what lets a task operation elect its BPMS from the record instead of
   asking one (decision 30), and the connection they use is the caller's, so the read sees
   what the caller's own transaction wrote.

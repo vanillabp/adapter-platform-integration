@@ -20,8 +20,9 @@ import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfig
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * On Spring Boot the phase-two outbox is gruelbox, and its table
- * <code>TXNO_OUTBOX</code> is the one table a schema handover does NOT get from
+ * An application which keeps running gruelbox
+ * (<code>vanillabp.outbox.gruelbox.enabled</code>) stores its entries in the table
+ * <code>TXNO_OUTBOX</code>, and that is the one table a schema handover does NOT get from
  * <code>io.vanillabp:vanillabp-schema</code> - the schema belongs to gruelbox. Switching
  * VanillaBP's table creation off switches gruelbox's migrator off with it, and a custom table
  * name does the same silently, so the table's existence is verified at startup exactly like
@@ -35,10 +36,12 @@ public class GruelboxOutboxSchemaHandoverTest {
       final String database,
       final String... properties) {
 
-    final var configuration = new String[properties.length + 2];
+    final var configuration = new String[properties.length + 3];
     configuration[0] = "spring.datasource.url=jdbc:h2:mem:%s;DB_CLOSE_DELAY=-1".formatted(database);
     configuration[1] = "spring.jpa.hibernate.ddl-auto=none";
-    System.arraycopy(properties, 0, configuration, 2, properties.length);
+    // gruelbox is the store an application asks for, not the one it gets
+    configuration[2] = "vanillabp.outbox.gruelbox.enabled=true";
+    System.arraycopy(properties, 0, configuration, 3, properties.length);
 
     return new ApplicationContextRunner()
         .withPropertyValues(configuration)

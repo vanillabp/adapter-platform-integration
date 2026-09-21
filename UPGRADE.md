@@ -590,6 +590,13 @@ a growing distance, `vanillabp.outbox.attempt-frequency` to the first retry and 
 one is an operations duty. Dispatched entries are marked done and cleaned up after
 `vanillabp.outbox.retention`, seven days by default.
 
+The entries are dispatched on a few threads of their own, `vanillabp.outbox.dispatch-threads`, four
+by default. Which thread takes an entry is decided by the workflow aggregate, so what belongs to one
+workflow keeps its order while different workflows travel at the same time. Version 1 progressed a
+workflow in the thread which was already there, a job executor thread on Camunda 7 or the committing
+thread on Camunda 8, so this is a new place where your database connections are used. Count the
+threads into the pool of the database your workflow aggregates live in.
+
 The records of processed task deliveries have a retention of their own,
 `vanillabp.delivery.retention`, which follows the outbox retention where it is not set. The two
 windows point in different directions: on the outbox side the retention only decides how long a

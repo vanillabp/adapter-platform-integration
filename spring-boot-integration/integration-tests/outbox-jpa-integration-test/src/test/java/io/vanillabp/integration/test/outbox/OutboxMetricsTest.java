@@ -1,7 +1,7 @@
 package io.vanillabp.integration.test.outbox;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.DisplayName;
@@ -19,14 +19,20 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * What the phase-two outbox reports about itself on Spring Boot. gruelbox
- * has no API for its backlog, so the number is read off its own table - which is why
- * this test runs against the real store rather than a double.
+ * What the phase-two outbox reports about itself on Spring Boot. The backlog is read off
+ * the outbox table, which is why this test runs against the real store rather than a
+ * double.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
 @SpringBootTest(classes = TestApplication.class)
 public class OutboxMetricsTest {
+
+  /**
+   * The name the meters of this store carry, which is the simple name of the bean an
+   * application sees.
+   */
+  private static final String STORE = "JdbcPhaseTwoOutbox";
 
   @Autowired
   private ProcessService<Aggregate> processService;
@@ -54,12 +60,12 @@ public class OutboxMetricsTest {
 
     final var pending = registry
         .get(VanillaBpMetrics.OUTBOX_PENDING)
-        .tag(VanillaBpMetrics.TAG_STORE, "GruelboxPhaseTwoOutbox")
+        .tag(VanillaBpMetrics.TAG_STORE, STORE)
         .gauge();
     assertEquals(
         0.0,
         pending.value(),
-        "gruelbox marks a dispatched entry processed, so nothing of the earlier tests is waiting");
+        "a dispatched entry is marked DONE, so nothing of the earlier tests is waiting");
 
     transactionTemplate
         .execute(status -> {
@@ -83,23 +89,23 @@ public class OutboxMetricsTest {
   }
 
   @Test
-  @DisplayName("gruelbox publishes no age of its oldest waiting entry, because it keeps no such moment")
-  public void gruelboxDoesNotSayHowOldItsOldestWaitingEntryIs() {
+  @DisplayName("The age of the oldest waiting entry is published, and it is zero while nothing waits")
+  public void theStoreSaysHowOldItsOldestWaitingEntryIs() {
 
     final var registry = new SimpleMeterRegistry();
     metrics.bindTo(registry);
 
-    assertTrue(
-        outbox
-            .ageOfOldestPendingCall()
-            .isEmpty(),
-        "gruelbox overwrites the moment an entry was written the first time it picks it up");
-    assertNull(
-        registry
-            .find(VanillaBpMetrics.OUTBOX_OLDEST_PENDING_AGE)
-            .tag(VanillaBpMetrics.TAG_STORE, "GruelboxPhaseTwoOutbox")
-            .gauge(),
-        "a gauge which could only ever report a gap is not published at all");
+    // the entry keeps the moment it was written in a column of its own, which is what
+    // the gruelbox store this one replaced could not do
+    final var age = outbox.ageOfOldestPendingCall();
+    assertTrue(age.isPresent(), "the store reads the moment its oldest waiting entry was written");
+
+    final var gauge = registry
+        .find(VanillaBpMetrics.OUTBOX_OLDEST_PENDING_AGE)
+        .tag(VanillaBpMetrics.TAG_STORE, STORE)
+        .gauge();
+    assertNotNull(gauge, "a store which can answer publishes the gauge");
+    assertTrue(gauge.value() >= 0.0, "an age is never negative");
 
   }
 
@@ -119,7 +125,7 @@ public class OutboxMetricsTest {
     while (true) {
       final var waited = registry
           .find(VanillaBpMetrics.OUTBOX_DISPATCH_LAG)
-          .tag(VanillaBpMetrics.TAG_STORE, "GruelboxPhaseTwoOutbox")
+          .tag(VanillaBpMetrics.TAG_STORE, STORE)
           .tag(VanillaBpMetrics.TAG_OUTCOME, "succeeded")
           .timer();
       if ((waited != null) && (waited.count() >= 1L)) {

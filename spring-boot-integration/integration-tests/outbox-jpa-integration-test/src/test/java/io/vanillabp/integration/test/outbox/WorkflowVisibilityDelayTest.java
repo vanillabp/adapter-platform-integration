@@ -46,6 +46,13 @@ public class WorkflowVisibilityDelayTest {
    */
   private static final int INVISIBLE_PROBES = 3;
 
+  /**
+   * How long a test waits for a dispatch before it says that none is coming. Three times
+   * the window the probes below name, which is what two rejected attempts cost plus room
+   * for a machine which is carrying other builds.
+   */
+  private static final long UNTIL_A_DISPATCH_COUNTS_AS_LOST = 30000;
+
   @Autowired
   private ProcessService<Aggregate> processService;
 
@@ -131,7 +138,11 @@ public class WorkflowVisibilityDelayTest {
         probesLeftByPhaseOne.get(),
         "phase one asks once and leaves asking again to the dispatch");
 
-    final var deadline = System.currentTimeMillis() + 10000;
+    // every probe which still reports the workflow as unknown costs the window the
+    // adapter names, and two of the three are left for the dispatch. So this guard has to
+    // span two of those windows plus whatever a loaded machine adds, and it measures
+    // nothing: what is asserted is that the correlation arrives, not how soon
+    final var deadline = System.currentTimeMillis() + UNTIL_A_DISPATCH_COUNTS_AS_LOST;
     while (listener.getCorrelatedMessages().isEmpty()) {
       assertTrue(
           System.currentTimeMillis() < deadline,

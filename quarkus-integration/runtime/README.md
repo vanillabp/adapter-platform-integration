@@ -65,16 +65,24 @@ committed, so every application needs a transaction outbox (`PhaseTwoOutbox` SPI
 transaction and dispatches it reliably after the commit (also after a crash/restart,
 retrying with a backoff).
 
-This module provides an own JDBC/JTA-based default implementation (gruelbox does not
-support JTA): `JdbcPhaseTwoOutbox` writes entries into the table
-`VANILLABP_PHASE_TWO_OUTBOX` using a connection of the Agroal datasource which is
-enlisted in the running JTA transaction. The entry persists all fields of the
+The store is not this module's own any more: `JdbcPhaseTwoOutboxStore` and
+`JdbcPhaseTwoOutboxDispatcher` live in the core and a Spring Boot application runs the same
+two classes (decision 75 in `DECISIONS.md`). What this module brings is the bean
+`JdbcPhaseTwoOutbox` and the halves which really are Quarkus': a connection of the Agroal
+datasource, enlisted in the running JTA transaction, and the JTA answers to "is a
+transaction running" and "tell me when it committed" (`PhaseTwoOutboxTransaction`).
+
+Entries go into the table
+`VANILLABP_PHASE_TWO_OUTBOX`. The entry persists all fields of the
 `PhaseTwoCall` (operation discriminator, elected adapter ID, serialized aggregate
 ID) plus the idempotency key, enforced unique by a constraint of the table —
-duplicate schedules are a no-op. `JdbcPhaseTwoOutboxDispatcher` claims due OPEN
+duplicate schedules are a no-op. The dispatcher claims due OPEN
 entries atomically (optimistic update with attempts/backoff) and dispatches them
 through the core-owned `PhaseTwoRouter` — right after the commit and by a
-fixed-delay poller (crash recovery and retries). Successful dispatches mark the
+fixed-delay poller (crash recovery and retries). It dispatches
+`vanillabp.outbox.dispatch-threads` entries at the same time, four by default, and the
+workflow aggregate decides which of the threads takes an entry, so two operations of one
+workflow keep the order they were written in. Successful dispatches mark the
 entry DONE (deleted asynchronously once `vanillabp.outbox.retention` passed — the
 entry stays readable for support, while its `DEDUP_KEY` is replaced by its own ID so
 a repetition of the same operation can be planned again); repeatedly failing entries are marked
@@ -192,6 +200,7 @@ moment.
 
 Configuration (`QuarkusMigrationAdapterProperties`): `vanillabp.outbox.poll-interval`,
 `vanillabp.outbox.attempt-frequency`, `vanillabp.outbox.block-after-attempts`,
+`vanillabp.outbox.dispatch-threads`,
 `vanillabp.outbox.retention` and
 `vanillabp.outbox.create-schema` (disable the `CREATE TABLE IF NOT EXISTS` DDL /
 index creation to manage the schema manually, e.g. by Flyway or Liquibase — then

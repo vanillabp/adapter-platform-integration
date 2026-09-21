@@ -2500,3 +2500,41 @@ and that sentence is what was wrong. The property
 `vanillabp.delivery.check-open-tasks-on-delivery` switches it off for an application which does
 not want the new calls, and `vanillabp.delivery.max-open-tasks-checked` caps the round trips per
 wake-up at ten until somebody measures a better number.
+
+### 75. One outbox for every relational database, and the aggregate decides which thread dispatches
+
+On a relational database every platform runs the same outbox: the store and the dispatcher in
+`migration-adapter/runtime`, written against a JDBC connection. Spring Boot used gruelbox for it
+and Quarkus a copy of its own, so one promise had two implementations, and a defect found on one
+platform had to be looked for twice. What stays platform-specific is the transaction: Spring Boot
+binds its connection with `DataSourceUtils` and Quarkus enlists an Agroal one in the running JTA
+transaction, which is what `PhaseTwoOutboxTransaction` and `JdbcConnectionAccess` carry.
+
+Working against a third-party outbox as long as possible was deliberate, and it did its job: it
+kept us from building things which only work with an outbox of our own. That job is done, so the
+swap happens in 2.0. Gruelbox stays available for an application which already runs it
+(`vanillabp.outbox.gruelbox.enabled`), and nothing in the platform depends on it any more. It
+takes its own table with it, so an upgrade which still has entries there is told at startup
+rather than losing them quietly.
+
+The entries of one workflow aggregate are dispatched by one thread, and the aggregate decides
+which of them (`DispatchLanes`, `vanillabp.outbox.dispatch-threads`, four by default). Until now
+every store dispatched on a single thread per node, so an application which completed tasks from
+twenty job executor threads in version 1 handed every completion to one dispatcher. A pool giving
+the next free thread the next entry would fix the throughput and break the order: two operations
+of one workflow would reach the BPMS the wrong way round, and nothing downstream would notice
+until a customer did. The number of threads is bounded because an unbounded one only moves the
+limit into the connection pool, where it is harder to see.
+
+What this does not order is a FAILED entry. It waits for its backoff, and the next entry of the
+same aggregate passes it in the meantime - which is what a single thread did as well, because a
+failed entry goes back into the table either way.
+
+The MongoDB stores keep dispatching on one thread. They are a store of their own on both
+platforms, the lanes are not tied to JDBC, and the work belongs to the story which measures
+whether they need it.
+
+The entry above which this changes the premise of is 47: gruelbox is no longer what most
+applications run, so the store which cannot name the adapter ids of its waiting entries at a
+start is now the exception rather than the default. What decision 47 decided - that such a store
+says it at the first dispatch instead - is unchanged and still holds for gruelbox.

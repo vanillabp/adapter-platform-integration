@@ -16,7 +16,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Simulates crash recovery of the gruelbox-based JPA phase-two outbox: a first
+ * Simulates crash recovery of the JDBC phase-two outbox on JPA: a first
  * application context leaves a committed-but-unprocessed entry in the database (the
  * dispatch fails and the poll interval is too long for a retry - like a crashed
  * instance). A second application context using the same (in-memory, kept-alive) H2

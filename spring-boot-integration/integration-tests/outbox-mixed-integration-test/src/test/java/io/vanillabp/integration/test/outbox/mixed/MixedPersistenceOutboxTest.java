@@ -35,7 +35,7 @@ import io.vanillabp.spi.process.ProcessService;
  * MIXED-PERSISTENCE application (JPA/H2 + MongoDB/TestContainers replica set) with a
  * dedicated outbox for one "hot" process:
  * <ul>
- * <li>the JPA aggregate's outbox entry lands in the JDBC (gruelbox) outbox and rides
+ * <li>the JPA aggregate's outbox entry lands in the JDBC outbox and rides
  * the JPA transaction (gone on rollback),</li>
  * <li>the MongoDB aggregate's outbox entry lands in the MongoDB outbox and rides the
  * MongoDB transaction (gone on rollback),</li>
@@ -66,7 +66,7 @@ public class MixedPersistenceOutboxTest {
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
-  private static final String COUNT_JDBC_OUTBOX_ENTRIES = "select count(*) from TXNO_OUTBOX";
+  private static final String COUNT_JDBC_OUTBOX_ENTRIES = "select count(*) from VANILLABP_PHASE_TWO_OUTBOX";
 
   private static final String COUNT_HOT_OUTBOX_ENTRIES = "select count(*) from HOT_OUTBOX";
 

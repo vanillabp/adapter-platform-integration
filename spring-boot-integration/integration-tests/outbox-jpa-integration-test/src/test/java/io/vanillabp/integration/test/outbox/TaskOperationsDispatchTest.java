@@ -69,14 +69,13 @@ public class TaskOperationsDispatchTest {
   private DataSource dataSource;
 
   /**
-   * What gruelbox still owes for one aggregate. Its table names no aggregate of its own, but
-   * the idempotency key of a workflow start ends with the aggregate id, which is enough to
-   * tell this test's entries from those the classes before it left in the database they all
-   * share. A BLOCKED entry is left out for the same reason: it waits for a person, so a test
+   * What the outbox still owes for one aggregate. The idempotency key of a workflow start
+   * ends with the aggregate id, which is enough to tell this test's entries from those the
+   * classes before it left in the database they all share. A BLOCKED entry is left out for the same reason: it waits for a person, so a test
    * which waited for it would wait for ever.
    */
-  private static final String COUNT_ENTRIES_NOT_DISPATCHED = "SELECT COUNT(*) FROM TXNO_OUTBOX "
-      + "WHERE processed = false AND blocked = false AND uniqueRequestId LIKE ?";
+  private static final String COUNT_ENTRIES_NOT_DISPATCHED = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX "
+      + "WHERE STATUS = 'OPEN' AND IDEMPOTENCY_KEY LIKE ?";
 
   @BeforeEach
   public void reset() {
@@ -102,7 +101,7 @@ public class TaskOperationsDispatchTest {
 
   /**
    * A workflow whose start is THROUGH: the outbox entry of its phase two is dispatched and
-   * gruelbox marked it processed.
+   * marked DONE.
    * <p>
    * Waiting for the listener instead would answer a different question. The listener runs
    * INSIDE the dispatch, one write before the store marks the entry, so it says that the

@@ -18,14 +18,15 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * An adapter id which a waiting outbox entry names although the configuration does not,
- * on Spring Boot with JPA - the setup whose store is the gruelbox one.
+ * An adapter id which a waiting outbox entry names although the configuration does not, on
+ * an application which kept gruelbox (<code>vanillabp.outbox.gruelbox.enabled</code>).
  * <p>
- * The other three stores keep the id in a column and name it while the application boots.
- * This one keeps a call as a serialized invocation, so the boot cannot ask without reading
- * the whole table. It answers at the first dispatch instead, where the entry is read anyway,
- * and it says what the boot of the other stores says (decision 47 in the repository's
- * DECISIONS.md).
+ * The stores VanillaBP writes itself keep the id in a column and name it while the
+ * application boots, which is what
+ * {@link AStaleAdapterIdIsNamedAtTheStartTest} holds. Gruelbox keeps a call as a serialized
+ * invocation, so the boot cannot ask without reading the whole table. It answers at the
+ * first dispatch instead, where the entry is read anyway, and it says what the boot of the
+ * other stores says (decision 47 in the repository's DECISIONS.md).
  * <p>
  * Two contexts on one database: the first runs with an adapter 'old-bpms' at first priority
  * and leaves an entry of it undispatched, the second does not configure that adapter at all.
@@ -62,7 +63,7 @@ public class StaleAdapterIdNamedAtDispatchTest {
    * The application as the first context runs it: an adapter nobody has heard of yet is
    * configured and prioritized, so the workflow starts there and its entry names it.
    *
-   * @param pollInterval How long gruelbox waits between two flushes
+   * @param pollInterval How long the store waits between two polls
    * @return The running application context
    */
   private ConfigurableApplicationContext runWithTheAdapterWhichGoesAway(
@@ -80,7 +81,7 @@ public class StaleAdapterIdNamedAtDispatchTest {
   /**
    * The application as it is configured from here on: the adapter of the entry is gone.
    *
-   * @param pollInterval How long gruelbox waits between two flushes
+   * @param pollInterval How long the store waits between two polls
    * @return The running application context
    */
   private ConfigurableApplicationContext runWithoutThatAdapter(
@@ -100,6 +101,7 @@ public class StaleAdapterIdNamedAtDispatchTest {
     arguments.add("--vanillabp.outbox.poll-interval="
         + pollInterval);
     arguments.add("--vanillabp.outbox.attempt-frequency=PT0.5S");
+    arguments.add("--vanillabp.outbox.gruelbox.enabled=true");
     arguments.addAll(java.util.List.of(adapterConfiguration));
     return new SpringApplicationBuilder(TestApplication.class)
         .web(WebApplicationType.NONE)
@@ -149,7 +151,7 @@ public class StaleAdapterIdNamedAtDispatchTest {
       listener.awaitInvocations(1, 10000);
       // the failed attempt has to be written before the context goes away, otherwise the
       // second context meets an entry which was never dispatched
-      FailedAttempts.awaitWrittenDown(context, 1);
+      FailedAttempts.awaitWrittenDown(context, 1, FailedAttempts.Store.GRUELBOX);
       assertEquals(
           0,
           occurrencesOf(THE_REPORT_NAMING_IT, output),
@@ -178,7 +180,7 @@ public class StaleAdapterIdNamedAtDispatchTest {
       // attempts are read from the store instead of waited for: a wait would pass on a
       // machine where the dispatcher never came back, which is the one case this must
       // not call green
-      FailedAttempts.awaitAttemptsOfAWaitingEntry(context, ATTEMPTS_WORTH_ONE_REPORT);
+      FailedAttempts.awaitAttemptsOfAWaitingEntry(context, ATTEMPTS_WORTH_ONE_REPORT, FailedAttempts.Store.GRUELBOX);
       assertEquals(
           1,
           occurrencesOf(THE_REPORT_NAMING_IT, output),
