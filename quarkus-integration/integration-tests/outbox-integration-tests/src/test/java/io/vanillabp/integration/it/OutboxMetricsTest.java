@@ -83,6 +83,38 @@ public class OutboxMetricsTest {
             .count() >= 1.0,
         "the dispatch of the started workflow's phase two has to be counted");
 
+    awaitMeasuredWait();
+
+  }
+
+  /**
+   * Waits until the wait of the dispatched entry was measured.
+   * <p>
+   * The listener runs INSIDE the dispatch and the wait is reported when the dispatch
+   * returns, so the listener is not the signal that the measurement is there. Waiting
+   * for the meter is.
+   */
+  private void awaitMeasuredWait() throws Exception {
+
+    final var deadline = System.currentTimeMillis() + 30_000;
+    while (true) {
+      final var waited = meterRegistry
+          .find(VanillaBpMetrics.OUTBOX_DISPATCH_LAG)
+          .tag(VanillaBpMetrics.TAG_STORE, "JdbcPhaseTwoOutbox")
+          .tag(VanillaBpMetrics.TAG_OUTCOME, "succeeded")
+          .timer();
+      if ((waited != null) && (waited.count() >= 1L)) {
+        assertTrue(
+            waited.totalTime(java.util.concurrent.TimeUnit.NANOSECONDS) > 0.0,
+            "an entry which was written and then dispatched waited for something");
+        return;
+      }
+      assertTrue(
+          System.currentTimeMillis() < deadline,
+          "the wait of the dispatched entry was never measured");
+      Thread.sleep(50);
+    }
+
   }
 
 }

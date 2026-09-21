@@ -15,6 +15,7 @@ import io.quarkus.runtime.StartupEvent;
 import io.smallrye.config.SmallRyeConfig;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema;
+import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DispatchOutcome;
 import io.vanillabp.integration.adapter.migration.outbox.DueEntryPoller;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
@@ -85,7 +86,8 @@ public class JdbcPhaseTwoOutboxDispatcher {
   public static final String STATUS_BLOCKED = "BLOCKED";
 
   private static final String SELECT_DUE_ENTRIES = """
-      SELECT ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, AGGREGATE_ID, ADAPTER_ID, ARGS, ATTEMPTS \
+      SELECT ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, AGGREGATE_ID, ADAPTER_ID, ARGS, ATTEMPTS, \
+      CREATED_AT \
       FROM %s \
       WHERE STATUS = '%s' AND NEXT_ATTEMPT_AT <= ? AND ATTEMPTS < ?""";
 
@@ -120,7 +122,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
    * for why the row is not the one the select of the due entries returned.
    */
   private static final String SELECT_CLAIMED_ENTRY = """
-      SELECT WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, AGGREGATE_ID, ADAPTER_ID, ARGS \
+      SELECT WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, AGGREGATE_ID, ADAPTER_ID, ARGS, CREATED_AT \
       FROM %s WHERE ID = ?""";
 
   /**
@@ -190,6 +192,8 @@ public class JdbcPhaseTwoOutboxDispatcher {
    * @param aggregateId The workflow aggregate's ID in serialized form
    * @param adapterId The ID of the elected BPMS adapter (may be <code>null</code>)
    * @param attempts The number of dispatch attempts so far
+   * @param createdAt When the entry was written - a replacing call sets it anew,
+   *          because the row then carries a younger operation
    */
   private record Entry(
                        String id,
@@ -199,7 +203,8 @@ public class JdbcPhaseTwoOutboxDispatcher {
                        String aggregateId,
                        String adapterId,
                        String serializedArgs,
-                       int attempts) {
+                       int attempts,
+                       Instant createdAt) {
   }
 
   @Inject
@@ -608,7 +613,8 @@ public class JdbcPhaseTwoOutboxDispatcher {
         while (resultSet.next()) {
           entries.add(new Entry(
               resultSet.getString(1), resultSet.getString(2), resultSet.getString(3), resultSet.getString(4), resultSet
-                  .getString(5), resultSet.getString(6), resultSet.getString(7), resultSet.getInt(8)));
+                  .getString(5), resultSet.getString(6), resultSet.getString(7), resultSet.getInt(8), writtenAt(
+                      resultSet, 9)));
         }
       }
     }
@@ -656,7 +662,8 @@ public class JdbcPhaseTwoOutboxDispatcher {
         return resultSet.next()
             ? new Entry(
                 entry.id(), resultSet.getString(1), resultSet.getString(2), resultSet.getString(3), resultSet
-                    .getString(4), resultSet.getString(5), resultSet.getString(6), entry.attempts())
+                    .getString(4), resultSet.getString(5), resultSet.getString(6), entry.attempts(), writtenAt(
+                        resultSet, 7))
             : null;
       }
     }
@@ -689,15 +696,14 @@ public class JdbcPhaseTwoOutboxDispatcher {
       final var payload = payloadReference == null
           ? null
           : getPayloadStore().read(payloadReference);
-      phaseTwoRouter
-          .get()
-          .dispatch(
-              PhaseTwoCall
-                  .forDispatch(
-                      entry.operation(), entry.workflowModuleId(), entry.bpmnProcessId(), entry
-                          .aggregateId(),
-                      entry.adapterId(), args, payload),
-              entry.attempts() > 0);
+      dispatchMeasuringTheWait(
+          PhaseTwoCall
+              .forDispatch(
+                  entry.operation(), entry.workflowModuleId(), entry.bpmnProcessId(), entry
+                      .aggregateId(),
+                  entry.adapterId(), args, payload),
+          entry.attempts() > 0,
+          entry.createdAt());
     } catch (Exception e) {
       // the adapter said that repeating cannot help - blocked right away
       // instead of after the configured attempts
@@ -795,6 +801,75 @@ public class JdbcPhaseTwoOutboxDispatcher {
     if (payloadReference != null) {
       getPayloadStore().remove(payloadReference);
     }
+
+  }
+
+  /**
+   * Hands the call to the core's router and reports how long its entry waited for this
+   * attempt, whether the attempt succeeded or threw. The wait is counted from the
+   * moment the entry was written, so a repeated attempt reports the whole wait of the
+   * operation and not the distance since the last try.
+   *
+   * @param call The call to dispatch
+   * @param previouslyAttempted Whether the entry was dispatched before
+   * @param writtenAt When the entry was written, or <code>null</code> where the row
+   *          carries no such moment
+   */
+  private void dispatchMeasuringTheWait(
+      final PhaseTwoCall call,
+      final boolean previouslyAttempted,
+      final Instant writtenAt) {
+
+    try {
+      phaseTwoRouter
+          .get()
+          .dispatch(call, previouslyAttempted);
+    } catch (final RuntimeException e) {
+      reportWait(writtenAt, DispatchOutcome.FAILED);
+      throw e;
+    }
+    reportWait(writtenAt, DispatchOutcome.SUCCEEDED);
+
+  }
+
+  /**
+   * @param writtenAt When the entry was written
+   * @param outcome How the attempt ended
+   */
+  private void reportWait(
+      final Instant writtenAt,
+      final DispatchOutcome outcome) {
+
+    if (writtenAt == null) {
+      return;
+    }
+    io.vanillabp.integration.runtime.processservice.PhaseTwoRouterProducer
+        .vanillaBpMetricsOf(vanillaBpMetrics)
+        .outboxDispatchEnded(
+            JdbcPhaseTwoOutbox.class.getSimpleName(),
+            outcome,
+            io.vanillabp.integration.spi.PhaseTwoOutbox
+                .waitedSince(writtenAt)
+                .toNanos());
+
+  }
+
+  /**
+   * When an entry was written, as its row says. The column is NOT NULL in the table
+   * VanillaBP creates, so nothing comes back only where the application brought a table
+   * of its own which leaves it empty. The attempt of such an entry is not measured, which
+   * is better than measuring it from now.
+   *
+   * @param resultSet The row being read
+   * @param column The column holding the moment
+   * @return The moment or <code>null</code>
+   */
+  private static Instant writtenAt(
+      final java.sql.ResultSet resultSet,
+      final int column) throws SQLException {
+
+    final var written = resultSet.getTimestamp(column);
+    return written == null ? null : written.toInstant();
 
   }
 

@@ -13,6 +13,7 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
+import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DispatchOutcome;
 import io.vanillabp.integration.adapter.migration.outbox.DueEntryPoller;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.spi.PhaseTwoCall;
@@ -258,15 +259,14 @@ public class MongoPhaseTwoOutboxDispatcher {
       final var payload = payloadReference == null
           ? null
           : payloadStore.read(payloadReference);
-      phaseTwoRouter
-          .getObject()
-          .dispatch(
-              PhaseTwoCall
-                  .forDispatch(
-                      entry.getOperation(), entry.getWorkflowModuleId(), entry.getBpmnProcessId(), entry
-                          .getAggregateId(),
-                      entry.getAdapterId(), entry.getArgs(), payload),
-              entry.getAttempts() > 0);
+      dispatchMeasuringTheWait(
+          PhaseTwoCall
+              .forDispatch(
+                  entry.getOperation(), entry.getWorkflowModuleId(), entry.getBpmnProcessId(), entry
+                      .getAggregateId(),
+                  entry.getAdapterId(), entry.getArgs(), payload),
+          entry.getAttempts() > 0,
+          entry.getCreatedAt());
       mongoTemplate.updateFirst(
           Query.query(Criteria.where("_id").is(entry.getId())),
           new Update()
@@ -367,6 +367,58 @@ public class MongoPhaseTwoOutboxDispatcher {
             e);
       }
     }
+
+  }
+
+  /**
+   * Hands the call to the core's router and reports how long its entry waited for this
+   * attempt, whether the attempt succeeded or threw. The wait is counted from the
+   * moment the entry was written, so a repeated attempt reports the whole wait of the
+   * operation and not the distance since the last try.
+   *
+   * @param call The call to dispatch
+   * @param previouslyAttempted Whether the entry was dispatched before
+   * @param writtenAt When the entry was written, or <code>null</code> where the
+   *          document carries no such moment
+   */
+  private void dispatchMeasuringTheWait(
+      final PhaseTwoCall call,
+      final boolean previouslyAttempted,
+      final Instant writtenAt) {
+
+    try {
+      phaseTwoRouter
+          .getObject()
+          .dispatch(call, previouslyAttempted);
+    } catch (final RuntimeException e) {
+      reportWait(writtenAt, DispatchOutcome.FAILED);
+      throw e;
+    }
+    reportWait(writtenAt, DispatchOutcome.SUCCEEDED);
+
+  }
+
+  /**
+   * @param writtenAt When the entry was written - <code>null</code> only for a document
+   *          somebody else wrote into the collection without that field, whose attempt
+   *          is not measured rather than measured from now
+   * @param outcome How the attempt ended
+   */
+  private void reportWait(
+      final Instant writtenAt,
+      final DispatchOutcome outcome) {
+
+    if (writtenAt == null) {
+      return;
+    }
+    io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration
+        .vanillaBpMetricsOf(metrics)
+        .outboxDispatchEnded(
+            MongoPhaseTwoOutbox.class.getSimpleName(),
+            outcome,
+            io.vanillabp.integration.spi.PhaseTwoOutbox
+                .waitedSince(writtenAt)
+                .toNanos());
 
   }
 

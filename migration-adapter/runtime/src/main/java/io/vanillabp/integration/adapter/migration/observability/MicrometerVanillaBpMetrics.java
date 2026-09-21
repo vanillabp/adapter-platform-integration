@@ -2,6 +2,7 @@ package io.vanillabp.integration.adapter.migration.observability;
 
 import java.time.Duration;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -36,11 +37,13 @@ import io.vanillabp.integration.adapter.spi.observability.CachedGaugeValue;
  * record is dropped. That is the normal state during startup, where beans are built
  * before the metrics infrastructure binds them.
  * <p>
- * <b>Reading a metric costs nothing.</b> The counters and the timer are numbers this
+ * <b>Reading a metric costs nothing.</b> The counters and the timers are numbers this
  * class already holds, but a gauge is different: it is read on every collection, and
- * the only gauge here has to ask an outbox store how many entries wait. That query is
+ * both gauges here have to ask an outbox store - how many entries wait, and how long
+ * the oldest of them has been waiting. Each query is
  * wrapped in a {@link CachedGaugeValue} before it ever becomes a gauge, so a store
- * cannot forget to do it - see {@link #registerPendingOutboxEntries(String, java.util.function.Supplier)}.
+ * cannot forget to do it - see {@link #registerPendingOutboxEntries(String, java.util.function.Supplier)}
+ * and {@link #registerAgeOfOldestPendingOutboxEntry(String, java.util.function.Supplier)}.
  * <p>
  * Why the caching happens here once instead of in every store is decision 18 in the repository's
  * DECISIONS.md.
@@ -86,6 +89,12 @@ public class MicrometerVanillaBpMetrics implements VanillaBpMetrics, MeterBinder
    */
   private final Map<String, Supplier<OptionalLong>> pendingOutboxEntries = new ConcurrentHashMap<>();
 
+  /**
+   * The age suppliers of the outbox stores, held for the same reason the pending ones
+   * are: a store registers while the beans are built, long before a registry exists.
+   */
+  private final Map<String, Supplier<OptionalLong>> oldestPendingOutboxEntryAges = new ConcurrentHashMap<>();
+
   @Override
   public void bindTo(
       final MeterRegistry meterRegistry) {
@@ -97,6 +106,9 @@ public class MicrometerVanillaBpMetrics implements VanillaBpMetrics, MeterBinder
     pendingOutboxEntries.forEach((
         store,
         pending) -> registerPendingGauge(meterRegistry, store, pending));
+    oldestPendingOutboxEntryAges.forEach((
+        store,
+        age) -> registerOldestPendingAgeGauge(meterRegistry, store, age));
 
   }
 
@@ -309,6 +321,28 @@ public class MicrometerVanillaBpMetrics implements VanillaBpMetrics, MeterBinder
 
   }
 
+  @Override
+  public void outboxDispatchEnded(
+      final String store,
+      final DispatchOutcome outcome,
+      final long waitedNanos) {
+
+    final var meterRegistry = registry;
+    if (meterRegistry == null) {
+      return;
+    }
+
+    timer(
+        meterRegistry,
+        OUTBOX_DISPATCH_LAG,
+        "How long an outbox entry waited, from being written to the end of its dispatch",
+        Tags.of(
+            TAG_STORE, tagValue(store),
+            TAG_OUTCOME, outcome.getTagValue()))
+        .record(waitedNanos, TimeUnit.NANOSECONDS);
+
+  }
+
   /**
    * The supplier is NOT registered as the gauge reads it. Counting the waiting entries
    * of an outbox is a query, a gauge is read on every collection, and every instance of
@@ -326,6 +360,34 @@ public class MicrometerVanillaBpMetrics implements VanillaBpMetrics, MeterBinder
     final var meterRegistry = registry;
     if (meterRegistry != null) {
       registerPendingGauge(meterRegistry, store, held);
+    }
+
+  }
+
+  /**
+   * The age travels as milliseconds and is published as seconds, because a dashboard
+   * reads seconds while an outbox which waits milliseconds needs no alert at all. The
+   * query behind it is held exactly as the pending one is: asking a store for its
+   * oldest waiting entry is a query, and a gauge is read on every collection.
+   */
+  @Override
+  public void registerAgeOfOldestPendingOutboxEntry(
+      final String store,
+      final Supplier<Optional<Duration>> age) {
+
+    final Supplier<OptionalLong> inMillis = () -> {
+      final var waiting = age.get();
+      return ((waiting == null) || waiting.isEmpty())
+          ? OptionalLong.empty()
+          : OptionalLong.of(waiting
+              .get()
+              .toMillis());
+    };
+    final var held = CachedGaugeValue.holding(gaugeCache, inMillis);
+    oldestPendingOutboxEntryAges.put(store, held);
+    final var meterRegistry = registry;
+    if (meterRegistry != null) {
+      registerOldestPendingAgeGauge(meterRegistry, store, held);
     }
 
   }
@@ -353,6 +415,34 @@ public class MicrometerVanillaBpMetrics implements VanillaBpMetrics, MeterBinder
                 .orElse(Double.NaN))
         .tags(Tags.of(TAG_STORE, store))
         .description("Outbox entries waiting to be dispatched")
+        .register(meterRegistry);
+
+  }
+
+  /**
+   * Publishes the held age as seconds. An outbox with nothing waiting reports zero,
+   * which is a measurement: nothing is owed. A store which could not read its oldest
+   * entry reports NaN, the gap {@link #registerPendingGauge} leaves for the same
+   * reason.
+   */
+  private static void registerOldestPendingAgeGauge(
+      final MeterRegistry meterRegistry,
+      final String store,
+      final Supplier<OptionalLong> ageInMillis) {
+
+    Gauge
+        .builder(
+            OUTBOX_OLDEST_PENDING_AGE,
+            ageInMillis,
+            supplier -> supplier
+                .get()
+                .stream()
+                .mapToDouble(millis -> millis / 1000.0d)
+                .findFirst()
+                .orElse(Double.NaN))
+        .tags(Tags.of(TAG_STORE, store))
+        .baseUnit("seconds")
+        .description("How long the oldest outbox entry waiting for its dispatch has been waiting")
         .register(meterRegistry);
 
   }

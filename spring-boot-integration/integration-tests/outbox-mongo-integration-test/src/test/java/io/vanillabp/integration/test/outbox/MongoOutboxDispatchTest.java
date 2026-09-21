@@ -44,7 +44,9 @@ import io.vanillabp.spi.process.ProcessService;
  *   <li>a duplicate schedule for the same aggregate is a no-op,</li>
  *   <li>a failing dispatch is retried and</li>
  *   <li>a left-over entry (e.g. of a crashed instance) is dispatched by the
- *       poller.</li>
+ *       poller and</li>
+ *   <li>the store says how long the oldest entry waiting for its dispatch has been
+ *       waiting.</li>
  * </ul>
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -98,6 +100,9 @@ public class MongoOutboxDispatchTest {
   @Autowired
   private RecordingPhaseTwoListener listener;
 
+  @Autowired
+  private io.vanillabp.integration.spi.PhaseTwoOutbox outbox;
+
   @BeforeEach
   public void resetListenerAndOutbox() {
 
@@ -137,6 +142,57 @@ public class MongoOutboxDispatchTest {
       assertTrue(System.currentTimeMillis() < deadline, "an outbox entry was never marked DONE");
       Thread.sleep(50);
     }
+
+  }
+
+  @Test
+  @DisplayName("The age of the oldest waiting entry is the one of the oldest, not of the youngest")
+  public void theOldestWaitingEntryDecidesTheAge() {
+
+    assertEquals(
+        java.time.Duration.ZERO,
+        outbox
+            .ageOfOldestPendingCall()
+            .orElseThrow(),
+        "nothing waits, and that zero says the outbox owes nothing");
+
+    final var now = Instant.now();
+    writeWaitingEntry("younger", now.minus(java.time.Duration.ofMinutes(1)));
+    writeWaitingEntry("older", now.minus(java.time.Duration.ofMinutes(10)));
+
+    assertTrue(
+        outbox
+            .ageOfOldestPendingCall()
+            .orElseThrow()
+            .toSeconds() >= 600L,
+        "the store answers for the entry which has been waiting longest");
+
+  }
+
+  /**
+   * Writes an entry which stays where it is: its next attempt lies an hour ahead, so
+   * the dispatcher's poll does not pick it up.
+   *
+   * @param id The id of the entry
+   * @param writtenAt When it was written
+   */
+  private void writeWaitingEntry(
+      final String id,
+      final Instant writtenAt) {
+
+    mongoTemplate
+        .getCollection(OUTBOX_COLLECTION)
+        .insertOne(new org.bson.Document()
+            .append("_id", id)
+            .append("workflowModuleId", "test-module")
+            .append("bpmnProcessId", "Test")
+            .append("operation", "START_WORKFLOW")
+            .append("aggregateId", "4711")
+            .append("dedupKey", id)
+            .append("status", "OPEN")
+            .append("createdAt", Date.from(writtenAt))
+            .append("attempts", 0)
+            .append("nextAttemptAt", Date.from(Instant.now().plus(java.time.Duration.ofHours(1)))));
 
   }
 

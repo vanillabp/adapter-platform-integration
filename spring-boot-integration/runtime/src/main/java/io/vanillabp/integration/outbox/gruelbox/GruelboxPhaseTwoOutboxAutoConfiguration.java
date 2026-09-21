@@ -347,12 +347,16 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
    * routes it through the core's {@link PhaseTwoRouter}.
    *
    * @param phaseTwoRouter Provider of the router dispatched to
+   * @param payloadStore Where the payload of an entry which names one is read from
+   * @param metrics Provider of what the wait of a dispatched entry is reported to;
+   *          Micrometer is optional, so the bean may legitimately be absent
    * @return The dispatch bean
    */
   @Bean
   public GruelboxPhaseTwoDispatch vanillaBpGruelboxPhaseTwoDispatch(
       final ObjectProvider<PhaseTwoRouter> phaseTwoRouter,
-      @Qualifier(DEFAULT_PAYLOAD_STORE_BEAN_NAME) final ObjectProvider<JdbcPhaseTwoPayloadStore> payloadStore) {
+      @Qualifier(DEFAULT_PAYLOAD_STORE_BEAN_NAME) final ObjectProvider<JdbcPhaseTwoPayloadStore> payloadStore,
+      final ObjectProvider<io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics> metrics) {
 
     return (
         operation,
@@ -361,7 +365,9 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
         workflowAggregateId,
         adapterId,
         serializedArgs) -> new GruelboxPhaseTwoDispatchBean(
-            phaseTwoRouter.getObject(), payloadStore.getObject())
+            phaseTwoRouter.getObject(), payloadStore
+                .getObject(), io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration
+                    .vanillaBpMetricsOf(metrics))
             .dispatch(
                 operation, workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, serializedArgs);
 

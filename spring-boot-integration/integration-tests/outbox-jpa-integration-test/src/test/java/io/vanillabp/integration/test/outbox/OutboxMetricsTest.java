@@ -1,6 +1,7 @@
 package io.vanillabp.integration.test.outbox;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.DisplayName;
@@ -39,6 +40,9 @@ public class OutboxMetricsTest {
   @Autowired
   private MicrometerVanillaBpMetrics metrics;
 
+  @Autowired
+  private io.vanillabp.integration.spi.PhaseTwoOutbox outbox;
+
   @Test
   @DisplayName("The waiting entries are a gauge and every dispatch is counted")
   public void outboxReportsItsBacklogAndItsDispatches() throws Exception {
@@ -73,6 +77,59 @@ public class OutboxMetricsTest {
             .counter()
             .count() >= 1.0,
         "the dispatch of the started workflow's phase two has to be counted");
+
+    awaitMeasuredWait(registry);
+
+  }
+
+  @Test
+  @DisplayName("gruelbox publishes no age of its oldest waiting entry, because it keeps no such moment")
+  public void gruelboxDoesNotSayHowOldItsOldestWaitingEntryIs() {
+
+    final var registry = new SimpleMeterRegistry();
+    metrics.bindTo(registry);
+
+    assertTrue(
+        outbox
+            .ageOfOldestPendingCall()
+            .isEmpty(),
+        "gruelbox overwrites the moment an entry was written the first time it picks it up");
+    assertNull(
+        registry
+            .find(VanillaBpMetrics.OUTBOX_OLDEST_PENDING_AGE)
+            .tag(VanillaBpMetrics.TAG_STORE, "GruelboxPhaseTwoOutbox")
+            .gauge(),
+        "a gauge which could only ever report a gap is not published at all");
+
+  }
+
+  /**
+   * Waits until the wait of the dispatched entry was measured.
+   * <p>
+   * The listener runs INSIDE the dispatch and the wait is reported when the dispatch
+   * returns, so the listener is not the signal that the measurement is there. Waiting
+   * for the meter is.
+   *
+   * @param registry The registry the meters were bound to
+   */
+  private void awaitMeasuredWait(
+      final SimpleMeterRegistry registry) throws Exception {
+
+    final var deadline = System.currentTimeMillis() + 30_000;
+    while (true) {
+      final var waited = registry
+          .find(VanillaBpMetrics.OUTBOX_DISPATCH_LAG)
+          .tag(VanillaBpMetrics.TAG_STORE, "GruelboxPhaseTwoOutbox")
+          .tag(VanillaBpMetrics.TAG_OUTCOME, "succeeded")
+          .timer();
+      if ((waited != null) && (waited.count() >= 1L)) {
+        return;
+      }
+      assertTrue(
+          System.currentTimeMillis() < deadline,
+          "the wait of the dispatched entry was never measured");
+      Thread.sleep(50);
+    }
 
   }
 

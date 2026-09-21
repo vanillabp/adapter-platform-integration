@@ -259,4 +259,57 @@ public interface PhaseTwoOutbox {
 
   }
 
+  /**
+   * How long the oldest entry waiting for its dispatch has been waiting. It is the
+   * number which tells a backlog being worked off from one standing still, and
+   * {@link #pendingCalls()} alone cannot: a count which stays at the same value looks
+   * the same in both cases, while this age keeps growing only while the same entry
+   * keeps waiting.
+   * <p>
+   * The age is counted from the moment the entry was written, which is the timestamp
+   * the dispatch of that entry is measured from as well. It is not the moment of the
+   * next attempt: an entry which failed once waits for its backoff, and the operation
+   * the application asked for has been owed since it was planned.
+   * <p>
+   * {@link java.time.Duration#ZERO} where nothing waits, which is the ordinary state of
+   * a healthy application and belongs in the graph. {@link java.util.Optional#empty()}
+   * means "this store cannot say" - no meter is published then, the same way
+   * {@link #pendingCalls()} publishes none. A store which keeps no moment of writing
+   * answers empty and says so in its own documentation, because a zero would read as an
+   * outbox which is up to date.
+   * <p>
+   * A store implementing it answers with a cheap query; it is called whenever the
+   * metrics backend collects, so an expensive scan does not belong here.
+   *
+   * @return How long the oldest waiting entry has been waiting, zero where none waits,
+   *         or empty if the store cannot say
+   */
+  default java.util.Optional<java.time.Duration> ageOfOldestPendingCall() {
+
+    return java.util.Optional.empty();
+
+  }
+
+  /**
+   * How long an entry written at that moment has been waiting, for the stores which
+   * answer {@link #ageOfOldestPendingCall()} and for the wait they report per dispatch.
+   * <p>
+   * Never negative. The moment comes from the database while the clock comes from this
+   * node, and where the two disagree the difference is the disagreement rather than a
+   * wait. An age below zero would make a dashboard look broken instead of showing the
+   * backlog.
+   *
+   * @param writtenAt When the entry was written
+   * @return How long it has been waiting, at least zero
+   */
+  static java.time.Duration waitedSince(
+      final java.time.Instant writtenAt) {
+
+    final var waited = java.time.Duration.between(writtenAt, java.time.Instant.now());
+    return waited.isNegative()
+        ? java.time.Duration.ZERO
+        : waited;
+
+  }
+
 }

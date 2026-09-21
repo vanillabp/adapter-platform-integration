@@ -49,6 +49,13 @@ public final class GruelboxRedispatchAwareSubmitter implements Submitter {
   private static final ThreadLocal<Boolean> PREVIOUSLY_ATTEMPTED = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
   /**
+   * When the entry dispatched on this thread was written, for the wait the dispatch
+   * reports. It travels the same way the flag above does, and for the same reason:
+   * gruelbox invokes the scheduled method with the persisted arguments only.
+   */
+  private static final ThreadLocal<java.time.Instant> WRITTEN_AT = new ThreadLocal<>();
+
+  /**
    * The entries this application is dispatching right now. gruelbox locks the row of
    * an entry it dispatches (<code>SELECT ... FOR UPDATE</code>) and keeps that lock
    * until the handler returned, so any write to such a row waits for a remote call to
@@ -88,6 +95,25 @@ public final class GruelboxRedispatchAwareSubmitter implements Submitter {
   public static boolean isPreviouslyAttempted() {
 
     return PREVIOUSLY_ATTEMPTED.get();
+
+  }
+
+  /**
+   * When the entry dispatched on the current thread was written, or <code>null</code>
+   * where gruelbox cannot say any more.
+   * <p>
+   * gruelbox has no column for the moment of writing. It puts that moment into
+   * <code>nextAttemptTime</code> when it schedules an entry and overwrites it the first
+   * time a flush picks the entry up, so only an entry which was submitted right after
+   * its transaction committed still carries it. Every other entry answers
+   * <code>null</code> here and its wait stays unmeasured, which is what a store says
+   * instead of reporting a number it cannot back.
+   *
+   * @return The moment or <code>null</code>
+   */
+  public static java.time.Instant whenTheEntryWasWritten() {
+
+    return WRITTEN_AT.get();
 
   }
 
@@ -141,14 +167,20 @@ public final class GruelboxRedispatchAwareSubmitter implements Submitter {
     delegate.submit(
         entry,
         entryOnWorkerThread -> {
-          PREVIOUSLY_ATTEMPTED.set(
-              (entryOnWorkerThread.getAttempts() > 0) || (entryOnWorkerThread.getLastAttemptTime() != null));
+          final var attemptedBefore = (entryOnWorkerThread.getAttempts() > 0) || (entryOnWorkerThread
+              .getLastAttemptTime() != null);
+          PREVIOUSLY_ATTEMPTED.set(attemptedBefore);
+          WRITTEN_AT.set(
+              attemptedBefore
+                  ? null
+                  : entryOnWorkerThread.getNextAttemptTime());
           BEING_DISPATCHED.add(entryOnWorkerThread.getId());
           try {
             localExecutor.accept(entryOnWorkerThread);
           } finally {
             BEING_DISPATCHED.remove(entryOnWorkerThread.getId());
             PREVIOUSLY_ATTEMPTED.remove();
+            WRITTEN_AT.remove();
           }
         });
 

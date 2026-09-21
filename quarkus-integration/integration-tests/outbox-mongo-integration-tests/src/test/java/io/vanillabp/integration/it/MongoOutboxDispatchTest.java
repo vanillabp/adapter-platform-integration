@@ -42,7 +42,9 @@ import jakarta.transaction.UserTransaction;
  *       index on the idempotency key),</li>
  *   <li>a failing dispatch is retried and</li>
  *   <li>a left-over entry (like after a crash) is dispatched by the recovery
- *       poller.</li>
+ *       poller and</li>
+ *   <li>the store says how long the oldest entry waiting for its dispatch has been
+ *       waiting.</li>
  * </ul>
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -82,6 +84,9 @@ public class MongoOutboxDispatchTest {
   @Inject
   MongoClient mongoClient;
 
+  @Inject
+  io.vanillabp.integration.runtime.outbox.MongoPhaseTwoOutbox outbox;
+
   private MongoCollection<Document> outbox() {
 
     return mongoClient
@@ -114,6 +119,56 @@ public class MongoOutboxDispatchTest {
 
     listener.reset();
     outbox().deleteMany(new Document());
+
+  }
+
+  @Test
+  @DisplayName("The age of the oldest waiting entry is the one of the oldest, not of the youngest")
+  public void theOldestWaitingEntryDecidesTheAge() {
+
+    assertEquals(
+        java.time.Duration.ZERO,
+        outbox
+            .ageOfOldestPendingCall()
+            .orElseThrow(),
+        "nothing waits, and that zero says the outbox owes nothing");
+
+    final var now = java.time.Instant.now();
+    writeWaitingEntry("younger", now.minus(java.time.Duration.ofMinutes(1)));
+    writeWaitingEntry("older", now.minus(java.time.Duration.ofMinutes(10)));
+
+    assertTrue(
+        outbox
+            .ageOfOldestPendingCall()
+            .orElseThrow()
+            .toSeconds() >= 600L,
+        "the store answers for the entry which has been waiting longest");
+
+  }
+
+  /**
+   * Writes an entry which stays where it is: its next attempt lies an hour ahead, so
+   * the dispatcher's poll does not pick it up.
+   *
+   * @param id The id of the entry
+   * @param writtenAt When it was written
+   */
+  private void writeWaitingEntry(
+      final String id,
+      final java.time.Instant writtenAt) {
+
+    outbox()
+        .insertOne(new Document()
+            .append("_id", id)
+            .append("workflowModuleId", "test-module")
+            .append("bpmnProcessId", "Test")
+            .append("operation", "START_WORKFLOW")
+            .append("aggregateId", "4711")
+            .append("dedupKey", id)
+            .append("status", "OPEN")
+            .append("createdAt", Date.from(writtenAt))
+            .append("attempts", 0)
+            .append("nextAttemptAt", Date.from(java.time.Instant.now().plus(java.time.Duration.ofHours(1)))));
 
   }
 

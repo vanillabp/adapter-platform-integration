@@ -48,32 +48,42 @@ public class VanillaBpMetricsProducer {
   private static final int STARTUP_PRIORITY = jakarta.interceptor.Interceptor.Priority.APPLICATION + 800;
 
   /**
-   * Publishes how many entries wait in each outbox store, for the stores which can
-   * count them ({@link PhaseTwoOutbox#pendingCalls()}). The gauge is tagged with the
-   * class name of the store, because an application may run several of them.
+   * Publishes what each outbox store says about its backlog: how many entries wait
+   * ({@link PhaseTwoOutbox#pendingCalls()}) and how long the oldest of them has been
+   * waiting ({@link PhaseTwoOutbox#ageOfOldestPendingCall()}). Each gauge is published
+   * for the stores which can answer that question, and they are asked separately
+   * because a store may answer one of them and not the other. The gauges are tagged
+   * with the class name of the store, because an application may run several of them.
    *
    * @param startup The startup event - the outbox stores must not be materialized
    *          while the beans are still being built
    * @param metrics The metrics to register the gauges with
    * @param outboxes All outbox stores of the application
    */
-  void registerOutboxPendingGauges(
+  void registerOutboxBacklogGauges(
       @Observes
       @jakarta.annotation.Priority(STARTUP_PRIORITY) final StartupEvent startup,
       final MicrometerVanillaBpMetrics metrics,
       @jakarta.enterprise.inject.Any final Instance<PhaseTwoOutbox> outboxes) {
 
-    if (!outboxes.isUnsatisfied()) {
-      outboxes
-          .stream()
-          .filter(outbox -> outbox
-              .pendingCalls()
-              .isPresent())
-          .forEach(outbox -> metrics
-              .registerPendingOutboxEntries(
-                  storeNameOf(outbox),
-                  outbox::pendingCalls));
+    if (outboxes.isUnsatisfied()) {
+      return;
     }
+    outboxes
+        .stream()
+        .forEach(outbox -> {
+          final var store = storeNameOf(outbox);
+          if (outbox
+              .pendingCalls()
+              .isPresent()) {
+            metrics.registerPendingOutboxEntries(store, outbox::pendingCalls);
+          }
+          if (outbox
+              .ageOfOldestPendingCall()
+              .isPresent()) {
+            metrics.registerAgeOfOldestPendingOutboxEntry(store, outbox::ageOfOldestPendingCall);
+          }
+        });
 
   }
 

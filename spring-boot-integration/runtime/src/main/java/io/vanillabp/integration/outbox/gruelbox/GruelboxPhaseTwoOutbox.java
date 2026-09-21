@@ -71,6 +71,18 @@ import lombok.extern.slf4j.Slf4j;
  * id which is gone from the configuration is reported in the words the start uses - once
  * per adapter id, whatever the backlog. Decision 47 in the repository's DECISIONS.md says
  * why that is the answer and what the alternatives would have cost.
+ * <p>
+ * {@link PhaseTwoOutbox#ageOfOldestPendingCall()} is the other question this store
+ * leaves unanswered, and this one it cannot answer at all. gruelbox keeps no moment of
+ * writing: it puts that moment into <code>nextAttemptTime</code> and overwrites it the
+ * first time a flush picks the entry up, so the oldest waiting entry - which is usually
+ * one which was picked up and failed - no longer says when it was planned. Answering
+ * from the entries nothing has touched yet would report a young age while old ones
+ * stand next to them, which reads as an outbox that is up to date. So no age is
+ * published for this store, and <code>vanillabp.outbox.pending</code> stays the number
+ * to watch here. The wait of a dispatch is reported for the entries where the moment is
+ * still there, which is every entry submitted right after its transaction committed
+ * (see {@link GruelboxRedispatchAwareSubmitter#whenTheEntryWasWritten()}).
  */
 @Slf4j
 public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {

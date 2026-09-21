@@ -3788,9 +3788,23 @@ does is inside it, and nothing had to be repeated per BPMS.
   it, so its store reads the table gruelbox created, along the index gruelbox created with it.
   On Quarkus the gauges are registered by a `StartupEvent` observer running AFTER the outbox
   dispatchers, because a store asked before its table exists cannot count.
+- A count cannot tell a backlog being worked off from one standing still, so two more meters
+  say what happens in the gap between the transaction and the BPMS.
+  `vanillabp.outbox.dispatch.lag` is a timer per `store` and `outcome`, measured from the
+  moment the entry was written to the end of the attempt - a failed attempt is measured too,
+  because the operation is still owed and the next attempt is measured from the same moment
+  again. `vanillabp.outbox.oldest.pending.age` is the gauge beside `vanillabp.outbox.pending`,
+  in seconds, read from `PhaseTwoOutbox#ageOfOldestPendingCall()`. An empty outbox answers
+  zero, which is a measurement, and a store which cannot read its oldest entry answers empty,
+  which leaves a gap. Both are the store's to report, because only the store knows when an
+  entry was written. gruelbox is the one store which publishes no age: it puts the moment of
+  writing into `nextAttemptTime` and overwrites it the first time a flush picks the entry up,
+  so the entries most likely to be old are exactly the ones which cannot say. Its wait is
+  measured for the entries which were submitted right after their commit, where the moment is
+  still there.
 
-`MicrometerVanillaBpMetricsTest` holds the counting, the tags and the records dropped while
-no registry is bound; `AdapterHealthReportTest` holds the health verdicts including
+`MicrometerVanillaBpMetricsTest` holds the counting, the tags, the two outbox meters above and
+the records dropped while no registry is bound; `AdapterHealthReportTest` holds the health verdicts including
 `unconfiguredAdapterDoesNotDragTheApplicationDown`; `DeliveryMdcTest` holds the keys put
 back afterwards; `ObservabilityTest` and `OutboxMetricsTest` run all of it through a booted
 application per platform.
@@ -3823,8 +3837,9 @@ Three decisions inside it are worth knowing before changing it:
   forever would poison the gauge. The exception never leaves the class, because a metric must
   not be the reason an application fails.
 
-The wrapping happens in `MicrometerVanillaBpMetrics#registerPendingOutboxEntries`, not in the
-platform modules and not in the stores. One place, so a store cannot forget.
+The wrapping happens in `MicrometerVanillaBpMetrics#registerPendingOutboxEntries` and
+`#registerAgeOfOldestPendingOutboxEntry`, not in the platform modules and not in the stores.
+One place per gauge, so a store cannot forget.
 
 The window, the serialized collectors and the failure which does not stay are
 `CachedGaugeValueTest`: `oneMeasurementPerWindow`, `concurrentCollectorsShareOneMeasurement`,

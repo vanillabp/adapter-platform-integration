@@ -408,10 +408,13 @@ public class SpringBootMigrationAdapterAutoConfiguration {
     }
 
     /**
-     * Publishes how many entries wait in each outbox store, for the stores which can
-     * count them
-     * ({@link io.vanillabp.integration.spi.PhaseTwoOutbox#pendingCalls()}). The
-     * gauge is tagged with the bean name of the store, because an application may
+     * Publishes what each outbox store says about its backlog: how many entries wait
+     * ({@link io.vanillabp.integration.spi.PhaseTwoOutbox#pendingCalls()}) and how long
+     * the oldest of them has been waiting
+     * ({@link io.vanillabp.integration.spi.PhaseTwoOutbox#ageOfOldestPendingCall()}).
+     * Each gauge is published for the stores which can answer that question, and they
+     * are asked separately because a store may answer one of them and not the other.
+     * The gauges are tagged with the name of the store, because an application may
      * run several of them (mixed persistence, a dedicated outbox for one aggregate).
      * <p>
      * The stores are resolved lazily: touching them while the beans are built would
@@ -423,21 +426,27 @@ public class SpringBootMigrationAdapterAutoConfiguration {
      * @return The registration, run once the context is ready
      */
     @Bean
-    public org.springframework.beans.factory.SmartInitializingSingleton vanillaBpOutboxPendingGauges(
+    public org.springframework.beans.factory.SmartInitializingSingleton vanillaBpOutboxBacklogGauges(
         final io.vanillabp.integration.adapter.migration.observability.MicrometerVanillaBpMetrics metrics,
         final org.springframework.beans.factory.ObjectProvider<io.vanillabp.integration.spi.PhaseTwoOutbox> outboxes) {
 
       return () -> outboxes
           .stream()
-          .filter(outbox -> outbox
-              .pendingCalls()
-              .isPresent())
-          .forEach(outbox -> metrics
-              .registerPendingOutboxEntries(
-                  outbox
-                      .getClass()
-                      .getSimpleName(),
-                  outbox::pendingCalls));
+          .forEach(outbox -> {
+            final var store = outbox
+                .getClass()
+                .getSimpleName();
+            if (outbox
+                .pendingCalls()
+                .isPresent()) {
+              metrics.registerPendingOutboxEntries(store, outbox::pendingCalls);
+            }
+            if (outbox
+                .ageOfOldestPendingCall()
+                .isPresent()) {
+              metrics.registerAgeOfOldestPendingOutboxEntry(store, outbox::ageOfOldestPendingCall);
+            }
+          });
 
     }
 

@@ -248,6 +248,44 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
 
   }
 
+  /**
+   * How long the oldest waiting entry has been waiting, read from
+   * <code>CREATED_AT</code> - the moment the entry was written, which a replacing call
+   * sets anew because the row then carries a younger operation. It reads the same rows
+   * the count of the waiting entries reads.
+   */
+  @Override
+  public java.util.Optional<java.time.Duration> ageOfOldestPendingCall() {
+
+    if (!dataSource.isResolvable()) {
+      return java.util.Optional.empty();
+    }
+    final var oldestPending = "SELECT MIN(CREATED_AT) FROM %s WHERE STATUS = ?"
+        .formatted(tableName(dispatcher.getProperties()));
+    try (var connection = dataSource.get().getConnection(); var statement = connection
+        .prepareStatement(oldestPending)) {
+      statement.setString(1, JdbcPhaseTwoOutboxDispatcher.STATUS_OPEN);
+      try (var resultSet = statement.executeQuery()) {
+        if (!resultSet.next()) {
+          return java.util.Optional.empty();
+        }
+        final var oldest = resultSet.getTimestamp(1);
+        // no row at all means nothing waits, and that zero is a measurement: the
+        // outbox owes nothing
+        return java.util.Optional
+            .of(oldest == null
+                ? java.time.Duration.ZERO
+                : PhaseTwoOutbox.waitedSince(oldest.toInstant()));
+      }
+    } catch (final SQLException e) {
+      // a metric must never be the reason an application fails - the gauge reports
+      // nothing for this collection and the next one tries again
+      log.debug("Could not read the oldest pending entry of the JDBC phase-two outbox", e);
+      return java.util.Optional.empty();
+    }
+
+  }
+
   @Override
   public boolean schedule(
       final PhaseTwoCall call) {
