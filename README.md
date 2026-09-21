@@ -111,6 +111,9 @@ Top-level modules (by directory name) are:
    the numbers and names the one case where Quarkus does change a class id.
 6. **test-utils:**<br>
    A small module providing utilities used by tests across all platforms.
+   It also holds `PublishedPoms`, the assertion every VanillaBP repository calls to check what its
+   published POMs hand an application. The repository names the file its modules publish and the
+   tools of its own build, and the javadoc of that class says why.
 7. **bpms-double:**<br>
    The BPMS double, published so that a repository outside this one can boot a VanillaBP application in a test
    without a real BPMS. It is the adapter the platform's own tests run against, which is what proves it for
