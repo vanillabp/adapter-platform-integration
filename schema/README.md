@@ -26,14 +26,20 @@ the JAR from the classpath.
 
 Three tables are described: the phase-two outbox (`VANILLABP_PHASE_TWO_OUTBOX`), the log of
 processed task deliveries (`VANILLABP_TASK_DELIVERY`) and the payloads of the phase-two calls which
-carry one (`VANILLABP_PHASE_TWO_PAYLOAD`). All three serve a Spring Boot and a Quarkus application
-alike, because both run the same JDBC store. Not described: `TXNO_OUTBOX`, the table of the
-gruelbox store a Spring Boot application can still opt into
+carry one (`VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD`). All three serve a Spring Boot and a Quarkus
+application alike, because both run the same JDBC store. Not described: `TXNO_OUTBOX`, the table of
+the gruelbox store a Spring Boot application can still opt into
 (`vanillabp.outbox.gruelbox.enabled`) - that schema belongs to gruelbox and its own migrator.
 
 The payload table is needed by every JDBC-backed outbox, gruelbox included: a call which carries
 bytes stores them there and its entry names the row (see decision 62 in `DECISIONS.md`). An
 application whose extensions pass no payload never writes a row into it, and the table stays empty.
+
+Its name is the name of the outbox table plus `_PAYLOAD`. An application which renames the outbox
+with `vanillabp.outbox.jdbc.table` therefore has to rename this table too, by overriding the
+property `vanillabp.payload.table` of the changelog. Both tables belong to one outbox, and two
+applications which separate themselves on one schema by the outbox name have to separate the
+payloads as well.
 
 ## Why the SQL is generated and not written
 

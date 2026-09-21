@@ -37,7 +37,7 @@ public class JdbcPhaseTwoPayloadStoreTest {
       .idempotencyKey(call -> Optional.empty())
       .build();
 
-  private static final String TABLE_NAME = "VANILLABP_PHASE_TWO_PAYLOAD";
+  private static final String TABLE_NAME = "VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD";
 
   private static JdbcConnectionAccess h2(
       final String name) {

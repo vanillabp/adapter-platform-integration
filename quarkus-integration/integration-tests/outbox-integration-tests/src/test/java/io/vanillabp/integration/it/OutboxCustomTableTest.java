@@ -3,6 +3,7 @@ package io.vanillabp.integration.it;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import javax.sql.DataSource;
 
@@ -26,11 +27,19 @@ import jakarta.transaction.UserTransaction;
  * dispatcher polls) the configured table - the default table is never created.
  * Every outbox instance needs its own store, so a dedicated outbox for a high-load
  * process gets its own table this way.
+ * <p>
+ * The payloads follow the outbox they belong to: nothing here names the payload table, so
+ * it is the configured outbox table plus <code>_PAYLOAD</code>. Two applications keeping
+ * themselves apart on one schema by the outbox name would otherwise still house-keep each
+ * other's payloads.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class OutboxCustomTableTest {
 
   private static final String CUSTOM_TABLE = "CUSTOM_HOT_OUTBOX";
+
+  private static final String CUSTOM_PAYLOAD_TABLE = CUSTOM_TABLE
+      + "_PAYLOAD";
 
   @RegisterExtension
   static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
@@ -106,6 +115,15 @@ public class OutboxCustomTableTest {
 
     // the default table was never created
     assertFalse(tableExists("VANILLABP_PHASE_TWO_OUTBOX"));
+
+  }
+
+  @Test
+  @DisplayName("The payload table is named after the configured outbox table")
+  public void thePayloadTableFollowsTheOutboxTable() throws Exception {
+
+    assertTrue(tableExists(CUSTOM_PAYLOAD_TABLE));
+    assertFalse(tableExists("VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD"));
 
   }
 

@@ -148,11 +148,16 @@ bytes do not travel in the outbox entry. They are written into a store of their 
 same transaction, and the entry names them by a reference in its arguments - the reasoning
 is decision 62 in `DECISIONS.md`.
 
-The store is a table `VANILLABP_PHASE_TWO_PAYLOAD` for the JDBC-backed outboxes
-(`vanillabp.outbox.jdbc.payload-table`) and a collection `vanillabp-phase-two-payloads` for
-the MongoDB ones (`vanillabp.outbox.mongo.payload-collection`). It is created together with
+The store is a table `VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD` for the JDBC-backed outboxes
+(`vanillabp.outbox.jdbc.payload-table`) and a collection `vanillabp-phase-two-outbox-payloads`
+for the MongoDB ones (`vanillabp.outbox.mongo.payload-collection`). It is created together with
 the other tables unless `vanillabp.outbox.create-schema` is disabled, and
 `io.vanillabp:vanillabp-schema` describes it for Liquibase and Flyway.
+
+Both names follow the outbox they belong to. Where neither key is set, VanillaBP appends
+`_PAYLOAD` to the name of the outbox table and `-payloads` to the name of the outbox collection. So
+an application which renames its outbox to keep two deployments apart on one schema keeps the
+payloads apart too. A name written into one of the two keys is used as it stands.
 
 The form costs one read by primary key per dispatch attempt of a call which carries a
 payload, and nothing at all for a call which carries none - such a call writes no row

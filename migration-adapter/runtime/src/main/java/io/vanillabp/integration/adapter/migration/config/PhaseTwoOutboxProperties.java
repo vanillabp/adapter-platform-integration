@@ -206,8 +206,10 @@ public class PhaseTwoOutboxProperties {
      * The name of the table storing the payloads of phase-two calls which carry one
      * (see {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}). One table per
      * outbox, for the reason the outbox itself has one: two applications sharing it
-     * would house-keep each other's rows. <code>null</code> means
-     * <code>VANILLABP_PHASE_TWO_PAYLOAD</code>.
+     * would house-keep each other's rows. <code>null</code> means the name of the
+     * outbox table plus
+     * {@link io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore#TABLE_NAME_SUFFIX},
+     * so an application which renames the outbox renames the payloads with it.
      */
     @Builder.Default
     private String payloadTable = null;
@@ -219,6 +221,22 @@ public class PhaseTwoOutboxProperties {
   @NoArgsConstructor
   @SuperBuilder
   public static class MongoOutboxProperties {
+
+    /**
+     * The name of the collection the entries go into where the application configures
+     * none.
+     */
+    public static final String DEFAULT_COLLECTION = "vanillabp-phase-two-outbox";
+
+    /**
+     * What is appended to the name of the outbox collection to get the name of the
+     * payload collection. It is written the way a MongoDB collection is written here,
+     * in small letters with a hyphen, while the JDBC store appends
+     * {@link io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore#TABLE_NAME_SUFFIX}
+     * in the way a table is written. The two are the same idea in two spellings, so
+     * do not pull them together into one string.
+     */
+    public static final String PAYLOAD_COLLECTION_SUFFIX = "-payloads";
 
     /**
      * Whether the MongoDB-based default outbox is created when a MongoDB connection
@@ -235,15 +253,34 @@ public class PhaseTwoOutboxProperties {
      * compete and double-dispatch.
      */
     @Builder.Default
-    private String collection = "vanillabp-phase-two-outbox";
+    private String collection = DEFAULT_COLLECTION;
 
     /**
      * The name of the collection storing the payloads of phase-two calls which carry
      * one (see {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}). One
      * collection per outbox, for the reason the outbox itself has one.
+     * <code>null</code> means the name of the outbox collection plus
+     * {@link #PAYLOAD_COLLECTION_SUFFIX}, so an application which renames the outbox
+     * renames the payloads with it.
      */
     @Builder.Default
-    private String payloadCollection = "vanillabp-phase-two-payloads";
+    private String payloadCollection = null;
+
+    /**
+     * The collection both MongoDB stores write their payloads into: the configured
+     * name where there is one, and otherwise the name of the outbox collection plus
+     * {@link #PAYLOAD_COLLECTION_SUFFIX}. Read this instead of the plain getter, which
+     * answers what the application wrote and is <code>null</code> most of the time.
+     *
+     * @return The payload collection name
+     */
+    public String payloadCollectionName() {
+
+      return payloadCollection == null
+          ? collection + PAYLOAD_COLLECTION_SUFFIX
+          : payloadCollection;
+
+    }
 
   }
 

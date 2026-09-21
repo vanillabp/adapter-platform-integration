@@ -43,8 +43,10 @@ import lombok.extern.slf4j.Slf4j;
  * background dispatcher) is unwanted.
  * <p>
  * The tables (<code>VANILLABP_PHASE_TWO_OUTBOX</code> and
- * <code>VANILLABP_PHASE_TWO_PAYLOAD</code>, the first one overridable via
- * <code>vanillabp.outbox.jdbc.table</code>) are created while the outbox bean is built,
+ * <code>VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD</code>, overridable via
+ * <code>vanillabp.outbox.jdbc.table</code> and
+ * <code>vanillabp.outbox.jdbc.payload-table</code>; a renamed outbox renames the payload
+ * table with it) are created while the outbox bean is built,
  * unless <code>vanillabp.outbox.create-schema</code> is set to <code>false</code> - their
  * existence is then verified instead, and the artifact
  * <code>io.vanillabp:vanillabp-schema</code> carries the statements for the migration

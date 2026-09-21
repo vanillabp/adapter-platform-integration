@@ -77,10 +77,10 @@ public class ExtensionOperationDispatchTest {
   /**
    * The payload of one call, addressed by the reference its entry names.
    */
-  private static final String COUNT_PAYLOAD_OF_REFERENCE = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_PAYLOAD "
+  private static final String COUNT_PAYLOAD_OF_REFERENCE = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD "
       + "WHERE REFERENCE = '%s'";
 
-  private static final String COUNT_PAYLOADS = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_PAYLOAD";
+  private static final String COUNT_PAYLOADS = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD";
 
   /**
    * The entries of one key which still wait, addressed the way the store deduplicates
