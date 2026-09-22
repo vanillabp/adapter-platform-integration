@@ -4,7 +4,7 @@ The platform-neutral core of VanillaBP 2 plus the Spring Boot and Quarkus integr
 is implemented in `migration-adapter` and reaches both platforms from there.
 
 Read [`README.md`](./README.md) first: it says which module a change belongs in, which SPI it may
-touch, and how to build. [`CONTRIBUTING.md`](./CONTRIBUTING.md) carries the one rule which is easy
+touch, and how to build. [`CONTRIBUTING.md`](./CONTRIBUTING.md) carries the rules which are easy
 to lose sight of while writing code, and [`UPGRADE.md`](./UPGRADE.md) says what an application
 upgrading from VanillaBP 1 has to do.
 
@@ -60,6 +60,23 @@ entry until its old text is gone is never the way.
 Adding an entry has the same rule. A decision earns a number when several places rely on it and
 copying the explanation to each of them would rot; anything smaller is a comment where it belongs,
 and anything larger is documentation.
+
+## Who has to follow
+
+A change an application can see does not stop at this repository. The BPMS adapters, the blueprints,
+both wikis and the Business Cockpit write the same property names, default values and table names
+down again, and this build compiles none of them. Name the repositories which have to follow, in the
+pull request, and write `nobody` where none does.
+
+The search which answers it, from the root of this repository, with the other clones next to it and
+up to date:
+
+```bash
+grep -rIl --exclude-dir=.git --exclude-dir=target <the name you are changing> .. | cut -d/ -f2 | sort -u
+```
+
+[`CONTRIBUTING.md`](./CONTRIBUTING.md#a-change-names-who-has-to-follow) says why this is a rule and
+what it cost the two times it was skipped.
 
 ## Before you open a pull request
 

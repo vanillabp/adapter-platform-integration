@@ -12,7 +12,10 @@ import java.util.function.Supplier;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.TestInstancePostProcessor;
@@ -46,6 +49,10 @@ public class SuppressOutputExtensionTest {
   private static final String WHAT_THE_PASSING_TEST_PRINTED = "what the only test of the class printed";
 
   private static final String WHAT_WAS_PRINTED_AFTER_THE_LAST_TEST = "the last word of the class";
+
+  private static final String WHAT_THE_FIRST_TEST_PRINTED = "a sentence of the first test";
+
+  private static final String WHAT_THE_SECOND_TEST_PRINTED = "a sentence of the second test";
 
   @Test
   @DisplayName("A failing class is readable behind a class which silenced its background output")
@@ -169,6 +176,29 @@ public class SuppressOutputExtensionTest {
         1,
         occurrencesIn(readAll(console), WHAT_THE_PASSING_TEST_PRINTED),
         "the output of the last test is expected once, not once more for the class it belongs to");
+
+  }
+
+  @Test
+  @DisplayName("The view of the running test leaves out what the test before it printed")
+  public void theViewOfTheRunningTestLeavesOutTheTestBefore() {
+
+    final var console = new ByteArrayOutputStream();
+
+    final var run = withTheConsoleReplacedBy(
+        console, () -> run(PrintsInItsFirstTestAndLooksInItsSecond.class));
+
+    assertEquals(
+        0,
+        run.getTotalFailureCount(),
+        () -> "The second test of the class did not see its own output the way it expected, "
+            + "so an assertion about an absent sentence speaks for the whole class again. "
+            + "This is what the run said: "
+            + run
+                .getFailures()
+                .stream()
+                .map(failure -> String.valueOf(failure.getException()))
+                .toList());
 
   }
 
@@ -326,6 +356,51 @@ public class SuppressOutputExtensionTest {
           output.getAll().contains(WHAT_THE_STARTUP_PRINTED),
           "a test asking for the captured output was not given what its class printed "
               + "before the first test began");
+
+    }
+
+  }
+
+  /**
+   * Two tests where the second asks about a sentence the first one printed. It is the
+   * shape which makes an absence assertion depend on the order of the tests, so the order
+   * is fixed here rather than left to the engine.
+   */
+  @ExtendWith(SuppressOutputExtension.class)
+  @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+  static class PrintsInItsFirstTestAndLooksInItsSecond {
+
+    @Test
+    @Order(1)
+    public void prints() {
+
+      System.out.println(WHAT_THE_FIRST_TEST_PRINTED);
+      System.err.println(WHAT_THE_FIRST_TEST_PRINTED);
+
+    }
+
+    @Test
+    @Order(2)
+    public void looks(
+        final CapturedOutput output) {
+
+      assertTrue(
+          output.getAll().contains(WHAT_THE_FIRST_TEST_PRINTED),
+          "the class buffer lost what the test before this one printed");
+      assertFalse(
+          output.getAllOfThisTest().contains(WHAT_THE_FIRST_TEST_PRINTED),
+          "the view of the running test carries what the test before it printed");
+      assertFalse(
+          output.getOutOfThisTest().contains(WHAT_THE_FIRST_TEST_PRINTED),
+          "the stdout of the running test carries what the test before it printed");
+      assertFalse(
+          output.getErrOfThisTest().contains(WHAT_THE_FIRST_TEST_PRINTED),
+          "the stderr of the running test carries what the test before it printed");
+
+      System.out.println(WHAT_THE_SECOND_TEST_PRINTED);
+      assertTrue(
+          output.getAllOfThisTest().contains(WHAT_THE_SECOND_TEST_PRINTED),
+          "the view of the running test does not show what the running test prints");
 
     }
 

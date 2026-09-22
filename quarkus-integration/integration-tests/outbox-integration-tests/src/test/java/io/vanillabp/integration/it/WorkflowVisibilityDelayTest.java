@@ -61,6 +61,31 @@ public class WorkflowVisibilityDelayTest {
    */
   private static final int INVISIBLE_PROBES = 3;
 
+  /**
+   * The window the awareness double reports while the workflow is not visible yet. Every
+   * probe which answers "unknown" makes the dispatch hand the entry back, due one window
+   * later.
+   */
+  private static final Duration VISIBILITY_WINDOW = Duration.ofSeconds(1);
+
+  /**
+   * What the case below costs on an idle machine. Phase one uses the first probe, and
+   * every probe left over buys the dispatch one more window.
+   */
+  private static final Duration WINDOWS_THE_CASE_COSTS = VISIBILITY_WINDOW
+      .multipliedBy(INVISIBLE_PROBES - 1);
+
+  /**
+   * How long a test waits for a dispatch before it says that none is coming. Three times
+   * what the case costs, and never less than thirty seconds: a machine carrying other
+   * builds leaves this JVM without a turn for seconds at a time, and such a pause does not
+   * get smaller when the window does. Nothing is measured here, so the budget is spent
+   * only when the test fails. A test which is right stops waiting as soon as the
+   * correlation arrives.
+   */
+  private static final long UNTIL_A_DISPATCH_COUNTS_AS_LOST = Math
+      .max(30000, WINDOWS_THE_CASE_COSTS.multipliedBy(3).toMillis());
+
   @Inject
   WorkflowService workflowService;
 
@@ -112,7 +137,7 @@ public class WorkflowVisibilityDelayTest {
     // probes - what an exporter-fed read model does right after a start. Each dispatch
     // asks once and gives the entry back due in the window, so three probes are three
     // attempts: the window is what decides how long the correlation takes
-    awareness.becomeVisibleAfter(INVISIBLE_PROBES, Duration.ofSeconds(1));
+    awareness.becomeVisibleAfter(INVISIBLE_PROBES, VISIBILITY_WINDOW);
 
     // the number of probes left over is read INSIDE the transaction, because the dispatch
     // begins right after the commit and probes as well
@@ -138,7 +163,11 @@ public class WorkflowVisibilityDelayTest {
         probesLeftByPhaseOne,
         "phase one asks once and leaves asking again to the dispatch");
 
-    final var deadline = System.currentTimeMillis() + 30_000;
+    // every probe which still reports the workflow as unknown costs one window, and two
+    // of the three probes are left for the dispatch. This guard has to span both of them
+    // plus whatever a loaded machine adds, and it measures nothing: what is asserted is
+    // that the correlation arrives, not how soon
+    final var deadline = System.currentTimeMillis() + UNTIL_A_DISPATCH_COUNTS_AS_LOST;
     while (listener.getCorrelatedMessages().isEmpty()) {
       assertTrue(
           System.currentTimeMillis() < deadline,

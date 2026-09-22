@@ -13,6 +13,15 @@ import org.junit.jupiter.api.extension.*;
 import org.junit.jupiter.api.extension.ExtensionContext.Namespace;
 import org.junit.jupiter.api.extension.ExtensionContext.Store;
 
+/**
+ * Keeps the output of a green build empty and replays the output of a red one, and hands
+ * a test what was captured as a {@link CapturedOutput} parameter.
+ * <p>
+ * Every finished test is moved into the buffers of the class, so the two views of
+ * {@link CapturedOutput} answer two different questions: what this class has printed so
+ * far, and what the running test printed. Which one an assertion needs depends on whether
+ * it looks for a sentence or for its absence. {@link CapturedOutput} says which is which.
+ */
 public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallback, BeforeEachCallback, AfterEachCallback, ParameterResolver {
 
   /**
