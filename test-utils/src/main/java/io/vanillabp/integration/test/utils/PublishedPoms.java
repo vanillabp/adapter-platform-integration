@@ -162,6 +162,23 @@ public final class PublishedPoms {
    * {@code provided} or {@code test}, or when the declaration itself says
    * {@code optional}. The flag counts here and not in the {@code dependencyManagement},
    * which is the whole difference between the two messages this may throw.
+   * <p>
+   * The list holds for the whole repository, while a finding falls per module. A tool
+   * which is not in the list is therefore invisible here, in every module at once, and
+   * a tool which is in it is checked in every module the same way. A module which is
+   * itself a library of test tools needs the second half of that to bend: it uses the
+   * tool in {@code src/main/java} and hands it on at compile scope on purpose. That is
+   * what {@code business-cockpit} did on 2026-09-22, and this check said nothing only
+   * because {@code test-utils} was no tool of that build's list.
+   * <p>
+   * A repository which keeps a tool right everywhere and passes it on in exactly one
+   * module cannot say so today. It would have to drop the tool from the list and lose
+   * the check for it everywhere else. The way out is an exception which names module and
+   * tool together, and the module is named by its {@code groupId:artifactId} rather than
+   * by the path of its POM. The coordinates stand in the file this check already reads
+   * and they survive a move in the directory tree. In a flattened file the
+   * {@code groupId} is sometimes only inherited from the parent, and whoever reads the
+   * coordinates has to take that case along.
    *
    * @param toolsOfTheBuild The tools of this repository, each as
    *          {@code groupId:artifactId}, for example
