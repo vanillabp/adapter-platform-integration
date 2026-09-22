@@ -119,16 +119,26 @@
         <artifactId>vanillabp-schema</artifactId>
         <version>${project.version}</version>
       </dependency>
-      <!-- Optional helpers. -->
+      <!-- ATTENTION: every entry below is a tool of the build and has to name its scope
+           here. A management entry without a scope promises 'compile'. An application
+           which writes down the coordinate and nothing else would then ship the tool to
+           its own users. This is the mistake we made with Lombok in the aggregator pom,
+           one level higher up: what an application sees of this BOM is what the entry
+           says, not what we meant. -->
+      <!-- Build-time helper: it teaches MapStruct to read fluent accessors and only runs
+           on an annotation-processor path. Nothing calls it once the class files exist. -->
       <dependency>
         <groupId>io.vanillabp</groupId>
         <artifactId>vanillabp-mapstruct-fluent-accessors</artifactId>
         <version>${project.version}</version>
+        <scope>provided</scope>
       </dependency>
+      <!-- Test helper: the small utilities a VanillaBP test uses to set itself up. -->
       <dependency>
         <groupId>io.vanillabp</groupId>
         <artifactId>test-utils</artifactId>
         <version>${project.version}</version>
+        <scope>test</scope>
       </dependency>
       <!-- The BPMS double: an adapter which pretends to be a BPMS, so a test boots an
            application without one. A Spring Boot application adds the one artifact, a
@@ -137,21 +147,25 @@
         <groupId>io.vanillabp</groupId>
         <artifactId>bpms-double</artifactId>
         <version>${project.version}</version>
+        <scope>test</scope>
       </dependency>
       <dependency>
         <groupId>io.vanillabp</groupId>
         <artifactId>bpms-double-spring-boot</artifactId>
         <version>${project.version}</version>
+        <scope>test</scope>
       </dependency>
       <dependency>
         <groupId>io.vanillabp</groupId>
         <artifactId>bpms-double-quarkus</artifactId>
         <version>${project.version}</version>
+        <scope>test</scope>
       </dependency>
       <dependency>
         <groupId>io.vanillabp</groupId>
         <artifactId>bpms-double-quarkus-deployment</artifactId>
         <version>${project.version}</version>
+        <scope>test</scope>
       </dependency>
     </dependencies>
   </dependencyManagement>
