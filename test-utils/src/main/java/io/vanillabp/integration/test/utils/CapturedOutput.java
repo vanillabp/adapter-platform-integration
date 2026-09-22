@@ -6,6 +6,18 @@ import java.io.ByteArrayOutputStream;
  * Provides access to output captured by {@link SuppressOutputExtension}.
  * Can be injected as a test method parameter when using
  * {@code @ExtendWith(SuppressOutputExtension.class)}.
+ * <p>
+ * There are two views on that output, and they answer two different questions.
+ * {@link #getAll()} and its two halves show everything the test class has printed so far,
+ * the tests which already ran included. {@link #getAllOfThisTest()} and its two halves
+ * show only what the running test printed.
+ * <p>
+ * An assertion that a sentence IS there may use either view, because a sentence printed
+ * anywhere in the class is still evidence that the code under test writes it. An
+ * assertion that a sentence is NOT there has to use the view of the running test.
+ * Over the whole class such an assertion also speaks for every other test of that class,
+ * so it passes as long as the test which prints the sentence happens to run later.
+ * Nothing guarantees that order and nothing fails when it changes.
  */
 public class CapturedOutput implements CharSequence {
 
@@ -34,7 +46,8 @@ public class CapturedOutput implements CharSequence {
   }
 
   /**
-   * Returns all captured output (stdout and stderr combined).
+   * Returns all output of this test class so far (stdout and stderr combined), which
+   * includes what the tests before this one printed.
    */
   public String getAll() {
 
@@ -43,7 +56,8 @@ public class CapturedOutput implements CharSequence {
   }
 
   /**
-   * Returns captured stdout output only.
+   * Returns the stdout of this test class so far, which includes what the tests before
+   * this one printed.
    */
   public String getOut() {
 
@@ -52,11 +66,43 @@ public class CapturedOutput implements CharSequence {
   }
 
   /**
-   * Returns captured stderr output only.
+   * Returns the stderr of this test class so far, which includes what the tests before
+   * this one printed.
    */
   public String getErr() {
 
     return combine(classLevelErrBuffer, errBuffer);
+
+  }
+
+  /**
+   * Returns what the running test printed (stdout and stderr combined), and nothing of
+   * what the tests before it printed. This is the view an assertion about an absent
+   * sentence needs.
+   */
+  public String getAllOfThisTest() {
+
+    return combine(null, allBuffer);
+
+  }
+
+  /**
+   * Returns the stdout of the running test, and nothing of what the tests before it
+   * printed. This is the view an assertion about an absent sentence needs.
+   */
+  public String getOutOfThisTest() {
+
+    return combine(null, outBuffer);
+
+  }
+
+  /**
+   * Returns the stderr of the running test, and nothing of what the tests before it
+   * printed. This is the view an assertion about an absent sentence needs.
+   */
+  public String getErrOfThisTest() {
+
+    return combine(null, errBuffer);
 
   }
 

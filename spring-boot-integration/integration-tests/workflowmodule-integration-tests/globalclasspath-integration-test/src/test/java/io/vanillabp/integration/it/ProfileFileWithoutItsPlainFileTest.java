@@ -91,7 +91,7 @@ public class ProfileFileWithoutItsPlainFileTest {
     }
 
     assertFalse(
-        output.getAll().contains("test-module-tenant.yaml"),
+        output.getAllOfThisTest().contains("test-module-tenant.yaml"),
         "a module which works on both platforms is reported all the same");
 
   }
