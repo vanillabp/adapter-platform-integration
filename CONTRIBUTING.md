@@ -213,6 +213,42 @@ The mirror image is just as much a finding: an entry which nothing cites, or one
 fits into a comment at the single place which needs it. A decision earns a number when several
 places rely on it and copying the explanation to each of them would rot.
 
+## A change names who has to follow
+
+> A change which an application can see says who has to follow it, in the same pull request. Those
+> places are the BPMS adapters, the blueprints, both wikis and the Business Cockpit. Where nobody has
+> to follow, the answer is "nobody", and it is written down all the same.
+
+Why it is a rule rather than good advice: the story which replaced the outbox store of the Spring
+Boot integration said nothing about the rest of the workspace. Two persistence blueprints stopped
+compiling and stayed broken for a day. Three adapters kept reading a database table which no longer
+existed, and that surfaced on the red build of a pull request which had nothing to do with the
+outbox. The damage is not the red build, it is the time until somebody looks: a broken blueprint is
+what the next reader copies, and a red build holds up work which was ready. The rename of the
+payload store a week later did name its followers, and the four blueprints it touched were changed
+while the rename was still cheap.
+
+What an application can see is wider than the adapter SPI. A property name, a default value, the
+name of a table or a collection, a published artifact, a log line somebody searches for. Each of
+those is written down again in repositories this build never compiles.
+
+Finding out costs a minute. Update the other clones, because a clone from last week answers for last
+week. Then search them for the name you are about to change. From the root of this repository, where
+`..` holds the clones next to each other:
+
+```bash
+grep -rIl --exclude-dir=.git --exclude-dir=target VANILLABP_PHASE_TWO_OUTBOX .. | cut -d/ -f2 | sort -u
+```
+
+The names which come back are the repositories which have to follow. Run it once per name the change
+touches. A hit in a wiki clone counts as much as one in a source file, because a sentence which
+describes the old behaviour is wrong the moment the change is merged.
+
+Write that list on the line `who has to follow:` of the
+[pull request template](./.github/pull_request_template.md). A repository outside this one follows
+in a pull request of its own. An adapter can only follow once the new snapshot of this repository is
+published, so writing it down is what keeps it from being forgotten in between.
+
 ## Opening a pull request
 
 Work on a branch of your own and keep one subject per pull request. Fill in the
