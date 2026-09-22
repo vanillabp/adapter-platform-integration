@@ -184,8 +184,9 @@ They are not the citation targets of the code: what a comment points at is an en
 
 ### Building
 
-This project uses Java 21. In addition, `spotless` formatters are configured for all supported file
-types to enforce a consistent code style.
+This project publishes Java 21 class files, so an application on Java 21 can use it. The build itself
+runs on a JDK 21 or newer, and the workflows use the one named in `.github/workflows`. In addition,
+`spotless` formatters are configured for all supported file types to enforce a consistent code style.
 
 Use the following command to build the project, run all tests, and generate the code coverage report:
 

@@ -70,6 +70,11 @@
          serves. Set it deliberately with every release: raising it stops the boot of every
          application still using an older part (see decision 71 in DECISIONS.md). -->
     <vanillabp.oldest-part.version>2.0.0</vanillabp.oldest-part.version>
+    <!-- The Java version of the published class files, which is what an application
+         needs to run them. It is not the JDK the build runs on: the workflows under
+         .github/workflows build with a newer one and compile against this release, so an
+         application on Java 21 keeps working. Raising this number shuts such an
+         application out, so raise it deliberately and say so in UPGRADE.md. -->
     <version.java>21</version.java>
     <!-- the platform versions live here because two trees build against them: the two
          platform integrations and the BPMS double, which is a module tree of its own -->
