@@ -23,7 +23,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       packages: write
@@ -108,7 +108,7 @@ jobs:
           - image: built-with-the-tenant-profile
             built-with: "-Dquarkus.profile=tenant"
             started-with: ""
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       packages: read
@@ -164,7 +164,7 @@ jobs:
     environment:
       name: github-pages
       url: "${{ steps.deployment.outputs.page_url }}"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: publish
     steps:
       - name: Deploy to GitHub Pages
