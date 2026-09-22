@@ -49,8 +49,15 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
   /**
    * Not a record: whether the entry was ever read decides whether its eviction is
    * counted as pressure.
+   * <p>
+   * Named <code>CacheEntry</code> and not <code>Entry</code> on purpose: the map below is
+   * an anonymous subclass of {@link LinkedHashMap}, and inside such a subclass the plain
+   * name <code>Entry</code> is {@link Map.Entry}, inherited from the map, not a class of
+   * this file. The compiler of Java 21 still picked this class, the compiler of Java 25
+   * picks the inherited one, and the file stopped compiling. A name of its own says which
+   * type is meant without anybody having to know that rule.
    */
-  private static final class Entry {
+  private static final class CacheEntry {
 
     private final String adapterId;
 
@@ -70,7 +77,7 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
 
     private boolean used;
 
-    private Entry(
+    private CacheEntry(
         final String adapterId,
         final String workflowId,
         final long expiresAtMillis,
@@ -93,7 +100,7 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
 
   private final InMemoryWorkflowAdapterCacheStatistics statistics;
 
-  private final Map<Key, Entry> entries;
+  private final Map<Key, CacheEntry> entries;
 
   /**
    * How many of the entries held are marks of ended workflows, counted along instead of
@@ -123,7 +130,7 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
     this.entries = new LinkedHashMap<>(16, 0.75f, true) {
       @Override
       protected boolean removeEldestEntry(
-          final Map.Entry<Key, Entry> eldest) {
+          final Map.Entry<Key, CacheEntry> eldest) {
         if (size() <= InMemoryWorkflowAdapterCache.this.maxEntries) {
           return false;
         }
@@ -206,7 +213,7 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
 
   private void reportEviction(
       final Key key,
-      final Entry entry) {
+      final CacheEntry entry) {
 
     if (entry.ended) {
       --endedEntries;
@@ -286,7 +293,7 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
       final String workflowId) {
 
     final var key = new Key(workflowModuleId, bpmnProcessId, workflowAggregateId);
-    final var entry = new Entry(adapterId, workflowId, System.currentTimeMillis() + timeToLiveMillis, false);
+    final var entry = new CacheEntry(adapterId, workflowId, System.currentTimeMillis() + timeToLiveMillis, false);
     synchronized (entries) {
       final var replaced = entries.put(key, entry);
       if ((replaced != null) && replaced.ended) {
@@ -308,7 +315,7 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
       final var current = entries.get(key);
       // the mark keeps what the entry knew about the workflow: the end says the workflow
       // is over, not that its id was wrong
-      final var entry = new Entry(
+      final var entry = new CacheEntry(
           adapterId, current == null
               ? null
               : current.workflowId, System.currentTimeMillis() + endedTimeToLiveMillis, true);

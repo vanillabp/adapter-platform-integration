@@ -36,8 +36,11 @@ a network.
 
 ## Building and testing
 
-Java 21, and `spi-for-java` installed into the local Maven repository first. Then, from the root of
-this repository:
+A JDK 21 or newer, and `spi-for-java` installed into the local Maven repository first. The
+workflows build with the JDK named in `.github/workflows`, currently 25, so build with that one if
+you want to see what the pipeline sees. The class files stay at Java 21 either way, because that is
+what the property `version.java` in the root `pom.xml` compiles against. Then, from the root of this
+repository:
 
 ```bash
 ./mvnw spotless:apply
