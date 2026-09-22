@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Duration;
+
 import javax.sql.DataSource;
 
 import org.junit.jupiter.api.AfterEach;
@@ -49,6 +51,37 @@ public class TaskOperationsDispatchTest {
    * did not grow.
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
+
+  /**
+   * How many probes report the workflow as not visible yet in the case below. Phase one
+   * uses the first one, so one probe is left for the dispatch.
+   */
+  private static final int INVISIBLE_PROBES = 2;
+
+  /**
+   * The window the awareness double reports while the workflow is not visible yet. Every
+   * probe which answers "unknown" makes the dispatch hand the entry back, due one window
+   * later.
+   */
+  private static final Duration VISIBILITY_WINDOW = Duration.ofSeconds(5);
+
+  /**
+   * What that case costs on an idle machine. Phase one uses the first probe, and every
+   * probe left over buys the dispatch one more window.
+   */
+  private static final Duration WINDOWS_THE_CASE_COSTS = VISIBILITY_WINDOW
+      .multipliedBy(INVISIBLE_PROBES - 1);
+
+  /**
+   * How long that case waits for a dispatch before it says that none is coming. Three
+   * times what the case costs, and never less than thirty seconds: a machine carrying
+   * other builds leaves this JVM without a turn for seconds at a time, and such a pause
+   * does not get smaller when the window does. Nothing is measured there, so the budget is
+   * spent only when the test fails. A test which is right stops waiting as soon as the
+   * correlation arrives.
+   */
+  private static final long UNTIL_A_DISPATCH_COUNTS_AS_LOST = Math
+      .max(30000, WINDOWS_THE_CASE_COSTS.multipliedBy(3).toMillis());
 
   @Autowired
   private ProcessService<Aggregate> processService;
@@ -345,12 +378,14 @@ public class TaskOperationsDispatchTest {
     // the start recorded which adapter holds the workflow, and that adapter does not
     // report it yet - the everyday state of an exporter-fed read model
     awareness.answerWith(WorkflowAwareness.ACTIVE);
-    awareness.becomeVisibleAfter(2, java.time.Duration.ofSeconds(5));
+    awareness.becomeVisibleAfter(INVISIBLE_PROBES, VISIBILITY_WINDOW);
 
     transactionTemplate.executeWithoutResult(status -> processService
         .correlateMessage(aggregate, "PaymentReceived"));
 
-    final var deadline = System.currentTimeMillis() + 10000;
+    // the probe left over costs one window before the correlation goes out, so this guard
+    // has to span that window plus whatever a loaded machine adds
+    final var deadline = System.currentTimeMillis() + UNTIL_A_DISPATCH_COUNTS_AS_LOST;
     while (listener.getCorrelatedMessages().isEmpty()) {
       assertTrue(
           System.currentTimeMillis() < deadline,

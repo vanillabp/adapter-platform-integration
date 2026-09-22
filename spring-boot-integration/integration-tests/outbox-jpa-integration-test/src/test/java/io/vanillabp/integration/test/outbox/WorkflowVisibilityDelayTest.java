@@ -47,11 +47,29 @@ public class WorkflowVisibilityDelayTest {
   private static final int INVISIBLE_PROBES = 3;
 
   /**
-   * How long a test waits for a dispatch before it says that none is coming. Three times
-   * the window the probes below name, which is what two rejected attempts cost plus room
-   * for a machine which is carrying other builds.
+   * The window the awareness double reports while the workflow is not visible yet. Every
+   * probe which answers "unknown" makes the dispatch hand the entry back, due one window
+   * later.
    */
-  private static final long UNTIL_A_DISPATCH_COUNTS_AS_LOST = 30000;
+  private static final Duration VISIBILITY_WINDOW = Duration.ofSeconds(5);
+
+  /**
+   * What the case below costs on an idle machine. Phase one uses the first probe, and
+   * every probe left over buys the dispatch one more window.
+   */
+  private static final Duration WINDOWS_THE_CASE_COSTS = VISIBILITY_WINDOW
+      .multipliedBy(INVISIBLE_PROBES - 1);
+
+  /**
+   * How long a test waits for a dispatch before it says that none is coming. Three times
+   * what the case costs, and never less than thirty seconds: a machine carrying other
+   * builds leaves this JVM without a turn for seconds at a time, and such a pause does not
+   * get smaller when the window does. Nothing is measured here, so the budget is spent
+   * only when the test fails. A test which is right stops waiting as soon as the
+   * correlation arrives.
+   */
+  private static final long UNTIL_A_DISPATCH_COUNTS_AS_LOST = Math
+      .max(30000, WINDOWS_THE_CASE_COSTS.multipliedBy(3).toMillis());
 
   @Autowired
   private ProcessService<Aggregate> processService;
@@ -117,7 +135,7 @@ public class WorkflowVisibilityDelayTest {
     final var aggregate = started("visibility-delay");
     // the BPMS holds the workflow but reports it as unknown for the next three
     // probes - what an exporter-fed read model does right after a start
-    awareness.becomeVisibleAfter(INVISIBLE_PROBES, Duration.ofSeconds(5));
+    awareness.becomeVisibleAfter(INVISIBLE_PROBES, VISIBILITY_WINDOW);
 
     // the number of probes left over is read INSIDE the transaction, because the dispatch
     // begins right after the commit and probes as well
