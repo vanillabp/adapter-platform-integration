@@ -572,26 +572,30 @@ public class DerivedCancelationTest {
 
     try (var testApp = buildTestApp(); var context = runTestApplication(testApp)) {
 
+      // Everything read below is the output of the running test alone. The sentences
+      // come from the boot report, and the five other tests of this class boot the same
+      // application, so an absence taken over the class buffer only holds as long as
+      // every one of those boots writes the same report.
       Assertions
           .assertTrue(
-              captured.getAll().contains("subscribe to TaskEvent.Event.CANCELED and read values"),
+              captured.getAllOfThisTest().contains("subscribe to TaskEvent.Event.CANCELED and read values"),
               () -> "the boot has to say what a derived cancellation cannot fill: "
-                  + captured.getAll());
+                  + captured.getAllOfThisTest());
       Assertions
           .assertTrue(
-              captured.getAll().contains("awaitPayment' reads @TaskParam amount"),
+              captured.getAllOfThisTest().contains("awaitPayment' reads @TaskParam amount"),
               () -> "the method reading @TaskParam has to be named with what it reads: "
-                  + captured.getAll());
+                  + captured.getAllOfThisTest());
       Assertions
           .assertFalse(
-              captured.getAll().contains("awaitSignature' reads"),
+              captured.getAllOfThisTest().contains("awaitSignature' reads"),
               () -> "a method which reads nothing of the element is not affected: "
-                  + captured.getAll());
+                  + captured.getAllOfThisTest());
       Assertions
           .assertFalse(
-              captured.getAll().contains("awaitDelivery' reads"),
+              captured.getAllOfThisTest().contains("awaitDelivery' reads"),
               () -> "and neither is one which never asked for the event: "
-                  + captured.getAll());
+                  + captured.getAllOfThisTest());
 
     }
 

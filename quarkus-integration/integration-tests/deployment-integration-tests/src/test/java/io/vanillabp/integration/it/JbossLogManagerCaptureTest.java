@@ -72,6 +72,10 @@ public class JbossLogManagerCaptureTest {
         captured.getAll().contains("jboss-log-manager-marker"),
         () -> "The line went past the capture, so it reached the console: "
             + captured.getAll());
+    // This absence stays on the view of the whole class on purpose. Nothing logs
+    // "never-logged-marker", here or anywhere else, so no neighbour can put it into the
+    // buffer. The wide view then proves more: the marker is nowhere in the class, not
+    // only nowhere in this test.
     assertFalse(
         captured.getAll().contains("never-logged-marker"),
         "the capture reports what was logged, nothing else");

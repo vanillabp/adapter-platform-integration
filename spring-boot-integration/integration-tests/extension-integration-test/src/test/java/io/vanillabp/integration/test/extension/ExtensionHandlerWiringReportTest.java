@@ -35,7 +35,10 @@ public class ExtensionHandlerWiringReportTest {
         .properties("spring.datasource.url=jdbc:h2:mem:extension-wiring-report;DB_CLOSE_DELAY=-1")
         .run()) {
 
-      final var reported = output.getAll();
+      // Everything read below is the output of the running test alone. The absent
+      // sentence belongs to a wiring report which every boot of this scenario writes,
+      // so a second test booting here would decide whether this one passes.
+      final var reported = output.getAllOfThisTest();
       Assertions.assertTrue(
           reported.contains("Extension 'sample' serves BPMN process 'DummyProcess'"),
           "no report about what the extension was wired to: "
