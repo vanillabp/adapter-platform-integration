@@ -88,6 +88,9 @@ Top-level modules (by directory name) are:
    artifacts. BPMS adapters are deliberately not part of it — they are released independently. Note that its parent is
    the release parent and *not* this aggregator: importing a BOM imports its *effective* dependency management, so
    inheriting from here would pin Lombok, SLF4J, Testcontainers, … in every application.
+   The BOM gives each tool of the build a scope, and that scope means the application which uses the tool. A module
+   which is itself a library of test tools writes its own scope at its declaration, because it uses the tool in
+   `src/main/java` and the managed `test` would stop it from compiling.
 2. **migration-adapter:**<br>
    Core VanillaBP functionality shared across all platforms. The goal is to implement as much logic as possible in
    plain Java, without platform-specific dependencies. This helps deliver new features to all platforms with minimal

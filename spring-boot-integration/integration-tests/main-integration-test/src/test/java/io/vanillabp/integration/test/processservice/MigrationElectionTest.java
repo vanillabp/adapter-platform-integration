@@ -259,7 +259,11 @@ public class MigrationElectionTest {
       final var oldAggregate = new Aggregate();
       inFakeTransaction(() -> processService.completeTask(oldAggregate, "task-mig"));
 
-      final var afterOldOperation = output.getAll();
+      // Everything read below is the output of the running test alone. Both absent
+      // sentences name an adapter id which the neighbour test configures as well, so a
+      // sentence sharp enough to rule the neighbour out would have to spell out the
+      // whole line. The counts read the same view, for the same reason.
+      final var afterOldOperation = output.getAllOfThisTest();
       Assertions.assertTrue(
           afterOldOperation.contains(OLD_INSTANCE_TASK_PHASE_ONE),
           "expected the task of the old instance to complete on 'old-bpms' but got: "
@@ -272,20 +276,20 @@ public class MigrationElectionTest {
       // the election probed 'new-bpms' first (it is first priority) - count the
       // probes to prove the SECOND operation skips the walk via the cache
       final var newBpmsProbes = countOccurrences(
-          output.getAll(), "Dummy-Adapter[new-bpms]: Checking awareness of task 'task-mig'");
+          output.getAllOfThisTest(), "Dummy-Adapter[new-bpms]: Checking awareness of task 'task-mig'");
 
       inFakeTransaction(() -> processService.completeTask(oldAggregate, "task-mig"));
 
       Assertions.assertEquals(
           newBpmsProbes,
-          countOccurrences(output.getAll(), "Dummy-Adapter[new-bpms]: Checking awareness of task 'task-mig'"),
+          countOccurrences(output.getAllOfThisTest(), "Dummy-Adapter[new-bpms]: Checking awareness of task 'task-mig'"),
           "the second operation must skip the walk (cache hit) - 'new-bpms' probed again");
       Assertions.assertEquals(
           2,
-          countOccurrences(output.getAll(), OLD_INSTANCE_TASK_PHASE_ONE),
+          countOccurrences(output.getAllOfThisTest(), OLD_INSTANCE_TASK_PHASE_ONE),
           () -> "the second operation must still execute on 'old-bpms' but got: "
               + output
-                  .getAll()
+                  .getAllOfThisTest()
                   .lines()
                   .filter(line -> line.contains("Dummy-Adapter"))
                   .collect(java.util.stream.Collectors.joining("\n")));
@@ -293,7 +297,7 @@ public class MigrationElectionTest {
       // NEW workflows start in the CURRENT first-priority adapter
       processService.startWorkflow(new Aggregate());
 
-      final var afterStart = output.getAll();
+      final var afterStart = output.getAllOfThisTest();
       Assertions.assertTrue(
           afterStart.contains(NEW_START_PHASE_ONE),
           "expected new workflows to start in 'new-bpms' but got: "

@@ -124,7 +124,14 @@
            which writes down the coordinate and nothing else would then ship the tool to
            its own users. This is the mistake we made with Lombok in the aggregator pom,
            one level higher up: what an application sees of this BOM is what the entry
-           says, not what we meant. -->
+           says, not what we meant.
+
+           The scope written here means the application which uses the tool. A module
+           which is ITSELF a library of test tools has to write its own scope at its
+           declaration. A module using 'test-utils' in 'src/main/java' says
+           <scope>compile</scope> there, or it inherits 'test' from this BOM and stops
+           compiling. That happened in 'business-cockpit' on 2026-09-22 and turned every
+           open pull request of that repository red. -->
       <!-- Build-time helper: it teaches MapStruct to read fluent accessors and only runs
            on an annotation-processor path. Nothing calls it once the class files exist. -->
       <dependency>

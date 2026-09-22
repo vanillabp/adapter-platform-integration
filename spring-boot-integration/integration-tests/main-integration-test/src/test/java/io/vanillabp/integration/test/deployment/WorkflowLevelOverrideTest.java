@@ -165,7 +165,12 @@ public class WorkflowLevelOverrideTest {
 
       // deployment-target union: 'test2' is named at the workflow level ONLY but
       // still receives the module's resources
-      final var capturedOutput = output.getAll();
+      //
+      // Everything read below is the output of the running test alone. The absent
+      // sentence names adapter id 'test' starting a workflow, and the second test of
+      // this class configures that id as well, so only the narrow view keeps the two
+      // boots apart.
+      final var capturedOutput = output.getAllOfThisTest();
       Assertions.assertTrue(
           capturedOutput.contains("Dummy-Adapter[test]: Deploying resources for test-module"),
           "expected deployment of module-level id 'test' but got: "
@@ -183,7 +188,7 @@ public class WorkflowLevelOverrideTest {
           .getObject();
       overriddenProcessService.startWorkflow(new OverriddenAggregate());
 
-      final var afterOverriddenStart = output.getAll();
+      final var afterOverriddenStart = output.getAllOfThisTest();
       Assertions.assertTrue(
           afterOverriddenStart.contains("Dummy-Adapter[test2]: Starting workflow (phase one)"),
           "expected phase one of 'DummyProcess' on the workflow-level first-priority id 'test2' but got: "
@@ -201,7 +206,7 @@ public class WorkflowLevelOverrideTest {
           .getObject();
       sampleProcessService.startWorkflow(new Aggregate());
 
-      final var afterSampleStart = output.getAll();
+      final var afterSampleStart = output.getAllOfThisTest();
       Assertions.assertTrue(
           afterSampleStart.contains("Dummy-Adapter[test]: Starting workflow (phase one)"),
           "expected phase one of 'SampleWorkflowService' on the module-level id 'test' but got: "

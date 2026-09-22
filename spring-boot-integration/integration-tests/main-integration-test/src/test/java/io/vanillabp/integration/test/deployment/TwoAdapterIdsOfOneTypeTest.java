@@ -140,7 +140,12 @@ public class TwoAdapterIdsOfOneTypeTest {
       Assertions.assertEquals(java.util.Set.of("test", "test2"), deploymentServiceIds);
 
       // BOTH deployment services received deployResources
-      final var capturedOutput = output.getAll();
+      //
+      // Everything read below is the output of the running test alone. The absent
+      // sentence is one any boot of this module could print, this class holds a single
+      // test today, and the narrow view is what keeps the assertion true on the day a
+      // second test boots here.
+      final var capturedOutput = output.getAllOfThisTest();
       Assertions.assertTrue(
           capturedOutput.contains("Dummy-Adapter[test]: Deploying resources for test-module"),
           "expected deployment of id 'test' but got: "
@@ -161,7 +166,7 @@ public class TwoAdapterIdsOfOneTypeTest {
 
       processService.startWorkflow(new Aggregate());
 
-      final var afterStart = output.getAll();
+      final var afterStart = output.getAllOfThisTest();
       Assertions.assertTrue(
           afterStart.contains("Dummy-Adapter[test2]: Starting workflow (phase one)"),
           "expected phase one on the module's first-priority id 'test2' but got: "
