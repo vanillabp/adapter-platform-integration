@@ -20,7 +20,6 @@ import io.vanillabp.integration.processservice.ProcessServiceSpringBean;
 import io.vanillabp.integration.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.workflowmodule.WorkflowModules;
 import io.vanillabp.spi.process.ProcessService;
-import lombok.RequiredArgsConstructor;
 
 /**
  * Manages deployment of resources using {@link DeploymentService}.
@@ -28,7 +27,7 @@ import lombok.RequiredArgsConstructor;
  * The service participates in the application lifecycle as a
  * {@link SmartLifecycle}:
  * <ul>
- *   <li>{@link #start()} loads and deploys all BPMN resources — during context
+ *   <li>{@link #start()} loads and deploys all BPMN resources - during context
  *       refresh, after all singletons were created but before the application is
  *       marked as started;</li>
  *   <li>{@code startWorkflowProcessing} is triggered by
@@ -39,12 +38,11 @@ import lombok.RequiredArgsConstructor;
  * </ul>
  * <b>Phase:</b> {@link SmartLifecycle#DEFAULT_PHASE} ({@code Integer.MAX_VALUE}) is
  * used deliberately: on shutdown, lifecycle beans are stopped in descending phase
- * order, so workflow processing stops in the very first group — before Spring
+ * order, so workflow processing stops in the very first group - before Spring
  * Boot's web server graceful shutdown ({@code SmartLifecycle.DEFAULT_PHASE - 1024})
  * and before messaging listener containers. This way no new workflow jobs are
  * processed while the infrastructure they may depend on is being torn down.
  */
-@RequiredArgsConstructor
 public class SpringBootDeploymentService implements SmartLifecycle {
 
   /**
@@ -70,6 +68,27 @@ public class SpringBootDeploymentService implements SmartLifecycle {
   private final ObjectProvider<ProcessService<?>> processServices;
 
   private volatile boolean running = false;
+
+  /**
+   * Built by {@link DeploymentAutoConfiguration}, once per application.
+   *
+   * @param deploymentService The core's deployment service, which does the work - this
+   *          class is the Spring lifecycle around it
+   * @param allWorkflowModules The workflow modules whose resources are deployed
+   * @param processServices The process service beans. They are asked which BPMN process ids
+   *          they declare before workflow processing starts, and stopped again when it
+   *          stops
+   */
+  public SpringBootDeploymentService(
+      final DeploymentService deploymentService,
+      final WorkflowModules allWorkflowModules,
+      final ObjectProvider<ProcessService<?>> processServices) {
+
+    this.deploymentService = deploymentService;
+    this.allWorkflowModules = allWorkflowModules;
+    this.processServices = processServices;
+
+  }
 
   /**
    * Triggers loading of all resources of the workflow modules - their BPMN files and

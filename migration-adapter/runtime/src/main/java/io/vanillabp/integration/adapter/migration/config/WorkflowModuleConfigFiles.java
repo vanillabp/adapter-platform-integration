@@ -25,6 +25,9 @@ public final class WorkflowModuleConfigFiles {
   }
 
   /**
+   * The four directories of one workflow module, in the order they are written down here
+   * rather than in an order of precedence - a file belongs in exactly one of them.
+   *
    * @param workflowModuleId The ID of the workflow module
    * @return The directories a file of that module is read in, each ending in a slash
    *         except the classpath root, which is the empty string
@@ -41,6 +44,10 @@ public final class WorkflowModuleConfigFiles {
   }
 
   /**
+   * Where one named file of a workflow module is looked for: the four directories above,
+   * each with the file name appended. A platform reads all four and refuses to start where
+   * two of them hold the file.
+   *
    * @param workflowModuleId The ID of the workflow module
    * @param filename The name of the file, for example <code>loan-approval-prod.yaml</code>
    * @return The classpath locations that file is read at

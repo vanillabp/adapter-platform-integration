@@ -72,6 +72,9 @@ public final class CachedGaugeValue {
   private volatile Measurement current;
 
   /**
+   * Holds one measurement for the given window, so however many collectors read the gauge
+   * meanwhile, the supplier runs once.
+   *
    * @param timeToLive How long one measurement is reused; zero or negative switches
    *          the holding off
    * @param measure What really has to be asked, answering
@@ -86,6 +89,9 @@ public final class CachedGaugeValue {
   }
 
   /**
+   * The same with a clock of its own, which is what a test uses: it can then age a
+   * measurement instead of waiting for the window to pass.
+   *
    * @param timeToLive How long one measurement is reused
    * @param measure What really has to be asked
    * @param nanoClock The clock to age a measurement by (tests hand in their own)

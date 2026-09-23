@@ -21,6 +21,11 @@ public final class ExtensionAggregateServiceContext<A> implements AggregateServi
   private final WorkflowElection election;
 
   /**
+   * Built by the platform integration while an extension's service bean is created, one for
+   * each pair of extension service and workflow-aggregate class. Nothing is copied out of
+   * the three parts here: an extension may hold this context for as long as the application
+   * runs.
+   *
    * @param processService The process service of the aggregate's primary BPMN process
    * @param handlers The handler methods of the extensions
    * @param election The election

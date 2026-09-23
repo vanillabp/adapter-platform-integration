@@ -58,6 +58,15 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
   private boolean theFirstTestHasBegun;
   private String outputBeforeTheFirstTest;
 
+  /**
+   * JUnit builds the extension for the test class it is registered on. A test neither
+   * creates it nor calls it: it writes
+   * {@code @ExtendWith(SuppressOutputExtension.class)} and takes a
+   * {@link CapturedOutput} parameter where it wants to read what was printed.
+   */
+  public SuppressOutputExtension() {
+  }
+
   @Override
   public void beforeAll(
       final ExtensionContext context) {

@@ -21,6 +21,10 @@ import java.util.Optional;
 public interface HandlerParameterBinder {
 
   /**
+   * Decides whether this binder serves the parameter, and says how its value is produced
+   * where it does. Asked once per parameter while the method is scanned, never per
+   * invocation.
+   *
    * @param parameter The parameter to bind
    * @return How to produce its value, or empty if this binder does not serve it
    */

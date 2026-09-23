@@ -76,10 +76,26 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore {
 
+  /**
+   * An entry which still owes its call to the BPMS. The dispatcher next to this class
+   * claims the entries in this state, and the relational outbox writes the same word
+   * into its state column, so both stores are read the same way in a support case.
+   */
   public static final String STATUS_OPEN = "OPEN";
 
+  /**
+   * An entry whose call reached the BPMS. It is kept until
+   * <code>vanillabp.outbox.retention</code> passed, so support can still read what
+   * happened.
+   */
   public static final String STATUS_DONE = "DONE";
 
+  /**
+   * An entry which failed <code>vanillabp.outbox.block-after-attempts</code> times and
+   * is not retried any more. Somebody has to look at it - with the defaults, that many
+   * attempts span hours, so what ends up here is broken rather than waiting for a BPMS
+   * which is away.
+   */
   public static final String STATUS_BLOCKED = "BLOCKED";
 
   @Inject
@@ -90,6 +106,14 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
 
   @Inject
   MongoPhaseTwoOutboxDispatcher dispatcher;
+
+  /**
+   * Built by the CDI container. The extension registers this bean whether or not the
+   * application has a MongoDB client, so nothing may be read or opened here -
+   * {@link #isAvailable()} decides later whether the bean is used at all.
+   */
+  public MongoPhaseTwoOutbox() {
+  }
 
   @Override
   public QuarkusPersistenceTechnology.Technology technology() {

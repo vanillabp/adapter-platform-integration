@@ -17,6 +17,10 @@ import java.util.stream.Stream;
 public interface HookBeans<H> {
 
   /**
+   * Every hook bean of this type a test declared. The double asks for all of them
+   * wherever each one may contribute, and an empty stream is the normal case: a test
+   * which declares no hook gets the double's own behaviour.
+   *
    * @return Every bean of the hook type, in the order the platform resolves them
    */
   Stream<H> all();

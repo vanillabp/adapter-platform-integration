@@ -135,6 +135,12 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
   private final Map<BpmnElement, String> bpmnTaskNames = new ConcurrentHashMap<>();
 
   /**
+   * Built by the {@link io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry},
+   * which hands over what an extension's handler needs to be treated like one of its own.
+   * <p>
+   * The version answers are shared rather than built again, so one selection serves VanillaBP's
+   * own handlers and an extension's (decision 56 in the repository's DECISIONS.md).
+   *
    * @param transactionRunner The platform's transaction runner, which wraps every
    *          invocation the way it wraps a workflow task
    * @param processVersions What the BPMS know about the versions of the BPMN processes

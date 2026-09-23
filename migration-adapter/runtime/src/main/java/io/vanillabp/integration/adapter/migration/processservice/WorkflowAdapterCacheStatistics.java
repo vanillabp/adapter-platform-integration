@@ -29,14 +29,32 @@ import java.util.concurrent.atomic.LongAdder;
  */
 public class WorkflowAdapterCacheStatistics {
 
+  /**
+   * What every meter of this class is named under. The numbers are about the election, so
+   * the prefix says nothing about which cache implementation produced them.
+   */
   public static final String METER_PREFIX = "vanillabp.workflow.adapter.cache";
 
+  /**
+   * Elections answered by a hint instead of by asking the BPMS. Read against
+   * {@link #METER_MISSES}: a cache which answers nothing costs nothing but saves nothing
+   * either.
+   */
   public static final String METER_HITS = METER_PREFIX
       + ".hits";
 
+  /**
+   * Elections which had to walk the prioritized adapters. A miss is normal for a workflow
+   * nobody asked about yet, so the number only means something over time.
+   */
   public static final String METER_MISSES = METER_PREFIX
       + ".misses";
 
+  /**
+   * Hints marked as belonging to a workflow which ended. It says whether the end of a
+   * workflow reaches the cache at all, which is the first thing to look at when the hints
+   * seem to be kept too long.
+   */
   public static final String METER_ENDED_MARKS = METER_PREFIX
       + ".ended.marks";
 
@@ -46,18 +64,45 @@ public class WorkflowAdapterCacheStatistics {
 
   private final LongAdder endedMarks = new LongAdder();
 
+  /**
+   * Built by the platform integration as one bean per application, and handed to every
+   * {@link InstrumentedWorkflowAdapterCache}. The counters start at zero, so an
+   * application which elects nothing reports three zeros rather than no meter at all.
+   */
+  public WorkflowAdapterCacheStatistics() {
+
+  }
+
+  /**
+   * Read by whoever publishes these numbers, which may be a metrics backend collecting
+   * every few seconds, so this is a sum and never a walk over a cache.
+   *
+   * @return How often a hint answered an election since this application started
+   */
   public long getHits() {
 
     return hits.sum();
 
   }
 
+  /**
+   * The counterpart of {@link #getHits()}. Both together are how often the election was
+   * asked at all.
+   *
+   * @return How often an election found no hint and had to ask the BPMS
+   */
   public long getMisses() {
 
     return misses.sum();
 
   }
 
+  /**
+   * A number which stays at zero while workflows do end says that the end never reaches the
+   * cache, which is a different defect from a cache which holds too little.
+   *
+   * @return How often the end of a workflow was reported to the cache
+   */
   public long getEndedMarks() {
 
     return endedMarks.sum();

@@ -88,10 +88,6 @@ public class DeploymentService {
   private final Map<String, List<ToBeStarted<?>>> bpmsProcessingContexts;
 
   /**
-   * @param properties Attributes for configuration of the deployment process.
-   * @param deploymentServices All adapters deployment services.
-   */
-  /**
    * The core's own wiring interface, used for what belongs to a whole workflow module and
    * no adapter has to remember (see {@link #runModuleLevelChecks(String)}). May be
    * <code>null</code> in tests which only exercise the pipeline itself.
@@ -105,6 +101,14 @@ public class DeploymentService {
    */
   private final UnclaimedBpmnProcessHints unclaimedProcessHints;
 
+  /**
+   * The pipeline without the checks which belong to a whole workflow module.
+   *
+   * @param properties Attributes for configuration of the deployment process.
+   * @param deploymentServices All adapters deployment services.
+   * @param wiringServices The extensions to be wired. Adapters may show up in this list as
+   *          well and are filtered out, because the pipeline wires them itself.
+   */
   public DeploymentService(
       final MigrationAdapterProperties properties,
       final List<AdapterDeploymentService<?, ?>> deploymentServices,
@@ -114,6 +118,15 @@ public class DeploymentService {
 
   }
 
+  /**
+   * The pipeline with the module-level checks, but without a hint of the platform.
+   *
+   * @param properties Attributes for configuration of the deployment process.
+   * @param deploymentServices All adapters deployment services.
+   * @param wiringServices The extensions to be wired
+   * @param workflowTaskWiring The core's wiring interface, which is what the checks about a
+   *          whole workflow module run through - <code>null</code> leaves them out
+   */
   public DeploymentService(
       final MigrationAdapterProperties properties,
       final List<AdapterDeploymentService<?, ?>> deploymentServices,
@@ -124,6 +137,17 @@ public class DeploymentService {
 
   }
 
+  /**
+   * The full pipeline, which is what a platform integration builds.
+   *
+   * @param properties Attributes for configuration of the deployment process.
+   * @param deploymentServices All adapters deployment services.
+   * @param wiringServices The extensions to be wired
+   * @param workflowTaskWiring The core's wiring interface
+   * @param unclaimedProcessHints What the platform can add to the report about a BPMN process
+   *          nothing claims - <code>null</code> where it has nothing to say, and never asked
+   *          on a boot without such a process
+   */
   public DeploymentService(
       final MigrationAdapterProperties properties,
       final List<AdapterDeploymentService<?, ?>> deploymentServices,
@@ -914,6 +938,8 @@ public class DeploymentService {
    * Starts to running the workflows of the given BPMN processes.
    *
    * @param workflowModuleIds The workflow module IDs to deploy
+   * @param <BPMN> The BPMN model type. No model is read here: the parameter carries the type
+   *          an extension's wiring service is cast to, which the deployment already matched.
    * @param <PC> The processing context, used to store all information needed by the adapter to deploy the process.
    */
   @SuppressWarnings("unchecked")
@@ -971,10 +997,12 @@ public class DeploymentService {
   /**
    * Stops running the workflows of the given BPMN processes. This is the counterpart
    * of {@link #startWorkflowProcessing(List)} and is executed in reverse order:
-   * extensions are stopped first (in reverse wiring order), then the adapters —
+   * extensions are stopped first (in reverse wiring order), then the adapters -
    * mirroring the start sequence where adapters are started before extensions.
    *
    * @param workflowModuleIds The workflow module IDs to stop
+   * @param <BPMN> The BPMN model type. No model is read here: the parameter carries the type
+   *          an extension's wiring service is cast to, which the deployment already matched.
    * @param <PC> The processing context, used to store all information needed by the adapter to deploy the process.
    */
   @SuppressWarnings("unchecked")

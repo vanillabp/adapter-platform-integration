@@ -38,6 +38,19 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
 
   private final TaskDeliveryRetentionCleanup retentionCleanup;
 
+  /**
+   * Builds the log, and nothing more: the table and the cleanup wait for
+   * {@link #start(boolean)}, because the DDL must not run while the beans are still being
+   * built.
+   *
+   * @param dataSource Where the table lives - the database the workflow aggregates are
+   *          persisted in, which is what lets a record and the aggregate commit together
+   * @param tableName The table the records go into
+   * @param retention How long a record is kept. This is the window in which a redelivery is
+   *          answered from the record instead of running the <code>@WorkflowTask</code>
+   *          method again, which is why it is a setting of its own - see decision 24 in the
+   *          repository's DECISIONS.md
+   */
   public JdbcTaskDeliveryLog(
       final DataSource dataSource,
       final String tableName,

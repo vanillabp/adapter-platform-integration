@@ -28,11 +28,21 @@ public record PhaseOneRequest<A>(
                                  A workflowAggregate,
                                  Map<String, String> args) {
 
+  /**
+   * Copies the arguments, so what a handler reads cannot be changed by whoever built the
+   * request, and reads a <code>null</code> map as an empty one. A handler may therefore
+   * ask for any argument and gets <code>null</code> for one its operation does not carry.
+   */
   public PhaseOneRequest {
     args = args == null ? Map.of() : Map.copyOf(args);
   }
 
   /**
+   * Which task the operation addresses: the BPMS-side id the adapter reported when it
+   * delivered the task
+   * ({@link io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext#getTaskId()}),
+   * handed back by the application.
+   *
    * @return The ID of the task the operation is about, or <code>null</code> where the
    *         operation is about none. An aggregate push carries it optionally: with a
    *         task ID the values belong to that task's scope, without it to the
@@ -45,6 +55,9 @@ public record PhaseOneRequest<A>(
   }
 
   /**
+   * How a cancellation ends the task. Cancelling a task means ending it with a BPMN
+   * error, so the code belongs to the call and no other operation carries one.
+   *
    * @return The error code a cancellation wants BPMN error boundary events to catch
    */
   public String bpmnErrorCode() {
@@ -54,6 +67,10 @@ public record PhaseOneRequest<A>(
   }
 
   /**
+   * Which message the operation sends. It is the PLAIN name as the model carries it, so
+   * an adapter which scopes identifiers scopes this one before it asks its BPMS - see
+   * {@link NameClashAvoidanceSupport}.
+   *
    * @return The BPMN message name of a correlation or of a message start event
    */
   public String messageName() {
@@ -63,6 +80,9 @@ public record PhaseOneRequest<A>(
   }
 
   /**
+   * Which of several waiting occurrences of that message is meant, where the application
+   * said so.
+   *
    * @return The correlation id of a correlation or <code>null</code>. Adapters use the
    *         aggregate ID as the technical correlation key; this one additionally
    *         disambiguates BETWEEN waiting occurrences of the same message
@@ -74,6 +94,9 @@ public record PhaseOneRequest<A>(
   }
 
   /**
+   * Which signal is broadcast. A broadcast is the one operation which is about no single
+   * workflow, so {@link #workflowAggregate()} is <code>null</code> next to it.
+   *
    * @return The PLAIN BPMN signal name of a broadcast - scoping identifiers is the
    *         adapter's business, see {@link NameClashAvoidanceSupport}
    */

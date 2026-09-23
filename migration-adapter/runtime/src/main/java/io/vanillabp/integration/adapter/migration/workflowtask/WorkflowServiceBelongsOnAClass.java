@@ -42,6 +42,8 @@ public final class WorkflowServiceBelongsOnAClass {
   }
 
   /**
+   * The message for the first shape of the defect - built by the platform which found it.
+   *
    * @param interfaceName The interface carrying the annotation
    * @param implementingClasses The classes implementing it, empty where the platform cannot
    *     name them
@@ -68,6 +70,8 @@ public final class WorkflowServiceBelongsOnAClass {
   }
 
   /**
+   * The message for the second shape: a meta-annotation of the application's own.
+   *
    * @param annotationName The annotation of the application carrying the annotation
    * @param annotatedClasses The classes using it, empty where the platform cannot name them
    * @return The message ending the start

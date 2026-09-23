@@ -11,6 +11,13 @@ import io.quarkus.runtime.ObjectSubstitution;
 public class UriSubstitution implements ObjectSubstitution<URI, UriSubstitute> {
 
   /**
+   * Built by Quarkus while it records the bytecode of the boot. The platform registers the
+   * class for {@link URI} in its build step and never builds one itself.
+   */
+  public UriSubstitution() {
+  }
+
+  /**
    * Serialize {@link URI} to {@link UriSubstitute}.
    *
    * @param uri The {@link URI} to serialize

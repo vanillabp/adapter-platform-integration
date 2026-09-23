@@ -38,20 +38,45 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class InMemoryWorkflowAdapterCacheStatistics {
 
+  /**
+   * What every meter of this class is named under. It names the implementation, because an
+   * application which plugs in a cache of its own has no meter starting like this - and
+   * that is the intended way to notice.
+   */
   public static final String METER_PREFIX = "vanillabp.inmemory.election.cache";
 
+  /**
+   * How many hints the cache holds right now. Read against the configured bound: a size
+   * which sits at the bound is where evictions start.
+   */
   public static final String METER_SIZE = METER_PREFIX
       + ".size";
 
+  /**
+   * How many of the held hints belong to workflows which ended. Those are kept for a short
+   * while only, so a big share of them means the cache is mostly holding leftovers.
+   */
   public static final String METER_SIZE_ENDED = METER_PREFIX
       + ".size.ended";
 
+  /**
+   * Hints dropped because the cache was full. An expired hint is not counted here - it did
+   * its job for a whole time-to-live.
+   */
   public static final String METER_EVICTIONS = METER_PREFIX
       + ".evictions";
 
+  /**
+   * Hints dropped before anybody read them. On its own this is no defect, see the note
+   * about lost hints on this class.
+   */
   public static final String METER_EVICTIONS_UNUSED = METER_PREFIX
       + ".evictions.unused";
 
+  /**
+   * Lookups which would have been a hit if the cache had been bigger. This is the number
+   * which says the bound is too low, and it is what the eviction-pressure warning counts.
+   */
   public static final String METER_LOST_HINTS = METER_PREFIX
       + ".lost.hints";
 
@@ -103,6 +128,10 @@ public class InMemoryWorkflowAdapterCacheStatistics {
   private boolean warned;
 
   /**
+   * Created by {@link InMemoryWorkflowAdapterCache} in its own constructor, so the two
+   * always belong together. The suppliers read the live cache instead of the cache pushing
+   * its size here on every change.
+   *
    * @param properties The cache's configuration - its bound is what the
    *          eviction-pressure warning names, and it bounds the memory of unused
    *          evictions as well
@@ -150,18 +179,38 @@ public class InMemoryWorkflowAdapterCacheStatistics {
 
   }
 
+  /**
+   * Evictions by themselves are not a defect - a cache with a bound evicts. What they say
+   * is that the bound is in play at all.
+   *
+   * @return How many hints were dropped for lack of space since this application started
+   */
   public long getEvictions() {
 
     return evictions.sum();
 
   }
 
+  /**
+   * The upper bound of what the evictions may have cost: only a hint nobody read can still
+   * turn into a lost one.
+   *
+   * @return How many of the dropped hints had never been read. A hint of a workflow nobody
+   *         operates on again ends up here without anything being wrong
+   */
   public long getEvictionsBeforeFirstUse() {
 
     return evictionsBeforeFirstUse.sum();
 
   }
 
+  /**
+   * The number to alert on, because every one of these lookups paid for the bound with an
+   * extra walk over the adapters.
+   *
+   * @return How many lookups missed although the hint had been there and was dropped for
+   *         lack of space. This is the number the bound has to answer for
+   */
   public long getLostHints() {
 
     return lostHints.sum();

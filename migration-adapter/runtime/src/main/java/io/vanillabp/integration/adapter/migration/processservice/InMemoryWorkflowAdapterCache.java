@@ -110,12 +110,23 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
    */
   private int endedEntries;
 
+  /**
+   * Builds the cache with the defaults of {@link WorkflowAdapterCacheProperties} - what an
+   * application which configured nothing gets.
+   */
   public InMemoryWorkflowAdapterCache() {
 
     this(new WorkflowAdapterCacheProperties());
 
   }
 
+  /**
+   * Built by the platform integration as the default cache bean, once per application, and
+   * only where the application brought no {@link WorkflowAdapterCache} of its own.
+   *
+   * @param properties The configured bounds. The cache reads them while it is built, so
+   *          they cannot be changed while the application runs
+   */
   public InMemoryWorkflowAdapterCache(
       final WorkflowAdapterCacheProperties properties) {
 
@@ -144,6 +155,9 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
   /**
    * Visible for tests - production code passes the configured
    * {@link WorkflowAdapterCacheProperties}.
+   *
+   * @param maxEntries How many hints are held before the least recently used one is dropped
+   * @param timeToLive How long the hint of a running workflow is kept
    */
   public InMemoryWorkflowAdapterCache(
       final int maxEntries,
@@ -156,6 +170,11 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
   /**
    * Visible for tests - production code passes the configured
    * {@link WorkflowAdapterCacheProperties}.
+   *
+   * @param maxEntries How many hints are held before the least recently used one is dropped
+   * @param timeToLive How long the hint of a running workflow is kept
+   * @param endedTimeToLive How long the hint of an ended workflow is kept, which is shorter
+   *          because it can only ever answer a late operation with a warned no-op
    */
   public InMemoryWorkflowAdapterCache(
       final int maxEntries,

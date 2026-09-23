@@ -39,6 +39,13 @@ public class MultiInstanceResolverBuildStepProcessor {
       .createSimple(NoResolver.class.getName());
 
   /**
+   * Quarkus builds this processor while it augments the application and calls the build step
+   * below on it. Nothing else builds it, and the step keeps no state in it.
+   */
+  public MultiInstanceResolverBuildStepProcessor() {
+  }
+
+  /**
    * @param combinedIndex The index of the application and of all indexed dependencies
    * @param ensureClassIsBeanBuildItemProducer Producer collecting classes required to be beans
    */

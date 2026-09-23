@@ -14,6 +14,17 @@ import lombok.extern.slf4j.Slf4j;
 public class WorkflowModuleConfigFilesRecorder {
 
   /**
+   * Built by Quarkus while it records the build steps. A recorder keeps no state: it
+   * carries what the build found out into the starting application, and Quarkus decides
+   * when its methods run.
+   */
+  public WorkflowModuleConfigFilesRecorder() {
+  }
+
+  /**
+   * Writes the report as a warning, because every line of it names a file whose
+   * settings nobody reads.
+   *
    * @param report What the build has to say about those files
    */
   public void report(

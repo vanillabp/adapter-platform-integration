@@ -48,6 +48,14 @@ import jakarta.transaction.TransactionSynchronizationRegistry;
 public class TransactionRunnerProducer {
 
   /**
+   * Built by the CDI container, which the platform's build step told about this class. The one
+   * runner both producer methods work with is built afterwards, by {@code buildPlatformRunner},
+   * because the registry it needs is injected first.
+   */
+  public TransactionRunnerProducer() {
+  }
+
+  /**
    * Application-provided attributions of aggregates to transaction runners.
    */
   @Inject
@@ -116,6 +124,10 @@ public class TransactionRunnerProducer {
   }
 
   /**
+   * Builds the resolver of this application. A new instance per injection point would be a
+   * second cache of the same resolutions, so the bean is a {@link Singleton} like the runner
+   * it is built with.
+   *
    * @return The resolver, injectable by extensions and used by the process services,
    *         the pre-commit registrar and the startup validation
    */

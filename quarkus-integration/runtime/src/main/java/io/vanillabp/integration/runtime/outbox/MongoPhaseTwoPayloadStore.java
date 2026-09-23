@@ -43,6 +43,10 @@ public class MongoPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
   private final TransactionSynchronizationRegistry txRegistry;
 
   /**
+   * Built by the dispatcher of the MongoDB outbox, which resolves the collection from
+   * the configuration. The collection arrives as a supplier because its name is read
+   * lazily, the same way the outbox reads its own.
+   *
    * @param collection Where the payload documents live
    * @param txRegistry Used to find the session of the running transaction
    */

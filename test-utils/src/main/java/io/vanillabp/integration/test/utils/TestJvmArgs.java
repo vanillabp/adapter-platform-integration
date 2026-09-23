@@ -8,12 +8,32 @@ import java.util.List;
  */
 public class TestJvmArgs {
 
+  /**
+   * Nobody builds this class, it only answers static questions.
+   */
+  private TestJvmArgs() {
+  }
+
+  /**
+   * The JVM arguments a forked test starts from. A test passes the result to the fork
+   * it configures, so every fork of every repository runs under the same limits.
+   *
+   * @return A new list, which the caller may add to
+   */
   public static List<String> quarkusProdModeTestDefaults() {
 
     return quarkusProdModeTestDefaults(new LinkedList<>());
 
   }
 
+  /**
+   * The same defaults, added to arguments a test collected already. This is the half
+   * which chains with {@link TestCoverageUtils#testCoverageJavaAgent(List)}, so a fork
+   * gets the limits and the coverage agent in one call.
+   *
+   * @param jvmArgs The arguments collected so far - this list is changed
+   * @return The same list, with the defaults appended
+   */
   public static List<String> quarkusProdModeTestDefaults(
       final List<String> jvmArgs) {
 

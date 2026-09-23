@@ -48,6 +48,9 @@ public class CapturedOutput implements CharSequence {
   /**
    * Returns all output of this test class so far (stdout and stderr combined), which
    * includes what the tests before this one printed.
+   *
+   * @return Everything printed since the class started, and an empty string where
+   *         nothing was printed
    */
   public String getAll() {
 
@@ -58,6 +61,9 @@ public class CapturedOutput implements CharSequence {
   /**
    * Returns the stdout of this test class so far, which includes what the tests before
    * this one printed.
+   *
+   * @return The stdout half of {@link #getAll()}, and an empty string where nothing
+   *         went there
    */
   public String getOut() {
 
@@ -68,6 +74,9 @@ public class CapturedOutput implements CharSequence {
   /**
    * Returns the stderr of this test class so far, which includes what the tests before
    * this one printed.
+   *
+   * @return The stderr half of {@link #getAll()}, and an empty string where nothing
+   *         went there
    */
   public String getErr() {
 
@@ -79,6 +88,9 @@ public class CapturedOutput implements CharSequence {
    * Returns what the running test printed (stdout and stderr combined), and nothing of
    * what the tests before it printed. This is the view an assertion about an absent
    * sentence needs.
+   *
+   * @return What the running test printed, and an empty string before it prints
+   *         anything
    */
   public String getAllOfThisTest() {
 
@@ -89,6 +101,9 @@ public class CapturedOutput implements CharSequence {
   /**
    * Returns the stdout of the running test, and nothing of what the tests before it
    * printed. This is the view an assertion about an absent sentence needs.
+   *
+   * @return The stdout half of {@link #getAllOfThisTest()}, and an empty string where
+   *         nothing went there
    */
   public String getOutOfThisTest() {
 
@@ -99,6 +114,9 @@ public class CapturedOutput implements CharSequence {
   /**
    * Returns the stderr of the running test, and nothing of what the tests before it
    * printed. This is the view an assertion about an absent sentence needs.
+   *
+   * @return The stderr half of {@link #getAllOfThisTest()}, and an empty string where
+   *         nothing went there
    */
   public String getErrOfThisTest() {
 

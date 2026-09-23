@@ -6,12 +6,10 @@ import java.util.Set;
 
 import lombok.Builder;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 
 /**
  * Meta-data of a workflow module.
  */
-@RequiredArgsConstructor
 @Getter
 @Builder
 public class WorkflowModule {
@@ -42,6 +40,28 @@ public class WorkflowModule {
   private final Set<Class<?>> workflowServices = new HashSet<>();
 
   /**
+   * Built while the marker files of the classpath are read, and by the builder of this
+   * class in tests. Both values are known at that moment; the workflow services are not,
+   * and are added later by the registration which pairs classes with modules.
+   *
+   * @param id The workflow module's id, the trimmed content of its marker file
+   * @param sourceUri The classpath root the marker file came from, or <code>null</code>
+   *     where it is unknown - a module without it matches no class by origin
+   */
+  public WorkflowModule(
+      final String id,
+      final String sourceUri) {
+
+    this.id = id;
+    this.sourceUri = sourceUri;
+
+  }
+
+  /**
+   * Whether this module holds the given workflow service. Asked while a process service is
+   * built, which is where the workflow module of a class has to be named - a class no
+   * module claims ends the boot there.
+   *
    * @param workflowService A workflow service class
    * @return Whether the workflow service class belongs to this workflow module
    */

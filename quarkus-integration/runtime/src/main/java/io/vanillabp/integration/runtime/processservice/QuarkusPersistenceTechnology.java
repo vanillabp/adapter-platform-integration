@@ -26,8 +26,15 @@ import jakarta.enterprise.inject.Instance;
  */
 public class QuarkusPersistenceTechnology {
 
+  /**
+   * The technologies VanillaBP brings a store for, plus the answer for everything else.
+   * Whether an aggregate is covered by the transaction VanillaBP opens, and which outbox and
+   * delivery log may serve it, follow from this one answer.
+   */
   public enum Technology {
+    /** A relational database, reached through JTA - Panache as well as Spring Data. */
     JPA,
+    /** MongoDB, where a transaction needs a replica set ({@link MongoDeploymentProbe}). */
     MONGO,
     /** The application brought the persistence itself, so nobody but it knows the store. */
     UNKNOWN
@@ -51,6 +58,15 @@ public class QuarkusPersistenceTechnology {
 
   private final Instance<AggregatePersistenceAware<?>> aggregatePersistences;
 
+  /**
+   * Built by whoever needs the answer - the two store resolvers and the transaction runner
+   * resolver each build their own, and all of them read the same beans. The persistences are
+   * taken as an {@link Instance} and not as a list, because the beans of an application are
+   * resolved when an aggregate is really asked about and not while this object is built.
+   *
+   * @param aggregatePersistences Every {@link AggregatePersistenceAware} bean of the
+   *          application, VanillaBP's generated ones included
+   */
   public QuarkusPersistenceTechnology(
       final Instance<AggregatePersistenceAware<?>> aggregatePersistences) {
 
@@ -59,6 +75,10 @@ public class QuarkusPersistenceTechnology {
   }
 
   /**
+   * The technology managing an aggregate. Asked per aggregate class rather than once per
+   * application, because one application may well keep one aggregate in a relational
+   * database and the next one in MongoDB.
+   *
    * @param workflowAggregateClass The workflow aggregate's class
    * @return The technology, {@link Technology#UNKNOWN} if the aggregate is stored by a
    *         persistence of the application
@@ -95,6 +115,10 @@ public class QuarkusPersistenceTechnology {
   }
 
   /**
+   * Whether a MongoDB session is involved, answered from the persistence itself. The static
+   * form is for a caller which already resolved the persistence of an aggregate and would
+   * otherwise build an instance of this class to ask one question.
+   *
    * @param persistence The persistence serving an aggregate
    * @return Whether it is one of VanillaBP's MongoDB defaults - the only case in which
    *         the platform knows a MongoDB session is involved

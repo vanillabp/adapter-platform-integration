@@ -18,6 +18,10 @@ public enum PartKind {
   EXTENSION;
 
   /**
+   * The kind in lower case. The same word stands in the messages a developer reads and in
+   * the path {@link VanillaBpParts#descriptorOf(PartKind, String)} builds, so the two can
+   * never drift apart.
+   *
    * @return The word used in messages and in the name of the version descriptor
    */
   public String word() {

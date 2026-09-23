@@ -266,6 +266,18 @@ public class JdbcTaskDeliveryStore {
 
   private final OpenTaskTouches touches;
 
+  /**
+   * Built by the platform's delivery log, once per application.
+   * <p>
+   * The statements are composed here rather than per call, because the table name is the one
+   * thing about them which can differ and it is known now. Nothing touches the database yet -
+   * the schema is checked when the log starts.
+   *
+   * @param connectionAccess Where a connection of the running transaction comes from, which
+   *          is what makes a record commit together with the workflow aggregate
+   * @param tableName The table holding the records, {@link #DEFAULT_TABLE_NAME} unless the
+   *          application configured another one
+   */
   public JdbcTaskDeliveryStore(
       final JdbcConnectionAccess connectionAccess,
       final String tableName) {
@@ -288,6 +300,11 @@ public class JdbcTaskDeliveryStore {
   }
 
   /**
+   * The table this store works on, which the messages around it name.
+   * <p>
+   * An operator who has to look at the records needs the name, and it is configurable, so
+   * nothing may spell it out a second time.
+   *
    * @return The name of the table the records are stored in
    */
   public String getTableName() {

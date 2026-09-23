@@ -152,6 +152,11 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   }
 
   /**
+   * The full service, which is what a platform integration builds.
+   * <p>
+   * An adapter's own default only applies where nothing is configured, and the configured
+   * value always wins - which is why the adapters are asked as late as possible.
+   *
    * @param properties The VanillaBP configuration
    * @param deploymentServices The adapters' deployment services, asked for their
    *          default mode and for reporting a workflow module whose identifiers are

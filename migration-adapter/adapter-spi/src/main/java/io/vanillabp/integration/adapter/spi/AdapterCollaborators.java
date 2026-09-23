@@ -104,6 +104,10 @@ public final class AdapterCollaborators {
   }
 
   /**
+   * Which adapter instance these collaborators were assembled for - the id the
+   * application configured under <code>vanillabp.adapters</code>, and the one the
+   * builder names in everything it reports.
+   *
    * @return The adapter id these collaborators were built for
    */
   public String adapterId() {
@@ -113,6 +117,9 @@ public final class AdapterCollaborators {
   }
 
   /**
+   * The wiring half of the task SPI - what an adapter calls while it deploys, never at
+   * runtime. {@link WorkflowTaskWiring} says which of those calls are due when.
+   *
    * @return What the adapter asks while it reads a BPMN file
    */
   public WorkflowTaskWiring workflowTaskWiring() {
@@ -122,6 +129,9 @@ public final class AdapterCollaborators {
   }
 
   /**
+   * The runtime half of the task SPI - what the adapter's worker threads hold to hand a
+   * delivered task to the application and to learn what to answer the BPMS with.
+   *
    * @return Where a delivered task goes
    */
   public WorkflowTaskInvoker workflowTaskInvoker() {
@@ -131,6 +141,10 @@ public final class AdapterCollaborators {
   }
 
   /**
+   * How an adapter turns a plain identifier into the one its BPMS sees. The core composes
+   * those strings so that every adapter scopes alike, which is why an adapter asks here
+   * instead of building a prefix of its own.
+   *
    * @return How the adapter avoids a name clash between workflow modules
    */
   public NameClashAvoidanceSupport scoping() {
@@ -140,6 +154,11 @@ public final class AdapterCollaborators {
   }
 
   /**
+   * What an adapter may hand to its BPMS of a workflow aggregate, asked at every sync
+   * point. An adapter reads an aggregate through this and never by itself, because what
+   * leaves the application is the application's decision - decision 10 in the
+   * repository's DECISIONS.md.
+   *
    * @return Which values of a workflow aggregate the BPMS may see
    */
   public WorkflowAggregateSync workflowAggregateSync() {
@@ -149,6 +168,10 @@ public final class AdapterCollaborators {
   }
 
   /**
+   * Where an adapter hands a phase-one check which should run as late as possible. The
+   * later such a check runs, the smaller the window in which its answer goes stale before
+   * phase two dispatches - see {@link PreCommitRegistrar}.
+   *
    * @return Where work is hung which has to happen before the caller's transaction
    *         commits
    */
@@ -159,6 +182,10 @@ public final class AdapterCollaborators {
   }
 
   /**
+   * Where an adapter reports the end of a workflow its BPMS told it about. An adapter has
+   * to cope with an empty answer, so it asks the {@link Optional} rather than unwrapping
+   * it - the end is then not reported and nothing else changes.
+   *
    * @return Where a workflow's end is reported, empty if the application has no
    *         {@code @WorkflowEnded} method
    */
@@ -169,6 +196,10 @@ public final class AdapterCollaborators {
   }
 
   /**
+   * Where an adapter reports a workflow its BPMS started on its own, and where it asks
+   * while it deploys whether such a start is served at all. An empty answer is coped with
+   * like the one of {@link #workflowEndedInvoker()}.
+   *
    * @return Where a workflow the BPMS started by itself is reported, empty if the
    *         application has no method for it
    */
@@ -207,6 +238,13 @@ public final class AdapterCollaborators {
 
     }
 
+    /**
+     * Hands over the wiring half of the task SPI.
+     *
+     * @param workflowTaskWiring What the adapter asks while it reads a BPMN file -
+     *                           mandatory, so {@link #build()} refuses a set without it
+     * @return This builder
+     */
     public Builder workflowTaskWiring(
         final WorkflowTaskWiring workflowTaskWiring) {
 
@@ -215,6 +253,13 @@ public final class AdapterCollaborators {
 
     }
 
+    /**
+     * Hands over the runtime half of the task SPI.
+     *
+     * @param workflowTaskInvoker Where a delivered task goes - mandatory, so
+     *                            {@link #build()} refuses a set without it
+     * @return This builder
+     */
     public Builder workflowTaskInvoker(
         final WorkflowTaskInvoker workflowTaskInvoker) {
 
@@ -223,6 +268,13 @@ public final class AdapterCollaborators {
 
     }
 
+    /**
+     * Hands over the core's name-clash scoping.
+     *
+     * @param scoping How the adapter avoids a name clash between workflow modules -
+     *                mandatory, so {@link #build()} refuses a set without it
+     * @return This builder
+     */
     public Builder scoping(
         final NameClashAvoidanceSupport scoping) {
 
@@ -231,6 +283,14 @@ public final class AdapterCollaborators {
 
     }
 
+    /**
+     * Hands over the aggregate sync every adapter reads a workflow aggregate through.
+     *
+     * @param workflowAggregateSync Which values of a workflow aggregate the BPMS may
+     *                              see - mandatory, so {@link #build()} refuses a set
+     *                              without it
+     * @return This builder
+     */
     public Builder workflowAggregateSync(
         final WorkflowAggregateSync workflowAggregateSync) {
 
@@ -239,6 +299,14 @@ public final class AdapterCollaborators {
 
     }
 
+    /**
+     * Hands over the hook a phase-one check is run by.
+     *
+     * @param preCommitRegistrar Where work is hung which has to happen before the
+     *                           caller's transaction commits - mandatory, so
+     *                           {@link #build()} refuses a set without it
+     * @return This builder
+     */
     public Builder preCommitRegistrar(
         final PreCommitRegistrar preCommitRegistrar) {
 
@@ -248,6 +316,8 @@ public final class AdapterCollaborators {
     }
 
     /**
+     * Hands over where the end of a workflow is reported.
+     *
      * @param workflowEndedInvoker May be null: an application without a
      *                             {@code @WorkflowEnded} method has none
      * @return This builder
@@ -261,6 +331,8 @@ public final class AdapterCollaborators {
     }
 
     /**
+     * Hands over where a workflow the BPMS started by itself is reported.
+     *
      * @param bpmsInitiatedStartInvoker May be null: an application which never lets the
      *                                  BPMS start a workflow has none
      * @return This builder
@@ -274,6 +346,10 @@ public final class AdapterCollaborators {
     }
 
     /**
+     * Closes the set: throws where a mandatory collaborator is missing, and warns about
+     * the optional ones which did not arrive. Both messages name the adapter id, because
+     * an application running several adapters otherwise learns nothing from them.
+     *
      * @return The collaborators, complete
      * @throws IllegalStateException If a mandatory collaborator is missing - the message
      *                               names the adapter id and every one of them

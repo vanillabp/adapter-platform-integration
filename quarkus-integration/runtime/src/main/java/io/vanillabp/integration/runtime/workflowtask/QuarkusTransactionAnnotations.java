@@ -35,6 +35,11 @@ public final class QuarkusTransactionAnnotations {
   }
 
   /**
+   * The specs the core checks a <code>&#64;WorkflowTask</code> method against. All four
+   * annotations are listed, the ones without an effect on Quarkus included: a method carrying
+   * one of those is told what it gets instead of being passed over, which is the only way its
+   * author learns about it.
+   *
    * @param springTransactionsHonored Whether the extension {@code quarkus-spring-tx} is
    *          part of the application, which makes Spring's annotation effective
    * @return The specs of all transaction annotations known on Quarkus

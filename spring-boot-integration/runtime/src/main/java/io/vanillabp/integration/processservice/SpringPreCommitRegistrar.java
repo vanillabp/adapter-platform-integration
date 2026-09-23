@@ -14,6 +14,13 @@ public class SpringPreCommitRegistrar implements PreCommitRegistrar {
 
   private final SpringTransactionRunnerResolver transactionRunnerResolver;
 
+  /**
+   * Built once per application by the autoconfiguration and handed to the adapters.
+   *
+   * @param transactionRunnerResolver The same resolver everything else asks, so a check
+   *     registered here and the write it guards end up on one transaction (see decision 11
+   *     in the repository's DECISIONS.md)
+   */
   public SpringPreCommitRegistrar(
       final SpringTransactionRunnerResolver transactionRunnerResolver) {
 

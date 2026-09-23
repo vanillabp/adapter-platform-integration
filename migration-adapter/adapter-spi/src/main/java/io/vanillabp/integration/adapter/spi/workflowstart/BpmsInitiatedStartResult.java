@@ -28,9 +28,12 @@ public record BpmsInitiatedStartResult(
                                        Map<String, Object> variables,
                                        boolean created) {
 
+  /**
+   * Copies the variables, so an adapter writes what the core built and nothing else, and
+   * keeps a <code>null</code> VALUE instead of refusing it: an aggregate attribute shared
+   * with the BPMS may well be unset, and the BPMS is told exactly that.
+   */
   public BpmsInitiatedStartResult {
-    // a defensive copy which tolerates NULL values: an aggregate attribute shared
-    // with the BPMS may well be unset, and the BPMS is told exactly that
     variables = variables == null
         ? Map.of()
         : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(variables));

@@ -85,6 +85,10 @@ public final class HandlerCall {
   }
 
   /**
+   * The annotation the invoked methods carry. It selects the {@link HandlerContract} the
+   * call is served by, so a call naming an annotation no extension described is refused
+   * rather than silently finding nothing.
+   *
    * @return The annotation of the contract to invoke
    */
   public Class<? extends Annotation> getAnnotationType() {
@@ -94,6 +98,9 @@ public final class HandlerCall {
   }
 
   /**
+   * The workflow module of the workflow this call is about - one half of the pair which
+   * names the BPMN process whose methods are looked up.
+   *
    * @return The workflow module of the workflow
    */
   public String getWorkflowModuleId() {
@@ -103,6 +110,10 @@ public final class HandlerCall {
   }
 
   /**
+   * The BPMN process of the workflow this call is about. Nothing is registered for a
+   * process whose workflow service carries no method of the annotation, and a call for it
+   * finds nothing instead of failing.
+   *
    * @return The BPMN process of the workflow
    */
   public String getBpmnProcessId() {
@@ -112,6 +123,10 @@ public final class HandlerCall {
   }
 
   /**
+   * The keys this call offers, most wanted first. The first of them some method serves
+   * decides, so the order says which identity of a BPMN element the caller prefers (see
+   * decision 51 in the repository's DECISIONS.md).
+   *
    * @return The keys a method may be matched by - a method serving ANY of them runs
    */
   public List<String> getLookupKeys() {
@@ -134,6 +149,9 @@ public final class HandlerCall {
   }
 
   /**
+   * The aggregate VanillaBP loads for this call, named by its ID. A call names either this
+   * or the aggregate itself.
+   *
    * @return The ID of the workflow aggregate to load, or <code>null</code> where the
    *         caller handed one in
    */
@@ -144,6 +162,10 @@ public final class HandlerCall {
   }
 
   /**
+   * The aggregate the caller built, for an event about a workflow whose aggregate does not
+   * exist yet. Ask {@link #isWorkflowAggregateProvided()} before you read it: a caller may
+   * hand in nothing, and this is <code>null</code> in both cases.
+   *
    * @return The workflow aggregate the caller built, or <code>null</code> where the
    *         call names its ID instead
    */
@@ -154,6 +176,10 @@ public final class HandlerCall {
   }
 
   /**
+   * Whether the aggregate travels with the call or is loaded from its ID. This and not a
+   * <code>null</code> check is what decides: a caller may hand in nothing, and the method
+   * then runs without an aggregate and nothing is saved afterwards.
+   *
    * @return Whether the caller handed in the aggregate rather than its ID
    */
   public boolean isWorkflowAggregateProvided() {
@@ -163,6 +189,8 @@ public final class HandlerCall {
   }
 
   /**
+   * The process variables this call offers to the method's parameters.
+   *
    * @return The process variables <code>&#64;TaskParam</code> parameters read
    */
   public Map<String, Object> getVariables() {
@@ -172,6 +200,10 @@ public final class HandlerCall {
   }
 
   /**
+   * The multi-instance scopes this call runs in, one per BPMN element carrying
+   * multi-instance characteristics. Read a scope by the element id it is keyed under - the
+   * map keeps no order, whatever order it was built in.
+   *
    * @return The multi-instance scopes of this invocation, keyed by BPMN element id
    */
   public Map<String, HandlerMultiInstance> getMultiInstances() {
@@ -181,6 +213,9 @@ public final class HandlerCall {
   }
 
   /**
+   * The extension's own object for this call. Only the binders the extension contributed
+   * read it; VanillaBP hands it through without looking into it.
+   *
    * @return The extension's own event object the binders of the extension read
    */
   public Object getPayload() {
@@ -190,6 +225,10 @@ public final class HandlerCall {
   }
 
   /**
+   * Whether VanillaBP saves the aggregate after the method returned. A contract stating
+   * that none of its methods writes outranks this, so a call of such a contract never
+   * saves.
+   *
    * @return Whether the aggregate is saved after the method returned
    */
   public boolean savesWorkflowAggregate() {
@@ -323,6 +362,8 @@ public final class HandlerCall {
     }
 
     /**
+     * Adds one process variable of this invocation.
+     *
      * @param name The name of a process variable
      * @param value Its value
      * @return This builder
@@ -337,7 +378,11 @@ public final class HandlerCall {
     }
 
     /**
-     * @param variables The process variables of this invocation
+     * Adds process variables to the ones the builder already holds, rather than replacing
+     * them.
+     *
+     * @param variables The process variables of this invocation, <code>null</code> is
+     *          ignored
      * @return This builder
      */
     public Builder variables(
@@ -351,6 +396,10 @@ public final class HandlerCall {
     }
 
     /**
+     * Adds the current iteration of one multi-instance element. Add one per element the
+     * invocation runs in, nested ones included, because a parameter of the method may name
+     * any of them.
+     *
      * @param elementId The BPMN element carrying the multi-instance characteristics
      * @param multiInstance Its current iteration
      * @return This builder
@@ -365,6 +414,9 @@ public final class HandlerCall {
     }
 
     /**
+     * Hands the extension's own object to the binders the extension contributed. Anything
+     * a method of the extension needs and VanillaBP knows nothing about travels here.
+     *
      * @param payload The extension's own event object, read by the binders it
      *          contributed
      * @return This builder
@@ -401,7 +453,11 @@ public final class HandlerCall {
     }
 
     /**
+     * Builds the call, and refuses one which names no workflow aggregate at all.
+     *
      * @return The call
+     * @throws IllegalArgumentException If the call names neither the ID of an aggregate to
+     *           load nor an aggregate to hand in (guiding message)
      */
     public HandlerCall build() {
 

@@ -64,6 +64,17 @@ public class MongoPhaseTwoOutboxAutoConfiguration {
   public static final String DEFAULT_OUTBOX_BEAN_NAME = "vanillaBpMongoPhaseTwoOutbox";
 
   /**
+   * Built by Spring Boot while it applies its auto-configurations, and only where the
+   * conditions above hold. Nothing in VanillaBP builds it.
+   */
+  public MongoPhaseTwoOutboxAutoConfiguration() {
+  }
+
+  /**
+   * What polls the outbox collection: it claims a due entry, hands it to the router and
+   * marks it done, gives a failed one its next attempt, and deletes what the retention
+   * released. It also carries the payloads of the entries.
+   *
    * @param mongoTemplate The template used to claim and update entries
    * @param phaseTwoRouter Provider of the core's router dispatched to
    * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree carrying the
@@ -91,6 +102,12 @@ public class MongoPhaseTwoOutboxAutoConfiguration {
   }
 
   /**
+   * The phase-two outbox of every workflow aggregate this application persists in MongoDB.
+   * Spring builds it where Spring Data MongoDB is on the classpath, a
+   * {@link MongoDatabaseFactory} and a {@link MongoTemplate} exist and
+   * <code>vanillabp.outbox.mongo.enabled</code> is not <code>false</code>; an aggregate
+   * living in a relational database is served by the JDBC outbox beside it.
+   *
    * @param mongoTemplate The template used to write entries within the current transaction
    * @param dispatcher The dispatcher triggered right after a commit
    * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree carrying the

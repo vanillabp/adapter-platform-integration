@@ -91,6 +91,16 @@ public class ProcessVersions {
   private final java.util.Set<String> reportedAsUnknown = ConcurrentHashMap.newKeySet();
 
   /**
+   * Builds an empty registry - the {@link WorkflowTaskRegistry} keeps one of these, and a
+   * test which only needs the version answers builds one of its own.
+   * <p>
+   * Nothing is known at this point. Everything in here arrives while the adapters wire their
+   * BPMN, so the answers below are worth asking for only after the deployment.
+   */
+  public ProcessVersions() {
+  }
+
+  /**
    * Registers what one BPMS knows about one BPMN process. Registering the same catalog
    * again (a module deployed at every boot, several workflow service classes) does not
    * duplicate it.
@@ -215,6 +225,13 @@ public class ProcessVersions {
   }
 
   /**
+   * The border between the model this boot brought and the older versions the BPMS holds.
+   * <p>
+   * A <code>null</code> answer carries two meanings, and only the caller can tell them apart:
+   * where the module deployed the process there is no older version to speak of, and where
+   * the id was declared without a model every version the BPMS holds under it is an older one
+   * (decision 15 in the repository's DECISIONS.md).
+   *
    * @param adapterId The adapter ID
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
@@ -230,6 +247,13 @@ public class ProcessVersions {
   }
 
   /**
+   * Which BPMS can be asked about that process at all.
+   * <p>
+   * The order is the order the adapters registered in, and it is what decides the answer
+   * while two BPMS serve one process during a migration: the first one knowing a version or
+   * tag wins. An empty answer means nobody can be asked, which is not the same as "no version
+   * is deployed".
+   *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
    * @return The BPMS answering for that process, in registration order
@@ -246,6 +270,12 @@ public class ProcessVersions {
   }
 
   /**
+   * A resolver for one BPMN process, to be handed to a {@link VersionRange}.
+   * <p>
+   * The resolver asks the registered catalogs and warns about a version or tag none of them
+   * knows, once per name. So it belongs where an unknown name is worth a word - a plain
+   * comparison of numbers needs no resolver at all.
+   *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
    * @return Resolves version identifiers and version tags of that BPMN process
@@ -433,6 +463,18 @@ public class ProcessVersions {
   @FunctionalInterface
   public interface MethodsWhichNeverRun {
 
+    /**
+     * Names the methods of that process which no delivery of such a BPMS can reach.
+     * <p>
+     * This is asked only where a BPMS said it keeps no catalog, so the answer is a list for
+     * one message and nothing else. An empty list keeps that message out altogether.
+     *
+     * @param workflowModuleId The workflow module ID
+     * @param bpmnProcessId The plain BPMN process ID
+     * @param reported What a delivery of that BPMS carries as its process version - what
+     *          decides whether a specification can be met there at all
+     * @return The methods, worded for the message, empty where every method can be reached
+     */
     List<String> of(
         String workflowModuleId,
         String bpmnProcessId,

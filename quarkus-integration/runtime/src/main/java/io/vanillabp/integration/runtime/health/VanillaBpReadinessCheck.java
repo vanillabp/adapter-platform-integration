@@ -39,6 +39,13 @@ import jakarta.inject.Inject;
 public class VanillaBpReadinessCheck implements HealthCheck {
 
   /**
+   * Built by the CDI container, and only in an application which brought the SmallRye Health
+   * extension - the build step named in the class comment is what registers the bean.
+   */
+  public VanillaBpReadinessCheck() {
+  }
+
+  /**
    * The adapters' deployment services, one per configured adapter id. Collected the
    * way the deployment runner collects them: element beans plus the flattened
    * <code>List</code> beans of adapters with runtime-config multiplicity.

@@ -19,6 +19,11 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 @ConditionalOnMissingClass("com.gruelbox.transactionoutbox.TransactionOutbox")
 public class GruelboxMissingAutoConfiguration {
 
+  /**
+   * Ends the boot. Spring builds this class only under the two conditions above, and a
+   * configuration class which cannot be built stops the application context - which is the
+   * whole point here: there is nothing to configure, only something to say.
+   */
   public GruelboxMissingAutoConfiguration() {
 
     throw new IllegalStateException(

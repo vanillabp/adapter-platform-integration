@@ -32,6 +32,14 @@ public class DeploymentAutoConfiguration {
   static final String BEANNAME_DEPLOYMENTSERVICE = "VanillaBpDeploymentService";
 
   /**
+   * Built by Spring Boot while it applies its auto-configurations, and only where the
+   * workflow modules and the adapter configuration were bound already. Nothing in VanillaBP
+   * builds it.
+   */
+  public DeploymentAutoConfiguration() {
+  }
+
+  /**
    * Collects the adapters' deployment services and the extensions' wiring services
    * via {@link ObjectProvider} streams: the convention is one <i>element</i> bean
    * per adapter/extension (never a bean of type <code>List&lt;...&gt;</code>) so
@@ -40,6 +48,24 @@ public class DeploymentAutoConfiguration {
    * {@link ExtensionWiringService}, the wiring stream contains the adapters, too;
    * the core {@link DeploymentService} filters them out (adapters are wired
    * explicitly by the deployment pipeline).
+   *
+   * @param allWorkflowModules The workflow modules of this application, whose resources are
+   *          deployed and whose ids everything below is done per
+   * @param properties Everything below <code>vanillabp</code> after Spring bound it, which
+   *          is what says which adapter serves a workflow
+   * @param deploymentServiceProvider The adapters' deployment services, one bean per
+   *          configured adapter
+   * @param wiringServiceProvider The extensions' wiring services, one bean each, the
+   *          adapters included for the reason named above
+   * @param processServices The process service beans, which are stopped again when workflow
+   *          processing stops
+   * @param workflowTaskWiring What connects a delivered task to the
+   *          <code>&#64;WorkflowTask</code> method serving it
+   * @param resourceLoader How a workflow module's BPMN and DMN files are read, and how a
+   *          class carrying <code>&#64;WorkflowService</code> without being a bean is found
+   *          while a process nothing claims is reported
+   * @return The lifecycle bean which deploys while the context comes up and stops workflow
+   *         processing when it goes down
    */
   @Bean(BEANNAME_DEPLOYMENTSERVICE)
   public SpringBootDeploymentService deploymentService(

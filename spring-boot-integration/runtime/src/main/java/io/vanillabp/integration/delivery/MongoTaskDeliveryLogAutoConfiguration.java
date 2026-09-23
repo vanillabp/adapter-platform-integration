@@ -49,6 +49,13 @@ public class MongoTaskDeliveryLogAutoConfiguration {
   public static final String DEFAULT_DELIVERY_LOG_BEAN_NAME = "vanillaBpMongoTaskDeliveryLog";
 
   /**
+   * Built by Spring Boot while it applies its auto-configurations, and only where the
+   * conditions above hold. Nothing in VanillaBP builds it.
+   */
+  public MongoTaskDeliveryLogAutoConfiguration() {
+  }
+
+  /**
    * The collection the records go into: what
    * <code>vanillabp.outbox.mongo.delivery-collection</code> says. The indexes are created
    * on the same name the log writes to, which is why both beans below ask this method
@@ -68,6 +75,12 @@ public class MongoTaskDeliveryLogAutoConfiguration {
   }
 
   /**
+   * The delivery log of every workflow aggregate this application persists in MongoDB.
+   * Spring builds it where Spring Data MongoDB is on the classpath, a
+   * {@link MongoDatabaseFactory} and a {@link MongoTemplate} exist and
+   * <code>vanillabp.outbox.mongo.enabled</code> is not <code>false</code>; an aggregate
+   * living in a relational database is served by the other default beside it.
+   *
    * @param mongoTemplate The template writing the records within the current transaction
    * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree, asked for the
    *          retention of delivery records (<code>vanillabp.delivery.retention</code>,

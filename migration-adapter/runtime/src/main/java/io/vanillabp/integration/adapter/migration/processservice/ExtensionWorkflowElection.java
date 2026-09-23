@@ -16,6 +16,10 @@ public final class ExtensionWorkflowElection implements WorkflowElection {
   private final PhaseTwoRouter router;
 
   /**
+   * Built by the platform integration as one bean per application, and handed to every
+   * extension which asks for the election. The router is kept rather than read out, because
+   * process services register themselves in it while the beans are still being built.
+   *
    * @param router The router holding the process services of this application
    */
   public ExtensionWorkflowElection(

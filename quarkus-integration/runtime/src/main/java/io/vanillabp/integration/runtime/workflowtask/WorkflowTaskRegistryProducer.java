@@ -18,6 +18,13 @@ import jakarta.inject.Singleton;
 public class WorkflowTaskRegistryProducer {
 
   /**
+   * Built by the CDI container, which the platform's build step told about this class. The
+   * sync model below is built with it, so every bean produced here shares the one instance.
+   */
+  public WorkflowTaskRegistryProducer() {
+  }
+
+  /**
    * The one sync-model instance of the application - handed to adapters as
    * {@link io.vanillabp.integration.adapter.spi.WorkflowAggregateSync} AND to the
    * registry (which validates the model of every registered workflow-aggregate
@@ -27,6 +34,11 @@ public class WorkflowTaskRegistryProducer {
   private final io.vanillabp.integration.adapter.migration.sync.AggregateSyncSupport aggregateSync = new io.vanillabp.integration.adapter.migration.sync.AggregateSyncSupport();
 
   /**
+   * Builds the one registry of the application. The platform's runner goes in as the
+   * FALLBACK: a delivery runs in the transaction the process service of its workflow aggregate
+   * resolved, and this one serves where that resolution answers nothing - see decision 11 in
+   * the repository's DECISIONS.md.
+   *
    * @param platformTransactionRunner The platform's own runner, the bean of
    *          {@link io.vanillabp.integration.runtime.processservice.TransactionRunnerProducer}
    *          - it also reads the state of the transaction a

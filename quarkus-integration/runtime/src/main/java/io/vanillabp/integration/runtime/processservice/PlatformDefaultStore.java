@@ -17,6 +17,10 @@ package io.vanillabp.integration.runtime.processservice;
 public interface PlatformDefaultStore {
 
   /**
+   * Which technology this default belongs to. A resolver compares the answer with the
+   * technology managing an aggregate, so a default naming the wrong one would be attributed
+   * to aggregates whose transaction it does not take part in.
+   *
    * @return The persistence technology whose transaction this store takes part in, never
    *         {@link QuarkusPersistenceTechnology.Technology#UNKNOWN}
    */

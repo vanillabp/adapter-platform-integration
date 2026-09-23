@@ -12,7 +12,6 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -50,7 +49,6 @@ import lombok.extern.slf4j.Slf4j;
  * and writing the entry may lose the phase-two call, and a rollback of the aggregate
  * does not remove an already written entry.
  */
-@RequiredArgsConstructor
 @Slf4j
 public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
 
@@ -65,6 +63,29 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
    * and double-dispatch.
    */
   private final String collection;
+
+  /**
+   * Built by {@link MongoPhaseTwoOutboxAutoConfiguration} where the workflow aggregates of
+   * this application live in MongoDB, and by an application building an outbox of its own
+   * on a collection nothing else writes into.
+   *
+   * @param mongoTemplate The template the entries are written and read through - the same
+   *          one the aggregates use, so both take part in one MongoDB transaction wherever
+   *          the deployment is a replica set
+   * @param dispatcher What polls the collection. It is told after every commit that
+   *          something is waiting, and it owns the payloads of the entries
+   * @param collection The collection the entries go into, one per outbox
+   */
+  public MongoPhaseTwoOutbox(
+      final MongoTemplate mongoTemplate,
+      final MongoPhaseTwoOutboxDispatcher dispatcher,
+      final String collection) {
+
+    this.mongoTemplate = mongoTemplate;
+    this.dispatcher = dispatcher;
+    this.collection = collection;
+
+  }
 
   /**
    * The adapter ids the OPEN entries of one BPMN process are waiting for: an
@@ -288,7 +309,8 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
 
   /**
    * Dispatches the entry right after the transaction was committed; recovery after a
-   * crash is covered by the dispatcher's fixed-delay poller.
+   * crash is covered by the dispatcher's poller, which wakes at the moment the earliest
+   * entry it still owes becomes due.
    */
   private void triggerPollAfterCommit() {
 

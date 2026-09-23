@@ -38,6 +38,14 @@ public class WorkflowEndedHandlers {
    */
   private final io.vanillabp.integration.adapter.migration.workflowtask.ProcessVersions processVersions;
 
+  /**
+   * Built by the workflow-task registry, once per application. The versions are the
+   * registry's own, because a <code>&#64;WorkflowEnded</code> method names its version the
+   * way a <code>&#64;WorkflowTask</code> method does and both have to read the same answer.
+   *
+   * @param processVersions What the BPMS know about the deployed versions of the BPMN
+   *          processes
+   */
   public WorkflowEndedHandlers(
       final io.vanillabp.integration.adapter.migration.workflowtask.ProcessVersions processVersions) {
 
@@ -203,6 +211,12 @@ public class WorkflowEndedHandlers {
   }
 
   /**
+   * Whether a method of the application was registered for that process. The registry
+   * asks it while an adapter wires a model, and it answers for the application's methods
+   * alone - two settings want the same notification without a method, which is why the
+   * registry adds them
+   * ({@code WorkflowTaskRegistry#workflowEndedHandlerExists}).
+   *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
    * @return Whether the application wants to be told about the end of workflows of

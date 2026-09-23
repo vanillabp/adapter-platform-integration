@@ -65,7 +65,11 @@ public record ClasspathFacts(
   }
 
   /**
-   * @return The IDs of the workflow modules found in the classpath
+   * The module ids alone, for everything which asks whether a configured module exists at
+   * all and does not care where its descriptor came from.
+   *
+   * @return The IDs of the workflow modules found in the classpath, in the order the
+   *         platform read them
    */
   public List<String> workflowModuleIds() {
 

@@ -54,6 +54,13 @@ public class SpringPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
 
   private final SpringPersistenceTechnology persistenceTechnology;
 
+  /**
+   * Built once per application by the autoconfiguration. The outbox beans are looked up on
+   * every question rather than kept here, so a store which is created late is found too.
+   *
+   * @param applicationContext The context the outbox beans and the aggregate's repository
+   *     are looked up in
+   */
   public SpringPhaseTwoOutboxResolver(
       final ApplicationContext applicationContext) {
 

@@ -27,6 +27,14 @@ import jakarta.inject.Inject;
 @ApplicationScoped
 public class VanillaBpShutdownObserver {
 
+  /**
+   * Built by the CDI container, which the platform's build step told about this class. The
+   * observer keeps no state of its own - it asks the {@link VanillaBpDeploymentRunner} to
+   * stop what that bean started.
+   */
+  public VanillaBpShutdownObserver() {
+  }
+
   @Inject
   VanillaBpDeploymentRunner deploymentRunner;
 

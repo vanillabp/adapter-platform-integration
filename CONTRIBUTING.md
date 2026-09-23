@@ -187,14 +187,31 @@ What this asks for in practice:
 Measurements are not claims: a number is a statement about a measured past, so it needs its context
 (version, setup, date) rather than a test.
 
-One part of it is a machine's job after all: every module compiles with `-Xdoclint:all,-missing`, so
-a `{@link}` pointing at a method which was renamed or removed fails the build, and so does a tag
-HTML no longer knows. Two tools share that work. The compiler reads every class, the package
-private ones included, while the javadoc plugin, which runs in every build here, reads what the
-published documentation shows and therefore starts at protected. What neither check can see is the same name
-written as prose, and neither says anything about whether a sentence is true, so the rest stays
-deliberately without tooling. A lint over words like "never" or "always" produces noise and a false
-sense of safety, and the habit is what does the work.
+One part of it is a machine's job after all. Two tools read the javadoc, and each one sees a part
+the other misses. The compiler checks every class for a broken reference or broken HTML, the package
+private ones included, because every module compiles with `-Xdoclint:all,-missing`. The javadoc
+plugin, which runs in every build here, checks what the published documentation shows, so it starts
+at protected and stops there. One thing below protected is shown as well: the fields a serializable
+class carries into its serialized form, which is why a private field of an exception is asked for a
+comment too.
+
+A comment which is missing breaks the build. Everything this repository publishes has one now, and
+the plugin fails on a warning so that it stays that way. Write the sentence rather than switching the
+check off, and write the one a reader needs: what this repository publishes is read by the author of
+an application, by whoever writes the next BPMS adapter and by whoever writes an extension of the
+deployment pipeline, and `@return the value` is the same gap in a longer form. A module which
+publishes nothing sets `maven.javadoc.skip`, so a test module is never asked for comments, and
+generated code is left out by the name its generator gives it.
+
+One thing the javadoc plugin cannot see is an accessor Lombok generates, because it reads the source
+and Lombok writes bytecode. So a published comment names a property in words rather than linking a
+getter which is not in the file. A published class which took its constructor from Lombok writes
+that constructor out, because the documentation otherwise shows a parameterless one which does not
+exist.
+
+What neither check can see is the same name written as prose, and neither says anything about
+whether a sentence is true, so the rest stays deliberately without tooling. A lint over words like
+"never" or "always" produces noise and a false sense of safety, and the habit is what does the work.
 
 ## A decision is superseded, never edited away
 

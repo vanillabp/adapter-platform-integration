@@ -35,6 +35,14 @@ public final class VanillaBpWorkflowModulesBuildItem extends SimpleBuildItem {
    */
   private final Map<DotName, WorkflowModule> resolvedWorkflowModules = new HashMap<>();
 
+  /**
+   * Built by {@link WorkflowModuleBuildStepProcessor#findAllWorkflowModules} once every
+   * archive of the build was searched for a descriptor, and read by every step which has to
+   * know the workflow modules of this application.
+   *
+   * @param workflowModulesByArchive The modules found, keyed by the archive their descriptor
+   *          was found in. The item works on the map it is given and never changes it
+   */
   public VanillaBpWorkflowModulesBuildItem(
       final Map<ApplicationArchive, WorkflowModule> workflowModulesByArchive) {
 
@@ -43,6 +51,9 @@ public final class VanillaBpWorkflowModulesBuildItem extends SimpleBuildItem {
   }
 
   /**
+   * The workflow modules of this application. A set of its own is built on every call, so a
+   * caller may sort or filter the one it gets.
+   *
    * @return All workflow modules found (workflow modules found in more than one archive
    *         are reported once since equality of workflow modules is based on their IDs)
    */

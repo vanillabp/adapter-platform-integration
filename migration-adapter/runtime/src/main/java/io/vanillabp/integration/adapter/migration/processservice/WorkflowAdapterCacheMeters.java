@@ -24,6 +24,12 @@ public class WorkflowAdapterCacheMeters implements MeterBinder {
 
   private final WorkflowAdapterCacheStatistics statistics;
 
+  /**
+   * Built by the platform integration where Micrometer is present, once per application.
+   *
+   * @param statistics The one instance every process service counts into. The meters read
+   *          it while the backend collects them, so it is kept rather than copied
+   */
   public WorkflowAdapterCacheMeters(
       final WorkflowAdapterCacheStatistics statistics) {
 

@@ -7,12 +7,11 @@ import org.springframework.data.annotation.Id;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * A single entry of the MongoDB-based phase-two outbox, stored in the collection
- * the configured collection (<code>vanillabp.outbox.mongo.collection</code>). The entry persists the fields of a
+ * A single entry of the MongoDB-based phase-two outbox, stored in the configured
+ * collection (<code>vanillabp.outbox.mongo.collection</code>). The entry persists the fields of a
  * {@link io.vanillabp.integration.spi.PhaseTwoCall} - the workflow
  * aggregate's ID in its serialized (String) form; conversion back to the aggregate's
  * ID type happens in the core's router at dispatch time.
@@ -29,14 +28,30 @@ import lombok.Setter;
  */
 @Getter
 @Setter
-@NoArgsConstructor
 @AllArgsConstructor
 public class PhaseTwoOutboxEntry {
 
+  /**
+   * An entry which is still waiting for its dispatch. Its {@link #dedupKey} is the
+   * idempotency key, so a second call planning the same operation is discarded while this
+   * entry stands.
+   */
   public static final String STATUS_OPEN = "OPEN";
 
+  /**
+   * An entry which reached the BPMS. It is kept for <code>vanillabp.outbox.retention</code>
+   * and deleted afterwards, so support can still read what was dispatched, and its
+   * {@link #dedupKey} is its own id by then - the deduplication ends where the dispatch is
+   * over (see decision 22 in the repository's DECISIONS.md).
+   */
   public static final String STATUS_DONE = "DONE";
 
+  /**
+   * An entry which used up <code>vanillabp.outbox.block-after-attempts</code> attempts, or
+   * whose failure the adapter called permanent. It waits for a person: no poll takes it
+   * again and no retention deletes it, which is why it is the one status somebody has to
+   * clean up by hand.
+   */
   public static final String STATUS_BLOCKED = "BLOCKED";
 
   @Id
@@ -106,5 +121,13 @@ public class PhaseTwoOutboxEntry {
    * <code>null</code> for an entry nobody holds.
    */
   private Instant leasedUntil;
+
+  /**
+   * What Spring Data starts from when it reads an entry of the collection: it builds the
+   * empty entry and fills the fields afterwards. The outbox writing an entry uses the
+   * constructor taking every field, which Lombok generates.
+   */
+  public PhaseTwoOutboxEntry() {
+  }
 
 }

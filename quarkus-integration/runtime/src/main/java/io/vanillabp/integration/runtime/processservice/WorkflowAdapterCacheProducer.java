@@ -38,6 +38,19 @@ import jakarta.inject.Singleton;
 @ApplicationScoped
 public class WorkflowAdapterCacheProducer {
 
+  /**
+   * Built by the CDI container, which the platform's build step told about this class. The
+   * producer reads its configuration itself, so nothing is injected into it.
+   */
+  public WorkflowAdapterCacheProducer() {
+  }
+
+  /**
+   * The one place these numbers are built. They count what the election asked of whatever
+   * cache is in use, so an application replacing the cache keeps the same numbers.
+   *
+   * @return The counters of the application, empty at this point
+   */
   @Produces
   @Singleton
   public WorkflowAdapterCacheStatistics workflowAdapterCacheStatistics() {
@@ -46,6 +59,14 @@ public class WorkflowAdapterCacheProducer {
 
   }
 
+  /**
+   * The cache an application gets when it says nothing. A bean of its own replaces this one
+   * ({@link DefaultBean}), which is how a cluster shares its elections - what such a cache
+   * holds are hints, so replacing it costs probes and never correctness (see decision 5 in the
+   * repository's DECISIONS.md).
+   *
+   * @return The in-memory cache, sized by <code>vanillabp.workflow-adapter-cache.*</code>
+   */
   @Produces
   @Singleton
   @DefaultBean

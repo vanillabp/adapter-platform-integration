@@ -4,15 +4,52 @@ import java.util.Map;
 
 import lombok.Builder;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
+/**
+ * What ONE adapter may be told. The same keys may be written at four levels:
+ *
+ * <pre>
+ * vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;workflow&gt;.tasks.&lt;task&gt;.adapters.&lt;id&gt;.*  (most specific)
+ * vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;workflow&gt;.adapters.&lt;id&gt;.*
+ * vanillabp.workflow-modules.&lt;module&gt;.adapters.&lt;id&gt;.*
+ * vanillabp.adapters.&lt;id&gt;.*                                                                (least specific)
+ * </pre>
+ *
+ * Every one of the four binds this class, so each key below may be written at any of them.
+ * The <code>&lt;id&gt;</code> is the adapter id, and an application running two adapters of
+ * the same BPMS - the migration case - says different things to each of them by writing two
+ * sections.
+ * <p>
+ * <code>null</code> is the value of every key nobody wrote, and it means "this level says
+ * nothing" rather than "off": the lookup walks from the most specific level to the least
+ * specific one and takes the first value which is not <code>null</code>
+ * ({@link MigrationAdapterProperties#resolveForAdapter}). Where no level says anything, the
+ * default named at the key applies. Why an adapter setting may be written in four places is
+ * decision 7 in the repository's DECISIONS.md.
+ * <p>
+ * The section of the adapter itself carries two keys more than the three levels below it,
+ * and those are in {@link AdapterConfigProperties}.
+ */
 @Getter
 @Setter
-@NoArgsConstructor
 @SuperBuilder
 public class AdapterProperties {
+
+  /**
+   * The empty section a configuration binder starts from: both platforms create the object
+   * and then write the keys the application configured into it, one setter per key.
+   * <p>
+   * It asks the builder for the values, and that is not a detour: Lombok moves the
+   * initializer of a field with a default into the builder, so a constructor which sets
+   * nothing itself would leave such a field <code>null</code>.
+   */
+  public AdapterProperties() {
+
+    this(builder());
+
+  }
 
   /**
    * Refused here on purpose: the permission to share a whole workflow aggregate belongs

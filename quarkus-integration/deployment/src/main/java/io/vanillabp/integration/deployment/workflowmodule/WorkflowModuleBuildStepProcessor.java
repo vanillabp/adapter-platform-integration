@@ -48,9 +48,22 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * VanillaBP extension build step processor, responsible for processing workflow modules.
+ * <p>
+ * A workflow module is a Maven or Gradle module carrying its BPMN files, its workflow
+ * services and configuration files of its own. Finding the modules and generating the
+ * classes which read those files happens while the application is built: Quarkus takes the
+ * config sources of an application from what the build registered, and a native image
+ * carries only the files it was told about. What a build does not see is not read later.
  */
 @Slf4j
 public class WorkflowModuleBuildStepProcessor {
+
+  /**
+   * Quarkus builds this processor while it augments the application and calls the build
+   * steps below on it. Nothing else builds it, and no step keeps state in it.
+   */
+  public WorkflowModuleBuildStepProcessor() {
+  }
 
   /**
    * Priority of workflow-module-specific YAML config files. Below the classpath "application.yaml" (255),
@@ -746,6 +759,19 @@ public class WorkflowModuleBuildStepProcessor {
 
   }
 
+  /**
+   * Reads the ID of a workflow module out of its descriptor. The descriptor is the file
+   * <code>META-INF/workflow-module</code> of an archive, and its whole content is the ID.
+   * <p>
+   * A descriptor which cannot be read ends the build. An archive carrying one is a workflow
+   * module, and passing over it silently would move its workflow services into another
+   * module or leave them without one.
+   *
+   * @param descriptorInJar Where the descriptor lies, resolvable on the machine running the
+   *          build only
+   * @return The ID, with the whitespace around it removed, or nothing where the file says
+   *         nothing at all
+   */
   public static Optional<String> readWorkflowModuleDescriptor(
       final URI descriptorInJar) {
 

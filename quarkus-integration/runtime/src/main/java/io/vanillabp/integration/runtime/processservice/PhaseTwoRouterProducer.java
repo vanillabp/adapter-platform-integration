@@ -23,6 +23,18 @@ import jakarta.inject.Singleton;
 public class PhaseTwoRouterProducer {
 
   /**
+   * Built by the CDI container, which the platform's build step told about this class. The
+   * producer methods below take what they need as parameters, so the producer itself holds
+   * nothing.
+   */
+  public PhaseTwoRouterProducer() {
+  }
+
+  /**
+   * Builds the one router of the application. It is what an outbox entry is handed to after
+   * the caller's transaction committed - the acting half of the split which decision 3 in
+   * the repository's DECISIONS.md describes.
+   *
    * @param platformTransactionRunner The transaction a dispatch runs in - the
    *          platform's own runner, the bean of {@link TransactionRunnerProducer}
    * @param metrics What dispatches are counted into; unsatisfied where the

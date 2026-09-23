@@ -55,6 +55,26 @@ public class DummyProcessServiceProducer {
    */
   public static final String PROPERTY_READ_AGGREGATE_IN_PHASE_TWO = DummyAdapter.PROPERTY_READ_AGGREGATE_IN_PHASE_TWO;
 
+  /**
+   * CDI builds this producer once per application. A test never creates it and never
+   * calls the method below: it asks the container for the process services, or lets the
+   * core's election do it.
+   */
+  public DummyProcessServiceProducer() {
+  }
+
+  /**
+   * Builds one {@link DummyProcessService} per configured adapter id of the dummy type,
+   * as the one List bean described above. The two switches are read from the
+   * configuration here, so every instance of one boot behaves the same way.
+   *
+   * @param properties The platform's core properties, the only place the adapter ids
+   *          come from
+   * @param phaseTwoListeners The hooks a test declared to watch phase two
+   * @param taskAwarenessSources The hooks answering what this BPMS knows about
+   * @param viewerSources The hooks answering the viewer API
+   * @return One process service per configured adapter id of the dummy type
+   */
   @Produces
   public List<io.vanillabp.integration.adapter.spi.MigratableProcessService<Object>> dummyMigratableProcessServices(
       final MigrationAdapterProperties properties,

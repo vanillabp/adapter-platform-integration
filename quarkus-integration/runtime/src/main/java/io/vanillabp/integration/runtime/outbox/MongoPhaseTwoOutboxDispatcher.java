@@ -107,6 +107,14 @@ public class MongoPhaseTwoOutboxDispatcher {
   private volatile MongoPhaseTwoPayloadStore payloadStore;
 
   /**
+   * Built by the CDI container, next to the outbox it dispatches for. The poller starts
+   * on the startup event and not here, because a dispatch must not run before the BPMN
+   * resources were deployed.
+   */
+  public MongoPhaseTwoOutboxDispatcher() {
+  }
+
+  /**
    * The outbox configuration (<code>vanillabp.outbox.*</code>), loaded lazily so
    * {@link MongoPhaseTwoOutbox} can resolve its collection even before the startup
    * event was observed.

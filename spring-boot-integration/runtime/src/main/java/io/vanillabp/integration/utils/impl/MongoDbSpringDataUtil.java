@@ -21,6 +21,14 @@ import org.springframework.data.repository.support.Repositories;
 
 import io.vanillabp.integration.utils.SpringDataUtil;
 
+/**
+ * The {@link SpringDataUtil} of workflow aggregates which are MongoDB documents. What it
+ * answers about a document comes from Spring Data's mapping context, and where a class is not
+ * mapped or names no id, the message says which annotation is missing.
+ * <p>
+ * {@link #unproxy(Object)} throws here. MongoDB hands out no proxies, so a document which was
+ * read is complete and there is nothing to initialize.
+ */
 public class MongoDbSpringDataUtil implements SpringDataUtil {
 
   private final Map<Class<?>, MongoRepository<?, Object>> repositoryCache = new HashMap<>();
@@ -31,6 +39,16 @@ public class MongoDbSpringDataUtil implements SpringDataUtil {
 
   private final MongoConverter mongoConverter;
 
+  /**
+   * Built by {@link io.vanillabp.integration.utils.config.MongoDbSpringDataUtilConfiguration},
+   * and by an application which wires the persistence itself.
+   *
+   * @param applicationContext Where the aggregates' repositories are looked up
+   * @param mongoDbFactory Read only where <code>mongoConverter</code> is
+   *          <code>null</code>: the default converter is built from it
+   * @param mongoConverter The application's converter, which is what carries its own
+   *          conversions. <code>null</code> where it defines none
+   */
   public MongoDbSpringDataUtil(
       final ApplicationContext applicationContext,
       final MongoDatabaseFactory mongoDbFactory,

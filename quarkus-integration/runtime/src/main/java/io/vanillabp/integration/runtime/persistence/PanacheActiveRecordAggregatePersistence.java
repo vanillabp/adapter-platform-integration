@@ -19,6 +19,12 @@ import io.quarkus.hibernate.orm.panache.Panache;
  */
 public class PanacheActiveRecordAggregatePersistence<A> extends DefaultAggregatePersistence<A> {
 
+  /**
+   * Called by the no-arg constructor of the subclass the build generates for one
+   * aggregate.
+   *
+   * @param aggregateClass The aggregate type, which is also the Panache entity
+   */
   public PanacheActiveRecordAggregatePersistence(
       final Class<A> aggregateClass) {
 

@@ -51,6 +51,18 @@ public class JdbcTaskDeliveryLogAutoConfiguration {
   public static final String DEFAULT_DELIVERY_LOG_BEAN_NAME = "vanillaBpJdbcTaskDeliveryLog";
 
   /**
+   * Built by Spring Boot while it applies its auto-configurations, and only where the
+   * conditions above hold. Nothing in VanillaBP builds it.
+   */
+  public JdbcTaskDeliveryLogAutoConfiguration() {
+  }
+
+  /**
+   * The delivery log of every workflow aggregate this application persists in its
+   * relational database. Spring builds it where a {@link DataSource} and a transaction
+   * manager exist and <code>vanillabp.outbox.jdbc.enabled</code> is not <code>false</code>;
+   * an aggregate living in MongoDB is served by the other default beside it.
+   *
    * @param dataSource The data source holding the records
    * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree, asked for the
    *          retention of delivery records (<code>vanillabp.delivery.retention</code>,

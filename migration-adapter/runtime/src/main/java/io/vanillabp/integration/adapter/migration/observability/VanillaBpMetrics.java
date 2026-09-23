@@ -147,20 +147,67 @@ public interface VanillaBpMetrics {
    */
   String OUTBOX_OLDEST_PENDING_AGE = "vanillabp.outbox.oldest.pending.age";
 
+  /**
+   * The configured adapter id which did the work - the <code>id</code> of
+   * <code>vanillabp.adapters.&lt;id&gt;</code>, not the BPMS type. An application may run
+   * two adapters of the same BPMS, and during a migration it usually does, so this tag is
+   * what separates the old BPMS from the new one in every number below.
+   */
   String TAG_ADAPTER = "adapter";
 
+  /**
+   * The workflow module the BPMN process belongs to. It is needed beside
+   * {@link #TAG_BPMN_PROCESS} because a BPMN process id is unique inside a module and not
+   * across the application: two modules may carry the same id where the BPMS keeps them
+   * apart by itself, on Camunda 8 by a tenant (see decision 41 in the repository's
+   * DECISIONS.md).
+   */
   String TAG_WORKFLOW_MODULE = "workflow.module";
 
+  /**
+   * The BPMN process id, the plain one the BPMN file spells. Whatever an adapter adds to
+   * it to keep two scopes apart is not part of this tag - {@link #TAG_ADAPTER} says which
+   * scope the number belongs to.
+   */
   String TAG_BPMN_PROCESS = "bpmn.process";
 
+  /**
+   * The key the delivery resolved its <code>&#64;WorkflowTask</code> method by: the task
+   * definition of the BPMN task, or its element id where the task names no definition
+   * ({@link io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext#getTaskDefinition()}).
+   * On {@link #TASK_DELIVERY_DURATION} it is the tag which tells one slow handler from a
+   * slow application.
+   */
   String TAG_TASK_DEFINITION = "task.definition";
 
+  /**
+   * How the measured thing ended. Which values occur depends on the meter:
+   * {@link DeliveryOutcome} on {@link #TASK_DELIVERIES}, {@link DispatchOutcome} on
+   * {@link #OUTBOX_DISPATCH_LAG}. Both know a <code>failed</code>, and it means a different
+   * thing on each, so a query names the meter as well as this tag.
+   */
   String TAG_OUTCOME = "outcome";
 
+  /**
+   * Which operation was carried out, as the persisted name of its
+   * {@link io.vanillabp.integration.spi.PhaseOperation}. An operation added later shows
+   * up here without anything in this interface changing.
+   */
   String TAG_OPERATION = "operation";
 
+  /**
+   * Whether repeating the failed operation cannot help, as <code>true</code> or
+   * <code>false</code>. A <code>true</code> is a defect somebody has to look at, a
+   * <code>false</code> may be a BPMS which was busy for a moment.
+   */
   String TAG_PERMANENT = "permanent";
 
+  /**
+   * Which outbox store the entry lies in. An application may run more than one - a
+   * relational one and a MongoDB one, or gruelbox beside the platform's own store - and
+   * they dispatch independently, so a backlog is read per store (see decision 75 in the
+   * repository's DECISIONS.md).
+   */
   String TAG_STORE = "store";
 
   /**

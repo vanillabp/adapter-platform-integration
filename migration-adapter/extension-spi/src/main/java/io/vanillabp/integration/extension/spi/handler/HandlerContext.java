@@ -10,6 +10,9 @@ package io.vanillabp.integration.extension.spi.handler;
 public interface HandlerContext {
 
   /**
+   * The aggregate this invocation runs for - what a parameter taking the aggregate by its
+   * type is bound to. It is <code>null</code> where the call carried none.
+   *
    * @return The workflow aggregate of the workflow the handler runs for
    */
   Object getWorkflowAggregate();
@@ -52,6 +55,9 @@ public interface HandlerContext {
   }
 
   /**
+   * The value of one process variable of this invocation, as the caller passed it and
+   * before any conversion to a parameter's type.
+   *
    * @param name The name of the process variable
    * @return Its value, or <code>null</code> if the call carried none of that name
    */
@@ -59,8 +65,12 @@ public interface HandlerContext {
       String name);
 
   /**
-   * @return The multi-instance scopes of this invocation, keyed by BPMN element id,
-   *         outermost first
+   * The multi-instance scopes this invocation runs in, one per BPMN element carrying
+   * multi-instance characteristics. Read a scope by the element id it is keyed under: an
+   * invocation of a workflow task carries the scopes outermost first, one built as a
+   * {@link HandlerCall} carries them in no order at all.
+   *
+   * @return The multi-instance scopes of this invocation, keyed by BPMN element id
    */
   java.util.Map<String, HandlerMultiInstance> getMultiInstances();
 

@@ -34,6 +34,13 @@ import lombok.extern.slf4j.Slf4j;
 public class ProfileSpecificApplicationFilesBuildStepProcessor {
 
   /**
+   * Quarkus builds this processor while it augments the application and calls the build step
+   * below on it. Nothing else builds it, and the step keeps no state in it.
+   */
+  public ProfileSpecificApplicationFilesBuildStepProcessor() {
+  }
+
+  /**
    * Matches <code>application-{profile}.{extension}</code> at the root of an archive, which is
    * where Quarkus reads the application's own configuration from.
    */

@@ -20,7 +20,6 @@ import io.vanillabp.integration.extension.spi.settings.SettingsLevel;
 import io.vanillabp.integration.extension.spi.settings.SettingsResolution;
 import lombok.Builder;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
@@ -42,13 +41,34 @@ import lombok.experimental.SuperBuilder;
  */
 @Getter
 @Setter
-@NoArgsConstructor
 @SuperBuilder
 public class MigrationAdapterProperties extends AdaptersConfigurationProperties {
 
   private static final Logger logger = LoggerFactory.getLogger(MigrationAdapterProperties.class);
 
+  /**
+   * The root of every property VanillaBP reads: <code>vanillabp</code>. Every message
+   * which names a key builds it from here, so what a developer reads in the log is spelled
+   * the way it has to be written in the configuration.
+   */
   public static final String PREFIX = "vanillabp";
+
+  /**
+   * The empty configuration a binder starts from: both platforms create this object and
+   * then write everything below <code>vanillabp</code> into it, one setter per key. An
+   * application which configures nothing keeps what the defaults say and is led on from
+   * there by {@link #normalize(ClasspathFacts)} and the validation.
+   * <p>
+   * It asks the builder for the values, and that is not a detour: Lombok moves the
+   * initializer of a field with a default into the builder, so a constructor which sets
+   * nothing itself would leave every map of this class <code>null</code> and every
+   * sub-section missing.
+   */
+  public MigrationAdapterProperties() {
+
+    this(builder());
+
+  }
 
   /**
    * The location BPMN resources are loaded from and whether that location contains
@@ -405,12 +425,6 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Links child properties back to their parents (e.g. the workflow module ID into
-   * the module's properties object). Invoked by {@link #validateProperties(List, List)};
-   * has to be invoked explicitly if properties objects are built without running
-   * validation (e.g. in tests).
-   */
-  /**
    * How long the records of processed task deliveries are kept:
    * <code>vanillabp.delivery.retention</code> where it is set, and
    * <code>vanillabp.outbox.retention</code> otherwise, which is where the number lived
@@ -557,6 +571,17 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       '{}.delivery.retention' is set to {}, so the records of processed task deliveries are kept for \
       that long, while dispatched outbox entries keep '{}.outbox.retention' ({}).""";
 
+  /**
+   * Links child properties back to their parents (e.g. the workflow module ID into
+   * the module's properties object). Invoked by {@link #validateProperties(List, List)};
+   * has to be invoked explicitly if properties objects are built without running
+   * validation (e.g. in tests).
+   * <p>
+   * A binder keys a section by its map key and writes nothing else into it, so a module
+   * section does not know its own id and a workflow section knows neither its BPMN process
+   * id nor the module it belongs to. Everything which builds a message about a workflow
+   * needs both, which is why this runs before the first validation rule.
+   */
   public void validateAndLink() {
 
     workflowModules.forEach((
@@ -644,6 +669,14 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   }
 
+  /**
+   * The adapters serving a whole workflow module, for everything which is about the module
+   * rather than about one of its processes - a deployment, for instance.
+   *
+   * @param workflowModuleId The workflow module, or <code>null</code> to ask what the
+   *          application says in general
+   * @return The adapter ids in the order they are asked in, empty where no level names one
+   */
   public List<String> getPrioritizedAdaptersFor(
       final String workflowModuleId) {
 
@@ -653,6 +686,24 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   }
 
+  /**
+   * The adapters serving one BPMN process, in the order they are asked in: the first one
+   * which says it holds the workflow runs the operation, and a workflow which is new
+   * starts in the first one of the list.
+   * <p>
+   * Three levels may name adapters - the workflow, its module and the application - and
+   * the most specific level which names ANY wins as a whole. A list is not merged with the
+   * one above it: an empty list is how a level says nothing, so a workflow which names one
+   * adapter has exactly that one, whatever its module says.
+   *
+   * @param workflowModuleId The workflow module, or <code>null</code> to ask what the
+   *          application says in general
+   * @param bpmnProcessId The plain BPMN process id, or <code>null</code> to stop at the
+   *          workflow module
+   * @return The adapter ids in the order they are asked in, empty where no level names
+   *         one - which ends the startup of that workflow with a message naming the three
+   *         keys, see {@link #validatePropertiesFor(List, String, String)}
+   */
   public List<String> getPrioritizedAdaptersFor(
       final String workflowModuleId,
       final String bpmnProcessId) {
@@ -1712,6 +1763,23 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   }
 
+  /**
+   * Checks the adapters of ONE BPMN process: that some level names an adapter for it at
+   * all, and that every id it names is an adapter the application really has. Both
+   * messages name the keys the reader would write and the ids which do exist, the way
+   * decision 8 in the repository's DECISIONS.md asks for.
+   * <p>
+   * An id which is named but not configured is the expensive case: the workflow would
+   * start in whichever adapter is left, which is the migration going wrong silently, so
+   * the startup ends instead. <code>MigrationAdapterPropertiesTest</code> holds both
+   * cases.
+   *
+   * @param adapterIds The adapter ids the application really has
+   * @param workflowModuleId The workflow module of the process
+   * @param bpmnProcessId The plain BPMN process id
+   * @throws IllegalStateException Where no level names an adapter for that process, or
+   *           where a named id is not among <code>adapterIds</code>
+   */
   public void validatePropertiesFor(
       final List<String> adapterIds,
       final String workflowModuleId,
@@ -1745,6 +1813,16 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     }
   }
 
+  /**
+   * Validates the configuration of a platform which has nothing to add to the messages -
+   * the same run as {@link #validateProperties(List, List, String)} without a note of its
+   * own.
+   *
+   * @param adaptersLoaded The adapter types found in the classpath
+   * @param knownWorkflowModuleIds The workflow module IDs found in the classpath
+   * @throws IllegalStateException Where the configuration cannot be made to work, with a
+   *           message naming the keys to write
+   */
   public void validateProperties(
       final List<String> adaptersLoaded,
       final List<String> knownWorkflowModuleIds) {

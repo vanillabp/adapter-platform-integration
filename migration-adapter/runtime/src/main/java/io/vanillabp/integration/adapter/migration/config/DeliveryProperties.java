@@ -3,7 +3,6 @@ package io.vanillabp.integration.adapter.migration.config;
 import java.time.Duration;
 
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
@@ -32,9 +31,24 @@ import lombok.experimental.SuperBuilder;
  */
 @Getter
 @Setter
-@NoArgsConstructor
 @SuperBuilder
 public class DeliveryProperties {
+
+  /**
+   * The empty section a configuration binder starts from: both platforms create the object
+   * and then write the keys the application configured into it, one setter per key. Every
+   * key of this section is <code>null</code> until somebody writes it, because
+   * <code>null</code> is what carries "this level says nothing".
+   * <p>
+   * It asks the builder for the values, which is how a field given a default one day keeps
+   * it: Lombok moves the initializer of such a field into the builder, so a constructor
+   * which sets nothing itself would leave the field <code>null</code>.
+   */
+  public DeliveryProperties() {
+
+    this(builder());
+
+  }
 
   /**
    * Whether the records of a workflow are deleted the moment it ends, instead of waiting

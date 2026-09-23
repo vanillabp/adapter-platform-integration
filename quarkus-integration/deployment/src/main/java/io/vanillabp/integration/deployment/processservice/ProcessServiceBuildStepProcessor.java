@@ -48,15 +48,45 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * VanillaBP extension build step processor, responsible for building {@link ProcessService} beans.
+ * <p>
+ * One bean per workflow aggregate is written as bytecode while the application is built,
+ * which is where Quarkus fixes its set of beans: an application injecting
+ * <code>ProcessService&lt;TheAggregate&gt;</code> finds a bean only where the build wrote
+ * one. The same moment decides which persistence that bean uses and which classes a native
+ * image keeps for reflection. Both are read off the Jandex index, and neither question can
+ * be asked again once the application is packaged.
  */
 @Slf4j
 public class ProcessServiceBuildStepProcessor {
 
+  /**
+   * The name of the {@link WorkflowService} attribute naming the workflow aggregate class.
+   * <p>
+   * The attributes are read off the Jandex index by name, so renaming one in the SPI would
+   * not reach the compiler here - the steps below would simply find nothing. That is what
+   * {@code WorkflowServiceAnnotationTest} guards: it asks the annotation for a member of
+   * this name.
+   */
   public static final String ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_AGGREGATECLASS = "workflowAggregateClass";
+
+  /** The attribute holding the primary <code>&#64;BpmnProcess</code> of a class. */
   public static final String ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_BPMNPROCESS = "bpmnProcess";
+
+  /** The attribute of <code>&#64;BpmnProcess</code> holding the BPMN process ID. */
   public static final String ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_BPMNPROCESS_BPMNPROCESSID = "bpmnProcessId";
 
+  /**
+   * The attribute holding the further BPMN processes one class serves, each of them a
+   * <code>&#64;BpmnProcess</code> of its own.
+   */
   public static final String ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_SECONDARYBPMNPROCESSES = "secondaryBpmnProcesses";
+
+  /**
+   * Quarkus builds this processor while it augments the application and calls the build
+   * steps below on it. Nothing else builds it, and no step keeps state in it.
+   */
+  public ProcessServiceBuildStepProcessor() {
+  }
 
   /**
    * Beans implementing {@link AggregatePersistenceAware} are not necessarily injected by
@@ -83,10 +113,15 @@ public class ProcessServiceBuildStepProcessor {
    *        {@link AggregatePersistenceAware} for
    * @param migrationAdapterProperties Properties of the migration adapter previously built and validated as a dependency
    * @param workflowModulesFound Information about all workflow modules found in the project
+   * @param ensureClassIsBeanBuildItemProducer {@link BuildProducer} used to collect the
+   *        classes which have to be CDI beans at runtime: the workflow services and the
+   *        aggregate persistence
    * @param generatedBeanBuildItemBuildProducer {@link BuildProducer} used to collect generated {@link ProcessService} beans
    * @param reflectiveClassBuildItemProducer {@link BuildProducer} used to register the classes VanillaBP scans by reflection: the workflow services and the aggregates whose ID it reads
    * @param unremovableBeanBuildItemProducer {@link BuildProducer} used to keep repositories alive which only VanillaBP uses
    * @param additionalBeanBuildItemBuildProducer {@link BuildProducer} used to collect beans provided in module "runtime"
+   * @param workflowAggregatesProducer {@link BuildProducer} publishing the aggregates found,
+   *        so an extension's own beans are built for the same ones without a second scan
    */
   @BuildStep
   void buildProcessServices(

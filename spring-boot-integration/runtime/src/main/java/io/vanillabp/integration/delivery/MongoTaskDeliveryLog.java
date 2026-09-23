@@ -60,6 +60,19 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
 
   private final OpenTaskTouches touches;
 
+  /**
+   * Builds the log, and nothing more: the indexes and the cleanup wait for
+   * {@link #start()}, which the auto-configuration calls once every singleton exists.
+   *
+   * @param mongoTemplate The template the records are written and read through - the same
+   *          one the aggregates use, so both take part in one MongoDB transaction wherever
+   *          the deployment is a replica set
+   * @param collection The collection the records go into
+   * @param retention How long a record nobody saw again is kept. This is the window in which
+   *          a redelivery is answered from the record instead of running the
+   *          <code>@WorkflowTask</code> method again, which is why it is a setting of its
+   *          own - see decision 24 in the repository's DECISIONS.md
+   */
   public MongoTaskDeliveryLog(
       final MongoTemplate mongoTemplate,
       final String collection,

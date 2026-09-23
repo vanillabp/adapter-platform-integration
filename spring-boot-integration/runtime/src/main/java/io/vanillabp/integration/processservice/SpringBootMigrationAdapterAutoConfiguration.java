@@ -48,6 +48,16 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   static final String BEANNAME_MIGRATIONADAPERPROPERTIES = "VanillaBpMigrationAdapterProperties";
 
   /**
+   * Built by Spring Boot. This autoconfiguration reaches an application only because a
+   * BPMS adapter brought it, so it runs exactly where there is one. Several bean methods
+   * here are static on purpose, so that what they build is available without this class
+   * being created first.
+   */
+  public SpringBootMigrationAdapterAutoConfiguration() {
+
+  }
+
+  /**
    * Finds the workflow services among the bean definitions of the application and
    * registers a {@link io.vanillabp.spi.process.ProcessService} bean per workflow
    * aggregate.
@@ -100,6 +110,10 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    *          not taken over by the binding)
    * @param allWorkflowModules All workflow modules found in classpath
    * @param adapterConfigurations Configuration beans of adapters found in classpath
+   * @param applicationContext Used to find the classpath root of the
+   *          <code>&#64;SpringBootApplication</code> class, which decides whether a
+   *          workflow module IS the application or is shipped as its own artifact - and
+   *          that decides where its BPMN files are read from
    * @return The validated properties bean
    */
   @Bean(BEANNAME_MIGRATIONADAPERPROPERTIES)
@@ -232,6 +246,8 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    * beans register themselves (including the aggregate-ID converter) at
    * bean-creation time.
    *
+   * @param metrics What the router counts its dispatches into, absent where the
+   *          application brings no metrics backend
    * @return The phase-two router
    */
   @Bean
@@ -346,6 +362,18 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   public static class WorkflowAdapterCacheMetricsConfiguration {
 
     /**
+     * Built by Spring where the condition above holds, that is where Micrometer is on the
+     * classpath.
+     */
+    public WorkflowAdapterCacheMetricsConfiguration() {
+
+    }
+
+    /**
+     * Publishes what the election asked of the cache as Micrometer meters, whichever
+     * cache the application ended up with. The numbers are counted outside the cache for
+     * exactly that reason, so they stay comparable.
+     *
      * @param statistics The application's cache statistics
      * @return The meter binder of the election cache
      */
@@ -486,6 +514,14 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   public static class AdapterHealthConfiguration {
 
     /**
+     * Built by Spring where the condition above holds, that is where Spring Boot's health
+     * support is on the classpath.
+     */
+    public AdapterHealthConfiguration() {
+
+    }
+
+    /**
      * The bean name decides the name of the health component, so it has to stay
      * <code>vanillabp</code> + the suffix Spring Boot strips.
      *
@@ -623,8 +659,9 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    * {@link #vanillaBpProcessServiceStartupValidation}.
    *
    * @param applicationContext Used to look up runner/aware beans and repositories
-   * @param platformTransactionRunner The platform's runner, the last of the four
-   *          resolution steps
+   * @param platformTransactionRunner The platform's runner, the last resolution step
+   *          which yields one - after it the resolver has nothing left to offer and the
+   *          core turns that into a guiding startup failure
    * @return The resolver
    */
   @Bean

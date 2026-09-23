@@ -25,6 +25,13 @@ public interface BpmsInitiatedStartContext {
   String getStartEventId();
 
   /**
+   * Which kind of start event fired. It reaches a
+   * <code>&#64;WorkflowStartedByBpms</code> method as part of {@link BpmsStartTrigger},
+   * and it decides how the workflow aggregate's id is derived where
+   * {@link #getNaturalIdentity()} says nothing: only a timer fires at an instant it will
+   * report again, so only there {@link #getStartInstant()} becomes the id and a repeated
+   * notification finds the aggregate instead of building a second one.
+   *
    * @return Which kind of start event fired
    */
   BpmsStartTrigger.Kind getKind();
@@ -72,6 +79,10 @@ public interface BpmsInitiatedStartContext {
   }
 
   /**
+   * Which signal started the workflow, reported to the application as
+   * {@link BpmsStartTrigger#signalName()}. It is the name the model carries, so an adapter
+   * which scoped it on the way to its BPMS reports the plain one again here.
+   *
    * @return The PLAIN signal name for {@link BpmsStartTrigger.Kind#SIGNAL},
    *         <code>null</code> otherwise
    */

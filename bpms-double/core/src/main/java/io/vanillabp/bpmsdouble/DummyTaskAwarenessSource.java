@@ -63,16 +63,6 @@ public interface DummyTaskAwarenessSource {
   }
 
   /**
-   * The awareness the dummy adapter reports for a USER task - defaults to the
-   * service-task answer.
-   *
-   * @param adapterId The dummy adapter's ID
-   * @param workflowAggregateId The ID of the workflow aggregate
-   * @param taskId The user task's ID
-   * @return The awareness or <code>null</code> to let another source answer
-   */
-
-  /**
    * Whether the dummy adapter of the given ID can ask its BPMS whether it holds a
    * workflow - the capability the core refuses to combine with a second adapter
    * (a Camunda 8 cluster without secondary storage answers <code>false</code> here).
@@ -87,6 +77,15 @@ public interface DummyTaskAwarenessSource {
 
   }
 
+  /**
+   * The awareness the dummy adapter reports for a USER task - defaults to the
+   * service-task answer.
+   *
+   * @param adapterId The dummy adapter's ID
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param taskId The user task's ID
+   * @return The awareness or <code>null</code> to let another source answer
+   */
   default WorkflowAwareness awarenessOfUserTask(
       final String adapterId,
       final Object workflowAggregateId,
@@ -95,7 +94,6 @@ public interface DummyTaskAwarenessSource {
     return awarenessOfTask(adapterId, workflowAggregateId, taskId);
 
   }
-
 
   /**
    * The visibility window the dummy adapter reports: how long the core

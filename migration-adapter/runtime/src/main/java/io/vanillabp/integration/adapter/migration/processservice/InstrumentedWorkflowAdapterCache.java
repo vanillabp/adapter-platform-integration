@@ -44,6 +44,16 @@ public class InstrumentedWorkflowAdapterCache implements WorkflowAdapterCache {
 
   }
 
+  /**
+   * Wraps a cache which is really there. Callers use
+   * {@link #instrument(WorkflowAdapterCache, WorkflowAdapterCacheStatistics)} instead,
+   * which also handles the two cases where there is nothing to wrap - neither argument may
+   * be <code>null</code> here, and a <code>null</code> would fail at the first lookup
+   * rather than while the application boots.
+   *
+   * @param delegate The cache every call is passed on to
+   * @param statistics The application's counters, shared by all process services
+   */
   public InstrumentedWorkflowAdapterCache(
       final WorkflowAdapterCache delegate,
       final WorkflowAdapterCacheStatistics statistics) {

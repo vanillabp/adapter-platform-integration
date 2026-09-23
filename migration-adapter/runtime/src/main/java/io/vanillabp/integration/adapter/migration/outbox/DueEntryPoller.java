@@ -63,6 +63,10 @@ public class DueEntryPoller {
   private Instant nextPollAt;
 
   /**
+   * Builds the poller of one store. Nothing runs and no thread exists until
+   * {@link #start()} is called, so a store may build its poller while the application is
+   * still coming up.
+   *
    * @param threadName The name of the daemon thread polling, which is what an operator
    *          reads in a thread dump
    * @param longestSleep How long the poller sleeps while the store owes nothing

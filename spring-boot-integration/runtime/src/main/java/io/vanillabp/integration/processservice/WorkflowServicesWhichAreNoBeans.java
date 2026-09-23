@@ -63,6 +63,16 @@ public class WorkflowServicesWhichAreNoBeans implements UnclaimedBpmnProcessHint
 
   private final WorkflowModules allWorkflowModules;
 
+  /**
+   * Built once per application by the autoconfiguration and handed to the deployment. It
+   * reads nothing here: the scan runs at most once, on a boot which is already reporting a
+   * BPMN process nobody claims.
+   *
+   * @param resourceLoader Reads the class resources of the classpath, which is what makes
+   *     a class visible that never became a bean
+   * @param allWorkflowModules Says which classpath root belongs to which workflow module,
+   *     so a class of another module is not reported here
+   */
   public WorkflowServicesWhichAreNoBeans(
       final ResourceLoader resourceLoader,
       final WorkflowModules allWorkflowModules) {

@@ -48,6 +48,15 @@ public class SavingHandlerCheck {
   private final Set<String> reported = ConcurrentHashMap.newKeySet();
 
   /**
+   * Built by the registry which wires the handlers of the extensions, once per application.
+   * <p>
+   * What it remembers is which BPMN processes were already reported, so a process served by
+   * two extensions is said once.
+   */
+  public SavingHandlerCheck() {
+  }
+
+  /**
    * Reports that an extension has handler methods for a BPMN process whose workflow
    * aggregate cannot notice a second writer.
    *

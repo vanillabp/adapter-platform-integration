@@ -24,8 +24,20 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
  */
 public abstract class DefaultAggregatePersistence<A> implements AggregatePersistenceAware<A> {
 
+  /**
+   * The aggregate type this instance serves. There is one instance per aggregate, so
+   * the class is known when the bean is built and every question about the aggregate's
+   * ID is answered against it.
+   */
   protected final Class<A> aggregateClass;
 
+  /**
+   * Called by the subclass the build generates for one aggregate, which passes the
+   * class literal. Nothing of the persistence framework is touched here - the bean is
+   * built before the CDI container serves anybody.
+   *
+   * @param aggregateClass The aggregate type this instance persists
+   */
   protected DefaultAggregatePersistence(
       final Class<A> aggregateClass) {
 

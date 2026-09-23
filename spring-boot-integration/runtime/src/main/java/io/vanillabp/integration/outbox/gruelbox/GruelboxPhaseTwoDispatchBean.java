@@ -55,6 +55,12 @@ public class GruelboxPhaseTwoDispatchBean implements GruelboxPhaseTwoDispatch {
    */
   private final io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics metrics;
 
+  /**
+   * The dispatch of an outbox whose calls carry no payload and whose waiting time nobody
+   * measures. An entry which names a payload is dispatched without it here.
+   *
+   * @param phaseTwoRouter The router the rebuilt call is handed to
+   */
   public GruelboxPhaseTwoDispatchBean(
       final PhaseTwoRouter phaseTwoRouter) {
 
@@ -63,6 +69,9 @@ public class GruelboxPhaseTwoDispatchBean implements GruelboxPhaseTwoDispatch {
   }
 
   /**
+   * The dispatch of an outbox whose calls may carry a payload, and whose waiting time
+   * nobody measures.
+   *
    * @param phaseTwoRouter The router the rebuilt call is handed to
    * @param payloadStore Where the payload of an entry which names one is read from
    */
@@ -75,6 +84,9 @@ public class GruelboxPhaseTwoDispatchBean implements GruelboxPhaseTwoDispatch {
   }
 
   /**
+   * The full form, which {@link GruelboxPhaseTwoOutboxAutoConfiguration} builds anew for
+   * every entry gruelbox hands over.
+   *
    * @param phaseTwoRouter The router the rebuilt call is handed to
    * @param payloadStore Where the payload of an entry which names one is read from
    * @param metrics What the wait of the dispatched entry is reported to

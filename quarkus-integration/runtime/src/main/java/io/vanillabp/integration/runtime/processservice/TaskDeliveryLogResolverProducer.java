@@ -44,6 +44,13 @@ import jakarta.inject.Singleton;
 public class TaskDeliveryLogResolverProducer {
 
   /**
+   * Built by the CDI container, which the platform's build step told about this class. What
+   * the producer method below needs arrives through the injected fields.
+   */
+  public TaskDeliveryLogResolverProducer() {
+  }
+
+  /**
    * Application-provided attributions of aggregates to delivery logs (required in
    * mixed-persistence setups, optional otherwise).
    */
@@ -72,6 +79,10 @@ public class TaskDeliveryLogResolverProducer {
   Instance<AggregatePersistenceAware<?>> aggregatePersistences;
 
   /**
+   * Builds the resolver of this application: the beans injected above, plus the two switches
+   * the log shares with the outbox, read out of the configuration. What ends up in such a log
+   * is decided in decision 54 in the repository's DECISIONS.md.
+   *
    * @return The resolver, injectable by extensions and used by the process services
    */
   @Produces

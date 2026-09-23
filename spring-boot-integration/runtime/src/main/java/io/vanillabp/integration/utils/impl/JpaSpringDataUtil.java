@@ -16,6 +16,16 @@ import org.springframework.data.repository.support.Repositories;
 
 import io.vanillabp.integration.utils.SpringDataUtil;
 
+/**
+ * The {@link SpringDataUtil} of workflow aggregates which are JPA entities. Everything it
+ * answers it asks Spring Data or Hibernate, so VanillaBP keeps no knowledge of its own about
+ * how an aggregate is mapped.
+ * <p>
+ * A repository is searched for the entity's class and then up its superclasses, because an
+ * application may map a hierarchy and declare the repository on a base class. What is found
+ * is cached per type: it cannot change while the application runs, and an aggregate is loaded
+ * and saved on every task delivery.
+ */
 public class JpaSpringDataUtil implements SpringDataUtil {
 
   private final Map<Class<?>, JpaRepository<?, Object>> repositoryCache = new HashMap<>();
@@ -26,6 +36,14 @@ public class JpaSpringDataUtil implements SpringDataUtil {
 
   private final JpaContext jpaContext;
 
+  /**
+   * Built by {@link io.vanillabp.integration.utils.config.JpaSpringDataUtilConfiguration},
+   * and by an application which wires the persistence itself.
+   *
+   * @param applicationContext Where the aggregates' repositories are looked up
+   * @param jpaContext Answers which entity manager manages a given type, so an application
+   *          with more than one persistence unit asks the right one
+   */
   public JpaSpringDataUtil(
       final ApplicationContext applicationContext,
       final JpaContext jpaContext) {

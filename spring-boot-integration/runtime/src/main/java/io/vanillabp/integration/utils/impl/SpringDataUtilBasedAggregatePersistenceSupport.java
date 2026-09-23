@@ -14,6 +14,9 @@ import io.vanillabp.integration.utils.SpringDataUtil;
  * with Spring Data's own <code>No Spring Data repository defined for ...</code> and
  * nothing about the workflow it belonged to. Quarkus decides the same question while it
  * builds, so the same application used to fail there and start here.
+ *
+ * @param <A> The workflow aggregate this instance persists - one instance per aggregate
+ *          class, because the class is what a repository is searched for
  */
 public class SpringDataUtilBasedAggregatePersistenceSupport<A> implements AggregatePersistenceAware<A> {
 
@@ -27,6 +30,15 @@ public class SpringDataUtilBasedAggregatePersistenceSupport<A> implements Aggreg
    */
   private final String workflowModuleId;
 
+  /**
+   * The support of an aggregate whose workflow module the caller does not name. The message
+   * about a missing repository then says less, so prefer the constructor below wherever the
+   * module is known.
+   *
+   * @param springDataUtil How the aggregate's repository is found
+   * @param aggregateClass The workflow aggregate's class, which is what the repository is
+   *          searched for
+   */
   public SpringDataUtilBasedAggregatePersistenceSupport(
       final SpringDataUtil springDataUtil,
       final Class<A> aggregateClass) {
@@ -35,6 +47,17 @@ public class SpringDataUtilBasedAggregatePersistenceSupport<A> implements Aggreg
 
   }
 
+  /**
+   * The support of an aggregate of one known workflow module, which is what the process
+   * service registrar builds: an application with several modules then reads which of them
+   * the aggregate without a repository belongs to.
+   *
+   * @param springDataUtil How the aggregate's repository is found
+   * @param aggregateClass The workflow aggregate's class, which is what the repository is
+   *          searched for
+   * @param workflowModuleId The workflow module the aggregate belongs to, for the message
+   *          alone - <code>null</code> where the caller knows none
+   */
   public SpringDataUtilBasedAggregatePersistenceSupport(
       final SpringDataUtil springDataUtil,
       final Class<A> aggregateClass,

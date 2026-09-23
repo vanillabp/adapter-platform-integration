@@ -30,6 +30,18 @@ import jakarta.enterprise.inject.Any;
 public class ExtensionServiceRecorder {
 
   /**
+   * Quarkus builds the recorder while it builds the application and hands it to the build
+   * step which found the extension's services. What that step calls here is not executed but
+   * written into the bytecode of the boot, and it runs when the application starts.
+   */
+  public ExtensionServiceRecorder() {
+  }
+
+  /**
+   * Hands one synthetic bean its creation function. Both types arrive as NAMES: the build
+   * step reads them from the index of the application's classes and the loading is left to
+   * the runtime, which is what {@code loadClass} below says when a name has gone missing.
+   *
    * @param serviceInterfaceName The service interface the extension offers
    * @param workflowAggregateClassName The workflow aggregate this bean serves
    * @return How to build the bean

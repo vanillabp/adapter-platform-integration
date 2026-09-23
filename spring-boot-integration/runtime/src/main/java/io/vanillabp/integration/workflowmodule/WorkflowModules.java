@@ -3,12 +3,10 @@ package io.vanillabp.integration.workflowmodule;
 import java.util.List;
 
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 
 /**
  * A bean holding all workflow modules found.
  */
-@RequiredArgsConstructor
 @Getter
 public class WorkflowModules {
 
@@ -18,6 +16,20 @@ public class WorkflowModules {
   private final List<WorkflowModule> workflowModules;
 
   private boolean workflowServicesAssociated = false;
+
+  /**
+   * Built while the application boots, from the marker files found in the classpath, and
+   * built directly by tests which want a fixed set of modules. The list is taken as it is
+   * given: the order is the order the classpath was walked in, and nothing here sorts it.
+   *
+   * @param workflowModules The workflow modules of this application, possibly none
+   */
+  public WorkflowModules(
+      final List<WorkflowModule> workflowModules) {
+
+    this.workflowModules = workflowModules;
+
+  }
 
   /**
    * Associates the given workflow service classes with the workflow modules held by

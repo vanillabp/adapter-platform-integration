@@ -44,6 +44,40 @@ import jakarta.inject.Singleton;
 @ApplicationScoped
 public class DummyDeploymentServiceProducer {
 
+  /**
+   * CDI builds this producer once per application. A test never creates it and never
+   * calls the method below: it asks the container for the deployment services, or lets
+   * the platform's deployment pipeline do it.
+   */
+  public DummyDeploymentServiceProducer() {
+  }
+
+  /**
+   * Builds one {@link DummyDeploymentService} per configured adapter id of the dummy
+   * type, as the one List bean described above.
+   * <p>
+   * Every collaborator is passed to the constructor and none is set afterwards - see
+   * decision 28 in the repository's DECISIONS.md.
+   *
+   * @param properties The platform's core properties, the only place the adapter ids
+   *          come from
+   * @param deploymentListeners The hooks a test declared to watch the pipeline
+   * @param workflowTaskRegistry The wiring half and the runtime half of the task SPI
+   * @param scoping The core's one place which builds the identifiers a BPMS sees
+   * @param workflowAggregateSync What says which values of an aggregate leave for the
+   *          BPMS
+   * @param preCommitRegistrar What runs a check right before the caller's transaction
+   *          commits
+   * @param workflowEndedInvoker The core bean reporting a workflow which ended, absent
+   *          where the application asks for none
+   * @param bpmsInitiatedStartInvoker The core bean reporting a workflow the BPMS started
+   *          by itself, absent where the application asks for none
+   * @param taskWiringSource The hooks standing in for the BPMN model
+   * @param bpmsInitiatedStartSource The hooks standing in for the model's start events
+   * @param processVersionSource The hooks standing in for the versions the BPMS deployed
+   * @param healthSource The hooks standing in for what the BPMS answers about itself
+   * @return One deployment service per configured adapter id of the dummy type
+   */
   @Produces
   @Singleton
   public List<AdapterDeploymentService<Object, Object>> dummyAdapterDeploymentServices(

@@ -29,11 +29,23 @@ package io.vanillabp.integration.extension.spi;
 public interface ExtensionWiringService<BPMN, PC> {
 
   /**
+   * The BPMN model class this service can wire. It decides whether the service is asked
+   * about a model at all: the deployment asks it where this type is the same as, or a
+   * supertype of, the model type of the adapter which read the file, so a service written
+   * for another BPMS is skipped instead of being handed a model it cannot read.
+   * <p>
+   * Answer with a class literal. This value is what the deployment matches, never the type
+   * argument of the implementing class.
+   *
    * @return The model type
    */
   Class<BPMN> getModelType();
 
   /**
+   * The class of the context this service is handed while a model is wired and while the
+   * workflows of a module are started. It is matched the way {@link #getModelType()} is
+   * and both have to fit, so a service is either wired and started or neither of the two.
+   *
    * @return The process context type
    */
   Class<PC> getProcessContextType();

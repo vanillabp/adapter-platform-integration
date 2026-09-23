@@ -59,6 +59,15 @@ public class SpringTransactionRunnerResolver implements TransactionRunnerResolve
   private record Resolution(TransactionRunner runner, Origin origin, String description) {
   }
 
+  /**
+   * Built once per application by the autoconfiguration. It detects an aggregate's
+   * persistence technology itself; the constructor below takes that detection as a
+   * function and is what the tests use.
+   *
+   * @param applicationContext The context the runner and aware beans are looked up in
+   * @param platformRunner The platform's runner, used for every aggregate the application
+   *     contributed no runner for (see decision 11 in the repository's DECISIONS.md)
+   */
   public SpringTransactionRunnerResolver(
       final ApplicationContext applicationContext,
       final SpringTransactionRunner platformRunner) {

@@ -63,6 +63,17 @@ public class BpmsInitiatedStarts {
    */
   private final io.vanillabp.integration.adapter.migration.workflowtask.DeclaredBpmnProcesses declaredProcesses;
 
+  /**
+   * Built by the workflow-task registry, once per application. Both arguments belong to
+   * that registry and are read rather than copied, because a
+   * <code>&#64;WorkflowStartedByBpms</code> method has to reach the same verdict about a
+   * version as the registry does about a <code>&#64;WorkflowTask</code> method.
+   *
+   * @param processVersions What the BPMS know about the deployed versions of the BPMN
+   *          processes
+   * @param declaredProcesses Which BPMN process ids the application declares without any
+   *          adapter deploying them
+   */
   public BpmsInitiatedStarts(
       final io.vanillabp.integration.adapter.migration.workflowtask.ProcessVersions processVersions,
       final io.vanillabp.integration.adapter.migration.workflowtask.DeclaredBpmnProcesses declaredProcesses) {

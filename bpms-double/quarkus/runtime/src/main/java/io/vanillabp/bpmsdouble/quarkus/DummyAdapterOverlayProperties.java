@@ -35,6 +35,9 @@ public interface DummyAdapterOverlayProperties {
   /**
    * The adapter sections of the shared tree, keyed by adapter ID - only the dummy
    * adapter's own keys are modeled here.
+   *
+   * @return The sections keyed by adapter ID, empty where an application configures
+   *         none of them - a lookup map, never the source of the ids
    */
   Map<String, DummyAdapterConfig> adapters();
 
@@ -44,6 +47,9 @@ public interface DummyAdapterOverlayProperties {
    * adapter-scoped properties (task &gt; workflow &gt; workflow-module &gt;
    * adapter), so scope-specific adapter keys (like a per-task job timeout of a
    * real BPMS) resolve from real application configuration.
+   *
+   * @return The sections keyed by workflow module ID, empty where no module sets a key
+   *         of this adapter
    */
   Map<String, ModuleOverlay> workflowModules();
 
@@ -108,6 +114,10 @@ public interface DummyAdapterOverlayProperties {
      * A test value used by the platform integration's tests to prove that
      * adapter-specific keys inside the shared tree are tolerated and reach the
      * adapter's overlay typed.
+     *
+     * @return The value set on the level this section belongs to, empty where that
+     *         level says nothing - {@link DummyAdapterOverlayProperties#testFor}
+     *         walks the levels and takes the first one which does
      */
     Optional<Integer> test();
 

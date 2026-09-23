@@ -20,8 +20,31 @@ import jakarta.transaction.TransactionSynchronizationRegistry;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * The bean an application injects as {@link io.vanillabp.spi.process.ProcessService}, one per
+ * workflow aggregate class.
+ * <p>
+ * The class is abstract because what differs per aggregate is settled while the application is
+ * built: {@code ProcessServiceBuildStepProcessor} of the deployment module generates a subclass
+ * per aggregate which answers the abstract methods below with constants, and registers it as an
+ * {@code @ApplicationScoped} bean. What a call then does lives in the core - in
+ * {@link ProcessServiceBase} and in the {@link MigrationProcessService} built by
+ * {@link #initialize()}. This class is the CDI half of it: the beans of the application arrive
+ * through the injected fields and are handed over, so nothing in the core has to know a
+ * platform.
+ *
+ * @param <A> The workflow aggregate class this service serves
+ */
 @Slf4j
 public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A> {
+
+  /**
+   * Called by the generated subclass, which the CDI container builds. An application neither
+   * builds nor extends this class - the fields below are injected afterwards, and only then
+   * does {@link #initialize()} have what it needs.
+   */
+  public ProcessServiceBaseCdiBean() {
+  }
 
   @Inject
   MigrationAdapterProperties properties;
@@ -142,10 +165,35 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
    */
   private List<MigrationProcessService<A>> processServicesOfDeclaredIds;
 
+  /**
+   * The persistence bean this service loads and saves its aggregates through, named by the
+   * class it was DECLARED as: either the {@link AggregatePersistenceAware} implementation of
+   * the application, or the one VanillaBP generated for the persistence idiom the aggregate is
+   * written in. The choice is made while the application is built, so a second implementation
+   * added later changes what is deployed and not what a running application picks.
+   *
+   * @return The class the persistence is looked up by, see {@code getAggregatePersistence()}
+   */
   public abstract Class<AggregatePersistenceAware<A>> getAggregatePersistenceClass();
 
+  /**
+   * The workflow aggregate this service serves. The store resolvers and the core's reflection
+   * on the aggregate's id start from it, and the generated subclass answers with a constant of
+   * its own rather than leaving the class to be read off a type parameter.
+   *
+   * @return The workflow aggregate class
+   */
   public abstract Class<A> getWorkflowAggregateClass();
 
+  /**
+   * The PRIMARY BPMN process id of this service: what
+   * <code>&#64;WorkflowService.bpmnProcess</code> names, or the simple name of the workflow
+   * service class where it names nothing. Every call of the application reaches this process,
+   * while a task of a secondary process is delivered to the service built for that id (see
+   * {@link #getProcessServicesOfDeclaredIds()}).
+   *
+   * @return The BPMN process id calls of the application address
+   */
   public abstract String getBpmnProcessId();
 
   /**
@@ -155,9 +203,20 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
    * ({@code @WorkflowService.bpmnProcess} and {@code secondaryBpmnProcesses}).
    * Encoding: entries {@code <module>|<class name>|<bpmn process id>} joined by
    * {@code ';'} (generated as a class-file constant - Gizmo-friendly).
+   *
+   * @return The encoded registrations, never empty - an aggregate without a workflow service
+   *         class gets no process service either
    */
   public abstract String getWorkflowTaskRegistrations();
 
+  /**
+   * Builds everything this bean serves with, once, when the container created it: the core's
+   * {@link MigrationProcessService} of the primary BPMN process, the registration for
+   * phase-two routing, and the workflow service classes of every declared id.
+   * <p>
+   * The beans it collects are injected into this instance first, which is why the work is done
+   * here and not in the constructor.
+   */
   @PostConstruct
   public void initialize() {
 
@@ -582,6 +641,13 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
 
   }
 
+  /**
+   * The positive form of {@link #noTransactionIsActive()}. It exists because the Spring Boot
+   * bean offers it as well: what a test or an application asks a process service should not
+   * depend on the platform underneath.
+   *
+   * @return Whether something is open the aggregate could be persisted in
+   */
   public boolean transactionIsActive() {
 
     return !noTransactionIsActive();
@@ -593,6 +659,8 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
    * runner serving this aggregate: an application storing its aggregates in a
    * system JTA does not cover has its own unit of work, and the JTA answer would be wrong
    * for it.
+   *
+   * @return Whether the caller would write outside a transaction
    */
   public boolean noTransactionIsActive() {
 

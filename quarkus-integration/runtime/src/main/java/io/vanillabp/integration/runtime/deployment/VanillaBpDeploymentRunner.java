@@ -53,6 +53,14 @@ import lombok.extern.slf4j.Slf4j;
 public class VanillaBpDeploymentRunner {
 
   /**
+   * Built by the CDI container, which the platform's build step told about this class. An
+   * application never builds one: what the runner needs arrives through the injected
+   * fields, and the pipeline it holds must be the one the shutdown observer stops again.
+   */
+  public VanillaBpDeploymentRunner() {
+  }
+
+  /**
    * Priority of the deployment runner's {@link StartupEvent} observer: AFTER the
    * default-priority observers (the process-service startup validations, e.g.
    * unserved-prioritized-adapter and phase-two-outbox checks, fire BEFORE anything

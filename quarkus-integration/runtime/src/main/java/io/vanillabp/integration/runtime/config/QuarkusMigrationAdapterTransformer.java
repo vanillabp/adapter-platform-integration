@@ -26,7 +26,6 @@ import lombok.Builder;
  * {@link MigrationAdapterProperties#validateEnvironmentVariableUsage(Iterable)}),
  * so the same configuration yields the same validation outcome on all platforms.
  */
-@Builder
 public class QuarkusMigrationAdapterTransformer {
 
   /**
@@ -68,6 +67,28 @@ public class QuarkusMigrationAdapterTransformer {
    * Capabilities of Quarkus extensions available
    */
   private final Collection<String> capabilities;
+
+  /**
+   * Built through the generated builder, by the recorder which runs while the
+   * application starts. Everything it needs is known at that moment and never changes
+   * afterwards, so the three fields are final and the class is used once and dropped.
+   *
+   * @param properties What SmallRye bound below <code>vanillabp.</code>
+   * @param propertyNames Every property name the configuration knows, unconverted
+   * @param capabilities The capabilities of the Quarkus extensions of this application,
+   *          which is how the adapters on the classpath are recognised
+   */
+  @Builder
+  QuarkusMigrationAdapterTransformer(
+      final QuarkusMigrationAdapterProperties properties,
+      final Iterable<String> propertyNames,
+      final Collection<String> capabilities) {
+
+    this.properties = properties;
+    this.propertyNames = propertyNames;
+    this.capabilities = capabilities;
+
+  }
 
   /**
    * Transforms {@link QuarkusMigrationAdapterProperties} into

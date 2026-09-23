@@ -67,6 +67,18 @@ public class QuarkusTransactionRunnerResolver implements TransactionRunnerResolv
   private record DeclaredBean<T>(T bean, String declaredClassName) {
   }
 
+  /**
+   * Built by {@link TransactionRunnerProducer}, once per application. The platform's runner is
+   * passed in rather than looked up among the runner beans, because telling it from a runner
+   * of the application is what the second resolution step rests on: the same object has to
+   * arrive here which the producer hands out as a bean.
+   *
+   * @param transactionRunnerAwares What the application says about its aggregates, if anything
+   * @param transactionRunners Every runner bean, the platform's own among them
+   * @param aggregatePersistences The persistences an aggregate's technology is read off
+   * @param mongoDeploymentProbes The probe, unsatisfied without the MongoDB client extension
+   * @param platformRunner The platform's own runner, recognized here by identity
+   */
   public QuarkusTransactionRunnerResolver(
       final Instance<TransactionRunnerAware<?>> transactionRunnerAwares,
       final Instance<TransactionRunner> transactionRunners,

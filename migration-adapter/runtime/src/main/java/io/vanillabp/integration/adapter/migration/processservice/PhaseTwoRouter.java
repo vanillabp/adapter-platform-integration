@@ -54,9 +54,10 @@ public final class PhaseTwoRouter {
 
   /**
    * Provides the transaction (and whatever else the platform needs, e.g. an active
-   * CDI request context on Quarkus) the dispatch runs in, or <code>null</code> if
-   * the platform's outbox implementations bring their own (Spring Boot: gruelbox
-   * dispatches inside a transaction it manages).
+   * CDI request context on Quarkus) the dispatch runs in, or <code>null</code> where
+   * the platform hands the router none. Spring Boot hands none: there a dispatch runs
+   * in the runner of its own aggregate, which {@link #runnerFor(PhaseTwoCall)} asks the
+   * process service for.
    */
   private final TransactionRunner transactionRunner;
 
@@ -69,6 +70,12 @@ public final class PhaseTwoRouter {
   private volatile io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics metrics = io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.NONE;
 
   /**
+   * Hands the router what to count into. Called by the platform integration right after the
+   * router was built, because the metrics are a bean of their own and may be absent
+   * altogether. A missing one is not an error: it becomes
+   * {@link io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics#NONE},
+   * so a dispatch never has to ask whether anybody is counting.
+   *
    * @param metrics What to count dispatches into, never <code>null</code>
    */
   public void setMetrics(
@@ -80,6 +87,12 @@ public final class PhaseTwoRouter {
 
   }
 
+  /**
+   * Builds a router with a registry of its own and no transaction runner of its own. A
+   * dispatch then runs in the transaction the process service of the call resolves for its
+   * aggregate (see decision 11 in the repository's DECISIONS.md), and an entry which routes
+   * to no process service runs without one.
+   */
   public PhaseTwoRouter() {
 
     this(new PhaseOperationRegistry(), null);
@@ -87,6 +100,9 @@ public final class PhaseTwoRouter {
   }
 
   /**
+   * Builds a router on a registry somebody else owns, so the operations an extension
+   * registered and the core's own operations end up in one place.
+   *
    * @param operations The registry to register the core operations in and to
    *        resolve dispatched operations from
    */
@@ -98,6 +114,9 @@ public final class PhaseTwoRouter {
   }
 
   /**
+   * Builds a router with the platform's transaction runner. It is the fallback: a dispatch
+   * whose aggregate resolves a runner of its own uses that one instead.
+   *
    * @param transactionRunner Provides the transaction dispatching runs in, see
    *        {@link #transactionRunner}
    */
@@ -109,6 +128,11 @@ public final class PhaseTwoRouter {
   }
 
   /**
+   * Builds a router on a given registry and with a given transaction runner. The other
+   * three constructors end up here, and this is where the core operations are registered,
+   * so an extension which registers its own operations later always finds the core ones
+   * already there.
+   *
    * @param operations The registry to register the core operations in and to
    *        resolve dispatched operations from
    * @param transactionRunner Provides the transaction dispatching runs in, see
@@ -280,8 +304,9 @@ public final class PhaseTwoRouter {
    * of the call where a process service is registered for it, the platform's otherwise.
    *
    * @param call The call about to be dispatched
-   * @return The runner or <code>null</code> if none is available at all (an outbox
-   *         dispatching inside a transaction of its own, e.g. gruelbox on Spring Boot)
+   * @return The runner, or <code>null</code> where neither the platform nor the
+   *         aggregate's process service offers one, and the outbox dispatches inside a
+   *         transaction it opened itself
    */
   private TransactionRunner runnerFor(
       final PhaseTwoCall call) {

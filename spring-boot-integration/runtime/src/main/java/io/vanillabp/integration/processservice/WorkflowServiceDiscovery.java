@@ -56,6 +56,16 @@ public class WorkflowServiceDiscovery implements BeanDefinitionRegistryPostProce
 
   private Environment environment;
 
+  /**
+   * Built by a bean method of {@link SpringBootMigrationAdapterAutoConfiguration}, which
+   * is static so this post-processor can be created without creating that configuration
+   * class first. Nothing is handed in: the bean factory and the environment arrive through
+   * the two setters Spring calls afterwards.
+   */
+  public WorkflowServiceDiscovery() {
+
+  }
+
   @Override
   public void setBeanFactory(
       final BeanFactory beanFactory) throws BeansException {

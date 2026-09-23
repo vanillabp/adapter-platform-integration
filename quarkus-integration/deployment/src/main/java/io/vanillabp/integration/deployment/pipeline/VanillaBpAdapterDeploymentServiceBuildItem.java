@@ -34,4 +34,26 @@ public final class VanillaBpAdapterDeploymentServiceBuildItem extends MultiBuild
    */
   private String deploymentServiceBeanClass;
 
+  /**
+   * Built by the adapter's own Quarkus extension through the builder, one item per adapter
+   * type. {@link DeploymentPipelineBuildStepProcessor#buildAdapterDeploymentServiceBeans}
+   * reads it and registers the bean class named in it.
+   * <p>
+   * The constructor is not part of the adapter-facing contract, the builder is: an adapter
+   * lives in a package of its own and reaches this class through
+   * <code>VanillaBpAdapterDeploymentServiceBuildItem.builder()</code>.
+   *
+   * @param adapterType The type of the adapter announcing itself, e.g.
+   *          <code>camunda8</code>
+   * @param deploymentServiceBeanClass The bean class described above, or <code>null</code>
+   */
+  VanillaBpAdapterDeploymentServiceBuildItem(
+      final String adapterType,
+      final String deploymentServiceBeanClass) {
+
+    this.adapterType = adapterType;
+    this.deploymentServiceBeanClass = deploymentServiceBeanClass;
+
+  }
+
 }

@@ -93,10 +93,30 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class JdbcPhaseTwoOutboxDispatcher {
 
+  /**
+   * What the <code>STATUS</code> column holds while an entry still has to be dispatched -
+   * the state every entry is written in, and the only one a poll reads. An entry somebody
+   * is dispatching right now is OPEN as well and is kept apart by its lease.
+   * <p>
+   * The three values are constants because they are written into SQL here, read by the
+   * store next to this class and looked up by their name in the tests. A test which wrote
+   * <code>'OPEN'</code> itself would keep passing after a rename.
+   */
   public static final String STATUS_OPEN = "OPEN";
 
+  /**
+   * What the <code>STATUS</code> column holds after the operation reached the BPMS. The
+   * row stays for <code>vanillabp.outbox.retention</code> so support can still read what
+   * was dispatched, and the housekeeping deletes it afterwards.
+   */
   public static final String STATUS_DONE = "DONE";
 
+  /**
+   * What the <code>STATUS</code> column holds after <code>block-after-attempts</code>
+   * failed attempts: the entry is not read by any poll any more and waits for a person.
+   * Nothing in VanillaBP moves it back, which is the point - an entry which failed that
+   * often is broken rather than unlucky.
+   */
   public static final String STATUS_BLOCKED = "BLOCKED";
 
   /**
@@ -385,6 +405,11 @@ public class JdbcPhaseTwoOutboxDispatcher {
   }
 
   /**
+   * Builds the dispatcher of one JDBC outbox: the statements for the table it was given,
+   * the poller, the lanes and the renewal of the leases. None of the three does anything
+   * before {@link #start()}, and the table is not touched before
+   * {@link #prepareSchema()}.
+   *
    * @param connections How this platform hands out a connection, used here outside any
    *          transaction of the application
    * @param properties The bound <code>vanillabp.outbox</code> section

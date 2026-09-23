@@ -20,6 +20,13 @@ class DummyIntegrationProcessor {
   private static final String FEATURE = "vanillabp-bpms-double";
 
   /**
+   * Quarkus builds the processor once while it augments the application, to run the
+   * build steps below. Nothing at runtime creates it.
+   */
+  DummyIntegrationProcessor() {
+  }
+
+  /**
    * Builds the {@link VanillaBpMigratableProcessServiceBuildItem} build item
    * used by VanillaBP Quarkus integration to determine and register the
    * process-service bean of the adapter - the VanillaBP extension registers the

@@ -65,12 +65,27 @@ public class BpmsInitiatedStartHandler {
 
   }
 
+  /**
+   * The start event this method asked for, read by the registry when it looks for a second
+   * method wired to the same one. An accessor per field rather than a whole class of them
+   * is decision 1 in the repository's DECISIONS.md.
+   *
+   * @return The BPMN id of the start event, or <code>null</code> where the method serves
+   *         every BPMS-initiated start event of the process
+   */
   public String getStartEventId() {
 
     return startEventId;
 
   }
 
+  /**
+   * Which of the two shapes this method has, which decides what happens with its return
+   * value: a returned aggregate replaces the one VanillaBP built, and a method which
+   * returns nothing is expected to have filled the aggregate it was passed.
+   *
+   * @return Whether the method returns the workflow aggregate
+   */
   public boolean isReturningAggregate() {
 
     return returnsAggregate;
@@ -78,6 +93,9 @@ public class BpmsInitiatedStartHandler {
   }
 
   /**
+   * How this method is named in a message: the class and the method, both spelled the way
+   * they stand in the application's source, so a reader can go to them.
+   *
    * @return The method, for guiding messages
    */
   public String describe() {
@@ -87,6 +105,11 @@ public class BpmsInitiatedStartHandler {
   }
 
   /**
+   * What this method serves, in the words of a message: one named start event, or every
+   * BPMS-initiated start event of the process. Two methods are a defect only where both
+   * describe the same thing, which is why the message quotes this rather than the id
+   * alone.
+   *
    * @return What this handler is wired to, for guiding messages
    */
   public String describeWiring() {

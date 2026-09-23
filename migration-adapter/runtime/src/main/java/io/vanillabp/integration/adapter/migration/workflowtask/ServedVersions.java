@@ -108,6 +108,11 @@ public final class ServedVersions {
   }
 
   /**
+   * Whether this method is unrestricted.
+   * <p>
+   * Two places rely on it: a method like this inherits the ranges of its class, and it is
+   * the only kind of method which serves a delivery whose version the BPMS did not report.
+   *
    * @return Whether every version is served - what a method naming no version parses
    *         to, and what makes it inherit the ranges of its class
    */
@@ -135,6 +140,12 @@ public final class ServedVersions {
   }
 
   /**
+   * Whether this method serves that version, using numbers alone.
+   * <p>
+   * For ranges made of numbers that is the whole answer. A range naming a version tag needs
+   * the BPMS, so use {@link #matches(String, VersionRange.ProcessVersionResolver)} wherever a
+   * tag may turn up.
+   *
    * @param processVersion The version the BPMS reported
    * @return Whether this method serves it, decided without asking a BPMS
    */
@@ -146,6 +157,13 @@ public final class ServedVersions {
   }
 
   /**
+   * Whether this method serves the version a delivery came from - the question every
+   * dispatch asks.
+   * <p>
+   * A method serves a version ANY of its specifications covers. Where the BPMS reported no
+   * version, only a method naming no range at all is served (decision 20 in the repository's
+   * DECISIONS.md).
+   *
    * @param processVersion The version the BPMS reported, <code>null</code> where it
    *          reports none
    * @param resolver Resolves version tags of the BPMN process the version belongs to
@@ -184,6 +202,12 @@ public final class ServedVersions {
   }
 
   /**
+   * The tags which have to be resolved before these ranges can be placed in the deployment
+   * order.
+   * <p>
+   * An empty answer for every method of a process saves the BPMS question altogether, and a
+   * tag the BPMS does not know is reported naming the method it came from.
+   *
    * @return The version tags these specifications name, each once - empty for
    *         specifications no BPMS has to be asked about
    */
@@ -198,6 +222,11 @@ public final class ServedVersions {
   }
 
   /**
+   * Whether a message about these ranges has to explain where they sit.
+   * <p>
+   * A range the method does not carry is the surprising case: its author reads a complaint
+   * about a version attribute nowhere near the method.
+   *
    * @return Whether these ranges come from the class rather than from the method
    */
   public boolean inherited() {

@@ -14,8 +14,10 @@ import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * The default {@link PhaseTwoOutbox} implementation for Spring Boot applications using
- * JPA: delegates to a <a href="https://github.com/gruelbox/transaction-outbox">gruelbox
+ * The {@link PhaseTwoOutbox} implementation of a Spring Boot application which persists
+ * its workflow aggregates via JPA and asked to keep gruelbox
+ * (<code>vanillabp.outbox.gruelbox.enabled</code>): delegates to a
+ * <a href="https://github.com/gruelbox/transaction-outbox">gruelbox
  * transaction-outbox</a> configured with Spring's transaction manager, so the outbox
  * entry is enlisted in the currently running local (JDBC) transaction.
  * <p>
@@ -123,6 +125,9 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
   private final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore;
 
   /**
+   * A store for calls which carry no payload, which is what a test builds. A call which
+   * carries one is refused, with a message naming the constructor below.
+   *
    * @param transactionOutbox The gruelbox transaction outbox
    * @param dataSource Where gruelbox' table lives
    * @param tableName The table gruelbox stores its entries in
@@ -137,6 +142,10 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
   }
 
   /**
+   * The complete store, which is the one
+   * {@link GruelboxPhaseTwoOutboxAutoConfiguration} builds where an application asked for
+   * gruelbox.
+   *
    * @param transactionOutbox The gruelbox transaction outbox
    * @param dataSource Where gruelbox' table lives
    * @param tableName The table gruelbox stores its entries in

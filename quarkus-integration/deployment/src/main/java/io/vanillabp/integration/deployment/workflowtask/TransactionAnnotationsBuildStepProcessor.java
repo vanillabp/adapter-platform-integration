@@ -32,6 +32,13 @@ public class TransactionAnnotationsBuildStepProcessor {
   private static final String SPRING_TX_EXTENSION_PROCESSOR = "io.quarkus.spring.tx.deployment.SpringTransactionalProcessor";
 
   /**
+   * Quarkus builds this processor while it augments the application and calls the build step
+   * below on it. Nothing else builds it, and the step keeps no state in it.
+   */
+  public TransactionAnnotationsBuildStepProcessor() {
+  }
+
+  /**
    * @param recorder The recorder building the runtime object
    * @param syntheticBeans Producer used to register the answer as a bean
    */

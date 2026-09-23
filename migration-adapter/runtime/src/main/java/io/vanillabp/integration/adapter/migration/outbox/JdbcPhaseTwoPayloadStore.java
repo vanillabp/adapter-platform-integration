@@ -95,6 +95,9 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
   private final String selectExpiredReferences;
 
   /**
+   * Builds the payload store of one outbox: the statements for the table it was given.
+   * The table itself is created by the dispatcher of that outbox.
+   *
    * @param connectionAccess How this platform hands out a connection taking part in the
    *        transaction currently running
    * @param tableName The table to store payloads in
@@ -113,6 +116,10 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
   }
 
   /**
+   * The table this store was built for. The store itself formats its statements with that
+   * name; it is asked from outside where something writes into the table directly, which
+   * a test ageing a payload does.
+   *
    * @return The table this store reads and writes
    */
   public String getTableName() {

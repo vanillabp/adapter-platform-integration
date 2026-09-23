@@ -16,6 +16,11 @@ import java.util.Collection;
 public interface DeclaredBpmnProcesses {
 
   /**
+   * Whether that id is known from a declaration only, with no model deployed under it.
+   * <p>
+   * This is the case which turns off the comparison against a deployed version: there is
+   * no newer version, so every version the BPMS still holds under that id is an older one.
+   *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
    * @return Whether the application declares that id without bringing a model for it
@@ -25,6 +30,11 @@ public interface DeclaredBpmnProcesses {
       String bpmnProcessId);
 
   /**
+   * The ids of that module which a model really arrived for during this boot.
+   * <p>
+   * The message about an id nothing was deployed under lists these ids, because a typo is
+   * easiest to see next to the ids which did reach a model.
+   *
    * @param workflowModuleId The workflow module ID
    * @return The BPMN process ids of that module a model was deployed under
    */

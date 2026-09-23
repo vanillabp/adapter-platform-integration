@@ -154,6 +154,16 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
 
   }
 
+  /**
+   * Built by the platform integration, once per application.
+   * <p>
+   * Nothing is read here. What an aggregate class shares is derived the first time that class
+   * turns up and kept afterwards, because a sync point is a hot path and reflection is not
+   * free.
+   */
+  public AggregateSyncSupport() {
+  }
+
   @Override
   public Map<String, Object> syncedValues(
       final Object workflowAggregate,

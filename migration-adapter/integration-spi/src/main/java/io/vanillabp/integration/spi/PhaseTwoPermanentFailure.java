@@ -20,6 +20,14 @@ public class PhaseTwoPermanentFailure extends RuntimeException {
 
   private static final long serialVersionUID = 1L;
 
+  /**
+   * Says that repeating this operation cannot help, so the outbox entry is blocked right
+   * away instead of after the configured attempts.
+   *
+   * @param message What an operator has to change - it is what the log and the blocked
+   *        entry say about this failure
+   * @param cause What the adapter caught
+   */
   public PhaseTwoPermanentFailure(
       final String message,
       final Throwable cause) {
@@ -29,6 +37,9 @@ public class PhaseTwoPermanentFailure extends RuntimeException {
   }
 
   /**
+   * Whether a failure says that repeating cannot help. It looks through the causes, so a
+   * failure wrapped on its way out is recognised as well.
+   *
    * @param failure The failure a dispatch ended with
    * @return Whether repeating the operation cannot help
    */

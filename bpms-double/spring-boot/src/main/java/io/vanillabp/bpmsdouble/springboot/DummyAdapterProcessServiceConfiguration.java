@@ -23,6 +23,13 @@ import io.vanillabp.bpmsdouble.DummyAdapter;
 public class DummyAdapterProcessServiceConfiguration {
 
   /**
+   * Spring builds this auto-configuration once per application. A test never creates
+   * it: putting the double on the test classpath is what brings it in.
+   */
+  public DummyAdapterProcessServiceConfiguration() {
+  }
+
+  /**
    * See {@link DummyAdapter#PROPERTY_AT_LEAST_ONCE_DELIVERY}.
    */
   public static final String PROPERTY_AT_LEAST_ONCE_DELIVERY = DummyAdapter.PROPERTY_AT_LEAST_ONCE_DELIVERY;

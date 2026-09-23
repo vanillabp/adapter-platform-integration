@@ -178,7 +178,7 @@ public class GruelboxPhaseTwoOutboxDispatcher {
   }
 
   /**
-   * Starts the fixed-delay poller. The first run is executed immediately, dispatching
+   * Starts the poller. The first run is executed immediately, dispatching
    * committed-but-unprocessed entries of a previously crashed instance and those the
    * submitter kept while the application was starting. The listener
    * order guarantees that workflow processing started BEFORE any recovered entry is
@@ -199,6 +199,10 @@ public class GruelboxPhaseTwoOutboxDispatcher {
 
   }
 
+  /**
+   * Stops the poller when the application context closes. An entry which was not dispatched
+   * stays in gruelbox' table, and the first flush of the next start carries it.
+   */
   @PreDestroy
   public void stopPolling() {
 

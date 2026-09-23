@@ -67,6 +67,9 @@ import lombok.extern.slf4j.Slf4j;
  * (decision 12 in the repository's DECISIONS.md), and the transaction the work runs in is the one
  * resolved for THIS aggregate rather than the platform's
  * (decision 11 in the repository's DECISIONS.md).
+ *
+ * @param <A> The workflow-aggregate type of this BPMN process - the class a
+ *          <code>&#64;WorkflowService</code> of the application names
  */
 @Slf4j
 // see decision 1 in the repository's DECISIONS.md
@@ -189,6 +192,10 @@ public class MigrationProcessService<A> {
   private final Set<String> leftoversAlreadyNamed = ConcurrentHashMap.newKeySet();
 
   /**
+   * Hands over what to count into, called by the platform integration once the metrics of
+   * the application are known. It passes them on to the delivery records, so both count
+   * into the same place without the platform having to know that there are two.
+   *
    * @param metrics What to count deliveries into, never <code>null</code>
    */
   public void setMetrics(
@@ -207,6 +214,7 @@ public class MigrationProcessService<A> {
    * {@link Builder}, which refuses to build a service missing something no application can
    * work without.
    *
+   * @param <A> The workflow-aggregate type, taken from the class handed in
    * @param workflowModuleId The workflow module the process belongs to
    * @param bpmnProcessId The plain BPMN process id
    * @param workflowAggregateClass The workflow aggregate of that process
@@ -565,6 +573,10 @@ public class MigrationProcessService<A> {
   }
 
   /**
+   * Saves the workflow aggregate through the persistence of the application. An operation
+   * which changes a workflow does this first, in the caller's transaction, so an operation
+   * the application rolls back leaves neither a changed aggregate nor an outbox entry.
+   *
    * @param workflowAggregate The aggregate to persist
    * @return The persisted aggregate (attached, in case of an ORM)
    */
@@ -576,6 +588,10 @@ public class MigrationProcessService<A> {
   }
 
   /**
+   * Reads the id of a workflow aggregate, asking the persistence rather than the class: the
+   * id may sit in a field the core knows nothing about. It is the value every operation is
+   * keyed by, the election and the outbox entry included.
+   *
    * @param workflowAggregate The aggregate to investigate
    * @return Its ID
    */
@@ -2340,6 +2356,11 @@ public class MigrationProcessService<A> {
   private List<String> servedBpmnProcessIds;
 
   /**
+   * Tells this process service which BPMN processes it serves. Called by the platform
+   * integration while the beans are built, because only it sees every workflow service of
+   * the aggregate at once. It also decides which ids a delivery record and an election hint
+   * are looked for under, so the three lists can never drift apart.
+   *
    * @param servedBpmnProcessIds The plain BPMN process ids of this aggregate's workflow
    *          services, the primary one first
    */
@@ -2639,6 +2660,9 @@ public class MigrationProcessService<A> {
     }
 
     /**
+     * Mandatory. Everything an adapter is chosen and configured by is read from here, so a
+     * service without it cannot answer a single call.
+     *
      * @param properties The bound <code>vanillabp.*</code> tree
      * @return This builder
      */
@@ -2651,6 +2675,9 @@ public class MigrationProcessService<A> {
     }
 
     /**
+     * Mandatory. It is also where the id of an aggregate and its type come from, which is
+     * what the outbox stores and the election is keyed by.
+     *
      * @param aggregatePersistence How the workflow aggregate is loaded and saved
      * @return This builder
      */
@@ -2663,6 +2690,11 @@ public class MigrationProcessService<A> {
     }
 
     /**
+     * Mandatory. The whole list is handed over and the prioritized ones are picked out of
+     * it while the service is built, so a configured adapter id which no adapter serves
+     * ends the boot with a message naming it rather than silently starting workflows in the
+     * wrong BPMS.
+     *
      * @param processServices The process service of every adapter of this application -
      *          the prioritized ones of this BPMN process have to be among them
      * @return This builder
@@ -2676,6 +2708,11 @@ public class MigrationProcessService<A> {
     }
 
     /**
+     * Left out by a test which plans no operation. In an application it is always there:
+     * phase two of every outbound operation is dispatched through the outbox
+     * (see decision 2 in the repository's DECISIONS.md), and a missing one is reported
+     * while the application starts.
+     *
      * @param phaseTwoOutboxResolver Resolves the outbox phase two of every outbound
      *          operation is planned in
      * @return This builder
@@ -2689,6 +2726,10 @@ public class MigrationProcessService<A> {
     }
 
     /**
+     * Optional, and only ever an accelerator: what the cache holds is a hint, so an
+     * application without one gets the same answers and pays more probes for them
+     * (see decision 5 in the repository's DECISIONS.md).
+     *
      * @param workflowAdapterCache Where an elected adapter is remembered; without one
      *          every election probes
      * @return This builder
@@ -2702,6 +2743,12 @@ public class MigrationProcessService<A> {
     }
 
     /**
+     * Optional. What a record is for is to answer a repeated delivery without running the
+     * <code>&#64;WorkflowTask</code> method a second time
+     * (see decision 6 in the repository's DECISIONS.md). Without a store that method does
+     * run again, and the guards in the handlers carry the case, as they did before the
+     * records existed.
+     *
      * @param taskDeliveryLogResolver Resolves the store of the delivery records; without
      *          one deliveries are not deduplicated
      * @return This builder
@@ -2715,6 +2762,9 @@ public class MigrationProcessService<A> {
     }
 
     /**
+     * Optional, and what lets an aggregate of its own kind be written in a transaction of
+     * its own kind (see decision 11 in the repository's DECISIONS.md).
+     *
      * @param transactionRunnerResolver Resolves the transaction the work on this
      *          aggregate runs in; without one the runner the caller passes is used
      * @return This builder
@@ -2728,6 +2778,10 @@ public class MigrationProcessService<A> {
     }
 
     /**
+     * Builds the process service, or says what is missing. The check happens here and not
+     * at the first call, so a wiring defect ends the boot instead of a business
+     * transaction.
+     *
      * @return The process service
      * @throws IllegalStateException If something mandatory is missing - the message names
      *           the BPMN process and every one of them

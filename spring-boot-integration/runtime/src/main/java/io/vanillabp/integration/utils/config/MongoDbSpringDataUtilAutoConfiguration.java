@@ -32,4 +32,13 @@ import io.vanillabp.integration.utils.SpringDataUtil;
 @Import(MongoDbSpringDataUtilConfiguration.class)
 public class MongoDbSpringDataUtilAutoConfiguration {
 
+  /**
+   * Built by Spring Boot while it applies its auto-configurations, and only where the
+   * conditions above hold. It defines no bean itself - importing
+   * {@link MongoDbSpringDataUtilConfiguration} is all it does, so an application may import
+   * that one directly and get the same bean without these conditions.
+   */
+  public MongoDbSpringDataUtilAutoConfiguration() {
+  }
+
 }

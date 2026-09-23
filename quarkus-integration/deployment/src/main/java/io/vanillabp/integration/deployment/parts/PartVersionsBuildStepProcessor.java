@@ -43,6 +43,13 @@ public class PartVersionsBuildStepProcessor {
   private static final String DESCRIPTOR_SUFFIX = ".properties";
 
   /**
+   * Quarkus builds this processor while it augments the application and calls the build step
+   * below on it. Nothing else builds it, and the step keeps no state in it.
+   */
+  public PartVersionsBuildStepProcessor() {
+  }
+
+  /**
    * @param applicationArchives The archives of this Quarkus build
    * @param nativeImageResources Producer putting the descriptors into the native image
    * @return The word that the parts were judged, which the deployment pipeline waits for

@@ -34,6 +34,11 @@ public class AdapterHealthReport {
   private final Supplier<Collection<AdapterDeploymentService<?, ?>>> adapters;
 
   /**
+   * Built by the platform which publishes the report, once per application.
+   * <p>
+   * The adapters are handed over as a supplier rather than as a list, because an endpoint
+   * answers long after the boot and an adapter may join or go in between.
+   *
    * @param adapters Reports the adapter deployment services of the application, one
    *          per configured adapter id (resolved on every call - the platform's bean
    *          provider does the collecting)

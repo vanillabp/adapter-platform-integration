@@ -4,7 +4,6 @@ import java.util.Map;
 
 import lombok.Builder;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
@@ -16,17 +15,34 @@ import lombok.experimental.SuperBuilder;
  * adapter-scoped properties (see
  * {@link MigrationAdapterProperties#resolveForAdapter}).
  * <p>
- * <b>Attention:</b> This level is structural preparation for task-scoped adapter
- * configuration (e.g. a per-task job timeout) - there is no consumer yet.
+ * It is read where a single task is the reason for a setting: whether the deliveries of
+ * that task are deduplicated (<code>deduplicate-deliveries</code> of
+ * {@link AdapterProperties}) and how long it may stay open (<code>max-task-age</code> of
+ * {@link DeliveryProperties}). An adapter setting of its own, a per-task job timeout say,
+ * needs nothing here beyond its key.
  * <p>
  * Why an adapter setting can be written at four levels, and which of them wins, is decision 7 in
  * the repository's DECISIONS.md.
  */
 @Getter
 @Setter
-@NoArgsConstructor
 @SuperBuilder
 public class TaskAdapterProperties {
+
+  /**
+   * The empty section a configuration binder starts from, one per task an application
+   * writes something about: both platforms create the object and then write the keys into
+   * it, one setter per key.
+   * <p>
+   * It asks the builder for the values, and that is not a detour: Lombok moves the
+   * initializer of a field with a default into the builder, so a constructor which sets
+   * nothing itself would leave the maps below <code>null</code> instead of empty.
+   */
+  public TaskAdapterProperties() {
+
+    this(builder());
+
+  }
 
   /**
    * The properties of adapters specific to this task. Keys are the adapter IDs.

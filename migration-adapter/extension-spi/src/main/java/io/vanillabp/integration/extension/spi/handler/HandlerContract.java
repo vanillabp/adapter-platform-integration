@@ -124,6 +124,9 @@ public final class HandlerContract {
   }
 
   /**
+   * The extension this contract belongs to. It names the extension in every message about
+   * one of its methods, so a developer reads which library asked for what.
+   *
    * @return The id of the extension owning this contract
    */
   public String getExtensionId() {
@@ -133,6 +136,10 @@ public final class HandlerContract {
   }
 
   /**
+   * The annotation the extension's handler methods carry. It is what a
+   * {@link HandlerCall} names to reach them, and what the scan looks for on the methods of
+   * a <code>&#64;WorkflowService</code> class.
+   *
    * @return The annotation the extension's handler methods carry
    */
   public Class<? extends Annotation> getAnnotationType() {
@@ -142,6 +149,8 @@ public final class HandlerContract {
   }
 
   /**
+   * How the keys a method serves are read out of one occurrence of the annotation.
+   *
    * @return Reads the keys one occurrence of the annotation names, or an empty list
    *         for "the method's name"
    */
@@ -152,6 +161,9 @@ public final class HandlerContract {
   }
 
   /**
+   * How the process versions a method serves are read out of one occurrence of the
+   * annotation.
+   *
    * @return Reads the version specifications one occurrence of the annotation names,
    *         or an empty list for "every version"
    */
@@ -162,6 +174,10 @@ public final class HandlerContract {
   }
 
   /**
+   * Whether the calls of this contract name the version of the BPMN process. Only the
+   * extension can answer it, and the answer is what lets the boot report a method no call
+   * could ever reach (see decision 56 in the repository's DECISIONS.md).
+   *
    * @return Whether the calls of this contract name the version of the BPMN process they
    *         are about
    */
@@ -172,6 +188,10 @@ public final class HandlerContract {
   }
 
   /**
+   * Which of the parameters VanillaBP binds itself the methods of this contract may ask
+   * for. A parameter of a kind left out is refused while the method is scanned, so the
+   * developer reads it at the start instead of receiving <code>null</code> later.
+   *
    * @return The parameter kinds VanillaBP binds for these methods
    */
   public Set<CoreHandlerParameter> getCoreParameters() {
@@ -181,6 +201,10 @@ public final class HandlerContract {
   }
 
   /**
+   * The binders of the parameter kinds the extension's own SPI adds. They are asked before
+   * VanillaBP tries its own, so an extension may serve a parameter VanillaBP would
+   * otherwise take.
+   *
    * @return The binders the extension contributes, asked in the order they were added
    */
   public List<HandlerParameterBinder> getParameterBinders() {
@@ -190,6 +214,9 @@ public final class HandlerContract {
   }
 
   /**
+   * What the extension checks about one occurrence of its annotation, run while the scan
+   * still holds the method carrying it.
+   *
    * @return What the extension checks about one occurrence of its annotation while the
    *         method carrying it is scanned, or <code>null</code> where it checks nothing
    */
@@ -200,6 +227,10 @@ public final class HandlerContract {
   }
 
   /**
+   * Whether what a method returns reaches the caller of
+   * {@link ExtensionHandlers#invoke(HandlerCall)}. Where it does not, a method of this
+   * contract has to be <code>void</code>.
+   *
    * @return Whether what a method returns is handed back to the caller
    */
   public boolean deliversReturnValue() {
@@ -426,7 +457,12 @@ public final class HandlerContract {
     }
 
     /**
+     * Builds the contract, and refuses one which cannot name the extension or the
+     * annotation it is about.
+     *
      * @return The contract
+     * @throws IllegalArgumentException If the extension id is missing or blank, or if no
+     *           annotation was named (guiding message)
      */
     public HandlerContract build() {
 

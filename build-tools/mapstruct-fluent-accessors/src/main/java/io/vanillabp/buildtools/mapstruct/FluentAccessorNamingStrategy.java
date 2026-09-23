@@ -20,6 +20,13 @@ import org.mapstruct.ap.spi.DefaultAccessorNamingStrategy;
  */
 public class FluentAccessorNamingStrategy extends DefaultAccessorNamingStrategy {
 
+  /**
+   * MapStruct looks the strategy up with {@link java.util.ServiceLoader} while it processes
+   * the annotations of a compilation, so it stays public and takes no arguments.
+   */
+  public FluentAccessorNamingStrategy() {
+  }
+
   @Override
   public boolean isGetterMethod(
       final ExecutableElement method) {

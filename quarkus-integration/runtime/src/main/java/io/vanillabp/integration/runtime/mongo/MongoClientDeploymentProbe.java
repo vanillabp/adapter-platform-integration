@@ -24,6 +24,14 @@ public class MongoClientDeploymentProbe implements MongoDeploymentProbe {
   @Inject
   Instance<MongoClient> mongoClients;
 
+  /**
+   * Built by the CDI container, and only where the MongoDB extension is present. The
+   * client itself may still be missing, which is why it is injected as an
+   * {@link Instance} and asked for before it is used.
+   */
+  public MongoClientDeploymentProbe() {
+  }
+
   @Override
   public Boolean isReplicaSet() {
 

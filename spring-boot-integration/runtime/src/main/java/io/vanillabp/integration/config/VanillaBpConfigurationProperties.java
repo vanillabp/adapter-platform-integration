@@ -25,4 +25,19 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
 @ConfigurationProperties(MigrationAdapterProperties.PREFIX)
 public class VanillaBpConfigurationProperties extends MigrationAdapterProperties {
 
+  /**
+   * Spring Boot builds the empty instance and then fills the inherited fields from the
+   * environment, setter by setter. So everything this object holds arrives after the
+   * constructor ran, and nothing may be computed here.
+   * <p>
+   * Defaulting and validation happen later still, once the classpath facts are known: the
+   * bean method building the {@link MigrationAdapterProperties} bean of this application
+   * calls {@link MigrationAdapterProperties#validateProperties(io.vanillabp.integration.adapter.migration.config.ClasspathFacts, String)},
+   * which derives the defaults first (see
+   * {@link io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration}).
+   */
+  public VanillaBpConfigurationProperties() {
+
+  }
+
 }

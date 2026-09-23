@@ -68,6 +68,12 @@ public class VersionRange {
   public interface ProcessVersionResolver {
 
     /**
+     * Asks the BPMS what it holds under that version or tag.
+     * <p>
+     * An unknown tag is not an error here: the application may name a tag nobody deployed
+     * yet, and a specification which cannot be placed simply matches nothing. Whoever wires
+     * the handlers reports such a tag once, naming the method.
+     *
      * @param versionOrVersionTag A version identifier or a version tag
      * @return The deployed version or <code>null</code> if the BPMS does not know it
      */
@@ -131,6 +137,23 @@ public class VersionRange {
 
   }
 
+  /**
+   * Reads one written specification, while the application boots.
+   * <p>
+   * Nothing is asked of a BPMS here. A boundary which is not a number is kept as written and
+   * resolved later, because the deployment has not happened yet at this point.
+   * <p>
+   * A specification which cannot be read ends the boot with an {@link IllegalStateException}
+   * naming the location and every supported format. That is on purpose: a version attribute
+   * with a typo would otherwise match nothing and the task would stay untouched until
+   * somebody looks for it.
+   *
+   * @param spec What the <code>version</code> attribute says - <code>null</code> and an
+   *          empty text both mean every version
+   * @param describedLocation Where that text was written, for the message about a
+   *          specification which cannot be read
+   * @return The specification, ready to be matched
+   */
   public static VersionRange parse(
       final String spec,
       final String describedLocation) {
@@ -196,6 +219,12 @@ public class VersionRange {
   }
 
   /**
+   * Whether this specification covers that version, using numbers alone.
+   * <p>
+   * A specification naming a version tag cannot be placed without the BPMS, so it matches
+   * nothing here. Use {@link #matches(String, ProcessVersionResolver)} wherever a tag may
+   * turn up.
+   *
    * @param processVersion The version the BPMS reported
    * @return Whether this specification covers that version - only <code>*</code>
    *         covers <code>null</code> (see
@@ -284,6 +313,11 @@ public class VersionRange {
   }
 
   /**
+   * Whether this specification restricts anything at all.
+   * <p>
+   * A method whose attribute nobody wrote and a method naming <code>*</code> are the same
+   * thing, so both of them inherit the range of their class.
+   *
    * @return Whether this specification covers every version - what a
    *         <code>version</code> attribute nobody wrote parses to, and what makes a
    *         handler method inherit the range of its class
@@ -369,6 +403,12 @@ public class VersionRange {
   }
 
   /**
+   * Whether two specifications cover a common version, using numbers alone.
+   * <p>
+   * For two specifications naming a tag this answers "no" unless they are written the same
+   * way, which is the honest answer as long as nothing can place a tag. Whoever needs the
+   * full answer asks again with a resolver once the process is deployed.
+   *
    * @param other The other specification
    * @return Whether both cover a common version, decided without asking a BPMS
    */

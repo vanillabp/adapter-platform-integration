@@ -46,6 +46,15 @@ public class ConcurrentTokenCheck {
   private final Set<String> reported = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
   /**
+   * Built by the registry which wires the workflow tasks, once per application.
+   * <p>
+   * What it remembers is which BPMN processes were already reported, so the hint stays one
+   * per process however many files and held versions it is drawn from.
+   */
+  public ConcurrentTokenCheck() {
+  }
+
+  /**
    * Reports the elements an adapter found in a BPMN process which can put a second
    * token into a running workflow, and warns if that process' workflow aggregate has
    * no version attribute.

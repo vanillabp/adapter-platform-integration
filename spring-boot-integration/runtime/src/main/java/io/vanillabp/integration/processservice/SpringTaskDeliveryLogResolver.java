@@ -36,6 +36,13 @@ public class SpringTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
 
   private final SpringPersistenceTechnology persistenceTechnology;
 
+  /**
+   * Built once per application by the autoconfiguration. The log beans are looked up on
+   * every question rather than kept here, so a store which is created late is found too.
+   *
+   * @param applicationContext The context the delivery-log beans and the aggregate's
+   *     repository are looked up in
+   */
   public SpringTaskDeliveryLogResolver(
       final ApplicationContext applicationContext) {
 

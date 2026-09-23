@@ -23,6 +23,13 @@ public class VanillaBpMetricsBuildStepProcessor {
   private static final String MICROMETER_EXTENSION_PROCESSOR = "io.quarkus.micrometer.deployment.MicrometerProcessor";
 
   /**
+   * Quarkus builds this processor while it augments the application and calls the build step
+   * below on it. Nothing else builds it, and the step keeps no state in it.
+   */
+  public VanillaBpMetricsBuildStepProcessor() {
+  }
+
+  /**
    * @param additionalBeans Producer used to register the metrics' producer
    */
   @BuildStep

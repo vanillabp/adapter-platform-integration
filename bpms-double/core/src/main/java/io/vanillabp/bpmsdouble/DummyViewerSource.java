@@ -17,6 +17,10 @@ import io.vanillabp.spi.process.WorkflowHistory;
 public interface DummyViewerSource {
 
   /**
+   * The process definitions this double reports for one workflow. A test answers here
+   * to exercise the core's read path without a BPMS: which adapter is elected, and how
+   * the core namespaces the ids of the elected one.
+   *
    * @param adapterId The dummy adapter's ID (several instances may be configured)
    * @param workflowAggregateId The ID of the workflow aggregate
    * @param historyContext The history context or <code>null</code>
@@ -30,6 +34,10 @@ public interface DummyViewerSource {
       String historyContext);
 
   /**
+   * The BPMN XML this double holds for one of its own definitions. The double parses
+   * nothing, so a test may return any text and assert that it arrives at the
+   * application unchanged.
+   *
    * @param adapterId The dummy adapter's ID
    * @param processDefinitionId The ADAPTER-NATIVE process definition id
    * @return The BPMN XML or <code>null</code> if unknown
@@ -39,6 +47,10 @@ public interface DummyViewerSource {
       String processDefinitionId);
 
   /**
+   * The execution history this double reports for one workflow. A test builds it by
+   * hand, which is how the read path is asserted both for a BPMS which records an
+   * element history and for one which records none.
+   *
    * @param adapterId The dummy adapter's ID
    * @param workflowAggregateId The ID of the workflow aggregate
    * @param historyContext The history context or <code>null</code>

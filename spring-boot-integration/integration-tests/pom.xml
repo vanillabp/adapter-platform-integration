@@ -34,6 +34,9 @@
          proves it for outsiders by using it itself - see decision 33 in the repository's
          DECISIONS.md. -->
     <maven.deploy.skip>true</maven.deploy.skip>
+    <!-- and therefore no javadoc to check: the goal is bound in every module of this
+         build, and a module which publishes nothing has no reader to write for -->
+    <maven.javadoc.skip>true</maven.javadoc.skip>
   </properties>
 
   <dependencyManagement>

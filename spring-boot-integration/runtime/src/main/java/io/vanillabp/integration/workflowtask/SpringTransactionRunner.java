@@ -24,6 +24,15 @@ public class SpringTransactionRunner implements TransactionRunner {
 
   private final ThreadLocal<TransactionStatus> currentStatus = new ThreadLocal<>();
 
+  /**
+   * The platform's own runner, built once by the autoconfiguration. The manager arrives as
+   * a provider because it is asked for at the first task and not while the application
+   * boots: an application with no transactional persistence yet still starts, and the
+   * startup check tells it what to add.
+   *
+   * @param transactionManager Asked for the unique <code>PlatformTransactionManager</code>
+   *     of the application, which may be none
+   */
   public SpringTransactionRunner(
       final ObjectProvider<PlatformTransactionManager> transactionManager) {
 

@@ -9,7 +9,6 @@ import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
@@ -31,8 +30,16 @@ import lombok.Setter;
 @Getter
 @Setter(AccessLevel.PACKAGE) // needed for object-serialization
 @AllArgsConstructor
-@NoArgsConstructor(access = AccessLevel.PACKAGE) // needed for object-serialization
 public class BpmsResourceIndex {
+
+  /**
+   * An index without content, package-visible like the setters which fill it. The instance
+   * a boot works with is built by the builder of this class, in
+   * {@link DeploymentRecorder#recordBpmsResourceIndex(List, List)}, so nothing outside this
+   * package has a use for an empty one.
+   */
+  BpmsResourceIndex() {
+  }
 
   /**
    * The IDs of all workflow modules found in the application's archives at build

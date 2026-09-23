@@ -105,7 +105,12 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
   private final java.util.List<String> processesWithEndListener = new java.util.concurrent.CopyOnWriteArrayList<>();
 
   /**
-   * @return The BPMN processes an end listener was attached to
+   * The BPMN processes this instance decided to attach an end listener to, in the
+   * order they were wired. A test reads it to show that a process whose application
+   * declares no end handler is left alone, which is the model change a real adapter
+   * saves there.
+   *
+   * @return A copy, so a test may keep it while the deployment goes on
    */
   public java.util.List<String> getProcessesWithEndListener() {
 
@@ -142,6 +147,13 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
   }
 
   /**
+   * Builds the deployment service of one configured adapter id. Each platform module
+   * calls this once per id, so a test which configures two ids gets two doubles and
+   * can play a migration between them.
+   * <p>
+   * Every collaborator arrives here and none is set afterwards - see decision 28 in
+   * the repository's DECISIONS.md.
+   *
    * @param adapterId The id this instance answers for
    * @param listeners The hooks watching the deployment pipeline
    * @param collaborators What the platform handed this adapter

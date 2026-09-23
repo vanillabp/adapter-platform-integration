@@ -43,6 +43,14 @@ public class DummyAdapterOverlayProperties {
   private Map<String, ModuleOverlay> workflowModules = Map.of();
 
   /**
+   * Spring's configuration binder creates the empty overlay and fills the two maps
+   * above through their setters. A test never builds one: it writes the keys into the
+   * application configuration and asks the container for this bean.
+   */
+  public DummyAdapterOverlayProperties() {
+  }
+
+  /**
    * Resolves the dummy adapter's <code>test</code> key with most-specific-wins
    * semantics across the four levels - the reference implementation of how a real
    * adapter resolves its scope-specific keys from its overlay (the core's
@@ -108,6 +116,13 @@ public class DummyAdapterOverlayProperties {
      */
     private Integer test;
 
+    /**
+     * The binder creates the empty section and sets <code>test</code> from the
+     * configuration of that level.
+     */
+    public DummyAdapterConfig() {
+    }
+
   }
 
   /**
@@ -120,6 +135,13 @@ public class DummyAdapterOverlayProperties {
     private Map<String, DummyAdapterConfig> adapters = Map.of();
 
     private Map<String, WorkflowOverlay> workflows = Map.of();
+
+    /**
+     * The binder creates the empty section and fills its two maps while it walks down
+     * the configuration tree.
+     */
+    public ModuleOverlay() {
+    }
 
   }
 
@@ -134,6 +156,13 @@ public class DummyAdapterOverlayProperties {
 
     private Map<String, TaskOverlay> tasks = Map.of();
 
+    /**
+     * The binder creates the empty section and fills its two maps while it walks down
+     * the configuration tree.
+     */
+    public WorkflowOverlay() {
+    }
+
   }
 
   /**
@@ -144,6 +173,13 @@ public class DummyAdapterOverlayProperties {
   public static class TaskOverlay {
 
     private Map<String, DummyAdapterConfig> adapters = Map.of();
+
+    /**
+     * The binder creates the empty section and fills its adapter map. This is the most
+     * specific of the four levels, so a value set here wins.
+     */
+    public TaskOverlay() {
+    }
 
   }
 

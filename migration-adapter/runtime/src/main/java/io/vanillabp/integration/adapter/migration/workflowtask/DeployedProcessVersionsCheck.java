@@ -63,6 +63,16 @@ public class DeployedProcessVersionsCheck {
   @FunctionalInterface
   public interface UnservedTasks {
 
+    /**
+     * Picks the tasks of one held version which nothing would serve.
+     *
+     * @param workflowModuleId The workflow module ID
+     * @param bpmnProcessId The plain BPMN process ID
+     * @param version The version identifier the BPMS reported, which is what the version
+     *          ranges of the methods are matched against
+     * @param tasks The tasks of that version, read from the model the BPMS still holds
+     * @return Those of them no method serves, empty where the version is fully served
+     */
     Collection<BpmnTaskSpec> of(
         String workflowModuleId,
         String bpmnProcessId,
@@ -80,6 +90,20 @@ public class DeployedProcessVersionsCheck {
   @FunctionalInterface
   public interface DeadHandlers {
 
+    /**
+     * Names the methods registered for that process which serve nothing worth serving.
+     * <p>
+     * The whole module is handed over, not just the process being asked about, because a
+     * method is registered once per BPMN process its class declares. A method which serves no
+     * version of one process may be the one kept for another, and calling it dead would send
+     * a developer to remove the code which keeps the running workflows alive.
+     *
+     * @param workflowModuleId The workflow module ID
+     * @param bpmnProcessId The plain BPMN process ID whose methods are judged
+     * @param servableVersionsByProcess What every BPMN process of that module can be served
+     *          with - what the BPMS holds minus the versions the configuration faded out
+     * @return The methods, worded for the message, empty where every method serves something
+     */
     List<String> of(
         String workflowModuleId,
         String bpmnProcessId,
@@ -96,6 +120,15 @@ public class DeployedProcessVersionsCheck {
   @FunctionalInterface
   public interface ConcurrentTokenElementsOfHeldVersions {
 
+    /**
+     * Hands over what was found in the held versions of one BPMN process, once per process.
+     *
+     * @param workflowModuleId The workflow module ID
+     * @param bpmnProcessId The plain BPMN process ID
+     * @param elementIdsByVersion The element ids per held version, and only for a version
+     *          workflows still run on - empty where nothing was found, which is the normal
+     *          case and gets no message
+     */
     void report(
         String workflowModuleId,
         String bpmnProcessId,
@@ -111,6 +144,18 @@ public class DeployedProcessVersionsCheck {
   @FunctionalInterface
   public interface IdentifiersOfHeldVersions {
 
+    /**
+     * Hands over the identifiers of ONE held version, while that version's model is read.
+     *
+     * @param adapterId The adapter ID whose BPMS holds the version
+     * @param workflowModuleId The workflow module ID
+     * @param bpmnProcessId The plain BPMN process ID
+     * @param version The version identifier the BPMS reported
+     * @param activeWorkflows How many workflows still run on it, <code>null</code> where that
+     *          BPMS cannot count - the number says how urgent a finding is, because a name of
+     *          a version workflows run on is live rather than dormant
+     * @param declared The plain identifiers that version declares, never <code>null</code>
+     */
     void report(
         String adapterId,
         String workflowModuleId,
@@ -127,20 +172,71 @@ public class DeployedProcessVersionsCheck {
    */
   public interface ProcessVersionCatalogAccess {
 
+    /**
+     * Every version that BPMS holds, which is what the whole check works through - see
+     * {@link io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog#deployedVersionsOf}.
+     * <p>
+     * Nothing held means nothing to check and the run ends there, after saying so where the
+     * application declared that id without deploying a model under it.
+     *
+     * @param workflowModuleId The workflow module ID
+     * @param bpmnProcessId The plain BPMN process ID
+     * @return The versions, oldest first - empty or <code>null</code> where the BPMS cannot
+     *         tell
+     */
     List<DeployedProcessVersion> deployedVersionsOf(
         String workflowModuleId,
         String bpmnProcessId);
 
+    /**
+     * The tasks of one held version, read from the model that BPMS still holds - see
+     * {@link io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog#tasksOfVersion}.
+     * <p>
+     * A <code>null</code> answer ends the walk over the older versions of this process and is
+     * said once: a BPMS which cannot read one held model cannot read the next one either.
+     *
+     * @param workflowModuleId The workflow module ID
+     * @param bpmnProcessId The plain BPMN process ID
+     * @param version The version identifier the BPMS reported
+     * @return The tasks of that version, or <code>null</code> where this BPMS cannot say
+     */
     Collection<BpmnTaskSpec> tasksOfVersion(
         String workflowModuleId,
         String bpmnProcessId,
         String version);
 
+    /**
+     * How many workflows still run on one held version - see
+     * {@link io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog#activeInstanceCountOf}.
+     * <p>
+     * This is what decides how loud a finding is, so the answer is asked once per version and
+     * shared by the reports which need it. A BPMS which cannot count says so once per process,
+     * and the findings about such a version are then worded without a number - "cannot tell"
+     * is never read as "nobody".
+     *
+     * @param workflowModuleId The workflow module ID
+     * @param bpmnProcessId The plain BPMN process ID
+     * @param version The version identifier the BPMS reported
+     * @return The number of running workflows, or <code>null</code> where this BPMS cannot
+     *         count
+     */
     Long activeInstanceCountOf(
         String workflowModuleId,
         String bpmnProcessId,
         String version);
 
+    /**
+     * What a workflow on an older version never gets, in the adapter's own words - see
+     * {@link io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog#whatOlderVersionsMiss}.
+     * <p>
+     * The default answers <code>null</code>, which is the right answer for an adapter which
+     * attaches its behaviour while the engine parses a model: there nothing is missing. The
+     * report then stays at the bare count.
+     *
+     * @param workflowModuleId The workflow module ID
+     * @param bpmnProcessId The plain BPMN process ID
+     * @return A sentence naming what is missing, or <code>null</code> where nothing is
+     */
     default String whatOlderVersionsMiss(
         final String workflowModuleId,
         final String bpmnProcessId) {
@@ -149,6 +245,22 @@ public class DeployedProcessVersionsCheck {
 
     }
 
+    /**
+     * The elements of one held version which can put a second token into a running workflow -
+     * see
+     * {@link io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog#concurrentTokenElementsOfVersion}.
+     * <p>
+     * Asked only where workflows still run on that version, because there is nothing to lose
+     * in a workflow nobody is in. Two writers on one workflow aggregate are made visible and
+     * not resolved (decision 14 in the repository's DECISIONS.md), and an old version with a
+     * parallel gateway the new model dropped is the case a check over this boot's model never
+     * sees.
+     *
+     * @param workflowModuleId The workflow module ID
+     * @param bpmnProcessId The plain BPMN process ID
+     * @param version The version identifier the BPMS reported
+     * @return The element ids, or <code>null</code> where this BPMS cannot read a held model
+     */
     default Collection<String> concurrentTokenElementsOfVersion(
         final String workflowModuleId,
         final String bpmnProcessId,
@@ -158,6 +270,20 @@ public class DeployedProcessVersionsCheck {
 
     }
 
+    /**
+     * The plain identifiers one held version declares - see
+     * {@link io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog#identifiersOfVersion}.
+     * <p>
+     * A message name of a model deployed years ago lives in that model and nowhere else, so
+     * this is the only place a clash with a name another workflow module uses today can be
+     * seen at all (decision 40 in the repository's DECISIONS.md). Asked in the loop which
+     * reads that version's model anyway.
+     *
+     * @param workflowModuleId The workflow module ID
+     * @param bpmnProcessId The plain BPMN process ID
+     * @param version The version identifier the BPMS reported
+     * @return The identifiers, or <code>null</code> where this BPMS cannot read a held model
+     */
     default Collection<io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.ModelIdentifier> identifiersOfVersion(
         final String workflowModuleId,
         final String bpmnProcessId,
@@ -225,6 +351,20 @@ public class DeployedProcessVersionsCheck {
                               List<String> outfaded) {
   }
 
+  /**
+   * The check without the two reports which need a model of a held version read for them.
+   * <p>
+   * What is left is the version judgement itself: which tasks of an older version nobody
+   * serves, which methods serve nothing, and how many workflows are on an older version.
+   *
+   * @param processVersions What the BPMS reported about their versions
+   * @param outfadedVersions Which versions the operator declared obsolete
+   * @param unservedTasks Which tasks of a held version no method serves
+   * @param deadHandlers Which methods of the module serve nothing worth serving -
+   *          <code>null</code> switches that report off, and nothing is then remembered for it
+   * @param declaredProcesses What the application declared and what was really deployed,
+   *          which is what tells the two readings of "older version" apart
+   */
   public DeployedProcessVersionsCheck(
       final ProcessVersions processVersions,
       final OutfadedProcessVersions outfadedVersions,
@@ -236,6 +376,17 @@ public class DeployedProcessVersionsCheck {
 
   }
 
+  /**
+   * The check with the second-token report, but without the identifiers of a held version.
+   *
+   * @param processVersions What the BPMS reported about their versions
+   * @param outfadedVersions Which versions the operator declared obsolete
+   * @param unservedTasks Which tasks of a held version no method serves
+   * @param deadHandlers Which methods of the module serve nothing worth serving
+   * @param declaredProcesses What the application declared and what was really deployed
+   * @param concurrentTokenElements Where the elements of a held version which can produce a
+   *          second token are judged - <code>null</code> leaves those models unread
+   */
   public DeployedProcessVersionsCheck(
       final ProcessVersions processVersions,
       final OutfadedProcessVersions outfadedVersions,
@@ -248,6 +399,24 @@ public class DeployedProcessVersionsCheck {
 
   }
 
+  /**
+   * The full check, which is what the {@link WorkflowTaskRegistry} builds while it is wired.
+   * <p>
+   * Every report is optional on purpose. A caller which does not want one hands
+   * <code>null</code> for it, and the question behind it is then not even asked - which
+   * matters here, because asking means reading a model the BPMS holds.
+   *
+   * @param processVersions What the BPMS reported about their versions
+   * @param outfadedVersions Which versions the operator declared obsolete
+   * @param unservedTasks Which tasks of a held version no method serves
+   * @param deadHandlers Which methods of the module serve nothing worth serving
+   * @param declaredProcesses What the application declared and what was really deployed
+   * @param concurrentTokenElements Where the elements of a held version which can produce a
+   *          second token are judged
+   * @param identifiersOfHeldVersions Where the identifiers of a held version are held against
+   *          what this deployment scopes the same names to - <code>null</code> where no
+   *          platform wired the name-clash check
+   */
   public DeployedProcessVersionsCheck(
       final ProcessVersions processVersions,
       final OutfadedProcessVersions outfadedVersions,

@@ -81,6 +81,14 @@ public final class GruelboxRedispatchAwareSubmitter implements Submitter {
    */
   private volatile boolean holdingBack;
 
+  /**
+   * The wrapper gruelbox is built with. The gate is open until a
+   * {@link GruelboxPhaseTwoOutboxDispatcher} is built for this submitter, so an outbox
+   * without one dispatches right after the commit.
+   *
+   * @param delegate What gruelbox would submit with by itself, and what runs the entry once
+   *          this wrapper lets it through
+   */
   public GruelboxRedispatchAwareSubmitter(
       final Submitter delegate) {
 
@@ -89,6 +97,10 @@ public final class GruelboxRedispatchAwareSubmitter implements Submitter {
   }
 
   /**
+   * Whether the entry being dispatched on this thread had an attempt before, which is what
+   * the core's START re-dispatch mitigation asks for. Read on the dispatching thread only,
+   * because that is where gruelbox left the answer.
+   *
    * @return Whether the entry dispatched on the current thread was attempted
    *         before (a retried entry)
    */

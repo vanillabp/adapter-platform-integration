@@ -185,6 +185,10 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
   private final String selectOldestPendingEntry;
 
   /**
+   * Builds the store of one JDBC outbox: the statements for the table it was given, and
+   * the collaborators the platform has to hand it. The table is created by the dispatcher
+   * of that outbox, not here.
+   *
    * @param connections How this platform hands out a connection taking part in the
    *          transaction currently running
    * @param transaction How this platform answers whether a transaction is running and
@@ -216,6 +220,10 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
   }
 
   /**
+   * The table this store was built for. It is asked wherever a message or a housekeeping
+   * has to name the table: every outbox instance has one of its own, so a message which
+   * named the default would send a reader looking in the wrong place.
+   *
    * @return The table this store writes its entries into
    */
   public String getTableName() {

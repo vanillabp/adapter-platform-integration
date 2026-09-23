@@ -23,6 +23,15 @@ public class QuarkusTransactionRunner implements TransactionRunner {
 
   private final TransactionSynchronizationRegistry transactionRegistry;
 
+  /**
+   * Built once per application, by
+   * {@link io.vanillabp.integration.runtime.processservice.TransactionRunnerProducer}, and
+   * handed out as the platform's runner bean. That one instance matters: the resolver tells
+   * the platform's runner from an application's by identity.
+   *
+   * @param transactionRegistry What the state of the transaction of the CURRENT THREAD is read
+   *          from - JTA answers per thread, so this object carries no state of its own
+   */
   public QuarkusTransactionRunner(
       final TransactionSynchronizationRegistry transactionRegistry) {
 

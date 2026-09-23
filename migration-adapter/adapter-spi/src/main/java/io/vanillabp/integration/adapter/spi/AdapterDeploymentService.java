@@ -29,11 +29,24 @@ import io.vanillabp.integration.extension.spi.ExtensionWiringService;
 public interface AdapterDeploymentService<BPMN, PC> extends ExtensionWiringService<BPMN, PC> {
 
   /**
+   * Which configured adapter instance this deployment service belongs to. One instance is
+   * built per configured adapter id, and several ids of one type are the migration setup.
+   * The id is an identity rather than a label: everything VanillaBP writes down about a
+   * workflow carries it, which is why renaming one orphans that work - decision 17 in the
+   * repository's DECISIONS.md.
+   *
    * @return The ID of the adapter implementing this interface
    */
   String getAdapterId();
 
   /**
+   * Which BPMS this adapter talks to, as the fixed name the adapter ships rather than
+   * something an application configures (<code>camunda7</code>, <code>camunda8</code>).
+   * The core groups the configured instances by it before it asks
+   * {@link #validateDistinctAdapterInstances(List)}, and it is the name the adapter's
+   * version descriptor is looked up under while the boot checks whether this adapter and
+   * the platform integration on the classpath were built for each other.
+   *
    * @return The type of the adapter implementing this interface
    */
   String getAdapterType();
