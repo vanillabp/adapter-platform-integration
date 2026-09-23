@@ -1,6 +1,8 @@
 package io.vanillabp.integration.spi;
 
 import java.time.Instant;
+import java.util.Collection;
+import java.util.Set;
 
 /**
  * Where the payload of a {@link PhaseTwoCall} lies while its outbox entry waits for its
@@ -21,11 +23,15 @@ import java.time.Instant;
  * lookup by key per dispatched call which carries a payload, and none at all for a call
  * which carries none.
  * <p>
- * It is removed where the entry is finished, in the update marking the entry dispatched.
- * What a crash between those two leaves behind is removed by
- * {@link #removeOlderThan(Instant)}, which every store runs with its own housekeeping.
- * Removal therefore errs towards keeping a payload too long and never towards losing one
- * a dispatch still needs.
+ * It is removed where the entry is finished, in the update marking the entry dispatched,
+ * and one retention period later with the dispatched entry itself. A payload nothing
+ * points at any more is removed by age, which is what
+ * {@link #removeOrphansOlderThan(Instant, EntriesNamingPayloads)} does.
+ * <p>
+ * The age never decides about a payload an entry still names. An entry which waits, and
+ * an entry which is blocked until somebody repairs it, keeps its bytes however long that
+ * takes: the whole point of a blocked entry is that it can be opened again, and it can
+ * only go out with the state its caller planned it with.
  */
 public interface PhaseTwoPayloadStore {
 
@@ -57,14 +63,42 @@ public interface PhaseTwoPayloadStore {
       String reference);
 
   /**
-   * Removes the payloads written before the given moment, whatever became of their
-   * entries. It is the housekeeping which keeps the store from growing over the rows a
-   * crash between the two writes left behind.
+   * Removes the payloads written before the given moment which no outbox entry names
+   * any more. Such a payload is an orphan: a write which was rolled back, or one whose
+   * process died before it could write the entry.
+   * <p>
+   * Age alone is not enough to delete, so the store asks the entries first. A payload of
+   * an entry which is blocked is older than the retention as soon as the repair takes
+   * longer than that, and deleting it would take the bytes away from the very dispatch
+   * the operator is preparing.
    *
-   * @param threshold Payloads written before this moment are removed
+   * @param threshold Payloads written before this moment are candidates
+   * @param entries Asked which of the candidates the outbox still names
    * @return The number of payloads removed
    */
-  int removeOlderThan(
-      Instant threshold);
+  int removeOrphansOlderThan(
+      Instant threshold,
+      EntriesNamingPayloads entries);
+
+  /**
+   * The entries of an outbox, asked by their payload store which payloads they still
+   * name. Every store VanillaBP ships answers this from the column respectively field
+   * its entries keep {@link PhaseTwoCall#ARG_PAYLOAD_REFERENCE} in.
+   * <p>
+   * The store asks with the payloads which are old enough to go, and it asks only when
+   * there are any, so a housekeeping run over a store nothing outlived costs one
+   * question to the payloads and nothing else.
+   */
+  @FunctionalInterface
+  interface EntriesNamingPayloads {
+
+    /**
+     * @param references The references of the payloads the store is about to remove
+     * @return Those of them an entry of the outbox still names, in any state
+     */
+    Set<String> stillNaming(
+        Collection<String> references);
+
+  }
 
 }

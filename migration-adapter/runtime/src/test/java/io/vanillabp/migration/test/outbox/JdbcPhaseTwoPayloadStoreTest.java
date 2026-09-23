@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,7 @@ import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore;
 import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.spi.PhaseTwoCall;
+import io.vanillabp.integration.spi.PhaseTwoPayloadStore;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
@@ -38,6 +40,12 @@ public class JdbcPhaseTwoPayloadStoreTest {
       .build();
 
   private static final String TABLE_NAME = "VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD";
+
+  /**
+   * The answer of an outbox whose entries name none of the payloads asked about - the
+   * store of a test which is about the sweep itself.
+   */
+  private static final PhaseTwoPayloadStore.EntriesNamingPayloads NO_ENTRY_NAMES_ANY = references -> Set.of();
 
   private static JdbcConnectionAccess h2(
       final String name) {
@@ -118,12 +126,36 @@ public class JdbcPhaseTwoPayloadStoreTest {
     store.write(orphan);
 
     // nothing is old enough yet, so the sweep of a moment in the past removes none
-    assertEquals(0, store.removeOlderThan(Instant.now().minus(Duration.ofDays(1))));
+    assertEquals(0, store.removeOrphansOlderThan(Instant.now().minus(Duration.ofDays(1)), NO_ENTRY_NAMES_ANY));
     assertArrayEquals(
         "written by a process which then died".getBytes(StandardCharsets.UTF_8),
         store.read(orphan.payloadReference()));
 
-    assertEquals(1, store.removeOlderThan(Instant.now().plus(Duration.ofSeconds(1))));
+    assertEquals(1, store.removeOrphansOlderThan(Instant.now().plus(Duration.ofSeconds(1)), NO_ENTRY_NAMES_ANY));
+    assertNull(store.read(orphan.payloadReference()));
+
+  }
+
+  @Test
+  @DisplayName("The age sweep leaves a payload an entry still names, however old it is")
+  public void theAgeSweepLeavesWhatAnEntryNames() {
+
+    final var store = storeOn("payload-sweep-named");
+    store.createSchemaIfNotExists();
+
+    final var named = callWith("the state an entry is still waiting to send");
+    final var orphan = callWith("written by a process which then died");
+    store.write(named);
+    store.write(orphan);
+
+    final var removed = store
+        .removeOrphansOlderThan(
+            Instant.now().plus(Duration.ofSeconds(1)), references -> Set.of(named.payloadReference()));
+
+    assertEquals(1, removed, "only the payload no entry names may go");
+    assertArrayEquals(
+        "the state an entry is still waiting to send".getBytes(StandardCharsets.UTF_8),
+        store.read(named.payloadReference()));
     assertNull(store.read(orphan.payloadReference()));
 
   }

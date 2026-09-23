@@ -1,6 +1,8 @@
 package io.vanillabp.integration.outbox.mongo;
 
 import java.time.Instant;
+import java.util.Collection;
+import java.util.Set;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -463,8 +465,13 @@ public class MongoPhaseTwoOutboxDispatcher {
 
   /**
    * Deletes successfully dispatched (DONE) entries whose retention period passed - the
-   * asynchronous cleanup of the "DONE instead of delete" contract - and the payloads
-   * which outlived the same period.
+   * asynchronous cleanup of the "DONE instead of delete" contract - and then the
+   * payloads which belong to no entry any more.
+   * <p>
+   * The order is what makes the retention count at the entry: the payload of an entry
+   * deleted a moment ago is named by nothing now, so it goes with it, while the payload
+   * of an entry which waits or is blocked is named and stays, however long the repair
+   * takes.
    */
   private void cleanupDoneEntries() {
 
@@ -476,9 +483,35 @@ public class MongoPhaseTwoOutboxDispatcher {
             .and("doneAt")
             .lt(expiredBefore)),
         collection);
-    // what a rollback without a MongoDB transaction left behind, and the payload of an
-    // entry blocked longer than the retention. Both are documents nobody reads again
-    payloadStore.removeOlderThan(expiredBefore);
+    // the payloads of the entries just deleted, and what a rollback without a MongoDB
+    // transaction left behind. What an entry still names is not removed by age at all
+    payloadStore.removeOrphansOlderThan(expiredBefore, this::referencesStillNamed);
+
+  }
+
+  /**
+   * Which of the given payloads an entry of this collection still names, asked with one
+   * query. The reference lies in the entry's <code>args</code>, which no index spans,
+   * so the query reads the collection - and it is asked only where a payload outlived
+   * the retention, which on a healthy store is never.
+   *
+   * @param references The payloads the housekeeping is about to remove
+   * @return Those of them an entry names
+   */
+  private Set<String> referencesStillNamed(
+      final Collection<String> references) {
+
+    final var named = "args.%s".formatted(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
+    try {
+      return Set.copyOf(
+          mongoTemplate.findDistinct(
+              Query.query(Criteria.where(named).in(references)), named, collection, String.class));
+    } catch (final RuntimeException e) {
+      // nothing is removed then: a payload kept too long costs space, a payload removed
+      // from an entry which still waits costs the dispatch
+      log.warn("Could not ask the outbox collection '{}' which payloads it still names", collection, e);
+      return Set.copyOf(references);
+    }
 
   }
 

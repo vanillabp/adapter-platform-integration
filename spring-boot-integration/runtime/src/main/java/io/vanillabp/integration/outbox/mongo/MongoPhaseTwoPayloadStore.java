@@ -1,6 +1,7 @@
 package io.vanillabp.integration.outbox.mongo;
 
 import java.time.Instant;
+import java.util.List;
 
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -24,7 +25,8 @@ import lombok.extern.slf4j.Slf4j;
  * The write goes through the same {@link MongoTemplate} the outbox entry goes through,
  * so it takes part in the running MongoDB transaction where the deployment is a replica
  * set. Without one the write is immediate and a rollback can leave a document behind,
- * which is what {@link #removeOlderThan(Instant)} is for.
+ * which is what {@link #removeOrphansOlderThan(Instant, EntriesNamingPayloads)} is
+ * for.
  */
 @RequiredArgsConstructor
 @Slf4j
@@ -77,17 +79,53 @@ public class MongoPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
   }
 
   @Override
-  public int removeOlderThan(
-      final Instant threshold) {
+  public int removeOrphansOlderThan(
+      final Instant threshold,
+      final EntriesNamingPayloads entries) {
 
     try {
+      final var expired = expiredReferences(threshold);
+      if (expired.isEmpty()) {
+        return 0;
+      }
+      final var stillNamed = entries.stillNaming(expired);
+      final var orphans = expired
+          .stream()
+          .filter(reference -> !stillNamed.contains(reference))
+          .toList();
+      if (orphans.isEmpty()) {
+        return 0;
+      }
       return (int) mongoTemplate
-          .remove(Query.query(Criteria.where("createdAt").lt(threshold)), collection)
+          .remove(Query.query(Criteria.where("_id").in(orphans)), collection)
           .getDeletedCount();
     } catch (final RuntimeException e) {
-      log.warn("Could not remove the expired payloads", e);
+      log.warn("Could not remove the orphaned payloads", e);
       return 0;
     }
+
+  }
+
+  /**
+   * The payloads which are old enough to go, read along the index over
+   * <code>createdAt</code>. On a healthy store this reads nothing: a payload is removed
+   * with the dispatch of its entry and with the deletion of that entry, so what stays
+   * beyond the retention either belongs to an entry which waits or belongs to no entry
+   * at all.
+   *
+   * @param threshold Payloads written before this moment
+   * @return Their references
+   */
+  private List<String> expiredReferences(
+      final Instant threshold) {
+
+    final var query = Query.query(Criteria.where("createdAt").lt(threshold));
+    query.fields().include("_id");
+    return mongoTemplate
+        .find(query, PhaseTwoPayloadDocument.class, collection)
+        .stream()
+        .map(PhaseTwoPayloadDocument::getId)
+        .toList();
 
   }
 

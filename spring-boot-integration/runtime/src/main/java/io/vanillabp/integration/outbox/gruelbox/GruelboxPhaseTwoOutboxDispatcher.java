@@ -76,7 +76,8 @@ public class GruelboxPhaseTwoOutboxDispatcher {
   /**
    * How long a payload nobody removed is kept, and where those are removed from.
    * <code>null</code> for a dispatcher built without a payload store - nothing is
-   * house-kept then.
+   * house-kept then, and the same holds for a dispatcher without the store above, which
+   * is what answers which payloads the entries still name.
    */
   private final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore;
 
@@ -204,11 +205,11 @@ public class GruelboxPhaseTwoOutboxDispatcher {
     } catch (Exception e) {
       log.error("Flushing the VanillaBP phase-two outbox failed - will retry", e);
     }
-    // what a crash between the two writes of a schedule left behind, and the payload of
-    // an entry gruelbox blocked longer than the retention. Both are rows nobody reads
-    // again, and this flush was going to happen anyway
-    if (payloadStore != null) {
-      payloadStore.removeOlderThan(java.time.Instant.now().minus(retention));
+    // the payloads of the entries the flush deleted, and what a crash between the two
+    // writes of a schedule left behind. What an entry still names stays with it,
+    // whether that entry waits or is blocked, and this flush was going to happen anyway
+    if ((payloadStore != null) && (outbox != null)) {
+      payloadStore.removeOrphansOlderThan(java.time.Instant.now().minus(retention), outbox::stillNaming);
     }
 
   }

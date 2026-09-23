@@ -1,9 +1,12 @@
 package io.vanillabp.integration.runtime.outbox;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.Date;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 
 import org.bson.Document;
 import org.eclipse.microprofile.config.ConfigProvider;
@@ -379,12 +382,46 @@ public class MongoPhaseTwoOutboxDispatcher {
           Filters.and(
               Filters.eq("status", MongoPhaseTwoOutbox.STATUS_DONE),
               Filters.lt("doneAt", Date.from(Instant.now().minus(properties.getRetention())))));
-      // what a rollback without a MongoDB transaction left behind, and the payload of
-      // an entry blocked longer than the retention. Both are documents nobody reads again
-      getPayloadStore().removeOlderThan(Instant.now().minus(properties.getRetention()));
+      // the payloads of the entries just deleted, and what a rollback without a MongoDB
+      // transaction left behind. What an entry still names is not removed by age at all,
+      // so an entry which waits or is blocked keeps its bytes until it is dispatched
+      getPayloadStore()
+          .removeOrphansOlderThan(
+              Instant.now().minus(properties.getRetention()),
+              references -> referencesStillNamed(collection, references));
     } catch (final RuntimeException e) {
       log.error("Polling the VanillaBP phase-two outbox failed - will retry", e);
     }
+
+  }
+
+  /**
+   * Which of the given payloads an entry of this collection still names, asked with one
+   * query. The reference lies in the entry's <code>args</code>, which no index spans, so
+   * the query reads the collection - and it is asked only where a payload outlived the
+   * retention, which on a healthy store is never.
+   *
+   * @param collection The outbox collection
+   * @param references The payloads the housekeeping is about to remove
+   * @return Those of them an entry names
+   */
+  private Set<String> referencesStillNamed(
+      final MongoCollection<Document> collection,
+      final Collection<String> references) {
+
+    final var named = "args.%s".formatted(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
+    final var stillNamed = new LinkedHashSet<String>();
+    try {
+      collection
+          .distinct(named, Filters.in(named, references), String.class)
+          .forEach(stillNamed::add);
+    } catch (final RuntimeException e) {
+      // nothing is removed then: a payload kept too long costs space, a payload removed
+      // from an entry which still waits costs the dispatch
+      log.warn("Could not ask the outbox collection which payloads it still names", e);
+      return Set.copyOf(references);
+    }
+    return stillNamed;
 
   }
 
