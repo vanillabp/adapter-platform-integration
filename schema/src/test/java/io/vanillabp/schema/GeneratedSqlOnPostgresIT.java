@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Set;
 
 import org.junit.jupiter.api.DisplayName;
@@ -72,7 +73,7 @@ public class GeneratedSqlOnPostgresIT {
   }
 
   @Test
-  @DisplayName("PostgreSQL accepts the generated SQL and ends up with both tables")
+  @DisplayName("PostgreSQL accepts the generated SQL and ends up with every table of the changelog")
   public void postgresAcceptsTheGeneratedSql() throws Exception {
 
     try (var connection = DriverManager
@@ -95,9 +96,17 @@ public class GeneratedSqlOnPostgresIT {
         }
       }
 
+      // which tables have to be there is read from the changelog the SQL was generated from,
+      // not listed here: a list would have stayed at two tables when the third one arrived
       final var tables = tablesOf(connection);
-      assertTrue(tables.contains("VANILLABP_PHASE_TWO_OUTBOX"), tables.toString());
-      assertTrue(tables.contains("VANILLABP_TASK_DELIVERY"), tables.toString());
+      assertTrue(
+          tables.containsAll(ChangelogDescription.of(Map.of()).tableNames()),
+          """
+              The generated SQL has to create every table the changelog describes. Missing here \
+              but present in the changelog means the liquibase-maven-plugin execution of that \
+              version has no label for the new changeset (see schema/README.md). What PostgreSQL \
+              ended up with: %s"""
+              .formatted(tables));
 
       // and the constraint the outbox relies on is really there
       try (var jdbcStatement = connection.createStatement()) {
