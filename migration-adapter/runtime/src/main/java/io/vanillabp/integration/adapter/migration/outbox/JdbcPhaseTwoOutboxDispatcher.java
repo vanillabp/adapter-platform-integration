@@ -39,11 +39,13 @@ import lombok.extern.slf4j.Slf4j;
  * </ul>
  * The poller uses a plain scheduled executor, so no framework scheduler is registered or
  * used and an application's own scheduling setup stays as it is. Due entries (status
- * {@link #STATUS_OPEN}) are claimed atomically (optimistic update incrementing the number
- * of attempts and leasing the entry for one
+ * {@link #STATUS_OPEN}) are claimed atomically (an optimistic update writing
+ * <code>LEASED_BY</code> and <code>LEASED_UNTIL</code>, the lease lasting one
  * <code>vanillabp.outbox.attempt-frequency</code>), so multiple instances
- * do not dispatch the same entry concurrently. A dispatch which FAILS writes the next
- * attempt itself, at the growing distance of
+ * do not dispatch the same entry concurrently. <strong>A running dispatch renews its
+ * lease</strong> ({@link DispatchLease}), so an entry travelling longer than that distance
+ * stays the claim of the node carrying it instead of being taken by the next poll. A
+ * dispatch which FAILS writes the next attempt itself, at the growing distance of
  * {@link PhaseTwoOutboxProperties#attemptDelay(int)}
  * - doubling per attempt up to <code>vanillabp.outbox.max-attempt-frequency</code>, so
  * an outage of hours drains itself when the BPMS comes back. On successful dispatch the entry is
@@ -52,6 +54,12 @@ import lombok.extern.slf4j.Slf4j;
  * <code>vanillabp.outbox.retention</code> passed. After
  * <code>vanillabp.outbox.block-after-attempts</code> failed attempts an entry is
  * marked {@link #STATUS_BLOCKED} and has to be cleaned up manually.
+ * <p>
+ * <strong><code>ATTEMPTS</code> counts attempts, not claims.</strong> The column is
+ * written when an attempt ENDED - together with the mark which says how it ended - so a
+ * dispatch which takes its time uses up no attempt budget, and
+ * <code>block-after-attempts</code> blocks an entry which keeps failing rather than one
+ * which is slow.
  * <p>
  * <strong>Several entries leave at the same time</strong>, and the workflow aggregate
  * decides which of them may: the poller claims the due entries in the order they were
@@ -65,9 +73,10 @@ import lombok.extern.slf4j.Slf4j;
  * <strong>Cluster safety:</strong> multiple application instances (pods) may poll
  * concurrently without any distributed lock: the SELECT may return the same due
  * entries on several instances, but the claim is an optimistic UPDATE
- * (<code>WHERE ID = ? AND ATTEMPTS = ?</code>) - exactly one instance wins the
- * claim and dispatches the entry, the others simply skip it. The retention cleanup
- * is a plain idempotent DELETE.
+ * (<code>WHERE ID = ? AND (LEASED_UNTIL IS NULL OR LEASED_UNTIL &lt;= ?)</code>) - exactly
+ * one instance wins the claim and dispatches the entry, the others simply skip it. A node
+ * which dies while dispatching stops renewing, its lease runs out, and the next poll of
+ * any node takes the entry over. The retention cleanup is a plain idempotent DELETE.
  * <p>
  * The outbox table and the table holding the payloads of the calls which carry one are
  * created on startup unless <code>vanillabp.outbox.create-schema</code> is disabled for manually managed
@@ -94,19 +103,31 @@ public class JdbcPhaseTwoOutboxDispatcher {
    * The due entries, oldest first. The order is what the lanes turn into the order of
    * one aggregate: a lane runs what it is handed in the order it is handed, so the
    * entries of one aggregate have to reach it the way they were written.
+   * <p>
+   * An entry somebody is dispatching right now is out, by its lease. Its
+   * <code>NEXT_ATTEMPT_AT</code> says the same thing, because a claim and every renewal
+   * write both, but the lease is what decides - which is what keeps the rule in one place
+   * when a due time is written from somewhere else.
    */
   private static final String SELECT_DUE_ENTRIES = """
       SELECT ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, AGGREGATE_ID, ADAPTER_ID, ARGS, ATTEMPTS, \
-      CREATED_AT \
+      CREATED_AT, LEASED_BY \
       FROM %s \
       WHERE STATUS = '%s' AND NEXT_ATTEMPT_AT <= ? AND ATTEMPTS < ? \
+      AND (LEASED_UNTIL IS NULL OR LEASED_UNTIL <= ?) \
       ORDER BY CREATED_AT""";
 
   /**
    * When the earliest entry waiting for its dispatch wants to be looked at. It is the
-   * select above with its time bound dropped, which is what keeps the two in step: an
+   * select above with its time bounds dropped, which is what keeps the two in step: an
    * entry this does not see is an entry that one would not pick up either, and a BLOCKED
    * entry is in neither, because it waits for a person rather than for a clock.
+   * <p>
+   * An entry being dispatched right now answers with the end of its lease, not with "due":
+   * the claim and every renewal push <code>NEXT_ATTEMPT_AT</code> along with
+   * <code>LEASED_UNTIL</code>. Without that the poller would be told "due now" for as long
+   * as the dispatch runs and would ask again at its shortest sleep, which is the repeated
+   * question decision 19 in the repository's DECISIONS.md forbids.
    */
   private static final String SELECT_NEXT_ATTEMPT = """
       SELECT MIN(NEXT_ATTEMPT_AT) \
@@ -123,10 +144,28 @@ public class JdbcPhaseTwoOutboxDispatcher {
       FROM %s \
       WHERE STATUS = '%s'""";
 
+  /**
+   * Takes the entry, for as long as the lease lasts. The condition is the lease and not the
+   * number of attempts: a claim must say "nobody is carrying this right now", and the
+   * attempts say something else since they are written when an attempt ended.
+   * <p>
+   * <code>NEXT_ATTEMPT_AT</code> travels with the lease so the poller's sleep is computed
+   * from a moment where there is something to do again - see {@link #SELECT_NEXT_ATTEMPT}.
+   */
   private static final String CLAIM_ENTRY = """
       UPDATE %s \
-      SET ATTEMPTS = ATTEMPTS + 1, NEXT_ATTEMPT_AT = ? \
-      WHERE ID = ? AND ATTEMPTS = ?""";
+      SET LEASED_BY = ?, LEASED_UNTIL = ?, NEXT_ATTEMPT_AT = ? \
+      WHERE ID = ? AND STATUS = '%s' AND (LEASED_UNTIL IS NULL OR LEASED_UNTIL <= ?)""";
+
+  /**
+   * Pushes the lease of a running dispatch along, one write per tick of
+   * {@link DispatchLease}. <code>LEASED_BY</code> is in the condition, so a node whose
+   * lease ran out and was taken over renews nothing and learns that it lost the entry.
+   */
+  private static final String RENEW_LEASE = """
+      UPDATE %s \
+      SET LEASED_UNTIL = ?, NEXT_ATTEMPT_AT = ? \
+      WHERE ID = ? AND LEASED_BY = ? AND STATUS = '%s'""";
 
   /**
    * What the claim won, read again by its ID - see {@link #claim(Connection, Entry)}
@@ -140,10 +179,14 @@ public class JdbcPhaseTwoOutboxDispatcher {
    * Marking an entry DONE closes its deduplication window: DEDUP_KEY takes the entry's
    * own ID, so a repetition of the same operation can be planned again, while
    * IDEMPOTENCY_KEY keeps the key readable for whoever reads the table during support.
+   * <p>
+   * This is also where the attempt is counted, because this is where it ended, and where
+   * the lease is given back.
    */
   private static final String MARK_ENTRY_DONE = """
       UPDATE %s \
-      SET STATUS = '%s', DONE_AT = ?, DEDUP_KEY = ID \
+      SET STATUS = '%s', DONE_AT = ?, DEDUP_KEY = ID, ATTEMPTS = ATTEMPTS + 1, \
+      LEASED_BY = NULL, LEASED_UNTIL = NULL \
       WHERE ID = ?""";
 
   /**
@@ -153,20 +196,24 @@ public class JdbcPhaseTwoOutboxDispatcher {
    * application needs - it would ask, the outbox would answer no, and that answer looks
    * exactly like a correct deduplication. The row stays for whoever repairs it, and the
    * new attempt of the operation is a row of its own.
+   * <p>
+   * The attempt which led here is counted, and the lease is given back so the row is not
+   * held by a node which has nothing left to do with it.
    */
   private static final String MARK_ENTRY_BLOCKED = """
       UPDATE %s \
-      SET STATUS = '%s', DEDUP_KEY = ID \
+      SET STATUS = '%s', DEDUP_KEY = ID, ATTEMPTS = ATTEMPTS + 1, \
+      LEASED_BY = NULL, LEASED_UNTIL = NULL \
       WHERE ID = ?""";
 
   /**
-   * Moves the next attempt of a claimed entry closer than the configured backoff, for a
-   * dispatch which said how long its reason lasts. The claim already counted the
-   * attempt, so this shortens the wait and nothing else.
+   * Says when the entry is to be read again after an attempt which did not get through,
+   * counts that attempt and gives the lease back. All three in one write, because an entry
+   * which is due again while still leased would be waited out to the end of the lease.
    */
   private static final String RESCHEDULE_ENTRY = """
       UPDATE %s \
-      SET NEXT_ATTEMPT_AT = ? \
+      SET NEXT_ATTEMPT_AT = ?, ATTEMPTS = ATTEMPTS + 1, LEASED_BY = NULL, LEASED_UNTIL = NULL \
       WHERE ID = ?""";
 
   private static final String DELETE_EXPIRED_DONE_ENTRIES = """
@@ -183,6 +230,29 @@ public class JdbcPhaseTwoOutboxDispatcher {
    */
   private static final String SELECT_ARGS_NAMING = """
       SELECT ARGS FROM %s WHERE %s""";
+
+  /**
+   * The columns a later version of VanillaBP added to this table. A table created by an
+   * earlier version has neither, and every poll would fail on a column which is not there -
+   * so this is said at startup, with the statement which repairs it, instead of at the first
+   * dispatch.
+   */
+  private static final List<AddedColumn> ADDED_COLUMNS = List
+      .of(
+          new AddedColumn(
+              "LEASED_BY", "VARCHAR(255) (nullable: an entry nobody is dispatching is leased by nobody)", "an entry cannot be claimed, so nothing is dispatched at all"),
+          new AddedColumn(
+              "LEASED_UNTIL", "TIMESTAMP (the type your database uses for the existing column NEXT_ATTEMPT_AT), nullable", "an entry cannot be claimed, so nothing is dispatched at all"));
+
+  /**
+   * A column this version of VanillaBP reads which an older table does not have.
+   *
+   * @param name The column
+   * @param definition What to add it as, in the words of whoever writes the statement
+   * @param whatIsLost What does not work while it is missing
+   */
+  private record AddedColumn(String name, String definition, String whatIsLost) {
+  }
 
   /**
    * The index the poller asks its question along. STATUS first and the timestamp second, which is
@@ -227,6 +297,8 @@ public class JdbcPhaseTwoOutboxDispatcher {
 
   private final String claimEntry;
 
+  private final String renewLease;
+
   private final String selectClaimedEntry;
 
   private final String markEntryDone;
@@ -242,6 +314,12 @@ public class JdbcPhaseTwoOutboxDispatcher {
   private final DispatchLanes lanes;
 
   /**
+   * What a running dispatch holds its entry with, and what keeps that hold alive while it
+   * runs.
+   */
+  private final DispatchLease lease;
+
+  /**
    * A due outbox entry read from the database.
    *
    * @param id The entry's ID
@@ -251,9 +329,13 @@ public class JdbcPhaseTwoOutboxDispatcher {
    * @param aggregateId The workflow aggregate's ID in serialized form
    * @param adapterId The ID of the elected BPMS adapter (may be <code>null</code>)
    * @param serializedArgs The arguments the call was scheduled with
-   * @param attempts The number of dispatch attempts so far
+   * @param attempts How many dispatch attempts of it have ENDED
    * @param createdAt When the entry was written - a replacing call sets it anew,
    *          because the row then carries a younger operation
+   * @param heldBefore Who held this entry before this poll read it, or <code>null</code>
+   *          where nobody did. It is the second half of "somebody has had this entry
+   *          already": an attempt which ended is counted, and an attempt which a node died
+   *          in the middle of left its name here and nothing else
    */
   private record Entry(
                        String id,
@@ -264,7 +346,20 @@ public class JdbcPhaseTwoOutboxDispatcher {
                        String adapterId,
                        String serializedArgs,
                        int attempts,
-                       Instant createdAt) {
+                       Instant createdAt,
+                       String heldBefore) {
+
+    /**
+     * Whether a dispatch has had this entry before, which is what makes a START probe the
+     * BPMS it was meant for instead of starting a second workflow.
+     *
+     * @return Whether an attempt ended or a holder disappeared
+     */
+    boolean wasTakenBefore() {
+
+      return (attempts > 0) || (heldBefore != null);
+
+    }
 
     /**
      * What this entry is ordered by: its workflow aggregate. An entry which names none -
@@ -318,7 +413,8 @@ public class JdbcPhaseTwoOutboxDispatcher {
     this.selectDueEntries = SELECT_DUE_ENTRIES.formatted(tableName, STATUS_OPEN);
     this.selectNextAttempt = SELECT_NEXT_ATTEMPT.formatted(tableName, STATUS_OPEN);
     this.selectOldestDone = SELECT_OLDEST_DONE.formatted(tableName, STATUS_DONE);
-    this.claimEntry = CLAIM_ENTRY.formatted(tableName);
+    this.claimEntry = CLAIM_ENTRY.formatted(tableName, STATUS_OPEN);
+    this.renewLease = RENEW_LEASE.formatted(tableName, STATUS_OPEN);
     this.selectClaimedEntry = SELECT_CLAIMED_ENTRY.formatted(tableName);
     this.markEntryDone = MARK_ENTRY_DONE.formatted(tableName, STATUS_DONE);
     this.markEntryBlocked = MARK_ENTRY_BLOCKED.formatted(tableName, STATUS_BLOCKED);
@@ -327,6 +423,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
     this.poller = new DueEntryPoller(
         "vanillabp-outbox", properties.getPollInterval(), this::poll, this::earliestDueAt);
     this.lanes = new DispatchLanes("vanillabp-outbox-dispatch", properties.getDispatchThreads());
+    this.lease = new DispatchLease("vanillabp-outbox-lease", properties.getAttemptFrequency());
 
   }
 
@@ -364,13 +461,15 @@ public class JdbcPhaseTwoOutboxDispatcher {
   }
 
   /**
-   * Stops the poller and the lanes. What a lane was still holding stays OPEN in the
-   * table, so the next start of this node or a poll of another one takes it.
+   * Stops the poller, the lanes and the renewal of the leases. What a lane was still
+   * holding stays OPEN in the table and keeps its lease until it runs out, so the next
+   * start of this node or a poll of another one takes it then.
    */
   public void stop() {
 
     poller.stop();
     lanes.stop();
+    lease.stop();
 
   }
 
@@ -449,6 +548,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
       // existence is checked via JDBC metadata since 'CREATE TABLE IF NOT EXISTS'
       // is not supported by all databases (e.g. Oracle, SQL Server)
       if (JdbcSchema.tableExists(connection, tableName)) {
+        validateColumns(connection);
         reportMissingIndexes(connection);
         return;
       }
@@ -501,11 +601,11 @@ public class JdbcPhaseTwoOutboxDispatcher {
   }
 
   /**
-   * Verifies that the outbox table exists, for an application creating its schema itself.
-   * The message names the table, the property which would have created it and the
-   * artifact carrying the statements.
+   * Verifies that the outbox table exists AND carries the columns this version writes, for
+   * an application creating its schema itself. The message names the table, the property
+   * which would have created it and the artifact carrying the statements.
    *
-   * @throws IllegalStateException If the table is missing
+   * @throws IllegalStateException If the table or one of its columns is missing
    */
   private void validateTableExists() {
 
@@ -513,6 +613,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
     try {
       connection = connections.acquire();
       if (JdbcSchema.tableExists(connection, tableName)) {
+        validateColumns(connection);
         reportMissingIndexes(connection);
         return;
       }
@@ -533,6 +634,35 @@ public class JdbcPhaseTwoOutboxDispatcher {
             - let VanillaBP create the table by setting 'vanillabp.outbox.create-schema' to \
             'true' (the default)."""
             .formatted(tableName));
+
+  }
+
+  /**
+   * Verifies the columns which a later version of VanillaBP added to this table. A failure and
+   * not a warning, unlike a missing index: an entry cannot be claimed without them, so an
+   * application which booted anyway would dispatch nothing and say nothing either.
+   *
+   * @param connection The connection to the database holding the table
+   * @throws IllegalStateException If a column is missing
+   */
+  private void validateColumns(
+      final Connection connection) throws SQLException {
+
+    for (final var column : ADDED_COLUMNS) {
+      if (JdbcSchema.columnExists(connection, tableName, column.name())) {
+        continue;
+      }
+      throw new IllegalStateException(
+          """
+              The phase-two outbox table '%s' has no column '%s'! It was added to the table of \
+              VanillaBP after your database was created, and without it %s. Either
+              - apply the current schema of VanillaBP with your migration tool: the artifact \
+              'io.vanillabp:vanillabp-schema' ships the Liquibase changelog \
+              'vanillabp/schema/changelog.xml' and the SQL generated from it for Flyway, or
+              - add the column yourself: ALTER TABLE %s ADD %s %s."""
+              .formatted(tableName, column.name(), column.whatIsLost(), tableName, column.name(), column
+                  .definition()));
+    }
 
   }
 
@@ -621,9 +751,12 @@ public class JdbcPhaseTwoOutboxDispatcher {
         CREATED_AT %s NOT NULL, \
         ATTEMPTS INT NOT NULL, \
         NEXT_ATTEMPT_AT %s NOT NULL, \
-        DONE_AT %s)"""
+        DONE_AT %s, \
+        LEASED_BY VARCHAR(255), \
+        LEASED_UNTIL %s)"""
         .formatted(
             tableName,
+            timestampType,
             timestampType,
             timestampType,
             timestampType);
@@ -666,16 +799,18 @@ public class JdbcPhaseTwoOutboxDispatcher {
   private List<Entry> loadDueEntries(
       final Connection connection) throws SQLException {
 
+    final var now = Timestamp.from(Instant.now());
     final var entries = new ArrayList<Entry>();
     try (var statement = connection.prepareStatement(selectDueEntries)) {
-      statement.setTimestamp(1, Timestamp.from(Instant.now()));
+      statement.setTimestamp(1, now);
       statement.setInt(2, properties.getBlockAfterAttempts());
+      statement.setTimestamp(3, now);
       try (var resultSet = statement.executeQuery()) {
         while (resultSet.next()) {
           entries.add(new Entry(
               resultSet.getString(1), resultSet.getString(2), resultSet.getString(3), resultSet.getString(4), resultSet
                   .getString(5), resultSet.getString(6), resultSet.getString(7), resultSet.getInt(8), writtenAt(
-                      resultSet, 9)));
+                      resultSet, 9), resultSet.getString(10)));
         }
       }
     }
@@ -684,9 +819,10 @@ public class JdbcPhaseTwoOutboxDispatcher {
   }
 
   /**
-   * Claims an entry using an optimistic update: incrementing the number of attempts
-   * and setting the backoff makes concurrent pollers (or other instances) skip the
-   * entry, and a failed dispatch is retried automatically once the backoff elapsed.
+   * Claims an entry using an optimistic update: writing this node's name and the end of
+   * the lease makes concurrent pollers (or other instances) skip the entry, and a dispatch
+   * which outlasts the lease renews it rather than losing the entry
+   * ({@link DispatchLease}).
    * <p>
    * What the claim won is then READ AGAIN, and the dispatch works with that. Between
    * the select of the due entries and this update the row may have been replaced by a
@@ -705,14 +841,17 @@ public class JdbcPhaseTwoOutboxDispatcher {
       final Connection connection,
       final Entry entry) throws SQLException {
 
+    final var leaseEnds = lease.endsAt();
     try (var statement = connection.prepareStatement(claimEntry)) {
-      // the claim leases the entry for one attempt-frequency, which is what keeps other
-      // pollers off it while this dispatch runs. The growing backoff belongs to a FAILED
-      // dispatch and is written there, so a poller which dies mid-dispatch does not
-      // inherit the long distance of an attempt nobody made
-      statement.setTimestamp(1, Timestamp.from(Instant.now().plus(properties.getAttemptFrequency())));
-      statement.setString(2, entry.id());
-      statement.setInt(3, entry.attempts());
+      // the claim leases the entry for one attempt-frequency and the dispatch renews it
+      // for as long as it runs, which is what keeps other pollers off it. The growing
+      // backoff belongs to a FAILED dispatch and is written there, so a node which dies
+      // mid-dispatch does not leave behind the long distance of an attempt nobody made
+      statement.setString(1, lease.owner());
+      statement.setTimestamp(2, Timestamp.from(leaseEnds));
+      statement.setTimestamp(3, Timestamp.from(leaseEnds));
+      statement.setString(4, entry.id());
+      statement.setTimestamp(5, Timestamp.from(Instant.now()));
       if (statement.executeUpdate() != 1) {
         return null;
       }
@@ -724,7 +863,10 @@ public class JdbcPhaseTwoOutboxDispatcher {
             ? new Entry(
                 entry.id(), resultSet.getString(1), resultSet.getString(2), resultSet.getString(3), resultSet
                     .getString(4), resultSet.getString(5), resultSet.getString(6), entry.attempts(), writtenAt(
-                        resultSet, 7))
+                        resultSet, 7),
+                // who held the row BEFORE this claim, which the claim has just overwritten
+                // with this node - so it travels from the row the select read
+                entry.heldBefore())
             : null;
       }
     }
@@ -738,7 +880,9 @@ public class JdbcPhaseTwoOutboxDispatcher {
    * <p>
    * This runs on the lane of the entry's aggregate, and it holds no connection while the
    * router works: the dispatch calls a BPMS over the network, and a connection held for
-   * that long would make the pool the limit of how many entries may travel at once.
+   * that long would make the pool the limit of how many entries may travel at once. The
+   * lease is renewed the same way, one short write per tick on a connection borrowed and
+   * given back, so holding an entry costs no connection either.
    *
    * @param entry The claimed entry
    */
@@ -748,8 +892,8 @@ public class JdbcPhaseTwoOutboxDispatcher {
     final var args = PhaseTwoCall.deserializeArgs(entry.serializedArgs());
     final var payloadReference = args.get(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
     try {
-      // entry.attempts() holds the count BEFORE this claim - a value > 0 means the
-      // entry was dispatched before (recovered/retried): the router then runs the
+      // an entry which was taken before is one whose dispatch may have reached the BPMS
+      // already (recovered/retried): the router then runs the
       // START re-dispatch mitigation. The operation travels as its persisted name -
       // the router resolves it in the operation registry (an unknown name yields a
       // guiding error and leaves the entry for operations)
@@ -759,13 +903,14 @@ public class JdbcPhaseTwoOutboxDispatcher {
       final var payload = payloadReference == null
           ? null
           : payloadStore.read(payloadReference);
-      dispatchMeasuringTheWait(
+      dispatchRenewingTheLease(
+          entry.id(),
           PhaseTwoCall
               .forDispatch(
                   entry.operation(), entry.workflowModuleId(), entry.bpmnProcessId(), entry
                       .aggregateId(),
                   entry.adapterId(), args, payload),
-          entry.attempts() > 0,
+          entry.wasTakenBefore(),
           entry.createdAt());
     } catch (final Exception e) {
       reportFailedDispatch(entry, e);
@@ -845,8 +990,9 @@ public class JdbcPhaseTwoOutboxDispatcher {
           e.getMessage());
       return;
     }
-    // attempts() is the count BEFORE this claim, so attemptDelay(0) is the distance
-    // after the first failure: close, because most failures are momentary
+    // attempts() is the count of the attempts which ended before this one, so
+    // attemptDelay(0) is the distance after the first failure: close, because most
+    // failures are momentary
     final var retryIn = properties.attemptDelay(entry.attempts());
     rescheduleAt(entry, Instant.now().plus(retryIn));
     log.warn(
@@ -907,6 +1053,56 @@ public class JdbcPhaseTwoOutboxDispatcher {
   }
 
   /**
+   * Runs the attempt with the lease of its entry being renewed, and lets the renewal go the
+   * moment the attempt is over.
+   * <p>
+   * The renewal covers the attempt and not the write which says how it ended. That write needs
+   * a lease which has not run out, which the last renewal gave it, and not one which is still
+   * growing - and a renewal outliving the mark would find the entry no longer OPEN and report a
+   * lease it never lost.
+   *
+   * @param entryId The entry being dispatched
+   * @param call The call to dispatch
+   * @param previouslyAttempted Whether a dispatch has had this entry before
+   * @param writtenAt When the entry was written
+   */
+  private void dispatchRenewingTheLease(
+      final String entryId,
+      final PhaseTwoCall call,
+      final boolean previouslyAttempted,
+      final Instant writtenAt) {
+
+    try (var held = lease.renewWhile(entryId, this::renewLease)) {
+      dispatchMeasuringTheWait(call, previouslyAttempted, writtenAt);
+    }
+
+  }
+
+  /**
+   * Pushes the lease of an entry this node is dispatching along, in a transaction of its
+   * own: one write, on a connection borrowed and given back, once per tick of
+   * {@link DispatchLease}.
+   *
+   * @param entryId The entry being dispatched
+   * @param leaseEnd How long the lease is to last now
+   * @return Whether this node still holds the entry. A write which matched no row says it
+   *         does not any more; a write which could not be asked at all says nothing, so the
+   *         renewal keeps trying rather than giving the entry up over one hiccup
+   */
+  private boolean renewLease(
+      final String entryId,
+      final Instant leaseEnd) {
+
+    return update(renewLease, statement -> {
+      statement.setTimestamp(1, Timestamp.from(leaseEnd));
+      statement.setTimestamp(2, Timestamp.from(leaseEnd));
+      statement.setString(3, entryId);
+      statement.setString(4, lease.owner());
+    }) != 0;
+
+  }
+
+  /**
    * Runs one statement on a connection of its own. A lane holds no connection between
    * two entries, so every write of a dispatch borrows one for the moment it needs it.
    * <p>
@@ -916,8 +1112,10 @@ public class JdbcPhaseTwoOutboxDispatcher {
    *
    * @param sql The statement to run
    * @param arguments What to put into it
+   * @return How many rows the statement changed, or <code>-1</code> where the database
+   *         could not be asked - which is not the same answer as "no row matched"
    */
-  private void update(
+  private int update(
       final String sql,
       final StatementArguments arguments) {
 
@@ -926,10 +1124,11 @@ public class JdbcPhaseTwoOutboxDispatcher {
       connection = connections.acquire();
       try (var statement = connection.prepareStatement(sql)) {
         arguments.setOn(statement);
-        statement.executeUpdate();
+        return statement.executeUpdate();
       }
     } catch (final SQLException e) {
       log.error("Could not update an entry of the phase-two outbox table '{}'", tableName, e);
+      return -1;
     } finally {
       release(connection);
     }

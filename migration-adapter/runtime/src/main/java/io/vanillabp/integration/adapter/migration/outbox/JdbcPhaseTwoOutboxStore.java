@@ -59,11 +59,11 @@ import lombok.extern.slf4j.Slf4j;
  * discarded against it, where it says so
  * ({@link PhaseTwoCall#replacingWhatIsStillWaiting()}). The row keeps its ID and its
  * key and gets everything the dispatch reads, and the payload of the entry it replaced
- * is removed in the same transaction. What decides is <code>ATTEMPTS</code>: the
- * dispatcher counts the attempt when it claims an entry, so a zero there means no
- * dispatch has read this entry and none is holding its payload. The update carries that
- * condition, which makes it the same optimistic lock the claim is - if a poller wins
- * the row, the update matches nothing and the call becomes an entry of its own, with
+ * is removed in the same transaction. What decides is the pair <code>ATTEMPTS</code> and
+ * <code>LEASED_UNTIL</code>: no attempt of this entry has ended and nobody is dispatching
+ * it right now, so no dispatch has read it and none is holding its payload. The update
+ * carries both conditions, which makes it the same optimistic lock the claim is - if a
+ * poller wins the row, the update matches nothing and the call becomes an entry of its own, with
  * <code>DEDUP_KEY</code> set to its own ID because the key belongs to the entry on its
  * way.
  * <p>
@@ -106,14 +106,16 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
    * derive one key from several calls; what stays is the row's ID, so a poller holding
    * the entry it read a moment ago still addresses the same row.
    * <p>
-   * <code>ATTEMPTS = 0</code> is the whole guard: an entry no dispatch has taken yet is
-   * one nobody is reading, and a poller which claims it while this update waits for the
-   * row finds the update matching no row afterwards.
+   * The guard is that no attempt has ended and no lease is running: an entry no dispatch
+   * has taken is one nobody is reading, and a poller which claims it while this update waits
+   * for the row finds the update matching no row afterwards. Both halves are needed, because
+   * the attempts are written when an attempt ends - a dispatch which is on its way right now
+   * still shows zero of them and is named by the lease alone.
    */
   private static final String REPLACE_PENDING_ENTRY = """
       UPDATE %s \
       SET OPERATION = ?, AGGREGATE_ID = ?, ADAPTER_ID = ?, ARGS = ?, CREATED_AT = ?, NEXT_ATTEMPT_AT = ? \
-      WHERE ID = ? AND ATTEMPTS = 0""";
+      WHERE ID = ? AND ATTEMPTS = 0 AND (LEASED_UNTIL IS NULL OR LEASED_UNTIL <= ?)""";
 
   /**
    * Resolves the name of the payload table: the configured one
@@ -484,6 +486,7 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
       statement.setTimestamp(5, Timestamp.from(now));
       statement.setTimestamp(6, Timestamp.from(now));
       statement.setString(7, waiting.id());
+      statement.setTimestamp(8, Timestamp.from(now));
       replaced = statement.executeUpdate() == 1;
     }
     if (!replaced) {
@@ -526,11 +529,12 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
 
   /**
    * What a store needs to know about the entry a younger call meets: which row it is,
-   * which payload it names, and whether a dispatch has taken it already.
+   * which payload it names, and whether an attempt of it has ended already.
    *
    * @param id The entry's own ID
    * @param args The arguments it persisted, holding the reference of its payload
-   * @param attempts How often a dispatch claimed it - zero means nobody read it yet
+   * @param attempts How many attempts of it have ended - zero plus a free lease means
+   *          nobody read it yet
    */
   private record PendingEntry(String id, String args, int attempts) {
   }

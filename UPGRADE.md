@@ -217,7 +217,8 @@ A payload lies beside its entry rather than inside it, which is why it has a tab
 its tables on the first boot. An application whose schema is a reviewed artifact sets the switch to
 `false` and applies the statements itself. They ship as `io.vanillabp:vanillabp-schema`, which holds
 a Liquibase changelog and generated Flyway scripts per database and pulls no runtime along. With the
-switch off the startup checks that the tables are there and names the one which is missing.
+switch off the startup checks that the tables are there and names the one which is missing, together
+with any column a later version of VanillaBP added to a table you created earlier.
 
 The names are `VANILLABP_PHASE_TWO_OUTBOX`, `VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD` and
 `VANILLABP_TASK_DELIVERY`. An application which renames the outbox through

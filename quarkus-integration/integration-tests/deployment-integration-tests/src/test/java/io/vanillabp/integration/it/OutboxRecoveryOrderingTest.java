@@ -61,7 +61,9 @@ public class OutboxRecoveryOrderingTest {
       CREATED_AT TIMESTAMP NOT NULL, \
       ATTEMPTS INT NOT NULL, \
       NEXT_ATTEMPT_AT TIMESTAMP NOT NULL, \
-      DONE_AT TIMESTAMP)""";
+      DONE_AT TIMESTAMP, \
+      LEASED_BY VARCHAR(255), \
+      LEASED_UNTIL TIMESTAMP)""";
 
   private static final String INSERT_ENTRY = """
       INSERT INTO VANILLABP_PHASE_TWO_OUTBOX \

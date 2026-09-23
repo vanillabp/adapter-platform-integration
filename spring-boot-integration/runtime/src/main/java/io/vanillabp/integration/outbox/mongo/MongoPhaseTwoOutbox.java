@@ -188,7 +188,7 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
     final var entry = new PhaseTwoOutboxEntry(
         entryId, call.workflowModuleId(), call.bpmnProcessId(), call.operation(), call
             .workflowAggregateId(), call.adapterId(), call
-                .args(), idempotencyKey, dedupKey, PhaseTwoOutboxEntry.STATUS_OPEN, now, 0, now, null);
+                .args(), idempotencyKey, dedupKey, PhaseTwoOutboxEntry.STATUS_OPEN, now, 0, now, null, null, null);
 
     try {
       mongoTemplate.insert(entry, collection);
@@ -227,10 +227,12 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
    * Puts the younger call into the document of the waiting entry, its payload
    * included, and removes the payload the replaced entry named.
    * <p>
-   * What decides is the number of attempts: the dispatcher counts one when it claims an
-   * entry, so a zero means no dispatch has read this entry and none is holding its
-   * payload. The update carries that condition, which makes it the same atomic claim
-   * the dispatcher uses - if a poller wins the document, the update matches nothing.
+   * What decides is the pair of the attempts and the lease: no attempt of this entry has
+   * ended and nobody is dispatching it right now, so no dispatch has read it and none is
+   * holding its payload. The update carries both conditions, which makes it the same atomic
+   * claim the dispatcher uses - if a poller wins the document, the update matches nothing.
+   * Both halves are needed, because the attempts are written when an attempt ends: a dispatch
+   * which is on its way still shows zero of them and is named by the lease alone.
    * <p>
    * Where a MongoDB transaction covers the writes they commit together and a rollback
    * takes them all. Without one they are three separate writes, the window this store's
@@ -249,7 +251,15 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
     }
     final var replaced = mongoTemplate
         .updateFirst(
-            Query.query(Criteria.where("_id").is(waiting.getId()).and("attempts").is(0)),
+            Query
+                .query(Criteria
+                    .where("_id")
+                    .is(waiting.getId())
+                    .and("attempts")
+                    .is(0)
+                    .orOperator(
+                        Criteria.where("leasedUntil").is(null),
+                        Criteria.where("leasedUntil").lte(now))),
             new org.springframework.data.mongodb.core.query.Update()
                 .set("operation", call.operation())
                 .set("aggregateId", call.workflowAggregateId())
