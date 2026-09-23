@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import javax.sql.DataSource;
@@ -340,10 +341,25 @@ public class PhaseTwoOutboxReaderTest {
 
     givenAnOutbox(shape);
 
-    final var reader = PhaseTwoOutboxReader
-        .of(dataSource, Shape.VANILLABP.table, Shape.GRUELBOX.table, PAYLOADS_OF_THIS_TEST);
+    final var tableFound = PhaseTwoOutboxReader
+        .outboxTableOf(dataSource, OUTBOX_OF_THIS_TEST, Optional.of(GRUELBOX_OF_THIS_TEST));
 
-    assertEquals(shape.table.name(), reader.outboxTableName());
+    assertEquals(shape.table.name(), tableFound);
+
+  }
+
+  @Test
+  @DisplayName("An application which cannot run the gruelbox outbox is served by the table it does write")
+  public void anApplicationWhichCannotRunGruelboxIsServedByItsOwnTable() throws Exception {
+
+    givenAnOutbox(Shape.VANILLABP);
+
+    // what an adapter repository looks like: the VanillaBP class which configures the
+    // gruelbox outbox is on its test classpath, the gruelbox library is not, so there is
+    // no name of a gruelbox table to ask this database about
+    final var tableFound = PhaseTwoOutboxReader.outboxTableOf(dataSource, OUTBOX_OF_THIS_TEST, Optional.empty());
+
+    assertEquals(OUTBOX_OF_THIS_TEST, tableFound);
 
   }
 
@@ -357,7 +373,7 @@ public class PhaseTwoOutboxReaderTest {
     final var bothTables = assertThrows(
         IllegalStateException.class,
         () -> PhaseTwoOutboxReader
-            .of(dataSource, Shape.VANILLABP.table, Shape.GRUELBOX.table, PAYLOADS_OF_THIS_TEST));
+            .outboxTableOf(dataSource, OUTBOX_OF_THIS_TEST, Optional.of(GRUELBOX_OF_THIS_TEST)));
 
     assertTrue(bothTables.getMessage().contains(OUTBOX_OF_THIS_TEST), bothTables.getMessage());
     assertTrue(bothTables.getMessage().contains(GRUELBOX_OF_THIS_TEST), bothTables.getMessage());
@@ -375,10 +391,26 @@ public class PhaseTwoOutboxReaderTest {
     final var noTable = assertThrows(
         IllegalStateException.class,
         () -> PhaseTwoOutboxReader
-            .of(dataSource, Shape.VANILLABP.table, Shape.GRUELBOX.table, PAYLOADS_OF_THIS_TEST));
+            .outboxTableOf(dataSource, OUTBOX_OF_THIS_TEST, Optional.of(GRUELBOX_OF_THIS_TEST)));
 
     assertTrue(noTable.getMessage().contains(OUTBOX_OF_THIS_TEST), noTable.getMessage());
     assertTrue(noTable.getMessage().contains(GRUELBOX_OF_THIS_TEST), noTable.getMessage());
+
+  }
+
+  @Test
+  @DisplayName("A database without a table says so although the gruelbox outbox was never an option")
+  public void aDatabaseWithoutATableSaysSoWithoutAGruelboxName() {
+
+    final var noTable = assertThrows(
+        IllegalStateException.class,
+        () -> PhaseTwoOutboxReader.outboxTableOf(dataSource, OUTBOX_OF_THIS_TEST, Optional.empty()));
+
+    assertTrue(noTable.getMessage().contains(OUTBOX_OF_THIS_TEST), noTable.getMessage());
+    assertTrue(
+        noTable.getMessage().contains("gruelbox"),
+        "the message has to say that the other outbox was out of the question: "
+            + noTable.getMessage());
 
   }
 

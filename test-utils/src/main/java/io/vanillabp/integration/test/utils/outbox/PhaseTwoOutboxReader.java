@@ -5,6 +5,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import javax.sql.DataSource;
 
@@ -328,7 +329,8 @@ public final class PhaseTwoOutboxReader {
 
   /**
    * The reader for the outbox this database holds, for a test which does not want to
-   * say which one its application runs.
+   * say which one its application runs. An application which cannot run the gruelbox
+   * outbox at all is served by the table VanillaBP writes itself, without being asked.
    *
    * @param dataSource The database of the application under test
    * @return The reader
@@ -337,52 +339,67 @@ public final class PhaseTwoOutboxReader {
   public static PhaseTwoOutboxReader of(
       final DataSource dataSource) {
 
-    return of(
+    final var vanillaBpTable = PhaseTwoOutboxNames.vanillaBpOutboxTable();
+    final var tableInThisDatabase = outboxTableOf(
         dataSource,
-        vanillaBpOutboxTable(),
-        gruelboxOutboxTable(),
-        PhaseTwoOutboxNames.payloadTable());
+        vanillaBpTable,
+        PhaseTwoOutboxNames.gruelboxOutboxTableIfThisApplicationCanRunIt());
+    // the name is the whole answer: the gruelbox table is the only other one this
+    // reader looks for
+    return tableInThisDatabase.equals(vanillaBpTable)
+        ? ofTheVanillaBpOutbox(dataSource)
+        : ofTheGruelboxOutbox(dataSource);
 
   }
 
   /**
-   * Picks the outbox by the table which is there. Both tables in one database is a
-   * question this cannot answer: an application which creates the whole VanillaBP
-   * schema has the table of VanillaBP's own outbox even while it runs gruelbox.
+   * Picks the outbox by the table which is there and answers with the name of that
+   * table. Two table names are all this question needs, so nothing else is fetched from
+   * the platform before it is answered - what the reader needs to read the table it
+   * found comes afterwards, from the factory method for that outbox. A name nobody
+   * needs must not be the reason a test fails in its setup.
+   * <p>
+   * Both tables in one database is a question this cannot answer: an application which
+   * creates the whole VanillaBP schema has the table of VanillaBP's own outbox even
+   * while it runs gruelbox.
    *
    * @param dataSource The database of the application under test
-   * @param vanillaBp The table VanillaBP writes itself
-   * @param gruelbox The table gruelbox writes
-   * @param payloadTable The table the payloads lie in
-   * @return The reader
+   * @param vanillaBpTable The table VanillaBP writes itself
+   * @param gruelboxTable The table gruelbox writes, empty where the application under
+   *          test cannot run the gruelbox outbox at all
+   * @return The name of the table this database holds
+   * @throws IllegalStateException If the database holds both tables or neither of them
    */
-  static PhaseTwoOutboxReader of(
+  static String outboxTableOf(
       final DataSource dataSource,
-      final OutboxTable vanillaBp,
-      final OutboxTable gruelbox,
-      final String payloadTable) {
+      final String vanillaBpTable,
+      final Optional<String> gruelboxTable) {
 
-    final var vanillaBpIsThere = tableExists(dataSource, vanillaBp.name());
-    final var gruelboxIsThere = tableExists(dataSource, gruelbox.name());
-    if (vanillaBpIsThere && gruelboxIsThere) {
+    final var vanillaBpIsThere = tableExists(dataSource, vanillaBpTable);
+    final var gruelboxWhichIsThere = gruelboxTable.filter(table -> tableExists(dataSource, table));
+    if (vanillaBpIsThere && gruelboxWhichIsThere.isPresent()) {
       throw new IllegalStateException(
           """
               This database holds '%s' as well as '%s', so which outbox the application runs \
               cannot be read from it! Say which one it is: ofTheVanillaBpOutbox(dataSource) or \
               ofTheGruelboxOutbox(dataSource)."""
-              .formatted(vanillaBp.name(), gruelbox.name()));
+              .formatted(vanillaBpTable, gruelboxWhichIsThere.get()));
     }
     if (vanillaBpIsThere) {
-      return new PhaseTwoOutboxReader(dataSource, vanillaBp, payloadTable);
+      return vanillaBpTable;
     }
-    if (gruelboxIsThere) {
-      return new PhaseTwoOutboxReader(dataSource, gruelbox, payloadTable);
+    if (gruelboxWhichIsThere.isPresent()) {
+      return gruelboxWhichIsThere.get();
     }
     throw new IllegalStateException(
         """
-            This database holds neither '%s' nor '%s'! Either the application under test writes \
+            This database holds neither '%s' nor %s! Either the application under test writes \
             its phase-two outbox somewhere else, or its schema was not created yet."""
-            .formatted(vanillaBp.name(), gruelbox.name()));
+            .formatted(
+                vanillaBpTable,
+                gruelboxTable
+                    .map("'%s'"::formatted)
+                    .orElse("a table of the gruelbox outbox, which this application cannot run")));
 
   }
 
