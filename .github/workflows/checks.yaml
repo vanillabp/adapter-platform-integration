@@ -1,14 +1,56 @@
 name: Checks
+# The trigger used to carry a path filter, so only a pull request with Markdown in it
+# started this workflow. That filter is now the 'markdown-change' job below, because a
+# filter on the trigger cannot live with a required check: branch protection waits for a
+# report, a workflow which never starts writes none, and the pull request waits for ever.
+# The expensive job still runs only where there is something to render, and a pull request
+# without Markdown pays for a checkout and a diff.
 "on":
   pull_request:
-    paths:
-      - "**/*.md"
-      - "bin/render-diagrams.sh"
-      - ".github/workflows/checks.yaml"
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
+  # Three kinds of change can break a picture: a Markdown file, which is where a Mermaid
+  # block lives; bin/render-diagrams.sh, which renders it; and this workflow, which says
+  # when that happens. The names of the changed files show all three, and the script renders
+  # every block of the repository anyway, so the content of the diff says nothing more.
+  #
+  # A run started by hand renders everything. It has no base branch to compare with, and
+  # somebody who starts this by hand wants the whole repository looked at.
+  markdown-change:
+    runs-on: ubuntu-latest
+    outputs:
+      markdown: "${{ steps.diff.outputs.markdown }}"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # the diff needs the base branch, and a shallow checkout has no other branch
+          fetch-depth: 0
+      - id: diff
+        name: Does this pull request touch a diagram
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "markdown=true" >> "$GITHUB_OUTPUT"
+            echo "A run started by hand renders every diagram of the repository."
+            exit 0
+          fi
+          git diff --name-only "origin/${{ github.base_ref }}...HEAD" \
+            > "${RUNNER_TEMP}/changed.txt"
+          # the diff is a file and not a pipe on purpose: a failed 'git diff' has to fail
+          # this step, and in a pipe its exit code is lost behind the one of grep
+          if grep -E '\.md$|^bin/render-diagrams\.sh$|^\.github/workflows/checks\.yaml$' \
+            "${RUNNER_TEMP}/changed.txt"; then
+            echo "markdown=true" >> "$GITHUB_OUTPUT"
+            echo "The files above can hold a Mermaid block or change how one is rendered,"
+            echo "so every block of the repository is rendered."
+          else
+            echo "markdown=false" >> "$GITHUB_OUTPUT"
+            echo "No Markdown file, no renderer and not this workflow moved, so this pull"
+            echo "request has no diagram to check."
+          fi
+
   # A Mermaid block which does not parse shows an error message where the picture should
   # be, on GitHub and in the IntelliJ plugin alike, and both times that happened here it
   # went unnoticed for weeks. This renders every block of every Markdown file with the
@@ -16,8 +58,11 @@ jobs:
   #
   # It is a job of its own rather than a step of the Maven build: mmdc pulls a headless
   # browser on first use, and a local build has to work without a network. It runs only
-  # where a Markdown file changed, so a pull request which touches none pays nothing.
+  # where the job above found one of those three changes, so a pull request which touches
+  # none pays nothing.
   diagrams:
+    needs: markdown-change
+    if: needs.markdown-change.outputs.markdown == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -26,3 +71,40 @@ jobs:
           node-version: 24
       - name: Every Mermaid block parses
         run: bin/render-diagrams.sh
+
+  # One name which reports on every pull request, whether the diagrams were rendered or
+  # not, so branch protection can require it without blocking a pull request which has no
+  # diagram in it. This is the name to require, not 'diagrams'.
+  #
+  # Both of its green answers say which one it is. "Nothing to check" and "checked" look
+  # the same from the outside, and which of the two it was is what a reader of the pull
+  # request wants to know.
+  diagrams-verified:
+    if: always()
+    needs: [markdown-change, diagrams]
+    runs-on: ubuntu-latest
+    steps:
+      - name: The diagrams of this pull request were rendered
+        run: |
+          set -euo pipefail
+          echo "markdown: ${{ needs.markdown-change.outputs.markdown }}"
+          echo "diagrams: ${{ needs.diagrams.result }}"
+          case "${{ needs.markdown-change.outputs.markdown }}" in
+            false)
+              echo "Nothing to check: this pull request touches no diagram."
+              exit 0 ;;
+            true)
+              ;;
+            *)
+              # the job above failed or was cancelled, so nobody knows whether there is a
+              # diagram in here, and an unknown is not a pass
+              echo "The diff was never read, so this pull request has no answer about its" >&2
+              echo "diagrams. Read the jobs above." >&2
+              exit 1 ;;
+          esac
+          [ "${{ needs.diagrams.result }}" = "success" ] || {
+            echo "A diagram of this pull request did not render. The 'diagrams' job above" >&2
+            echo "names the file, and diagrams/README.md has the traps written down." >&2
+            exit 1
+          }
+          echo "Diagrams checked: every Mermaid block of the repository parses."
