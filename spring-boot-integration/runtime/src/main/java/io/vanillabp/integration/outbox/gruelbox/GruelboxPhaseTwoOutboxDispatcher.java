@@ -40,6 +40,21 @@ import lombok.extern.slf4j.Slf4j;
  * an application's own scheduling setup (e.g. <code>&#64;EnableScheduling</code>)
  * stays unaffected.
  * <p>
+ * <strong>How this store holds an entry while it dispatches it.</strong> The stores VanillaBP
+ * owns lease an entry and renew the lease while the dispatch runs
+ * ({@link io.vanillabp.integration.adapter.migration.outbox.DispatchLease}), so a slow
+ * dispatch is never carried out twice and costs no attempt. Gruelbox does it differently and
+ * needs nothing added: its flush selects with <code>FOR UPDATE SKIP LOCKED</code> and then
+ * locks the row it is about to invoke for, so the flush of another node skips an entry
+ * somebody is dispatching however long that takes. The price is the one VanillaBP's own
+ * stores avoid - the lock is a database transaction held for the length of the dispatch, and
+ * therefore a connection - and it is gruelbox' design, not something this dispatcher chooses.
+ * <p>
+ * What it does mean is that gruelbox counts an attempt when it takes an entry rather than
+ * when the attempt ended. Since nobody else can take that entry meanwhile, the two numbers
+ * are the same here, and an entry only looks attempted while it is still travelling. The
+ * table belongs to gruelbox, so this is written down rather than changed.
+ * <p>
  * A dispatch which knows that repeating helps in a moment says so
  * ({@link io.vanillabp.integration.spi.PhaseTwoRetryLater} - a workflow its BPMS has not
  * made searchable yet), and gruelbox would schedule the next attempt from the

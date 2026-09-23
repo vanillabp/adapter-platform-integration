@@ -187,9 +187,11 @@ direction turned and why the mark hangs on the call.
 Both stores of this module refuse to replace an entry a dispatch has already taken; the
 younger call becomes an entry of its own then, with its `DEDUP_KEY` respectively `dedupKey`
 set to its own id, because the key belongs to the entry on its way. What says whether a
-dispatch has taken an entry is the attempts counter both dispatchers write when they claim
-one, and the update which replaces carries `ATTEMPTS = 0` respectively `attempts: 0` - the
-same optimistic lock the claim is, so the two can never both win.
+dispatch has taken an entry is the pair of the attempts and the lease: no attempt of it has
+ended and nobody holds it right now. The update which replaces carries both conditions, which
+makes it the same optimistic lock the claim is, so the two can never both win. Both halves are
+needed, because the attempts are written when an attempt ends - a dispatch which is on its way
+still shows zero of them and is named by the lease alone.
 
 On the JDBC store the claim reads its row once more after it won it. The select of the due
 entries happens before the claim, and between the two the row may have been replaced, so the
@@ -197,14 +199,15 @@ entry read then would send the dispatch to a payload reference which is gone. Mo
 no such read: its claim is one `findOneAndUpdate` and answers with the document as of that
 moment.
 
-|                  |           JDBC outbox (Agroal)           |       MongoDB outbox (`quarkus-mongodb-client`)       |
-|------------------|------------------------------------------|-------------------------------------------------------|
-| Enlisting        | JTA transaction (entry = part of TX)     | best-effort (write before commit, delete on rollback) |
-| Store            | table `VANILLABP_PHASE_TWO_OUTBOX`       | collection `vanillabp-phase-two-outbox`               |
-| Dedup            | unique constraint `DEDUP_KEY`            | unique index `dedupKey`                               |
-| Claim            | optimistic `UPDATE ... WHERE ATTEMPTS=?` | `findOneAndUpdate`                                    |
-| DONE + retention | yes                                      | yes                                                   |
-| Selected when    | Agroal capability present                | no Agroal, MongoDB client present                     |
+|                  |                 JDBC outbox (Agroal)                  |       MongoDB outbox (`quarkus-mongodb-client`)       |
+|------------------|-------------------------------------------------------|-------------------------------------------------------|
+| Enlisting        | JTA transaction (entry = part of TX)                  | best-effort (write before commit, delete on rollback) |
+| Store            | table `VANILLABP_PHASE_TWO_OUTBOX`                    | collection `vanillabp-phase-two-outbox`               |
+| Dedup            | unique constraint `DEDUP_KEY`                         | unique index `dedupKey`                               |
+| Claim            | optimistic `UPDATE ... WHERE LEASED_UNTIL`            | `findOneAndUpdate` on a free `leasedUntil`            |
+| Lease            | `LEASED_BY`/`LEASED_UNTIL`, renewed while dispatching | `leasedBy`/`leasedUntil`, renewed the same way        |
+| DONE + retention | yes                                                   | yes                                                   |
+| Selected when    | Agroal capability present                             | no Agroal, MongoDB client present                     |
 
 Configuration (`QuarkusMigrationAdapterProperties`): `vanillabp.outbox.poll-interval`,
 `vanillabp.outbox.attempt-frequency`, `vanillabp.outbox.block-after-attempts`,

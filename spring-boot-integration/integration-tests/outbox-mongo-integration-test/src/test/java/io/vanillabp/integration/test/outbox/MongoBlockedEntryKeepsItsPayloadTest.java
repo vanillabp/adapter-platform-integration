@@ -136,7 +136,7 @@ public class MongoBlockedEntryKeepsItsPayloadTest {
             new PhaseTwoOutboxEntry(
                 id, "test-module", "TestProcess", "sample:NOTIFY", "4711", "test", Map
                     .of(PhaseTwoCall.ARG_PAYLOAD_REFERENCE,
-                        payloadReference), null, id, status, LONG_BEFORE_THE_RETENTION, 0, LONG_BEFORE_THE_RETENTION, doneAt),
+                        payloadReference), null, id, status, LONG_BEFORE_THE_RETENTION, 0, LONG_BEFORE_THE_RETENTION, doneAt, null, null),
             OUTBOX_COLLECTION);
     return id;
 

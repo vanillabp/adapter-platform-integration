@@ -57,9 +57,14 @@ import lombok.extern.slf4j.Slf4j;
  * {@link PhaseTwoCall#MAX_IDEMPOTENCY_KEY_LENGTH} characters: gruelbox refuses a longer
  * unique request ID before any database sees it.
  * <p>
- * A store built with the constructor which takes no data source cannot read that flag.
- * It falls back to gruelbox' own answer, which deduplicates against retained entries as
- * well - kept for tests, and named here so nobody mistakes it for the contract.
+ * <strong>All of that is a read of gruelbox' table</strong>, so the store is built with the
+ * data source the table lives on and with its name, and it refuses to be built without
+ * them. A store which cannot read the table leaves every answer to gruelbox, and gruelbox'
+ * unique constraint spans the retained entries as well: the next operation of a workflow
+ * whose key is still retained would be discarded, a younger call would never take the place
+ * of a waiting one, and no payload would ever be removed. Work would be lost rather than
+ * delayed, and none of it would show up as an error, which is why the refusal comes at the
+ * constructor.
  * <p>
  * {@link PhaseTwoOutbox#adapterIdsOfPendingCalls(String, String)} is the one question of
  * the contract this store does not answer AT A START. gruelbox keeps a call as a
@@ -99,9 +104,8 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
   private final TransactionOutbox transactionOutbox;
 
   /**
-   * Where gruelbox' table lives, needed to count the entries waiting for their
-   * dispatch. <code>null</code> where the caller did not supply one - the pending
-   * meter is then absent rather than wrong.
+   * Where gruelbox' table lives. Never <code>null</code>: every question this store
+   * answers about its entries is a read of that table.
    */
   private final DataSource dataSource;
 
@@ -117,18 +121,6 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
    * the BPMS without it.
    */
   private final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore;
-
-  /**
-   * Creates an outbox which cannot count its pending entries - kept for tests.
-   *
-   * @param transactionOutbox The gruelbox transaction outbox
-   */
-  public GruelboxPhaseTwoOutbox(
-      final TransactionOutbox transactionOutbox) {
-
-    this(transactionOutbox, null, null, null);
-
-  }
 
   /**
    * @param transactionOutbox The gruelbox transaction outbox
@@ -149,6 +141,8 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
    * @param dataSource Where gruelbox' table lives
    * @param tableName The table gruelbox stores its entries in
    * @param payloadStore Where the payload of a call which carries one is written
+   * @throws IllegalArgumentException If the data source or the name of gruelbox' table is
+   *           missing
    */
   public GruelboxPhaseTwoOutbox(
       final TransactionOutbox transactionOutbox,
@@ -156,10 +150,61 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
       final String tableName,
       final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore) {
 
+    requireGruelboxTable(dataSource, tableName);
     this.transactionOutbox = transactionOutbox;
     this.dataSource = dataSource;
     this.tableName = tableName;
     this.payloadStore = payloadStore;
+
+  }
+
+  /**
+   * Refuses a store which could not read gruelbox' table, with the message saying what
+   * such a store would cost and how to build a complete one.
+   *
+   * @param dataSource Where gruelbox' table lives
+   * @param tableName The table gruelbox stores its entries in
+   */
+  private static void requireGruelboxTable(
+      final DataSource dataSource,
+      final String tableName) {
+
+    if ((dataSource != null) && (tableName != null)) {
+      return;
+    }
+    throw new IllegalArgumentException(
+        """
+            This gruelbox phase-two outbox was built without %s! The store reads gruelbox' \
+            table before it schedules: that is how the key of an entry which was dispatched \
+            is freed, how a younger call takes the place of one which is still waiting, and \
+            how the housekeeping learns which payloads an entry still names. A store which \
+            cannot read it discards the next operation of a workflow whose key is still \
+            retained and removes no payload at all, so it is refused here instead of losing \
+            work later. Pass the data source gruelbox' table lives on and the name of that \
+            table to the constructor, or let VanillaBP's \
+            GruelboxPhaseTwoOutboxAutoConfiguration build the store."""
+            .formatted(missingPart(dataSource, tableName)));
+
+  }
+
+  /**
+   * Which half of gruelbox' table the caller left out, so the message names what is
+   * actually missing instead of both.
+   *
+   * @param dataSource Where gruelbox' table lives
+   * @param tableName The table gruelbox stores its entries in
+   * @return The words the message puts in
+   */
+  private static String missingPart(
+      final DataSource dataSource,
+      final String tableName) {
+
+    if (dataSource == null) {
+      return tableName == null
+          ? "a data source and the name of gruelbox' table"
+          : "a data source";
+    }
+    return "the name of gruelbox' table";
 
   }
 
@@ -174,9 +219,6 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
   @Override
   public OptionalLong pendingCalls() {
 
-    if ((dataSource == null) || (tableName == null)) {
-      return OptionalLong.empty();
-    }
     final var countPending = "SELECT COUNT(*) FROM %s WHERE processed = ?".formatted(tableName);
     try (var connection = dataSource.getConnection(); var statement = connection.prepareStatement(countPending)) {
       statement.setBoolean(1, false);
@@ -210,15 +252,11 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
    * person rather than for a clock, so a store which holds nothing else has nothing to be woken
    * for.
    *
-   * @return The moment of the earliest entry, or <code>null</code> where nothing is owed -
-   *         which is the answer a store without a data source gives as well, leaving its
-   *         poller on the configured cap
+   * @return The moment of the earliest entry, or <code>null</code> where nothing is owed,
+   *         which leaves the poller on the configured cap
    */
   public java.time.Instant earliestDueAt() {
 
-    if ((dataSource == null) || (tableName == null)) {
-      return null;
-    }
     final var selectEarliest = "SELECT MIN(nextAttemptTime) FROM %s WHERE processed = ? AND blocked = ?"
         .formatted(tableName);
     try (var connection = dataSource.getConnection()) {
@@ -250,9 +288,9 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
    * the table, and it is asked only where a payload outlived the retention, which on a
    * healthy store is never.
    * <p>
-   * A store without a data source cannot ask, and it answers that every payload is still
-   * named. Keeping bytes nobody needs costs space; removing the bytes of an entry
-   * somebody is about to open again costs the dispatch.
+   * Where the table does not answer, every payload counts as still named. Keeping bytes
+   * nobody needs costs space; removing the bytes of an entry somebody is about to open
+   * again costs the dispatch.
    *
    * @param references The payloads the housekeeping is about to remove
    * @return Those of them an entry names
@@ -260,7 +298,7 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
   public java.util.Set<String> stillNaming(
       final java.util.Collection<String> references) {
 
-    if ((dataSource == null) || (tableName == null) || references.isEmpty()) {
+    if (references.isEmpty()) {
       return java.util.Set.copyOf(references);
     }
     final var condition = references
@@ -374,8 +412,8 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
       }
       return true;
     } catch (AlreadyScheduledException e) {
-      // two nodes scheduling the same operation at the same moment, or a store which
-      // cannot read gruelbox' table (see the class javadoc)
+      // two nodes scheduling the same operation at the same moment, so neither of them
+      // saw the entry of the other when it read the table
       logDiscardedSchedule(call);
       return false;
     }
@@ -411,7 +449,11 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
     }
     throw new IllegalStateException(
         """
-            Phase two (%s) of BPMN process '%s' of workflow module '%s' carries a payload, and this             outbox was built without a payload store to put it in! The auto-configuration of             VanillaBP builds one; an application building its gruelbox outbox itself passes a             PhaseTwoPayloadStore to the constructor of this class."""
+            Phase two (%s) of BPMN process '%s' of workflow module '%s' carries a payload, \
+            and this outbox was built without a payload store to put it in! The \
+            auto-configuration of VanillaBP builds one; an application building its \
+            gruelbox outbox itself passes a PhaseTwoPayloadStore to the constructor of this \
+            class."""
             .formatted(call.operation(), call.bpmnProcessId(), call.workflowModuleId()));
 
   }
@@ -430,11 +472,6 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
       final PhaseTwoCall call,
       final String idempotencyKey) {
 
-    if ((dataSource == null) || (tableName == null)) {
-      // no way to look at gruelbox' own columns: gruelbox answers instead, which
-      // deduplicates the retained entries as well and replaces nothing
-      return null;
-    }
     final var selectEntry = "SELECT id, processed, version, invocation FROM %s WHERE uniqueRequestId = ?"
         .formatted(tableName);
     final var connection = DataSourceUtils.getConnection(dataSource);

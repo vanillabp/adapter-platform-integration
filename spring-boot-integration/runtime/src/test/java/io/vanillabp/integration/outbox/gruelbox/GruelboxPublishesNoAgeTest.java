@@ -21,6 +21,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * would report a young age while old entries stand next to them, which reads as an outbox
  * that is up to date. The stores VanillaBP writes itself keep that moment in a column of
  * their own and do answer.
+ * <p>
+ * No database is needed for the answer, which is why the store here is built over mocks.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class GruelboxPublishesNoAgeTest {
@@ -29,7 +31,8 @@ public class GruelboxPublishesNoAgeTest {
   @DisplayName("Gruelbox says nothing about the age of its oldest waiting entry")
   public void gruelboxSaysNothingAboutTheAgeOfItsOldestEntry() {
 
-    final var outbox = new GruelboxPhaseTwoOutbox(Mockito.mock(TransactionOutbox.class));
+    final var outbox = new GruelboxPhaseTwoOutbox(
+        Mockito.mock(TransactionOutbox.class), Mockito.mock(javax.sql.DataSource.class), "TXNO_OUTBOX");
 
     assertTrue(
         outbox

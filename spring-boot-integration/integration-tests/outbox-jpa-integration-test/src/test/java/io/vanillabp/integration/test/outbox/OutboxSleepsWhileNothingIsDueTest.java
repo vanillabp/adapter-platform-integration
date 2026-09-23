@@ -265,6 +265,7 @@ public class OutboxSleepsWhileNothingIsDueTest {
         statement.executeUpdate(
             """
                 UPDATE VANILLABP_PHASE_TWO_OUTBOX SET STATUS = 'OPEN', ATTEMPTS = 0, \
+                LEASED_BY = NULL, LEASED_UNTIL = NULL, \
                 NEXT_ATTEMPT_AT = DATEADD('SECOND', -60, CURRENT_TIMESTAMP)""");
       }
 

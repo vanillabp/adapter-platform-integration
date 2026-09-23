@@ -22,10 +22,10 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * The START re-dispatch mitigation on the Quarkus JDBC outbox: the
- * dispatcher's claim increments the ATTEMPTS column BEFORE dispatching, so a
- * retried entry is recognized (attempts &gt; 0 before the claim) and the recorded
- * adapter's {@code awarenessOfWorkflowForRedispatch} is probed first - a workflow
+ * The START re-dispatch mitigation on the Quarkus JDBC outbox: an entry a dispatch has had
+ * before is recognized as such - its ATTEMPTS carry an attempt which ended, or its LEASED_BY
+ * carries the node which disappeared in the middle of one - and the recorded
+ * adapter's {@code awarenessOfWorkflowForRedispatch} is probed first, so a workflow
  * already known consumes the entry WITHOUT a second start. The residual
  * at-least-once window is accepted and documented; this proves the mitigation.
  */
@@ -80,8 +80,8 @@ public class OutboxRedispatchMitigationTest {
     // right after a successful start whose state is visible on retry
     awareness.answerFor("test", WorkflowAwareness.ACTIVE);
 
-    // the FIRST dispatch fails (BPMS "unreachable") - the entry stays pending,
-    // its ATTEMPTS column now carries the failed attempt
+    // the FIRST dispatch fails (BPMS "unreachable") - the entry stays pending and its
+    // ATTEMPTS column now carries the attempt which failed
     listener.failNextDispatches(1);
 
     userTransaction.begin();

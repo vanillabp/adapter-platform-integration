@@ -241,6 +241,36 @@
     </createIndex>
   </changeSet>
 
+  <changeSet author="VanillaBP" id="vanillabp-phase-two-outbox-lease-2.0.0" labels="2.0.0">
+    <comment>
+      Who is dispatching an entry right now, and until when. A poll claims an entry by writing both,
+      and no other poll - on this node or on another one - takes an entry whose lease has not run
+      out. A running dispatch pushes LEASED_UNTIL along in a short write of its own, so an operation
+      which takes longer than the configured distance stays with the node carrying it instead of
+      being dispatched a second time; a node which dies stops pushing, the lease runs out and the
+      next poll takes the entry over. LEASED_BY is what a renewal matches on, which is how a node
+      whose lease was taken over learns that the entry is no longer its own, and what an operator
+      reads to see where an entry is. Both are nullable: an entry nobody holds is held by nobody.
+      This is also what ATTEMPTS stopped carrying - that column now counts the attempts which ended
+      instead of the claims which were made, so a slow dispatch uses up none of
+      'vanillabp.outbox.block-after-attempts'. Neither column is indexed: the poll reads an entry by
+      STATUS and NEXT_ATTEMPT_AT, which the claim and every renewal move along with the lease, and
+      the lease is read from the rows that index already narrowed down. A changeset of its own
+      rather than columns added to the one which created the table, because that one was applied
+      already.
+    </comment>
+    <addColumn tableName="${vanillabp.outbox.table}">
+      <column name="LEASED_BY" type="VARCHAR(255)" />
+      <column name="LEASED_UNTIL" type="TIMESTAMP" />
+    </addColumn>
+    <!-- MySQL's TIMESTAMP ends in 2038 and auto-initializes, which is why the runtime creates
+         DATETIME(6) there as well - an application which starts with the runtime's tables and
+         later switches to this changelog has to end up with the same columns. -->
+    <modifySql dbms="mysql,mariadb">
+      <replace replace="timestamp" with="datetime(6)" />
+    </modifySql>
+  </changeSet>
+
   <changeSet author="VanillaBP" id="vanillabp-phase-two-payload-2.0.0" labels="2.0.0">
     <comment>
       Where the payload of a phase-two call lies while its outbox entry waits. A call which carries

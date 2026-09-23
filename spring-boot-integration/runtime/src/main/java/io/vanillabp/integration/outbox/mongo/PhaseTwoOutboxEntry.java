@@ -80,10 +80,31 @@ public class PhaseTwoOutboxEntry {
 
   private Instant createdAt;
 
+  /**
+   * How many dispatch attempts of this entry ENDED, whatever they ended with. Not how often
+   * it was claimed: an entry being dispatched right now has counted nothing yet, which is
+   * what keeps <code>vanillabp.outbox.block-after-attempts</code> from blocking an entry for
+   * being slow.
+   */
   private int attempts;
 
   private Instant nextAttemptAt;
 
   private Instant doneAt;
+
+  /**
+   * Which node is dispatching this entry, <code>null</code> for an entry nobody holds. It
+   * is what a renewal of the lease matches on, so a node whose lease ran out and was taken
+   * over renews nothing.
+   */
+  private String leasedBy;
+
+  /**
+   * How long the claim on this entry lasts. No poll takes an entry whose lease has not run
+   * out, and a running dispatch pushes the moment along for as long as it runs (see
+   * {@link io.vanillabp.integration.adapter.migration.outbox.DispatchLease}).
+   * <code>null</code> for an entry nobody holds.
+   */
+  private Instant leasedUntil;
 
 }

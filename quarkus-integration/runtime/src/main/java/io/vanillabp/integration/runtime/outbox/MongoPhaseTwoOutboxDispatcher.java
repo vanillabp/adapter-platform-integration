@@ -23,6 +23,7 @@ import io.quarkus.runtime.StartupEvent;
 import io.smallrye.config.SmallRyeConfig;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DispatchOutcome;
+import io.vanillabp.integration.adapter.migration.outbox.DispatchLease;
 import io.vanillabp.integration.adapter.migration.outbox.DueEntryPoller;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
@@ -49,10 +50,16 @@ import lombok.extern.slf4j.Slf4j;
  * another node wrote down before it died (see {@link DueEntryPoller}).</li>
  * </ul>
  * Due entries (status {@link MongoPhaseTwoOutbox#STATUS_OPEN}) are claimed
- * atomically (<code>findOneAndUpdate</code> incrementing the number of attempts and
- * leasing the entry for one <code>vanillabp.outbox.attempt-frequency</code>), so
+ * atomically (<code>findOneAndUpdate</code> writing <code>leasedBy</code> and
+ * <code>leasedUntil</code>, the lease lasting one
+ * <code>vanillabp.outbox.attempt-frequency</code>), so
  * multiple application instances (pods) may poll concurrently without any distributed
- * lock - exactly one instance wins each claim. A dispatch which FAILS writes the next
+ * lock - exactly one instance wins each claim. <strong>A running dispatch renews its
+ * lease</strong> ({@link DispatchLease}), so an entry travelling longer than that distance
+ * stays the claim of the node carrying it instead of being taken by the next poll; a node
+ * which dies stops renewing and another one takes the entry over once the lease ran out.
+ * <code>attempts</code> counts the attempts which ENDED, so a slow dispatch uses up no
+ * attempt budget. A dispatch which FAILS writes the next
  * attempt itself, at the growing distance of
  * {@link io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties#attemptDelay(int)}
  * - doubling per attempt up to <code>vanillabp.outbox.max-attempt-frequency</code>. On
@@ -123,6 +130,12 @@ public class MongoPhaseTwoOutboxDispatcher {
   private volatile DueEntryPoller poller;
 
   /**
+   * What a running dispatch holds its entry with, and what keeps that hold alive while it
+   * runs. Built with the poller, because both need the configuration.
+   */
+  private volatile DispatchLease lease;
+
+  /**
    * Creates the unique index (unless disabled) and starts the fixed-delay poller.
    * The first run is executed immediately, dispatching committed-but-unprocessed
    * entries of a previously crashed instance. The observer priority guarantees that
@@ -166,18 +179,27 @@ public class MongoPhaseTwoOutboxDispatcher {
       dropLegacyIdempotencyKeyIndex();
     }
 
+    lease = new DispatchLease("vanillabp-outbox-lease", properties.getAttemptFrequency());
     poller = new DueEntryPoller(
         "vanillabp-outbox", properties.getPollInterval(), this::poll, this::earliestDueAt);
     poller.start();
 
   }
 
+  /**
+   * Stops the poller and the renewal of the leases. What a dispatch was still carrying keeps
+   * its lease until it runs out, so another node takes the entry then.
+   */
   @PreDestroy
   void shutdown() {
 
     if (poller != null) {
       poller.stop();
       poller = null;
+    }
+    if (lease != null) {
+      lease.stop();
+      lease = null;
     }
 
   }
@@ -219,6 +241,11 @@ public class MongoPhaseTwoOutboxDispatcher {
    * dispatch, or the moment the oldest dispatched entry may be deleted, whichever comes
    * first. A BLOCKED entry is in neither set - it waits for a person rather than for a
    * clock, so it must not keep the poller awake.
+   * <p>
+   * An entry being dispatched right now answers with the end of its lease and not with
+   * "due": the claim and every renewal push <code>nextAttemptAt</code> along with
+   * <code>leasedUntil</code>. Without that the poller would be told "due now" for as long as
+   * the dispatch runs and would ask again at its shortest sleep.
    *
    * @return The earliest of the two moments, or <code>null</code> where the collection
    *         holds neither
@@ -362,16 +389,22 @@ public class MongoPhaseTwoOutboxDispatcher {
       final var collection = outboxCollection();
       while (true) {
         final var now = Instant.now();
-        // claim atomically: increment attempts and set the backoff, so other
-        // instances skip the entry and a failed dispatch is retried automatically
+        // claim atomically: this node's name and the end of the lease, so other instances
+        // skip the entry while the dispatch runs and renews. A free lease is what makes an
+        // entry available, never the number of attempts, which says what ENDED
+        final var leaseEnds = Date.from(lease.endsAt());
         final var entry = collection.findOneAndUpdate(
             Filters.and(
                 Filters.eq("status", MongoPhaseTwoOutbox.STATUS_OPEN),
                 Filters.lte("nextAttemptAt", Date.from(now)),
-                Filters.lt("attempts", properties.getBlockAfterAttempts())),
+                Filters.lt("attempts", properties.getBlockAfterAttempts()),
+                Filters.or(
+                    Filters.eq("leasedUntil", null),
+                    Filters.lte("leasedUntil", Date.from(now)))),
             Updates.combine(
-                Updates.inc("attempts", 1),
-                Updates.set("nextAttemptAt", Date.from(now.plus(properties.getAttemptFrequency())))));
+                Updates.set("leasedBy", lease.owner()),
+                Updates.set("leasedUntil", leaseEnds),
+                Updates.set("nextAttemptAt", leaseEnds)));
         if (entry == null) {
           break;
         }
@@ -426,6 +459,73 @@ public class MongoPhaseTwoOutboxDispatcher {
   }
 
   /**
+   * Pushes the lease of an entry this node is dispatching along, in a write of its own, once
+   * per tick of {@link DispatchLease}.
+   *
+   * @param collection The outbox collection
+   * @param entryId The entry being dispatched
+   * @param leaseEnd How long the lease is to last now
+   * @return Whether this node still holds the entry - <code>false</code> where the write
+   *         matched no document, which is the entry being gone or held by somebody else
+   */
+  private boolean renewLease(
+      final MongoCollection<Document> collection,
+      final String entryId,
+      final Instant leaseEnd) {
+
+    try {
+      return collection
+          .updateOne(
+              Filters
+                  .and(
+                      Filters.eq("_id", entryId),
+                      Filters.eq("leasedBy", lease.owner()),
+                      Filters.eq("status", MongoPhaseTwoOutbox.STATUS_OPEN)),
+              Updates
+                  .combine(
+                      Updates.set("leasedUntil", Date.from(leaseEnd)),
+                      Updates.set("nextAttemptAt", Date.from(leaseEnd))))
+          .getMatchedCount() == 1;
+    } catch (final RuntimeException e) {
+      // a collection which cannot be asked says nothing about who holds the entry, so the
+      // renewal keeps trying rather than giving it up over one hiccup
+      log.warn("Could not renew the lease of the phase-two outbox entry '{}' - trying again", entryId, e);
+      return true;
+    }
+
+  }
+
+  /**
+   * Runs the attempt with the lease of its entry being renewed, and lets the renewal go the
+   * moment the attempt is over.
+   * <p>
+   * The renewal covers the attempt and not the write which says how it ended. That write needs
+   * a lease which has not run out, which the last renewal gave it, and not one which is still
+   * growing - and a renewal outliving the mark would find the entry no longer OPEN and report a
+   * lease it never lost.
+   *
+   * @param collection The outbox collection
+   * @param entryId The entry being dispatched
+   * @param call The call to dispatch
+   * @param previouslyAttempted Whether a dispatch has had this entry before
+   * @param writtenAt When the entry was written
+   */
+  private void dispatchRenewingTheLease(
+      final MongoCollection<Document> collection,
+      final String entryId,
+      final PhaseTwoCall call,
+      final boolean previouslyAttempted,
+      final Date writtenAt) {
+
+    try (var held = lease.renewWhile(entryId, (
+        renewed,
+        leaseEnd) -> renewLease(collection, renewed, leaseEnd))) {
+      dispatchMeasuringTheWait(call, previouslyAttempted, writtenAt);
+    }
+
+  }
+
+  /**
    * Dispatches a single claimed entry through the core's {@link PhaseTwoRouter}. On
    * success the entry is marked DONE; on failure it stays claimed and is retried
    * after the configured backoff, until it is blocked.
@@ -446,8 +546,8 @@ public class MongoPhaseTwoOutboxDispatcher {
             key,
             value) -> args.put(key, String.valueOf(value)));
       }
-      // the document holds the attempts count BEFORE this claim - a value > 0
-      // means the entry was dispatched before (recovered/retried): the router
+      // a document which was taken before is one whose dispatch may have reached the
+      // BPMS already (recovered/retried): the router
       // then runs the START re-dispatch mitigation. The operation travels as its
       // persisted name and is resolved by the router's operation registry
       // the one extra read this form costs, and only for an entry which names a
@@ -456,7 +556,9 @@ public class MongoPhaseTwoOutboxDispatcher {
       final var payload = payloadReference == null
           ? null
           : getPayloadStore().read(payloadReference);
-      dispatchMeasuringTheWait(
+      dispatchRenewingTheLease(
+          collection,
+          entryId,
           PhaseTwoCall
               .forDispatch(
                   entry.getString("operation"), entry.getString("workflowModuleId"), entry
@@ -464,7 +566,7 @@ public class MongoPhaseTwoOutboxDispatcher {
                   entry.getString("aggregateId"), entry
                       .getString("adapterId"),
                   args, payload),
-          entry.getInteger("attempts") > 0,
+          wasTakenBefore(entry),
           entry.getDate("createdAt"));
       collection.updateOne(
           Filters.eq("_id", entryId),
@@ -473,7 +575,11 @@ public class MongoPhaseTwoOutboxDispatcher {
               Updates.set("doneAt", Date.from(Instant.now())),
               // the deduplication window ends with the dispatch: the entry's own id
               // takes the place of the key, which stays readable in idempotencyKey
-              Updates.set("dedupKey", entryId)));
+              Updates.set("dedupKey", entryId),
+              // the attempt is counted where it ended, and the lease given back
+              Updates.inc("attempts", 1),
+              Updates.unset("leasedBy"),
+              Updates.unset("leasedUntil")));
       // the entry is dispatched, so its bytes have done their work. Removed AFTER the
       // entry was marked, never before: a crash in between leaves a document the
       // housekeeping deletes, while the other order would leave an entry whose payload
@@ -526,7 +632,7 @@ public class MongoPhaseTwoOutboxDispatcher {
         // counted above, not this due time
         collection.updateOne(
             Filters.eq("_id", entryId),
-            Updates.set("nextAttemptAt", Date.from(Instant.now().plus(retryAfter))));
+            dueAgainAt(Instant.now().plus(retryAfter)));
         log.info(
             "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' cannot "
                 + "run yet - the outbox entry '{}' is dispatched again in {} ({} of {} attempts used): {}",
@@ -540,13 +646,13 @@ public class MongoPhaseTwoOutboxDispatcher {
             properties.getBlockAfterAttempts(),
             e.getMessage());
       } else {
-        // the attempts of the entry are the count BEFORE this claim, so attemptDelay(0)
-        // is the distance after the first failure: close, because most failures are
-        // momentary
+        // the attempts of the entry are the ones which ended before this one, so
+        // attemptDelay(0) is the distance after the first failure: close, because most
+        // failures are momentary
         final var retryIn = properties.attemptDelay(entry.getInteger("attempts"));
         collection.updateOne(
             Filters.eq("_id", entryId),
-            Updates.set("nextAttemptAt", Date.from(Instant.now().plus(retryIn))));
+            dueAgainAt(Instant.now().plus(retryIn)));
         log.warn(
             "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
                 + "failed - the outbox entry '{}' is dispatched again in {} ({} of {} attempts used)",
@@ -561,6 +667,23 @@ public class MongoPhaseTwoOutboxDispatcher {
             e);
       }
     }
+
+  }
+
+  /**
+   * Whether a dispatch has had this entry before, which is what makes a START probe the BPMS
+   * it was meant for instead of starting a second workflow. An attempt which ended is
+   * counted; an attempt whose node died in the middle left its name on the document and
+   * nothing else, and <code>findOneAndUpdate</code> answers with the document as it was
+   * BEFORE the claim, so that name is the one of the node before this one.
+   *
+   * @param entry The claimed document, as it stood before the claim
+   * @return Whether an attempt ended or a holder disappeared
+   */
+  private static boolean wasTakenBefore(
+      final Document entry) {
+
+    return (entry.getInteger("attempts") > 0) || (entry.getString("leasedBy") != null);
 
   }
 
@@ -635,6 +758,26 @@ public class MongoPhaseTwoOutboxDispatcher {
   }
 
   /**
+   * Says when an entry whose attempt did not get through is to be read again, counts that
+   * attempt and gives the lease back. All three in one write, because an entry which is due
+   * again while still leased would be waited out to the end of the lease.
+   *
+   * @param nextAttempt When it is to be read again
+   * @return The update to apply
+   */
+  private static org.bson.conversions.Bson dueAgainAt(
+      final Instant nextAttempt) {
+
+    return Updates
+        .combine(
+            Updates.set("nextAttemptAt", Date.from(nextAttempt)),
+            Updates.inc("attempts", 1),
+            Updates.unset("leasedBy"),
+            Updates.unset("leasedUntil"));
+
+  }
+
+  /**
    * Blocks an entry and releases its <code>dedupKey</code> the way a dispatched entry
    * releases it. Easy to miss and the reason a blocked entry used to be a dead end: the
    * key is what refuses a second schedule of the same operation, so a blocked entry
@@ -652,7 +795,11 @@ public class MongoPhaseTwoOutboxDispatcher {
     return Updates
         .combine(
             Updates.set("status", MongoPhaseTwoOutbox.STATUS_BLOCKED),
-            Updates.set("dedupKey", entryId));
+            Updates.set("dedupKey", entryId),
+            // the attempt which led here is counted, and the lease given back
+            Updates.inc("attempts", 1),
+            Updates.unset("leasedBy"),
+            Updates.unset("leasedUntil"));
 
   }
 

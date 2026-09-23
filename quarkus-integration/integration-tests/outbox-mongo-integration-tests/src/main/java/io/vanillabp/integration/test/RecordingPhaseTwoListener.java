@@ -18,14 +18,42 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
 
   private final AtomicInteger failuresRemaining = new AtomicInteger(0);
 
+  /**
+   * How long every dispatch stays inside the adapter, for a test about a dispatch which takes
+   * longer than the lease of its outbox entry. Zero unless a test asked for it, and the test
+   * which asked puts it back.
+   */
+  private final java.util.concurrent.atomic.AtomicLong dispatchTakesMillis = new java.util.concurrent.atomic.AtomicLong(0);
+
   @Override
   public void startedWorkflowPhaseTwo(
       final Object workflowAggregateId) {
 
     invocations.add(workflowAggregateId);
+    final var takes = dispatchTakesMillis.get();
+    if (takes > 0) {
+      try {
+        Thread.sleep(takes);
+      } catch (final InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+    }
     if (failuresRemaining.getAndUpdate(remaining -> remaining > 0 ? remaining - 1 : 0) > 0) {
       throw new RuntimeException("phase two failed for testing purposes");
     }
+
+  }
+
+  /**
+   * Makes every dispatch stay inside the adapter for a while, which is what an operation
+   * calling a system of somebody else's looks like from the outbox.
+   *
+   * @param millis How long one dispatch lasts, zero to return every dispatch at once
+   */
+  public void eachDispatchTakes(
+      final long millis) {
+
+    dispatchTakesMillis.set(millis);
 
   }
 
@@ -46,6 +74,7 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
 
     invocations.clear();
     failuresRemaining.set(0);
+    dispatchTakesMillis.set(0);
 
   }
 

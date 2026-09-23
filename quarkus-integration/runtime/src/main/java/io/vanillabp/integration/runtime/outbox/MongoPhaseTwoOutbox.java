@@ -294,10 +294,12 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
    * Puts the younger call into the document of the waiting entry, its payload
    * included, and removes the payload the replaced entry named.
    * <p>
-   * What decides is the number of attempts: the dispatcher counts one when it claims an
-   * entry, so a zero means no dispatch has read this entry and none is holding its
-   * payload. The update carries that condition, which makes it the same atomic claim
-   * the dispatcher uses - if a poller wins the document, the update matches nothing.
+   * What decides is the pair of the attempts and the lease: no attempt of this entry has
+   * ended and nobody is dispatching it right now, so no dispatch has read it and none is
+   * holding its payload. The update carries both conditions, which makes it the same atomic
+   * claim the dispatcher uses - if a poller wins the document, the update matches nothing.
+   * Both halves are needed, because the attempts are written when an attempt ends: a dispatch
+   * which is on its way still shows zero of them and is named by the lease alone.
    * <p>
    * Where a session covers the writes they commit together and a rollback takes them
    * all. Without one they are three separate writes and the window between them is the
@@ -329,7 +331,11 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
     final var filter = com.mongodb.client.model.Filters
         .and(
             com.mongodb.client.model.Filters.eq("_id", waiting.getString("_id")),
-            com.mongodb.client.model.Filters.eq("attempts", 0));
+            com.mongodb.client.model.Filters.eq("attempts", 0),
+            com.mongodb.client.model.Filters
+                .or(
+                    com.mongodb.client.model.Filters.eq("leasedUntil", null),
+                    com.mongodb.client.model.Filters.lte("leasedUntil", java.util.Date.from(now))));
     final var replaced = (session == null
         ? collection.updateOne(filter, replacement)
         : collection.updateOne(session, filter, replacement)).getModifiedCount() == 1;

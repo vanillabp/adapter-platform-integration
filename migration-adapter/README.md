@@ -2477,7 +2477,9 @@ store, for the MongoDB ones and for a store an application brings itself:
   operations. An entry a dispatch has already taken is NOT replaced - it runs to its end
   and the younger call becomes an entry of its own, which holds no key, because the key
   belongs to the entry on its way. The stores VanillaBP wrote itself read that off
-  `ATTEMPTS`, which their dispatchers count up when they claim an entry, and gruelbox off
+  `ATTEMPTS` plus the lease of the entry - no attempt of it has ended and nobody holds it
+  right now, which is needed as a pair because the attempts are written when an attempt
+  ends - and gruelbox off
   its `version` column plus the register of `GruelboxRedispatchAwareSubmitter`, because a
   gruelbox entry submitted right after a commit was never pushed back and its row is
   locked by the dispatch. A store which never learned replacing inherits the default of
@@ -2525,8 +2527,9 @@ store, for the MongoDB ones and for a store an application brings itself:
 - **START re-dispatch mitigation (minimizes, does not close, the window):** stores
   pass "this entry was dispatched before" to
   `PhaseTwoRouter.dispatch(call, previouslyAttempted)` (the JDBC/MongoDB defaults
-  claim entries by incrementing their attempts counter BEFORE dispatching, so a
-  recovered/retried entry is recognized; the gruelbox store bridges its entry
+  read it off two places: an attempt which ENDED is counted in the attempts, and an
+  attempt whose node died in the middle left that node's name in the lease, so a
+  recovered/retried entry is recognized either way; the gruelbox store bridges its entry
   state via a `Submitter` wrapper — there the counter is only incremented on
   FAILED attempts, so a hard crash still re-dispatches without the probe). A
   previously attempted START entry probes the recorded adapter's
