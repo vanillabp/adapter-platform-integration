@@ -13,7 +13,12 @@ import io.vanillabp.integration.adapter.spi.health.AdapterHealth;
 public interface DummyHealthSource {
 
   /**
-   * @param adapterId The adapter ID being asked
+   * What the double answers when the platform asks it about the BPMS behind it. A
+   * test returns a state to see it arrive at the health endpoint, or throws to play
+   * the adapter which cannot even reach its BPMS.
+   *
+   * @param adapterId The adapter ID being asked, so one bean can answer for several
+   *          configured ids
    * @return What the adapter found, or <code>null</code> to contribute nothing
    */
   AdapterHealth healthOf(

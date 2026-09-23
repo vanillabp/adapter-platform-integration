@@ -176,6 +176,15 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
    */
   private final DeployedProcessVersionsCheck deployedVersionsCheck;
 
+  /**
+   * The bare registry: handlers are wired and invoked, and no startup check runs.
+   * <p>
+   * What a platform integration knows is missing here - the sync model, the transaction
+   * annotations, the configuration - and every check resting on one of them stays silent. A
+   * test which only needs a delivery to reach a method builds this one.
+   *
+   * @param transactionRunner The transaction every handler runs in
+   */
   public WorkflowTaskRegistry(
       final TransactionRunner transactionRunner) {
 
@@ -183,6 +192,13 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
   }
 
+  /**
+   * The registry with the sync model, so what leaves for the BPMS is decided and validated.
+   *
+   * @param transactionRunner The transaction every handler runs in
+   * @param aggregateSync The core's sync model - <code>null</code> shares no values and
+   *          validates no aggregate class
+   */
   public WorkflowTaskRegistry(
       final TransactionRunner transactionRunner,
       final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync) {
@@ -191,6 +207,14 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
   }
 
+  /**
+   * The registry which also knows how a transaction is marked on the running platform.
+   *
+   * @param transactionRunner The transaction every handler runs in
+   * @param aggregateSync The core's sync model
+   * @param transactionAnnotations The transaction annotations of the platform - an empty
+   *          list switches the startup check about them off
+   */
   public WorkflowTaskRegistry(
       final TransactionRunner transactionRunner,
       final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync,
@@ -200,6 +224,16 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
   }
 
+  /**
+   * The registry with the configuration, which is what the version and delivery settings are
+   * read from.
+   *
+   * @param transactionRunner The transaction every handler runs in
+   * @param aggregateSync The core's sync model
+   * @param transactionAnnotations The transaction annotations of the platform
+   * @param properties The VanillaBP configuration - <code>null</code> leaves every setting
+   *          at its default
+   */
   public WorkflowTaskRegistry(
       final TransactionRunner transactionRunner,
       final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync,
@@ -211,6 +245,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
+   * The full registry, which is what a platform integration builds.
+   *
    * @param transactionRunner The transaction every handler runs in
    * @param aggregateSync The core's sync model
    * @param transactionAnnotations The transaction annotations of the platform

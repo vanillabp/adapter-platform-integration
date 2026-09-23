@@ -38,6 +38,13 @@ import jakarta.enterprise.context.ApplicationScoped;
 public class DeploymentPipelineBuildStepProcessor {
 
   /**
+   * Quarkus builds this processor while it augments the application and calls the build
+   * steps below on it. Nothing else builds it, and no step keeps state in it.
+   */
+  public DeploymentPipelineBuildStepProcessor() {
+  }
+
+  /**
    * Registers the adapters' deployment-service beans announced via
    * {@link VanillaBpAdapterDeploymentServiceBuildItem}: adapters only produce the
    * build item (adapter type + bean class), the VanillaBP extension registers the

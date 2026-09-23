@@ -16,6 +16,16 @@ import org.springframework.context.annotation.Bean;
 public class VanillaBpSupportAutoConfiguration {
 
   /**
+   * Built by Spring Boot, in every application which has
+   * <code>vanillabp-spring-boot-support</code> on its classpath. A workflow module
+   * compiles against that module alone, so this runs wherever a workflow module is, with
+   * or without a BPMS adapter.
+   */
+  public VanillaBpSupportAutoConfiguration() {
+
+  }
+
+  /**
    * The check, registered as a {@link org.springframework.beans.factory.config.BeanFactoryPostProcessor}
    * so it runs before the first bean of the application is created.
    *

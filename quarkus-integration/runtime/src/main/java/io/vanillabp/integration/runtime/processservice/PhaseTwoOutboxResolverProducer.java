@@ -39,6 +39,13 @@ import jakarta.inject.Singleton;
 public class PhaseTwoOutboxResolverProducer {
 
   /**
+   * Built by the CDI container, which the platform's build step told about this class. What
+   * the producer method below needs arrives through the injected fields.
+   */
+  public PhaseTwoOutboxResolverProducer() {
+  }
+
+  /**
    * Application-provided attributions of aggregates to outboxes (required where the
    * application brought the persistence itself, optional otherwise).
    */
@@ -65,6 +72,11 @@ public class PhaseTwoOutboxResolverProducer {
   Instance<AggregatePersistenceAware<?>> aggregatePersistences;
 
   /**
+   * Builds the resolver of this application: the beans injected above, plus the two switches
+   * of the platform defaults read out of the configuration. The switches are passed in as
+   * plain booleans, so the resolver itself knows nothing about Quarkus configuration and can
+   * be built in a test (see {@code QuarkusStoreAttributionTest}).
+   *
    * @return The resolver, injectable by extensions and used by the process services
    */
   @Produces

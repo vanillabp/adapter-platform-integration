@@ -21,6 +21,8 @@ import lombok.extern.slf4j.Slf4j;
  * {@link DummyAdapter} switch on the two behaviours a real BPMS has and a logging
  * double otherwise would not: repeating a task whose outcome it never learned, and
  * reading the aggregate while phase two runs.
+ *
+ * @param <A> The workflow aggregate's type, as the application declared it
  */
 @Slf4j
 public class DummyProcessService<A> implements io.vanillabp.integration.adapter.spi.MigratableProcessService<A> {
@@ -38,6 +40,10 @@ public class DummyProcessService<A> implements io.vanillabp.integration.adapter.
   private final HookBeans<DummyViewerSource> viewerSources;
 
   /**
+   * Builds the process service of one configured adapter id. Each platform module
+   * calls this once per id, so a test which configures two ids can move a workflow
+   * from one of them to the other.
+   *
    * @param adapterId The id this instance answers for
    * @param deliversTasksAtLeastOnce See {@link DummyAdapter#PROPERTY_AT_LEAST_ONCE_DELIVERY}
    * @param readsAggregateInPhaseTwo See {@link DummyAdapter#PROPERTY_READ_AGGREGATE_IN_PHASE_TWO}

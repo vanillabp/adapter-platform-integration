@@ -96,6 +96,13 @@ public class JdbcPhaseTwoOutboxAutoConfiguration {
   private static final String FORMER_OUTBOX_TABLE_NAME = "TXNO_OUTBOX";
 
   /**
+   * Built by Spring Boot while it applies its auto-configurations, and only where the
+   * conditions above hold. Nothing in VanillaBP builds it.
+   */
+  public JdbcPhaseTwoOutboxAutoConfiguration() {
+  }
+
+  /**
    * Where the payload of a phase-two call which carries one is stored while its entry
    * waits. It lies in a table of its own and the entry names it (see decision 62 in the
    * repository's DECISIONS.md).
@@ -122,6 +129,14 @@ public class JdbcPhaseTwoOutboxAutoConfiguration {
   }
 
   /**
+   * The phase-two outbox of every workflow aggregate this application persists in its
+   * relational database. Spring builds it where Spring Data JPA is on the classpath, there
+   * is exactly one {@link EntityManagerFactory} next to a {@link DataSource} and a
+   * transaction manager, <code>vanillabp.outbox.jdbc.enabled</code> is not
+   * <code>false</code> and <code>vanillabp.outbox.gruelbox.enabled</code> is not
+   * <code>true</code>; an aggregate living in MongoDB is served by the MongoDB outbox
+   * beside it.
+   *
    * @param dataSource The data source holding the outbox table
    * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree carrying the
    *          <code>vanillabp.outbox</code> section (registered here as well so the

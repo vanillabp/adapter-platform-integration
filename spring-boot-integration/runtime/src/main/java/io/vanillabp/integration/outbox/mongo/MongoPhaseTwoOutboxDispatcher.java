@@ -96,6 +96,10 @@ public class MongoPhaseTwoOutboxDispatcher {
   private final MongoPhaseTwoPayloadStore payloadStore;
 
   /**
+   * Builds the dispatcher together with its payload store, its lease and its poller. The
+   * poller does not run yet: it is started once workflow processing did, so nothing is
+   * carried to a BPMS which has not seen the models.
+   *
    * @param mongoTemplate The template writing and reading the entries
    * @param phaseTwoRouter Provider of the router dispatched to
    * @param properties The bound <code>vanillabp.outbox</code> section

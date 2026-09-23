@@ -56,6 +56,14 @@ public class WorkflowEndedHandler {
 
   }
 
+  /**
+   * The end event this method asked for, read by the registry when it looks for a second
+   * method wired to the same one. An accessor per field rather than a whole class of them
+   * is decision 1 in the repository's DECISIONS.md.
+   *
+   * @return The BPMN id of the end event, or <code>null</code> where the method serves
+   *         every end of the workflow
+   */
   public String getEndEventId() {
 
     return endEventId;
@@ -63,6 +71,9 @@ public class WorkflowEndedHandler {
   }
 
   /**
+   * How this method is named in a message: the class and the method, both spelled the way
+   * they stand in the application's source, so a reader can go to them.
+   *
    * @return The method, for guiding messages
    */
   public String describe() {
@@ -72,6 +83,10 @@ public class WorkflowEndedHandler {
   }
 
   /**
+   * What this method serves, in the words of a message: one named end event, or every end
+   * of the workflow. Two methods are a defect only where both describe the same thing,
+   * which is why the message quotes this rather than the id alone.
+   *
    * @return What this handler is wired to, for guiding messages
    */
   public String describeWiring() {

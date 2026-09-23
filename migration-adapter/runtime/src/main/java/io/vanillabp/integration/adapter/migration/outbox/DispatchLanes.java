@@ -50,6 +50,11 @@ public class DispatchLanes {
   private final List<ThreadPoolExecutor> lanes;
 
   /**
+   * Builds the lanes of one outbox dispatcher, one thread and one queue each. A lane
+   * starts its thread when it is first handed work and keeps it until {@link #stop()}, so
+   * the number is what this dispatcher costs in threads and in database connections held
+   * at the same time.
+   *
    * @param threadName What the threads are called, which is what an operator reads in a
    *          thread dump; the lane's number is appended
    * @param count How many lanes to run, at least one

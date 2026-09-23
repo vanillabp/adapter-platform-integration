@@ -41,6 +41,16 @@ public final class PhaseOperationRegistry {
   private final Map<String, Registration> registrations = new ConcurrentHashMap<>();
 
   /**
+   * Builds an empty registry. The core builds one while it builds its phase-two router and
+   * registers VanillaBP's own operations in it; both platform integrations then offer that
+   * same instance as a bean, because an extension has to register in the registry the
+   * router dispatches from.
+   */
+  public PhaseOperationRegistry() {
+    // everything arrives through register and registerCoreOperation
+  }
+
+  /**
    * Register one of VanillaBP's core operations - called by the core itself. An
    * operation which is not a core operation is rejected: extensions use
    * {@link #register(PhaseOperation, PhaseOperationDispatch)}.
@@ -106,6 +116,11 @@ public final class PhaseOperationRegistry {
   }
 
   /**
+   * The operation a persisted name stands for - for a store or an extension which needs
+   * the operation itself rather than its dispatch, its
+   * {@link PhaseOperation#carriesActivation()} for example. The core asks for the dispatch
+   * only.
+   *
    * @param name The persisted name of an operation
    * @return The registered operation of that name, if any
    */
@@ -119,6 +134,9 @@ public final class PhaseOperationRegistry {
   }
 
   /**
+   * What to do with a call of an operation a store read back by name, so that the store
+   * hands the call on without ever knowing what the operation means.
+   *
    * @param name The persisted name of an operation
    * @return The dispatch registered for that operation, if any
    */

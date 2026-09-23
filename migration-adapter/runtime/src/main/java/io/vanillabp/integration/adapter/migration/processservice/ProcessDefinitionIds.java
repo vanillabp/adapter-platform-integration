@@ -70,6 +70,9 @@ public final class ProcessDefinitionIds {
   }
 
   /**
+   * The two halves of a composite id, as {@link #parse(String)} read them. Both are always
+   * there: an id whose halves would be empty is not parsed at all.
+   *
    * @param adapterId The adapter id addressed by the composite id
    * @param nativeProcessDefinitionId The adapter-native definition id
    */

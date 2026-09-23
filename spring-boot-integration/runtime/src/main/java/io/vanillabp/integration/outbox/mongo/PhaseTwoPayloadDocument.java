@@ -6,7 +6,6 @@ import org.springframework.data.annotation.Id;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
@@ -19,7 +18,6 @@ import lombok.Setter;
  */
 @Getter
 @Setter
-@NoArgsConstructor
 @AllArgsConstructor
 public class PhaseTwoPayloadDocument {
 
@@ -46,5 +44,13 @@ public class PhaseTwoPayloadDocument {
    * document whose entry never came into being disappears again.
    */
   private Instant createdAt;
+
+  /**
+   * What Spring Data starts from when it reads a payload document: it builds the empty
+   * document and fills the fields afterwards. The store writing a payload uses the
+   * constructor taking every field, which Lombok generates.
+   */
+  public PhaseTwoPayloadDocument() {
+  }
 
 }

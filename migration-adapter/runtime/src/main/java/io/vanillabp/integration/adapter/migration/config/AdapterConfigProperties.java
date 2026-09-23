@@ -1,7 +1,6 @@
 package io.vanillabp.integration.adapter.migration.config;
 
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
@@ -21,9 +20,23 @@ import lombok.experimental.SuperBuilder;
  */
 @Getter
 @Setter
-@NoArgsConstructor
 @SuperBuilder
 public class AdapterConfigProperties extends AdapterProperties {
+
+  /**
+   * The empty section a configuration binder starts from, one per configured adapter id:
+   * both platforms create the object and then write the keys the application configured
+   * into it, one setter per key.
+   * <p>
+   * It asks the builder for the values, and that is not a detour: Lombok moves the
+   * initializer of a field with a default into the builder, so a constructor which sets
+   * nothing itself would leave such a field <code>null</code>.
+   */
+  public AdapterConfigProperties() {
+
+    this(builder());
+
+  }
 
   /**
    * The adapter's type in case of a custom adapter identifier or null in case

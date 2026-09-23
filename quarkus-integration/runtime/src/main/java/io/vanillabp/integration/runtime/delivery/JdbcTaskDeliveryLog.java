@@ -60,6 +60,14 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
 
   private volatile TaskDeliveryRetentionCleanup retentionCleanup;
 
+  /**
+   * Built by the CDI container. The extension registers this bean whether or not the
+   * application has a datasource, so nothing may be read or opened here -
+   * {@link #isAvailable()} decides later whether the bean is used at all.
+   */
+  public JdbcTaskDeliveryLog() {
+  }
+
   @Override
   public QuarkusPersistenceTechnology.Technology technology() {
 

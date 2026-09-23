@@ -68,6 +68,16 @@ public record AdapterHealth(
     private final Map<String, String> details = new LinkedHashMap<>();
 
     /**
+     * Starts an empty set of details. {@link AdapterHealth#detailsBuilder()} says the same
+     * and reads better where the health is built in one expression.
+     */
+    public DetailsBuilder() {
+    }
+
+    /**
+     * Adds one detail, or drops it where the adapter has nothing to show for that name -
+     * so a caller may offer a value it is not sure about instead of asking first.
+     *
      * @param name The name of the detail
      * @param value The value, ignored if <code>null</code> or blank
      * @return This builder
@@ -83,6 +93,11 @@ public record AdapterHealth(
 
     }
 
+    /**
+     * Closes the set, so what the endpoint is given cannot be changed afterwards.
+     *
+     * @return The details which had a value
+     */
     public Map<String, String> build() {
 
       return Map.copyOf(details);
@@ -92,6 +107,8 @@ public record AdapterHealth(
   }
 
   /**
+   * Starts the details of a health.
+   *
    * @return A builder for the {@link #details()} of an adapter health
    */
   public static DetailsBuilder detailsBuilder() {
@@ -100,6 +117,16 @@ public record AdapterHealth(
 
   }
 
+  /**
+   * The health of an adapter whose BPMS answered.
+   *
+   * @param adapterId The id of the adapter instance, so an operator can tell two instances
+   *          of one BPMS apart
+   * @param adapterType The adapter's type (e.g. <code>camunda8</code>)
+   * @param description One sentence for a human, e.g. which cluster answered
+   * @param details Named values an operator needs, built with {@link #detailsBuilder()}
+   * @return The health the platform integration publishes
+   */
   public static AdapterHealth up(
       final String adapterId,
       final String adapterType,
@@ -110,6 +137,18 @@ public record AdapterHealth(
 
   }
 
+  /**
+   * The health of an adapter which could not reach its BPMS or found it broken. It is the
+   * only status which makes an application unhealthy, so the description says what failed
+   * and the details say which address was tried - an adapter reports this instead of
+   * throwing, which the core would otherwise have to turn into the same thing.
+   *
+   * @param adapterId The id of the adapter instance
+   * @param adapterType The adapter's type (e.g. <code>camunda8</code>)
+   * @param description One sentence for a human saying what failed
+   * @param details Named values an operator needs, the address above all
+   * @return The health the platform integration publishes
+   */
   public static AdapterHealth down(
       final String adapterId,
       final String adapterType,
@@ -120,6 +159,17 @@ public record AdapterHealth(
 
   }
 
+  /**
+   * The health of an adapter which checked nothing, because it is not configured yet or
+   * its check is switched off. Never the answer of a BPMS which did not answer: that is
+   * {@link #down}, and reporting it as unknown hides an outage.
+   *
+   * @param adapterId The id of the adapter instance
+   * @param adapterType The adapter's type (e.g. <code>camunda8</code>)
+   * @param description One sentence for a human saying why nothing was checked
+   * @param details Named values an operator needs, e.g. the property which is missing
+   * @return The health the platform integration publishes
+   */
   public static AdapterHealth unknown(
       final String adapterId,
       final String adapterType,

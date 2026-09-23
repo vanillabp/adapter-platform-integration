@@ -30,8 +30,15 @@ import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.runtime.workflowtask.WorkflowTaskRegistryProducer;
 
 /**
- * Main VanillaBP extension processor, responsible for processing configuration
- * and the projects classes during the augmentation phase.
+ * Registers the beans VanillaBP itself brings to an application: the router and the
+ * resolvers the generated process services use, the phase-two outbox and the log of task
+ * deliveries, and the beans an adapter announced through a build item of its own.
+ * <p>
+ * Which of them an application gets is decided while it is built, because Quarkus fixes the
+ * set of beans there and not at startup. A bean nobody injects is dropped, which is why
+ * nearly every registration below marks its bean as unremovable, and a bean whose class
+ * needs an extension the application does not have is not registered at all - a native
+ * image resolves every class it was told about while it is built.
  */
 public class VanillaBpBuildStepProcessor {
 
@@ -39,6 +46,13 @@ public class VanillaBpBuildStepProcessor {
    * The VanillaBP extensions feature.
    */
   private static final String FEATURE = "vanillabp";
+
+  /**
+   * Quarkus builds this processor while it augments the application and calls the build
+   * steps below on it. Nothing else builds it, and no step keeps state in it.
+   */
+  public VanillaBpBuildStepProcessor() {
+  }
 
   /**
    * Build extension feature used as a dependency in VanillaBP adapter extensions.

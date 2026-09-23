@@ -32,6 +32,11 @@ public class InMemoryWorkflowAdapterCacheMeters implements MeterBinder {
   private final WorkflowAdapterCache cacheInUse;
 
   /**
+   * Built by the platform integration where Micrometer is present, once per application.
+   * Which meters this ends up registering is decided in
+   * {@link #bindTo(MeterRegistry)}, not here, because the cache is a bean and asking it
+   * what it is while the beans are still being built would be too early.
+   *
    * @param cacheInUse The cache of this application, whichever implementation it is, or
    *          <code>null</code> where the application has none at all (its elections
    *          then probe every time and there is nothing to report)

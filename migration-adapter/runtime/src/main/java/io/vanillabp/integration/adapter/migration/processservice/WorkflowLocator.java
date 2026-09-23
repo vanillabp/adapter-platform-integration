@@ -167,6 +167,17 @@ public final class WorkflowLocator {
    */
   private volatile List<String> bpmnProcessIdsToReadUnder;
 
+  /**
+   * Built by the {@link MigrationProcessService} of this BPMN process, in its constructor,
+   * so there is one election per BPMN process while the cache behind it is shared by the
+   * whole application.
+   *
+   * @param workflowModuleId The workflow module every lookup and every hint is keyed by
+   * @param bpmnProcessId The plain BPMN process id of this process service
+   * @param cache Where hints are read and written, or <code>null</code> where the
+   *          application has no cache at all - the walk then runs every time, which costs
+   *          probes but never an answer
+   */
   public WorkflowLocator(
       final String workflowModuleId,
       final String bpmnProcessId,
@@ -332,6 +343,10 @@ public final class WorkflowLocator {
                             String hintedAdapterId) {
 
     /**
+     * Tells the two unknown answers apart: a workflow whose BPMS has not caught up yet
+     * from an id nobody ever saw. A caller which plans an operation may go ahead in the
+     * first case, and has to tell the application about the second one.
+     *
      * @return Whether a hint claims this workflow exists although no adapter reports
      *         it (yet)
      */

@@ -12,7 +12,6 @@ import org.eclipse.microprofile.config.spi.ConfigSourceProvider;
 import io.quarkus.runtime.annotations.StaticInitSafe;
 import io.smallrye.config.source.yaml.YamlConfigSourceLoader;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleConfigFiles;
-import lombok.RequiredArgsConstructor;
 
 /**
  * A config source provider loading config files named by a workflow module ID.
@@ -25,7 +24,6 @@ import lombok.RequiredArgsConstructor;
  * which prefers a {@code config} directory can do that instead.
  */
 @StaticInitSafe
-@RequiredArgsConstructor
 public class WorkflowModuleSpecificYamlConfigSourceProvider extends YamlConfigSourceLoader implements ConfigSourceProvider {
 
   /**
@@ -37,6 +35,24 @@ public class WorkflowModuleSpecificYamlConfigSourceProvider extends YamlConfigSo
    * The ordinal/priority
    */
   private final int ordinal;
+
+  /**
+   * Built once per workflow module by the config builder which knows the modules of
+   * this application.
+   *
+   * @param workflowModuleId The module whose file this provider looks for - the file is
+   *          named after the module
+   * @param ordinal Where the values of that file rank against the other configuration
+   *          sources
+   */
+  public WorkflowModuleSpecificYamlConfigSourceProvider(
+      final String workflowModuleId,
+      final int ordinal) {
+
+    this.workflowModuleId = workflowModuleId;
+    this.ordinal = ordinal;
+
+  }
 
   /**
    * Determine all config sources for all known file extensions, at each of the

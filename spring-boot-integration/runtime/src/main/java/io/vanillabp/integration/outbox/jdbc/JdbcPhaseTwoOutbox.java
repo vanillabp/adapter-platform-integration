@@ -52,6 +52,9 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
   private final JdbcPhaseTwoOutboxDispatcher dispatcher;
 
   /**
+   * The outbox on the table <code>vanillabp.outbox.jdbc.table</code> names, which is what
+   * every application gets unless it builds a second outbox of its own.
+   *
    * @param dataSource Where the outbox table lives - the database the workflow
    *          aggregates are persisted in
    * @param properties The bound <code>vanillabp.outbox</code> section
@@ -104,6 +107,9 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
   }
 
   /**
+   * The table this outbox writes its entries into. The auto-configuration asks, because the
+   * message about entries left in the former store has to name the table this one uses.
+   *
    * @return The table this outbox writes its entries into
    */
   public String getTableName() {
@@ -163,6 +169,10 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
 
   }
 
+  /**
+   * Stops the poller when the application context closes. An entry which was not dispatched
+   * stays in the table, and the first poll of the next start carries it.
+   */
   @PreDestroy
   public void stopPolling() {
 

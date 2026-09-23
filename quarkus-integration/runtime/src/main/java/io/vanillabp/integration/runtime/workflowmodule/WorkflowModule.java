@@ -7,18 +7,25 @@ import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * Meta-data of a workflow module
+ * Meta-data of a workflow module.
  */
 @Builder
 @Getter
 @Setter(AccessLevel.PACKAGE) // needed for object-serialization
 @AllArgsConstructor
-@NoArgsConstructor(access = AccessLevel.PACKAGE) // needed for object-serialization
 public class WorkflowModule {
+
+  /**
+   * The empty instance the bytecode of the boot starts from. A workflow module is found while
+   * the application is built and reaches the runtime as a recorded object, which is rebuilt
+   * with this constructor and the package-visible setters. The {@link URI} of such an object
+   * travels as a {@link io.vanillabp.integration.runtime.util.UriSubstitute}.
+   */
+  WorkflowModule() {
+  }
 
   /**
    * The location of workflow module descriptor files.

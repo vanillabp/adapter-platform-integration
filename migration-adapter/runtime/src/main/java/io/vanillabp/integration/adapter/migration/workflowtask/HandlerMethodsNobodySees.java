@@ -56,6 +56,12 @@ public final class HandlerMethodsNobodySees {
   }
 
   /**
+   * Looks for handler methods the scan cannot reach, before the class is scanned.
+   * <p>
+   * The superclasses are walked as well, because the second defect only shows up there: an
+   * override which drops the annotation is a method the scan does reach, and the annotated
+   * one it replaced sits further up.
+   *
    * @param workflowServiceClass The class the platform integration hands to the scanners
    * @param handlerAnnotations The annotations which make a method a handler here -
    *          {@link #CORE_HANDLER_ANNOTATIONS} for VanillaBP's own scan, the annotation

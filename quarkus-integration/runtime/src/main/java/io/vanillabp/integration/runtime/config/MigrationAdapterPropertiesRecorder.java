@@ -17,6 +17,14 @@ import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 public class MigrationAdapterPropertiesRecorder {
 
   /**
+   * Built by Quarkus while it records the build steps. A recorder keeps no state: it
+   * carries what the build found out into the starting application, and Quarkus decides
+   * when its methods run.
+   */
+  public MigrationAdapterPropertiesRecorder() {
+  }
+
+  /**
    * Supplier for {@link MigrationAdapterProperties} runtime object.
    *
    * @param capabilities Capabilities of the projects all extensions available

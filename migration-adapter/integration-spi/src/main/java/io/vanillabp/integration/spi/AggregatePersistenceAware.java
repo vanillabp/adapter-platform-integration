@@ -42,6 +42,10 @@ package io.vanillabp.integration.spi;
 public interface AggregatePersistenceAware<A> {
 
   /**
+   * The aggregate class this implementation persists. VanillaBP picks the implementation
+   * whose class fits a workflow aggregate most closely, so this answer decides which
+   * aggregates reach it.
+   *
    * @return The aggregate class.
    */
   default Class<A> getAggregateClass() {
@@ -74,6 +78,10 @@ public interface AggregatePersistenceAware<A> {
   }
 
   /**
+   * Reads the ID out of an aggregate. It names the workflow in everything VanillaBP writes
+   * down about it - the outbox entry, the delivery record and, depending on the adapter,
+   * the BPMS itself.
+   *
    * @param aggregate The aggregate to investigate
    * @return The aggregate's ID.
    */

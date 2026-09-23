@@ -4,7 +4,6 @@ import java.time.Duration;
 
 import lombok.Builder;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
@@ -21,12 +20,27 @@ import lombok.experimental.SuperBuilder;
  */
 @Getter
 @Setter
-@NoArgsConstructor
 @SuperBuilder
 public class PhaseTwoOutboxProperties {
 
   /**
-   * The longest a store's background poller sleeps while it owes nothing.
+   * The empty section a configuration binder starts from: both platforms create the object
+   * and then write the keys the application configured into it, one setter per key.
+   * <p>
+   * It asks the builder for the values, and that is not a detour: Lombok moves the
+   * initializer of a field with a default into the builder, so a constructor which sets
+   * nothing itself would hand an application which configures no outbox a poll interval of
+   * <code>null</code> and no store sections at all.
+   */
+  public PhaseTwoOutboxProperties() {
+
+    this(builder());
+
+  }
+
+  /**
+   * The longest a store's background poller sleeps while it owes nothing. Key
+   * <code>vanillabp.outbox.poll-interval</code>.
    * <p>
    * It is a cap and not a rhythm. A poller asks its store when the earliest entry which
    * is still owed is due and sleeps until exactly that moment, so an entry is dispatched
@@ -54,7 +68,11 @@ public class PhaseTwoOutboxProperties {
   /**
    * The distance to the FIRST retry after a failed dispatch. Every further attempt
    * doubles it until {@link #maxAttemptFrequency} is reached (see
-   * {@link #attemptDelay(int)}).
+   * {@link #attemptDelay(int)}). It is the length of a claim on an entry as well, which is
+   * what {@link io.vanillabp.integration.adapter.migration.outbox.DispatchLease} renews
+   * while a dispatch runs.
+   * <p>
+   * Key <code>vanillabp.outbox.attempt-frequency</code>, thirty seconds by default.
    */
   @Builder.Default
   private Duration attemptFrequency = Duration.ofSeconds(30);
@@ -62,6 +80,8 @@ public class PhaseTwoOutboxProperties {
   /**
    * The longest distance the growing backoff reaches. Five minutes, so a BPMS which
    * comes back is noticed within five minutes however long it was away.
+   * <p>
+   * Key <code>vanillabp.outbox.max-attempt-frequency</code>, five minutes by default.
    */
   @Builder.Default
   private Duration maxAttemptFrequency = Duration.ofMinutes(5);
@@ -72,6 +92,8 @@ public class PhaseTwoOutboxProperties {
    * hours - a cluster upgrade rather than an exotic event. What ends up blocked is
    * then an entry which is broken rather than one whose BPMS was away for a while,
    * and it is the case an operator has to look at.
+   * <p>
+   * Key <code>vanillabp.outbox.block-after-attempts</code>, fifty attempts by default.
    */
   @Builder.Default
   private int blockAfterAttempts = 50;
@@ -122,6 +144,9 @@ public class PhaseTwoOutboxProperties {
    * enough that the threads wait for it rather than for the database.
    * <p>
    * The MongoDB stores dispatch on one thread and are unaffected by this.
+   * <p>
+   * Key <code>vanillabp.outbox.dispatch-threads</code>, four threads by default. Fewer
+   * than one is refused with a message naming the key.
    */
   @Builder.Default
   private int dispatchThreads = 4;
@@ -130,6 +155,10 @@ public class PhaseTwoOutboxProperties {
    * Whether the schema (table/collection) used to store outbox entries is created
    * automatically. Disable this if the database schema is managed manually (e.g. by
    * Flyway or Liquibase).
+   * <p>
+   * Key <code>vanillabp.outbox.create-schema</code>, <code>true</code> by default. The
+   * records of processed task deliveries share it, because it is a setting of the store
+   * rather than of the outbox.
    */
   @Builder.Default
   private boolean createSchema = true;
@@ -149,6 +178,8 @@ public class PhaseTwoOutboxProperties {
    * they were told apart (decision 24 in the repository's DECISIONS.md), which is why
    * shortening this one to keep the outbox table small used to shorten a correctness window
    * with the same hand.
+   * <p>
+   * Key <code>vanillabp.outbox.retention</code>, seven days by default.
    */
   @Builder.Default
   private Duration retention = DEFAULT_RETENTION;
@@ -178,17 +209,39 @@ public class PhaseTwoOutboxProperties {
   @Builder.Default
   private MongoOutboxProperties mongo = new MongoOutboxProperties();
 
+  /**
+   * The keys of the JDBC default outbox (properties section
+   * <code>vanillabp.outbox.jdbc.*</code>): whether it is built at all, and the two tables
+   * it works on.
+   */
   @Getter
   @Setter
-  @NoArgsConstructor
   @SuperBuilder
   public static class JdbcOutboxProperties {
+
+    /**
+     * The empty section a configuration binder starts from, and the section an application
+     * which writes nothing about the JDBC outbox gets, since the field holding it has this
+     * as its default.
+     * <p>
+     * It asks the builder for the values, and that is not a detour: Lombok moves the
+     * initializer of a field with a default into the builder, so a constructor which sets
+     * nothing itself would switch the JDBC outbox off for every application which
+     * configures no outbox.
+     */
+    public JdbcOutboxProperties() {
+
+      this(JdbcOutboxProperties.builder());
+
+    }
 
     /**
      * Whether the JDBC-based default outbox is created when a data source is
      * available. Disable it if the application defines its own
      * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} bean and the
      * default (including its store and background dispatcher) is unwanted.
+     * <p>
+     * Key <code>vanillabp.outbox.jdbc.enabled</code>, <code>true</code> by default.
      */
     @Builder.Default
     private boolean enabled = true;
@@ -202,6 +255,8 @@ public class PhaseTwoOutboxProperties {
      * well, and there a name of its own switches the schema migration of that library
      * off, because it only ever targets <code>TXNO_OUTBOX</code> - the table has to be
      * created by hand then, which is verified at startup.
+     * <p>
+     * Key <code>vanillabp.outbox.jdbc.table</code>, unset by default.
      */
     @Builder.Default
     private String table = null;
@@ -214,17 +269,39 @@ public class PhaseTwoOutboxProperties {
      * outbox table plus
      * {@link io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore#TABLE_NAME_SUFFIX},
      * so an application which renames the outbox renames the payloads with it.
+     * <p>
+     * Key <code>vanillabp.outbox.jdbc.payload-table</code>, unset by default.
      */
     @Builder.Default
     private String payloadTable = null;
 
   }
 
+  /**
+   * The keys of the MongoDB default outbox (properties section
+   * <code>vanillabp.outbox.mongo.*</code>): whether it is built at all, and the
+   * collections it and the delivery log work on.
+   */
   @Getter
   @Setter
-  @NoArgsConstructor
   @SuperBuilder
   public static class MongoOutboxProperties {
+
+    /**
+     * The empty section a configuration binder starts from, and the section an application
+     * which writes nothing about the MongoDB outbox gets, since the field holding it has
+     * this as its default.
+     * <p>
+     * It asks the builder for the values, and that is not a detour: Lombok moves the
+     * initializer of a field with a default into the builder, so a constructor which sets
+     * nothing itself would switch the MongoDB outbox off and leave both collections
+     * unnamed.
+     */
+    public MongoOutboxProperties() {
+
+      this(MongoOutboxProperties.builder());
+
+    }
 
     /**
      * The name of the collection the entries go into where the application configures
@@ -253,6 +330,8 @@ public class PhaseTwoOutboxProperties {
      * is available. Disable it if the application defines its own
      * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} bean and the
      * default (including its store and background dispatcher) is unwanted.
+     * <p>
+     * Key <code>vanillabp.outbox.mongo.enabled</code>, <code>true</code> by default.
      */
     @Builder.Default
     private boolean enabled = true;
@@ -261,6 +340,9 @@ public class PhaseTwoOutboxProperties {
      * The name of the collection storing outbox entries. Every outbox instance
      * needs its own store - two dispatchers polling the same collection would
      * compete and double-dispatch.
+     * <p>
+     * Key <code>vanillabp.outbox.mongo.collection</code>,
+     * {@value #DEFAULT_COLLECTION} by default.
      */
     @Builder.Default
     private String collection = DEFAULT_COLLECTION;
@@ -272,6 +354,8 @@ public class PhaseTwoOutboxProperties {
      * <code>null</code> means the name of the outbox collection plus
      * {@link #PAYLOAD_COLLECTION_SUFFIX}, so an application which renames the outbox
      * renames the payloads with it.
+     * <p>
+     * Key <code>vanillabp.outbox.mongo.payload-collection</code>, unset by default.
      */
     @Builder.Default
     private String payloadCollection = null;
@@ -288,6 +372,9 @@ public class PhaseTwoOutboxProperties {
      * Give it a name of its own where the database has naming rules, and keep it apart
      * from {@link #collection} and the payload collection: three stores sharing one
      * collection would read each other's documents.
+     * <p>
+     * Key <code>vanillabp.outbox.mongo.delivery-collection</code>,
+     * {@value #DEFAULT_DELIVERY_COLLECTION} by default.
      */
     @Builder.Default
     private String deliveryCollection = DEFAULT_DELIVERY_COLLECTION;

@@ -101,6 +101,14 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
    */
   private final Log log;
 
+  /**
+   * Built by Spring Boot, which reads this class from
+   * <code>META-INF/spring.factories</code> and passes the factory it finds in the
+   * signature. An environment post processor is created long before the application
+   * context, so nothing may be injected here and nothing may be logged directly.
+   *
+   * @param logFactory Builds the log which keeps its lines until the logging system is up
+   */
   public WorkflowModulePropertiesEnvironmentPostProcessor(
       final DeferredLogFactory logFactory) {
 

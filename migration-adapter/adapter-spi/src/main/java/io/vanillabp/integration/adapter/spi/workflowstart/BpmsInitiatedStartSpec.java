@@ -27,6 +27,10 @@ public record BpmsInitiatedStartSpec(
                                      String description) {
 
   /**
+   * The spec of a start event an adapter can say no more about than its id and its kind.
+   * The core matches a reported start event by the element id, so the two values left out
+   * change no decision - they make what is reported about it easier to read.
+   *
    * @param elementId The BPMN id of the start event
    * @param kind Which kind of start event it is
    * @return The spec without a signal name and description

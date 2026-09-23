@@ -17,6 +17,12 @@ import io.quarkus.mongodb.panache.runtime.JavaMongoOperations;
  */
 public class PanacheMongoActiveRecordAggregatePersistence<A> extends DefaultAggregatePersistence<A> {
 
+  /**
+   * Called by the no-arg constructor of the subclass the build generates for one
+   * aggregate.
+   *
+   * @param aggregateClass The aggregate type, which is also the MongoDB Panache entity
+   */
   public PanacheMongoActiveRecordAggregatePersistence(
       final Class<A> aggregateClass) {
 

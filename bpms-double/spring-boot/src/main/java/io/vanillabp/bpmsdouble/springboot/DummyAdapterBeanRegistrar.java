@@ -38,6 +38,13 @@ import io.vanillabp.integration.adapter.AdapterBeanRegistrarSupport;
  */
 public class DummyAdapterBeanRegistrar implements BeanRegistrar {
 
+  /**
+   * Spring builds the registrar once, because the auto-configuration imports it. A test
+   * neither creates it nor calls it - it looks the registered beans up by their names.
+   */
+  public DummyAdapterBeanRegistrar() {
+  }
+
   @Override
   public void register(
       final BeanRegistry registry,

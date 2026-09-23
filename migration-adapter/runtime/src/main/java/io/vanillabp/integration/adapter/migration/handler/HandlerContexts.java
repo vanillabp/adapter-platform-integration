@@ -21,6 +21,11 @@ public final class HandlerContexts {
   }
 
   /**
+   * The full context, whose multi-instance scopes are asked for only where one is needed.
+   * <p>
+   * Both suppliers are called when a binder reads them, not now: looking up a process
+   * variable costs the adapter a question, and a handler which binds none should cost none.
+   *
    * @param workflowAggregate The aggregate the handler works on
    * @param payload What the binders which are not the core's read - the adapter's
    *          invocation context, or the extension's own event object
@@ -71,6 +76,11 @@ public final class HandlerContexts {
   }
 
   /**
+   * The context for a caller which has its variables in hand and no iteration to speak of.
+   * <p>
+   * A handler binding a multi-instance parameter gets an empty scope here, which is the
+   * honest answer: the caller is not inside an iteration.
+   *
    * @param workflowAggregate The aggregate the handler works on
    * @param payload What the binders which are not the core's read
    * @param variables The process variables, may be <code>null</code>

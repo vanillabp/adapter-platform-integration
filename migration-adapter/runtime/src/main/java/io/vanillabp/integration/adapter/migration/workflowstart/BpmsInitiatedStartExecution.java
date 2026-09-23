@@ -27,6 +27,11 @@ public final class BpmsInitiatedStartExecution {
   }
 
   /**
+   * Runs that build for one notification of the BPMS, in the transaction the adapter asked
+   * for. A notification which arrives twice - a retried listener job, a replayed engine
+   * transaction - finds the aggregate it built the first time and creates nothing, so
+   * business data written meanwhile survives.
+   *
    * @param <A> The workflow-aggregate type
    * @param processService The process service of the BPMN process (persistence, ID
    *          type, aggregate class)

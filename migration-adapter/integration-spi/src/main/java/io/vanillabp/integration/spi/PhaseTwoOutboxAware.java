@@ -34,6 +34,10 @@ package io.vanillabp.integration.spi;
 public interface PhaseTwoOutboxAware<A> {
 
   /**
+   * Which aggregates this selection is about. VanillaBP picks the implementation whose
+   * class fits an aggregate most closely, so the answer decides whose entries go into the
+   * outbox below.
+   *
    * @return The aggregate class this outbox selection applies to.
    */
   default Class<A> getAggregateClass() {

@@ -43,6 +43,16 @@ public class OutfadedProcessVersions {
    */
   private final Map<SpecKey, List<VersionRange>> parsed = new ConcurrentHashMap<>();
 
+  /**
+   * Built while the registry is wired, once per application.
+   * <p>
+   * Nothing is read or parsed here. The configuration is asked the first time a version is
+   * judged, so a broken specification is reported while the processes are checked and names
+   * the process it was configured for.
+   *
+   * @param properties The bound configuration, <code>null</code> where nobody bound one -
+   *          nothing is outfaded then and every version keeps being served
+   */
   public OutfadedProcessVersions(
       final MigrationAdapterProperties properties) {
 
@@ -101,6 +111,13 @@ public class OutfadedProcessVersions {
   }
 
   /**
+   * What the operator asked for when workflows still run on a version faded out.
+   * <p>
+   * Reporting it is the default, because an application which boots is worth more than one
+   * which refuses over a workflow somebody can still complete. An operator who wants the
+   * boot stopped sets <code>outfaded-versions-in-use</code> to
+   * {@link OutfadedVersionsInUsePolicy#FAIL}.
+   *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
    * @param adapterId The adapter ID

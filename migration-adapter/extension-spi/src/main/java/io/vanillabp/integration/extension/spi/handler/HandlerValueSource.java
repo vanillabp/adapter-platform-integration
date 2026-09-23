@@ -9,6 +9,9 @@ package io.vanillabp.integration.extension.spi.handler;
 public interface HandlerValueSource {
 
   /**
+   * Produces the value of the parameter for one invocation. It runs on the thread the
+   * handler runs on and inside its transaction, so keep it to reading the context.
+   *
    * @param context The values of this invocation
    * @return The value to pass as the parameter
    */

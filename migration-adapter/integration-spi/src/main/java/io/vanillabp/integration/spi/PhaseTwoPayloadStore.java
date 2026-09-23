@@ -93,6 +93,10 @@ public interface PhaseTwoPayloadStore {
   interface EntriesNamingPayloads {
 
     /**
+     * Asks the outbox which of these payloads it still needs. Naming too many only leaves
+     * an orphan behind for one more run; naming too few takes the bytes away from an entry
+     * which is still to be dispatched.
+     *
      * @param references The references of the payloads the store is about to remove
      * @return Those of them an entry of the outbox still names, in any state
      */

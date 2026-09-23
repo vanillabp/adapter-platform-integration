@@ -31,6 +31,8 @@ public interface SpringDataUtil {
   /**
    * Determine the entity's object identifier.
    * 
+   * @param <I> The type the caller expects the identifier to have. The value is cast
+   *          unchecked, so a wrong expectation fails where the caller assigns it, not here.
    * @param entity The entity
    * @return The id
    * @see Id

@@ -64,15 +64,28 @@ public final class DefaultAggregatePersistenceResolver {
       DotName.createSimple("org.springframework.data.repository.PagingAndSortingRepository"),
       DotName.createSimple("org.springframework.data.jpa.repository.JpaRepository"));
 
-  /** Implementations provided by {@code vanillabp-quarkus-integration}. */
+  /**
+   * The implementation for an aggregate managed by a Hibernate ORM Panache repository, one
+   * of those {@code vanillabp-quarkus-integration} ships.
+   * <p>
+   * The implementations are named as strings and not as classes because this resolver runs
+   * while the application is built: each of them extends a type of the persistence
+   * framework it serves, and loading it in an application which does not use that framework
+   * would fail right here. The name is all the generated bean needs, too - Gizmo writes the
+   * superclass into bytecode and loads nothing either.
+   */
   public static final String PANACHE_REPOSITORY_PERSISTENCE = "io.vanillabp.integration.runtime.persistence.PanacheRepositoryAggregatePersistence";
 
+  /** The implementation for an aggregate which is a Hibernate ORM Panache active record. */
   public static final String PANACHE_ACTIVE_RECORD_PERSISTENCE = "io.vanillabp.integration.runtime.persistence.PanacheActiveRecordAggregatePersistence";
 
+  /** The implementation for an aggregate managed by a MongoDB Panache repository. */
   public static final String PANACHE_MONGO_REPOSITORY_PERSISTENCE = "io.vanillabp.integration.runtime.persistence.PanacheMongoRepositoryAggregatePersistence";
 
+  /** The implementation for an aggregate which is a MongoDB Panache active record. */
   public static final String PANACHE_MONGO_ACTIVE_RECORD_PERSISTENCE = "io.vanillabp.integration.runtime.persistence.PanacheMongoActiveRecordAggregatePersistence";
 
+  /** The implementation for an aggregate managed by a Spring Data repository. */
   public static final String SPRING_DATA_PERSISTENCE = "io.vanillabp.integration.runtime.persistence.SpringDataAggregatePersistence";
 
   private DefaultAggregatePersistenceResolver() {
@@ -93,6 +106,11 @@ public final class DefaultAggregatePersistenceResolver {
   }
 
   /**
+   * The persistence for the given aggregate, picked in the order the class describes. An
+   * aggregate claimed twice within one of those steps - two repositories of one kind, or a
+   * Hibernate ORM and a MongoDB artifact of the same shape - ends the build here, with a
+   * message naming both.
+   *
    * @param index The index to look up classes in (the combined index, so classes of
    *        extensions shipping a Jandex index are visible, too)
    * @param aggregateType The workflow aggregate's class

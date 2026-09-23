@@ -69,6 +69,10 @@ public class MicrometerVanillaBpMetrics implements VanillaBpMetrics, MeterBinder
   }
 
   /**
+   * Built by the platform integration while the application boots, once per application.
+   * No meter exists yet at that point: the registry arrives later, with
+   * {@link #bindTo(MeterRegistry)}.
+   *
    * @param gaugeCache How long one measurement of a gauge which has to ask somebody is
    *          reused before it is taken again
    */

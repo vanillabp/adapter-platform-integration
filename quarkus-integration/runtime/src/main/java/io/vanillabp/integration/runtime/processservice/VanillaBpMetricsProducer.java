@@ -23,6 +23,17 @@ import jakarta.inject.Singleton;
 public class VanillaBpMetricsProducer {
 
   /**
+   * Built by the CDI container, and only in an application which brought the Micrometer
+   * extension - the build step named in the class comment is what registers the bean.
+   */
+  public VanillaBpMetricsProducer() {
+  }
+
+  /**
+   * Builds what VanillaBP counts into. The window of a gauge which has to ask somebody comes
+   * from the configuration rather than from a constant, because a scrape must not turn into
+   * load - see decision 18 in the repository's DECISIONS.md.
+   *
    * @param properties The VanillaBP configuration, carrying how long the measurement of
    *          a gauge which has to ask somebody is reused
    * @return The meters of deliveries and outbox

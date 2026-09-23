@@ -17,6 +17,11 @@ package io.vanillabp.integration.runtime.processservice;
 public interface MongoDeploymentProbe {
 
   /**
+   * Asks the deployment what it is. The question goes to the server and not to the
+   * configured connection string, because a single host may well be a one-node replica set.
+   * It is asked while the application starts, when the core has the coverage of an
+   * aggregate's transaction reported to it, so a slow answer delays a boot and no write.
+   *
    * @return <code>true</code> for a replica set or a sharded cluster, <code>false</code> if
    *         the deployment demonstrably is neither, <code>null</code> if the question could
    *         not be answered (no client, no connection, a server refusing the command) - an

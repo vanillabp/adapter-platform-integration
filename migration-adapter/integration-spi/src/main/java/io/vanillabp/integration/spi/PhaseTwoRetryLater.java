@@ -27,8 +27,21 @@ public class PhaseTwoRetryLater extends RuntimeException {
 
   private static final long serialVersionUID = 1L;
 
+  /**
+   * How long the store should wait before it dispatches the entry again. It is the window
+   * the adapter asked for and not a backoff a store computed, which is why a store may use
+   * it in place of its own.
+   */
   private final Duration retryAfter;
 
+  /**
+   * Says that the operation is worth repeating, and how long the store should wait before
+   * it does.
+   *
+   * @param message Why the operation cannot run yet, and what to look at if it stays that
+   *        way
+   * @param retryAfter How long to wait before the next attempt
+   */
   public PhaseTwoRetryLater(
       final String message,
       final Duration retryAfter) {
@@ -39,6 +52,8 @@ public class PhaseTwoRetryLater extends RuntimeException {
   }
 
   /**
+   * How long this failure asks the store to wait.
+   *
    * @return How long to wait before the entry is dispatched again
    */
   public Duration getRetryAfter() {
@@ -48,6 +63,8 @@ public class PhaseTwoRetryLater extends RuntimeException {
   }
 
   /**
+   * Reads the waiting time out of whatever wrapped the failure, which is how a store asks.
+   *
    * @param failure The failure a dispatch ended with
    * @return How long to wait before the next attempt, or <code>null</code> where the
    *         failure says nothing about it and the store's own backoff applies

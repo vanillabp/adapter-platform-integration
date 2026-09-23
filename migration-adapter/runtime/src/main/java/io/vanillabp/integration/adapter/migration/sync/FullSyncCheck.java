@@ -25,6 +25,11 @@ public class FullSyncCheck {
   private final MigrationAdapterProperties properties;
 
   /**
+   * Built by the registry which registers the workflows, once per application.
+   * <p>
+   * Both of these may be missing where a test registers workflow services directly. Nothing
+   * is refused then, because neither what an aggregate shares nor the permission can be read.
+   *
    * @param aggregateSync The core's sync model, which answers what an aggregate shares
    * @param properties The VanillaBP configuration, which holds the permission
    */

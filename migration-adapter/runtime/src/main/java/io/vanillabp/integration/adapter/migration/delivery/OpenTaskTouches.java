@@ -56,6 +56,11 @@ public class OpenTaskTouches {
   private final AtomicBoolean overflowReported = new AtomicBoolean();
 
   /**
+   * Built by the store whose records are refreshed, once per application.
+   * <p>
+   * Writing is handed in rather than done here, because the two platforms differ in how a
+   * record is refreshed and in nothing else.
+   *
    * @param name Names the store refreshed (log messages)
    * @param refresh Writes the second timestamp of the records of one block of keys
    */

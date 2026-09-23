@@ -27,6 +27,15 @@ public class VanillaBpHealthIndicator implements HealthIndicator {
 
   private final AdapterHealthReport report;
 
+  /**
+   * Built by the bean method of
+   * {@link io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration}
+   * which runs only where Spring Boot's health support is on the classpath. Its bean name
+   * decides the name of the health component, so it is fixed there rather than here.
+   *
+   * @param report Asks the adapters on every call, so an adapter which is created late is
+   *     asked as well - this indicator keeps nothing of its own
+   */
   public VanillaBpHealthIndicator(
       final AdapterHealthReport report) {
 

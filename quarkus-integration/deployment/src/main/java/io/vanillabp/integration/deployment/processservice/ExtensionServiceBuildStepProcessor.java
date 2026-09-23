@@ -29,12 +29,12 @@ import io.vanillabp.integration.runtime.processservice.ExtensionServiceRecorder;
 public class ExtensionServiceBuildStepProcessor {
 
   /**
-   * @param combinedIndex The index, asked which classes implement
-   *          {@link AggregateServiceFactory}
-   * @param workflowAggregates The workflow aggregates of this application
-   * @param recorder Builds a service when its bean is created
-   * @param syntheticBeanProducer Collects the beans
+   * Quarkus builds this processor while it augments the application and calls the build
+   * steps below on it. Nothing else builds it, and no step keeps state in it.
    */
+  public ExtensionServiceBuildStepProcessor() {
+  }
+
   /**
    * Keeps the extensions' factories alive. Nothing of the application injects them - the
    * platform looks them up while it builds a service - and ArC removes beans nobody
@@ -49,6 +49,19 @@ public class ExtensionServiceBuildStepProcessor {
 
   }
 
+  /**
+   * Registers one bean per service interface and workflow aggregate. Which pairs there are
+   * is decided here because Quarkus fixes the set of beans while it builds the application:
+   * an injection point asking for the extension's service with an aggregate as its type
+   * argument finds a bean only where this step wrote one (see decision 35 in the
+   * repository's DECISIONS.md).
+   *
+   * @param combinedIndex The index, asked which classes implement
+   *          {@link AggregateServiceFactory}
+   * @param workflowAggregates The workflow aggregates of this application
+   * @param recorder Builds a service when its bean is created
+   * @param syntheticBeanProducer Collects the beans
+   */
   @BuildStep
   @Record(ExecutionTime.RUNTIME_INIT)
   void buildExtensionServices(

@@ -93,6 +93,11 @@ import io.vanillabp.spi.process.WorkflowHistory;
 public interface MigratableProcessService<A> {
 
   /**
+   * Which configured adapter instance serves this process service. The core writes the id
+   * into what it persists about a workflow - an outbox entry, a delivery record - and
+   * reads it back to reach the same BPMS again, which is why the id is an identity and not
+   * a label: decision 17 in the repository's DECISIONS.md.
+   *
    * @return The adapter's ID this service belongs to
    */
   String getAdapterId();

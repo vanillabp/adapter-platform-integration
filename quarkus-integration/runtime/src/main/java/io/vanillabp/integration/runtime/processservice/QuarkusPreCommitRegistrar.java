@@ -17,6 +17,14 @@ import jakarta.inject.Inject;
 @ApplicationScoped
 public class QuarkusPreCommitRegistrar implements PreCommitRegistrar {
 
+  /**
+   * Built by the CDI container, which the platform's build step told about this class. An
+   * adapter receives the bean among its collaborators and never builds one - see decision 28
+   * in the repository's DECISIONS.md.
+   */
+  public QuarkusPreCommitRegistrar() {
+  }
+
   @Inject
   TransactionRunnerResolver transactionRunnerResolver;
 

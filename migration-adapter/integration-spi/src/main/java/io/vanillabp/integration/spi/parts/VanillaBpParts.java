@@ -117,6 +117,9 @@ public final class VanillaBpParts {
   }
 
   /**
+   * Which platform integration this application runs. It is read from the descriptor on
+   * the classpath, and every message about a part which does not fit names it.
+   *
    * @return The version of the VanillaBP platform integration found on the classpath, or
    *         <code>unknown</code> if it cannot be determined
    */
@@ -333,6 +336,10 @@ public final class VanillaBpParts {
   }
 
   /**
+   * Where a part's version descriptor lies on the classpath. A part which wants to be
+   * judged puts its file there; a part which ships none is only warned about (see
+   * decision 71 in the repository's DECISIONS.md).
+   *
    * @param kind Whether the part is an adapter or an extension
    * @param name The name the part ships its version descriptor under
    * @return The path of the part's version descriptor

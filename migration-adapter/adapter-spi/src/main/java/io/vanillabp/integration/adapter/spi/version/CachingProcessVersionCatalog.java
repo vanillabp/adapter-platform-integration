@@ -92,12 +92,25 @@ public abstract class CachingProcessVersionCatalog implements ProcessVersionCata
 
   private final Duration refreshInterval;
 
+  /**
+   * The catalog an adapter builds, with the floor of
+   * {@value #DEFAULT_REFRESH_INTERVAL_SECONDS} seconds between two questions about the
+   * same unknown version identifier or tag.
+   */
   protected CachingProcessVersionCatalog() {
 
     this(Duration.ofSeconds(DEFAULT_REFRESH_INTERVAL_SECONDS));
 
   }
 
+  /**
+   * The same with a floor of its own. {@link Duration#ZERO} asks the BPMS about every
+   * unknown value again, which is what a test wants where it deploys a version and reads
+   * it back in the next line.
+   *
+   * @param refreshInterval How long an unknown version identifier or tag stays unknown
+   *          before the BPMS is asked about it again
+   */
   protected CachingProcessVersionCatalog(
       final Duration refreshInterval) {
 

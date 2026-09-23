@@ -52,10 +52,23 @@ public class SpringBootTestApplication implements AutoCloseable {
     this.classLoader = classLoader;
   }
 
+  /**
+   * Starts describing a test application: which resources it finds on its classpath,
+   * and which of the real ones it must not see.
+   *
+   * @return A fresh builder - each {@link Builder#build()} makes one application
+   */
   public static Builder builder() {
     return new Builder();
   }
 
+  /**
+   * The class loader carrying the resources of this test application. A test hands it
+   * to whatever it starts itself, where neither {@link #contextRunner()} nor
+   * {@link #applicationBuilder(Class...)} fits.
+   *
+   * @return The loader, which serves the added resources and hides the hidden ones
+   */
   public ClassLoader getClassLoader() {
     return classLoader;
   }
@@ -63,6 +76,9 @@ public class SpringBootTestApplication implements AutoCloseable {
   /**
    * Returns an {@link ApplicationContextRunner} pre-configured with the
    * custom ClassLoader.
+   *
+   * @return A runner which boots a context against the resources of this test
+   *         application
    */
   public ApplicationContextRunner contextRunner() {
     return new ApplicationContextRunner()
@@ -72,6 +88,10 @@ public class SpringBootTestApplication implements AutoCloseable {
   /**
    * Returns a {@link SpringApplicationBuilder} pre-configured with a
    * ResourceLoader that uses the custom ClassLoader.
+   *
+   * @param sources The configuration classes the application boots from
+   * @return The builder - what it runs reads the resources of this test application,
+   *         which is how a test asserts a boot which fails on them
    */
   public SpringApplicationBuilder applicationBuilder(
       final Class<?>... sources) {
@@ -180,6 +200,10 @@ public class SpringBootTestApplication implements AutoCloseable {
     }
   }
 
+  /**
+   * Collects what the classpath of the test application holds before it is built. Every
+   * method gives the builder back, so the calls chain.
+   */
   public static class Builder {
 
     private final List<ResourceEntry> resources = new ArrayList<>();
@@ -190,6 +214,11 @@ public class SpringBootTestApplication implements AutoCloseable {
 
     /**
      * Add a resource with the given string content.
+     *
+     * @param path Where the resource lies on the classpath of the test application,
+     *          e.g. <code>config/test-module.yaml</code>
+     * @param content The text, written as UTF-8
+     * @return This builder
      */
     public Builder addResource(
         final String path,
@@ -202,6 +231,10 @@ public class SpringBootTestApplication implements AutoCloseable {
 
     /**
      * Add a resource with the given byte content.
+     *
+     * @param path Where the resource lies on the classpath of the test application
+     * @param content The bytes, for a resource which is not text
+     * @return This builder
      */
     public Builder addResource(
         final String path,
@@ -212,10 +245,12 @@ public class SpringBootTestApplication implements AutoCloseable {
     }
 
     /**
-     * Copy a resource from the current classpath to the temp directory.
+     * Copy a resource from the classpath of the test itself into the test application,
+     * under the same name. A resource which is not there is reported by
+     * {@link #build()}, not here.
      *
-     * @throws IllegalArgumentException if the resource is not found on the
-     *     classpath
+     * @param path The resource to copy
+     * @return This builder
      */
     public Builder addResource(
         final String path) {
@@ -226,6 +261,10 @@ public class SpringBootTestApplication implements AutoCloseable {
     /**
      * Hide resources whose name contains the given fragment. Hidden
      * resources will only be resolved from the temp directory.
+     *
+     * @param nameFragment Every resource whose name holds this text is hidden, which is
+     *          how a test replaces a file its own module really ships
+     * @return This builder
      */
     public Builder hideResource(
         final String nameFragment) {
@@ -233,6 +272,18 @@ public class SpringBootTestApplication implements AutoCloseable {
       return this;
     }
 
+    /**
+     * Builds the test application: the collected resources are written into a temporary
+     * directory and a class loader serving it is put in front of the test's own one.
+     * The result is closed to delete that directory again, so a test uses it in a
+     * try-with-resources block.
+     *
+     * @return The application, ready to boot
+     * @throws IOException If the temporary directory or one of the resources cannot be
+     *           written
+     * @throws IllegalArgumentException If a resource named by
+     *           {@link #addResource(String)} is not on the classpath of the test
+     */
     public SpringBootTestApplication build() throws IOException {
       final var tempDir = Files
           .createTempDirectory("vanillabp-test-");

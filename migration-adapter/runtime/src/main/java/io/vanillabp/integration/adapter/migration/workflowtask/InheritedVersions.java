@@ -30,6 +30,12 @@ import io.vanillabp.spi.service.WorkflowService;
  * Why a method which INHERITS a range is as restricted as one naming it, and what that
  * means for a BPMS reporting no version at all, is decision 20 in the repository's
  * DECISIONS.md.
+ *
+ * @param versions What the class declared for that process, {@link ServedVersions#EVERY_VERSION}
+ *          where it declared nothing
+ * @param declaredBy The declaration the ranges were read from, worded for a message a developer
+ *          reads - <code>null</code> where there is nothing to inherit, because a message about
+ *          an inherited range has to name where the range sits
  */
 public record InheritedVersions(
                                 ServedVersions versions,
@@ -42,6 +48,12 @@ public record InheritedVersions(
   private static final InheritedVersions NOTHING = new InheritedVersions(ServedVersions.EVERY_VERSION, null);
 
   /**
+   * Reads the class annotation once, before the handler methods of that class are registered.
+   * <p>
+   * A class which says nothing about versions is the normal case, and it gets the same answer
+   * as a class naming <code>*</code>: there is nothing to inherit, so no message about such a
+   * method mentions an origin.
+   *
    * @param workflowServiceClass The <code>&#64;WorkflowService</code> class
    * @param bpmnProcessId The BPMN process its handlers are being registered for
    * @return What the methods of that class inherit for that process
@@ -92,6 +104,12 @@ public record InheritedVersions(
   }
 
   /**
+   * What one handler method of that class really serves - the method wins.
+   * <p>
+   * The two ranges are not intersected, so a method naming a range is not narrowed by its
+   * class. Only a method naming none takes the class range over, and it then carries the
+   * declaration it came from.
+   *
    * @param namedByTheMethod What the method's own <code>version</code> attribute parses
    *          to - {@link ServedVersions#EVERY_VERSION} where it names none
    * @return The versions the handler serves, naming their origin where the class

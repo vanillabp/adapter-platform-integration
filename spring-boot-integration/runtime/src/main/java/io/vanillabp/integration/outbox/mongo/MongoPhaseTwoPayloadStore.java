@@ -9,7 +9,6 @@ import org.springframework.data.mongodb.core.query.Query;
 
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoPayloadStore;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -28,7 +27,6 @@ import lombok.extern.slf4j.Slf4j;
  * which is what {@link #removeOrphansOlderThan(Instant, EntriesNamingPayloads)} is
  * for.
  */
-@RequiredArgsConstructor
 @Slf4j
 public class MongoPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
 
@@ -39,6 +37,23 @@ public class MongoPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
    * outbox itself has one.
    */
   private final String collection;
+
+  /**
+   * Built by the dispatcher of the outbox this store belongs to, which is what makes the
+   * two agree on the collection.
+   *
+   * @param mongoTemplate The template the payloads are written and read through - the same
+   *          one the entries use, so a payload becomes visible exactly when its entry does
+   * @param collection The collection the payload documents go into
+   */
+  public MongoPhaseTwoPayloadStore(
+      final MongoTemplate mongoTemplate,
+      final String collection) {
+
+    this.mongoTemplate = mongoTemplate;
+    this.collection = collection;
+
+  }
 
   @Override
   public void write(

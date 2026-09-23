@@ -83,6 +83,10 @@ public class GruelboxPhaseTwoFailureListener implements TransactionOutboxListene
   private final int blockAfterAttempts;
 
   /**
+   * The listener of ONE gruelbox outbox. It writes into that outbox' table through that
+   * outbox' transaction manager, so an application running a second gruelbox instance needs
+   * a second listener rather than this one.
+   *
    * @param persistor The persistor of the outbox this listener belongs to, used to write
    *          the blocked flag
    * @param transactionManager The transaction manager of that outbox, giving the

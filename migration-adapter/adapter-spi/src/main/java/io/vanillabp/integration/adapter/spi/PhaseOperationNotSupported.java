@@ -19,6 +19,10 @@ public class PhaseOperationNotSupported extends UnsupportedOperationException {
   private static final long serialVersionUID = 1L;
 
   /**
+   * Builds the message the application is refused with: what this adapter cannot do, which
+   * workflow it was asked about, and what to do instead where the operation names a way
+   * out.
+   *
    * @param adapterId The ID of the adapter which has no handler for the operation
    * @param operation The operation asked for
    * @param workflowModuleId The ID of the workflow module the call belongs to

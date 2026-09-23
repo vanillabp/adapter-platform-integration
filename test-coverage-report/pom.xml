@@ -23,5 +23,8 @@
   <properties>
     <!-- nothing to deploy - reports are published on Github pages -->
     <maven.deploy.skip>true</maven.deploy.skip>
+    <!-- and no javadoc either: these modules carry no source, they aggregate what the
+         others measured -->
+    <maven.javadoc.skip>true</maven.javadoc.skip>
   </properties>
 </project>

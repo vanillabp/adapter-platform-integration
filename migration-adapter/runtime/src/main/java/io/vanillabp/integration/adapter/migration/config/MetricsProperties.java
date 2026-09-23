@@ -4,7 +4,6 @@ import java.time.Duration;
 
 import lombok.Builder;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
@@ -23,13 +22,23 @@ import lombok.experimental.SuperBuilder;
  */
 @Getter
 @Setter
-@NoArgsConstructor
 @SuperBuilder
 public class MetricsProperties {
 
+  /**
+   * The section an application writes these keys below: <code>vanillabp.metrics</code>.
+   * Built from the prefix rather than written out, so a message names the section the way
+   * the application has to spell it.
+   */
   public static final String SECTION = MigrationAdapterProperties.PREFIX
       + ".metrics";
 
+  /**
+   * The key of {@link #gaugeCache}: <code>vanillabp.metrics.gauge-cache</code>. It is a
+   * constant because two messages name it - the startup message about what still keeps a
+   * database awake and the one {@link #validate()} throws - and a test reads the key from
+   * here instead of writing it a third time.
+   */
   public static final String GAUGE_CACHE_PROPERTY = SECTION
       + ".gauge-cache";
 
@@ -60,6 +69,21 @@ public class MetricsProperties {
    */
   @Builder.Default
   private Duration gaugeCache = DEFAULT_GAUGE_CACHE;
+
+  /**
+   * The empty section a configuration binder starts from: both platforms create the object
+   * and then write the keys the application configured into it, one setter per key.
+   * <p>
+   * It asks the builder for the values, and that is not a detour: Lombok moves the
+   * initializer of {@link #gaugeCache} into the builder, so a constructor which sets
+   * nothing itself would leave an application which configures no metrics without the
+   * default.
+   */
+  public MetricsProperties() {
+
+    this(builder());
+
+  }
 
   /**
    * The duration to hold a measurement for, with the default applied where nothing is

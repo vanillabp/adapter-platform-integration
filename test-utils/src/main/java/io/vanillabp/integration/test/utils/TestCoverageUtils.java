@@ -34,6 +34,12 @@ import java.util.List;
 public class TestCoverageUtils {
 
   /**
+   * Nobody builds this class, it only answers static questions.
+   */
+  private TestCoverageUtils() {
+  }
+
+  /**
    * The JaCoCo agent of the build, as the only JVM argument.
    *
    * @return The argument list to hand to the forked JVM, empty when the build runs

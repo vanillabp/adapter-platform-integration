@@ -29,6 +29,8 @@ import lombok.extern.slf4j.Slf4j;
  * The definition ids handed out are namespaced with the answering adapter's id (see
  * {@link ProcessDefinitionIds}), because {@link #getBpmnXml(String)} has no aggregate to
  * elect by and the id is what has to say who can resolve it.
+ *
+ * @param <A> The workflow-aggregate type of the process service this viewer belongs to
  */
 @Slf4j
 public final class WorkflowViewer<A> {
@@ -55,6 +57,23 @@ public final class WorkflowViewer<A> {
    */
   private final Supplier<WorkflowScope> scope;
 
+  /**
+   * Built by the {@link MigrationProcessService} of this BPMN process, in its constructor,
+   * and used by nobody else. It is handed the parts it reads from rather than the process
+   * service itself, which keeps the reading half away from everything that changes a
+   * workflow.
+   *
+   * @param workflowModuleId The workflow module of this process service
+   * @param bpmnProcessId The plain BPMN process id of this process service
+   * @param prioritizedAdapters The adapter ids to walk, most preferred first
+   * @param adapterProcessServices The adapters' process services, in the same order as
+   *          <code>prioritizedAdapters</code>
+   * @param aggregatePersistenceSupport How the id of a workflow aggregate is read
+   * @param workflowLocator The election, shared with the process service so that a read
+   *          profits from what an operation learned and the other way round
+   * @param scope Reports what this process service serves right now, asked at every probe
+   *          because the platform fills it in after the process service was built
+   */
   public WorkflowViewer(
       final String workflowModuleId,
       final String bpmnProcessId,

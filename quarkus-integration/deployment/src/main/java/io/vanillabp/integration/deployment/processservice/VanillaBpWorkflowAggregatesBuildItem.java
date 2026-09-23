@@ -18,6 +18,13 @@ public final class VanillaBpWorkflowAggregatesBuildItem extends SimpleBuildItem 
 
   private final List<DotName> workflowAggregateClasses;
 
+  /**
+   * Built by {@code ProcessServiceBuildStepProcessor} once it knows the aggregates it built
+   * a {@code ProcessService} for, and read by {@code ExtensionServiceBuildStepProcessor}.
+   *
+   * @param workflowAggregateClasses The aggregate classes, each of them once. The item keeps
+   *          a copy, so the producing step may go on working with its own list
+   */
   public VanillaBpWorkflowAggregatesBuildItem(
       final List<DotName> workflowAggregateClasses) {
 
@@ -26,7 +33,10 @@ public final class VanillaBpWorkflowAggregatesBuildItem extends SimpleBuildItem 
   }
 
   /**
-   * @return The workflow-aggregate classes, in the order the archives were scanned
+   * The aggregates an extension's build step builds its own beans for.
+   *
+   * @return The workflow-aggregate classes, in the order the archives were scanned. The list
+   *         is immutable, so a reader may pass it on as it is
    */
   public List<DotName> getWorkflowAggregateClasses() {
 

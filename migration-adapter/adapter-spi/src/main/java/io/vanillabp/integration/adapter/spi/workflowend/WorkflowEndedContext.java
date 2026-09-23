@@ -32,12 +32,22 @@ public interface WorkflowEndedContext {
   WorkflowEnd.Kind getKind();
 
   /**
+   * When the workflow ended, handed to a <code>&#64;WorkflowEnded</code> method as
+   * {@link WorkflowEnd#time()}. Where the BPMS reports no time of its own, the moment of
+   * the notification stands in for it, so the value says when VanillaBP heard rather than
+   * when the engine ended.
+   *
    * @return When the workflow ended - the time reported by the BPMS, or the moment
    *         of the notification where it reports none
    */
   Instant getEndTime();
 
   /**
+   * Which end event was reached, which is what picks the
+   * <code>&#64;WorkflowEnded</code> method: a method naming an end event serves that one
+   * alone, a method naming none serves every end. An adapter whose BPMS does not report
+   * the event therefore reaches only the methods which name none.
+   *
    * @return The BPMN id of the end event reached, or <code>null</code> where the
    *         BPMS does not report it
    */

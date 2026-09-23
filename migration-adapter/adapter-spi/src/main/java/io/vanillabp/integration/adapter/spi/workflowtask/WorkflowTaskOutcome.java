@@ -43,9 +43,28 @@ public record WorkflowTaskOutcome(
                                   Duration openFor,
                                   boolean maxAgeExceeded) {
 
+  /**
+   * What the adapter does with the delivered task. What each of them means for the
+   * aggregate the handler worked on is in the comment of {@link WorkflowTaskOutcome}.
+   */
   public enum Kind {
+
+    /**
+     * Complete the task.
+     */
     COMPLETED,
+
+    /**
+     * Leave the task open. The application completes it later through
+     * <code>ProcessService#completeTask</code>, and an adapter completing it now takes it
+     * away from whoever is still working on it.
+     */
     COMPLETION_PENDING,
+
+    /**
+     * Complete the task with a BPMN error, so the error boundary events of the model
+     * decide where the workflow goes on - see {@link WorkflowTaskOutcome#errorCode()}.
+     */
     BPMN_ERROR
   }
 
@@ -66,12 +85,24 @@ public record WorkflowTaskOutcome(
 
   }
 
+  /**
+   * The outcome of a handler which did its work and left nothing open.
+   *
+   * @return The outcome
+   */
   public static WorkflowTaskOutcome completed() {
 
     return new WorkflowTaskOutcome(Kind.COMPLETED, null, null);
 
   }
 
+  /**
+   * The outcome of a task the application completes later, with nothing to say about its
+   * age: the first delivery of it, and every repeated delivery whose record was written
+   * before VanillaBP kept the moment.
+   *
+   * @return The outcome
+   */
   public static WorkflowTaskOutcome completionPending() {
 
     return new WorkflowTaskOutcome(Kind.COMPLETION_PENDING, null, null);
@@ -94,6 +125,16 @@ public record WorkflowTaskOutcome(
 
   }
 
+  /**
+   * The outcome of a handler which threw a
+   * {@link io.vanillabp.spi.service.TaskException}. The aggregate was saved all the same,
+   * because a BPMN error is a business answer and not a failure.
+   *
+   * @param errorCode The code the BPMN error boundary events are matched by
+   * @param errorName The name of the error, which a BPMS may show next to the code; it is
+   *          the code itself where the application named only one
+   * @return The outcome
+   */
   public static WorkflowTaskOutcome bpmnError(
       final String errorCode,
       final String errorName) {

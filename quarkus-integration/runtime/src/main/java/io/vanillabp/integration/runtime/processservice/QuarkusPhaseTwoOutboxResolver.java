@@ -51,6 +51,18 @@ public class QuarkusPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
 
   private final boolean mongoOutboxEnabled;
 
+  /**
+   * Built by {@link PhaseTwoOutboxResolverProducer}, once per application. The two switches
+   * arrive as booleans rather than as a configuration object, so this class stays testable
+   * without a Quarkus configuration (see {@code QuarkusStoreAttributionTest}).
+   *
+   * @param phaseTwoOutboxAwares What the application says about its aggregates, if anything
+   * @param phaseTwoOutboxes Every outbox bean of the application, the platform defaults
+   *          included
+   * @param persistenceTechnology What an aggregate's technology is read off
+   * @param jdbcOutboxEnabled Whether <code>vanillabp.outbox.jdbc.enabled</code> was left on
+   * @param mongoOutboxEnabled Whether <code>vanillabp.outbox.mongo.enabled</code> was left on
+   */
   public QuarkusPhaseTwoOutboxResolver(
       final Instance<PhaseTwoOutboxAware<?>> phaseTwoOutboxAwares,
       final Instance<PhaseTwoOutbox> phaseTwoOutboxes,

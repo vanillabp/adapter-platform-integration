@@ -48,6 +48,10 @@ public final class BpmsInitiatedStartScanner {
   }
 
   /**
+   * Reads the <code>&#64;WorkflowStartedByBpms</code> methods of one workflow service
+   * class and builds a handler per method, with the parameter binders that method needs.
+   * Every public method of the class is looked at, the inherited ones included.
+   *
    * @param workflowServiceClass The <code>&#64;WorkflowService</code> class
    * @param workflowAggregateClass The workflow-aggregate class of that service
    * @param workflowServiceBean Supplies the bean instance of the class

@@ -119,6 +119,10 @@ public record PhaseOperation(
   public interface IdempotencyKey {
 
     /**
+     * Derives the key of one call. Read only what the call carries: the rule belongs to
+     * the persisted contract of its operation, so a call scheduled by an older version of
+     * the application has to yield the same key today.
+     *
      * @param call The call to derive the key for
      * @return The idempotency key or {@link Optional#empty()} if calls of this
      *         operation must not be deduplicated
@@ -138,6 +142,10 @@ public record PhaseOperation(
   public interface Describe {
 
     /**
+     * Names what one call does, reading the arguments it carries. An argument which is
+     * not there reads as <code>null</code> in the phrase, so build the phrase from what
+     * the operation always carries.
+     *
      * @param args The arguments of the call, see {@link PhaseTwoCall#args()}
      * @return The phrase, in the present participle and without a trailing period
      */
@@ -164,6 +172,10 @@ public record PhaseOperation(
                         String hintWhenUnknown,
                         String remedyWhenUnsupported) {
 
+    /**
+     * Takes a wording without a hint or a remedy: both texts are optional and become
+     * empty strings, so the core appends them without asking whether there is one.
+     */
     public Wording {
       Objects.requireNonNull(describe, "describe must not be null");
       hintWhenUnknown = Objects.requireNonNullElse(hintWhenUnknown, "");
@@ -334,6 +346,10 @@ public record PhaseOperation(
           SEND_SIGNAL,
           AGGREGATE_CHANGED);
 
+  /**
+   * Refuses an operation which misses one of its parts or has a blank name, while it is
+   * built rather than at the first call of it.
+   */
   public PhaseOperation {
     Objects.requireNonNull(name, "name must not be null");
     Objects.requireNonNull(idempotencyKey, "idempotencyKey must not be null");
@@ -380,6 +396,10 @@ public record PhaseOperation(
   }
 
   /**
+   * Finds the core operation a name stands for. An empty answer means the name is not
+   * VanillaBP's, which is how {@link PhaseOperationRegistry} tells a core registration
+   * from an extension's.
+   *
    * @param name The name to look up
    * @return The core operation of that name, if there is one
    */
@@ -464,6 +484,8 @@ public record PhaseOperation(
     }
 
     /**
+     * Sets the rule which derives the key calls of this operation are deduplicated by.
+     *
      * @param idempotencyKey The rule deriving the idempotency key of a call, or
      *        <code>call -&gt; Optional.empty()</code> (the default) for operations
      *        which must not be deduplicated. Name the operation in the key - the core
@@ -480,6 +502,9 @@ public record PhaseOperation(
     }
 
     /**
+     * Says which BPMS executes the operation, and with it which question the core asks
+     * before it dispatches a call.
+     *
      * @param election Which BPMS executes the operation, {@link Election#OWN_DISPATCH}
      *        by default
      * @return This builder
@@ -522,6 +547,9 @@ public record PhaseOperation(
     }
 
     /**
+     * Sets the phrase the core puts into its messages about this operation. Without it a
+     * message reads <code>executing '&lt;name&gt;'</code>.
+     *
      * @param describe What the operation does, see {@link Describe}
      * @return This builder
      */
@@ -534,6 +562,9 @@ public record PhaseOperation(
     }
 
     /**
+     * Adds a sentence to the message a caller reads where no configured BPMS knows what
+     * the operation addresses.
+     *
      * @param hintWhenUnknown What to add where no configured BPMS knows what the
      *        operation addresses, see {@link Wording#hintWhenUnknown()}
      * @return This builder
@@ -547,6 +578,9 @@ public record PhaseOperation(
     }
 
     /**
+     * Adds a sentence to the message a caller reads where the elected adapter cannot
+     * execute the operation at all.
+     *
      * @param remedyWhenUnsupported What to add where the elected adapter cannot execute
      *        the operation, see {@link Wording#remedyWhenUnsupported()}
      * @return This builder
@@ -560,6 +594,9 @@ public record PhaseOperation(
     }
 
     /**
+     * Builds the operation, and checks the name of an extension's operation before it
+     * hands it out.
+     *
      * @return The operation
      * @throws IllegalArgumentException If an extension's operation is not namespaced
      *         (guiding message)

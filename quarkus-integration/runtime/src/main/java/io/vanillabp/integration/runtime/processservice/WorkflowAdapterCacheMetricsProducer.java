@@ -20,6 +20,17 @@ import jakarta.inject.Singleton;
 public class WorkflowAdapterCacheMetricsProducer {
 
   /**
+   * Built by the CDI container, and only in an application which brought the Micrometer
+   * extension - the build step named in the class comment is what registers the bean.
+   */
+  public WorkflowAdapterCacheMetricsProducer() {
+  }
+
+  /**
+   * Builds the binder of the numbers every cache has: what the election asked and what it got
+   * back. They belong to the application and not to an implementation, so they are published
+   * whichever cache an application ended up with.
+   *
    * @param statistics What the election asked of the cache in use
    * @return The binder of the numbers which hold for every implementation
    */

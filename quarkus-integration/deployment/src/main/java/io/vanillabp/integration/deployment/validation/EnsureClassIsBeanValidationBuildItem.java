@@ -46,4 +46,30 @@ public final class EnsureClassIsBeanValidationBuildItem extends MultiBuildItem {
    */
   private final String remedy;
 
+  /**
+   * Built through the builder by every step which finds a class VanillaBP will look up by
+   * its name at runtime - the workflow services and their aggregate persistence
+   * ({@code ProcessServiceBuildStepProcessor}), and the resolvers of multi-instance elements
+   * ({@code MultiInstanceResolverBuildStepProcessor}). Both steps of
+   * {@link EnsureCollectedClassesAreBeansBuildStepProcessor} read the collected items.
+   *
+   * @param className The class which has to be a bean
+   * @param usageDescription How VanillaBP uses the class, shown in the build error
+   * @param aBeanOfASubclassCounts Whether a bean of a subclass satisfies the requirement, as
+   *          described at the field
+   * @param remedy What to do about it, or <code>null</code> for the default advice
+   */
+  EnsureClassIsBeanValidationBuildItem(
+      final DotName className,
+      final String usageDescription,
+      final boolean aBeanOfASubclassCounts,
+      final String remedy) {
+
+    this.className = className;
+    this.usageDescription = usageDescription;
+    this.aBeanOfASubclassCounts = aBeanOfASubclassCounts;
+    this.remedy = remedy;
+
+  }
+
 }

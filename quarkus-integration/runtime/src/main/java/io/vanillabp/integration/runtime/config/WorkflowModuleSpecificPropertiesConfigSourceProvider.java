@@ -14,7 +14,6 @@ import io.quarkus.runtime.annotations.StaticInitSafe;
 import io.smallrye.config.AbstractLocationConfigSourceLoader;
 import io.smallrye.config.PropertiesConfigSource;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleConfigFiles;
-import lombok.RequiredArgsConstructor;
 
 /**
  * A config source provider loading properties-files named by a workflow module ID.
@@ -27,7 +26,6 @@ import lombok.RequiredArgsConstructor;
  * which prefers a {@code config} directory can do that instead.
  */
 @StaticInitSafe
-@RequiredArgsConstructor
 public class WorkflowModuleSpecificPropertiesConfigSourceProvider extends AbstractLocationConfigSourceLoader implements ConfigSourceProvider {
 
   private static final String[] PROPS_EXTENSIONS = new String[]{
@@ -43,6 +41,24 @@ public class WorkflowModuleSpecificPropertiesConfigSourceProvider extends Abstra
    * The ordinal/priority
    */
   private final int ordinal;
+
+  /**
+   * Built once per workflow module by the config builder which knows the modules of
+   * this application.
+   *
+   * @param workflowModuleId The module whose file this provider looks for - the file is
+   *          named after the module
+   * @param ordinal Where the values of that file rank against the other configuration
+   *          sources
+   */
+  public WorkflowModuleSpecificPropertiesConfigSourceProvider(
+      final String workflowModuleId,
+      final int ordinal) {
+
+    this.workflowModuleId = workflowModuleId;
+    this.ordinal = ordinal;
+
+  }
 
   /**
    * Made public to be used by WorkflowModuleBuildStepProcessor when it collects the files to watch and to embed into a native image.

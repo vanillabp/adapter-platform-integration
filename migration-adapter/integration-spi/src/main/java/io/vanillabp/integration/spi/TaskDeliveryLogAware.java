@@ -28,6 +28,10 @@ package io.vanillabp.integration.spi;
 public interface TaskDeliveryLogAware<A> {
 
   /**
+   * Which aggregates this selection is about. VanillaBP picks the implementation whose
+   * class fits an aggregate most closely, so the answer decides whose deliveries are
+   * written into the log below.
+   *
    * @return The aggregate class this delivery-log selection applies to.
    */
   default Class<A> getAggregateClass() {

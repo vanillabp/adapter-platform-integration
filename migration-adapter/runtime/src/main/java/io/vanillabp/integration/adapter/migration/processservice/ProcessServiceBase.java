@@ -19,6 +19,16 @@ import io.vanillabp.spi.process.ProcessService;
 public abstract class ProcessServiceBase<A> implements ProcessService<A> {
 
   /**
+   * Called by the platform bean which extends this class, one per workflow aggregate
+   * class the application declares. There is no state here to hand over: what a process
+   * service needs to know sits in the {@link MigrationProcessService} the platform bean
+   * holds.
+   */
+  protected ProcessServiceBase() {
+
+  }
+
+  /**
    * Builds the exception thrown when {@link #startWorkflow(Object)} is called
    * without an active transaction although the elected adapter requires one. The
    * message guides the developer to the fix.

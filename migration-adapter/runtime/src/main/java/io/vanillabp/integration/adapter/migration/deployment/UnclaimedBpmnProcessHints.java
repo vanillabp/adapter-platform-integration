@@ -27,6 +27,11 @@ import java.util.List;
 public interface UnclaimedBpmnProcessHints {
 
   /**
+   * Asks the platform what it can say about those processes, while the report is written.
+   * <p>
+   * The answer is added to the report, so a sentence reads as part of it rather than on its
+   * own. Nothing found is the normal case and gets no word.
+   *
    * @param workflowModuleId The workflow module being reported
    * @param bpmnProcessIds The BPMN process ids of that module nothing claims
    * @return One sentence per finding, in the order they should be read; empty where there is

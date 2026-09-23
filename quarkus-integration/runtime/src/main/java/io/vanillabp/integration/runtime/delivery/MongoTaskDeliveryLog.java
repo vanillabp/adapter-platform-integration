@@ -81,6 +81,14 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
 
   private volatile OpenTaskTouches touches;
 
+  /**
+   * Built by the CDI container. The extension registers this bean whether or not the
+   * application has a MongoDB client, so nothing may be read or opened here -
+   * {@link #isAvailable()} decides later whether the bean is used at all.
+   */
+  public MongoTaskDeliveryLog() {
+  }
+
   @Override
   public QuarkusPersistenceTechnology.Technology technology() {
 

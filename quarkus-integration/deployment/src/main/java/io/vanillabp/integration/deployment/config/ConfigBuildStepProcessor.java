@@ -25,13 +25,25 @@ import jakarta.enterprise.context.ApplicationScoped;
 public class ConfigBuildStepProcessor {
 
   /**
-   * Validates properties given and builds the {@link MigrationAdapterProperties} object based on those properties.
+   * Quarkus builds this processor while it augments the application and calls the build step
+   * below on it. Nothing else builds it, and the step keeps no state in it.
+   */
+  public ConfigBuildStepProcessor() {
+  }
+
+  /**
+   * Records the work which builds and validates the {@link MigrationAdapterProperties}
+   * object when the application starts, and publishes it as a bean the generated process
+   * services inject. The properties are runtime configuration, so a build can prepare the
+   * check but not run it.
    *
    * @param capabilities Capabilities of the projects all extensions available
    * @param processServicesProvidedByAdapters All {@link MigratableProcessService} beans provided by VanillaBP adapter extensions
    * @param configsBuilt The build item for workflow module configurations as a dependency for this build step
    * @param substitutionsProvided All object substitutions as a dependency for this build step
    * @param workflowModulesFound Information about all workflow modules found in the project
+   * @param syntheticBeanBuildItemBuildProducer Producer used to publish the properties as a bean
+   *          the generated process services inject
    * @param migrationAdapterPropertiesRecorder Recorder for {@link MigrationAdapterProperties} objects
    * @return The {@link MigrationAdapterProperties} object
    */

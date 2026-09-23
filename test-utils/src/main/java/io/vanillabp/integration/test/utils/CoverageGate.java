@@ -73,7 +73,11 @@ public final class CoverageGate {
                          long missed,
                          long covered) {
 
-    /** The covered ratio in percent, or 0 if the report holds nothing at all. */
+    /**
+     * The covered ratio in percent, or 0 if the report holds nothing at all.
+     *
+     * @return The number a repository's gate compares with its threshold
+     */
     public double percentage() {
 
       final var total = missed + covered;

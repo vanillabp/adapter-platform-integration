@@ -21,6 +21,27 @@ import io.vanillabp.integration.utils.impl.MongoDbSpringDataUtil;
 @Configuration
 public class MongoDbSpringDataUtilConfiguration {
 
+  /**
+   * Built by Spring wherever this configuration is imported: by
+   * {@link MongoDbSpringDataUtilAutoConfiguration}, or by an application which imports it
+   * itself to win against JPA.
+   */
+  public MongoDbSpringDataUtilConfiguration() {
+  }
+
+  /**
+   * What VanillaBP loads and saves a workflow aggregate through where the aggregate is a
+   * MongoDB document.
+   *
+   * @param applicationContext Where the aggregates' repositories are looked up - once per
+   *          aggregate type, and cached afterwards
+   * @param mongoDbFactory Read only where the application brings no converter: the default
+   *          converter is built from it
+   * @param mongoConverter What maps a document to its class and says which property holds
+   *          the id. <code>null</code> where the application defines none, and the
+   *          <code>MongoTemplate</code> default is built instead
+   * @return The MongoDB implementation
+   */
   @Bean
   public MongoDbSpringDataUtil mongoDbSpringDataUtil(
       final ApplicationContext applicationContext,

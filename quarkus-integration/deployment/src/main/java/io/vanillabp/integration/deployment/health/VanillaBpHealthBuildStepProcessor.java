@@ -21,6 +21,18 @@ public class VanillaBpHealthBuildStepProcessor {
   private static final String HEALTH_EXTENSION_PROCESSOR = "io.quarkus.smallrye.health.deployment.SmallRyeHealthProcessor";
 
   /**
+   * Quarkus builds this processor while it augments the application and calls the build step
+   * below on it. Nothing else builds it, and the step keeps no state in it.
+   */
+  public VanillaBpHealthBuildStepProcessor() {
+  }
+
+  /**
+   * Registers the readiness check, and only where SmallRye Health is part of the
+   * application. The question is answered here and not at startup because Quarkus fixes the
+   * set of beans while it builds: a check registered in an application without the health
+   * extension would be a bean referring to classes which are not there.
+   *
    * @param additionalBeans Producer used to register the readiness check
    */
   @BuildStep

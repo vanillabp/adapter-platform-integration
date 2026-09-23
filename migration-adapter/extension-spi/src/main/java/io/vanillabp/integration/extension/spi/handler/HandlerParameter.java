@@ -12,11 +12,17 @@ import java.lang.annotation.Annotation;
 public interface HandlerParameter {
 
   /**
+   * What the parameter is declared as, before anything is converted. A binder decides from
+   * it and from the annotations whether it serves the parameter.
+   *
    * @return The declared type of the parameter
    */
   Class<?> getType();
 
   /**
+   * One annotation of the parameter, so a binder can read what it says - the name of the
+   * value it asks for, for example.
+   *
    * @param <A> The annotation type
    * @param annotationType The annotation to look for
    * @return The annotation of the parameter, or <code>null</code>
@@ -25,6 +31,9 @@ public interface HandlerParameter {
       Class<A> annotationType);
 
   /**
+   * Whether the parameter is marked with an annotation - the question to ask about an
+   * annotation which has nothing to read.
+   *
    * @param annotationType The annotation to look for
    * @return Whether the parameter carries that annotation
    */

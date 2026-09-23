@@ -35,6 +35,11 @@ public record WorkflowScope(
                             String workflowModuleId,
                             List<String> bpmnProcessIds) {
 
+  /**
+   * Copies the process ids, so a scope cannot change while it is being answered, and reads
+   * a <code>null</code> list as an empty one. An adapter may therefore walk
+   * {@link #bpmnProcessIds()} without checking it first.
+   */
   public WorkflowScope {
 
     bpmnProcessIds = bpmnProcessIds == null
@@ -44,6 +49,10 @@ public record WorkflowScope(
   }
 
   /**
+   * The scope of a workflow service which declares no
+   * <code>&#64;WorkflowService(secondaryBpmnProcesses = ...)</code>, which is the ordinary
+   * case.
+   *
    * @param workflowModuleId The workflow module
    * @param bpmnProcessId The only BPMN process served
    * @return The scope of a process service serving one process
@@ -57,8 +66,13 @@ public record WorkflowScope(
   }
 
   /**
-   * @return The primary BPMN process, which is the one an operation is executed with, or
-   *         <code>null</code> where the scope carries none
+   * The first process of the scope - a convenience for a caller which has to name a single
+   * process, in a message for instance. A probe is asked about {@link #bpmnProcessIds()}
+   * as a whole, so an adapter which answers by this id alone answers about less than it
+   * was asked.
+   *
+   * @return The first BPMN process of the scope, or <code>null</code> where the scope
+   *         carries none
    */
   public String primaryBpmnProcessId() {
 

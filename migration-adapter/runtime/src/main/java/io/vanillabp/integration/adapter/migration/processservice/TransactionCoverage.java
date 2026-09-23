@@ -16,6 +16,11 @@ package io.vanillabp.integration.adapter.migration.processservice;
  */
 public record TransactionCoverage(Verdict verdict, String message) {
 
+  /**
+   * The four answers a platform can give. Only {@link #UNCOVERABLE} can end the boot, and
+   * only it and {@link #UNGUARDED} carry a message, because the other two have nothing to
+   * tell the developer.
+   */
   public enum Verdict {
 
     /**
@@ -52,6 +57,10 @@ public record TransactionCoverage(Verdict verdict, String message) {
   }
 
   /**
+   * The answer of a platform which looked and found the aggregate's store inside the
+   * transaction VanillaBP opens. The developer hears nothing, so there is no message to
+   * pass.
+   *
    * @return A covered verdict
    */
   public static TransactionCoverage covered() {
@@ -61,6 +70,10 @@ public record TransactionCoverage(Verdict verdict, String message) {
   }
 
   /**
+   * The answer of a platform which cannot judge this store. It is not a defect and it is
+   * not a warning: an aggregate the application persists itself is meant to be invisible
+   * here, and guessing would cost the developer a message about nothing.
+   *
    * @return A verdict the platform cannot give
    */
   public static TransactionCoverage unknown() {
@@ -70,6 +83,10 @@ public record TransactionCoverage(Verdict verdict, String message) {
   }
 
   /**
+   * The answer of a platform which found the store outside the transaction. The
+   * application boots, because it may well be what the developer wanted, so the message
+   * has to say what is no longer guaranteed rather than only that something is odd.
+   *
    * @param message The guiding message naming what is given up and what to check
    * @return An unguarded verdict
    */
@@ -81,6 +98,10 @@ public record TransactionCoverage(Verdict verdict, String message) {
   }
 
   /**
+   * The answer of a platform which knows this combination cannot work and knows the fix.
+   * This is the only verdict which ends a boot, so the message has to name that fix - the
+   * developer reads it instead of documentation.
+   *
    * @param message The guiding message naming the fix
    * @return An uncoverable verdict
    */

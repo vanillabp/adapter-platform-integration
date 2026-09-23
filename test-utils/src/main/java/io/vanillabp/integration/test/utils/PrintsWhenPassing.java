@@ -23,7 +23,11 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface PrintsWhenPassing {
 
-  /** Why this class prints on a green build, in the author's own words. */
+  /**
+   * Why this class prints on a green build, in the author's own words.
+   *
+   * @return The reason a reviewer reads before allowing the next exemption
+   */
   String value();
 
 }

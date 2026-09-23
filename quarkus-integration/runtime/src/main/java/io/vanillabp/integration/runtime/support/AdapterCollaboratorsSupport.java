@@ -28,6 +28,10 @@ public final class AdapterCollaboratorsSupport {
   }
 
   /**
+   * Builds the collaborators of one adapter id. Every one of them is named here, so a producer
+   * which forgets one does not compile - which is the point of handing them over in one object
+   * (see decision 28 in the repository's DECISIONS.md).
+   *
    * @param adapterId The adapter id the producer is building for
    * @param workflowTaskWiring What the adapter asks while it reads a BPMN file
    * @param workflowTaskInvoker Where a delivered task goes

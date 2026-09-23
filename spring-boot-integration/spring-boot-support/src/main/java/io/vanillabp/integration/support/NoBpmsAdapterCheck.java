@@ -38,6 +38,15 @@ public class NoBpmsAdapterCheck implements BeanFactoryPostProcessor {
    */
   static final String METAINF_WORKFLOWMODULE = "META-INF/workflow-module";
 
+  /**
+   * Built by the bean method of {@link VanillaBpSupportAutoConfiguration}. There is
+   * nothing to hand in: both facts the rule needs are read off the classpath at the moment
+   * the check runs.
+   */
+  public NoBpmsAdapterCheck() {
+
+  }
+
   @Override
   public void postProcessBeanFactory(
       final ConfigurableListableBeanFactory beanFactory) {

@@ -180,6 +180,11 @@ public record PhaseTwoCall(
    */
   public static final String ARG_ACTIVATION_ID = "activationId";
 
+  /**
+   * Refuses a call which does not name its operation or the BPMN process it belongs to,
+   * and copies what a caller could still change afterwards - the arguments and the payload
+   * bytes.
+   */
   public PhaseTwoCall {
     Objects.requireNonNull(operation, "operation must not be null");
     Objects.requireNonNull(workflowModuleId, "workflowModuleId must not be null");

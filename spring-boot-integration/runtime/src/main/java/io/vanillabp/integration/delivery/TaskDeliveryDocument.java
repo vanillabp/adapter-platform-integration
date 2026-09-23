@@ -6,7 +6,6 @@ import org.springframework.data.annotation.Id;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
@@ -17,7 +16,6 @@ import lombok.Setter;
  */
 @Getter
 @Setter
-@NoArgsConstructor
 @AllArgsConstructor
 public class TaskDeliveryDocument {
 
@@ -91,5 +89,13 @@ public class TaskDeliveryDocument {
    * <code>null</code> while it is still open. Written once, after phase two succeeded.
    */
   private Instant taskClosedAt;
+
+  /**
+   * What Spring Data starts from when it reads a document of the collection: it builds the
+   * empty record and fills the fields afterwards. A log writing a record uses the
+   * constructor taking every field, which Lombok generates.
+   */
+  public TaskDeliveryDocument() {
+  }
 
 }

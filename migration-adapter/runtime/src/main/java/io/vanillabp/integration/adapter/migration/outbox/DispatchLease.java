@@ -70,6 +70,10 @@ public class DispatchLease {
   public interface Renewal {
 
     /**
+     * Writes the new end of the lease onto one entry, as its own short transaction. The
+     * dispatcher supplies it, because only it knows the table or the collection the entry
+     * lies in.
+     *
      * @param entryId The entry whose lease is being renewed
      * @param leaseEnd The moment the lease is to run until
      * @return Whether this node still holds the lease - <code>false</code> where the write
@@ -93,6 +97,10 @@ public class DispatchLease {
   }
 
   /**
+   * Builds the renewal of one dispatcher: the name this node writes into the entries it
+   * claims, and the one daemon thread which carries the ticks of every entry that
+   * dispatcher holds at the same time.
+   *
    * @param threadName The name of the daemon thread renewing, which is what an operator
    *          reads in a thread dump
    * @param lease How long a claim lasts - <code>vanillabp.outbox.attempt-frequency</code>,
@@ -114,6 +122,10 @@ public class DispatchLease {
   }
 
   /**
+   * The name a claim of this node is written under. It stays the same while the
+   * application runs and tells this run apart from an earlier one of the same process, so
+   * a node which died and came back does not renew what it held before.
+   *
    * @return Which node holds a claim, written into the entry
    */
   public String owner() {
@@ -123,6 +135,10 @@ public class DispatchLease {
   }
 
   /**
+   * The end of a lease starting now, which a claim and every renewal write onto the entry.
+   * Asked anew for every write, so the answer moves with the clock rather than with the
+   * moment the dispatcher was built.
+   *
    * @return When a lease taken now runs out
    */
   public Instant endsAt() {

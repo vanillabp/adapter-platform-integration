@@ -26,6 +26,15 @@ import lombok.extern.slf4j.Slf4j;
 public class WorkflowModuleAutoConfiguration {
 
   /**
+   * Built by Spring Boot. Every method here is static, because the workflow modules have
+   * to be known very early and a static bean method runs without this class being created
+   * first. Spring builds the instance all the same, so it is written down.
+   */
+  public WorkflowModuleAutoConfiguration() {
+
+  }
+
+  /**
    * Build a bean holding all workflow modules found.
    *
    * @param resourceLoader The resource loader used to find META-INF/workflow-module files

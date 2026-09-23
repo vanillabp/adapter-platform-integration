@@ -31,11 +31,19 @@ public record PhaseTwoRequest<A>(
                                  Object workflowAggregateId,
                                  Map<String, String> args) {
 
+  /**
+   * Copies the arguments, so what a handler reads cannot be changed by whoever built the
+   * request, and reads a <code>null</code> map as an empty one. A handler may therefore
+   * ask for any argument and gets <code>null</code> for one its operation does not carry.
+   */
   public PhaseTwoRequest {
     args = args == null ? Map.of() : Map.copyOf(args);
   }
 
   /**
+   * Which task the operation addresses - the value phase one was given, which the outbox
+   * persisted in between.
+   *
    * @return The ID of the task the operation is about, or <code>null</code>, see
    *         {@link PhaseOneRequest#taskId()}
    */
@@ -46,6 +54,8 @@ public record PhaseTwoRequest<A>(
   }
 
   /**
+   * How a cancellation ends the task, see {@link PhaseOneRequest#bpmnErrorCode()}.
+   *
    * @return The error code a cancellation wants BPMN error boundary events to catch
    */
   public String bpmnErrorCode() {
@@ -55,6 +65,9 @@ public record PhaseTwoRequest<A>(
   }
 
   /**
+   * Which message the operation sends, PLAIN as the model carries it - the adapter scopes
+   * it, see {@link PhaseOneRequest#messageName()}.
+   *
    * @return The BPMN message name of a correlation or of a message start event
    */
   public String messageName() {
@@ -64,6 +77,9 @@ public record PhaseTwoRequest<A>(
   }
 
   /**
+   * Which of several waiting occurrences of that message is meant, see
+   * {@link PhaseOneRequest#correlationId()}.
+   *
    * @return The correlation id of a correlation or <code>null</code>
    */
   public String correlationId() {
@@ -73,6 +89,9 @@ public record PhaseTwoRequest<A>(
   }
 
   /**
+   * Which signal is broadcast. A broadcast is about no single workflow, so
+   * {@link #workflowAggregateId()} is <code>null</code> next to it.
+   *
    * @return The PLAIN BPMN signal name of a broadcast
    */
   public String signalName() {

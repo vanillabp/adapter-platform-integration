@@ -30,6 +30,17 @@ public final class SpringTransactionAnnotations {
   private SpringTransactionAnnotations() {
   }
 
+  /**
+   * The four annotations the startup check looks for on a <code>&#64;WorkflowTask</code>
+   * method, built fresh on every call. The list carries the annotations this platform does
+   * NOT honor as well, because an annotation without effect is what the check has to be
+   * able to say something about.
+   * <p>
+   * An annotation is named by its type name and its members are read reflectively, so an
+   * annotation missing from the classpath costs nothing here.
+   *
+   * @return The specs, in no particular order - the check matches by annotation type
+   */
   public static List<TransactionAnnotationSpec> specs() {
 
     return List.of(

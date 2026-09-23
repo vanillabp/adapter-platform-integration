@@ -26,6 +26,11 @@ package io.vanillabp.integration.extension.spi.election;
 public interface WorkflowElection {
 
   /**
+   * Which BPMS holds this workflow right now. There is no "unknown" answer here: whoever
+   * asks holds a workflow already, so a workflow no BPMS knows is a mistake somewhere and
+   * says so instead of turning into a <code>null</code> nobody checks. What asking may cost
+   * is written at the type.
+   *
    * @param workflowModuleId The workflow module of the workflow
    * @param bpmnProcessId The BPMN process of the workflow
    * @param workflowAggregateId The ID of its workflow aggregate

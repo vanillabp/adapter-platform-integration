@@ -43,11 +43,14 @@ import io.vanillabp.integration.utils.config.JpaSpringDataUtilConfiguration;
 import jakarta.persistence.EntityManagerFactory;
 
 /**
- * Auto-configuration of the default {@link PhaseTwoOutbox} for JPA-based aggregate
- * persistence, backed by the
+ * Auto-configuration of the {@link PhaseTwoOutbox} for JPA-based aggregate persistence
+ * which an application asks for by setting
+ * <code>vanillabp.outbox.gruelbox.enabled</code> to <code>true</code>, backed by the
  * <a href="https://github.com/gruelbox/transaction-outbox">gruelbox
- * transaction-outbox</a>. Active whenever Spring Data JPA is on the classpath and
- * exactly one {@link EntityManagerFactory} exists - it COEXISTS with the MongoDB
+ * transaction-outbox</a>. It then takes the place of the store VanillaBP writes itself
+ * ({@link io.vanillabp.integration.outbox.jdbc.JdbcPhaseTwoOutboxAutoConfiguration}), and
+ * it needs gruelbox on the classpath next to Spring Data JPA and exactly one
+ * {@link EntityManagerFactory} - it COEXISTS with the MongoDB
  * default: each workflow aggregate is served by the outbox matching its persistence
  * (selection per aggregate, see
  * {@link io.vanillabp.integration.spi.PhaseTwoOutboxAware}), so outbox
@@ -140,6 +143,13 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
    * gruelbox's own schema migration ever creates.
    */
   public static final String DEFAULT_OUTBOX_TABLE_NAME = "TXNO_OUTBOX";
+
+  /**
+   * Built by Spring Boot while it applies its auto-configurations, and only where the
+   * conditions above hold. Nothing in VanillaBP builds it.
+   */
+  public GruelboxPhaseTwoOutboxAutoConfiguration() {
+  }
 
   /**
    * The submitter of the default outbox: it carries "this entry was attempted before"
@@ -318,6 +328,13 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
   }
 
   /**
+   * The phase-two outbox of every workflow aggregate this application persists in its
+   * relational database. Spring builds it INSTEAD OF the store VanillaBP writes itself,
+   * where <code>vanillabp.outbox.gruelbox.enabled</code> is <code>true</code>, gruelbox is
+   * on the classpath and there is exactly one {@link EntityManagerFactory}; an aggregate
+   * living in MongoDB is served by the MongoDB outbox beside it. Why gruelbox is still
+   * offered at all is decision 75 in the repository's DECISIONS.md.
+   *
    * @param transactionOutbox The gruelbox transaction outbox
    * @param dataSource The data source holding gruelbox' table, used to count the
    *          entries waiting for their dispatch
@@ -378,6 +395,11 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
   }
 
   /**
+   * What flushes gruelbox: it dispatches the entries a crashed instance left behind, gives
+   * a failed one its next attempt once the due time passed, and deletes what the retention
+   * released. It also opens the gate of the submitter, so nothing reaches a BPMS before the
+   * models did.
+   *
    * @param transactionOutbox The gruelbox transaction outbox
    * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree carrying the
    *          <code>vanillabp.outbox</code> section (registered here as well so the
@@ -386,6 +408,8 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
    *          dispatcher starts polling
    * @param outbox The store, asked when the next flush has something to do so the poller
    *          can sleep until then
+   * @param payloadStore Where the payloads of the entries a flush finished are removed, and
+   *          with them what a crash between the two writes of a schedule left behind
    * @return The dispatcher polling the outbox for recovery, retries and retention
    *         cleanup (private single-thread executor - no
    *         {@link org.springframework.scheduling.TaskScheduler} involved)

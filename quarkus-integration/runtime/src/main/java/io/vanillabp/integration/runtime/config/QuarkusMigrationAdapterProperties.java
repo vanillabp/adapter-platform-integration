@@ -27,6 +27,12 @@ import io.vanillabp.integration.adapter.migration.config.OutfadedVersionsInUsePo
 @ConfigMapping(prefix = QuarkusMigrationAdapterProperties.PREFIX)
 public interface QuarkusMigrationAdapterProperties {
 
+  /**
+   * The root of every key VanillaBP reads. It is the prefix of this config mapping, so
+   * an application writes <code>vanillabp.adapters.&lt;id&gt;.*</code> for one adapter,
+   * and it is spelled into the messages which name the key a reader would write, so the
+   * message and the mapping cannot drift apart.
+   */
   String PREFIX = "vanillabp";
 
   /**
@@ -62,6 +68,11 @@ public interface QuarkusMigrationAdapterProperties {
 
   /**
    * Where to load VanillaBP BPMN files from, which are NOT specific to any adapter.
+   * An empty Optional arrives as <code>null</code> in the core model, which then derives
+   * the location from what the classpath says rather than asking for it (see decision 8
+   * in the repository's DECISIONS.md).
+   *
+   * @return The location, or an empty Optional to leave it to the convention
    */
   Optional<String> resourcesLocation();
 
@@ -78,6 +89,10 @@ public interface QuarkusMigrationAdapterProperties {
 
   /**
    * The properties of all workflow modules. The key is the workflow module's id.
+   *
+   * @return The section per workflow module, empty where the application configures
+   *         none - the core adds a section for every module the build found on the
+   *         classpath, so a module which needs nothing configured needs no section
    */
   Map<String, WorkflowModuleProperties> workflowModules();
 
@@ -181,6 +196,11 @@ public interface QuarkusMigrationAdapterProperties {
      * section is the least specific level of the most-specific-wins resolution of
      * adapter-scoped properties, so it carries the same per-level keys as the
      * workflow-module, workflow and task levels.
+     *
+     * @return The location, or an empty Optional to leave it to the convention (see
+     *         decision 8 in the repository's DECISIONS.md). Which locations a
+     *         deployment searches, and in which order, is answered by
+     *         {@link io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties#getAdapterResourcesLocationsFor(String, String)}
      */
     Optional<String> resourcesLocation();
 
@@ -268,6 +288,10 @@ public interface QuarkusMigrationAdapterProperties {
      * an adapter section of a level may carry only adapter-specific keys (the
      * missing resources location is validated with a guiding message by the core
      * where it is actually required).
+     *
+     * @return The location this level sets, or an empty Optional where it says nothing
+     *         about it. The deployment reads it at the workflow module, see
+     *         {@link io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties#getAdapterResourcesLocationsFor(String, String)}
      */
     Optional<String> resourcesLocation();
 
@@ -593,18 +617,28 @@ public interface QuarkusMigrationAdapterProperties {
     /**
      * The priorities of adapters specific to a workflow module.
      *
+     * @return The order the adapters of this module are asked in, or an empty Optional
+     *         to keep the order the application configured for all modules - an empty
+     *         list is what the core reads as "this level says nothing"
      * @see QuarkusMigrationAdapterProperties#prioritizedAdapters()
      */
     Optional<List<String>> prioritizedAdapters();
 
     /**
      * The properties of adapters specific to this workflow module.
+     *
+     * @return The section per adapter id, the second least specific level an adapter
+     *         setting may be written at
      */
     Map<String, AdapterProperties> adapters();
 
     /**
      * The properties of workflows specific to this workflow module. The key is the
      * BPMN process ID.
+     *
+     * @return The section per workflow of this module. A process ID which no deployed
+     *         BPMN carries does not stop the boot - it warns, naming the key and the
+     *         process IDs the module does have
      */
     Map<String, WorkflowProperties> workflows();
 
@@ -746,19 +780,30 @@ public interface QuarkusMigrationAdapterProperties {
     /**
      * The priorities of adapters specific to a workflow.
      *
+     * @return The order the adapters of this workflow are asked in, or an empty Optional
+     *         to keep the order of the workflow module respectively of the application
      * @see QuarkusMigrationAdapterProperties#prioritizedAdapters()
      */
     Optional<List<String>> prioritizedAdapters();
 
     /**
      * The properties of adapters specific to this workflow.
+     *
+     * @return The section per adapter id, beating what the workflow module and the
+     *         adapter itself say about the same key
      */
     Map<String, AdapterProperties> adapters();
 
     /**
      * The properties of the workflow's BPMN tasks. The key is the task ID (task
-     * definition). Structural preparation for task-scoped adapter configuration -
-     * no consumer yet.
+     * definition). This is the most specific of the four levels a setting is resolved
+     * from, and the core asks it first
+     * ({@link io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties#resolveForAdapter},
+     * see decision 7 in the repository's DECISIONS.md). The delivery settings and the
+     * settings of an extension are resolved over the same four levels - see
+     * QuarkusMigrationAdapterPropertiesMapperTest#maxTaskAgeTravelsThroughEveryLevel.
+     *
+     * @return The section per task, keyed by task ID
      */
     Map<String, TaskProperties> tasks();
 
@@ -797,6 +842,9 @@ public interface QuarkusMigrationAdapterProperties {
 
     /**
      * The properties of adapters specific to this task.
+     *
+     * @return The section per adapter id - the most specific place a setting of one
+     *         adapter may be written at, so it beats every other level
      */
     Map<String, AdapterProperties> adapters();
 

@@ -17,6 +17,13 @@ import io.quarkus.deployment.annotations.BuildStep;
 public class EnsureCollectedClassesAreBeansBuildStepProcessor {
 
   /**
+   * Quarkus builds this processor while it augments the application and calls the build
+   * steps below on it. Nothing else builds it, and no step keeps state in it.
+   */
+  public EnsureCollectedClassesAreBeansBuildStepProcessor() {
+  }
+
+  /**
    * The classes collected are not necessarily injected by application code but looked up
    * dynamically at runtime. This build step prevents ArC from removing them as unused
    * beans (which would also cause false positives in

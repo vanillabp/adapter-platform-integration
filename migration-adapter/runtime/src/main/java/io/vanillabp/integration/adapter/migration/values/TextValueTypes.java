@@ -238,6 +238,12 @@ public final class TextValueTypes {
   }
 
   /**
+   * Whether the way back can say why a text cannot become a value of that type.
+   * <p>
+   * A parameter of such a type is refused with the advice which belongs to it
+   * ({@link #adviceFor}) rather than with a conversion error: the text did arrive, and what
+   * the developer needs to hear is that this type never travels back.
+   *
    * @param type The declared type
    * @return Whether something is known about why this type's text carries no value back
    */

@@ -276,6 +276,10 @@ public interface WorkflowAggregateSync {
     }
 
     /**
+     * Whether this verdict is worth reporting. The three kinds which stop at a segment
+     * are, {@link Kind#UNDECIDABLE} is not: there the declared types said nothing, and a
+     * warning about a model which works is worse than no warning at all.
+     *
      * @return Whether the path stops short of a value the BPMS holds, which is what a
      *         check reports
      */
@@ -286,6 +290,8 @@ public interface WorkflowAggregateSync {
     }
 
     /**
+     * The verdict of a path which stops nowhere, so it names no segment.
+     *
      * @return The path reaches a value the BPMS holds
      */
     public static PathVerdict aSharedValue() {
@@ -295,6 +301,9 @@ public interface WorkflowAggregateSync {
     }
 
     /**
+     * The verdict wherever the declared types cannot decide, a map or an interface for
+     * instance. It names no segment either: nothing was found and nothing is claimed.
+     *
      * @return The declared types cannot decide
      */
     public static PathVerdict undecidable() {
@@ -304,6 +313,9 @@ public interface WorkflowAggregateSync {
     }
 
     /**
+     * The verdict of a path whose segment is no attribute of the type it was read against.
+     * The three values are what a message needs to point at the segment which is wrong.
+     *
      * @param segment The segment which is no attribute
      * @param segmentIndex Its position in the path
      * @param segmentOwner The simple name of the type it was read against
@@ -319,6 +331,9 @@ public interface WorkflowAggregateSync {
     }
 
     /**
+     * The verdict of a path whose segment IS an attribute which the sync model keeps back,
+     * so the expression reads <code>null</code> although the aggregate holds a value.
+     *
      * @param segment The unshared attribute
      * @param segmentIndex Its position in the path
      * @param segmentOwner The simple name of the type it was read against
@@ -334,6 +349,9 @@ public interface WorkflowAggregateSync {
     }
 
     /**
+     * The verdict of a path which reads into a value carrying no members: the segment
+     * above it travels as a single number or text, so there is nothing below to read.
+     *
      * @param segment The segment which finds nothing
      * @param segmentIndex Its position in the path
      * @param segmentOwner The simple name of the type it was read against, which is the

@@ -34,6 +34,26 @@ import jakarta.persistence.EntityManagerFactory;
 @ConditionalOnSingleCandidate(EntityManagerFactory.class)
 public class JpaSpringDataUtilConfiguration {
 
+  /**
+   * Built by Spring Boot while it applies its auto-configurations, and only where the
+   * conditions above hold. Nothing in VanillaBP builds it.
+   */
+  public JpaSpringDataUtilConfiguration() {
+  }
+
+  /**
+   * What VanillaBP loads and saves a workflow aggregate through where the aggregate is a
+   * JPA entity. It is what makes a plain Spring Data repository enough: an application
+   * which has one for its aggregate needs no
+   * {@link io.vanillabp.integration.spi.AggregatePersistenceAware} bean of its own.
+   *
+   * @param applicationContext Where the aggregates' repositories are looked up - once per
+   *          aggregate type, and cached afterwards
+   * @param jpaContext Answers which entity manager manages a given type, so an application
+   *          with more than one persistence unit asks the right one
+   * @return The JPA implementation, which the application may replace by defining a
+   *         {@link SpringDataUtil} bean itself
+   */
   @Bean
   public SpringDataUtil jpaSpringDataUtil(
       final ApplicationContext applicationContext,

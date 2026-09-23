@@ -50,6 +50,12 @@ public class TaskDeliveryRetentionCleanup {
   private ScheduledExecutorService executor;
 
   /**
+   * Built by the platform's delivery log, which starts it from its own lifecycle hook.
+   * <p>
+   * Nothing runs yet. The first run happens when {@link #start()} is called, and the store
+   * counts as written to until then, so the records of a previous run of the application are
+   * cleaned up even where this one records nothing.
+   *
    * @param name Names the store cleaned up (thread name and log messages)
    * @param retention How long a record is kept
    * @param cleanup Deletes the expired records of one store

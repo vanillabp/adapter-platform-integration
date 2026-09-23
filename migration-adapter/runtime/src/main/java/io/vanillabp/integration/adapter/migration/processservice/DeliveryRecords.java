@@ -127,6 +127,11 @@ public final class DeliveryRecords {
       });
 
   /**
+   * Built by the {@link MigrationProcessService} of this BPMN process, in its constructor.
+   * The store is NOT resolved here: it is a bean of the application, and asking for it
+   * while the beans are being built would be too early, so it is resolved at the first use
+   * and kept from then on ({@link #resolveLog()}).
+   *
    * @param workflowModuleId The workflow module the records belong to
    * @param bpmnProcessId The BPMN process the records belong to
    * @param workflowAggregateClass The workflow aggregate whose store holds the records -
@@ -173,6 +178,10 @@ public final class DeliveryRecords {
   }
 
   /**
+   * Hands over what to count into, done by the process service once the platform
+   * integration told it. A <code>null</code> becomes {@link VanillaBpMetrics#NONE} rather
+   * than an error, because an application without a metrics backend is the normal case.
+   *
    * @param metrics What to count into, never <code>null</code>
    */
   public void setMetrics(
@@ -580,6 +589,7 @@ public final class DeliveryRecords {
    * Nothing is resolved where no adapter can repeat a delivery: an application using an
    * embedded BPMS only must not be pushed towards a store it does not need.
    *
+   * @param <A> The workflow-aggregate type the adapters' process services serve
    * @param adapterProcessServices The prioritized adapters of this BPMN process
    */
   public <A> void validateAtStartup(
@@ -722,6 +732,7 @@ public final class DeliveryRecords {
    * says nothing, a first start on an empty system says nothing, and the upgrade says
    * something once per BPMN process.
    *
+   * @param <A> The workflow-aggregate type the adapters' process services serve
    * @param adapterProcessServices The prioritized adapters of this BPMN process
    */
   public <A> void reportOpenTasksNobodyRemembers(
@@ -796,6 +807,7 @@ public final class DeliveryRecords {
    * or an adapter which is not configured any more. That fallback is what keeps the record a
    * hint rather than a registry.
    *
+   * @param <A> The workflow-aggregate type the adapters' process services serve
    * @param operation The operation being elected for
    * @param workflowAggregateId The workflow aggregate the operation is about
    * @param args The operation's arguments, which name the task

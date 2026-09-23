@@ -44,6 +44,9 @@ public record WorkflowVisibilityDelay(
   }
 
   /**
+   * Whether the core looks a second time at all. A window which is missing, zero or
+   * negative says no, which is what {@link #none()} reports.
+   *
    * @return Whether waiting for a workflow to become visible makes sense at all
    */
   public boolean isWaiting() {

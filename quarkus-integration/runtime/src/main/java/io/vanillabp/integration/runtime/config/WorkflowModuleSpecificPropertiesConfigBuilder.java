@@ -16,11 +16,28 @@ import io.smallrye.config.SmallRyeConfigBuilder;
 public abstract class WorkflowModuleSpecificPropertiesConfigBuilder implements ConfigBuilder {
 
   /**
+   * Built by Quarkus, through the subclass the build generates: the configuration has
+   * to be complete before anything else of the application runs, so the builder cannot
+   * wait for the CDI container.
+   */
+  public WorkflowModuleSpecificPropertiesConfigBuilder() {
+  }
+
+  /**
+   * The workflow modules of this application. Which modules there are can only be seen
+   * while the application is built, so the generated subclass answers with the list the
+   * build found.
+   *
    * @return The workflow module IDs for which files should be added
    */
   protected abstract List<String> getWorkflowModuleIds();
 
   /**
+   * Where the values of a module file rank against the other configuration sources. A
+   * module file supplies defaults which the application always outranks (see decision 7
+   * in the repository's DECISIONS.md), so the ordinal stays below the one of the
+   * application's own files.
+   *
    * @return The ordinal for proper overriding of properties
    */
   protected abstract int getOrdinal();

@@ -172,36 +172,79 @@ public class WorkflowTaskHandler {
 
   }
 
+  /**
+   * One of the two keys this handler can be reached by: what the BPMS subscribed to.
+   * <p>
+   * A delivery is routed by both keys, because the boot accepts both (decision 67 in the
+   * repository's DECISIONS.md).
+   *
+   * @return The task definition, or <code>null</code> where this handler is wired by
+   *         activity ID only
+   */
   public String getTaskDefinition() {
 
     return taskDefinition;
 
   }
 
+  /**
+   * The other of the two keys: the element of the model, which is what
+   * <code>&#64;WorkflowTask(id = ...)</code> names.
+   *
+   * @return The activity ID, or <code>null</code> where this handler is wired by task
+   *         definition only
+   */
   public String getActivityId() {
 
     return activityId;
 
   }
 
+  /**
+   * Whether completing the task is somebody else's job.
+   * <p>
+   * The method took a <code>&#64;TaskId</code>, so it keeps that id and completes the task
+   * later. Completing it when the method returns would end a task the application still
+   * works on.
+   *
+   * @return Whether the task stays open after the method returned
+   */
   public boolean isAsynchronousTask() {
 
     return asynchronousTask;
 
   }
 
+  /**
+   * Says that a BPMN element of the deployed model matched this handler.
+   * <p>
+   * Called while the wiring is validated, so the check for methods nothing ever calls can
+   * tell a method the model dropped from one which simply belongs to another of the BPMN
+   * processes its class declares.
+   */
   public void markWired() {
 
     wired = true;
 
   }
 
+  /**
+   * Whether any deployed BPMN element matched this handler during this boot.
+   *
+   * @return Whether something wired it - <code>false</code> for a method no model names
+   */
   public boolean isWired() {
 
     return wired;
 
   }
 
+  /**
+   * The method, named the way a developer finds it: the class it was declared in and its
+   * name. Every message about this handler starts with it.
+   *
+   * @return The class name and the method name
+   */
   public String describe() {
 
     return "%s#%s".formatted(workflowServiceClass.getName(), method.getName());
@@ -210,6 +253,8 @@ public class WorkflowTaskHandler {
 
   /**
    * The key(s) this handler is wired by, for guiding messages.
+   *
+   * @return What a model has to name to reach this method
    */
   public String describeWiring() {
 
