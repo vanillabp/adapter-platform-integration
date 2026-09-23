@@ -308,8 +308,13 @@ disable an unwanted default via its `enabled` flag:
    schedules: a row gruelbox marked `processed` is deleted in the caller's
    transaction so the operation can be planned again, a row which is not processed
    yet makes the schedule a no-op. That is also why the derived key is bounded to
-   250 characters — gruelbox refuses a longer one before any database sees it. Recovery, retries and retention cleanup are done by
-   a fixed-delay poller calling `TransactionOutbox.flush()` on a **private
+   250 characters — gruelbox refuses a longer one before any database sees it. That read,
+   the replacement of a waiting entry and the question which payloads an entry still names
+   all go to gruelbox' table, so an application which builds the store itself passes the
+   data source and the table name; a store without them is refused where it is built,
+   because it would discard the next operation of a workflow whose key is still retained
+   and would let no payload be removed ever again. Recovery, retries and retention cleanup
+   are done by a fixed-delay poller calling `TransactionOutbox.flush()` on a **private
    single-thread executor** — no `TaskScheduler` bean is registered or used, so an
    application's `@EnableScheduling` setup stays unaffected. The outbox table
    `TXNO_OUTBOX` is created by gruelbox's auto-DDL — set
@@ -338,8 +343,10 @@ disable an unwanted default via its `enabled` flag:
    `aMissingTableStopsTheStartupInsteadOfTheFirstWorkflow`,
    `theConventionallyNamedTransactionManagerWins`),
    `GruelboxOutboxSchemaHandoverTest` the handover to an application-managed schema,
-   `GruelboxDeduplicationWindowTest` the released key of a dispatched entry, and
-   `EnableSchedulingRegressionTest#noVanillaBpTaskSchedulerBean` the private executor.
+   `GruelboxDeduplicationWindowTest` the released key of a dispatched entry,
+   `GruelboxRefusesAStoreWithoutItsTableTest` the store which is not built without its
+   table, and `EnableSchedulingRegressionTest#noVanillaBpTaskSchedulerBean` the private
+   executor.
    The submitter of this outbox is a bean of its own
    (`GruelboxRedispatchAwareSubmitter`, `vanillaBpGruelboxSubmitter`), because the
    dispatcher needs the very submitter the outbox was built with. Gruelbox hands an
