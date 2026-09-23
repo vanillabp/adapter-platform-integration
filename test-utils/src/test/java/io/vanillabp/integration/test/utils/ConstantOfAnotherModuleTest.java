@@ -1,4 +1,4 @@
-package io.vanillabp.integration.test.utils.outbox;
+package io.vanillabp.integration.test.utils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -11,19 +11,17 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import io.vanillabp.integration.test.utils.SuppressOutputExtension;
-
 /**
  * The lookup which fetches a name from the class declaring it.
  * <p>
- * The classes of the platform are not on the classpath of this module, so this test
- * uses classes of its own. Two cases matter. A name which is gone has to be reported
- * with a message telling the next person where to follow the rename. And a class which
- * needs a library nobody brought counts as a class which is not there, because the
- * outbox it configures is not there either.
+ * The classes of the platform are not on the classpath of this module, so this test uses
+ * classes of its own. Two cases matter. A name which is gone has to be reported with a
+ * message telling the next person where to follow the rename. And a class which needs a
+ * library nobody brought counts as a class which is not there, because what that class
+ * configures is not there either.
  */
 @ExtendWith(SuppressOutputExtension.class)
-public class PhaseTwoOutboxNamesTest {
+public class ConstantOfAnotherModuleTest {
 
   /**
    * A class in the shape the lookup expects: a public constant holding a name.
@@ -36,15 +34,15 @@ public class PhaseTwoOutboxNamesTest {
 
   /**
    * A class in the shape of the one which configures the gruelbox outbox: it names a
-   * table, and it needs a library which an application does not have to bring. Loading
-   * it fails with a {@link NoClassDefFoundError}, the way the class loader fails on the
-   * real one in a repository whose test classpath carries the Spring Boot integration
-   * without the gruelbox library.
+   * table, and it needs a library which an application does not have to bring. Loading it
+   * fails with a {@link NoClassDefFoundError}, the way the class loader fails on the real
+   * one in a repository whose test classpath carries the Spring Boot integration without
+   * the gruelbox library.
    * <p>
    * The error is thrown here instead of arriving from a class loader because this test
-   * cannot take a library off its own classpath. What it stands in for is the whole
-   * point of the case: the error is not a {@link ClassNotFoundException}, so a lookup
-   * which only expects that one lets it through.
+   * cannot take a library off its own classpath. What it stands in for is the whole point
+   * of the case: the error is not a {@link ClassNotFoundException}, so a lookup which only
+   * expects that one lets it through.
    */
   public static final class AConfigurationWithoutItsLibrary {
 
@@ -58,11 +56,20 @@ public class PhaseTwoOutboxNamesTest {
 
   }
 
+  /**
+   * A class of this module holding names, which is what the messages point at.
+   */
+  private static final class TheNamesOfAReader {
+
+  }
+
   @Test
   @DisplayName("A name is read from the class which declares it")
   public void aNameIsReadFromTheClassWhichDeclaresIt() {
 
-    assertEquals("A_TABLE", PhaseTwoOutboxNames.constant(AStoreOfItsOwn.class.getName(), "DEFAULT_TABLE_NAME"));
+    assertEquals(
+        "A_TABLE",
+        ConstantOfAnotherModule.of(TheNamesOfAReader.class, AStoreOfItsOwn.class.getName(), "DEFAULT_TABLE_NAME"));
 
   }
 
@@ -72,7 +79,7 @@ public class PhaseTwoOutboxNamesTest {
 
     final var missing = assertThrows(
         IllegalStateException.class,
-        () -> PhaseTwoOutboxNames.constant("io.vanillabp.NoSuchStore", "DEFAULT_TABLE_NAME"));
+        () -> ConstantOfAnotherModule.of(TheNamesOfAReader.class, "io.vanillabp.NoSuchStore", "DEFAULT_TABLE_NAME"));
 
     assertTrue(missing.getMessage().contains("io.vanillabp.NoSuchStore"), missing.getMessage());
     assertTrue(missing.getMessage().contains("DEFAULT_TABLE_NAME"), missing.getMessage());
@@ -85,8 +92,11 @@ public class PhaseTwoOutboxNamesTest {
 
     final var cannotBeLoaded = assertThrows(
         IllegalStateException.class,
-        () -> PhaseTwoOutboxNames
-            .constant(AConfigurationWithoutItsLibrary.class.getName(), "DEFAULT_OUTBOX_TABLE_NAME"));
+        () -> ConstantOfAnotherModule
+            .of(
+                TheNamesOfAReader.class,
+                AConfigurationWithoutItsLibrary.class.getName(),
+                "DEFAULT_OUTBOX_TABLE_NAME"));
 
     assertTrue(cannotBeLoaded.getMessage().contains("AConfigurationWithoutItsLibrary"), cannotBeLoaded.getMessage());
     assertInstanceOf(NoClassDefFoundError.class, cannotBeLoaded.getCause().getCause());
@@ -99,9 +109,11 @@ public class PhaseTwoOutboxNamesTest {
 
     assertEquals(
         Optional.empty(),
-        PhaseTwoOutboxNames
-            .constantIfTheClassCanBeLoaded(
-                AConfigurationWithoutItsLibrary.class.getName(), "DEFAULT_OUTBOX_TABLE_NAME"));
+        ConstantOfAnotherModule
+            .ofAClassWhichMayBeMissing(
+                TheNamesOfAReader.class,
+                AConfigurationWithoutItsLibrary.class.getName(),
+                "DEFAULT_OUTBOX_TABLE_NAME"));
 
   }
 
@@ -111,7 +123,9 @@ public class PhaseTwoOutboxNamesTest {
 
     assertEquals(
         Optional.of("A_TABLE"),
-        PhaseTwoOutboxNames.constantIfTheClassCanBeLoaded(AStoreOfItsOwn.class.getName(), "DEFAULT_TABLE_NAME"));
+        ConstantOfAnotherModule
+            .ofAClassWhichMayBeMissing(
+                TheNamesOfAReader.class, AStoreOfItsOwn.class.getName(), "DEFAULT_TABLE_NAME"));
 
   }
 
@@ -121,10 +135,11 @@ public class PhaseTwoOutboxNamesTest {
 
     final var renamed = assertThrows(
         IllegalStateException.class,
-        () -> PhaseTwoOutboxNames.constant(AStoreOfItsOwn.class.getName(), "TABLE_NAME_OF_YESTERDAY"));
+        () -> ConstantOfAnotherModule
+            .of(TheNamesOfAReader.class, AStoreOfItsOwn.class.getName(), "TABLE_NAME_OF_YESTERDAY"));
 
     assertTrue(renamed.getMessage().contains("TABLE_NAME_OF_YESTERDAY"), renamed.getMessage());
-    assertTrue(renamed.getMessage().contains("PhaseTwoOutboxNames"), renamed.getMessage());
+    assertTrue(renamed.getMessage().contains("TheNamesOfAReader"), renamed.getMessage());
 
   }
 
