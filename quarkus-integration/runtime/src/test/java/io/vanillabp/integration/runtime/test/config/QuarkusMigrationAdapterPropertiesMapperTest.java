@@ -317,7 +317,8 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
   private record MongoOutboxProperties(
                                        boolean enabled,
                                        String collection,
-                                       Optional<String> payloadCollection) implements QuarkusMigrationAdapterProperties.MongoOutboxProperties {
+                                       Optional<String> payloadCollection,
+                                       String deliveryCollection) implements QuarkusMigrationAdapterProperties.MongoOutboxProperties {
   }
 
   private record OutboxProperties(
@@ -506,7 +507,7 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                                                                                                                                                             "HOT_PAYLOAD")), new MongoOutboxProperties(
                                                                                                                                                                                 false, "hot-outbox", Optional
                                                                                                                                                                                     .of(
-                                                                                                                                                                                        "hot-payloads"))), new WorkflowAdapterCacheProperties(
+                                                                                                                                                                                        "hot-payloads"), "hot-deliveries")), new WorkflowAdapterCacheProperties(
                                                                                                                                                                                             50_000, Duration
                                                                                                                                                                                                 .ofMinutes(
                                                                                                                                                                                                     30), Duration
@@ -576,6 +577,7 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     assertFalse(core.getOutbox().getMongo().isEnabled());
     assertEquals("hot-outbox", core.getOutbox().getMongo().getCollection());
     assertEquals("hot-payloads", core.getOutbox().getMongo().getPayloadCollection());
+    assertEquals("hot-deliveries", core.getOutbox().getMongo().getDeliveryCollection());
 
     assertEquals(50_000, core.getWorkflowAdapterCache().getMaxEntries());
     assertEquals(Duration.ofMinutes(30), core.getWorkflowAdapterCache().getTimeToLive());
@@ -669,6 +671,9 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     assertEquals(
         coreDefaults.getMongo().payloadCollectionName(),
         mappedDefaults.getMongo().payloadCollectionName());
+    assertEquals(
+        coreDefaults.getMongo().getDeliveryCollection(),
+        mappedDefaults.getMongo().getDeliveryCollection());
 
   }
 

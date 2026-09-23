@@ -22,9 +22,9 @@ import io.vanillabp.integration.spi.TaskDeliveryLog;
  * ({@link JdbcTaskDeliveryLogAutoConfiguration}) - each workflow aggregate is served by
  * the log matching its persistence.
  * <p>
- * The records live in the collection
- * {@value MongoTaskDeliveryLog#DEFAULT_COLLECTION_NAME} and are keyed by the delivery
- * key, so uniqueness comes from the document ID and no unique index is needed. Unless
+ * The records live in the collection <code>vanillabp.outbox.mongo.delivery-collection</code>
+ * names and are keyed by the delivery key, so uniqueness comes from the document ID and no
+ * unique index is needed. Unless
  * <code>vanillabp.outbox.create-schema</code> is disabled, two indexes are created: one on
  * the record's timestamp for the retention cleanup
  * (<code>vanillabp.delivery.retention</code>, falling back to
@@ -49,6 +49,25 @@ public class MongoTaskDeliveryLogAutoConfiguration {
   public static final String DEFAULT_DELIVERY_LOG_BEAN_NAME = "vanillaBpMongoTaskDeliveryLog";
 
   /**
+   * The collection the records go into: what
+   * <code>vanillabp.outbox.mongo.delivery-collection</code> says. The indexes are created
+   * on the same name the log writes to, which is why both beans below ask this method
+   * instead of remembering a name of their own.
+   *
+   * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree
+   * @return The name of the delivery-log collection
+   */
+  private static String collectionOf(
+      final VanillaBpConfigurationProperties vanillaBpProperties) {
+
+    return vanillaBpProperties
+        .getOutbox()
+        .getMongo()
+        .getDeliveryCollection();
+
+  }
+
+  /**
    * @param mongoTemplate The template writing the records within the current transaction
    * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree, asked for the
    *          retention of delivery records (<code>vanillabp.delivery.retention</code>,
@@ -61,7 +80,7 @@ public class MongoTaskDeliveryLogAutoConfiguration {
       final VanillaBpConfigurationProperties vanillaBpProperties) {
 
     return new MongoTaskDeliveryLog(
-        mongoTemplate, MongoTaskDeliveryLog.DEFAULT_COLLECTION_NAME, vanillaBpProperties
+        mongoTemplate, collectionOf(vanillaBpProperties), vanillaBpProperties
             .resolvedDeliveryRetention());
 
   }
@@ -87,27 +106,27 @@ public class MongoTaskDeliveryLogAutoConfiguration {
         // the field the cleanup scans; MongoDB answers a createIndex of an index which is
         // already there with its name, so two instances starting together do not collide
         mongoTemplate
-            .indexOps(MongoTaskDeliveryLog.DEFAULT_COLLECTION_NAME)
+            .indexOps(collectionOf(vanillaBpProperties))
             .createIndex(new Index()
                 .on("lastSeenAt", Sort.Direction.ASC));
         // the election of a task operation looks a record up by the task the caller
         // names, once per operation - without this index that read is a collection scan
         // and costs more than the BPMS round trip it saves
         mongoTemplate
-            .indexOps(MongoTaskDeliveryLog.DEFAULT_COLLECTION_NAME)
+            .indexOps(collectionOf(vanillaBpProperties))
             .createIndex(new Index()
                 .on("taskId", Sort.Direction.ASC));
         // an extension asks for the open tasks of one workflow aggregate once per screen
         // it builds, and MongoDB knows no key-length limit, so the aggregate id itself is
         // the index here - unlike in the SQL table, whose column is too wide for one
         mongoTemplate
-            .indexOps(MongoTaskDeliveryLog.DEFAULT_COLLECTION_NAME)
+            .indexOps(collectionOf(vanillaBpProperties))
             .createIndex(new Index()
                 .on("aggregateId", Sort.Direction.ASC));
         // the core asks for the open tasks of ONE workflow of the BPMS on every wake-up
         // of that workflow, which is far more often than an extension builds a screen
         mongoTemplate
-            .indexOps(MongoTaskDeliveryLog.DEFAULT_COLLECTION_NAME)
+            .indexOps(collectionOf(vanillaBpProperties))
             .createIndex(new Index()
                 .on("workflowId", Sort.Direction.ASC));
       }

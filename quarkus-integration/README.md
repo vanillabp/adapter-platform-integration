@@ -382,8 +382,12 @@ two answers as soon as one of them changes. `ExtensionEnablementTest` injects it
   `VANILLABP_TASK_DELIVERY` live in the core (`JdbcTaskDeliveryStore`), shared with
   Spring Boot. `recordOfTask` and `markTaskClosed` go to the same store: they are what lets
   a task operation elect its BPMS from the record instead of asking one (decision 30).
-- `MongoTaskDeliveryLog` writes into `vanillabp-task-deliveries` of
-  `quarkus.mongodb.database`. MongoDB is no JTA resource, so the record is written
+- `MongoTaskDeliveryLog` writes into the collection
+  `vanillabp.outbox.mongo.delivery-collection` names, of `quarkus.mongodb.database`. The
+  name is read through the lazily loaded configuration, so the bean touches no
+  `vanillabp.*` key before the adapter extensions registered their overlays, and
+  `MongoDeliveryCollectionNameTest` writes with a renamed collection. MongoDB is no JTA
+  resource, so the record is written
   immediately and deleted again from an interposed synchronization when the transaction
   ends in anything but a commit - the same best-effort compensation `MongoPhaseTwoOutbox`
   does for its entries. Next to the index the retention reads it creates one on `taskId`,

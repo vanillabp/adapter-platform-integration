@@ -14,6 +14,10 @@ import lombok.experimental.SuperBuilder;
  * source of truth for keys, defaults and documentation, used by every store VanillaBP
  * ships: the JDBC one both platforms run on a relational database, and the MongoDB one of
  * each platform.
+ * <p>
+ * The delivery log reads its store settings here as well - whether the store is created,
+ * whether the MongoDB default is active, and the name of its collection. What that log
+ * owns alone is the period a record is kept, which lives in {@link DeliveryProperties}.
  */
 @Getter
 @Setter
@@ -239,6 +243,12 @@ public class PhaseTwoOutboxProperties {
     public static final String PAYLOAD_COLLECTION_SUFFIX = "-payloads";
 
     /**
+     * The name of the collection the records of processed task deliveries go into where
+     * the application configures none.
+     */
+    public static final String DEFAULT_DELIVERY_COLLECTION = "vanillabp-task-deliveries";
+
+    /**
      * Whether the MongoDB-based default outbox is created when a MongoDB connection
      * is available. Disable it if the application defines its own
      * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} bean and the
@@ -265,6 +275,22 @@ public class PhaseTwoOutboxProperties {
      */
     @Builder.Default
     private String payloadCollection = null;
+
+    /**
+     * The name of the collection storing the records of processed task deliveries (see
+     * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). The name lies in this
+     * section because the STORE settings of the delivery log are the outbox' ones, the
+     * way <code>vanillabp.outbox.mongo.enabled</code> and
+     * <code>vanillabp.outbox.create-schema</code> already are; what belongs to the log
+     * alone is how long a record is kept
+     * ({@link DeliveryProperties#getRetention()}).
+     * <p>
+     * Give it a name of its own where the database has naming rules, and keep it apart
+     * from {@link #collection} and the payload collection: three stores sharing one
+     * collection would read each other's documents.
+     */
+    @Builder.Default
+    private String deliveryCollection = DEFAULT_DELIVERY_COLLECTION;
 
     /**
      * The collection both MongoDB stores write their payloads into: the configured
