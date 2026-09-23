@@ -4,6 +4,8 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
 import io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema;
@@ -19,8 +21,9 @@ import lombok.extern.slf4j.Slf4j;
  * <p>
  * One row per phase-two call which carries a payload, written in the transaction which
  * writes the outbox entry and read once per dispatch attempt of that entry. The row is
- * removed when the entry was dispatched; {@link #removeOlderThan(Instant)} removes what
- * a crash between the two writes left behind.
+ * removed when the entry was dispatched and again with the dispatched entry itself;
+ * {@link #removeOrphansOlderThan(Instant, EntriesNamingPayloads)} removes what a crash
+ * between the two writes left behind, and only that.
  * <p>
  * The table is VanillaBP's own, so it is described in
  * <code>io.vanillabp:vanillabp-schema</code> like the other two and created at startup
@@ -58,11 +61,24 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
 
   private static final String DELETE_PAYLOAD = "DELETE FROM %s WHERE REFERENCE = ?";
 
-  private static final String DELETE_EXPIRED_PAYLOADS = "DELETE FROM %s WHERE CREATED_AT < ?";
+  /**
+   * The payloads old enough to go, read before any of them is deleted: which of them
+   * really may go is the entries' answer, and only what nothing names is an orphan.
+   */
+  private static final String SELECT_EXPIRED_REFERENCES = "SELECT REFERENCE FROM %s WHERE CREATED_AT < ?";
 
   /**
-   * The index the housekeeping deletes along. Without it that delete reads every
-   * payload ever written, which is the cost this table can least afford.
+   * How many references the store puts into one question to the entries. The entries
+   * answer a chunk with one statement, and a chunk of this size keeps the number of its
+   * parameters far below what a database accepts (SQL Server stops at about two
+   * thousand).
+   */
+  private static final int REFERENCES_PER_QUESTION = 100;
+
+  /**
+   * The index the housekeeping reads along. Without it the question which payloads are
+   * old enough reads every payload ever written, which is the cost this table can least
+   * afford.
    */
   public static final String CREATE_AGE_INDEX = "CREATE INDEX %s_AGE ON %s (CREATED_AT)";
 
@@ -76,7 +92,7 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
 
   private final String deletePayload;
 
-  private final String deleteExpiredPayloads;
+  private final String selectExpiredReferences;
 
   /**
    * @param connectionAccess How this platform hands out a connection taking part in the
@@ -92,7 +108,7 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
     this.insertPayload = INSERT_PAYLOAD.formatted(tableName);
     this.selectPayload = SELECT_PAYLOAD.formatted(tableName);
     this.deletePayload = DELETE_PAYLOAD.formatted(tableName);
-    this.deleteExpiredPayloads = DELETE_EXPIRED_PAYLOADS.formatted(tableName);
+    this.selectExpiredReferences = SELECT_EXPIRED_REFERENCES.formatted(tableName);
 
   }
 
@@ -177,22 +193,102 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
   }
 
   @Override
-  public int removeOlderThan(
-      final Instant threshold) {
+  public int removeOrphansOlderThan(
+      final Instant threshold,
+      final EntriesNamingPayloads entries) {
 
     Connection connection = null;
     try {
       connection = connectionAccess.acquire();
-      try (var statement = connection.prepareStatement(deleteExpiredPayloads)) {
-        statement.setTimestamp(1, Timestamp.from(threshold));
-        return statement.executeUpdate();
+      final var expired = expiredReferences(connection, threshold);
+      if (expired.isEmpty()) {
+        return 0;
       }
+      final var orphans = orphansAmong(expired, entries);
+      return orphans.isEmpty() ? 0 : removePayloads(connection, orphans);
     } catch (final SQLException e) {
-      log.warn("Could not remove the expired payloads of table '{}'", tableName, e);
+      log.warn("Could not remove the orphaned payloads of table '{}'", tableName, e);
       return 0;
     } finally {
       release(connection);
     }
+
+  }
+
+  /**
+   * The payloads which are old enough to go, read along the index over
+   * <code>CREATED_AT</code>. On a healthy store this reads nothing: a payload is removed
+   * with the dispatch of its entry and with the deletion of that entry, so what stays
+   * beyond the retention either belongs to an entry which waits or belongs to no entry
+   * at all.
+   *
+   * @param connection The connection to be used
+   * @param threshold Payloads written before this moment
+   * @return Their references
+   */
+  private List<String> expiredReferences(
+      final Connection connection,
+      final Instant threshold) throws SQLException {
+
+    final var references = new ArrayList<String>();
+    try (var statement = connection.prepareStatement(selectExpiredReferences)) {
+      statement.setTimestamp(1, Timestamp.from(threshold));
+      try (var resultSet = statement.executeQuery()) {
+        while (resultSet.next()) {
+          references.add(resultSet.getString(1));
+        }
+      }
+    }
+    return references;
+
+  }
+
+  /**
+   * Asks the entries about the expired payloads, a chunk at a time, and keeps what no
+   * entry named.
+   *
+   * @param expired The payloads which are old enough to go
+   * @param entries The entries of the outbox this store belongs to
+   * @return The references nothing points at any more
+   */
+  private static List<String> orphansAmong(
+      final List<String> expired,
+      final EntriesNamingPayloads entries) {
+
+    final var orphans = new ArrayList<String>();
+    for (var from = 0; from < expired.size(); from += REFERENCES_PER_QUESTION) {
+      final var chunk = expired.subList(from, Math.min(from + REFERENCES_PER_QUESTION, expired.size()));
+      final var stillNamed = entries.stillNaming(chunk);
+      chunk
+          .stream()
+          .filter(reference -> !stillNamed.contains(reference))
+          .forEach(orphans::add);
+    }
+    return orphans;
+
+  }
+
+  /**
+   * Deletes the given payloads by their primary key, one statement per payload. There
+   * are as many of them as an application lost writes, which is none while nothing goes
+   * wrong.
+   *
+   * @param connection The connection to be used
+   * @param references The payloads to delete
+   * @return How many rows were deleted
+   */
+  private int removePayloads(
+      final Connection connection,
+      final List<String> references) throws SQLException {
+
+    var removed = 0;
+    try (var statement = connection.prepareStatement(deletePayload)) {
+      for (final var reference : references) {
+        statement.setString(1, reference);
+        removed += statement.executeUpdate();
+      }
+    }
+    return removed;
 
   }
 

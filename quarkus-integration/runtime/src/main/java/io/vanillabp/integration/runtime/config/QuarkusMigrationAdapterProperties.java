@@ -506,6 +506,18 @@ public interface QuarkusMigrationAdapterProperties {
      */
     Optional<String> payloadCollection();
 
+    /**
+     * The name of the collection storing the records of processed task deliveries. It
+     * lives in this section because the store settings of the delivery log are the
+     * outbox' ones; what the log owns alone is
+     * <code>vanillabp.delivery.retention</code>. Keep it apart from the two collections
+     * above - three stores sharing one collection would read each other's documents.
+     *
+     * @return The delivery-log collection name
+     */
+    @WithDefault("vanillabp-task-deliveries")
+    String deliveryCollection();
+
   }
 
   /**

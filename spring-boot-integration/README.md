@@ -131,12 +131,14 @@ a workflow is waiting for asks the same object the process services write throug
   same store: they are what lets a task operation elect its BPMS from the record instead of
   asking one (decision 30), and the connection they use is the caller's, so the read sees
   what the caller's own transaction wrote.
-- `MongoTaskDeliveryLog` writes `TaskDeliveryDocument`s into `vanillabp-task-deliveries`
-  through the `MongoTemplate`, keyed by the delivery key (the document ID gives
+- `MongoTaskDeliveryLog` writes `TaskDeliveryDocument`s into the collection
+  `vanillabp.outbox.mongo.delivery-collection` names, through the `MongoTemplate`, keyed by
+  the delivery key (the document ID gives
   uniqueness). A duplicate is detected by a pre-check read: inside a MongoDB transaction
   a duplicate-key error would abort the whole transaction, the aggregate changes
   included. Its auto-configuration creates a second index, on `taskId`, which is what
-  `recordOfTask` reads by.
+  `recordOfTask` reads by, on the same collection the log writes to -
+  `MongoDeliveryCollectionNameTest` renames it and asks for both.
 - Both come with an auto-configuration of their own
   (`vanillabp.outbox.jdbc.enabled` / `.mongo.enabled`), create their schema unless
   `vanillabp.outbox.create-schema` is disabled and delete expired records per

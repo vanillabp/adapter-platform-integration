@@ -90,8 +90,8 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
   /**
    * Reads back what gruelbox wrote into its <code>invocation</code> column. gruelbox
    * builds the same one unless an application replaces the serializer of its persistor,
-   * and where it did, an unreadable invocation costs a payload row the age sweep takes
-   * (see {@link #payloadReferenceOf(String)}).
+   * and where it did, the reference of a replaced entry stays unknown and its payload is
+   * removed one retention period later (see {@link #payloadReferenceOf(String)}).
    */
   private static final com.gruelbox.transactionoutbox.InvocationSerializer INVOCATION_SERIALIZER = com.gruelbox.transactionoutbox.InvocationSerializer
       .createDefaultJsonSerializer();
@@ -237,6 +237,60 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
       log.debug("Could not read the next attempt time of gruelbox' outbox table '{}'", tableName, e);
       return null;
     }
+
+  }
+
+  /**
+   * Which of the given payloads an entry of gruelbox' table still names, asked by the
+   * payload store before it removes anything by age. An entry which waits, and an entry
+   * gruelbox blocked, keeps its bytes for as long as it is there.
+   * <p>
+   * gruelbox keeps a call as one serialized invocation, so there is no column to join
+   * on: the statement looks for the reference anywhere in that text. It costs a scan of
+   * the table, and it is asked only where a payload outlived the retention, which on a
+   * healthy store is never.
+   * <p>
+   * A store without a data source cannot ask, and it answers that every payload is still
+   * named. Keeping bytes nobody needs costs space; removing the bytes of an entry
+   * somebody is about to open again costs the dispatch.
+   *
+   * @param references The payloads the housekeeping is about to remove
+   * @return Those of them an entry names
+   */
+  public java.util.Set<String> stillNaming(
+      final java.util.Collection<String> references) {
+
+    if ((dataSource == null) || (tableName == null) || references.isEmpty()) {
+      return java.util.Set.copyOf(references);
+    }
+    final var condition = references
+        .stream()
+        .map(reference -> "invocation LIKE ?")
+        .collect(java.util.stream.Collectors.joining(" OR "));
+    final var stillNamed = new java.util.LinkedHashSet<String>();
+    try (var connection = dataSource.getConnection(); var statement = connection
+        .prepareStatement("SELECT invocation FROM %s WHERE %s".formatted(tableName, condition))) {
+      var parameter = 1;
+      for (final var reference : references) {
+        statement.setString(parameter++, "%%%s%%".formatted(reference));
+      }
+      try (var resultSet = statement.executeQuery()) {
+        while (resultSet.next()) {
+          final var invocation = resultSet.getString(1);
+          // the text is searched rather than deserialized: an application may build its
+          // persistor with a serializer of its own, and an entry this store cannot read
+          // still names its payload
+          references
+              .stream()
+              .filter(invocation::contains)
+              .forEach(stillNamed::add);
+        }
+      }
+    } catch (final java.sql.SQLException e) {
+      log.warn("Could not ask gruelbox' outbox table '{}' which payloads it still names", tableName, e);
+      return java.util.Set.copyOf(references);
+    }
+    return stillNamed;
 
   }
 
@@ -486,9 +540,9 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
    * <p>
    * Read with gruelbox' own serializer, which is what wrote it. An entry this store did
    * not write, or one written by a persistor built with a serializer of the
-   * application's own, is not understood here - the reference then stays unknown, the
-   * replaced payload is left to the age sweep of the payload store, and nothing else
-   * changes.
+   * application's own, is not understood here - the reference then stays unknown and the
+   * replaced payload waits for the housekeeping, which removes it once no entry names it
+   * any more. Nothing else changes.
    *
    * @param invocation The serialized invocation of the entry
    * @return The reference or <code>null</code> where the entry names none

@@ -40,8 +40,8 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * The default {@link TaskDeliveryLog} for Quarkus applications using MongoDB (extension
  * <code>quarkus-mongodb-client</code>) for aggregate persistence. The records live in
- * the collection {@value #DEFAULT_COLLECTION_NAME} of the database
- * <code>quarkus.mongodb.database</code> and are keyed by the delivery key (the
+ * the collection <code>vanillabp.outbox.mongo.delivery-collection</code> names, of the
+ * database <code>quarkus.mongodb.database</code>, and are keyed by the delivery key (the
  * document's <code>_id</code>), so uniqueness comes for free.
  * <p>
  * <strong>One transaction where MongoDB Panache provides a session:</strong> the
@@ -59,12 +59,6 @@ import lombok.extern.slf4j.Slf4j;
 @ApplicationScoped
 @Slf4j
 public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultStore {
-
-  /**
-   * The collection holding the records - the same name the Spring Boot MongoDB log uses,
-   * so both platforms share the store layout.
-   */
-  public static final String DEFAULT_COLLECTION_NAME = "vanillabp-task-deliveries";
 
   /**
    * The outcome of a delivery which left its task open - the only records the questions
@@ -85,8 +79,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
 
   private volatile TaskDeliveryRetentionCleanup retentionCleanup;
 
-  private final OpenTaskTouches touches = new OpenTaskTouches(
-      DEFAULT_COLLECTION_NAME, this::refreshLastSeen);
+  private volatile OpenTaskTouches touches;
 
   @Override
   public QuarkusPersistenceTechnology.Technology technology() {
@@ -124,6 +117,39 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
               .outbox());
     }
     return properties;
+
+  }
+
+  /**
+   * The collection the records live in: what
+   * <code>vanillabp.outbox.mongo.delivery-collection</code> says. Read through the lazily
+   * loaded configuration above, because this bean must not touch the
+   * <code>vanillabp.*</code> tree before the adapter extensions registered their
+   * overlays.
+   *
+   * @return The name of the delivery-log collection
+   */
+  String deliveryCollectionName() {
+
+    return getProperties()
+        .getMongo()
+        .getDeliveryCollection();
+
+  }
+
+  /**
+   * The block of open tasks whose records are refreshed in one round trip. Built on first
+   * use and not at construction, because it is named after the collection and that name
+   * comes from the configuration this bean reads lazily.
+   *
+   * @return The block, the same one for every caller
+   */
+  private synchronized OpenTaskTouches touches() {
+
+    if (touches == null) {
+      touches = new OpenTaskTouches(deliveryCollectionName(), this::refreshLastSeen);
+    }
+    return touches;
 
   }
 
@@ -189,7 +215,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
       deliveryCollection().createIndex(Indexes.ascending("workflowId"));
     }
     retentionCleanup = new TaskDeliveryRetentionCleanup(
-        DEFAULT_COLLECTION_NAME, getDeliveryRetention(), this::cleanUpExpiredRecords);
+        deliveryCollectionName(), getDeliveryRetention(), this::cleanUpExpiredRecords);
     retentionCleanup.start();
 
   }
@@ -204,7 +230,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
    */
   public long cleanUpExpiredRecords() {
 
-    touches.flush();
+    touches().flush();
 
     return deliveryCollection()
         .deleteMany(
@@ -235,7 +261,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
       final String deliveryKey) {
 
     aDeliveryWasRecorded();
-    touches.remember(deliveryKey);
+    touches().remember(deliveryKey);
 
   }
 
@@ -634,7 +660,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
     return mongoClient
         .get()
         .getDatabase(database)
-        .getCollection(DEFAULT_COLLECTION_NAME);
+        .getCollection(deliveryCollectionName());
 
   }
 

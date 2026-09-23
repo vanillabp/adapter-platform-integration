@@ -101,6 +101,10 @@ schema/bin/schema-version.sh open 2.1.0    # a new, empty latest.xml, included a
   `labelFilter` set to it. That is what keeps a Flyway file per release holding only that release's
   statements - Flyway applies files, not diffs - and it is deliberately a visible, reviewed change
   rather than a loop over whatever happens to lie around.
+- A new table also needs its name in `TABLES_OF_VANILLABP` of `ChangelogAppliesTest`, in this
+  README and in the wiki pages of the two platform integrations. The test goes red the moment the
+  changelog describes a table that set does not, and its message names the places to write it
+  down. A new column or index needs none of that - the test reads those from the changelog.
 
 ## How the build produces the SQL
 
@@ -114,6 +118,11 @@ schema/bin/schema-version.sh open 2.1.0    # a new, empty latest.xml, included a
 A build therefore always regenerates the SQL from the changelog. The SQL is not committed, so it
 cannot drift away from the changelog - the changelog is what a reviewer reads.
 
-`ChangelogAppliesTest` applies the changelog to H2 and checks all three tables, their indexes and
-the unique index, and `GeneratedSqlOnPostgresIT#postgresAcceptsTheGeneratedSql` runs the generated
-statements against a PostgreSQL container.
+`ChangelogAppliesTest` applies the changelog to H2 and then compares the database with what the
+changelog describes. It reads the tables, their columns and their indexes from the changelog
+itself, so a changeset which adds a column or an index is checked without anybody writing it into
+the test. The table names are the one thing the test does hold, because this README and the wiki
+name them too. They are compared against the changelog rather than trusted, so a release which
+brings a fourth table turns the test red and the new name reaches all three places.
+`GeneratedSqlOnPostgresIT#postgresAcceptsTheGeneratedSql` runs the generated statements against a
+PostgreSQL container and asks the changelog for the same names.

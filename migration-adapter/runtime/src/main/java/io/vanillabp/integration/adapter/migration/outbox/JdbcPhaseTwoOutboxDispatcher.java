@@ -6,8 +6,12 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
@@ -168,6 +172,17 @@ public class JdbcPhaseTwoOutboxDispatcher {
   private static final String DELETE_EXPIRED_DONE_ENTRIES = """
       DELETE FROM %s \
       WHERE STATUS = '%s' AND DONE_AT < ?""";
+
+  /**
+   * The arguments of the entries which name one of the payloads the housekeeping is
+   * about to remove. There is no column for a payload reference - the entry keeps it
+   * among its arguments, which is where an identifier belongs (decision 62 in the
+   * repository's DECISIONS.md) - so the reference is looked for inside the serialized
+   * arguments and the rows which come back are read properly afterwards. The condition
+   * is repeated per reference asked about, joined by OR.
+   */
+  private static final String SELECT_ARGS_NAMING = """
+      SELECT ARGS FROM %s WHERE %s""";
 
   /**
    * The index the poller asks its question along. STATUS first and the timestamp second, which is
@@ -1024,8 +1039,13 @@ public class JdbcPhaseTwoOutboxDispatcher {
 
   /**
    * Deletes successfully dispatched (DONE) entries whose retention period passed - the
-   * asynchronous cleanup of the "DONE instead of delete" contract - and the payloads
-   * which outlived the same period.
+   * asynchronous cleanup of the "DONE instead of delete" contract - and then the
+   * payloads which belong to no entry any more.
+   * <p>
+   * The order is what makes the retention count at the entry: the payload of an entry
+   * deleted a moment ago is named by nothing now, so it goes with it, while the payload
+   * of an entry which waits or is blocked is named and stays, however long the repair
+   * takes.
    *
    * @param connection The connection to be used
    */
@@ -1037,9 +1057,57 @@ public class JdbcPhaseTwoOutboxDispatcher {
       statement.setTimestamp(1, Timestamp.from(expiredBefore));
       statement.executeUpdate();
     }
-    // what a crash between the two writes of a schedule left behind, and the payload of
-    // an entry blocked longer than the retention. Both are rows nobody will read again
-    payloadStore.removeOlderThan(expiredBefore);
+    // the payloads of the entries just deleted, and what a crash between the two writes
+    // of a schedule left behind. Nothing else is old enough to be gone, and what an
+    // entry still names is not removed by age at all
+    payloadStore
+        .removeOrphansOlderThan(expiredBefore, references -> referencesStillNamed(connection, references));
+
+  }
+
+  /**
+   * Which of the given payloads an entry of this table still names, asked with one
+   * statement. It costs a scan of the outbox table, because a reference lies inside the
+   * serialized arguments and no index reaches into them - but it is asked only where a
+   * payload outlived the retention, which on a healthy store is never.
+   *
+   * @param connection The connection to be used
+   * @param references The payloads the housekeeping is about to remove
+   * @return Those of them an entry names
+   */
+  private Set<String> referencesStillNamed(
+      final Connection connection,
+      final Collection<String> references) {
+
+    final var condition = references
+        .stream()
+        .map(reference -> "ARGS LIKE ?")
+        .collect(Collectors.joining(" OR "));
+    final var stillNamed = new LinkedHashSet<String>();
+    try (var statement = connection.prepareStatement(SELECT_ARGS_NAMING.formatted(tableName, condition))) {
+      var parameter = 1;
+      for (final var reference : references) {
+        statement.setString(parameter++, "%%%s%%".formatted(reference));
+      }
+      try (var resultSet = statement.executeQuery()) {
+        while (resultSet.next()) {
+          // read properly rather than trusted from the pattern: LIKE matches a
+          // reference wherever it stands, and what counts is the argument itself
+          final var named = PhaseTwoCall
+              .deserializeArgs(resultSet.getString(1))
+              .get(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
+          if ((named != null) && references.contains(named)) {
+            stillNamed.add(named);
+          }
+        }
+      }
+    } catch (final SQLException e) {
+      // nothing is removed then: a payload kept too long costs space, a payload removed
+      // from an entry which still waits costs the dispatch
+      log.warn("Could not ask the outbox table '{}' which payloads it still names", tableName, e);
+      return Set.copyOf(references);
+    }
+    return stillNamed;
 
   }
 

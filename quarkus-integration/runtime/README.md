@@ -166,11 +166,14 @@ limit holds for every store, so an application meets the same one whichever stor
 On MongoDB the bytes are a field of the payload document, which is why MongoDB's own limit
 of 16 MB per document is never reached.
 
-The payload is removed when its entry is marked dispatched. What a crash between the two
-writes leaves behind, and the payload of an entry blocked longer than
-`vanillabp.outbox.retention`, is removed by the age sweep which rides the housekeeping of
-each store. A payload is removed earlier in one case: where a younger call replaced the
-entry which named it, see below.
+The payload is removed when its entry is marked dispatched, and again with that entry
+itself once `vanillabp.outbox.retention` passed. The retention counts at the entry, so an
+entry which still waits, or which is blocked until somebody repairs it, keeps its payload
+for as long as it is in the store. What the housekeeping removes by age is a payload no
+entry names any more, which is what a crash between the two writes leaves behind: it asks
+the entries of its outbox first, and only where a payload outlived the retention. A
+payload is removed earlier in one case: where a younger call replaced the entry which
+named it, see below.
 
 ### A younger call which takes the waiting entry's place
 

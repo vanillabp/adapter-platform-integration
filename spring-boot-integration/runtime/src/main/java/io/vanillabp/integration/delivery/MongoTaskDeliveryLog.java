@@ -27,6 +27,10 @@ import lombok.extern.slf4j.Slf4j;
  * {@link MongoTemplate} which takes part in the Spring-managed MongoDB transaction, so
  * a record and the aggregate changes of the same delivery commit together.
  * <p>
+ * The collection is the one <code>vanillabp.outbox.mongo.delivery-collection</code> names,
+ * which defaults to
+ * {@value io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties.MongoOutboxProperties#DEFAULT_DELIVERY_COLLECTION}.
+ * <p>
  * <strong>Note:</strong> MongoDB transactions require a replica set. Without one (no
  * <code>MongoTransactionManager</code> or a standalone server) the record is written
  * immediately, exactly like an outbox entry is (see
@@ -38,11 +42,6 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class MongoTaskDeliveryLog implements TaskDeliveryLog {
-
-  /**
-   * The collection holding the records.
-   */
-  public static final String DEFAULT_COLLECTION_NAME = "vanillabp-task-deliveries";
 
   /**
    * The outcome of a delivery which left its task open - the only records the questions
