@@ -37,6 +37,7 @@ import io.vanillabp.integration.test.utils.impl.mongodb.DerivedEntity;
 import io.vanillabp.integration.test.utils.impl.mongodb.Entity;
 import io.vanillabp.integration.test.utils.impl.mongodb.Entity2;
 import io.vanillabp.integration.test.utils.impl.mongodb.EntityRepository;
+import io.vanillabp.integration.test.utils.impl.mongodb.EntityWithIdOnGetter;
 import io.vanillabp.integration.test.utils.impl.mongodb.EntityWithoutRepository;
 import io.vanillabp.integration.test.utils.springboot.FullyQualifiedRepositoryBeanNameGenerator;
 import io.vanillabp.integration.utils.SpringDataUtil;
@@ -159,6 +160,19 @@ class MongoDbSpringDataUtilTest {
 
     final var idName2 = mongoDbSpringDataUtil.getIdName(Entity2.class);
     assertEquals("entityId", idName2);
+
+  }
+
+  /**
+   * The same shape as the JPA entity of that name: what MongoDB has always read at the
+   * getter, JPA reads there now too. A class annotated at the field and at a getter of
+   * another property is not tested here, because Spring Data refuses two ID properties
+   * in one class, so only JPA can be asked which of the two wins.
+   */
+  @Test
+  public void idAnnotationAtTheGetterIsRead() {
+
+    assertEquals("entityId", mongoDbSpringDataUtil.getIdName(EntityWithIdOnGetter.class));
 
   }
 

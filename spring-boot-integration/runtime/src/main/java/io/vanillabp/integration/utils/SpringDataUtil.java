@@ -41,10 +41,14 @@ public interface SpringDataUtil {
       Object entity);
 
   /**
-   * Determine the entity's object identifier's parameter name.
+   * Determine the entity's object identifier's parameter name. The identifier is the one
+   * the persistence itself uses, so an annotation at the field and an annotation at the
+   * getter both count, and the field wins where an entity carries both.
    *
    * @param type The given entity's type.
    * @return The entity's object identifier's parameter name.
+   * @throws RuntimeException If the entity names no identifier at all. The message says
+   *           which annotation is missing and where it belongs.
    */
   String getIdName(
       Class<?> type);

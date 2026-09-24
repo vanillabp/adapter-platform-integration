@@ -1,6 +1,9 @@
 package io.vanillabp.integration.utils.impl;
 
+import java.beans.Introspector;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -135,17 +138,73 @@ public class JpaSpringDataUtil implements SpringDataUtil {
 
   }
 
+  /**
+   * JPA allows the ID annotation on the field and on the getter, and both are in use. A
+   * field wins over a getter, which is the order Spring Data uses as well, so the same
+   * aggregate gets the same answer on JPA and on MongoDB.
+   *
+   * @param type The aggregate's type
+   * @return The name of the ID property
+   * @throws IllegalStateException If neither a field nor a getter carries the annotation
+   */
   public String getIdName(
       final Class<?> type) {
 
-    // TODO: also check annotated getter methods
-    return Stream
+    final var annotatedField = Stream
         .iterate(type, Objects::nonNull, this::getSuperclass)
         .flatMap(c -> Stream.of(c.getDeclaredFields()))
         .filter(this::isIdAnnotationPresent)
         .findFirst()
-        .map(Field::getName)
-        .orElse(null);
+        .map(Field::getName);
+    if (annotatedField.isPresent()) {
+      return annotatedField.get();
+    }
+
+    return Stream
+        .iterate(type, Objects::nonNull, this::getSuperclass)
+        .flatMap(c -> Stream.of(c.getDeclaredMethods()))
+        .filter(JpaSpringDataUtil::isGetter)
+        .filter(this::isIdAnnotationPresent)
+        .findFirst()
+        .map(JpaSpringDataUtil::propertyNameOf)
+        .orElseThrow(() -> new IllegalStateException(
+            """
+                There is no field and no getter annotated with @jakarta.persistence.Id or \
+                @org.springframework.data.annotation.Id in class '%s' or its superclasses! Place \
+                the annotation at the aggregate's ID field or at its getter."""
+                .formatted(type.getName())));
+
+  }
+
+  private static boolean isGetter(
+      final Method method) {
+
+    if (Modifier.isStatic(method.getModifiers())) {
+      return false;
+    }
+    if (method.getParameterCount() > 0) {
+      return false;
+    }
+    final var returnType = method.getReturnType();
+    if (returnType == void.class) {
+      return false;
+    }
+    if (method.getName().startsWith("get")) {
+      return true;
+    }
+    if (!method.getName().startsWith("is")) {
+      return false;
+    }
+    return (returnType == boolean.class) || (returnType == Boolean.class);
+
+  }
+
+  private static String propertyNameOf(
+      final Method getter) {
+
+    final var name = getter.getName();
+    final var withoutPrefix = name.startsWith("get") ? name.substring(3) : name.substring(2);
+    return Introspector.decapitalize(withoutPrefix);
 
   }
 
@@ -153,6 +212,14 @@ public class JpaSpringDataUtil implements SpringDataUtil {
       Field field) {
 
     return field.isAnnotationPresent(jakarta.persistence.Id.class) || field
+        .isAnnotationPresent(org.springframework.data.annotation.Id.class);
+
+  }
+
+  private boolean isIdAnnotationPresent(
+      Method getter) {
+
+    return getter.isAnnotationPresent(jakarta.persistence.Id.class) || getter
         .isAnnotationPresent(org.springframework.data.annotation.Id.class);
 
   }
