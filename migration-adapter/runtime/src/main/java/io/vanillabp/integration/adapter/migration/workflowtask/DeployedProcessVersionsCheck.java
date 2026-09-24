@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 
 import io.vanillabp.integration.adapter.migration.config.OutfadedVersionsInUsePolicy;
 import io.vanillabp.integration.adapter.spi.version.DeployedProcessVersion;
+import io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog;
 import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 
 /**
@@ -21,7 +22,7 @@ import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
  * news of a version nobody serves is an incident on a live workflow.
  * <p>
  * The check runs once per BPMN process after its workflow module was deployed. Reading
- * an old model belongs to the adapter ({@link ProcessVersionCatalogAccess}), deciding
+ * an old model belongs to the adapter ({@link ProcessVersionCatalog}), deciding
  * whether a method serves it belongs to the core, and the two ends meet here.
  * <p>
  * "Older than what this boot deployed" has two readings, and both are ordinary. Where a
@@ -163,135 +164,6 @@ public class DeployedProcessVersionsCheck {
         String version,
         Long activeWorkflows,
         Collection<io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.ModelIdentifier> declared);
-
-  }
-
-  /**
-   * What the check reads from an adapter's catalog - narrowed to its questions so a test
-   * double does not have to be a whole catalog.
-   */
-  public interface ProcessVersionCatalogAccess {
-
-    /**
-     * Every version that BPMS holds, which is what the whole check works through - see
-     * {@link io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog#deployedVersionsOf}.
-     * <p>
-     * Nothing held means nothing to check and the run ends there, after saying so where the
-     * application declared that id without deploying a model under it.
-     *
-     * @param workflowModuleId The workflow module ID
-     * @param bpmnProcessId The plain BPMN process ID
-     * @return The versions, oldest first - empty or <code>null</code> where the BPMS cannot
-     *         tell
-     */
-    List<DeployedProcessVersion> deployedVersionsOf(
-        String workflowModuleId,
-        String bpmnProcessId);
-
-    /**
-     * The tasks of one held version, read from the model that BPMS still holds - see
-     * {@link io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog#tasksOfVersion}.
-     * <p>
-     * A <code>null</code> answer ends the walk over the older versions of this process and is
-     * said once: a BPMS which cannot read one held model cannot read the next one either.
-     *
-     * @param workflowModuleId The workflow module ID
-     * @param bpmnProcessId The plain BPMN process ID
-     * @param version The version identifier the BPMS reported
-     * @return The tasks of that version, or <code>null</code> where this BPMS cannot say
-     */
-    Collection<BpmnTaskSpec> tasksOfVersion(
-        String workflowModuleId,
-        String bpmnProcessId,
-        String version);
-
-    /**
-     * How many workflows still run on one held version - see
-     * {@link io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog#activeInstanceCountOf}.
-     * <p>
-     * This is what decides how loud a finding is, so the answer is asked once per version and
-     * shared by the reports which need it. A BPMS which cannot count says so once per process,
-     * and the findings about such a version are then worded without a number - "cannot tell"
-     * is never read as "nobody".
-     *
-     * @param workflowModuleId The workflow module ID
-     * @param bpmnProcessId The plain BPMN process ID
-     * @param version The version identifier the BPMS reported
-     * @return The number of running workflows, or <code>null</code> where this BPMS cannot
-     *         count
-     */
-    Long activeInstanceCountOf(
-        String workflowModuleId,
-        String bpmnProcessId,
-        String version);
-
-    /**
-     * What a workflow on an older version never gets, in the adapter's own words - see
-     * {@link io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog#whatOlderVersionsMiss}.
-     * <p>
-     * The default answers <code>null</code>, which is the right answer for an adapter which
-     * attaches its behaviour while the engine parses a model: there nothing is missing. The
-     * report then stays at the bare count.
-     *
-     * @param workflowModuleId The workflow module ID
-     * @param bpmnProcessId The plain BPMN process ID
-     * @return A sentence naming what is missing, or <code>null</code> where nothing is
-     */
-    default String whatOlderVersionsMiss(
-        final String workflowModuleId,
-        final String bpmnProcessId) {
-
-      return null;
-
-    }
-
-    /**
-     * The elements of one held version which can put a second token into a running workflow -
-     * see
-     * {@link io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog#concurrentTokenElementsOfVersion}.
-     * <p>
-     * Asked only where workflows still run on that version, because there is nothing to lose
-     * in a workflow nobody is in. Two writers on one workflow aggregate are made visible and
-     * not resolved (decision 14 in the repository's DECISIONS.md), and an old version with a
-     * parallel gateway the new model dropped is the case a check over this boot's model never
-     * sees.
-     *
-     * @param workflowModuleId The workflow module ID
-     * @param bpmnProcessId The plain BPMN process ID
-     * @param version The version identifier the BPMS reported
-     * @return The element ids, or <code>null</code> where this BPMS cannot read a held model
-     */
-    default Collection<String> concurrentTokenElementsOfVersion(
-        final String workflowModuleId,
-        final String bpmnProcessId,
-        final String version) {
-
-      return null;
-
-    }
-
-    /**
-     * The plain identifiers one held version declares - see
-     * {@link io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog#identifiersOfVersion}.
-     * <p>
-     * A message name of a model deployed years ago lives in that model and nowhere else, so
-     * this is the only place a clash with a name another workflow module uses today can be
-     * seen at all (decision 40 in the repository's DECISIONS.md). Asked in the loop which
-     * reads that version's model anyway.
-     *
-     * @param workflowModuleId The workflow module ID
-     * @param bpmnProcessId The plain BPMN process ID
-     * @param version The version identifier the BPMS reported
-     * @return The identifiers, or <code>null</code> where this BPMS cannot read a held model
-     */
-    default Collection<io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.ModelIdentifier> identifiersOfVersion(
-        final String workflowModuleId,
-        final String bpmnProcessId,
-        final String version) {
-
-      return null;
-
-    }
 
   }
 
@@ -456,14 +328,14 @@ public class DeployedProcessVersionsCheck {
             workflowModuleId,
             bpmnProcessId,
             registered.adapterId(),
-            access(registered.catalog()),
+            registered.catalog(),
             resolver));
 
   }
 
   /**
    * The check for ONE adapter - the entry point of the tests, which hand in their own
-   * {@link ProcessVersionCatalogAccess}. What it finds about methods which never run is
+   * {@link ProcessVersionCatalog}. What it finds about methods which never run is
    * remembered rather than reported: that verdict belongs to the whole workflow module
    * and is drawn by {@link #reportDeadHandlers(String)}.
    *
@@ -477,7 +349,7 @@ public class DeployedProcessVersionsCheck {
       final String workflowModuleId,
       final String bpmnProcessId,
       final String adapterId,
-      final ProcessVersionCatalogAccess catalog,
+      final ProcessVersionCatalog catalog,
       final VersionRange.ProcessVersionResolver resolver) {
 
     final var deployed = processVersions.deployedVersion(adapterId, workflowModuleId, bpmnProcessId);
@@ -560,7 +432,7 @@ public class DeployedProcessVersionsCheck {
       final String adapterId,
       final String version,
       final InstanceCounts instanceCounts,
-      final ProcessVersionCatalogAccess catalog) {
+      final ProcessVersionCatalog catalog) {
 
     if (identifiersOfHeldVersions == null) {
       return;
@@ -602,7 +474,7 @@ public class DeployedProcessVersionsCheck {
       final String bpmnProcessId,
       final String version,
       final InstanceCounts instanceCounts,
-      final ProcessVersionCatalogAccess catalog,
+      final ProcessVersionCatalog catalog,
       final java.util.Map<String, Collection<String>> concurrentTokensPerVersion) {
 
     if (concurrentTokenElements == null) {
@@ -645,7 +517,7 @@ public class DeployedProcessVersionsCheck {
    *
    * <p>
    * What the older workflows lack is BPMS-specific, so it is not spelled out here: the
-   * adapter reports it through {@link ProcessVersionCatalogAccess}, and an adapter which
+   * adapter reports it through {@link ProcessVersionCatalog}, and an adapter which
    * attaches its behaviour while parsing rather than while deploying answers nothing,
    * because for it nothing is missing.
    *
@@ -664,7 +536,7 @@ public class DeployedProcessVersionsCheck {
       final String adapterId,
       final List<String> olderVersions,
       final InstanceCounts instanceCounts,
-      final ProcessVersionCatalogAccess catalog,
+      final ProcessVersionCatalog catalog,
       final boolean nothingDeployedUnderThatId) {
 
     if (olderVersions.isEmpty()) {
@@ -1109,73 +981,6 @@ public class DeployedProcessVersionsCheck {
 
   }
 
-  private static ProcessVersionCatalogAccess access(
-      final io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog catalog) {
-
-    return new ProcessVersionCatalogAccess() {
-
-      @Override
-      public List<DeployedProcessVersion> deployedVersionsOf(
-          final String workflowModuleId,
-          final String bpmnProcessId) {
-
-        return catalog.deployedVersionsOf(workflowModuleId, bpmnProcessId);
-
-      }
-
-      @Override
-      public Collection<BpmnTaskSpec> tasksOfVersion(
-          final String workflowModuleId,
-          final String bpmnProcessId,
-          final String version) {
-
-        return catalog.tasksOfVersion(workflowModuleId, bpmnProcessId, version);
-
-      }
-
-      @Override
-      public Long activeInstanceCountOf(
-          final String workflowModuleId,
-          final String bpmnProcessId,
-          final String version) {
-
-        return catalog.activeInstanceCountOf(workflowModuleId, bpmnProcessId, version);
-
-      }
-
-      @Override
-      public String whatOlderVersionsMiss(
-          final String workflowModuleId,
-          final String bpmnProcessId) {
-
-        return catalog.whatOlderVersionsMiss(workflowModuleId, bpmnProcessId);
-
-      }
-
-      @Override
-      public Collection<String> concurrentTokenElementsOfVersion(
-          final String workflowModuleId,
-          final String bpmnProcessId,
-          final String version) {
-
-        return catalog.concurrentTokenElementsOfVersion(workflowModuleId, bpmnProcessId, version);
-
-      }
-
-      @Override
-      public Collection<io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.ModelIdentifier> identifiersOfVersion(
-          final String workflowModuleId,
-          final String bpmnProcessId,
-          final String version) {
-
-        return catalog.identifiersOfVersion(workflowModuleId, bpmnProcessId, version);
-
-      }
-
-    };
-
-  }
-
   /**
    * The instance count of a version, asked at most ONCE per version and per run of this
    * check.
@@ -1195,14 +1000,14 @@ public class DeployedProcessVersionsCheck {
 
     private final String bpmnProcessId;
 
-    private final ProcessVersionCatalogAccess catalog;
+    private final ProcessVersionCatalog catalog;
 
     private final java.util.Map<String, java.util.Optional<Long>> counts = new java.util.HashMap<>();
 
     private InstanceCounts(
         final String workflowModuleId,
         final String bpmnProcessId,
-        final ProcessVersionCatalogAccess catalog) {
+        final ProcessVersionCatalog catalog) {
 
       this.workflowModuleId = workflowModuleId;
       this.bpmnProcessId = bpmnProcessId;

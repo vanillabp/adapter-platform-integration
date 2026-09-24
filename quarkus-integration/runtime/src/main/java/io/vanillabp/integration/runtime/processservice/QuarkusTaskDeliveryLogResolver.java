@@ -21,6 +21,12 @@ import jakarta.enterprise.inject.Instance;
  * {@link PlatformDefaultStore} rather than by naming the implementations: the MongoDB ones
  * exist only where the MongoDB client extension does, and a native image resolves every
  * referenced method while it is built.
+ * <p>
+ * The outbox resolver next to this one walks the same three steps, and the two stay apart on
+ * purpose: they look up different bean types, they answer with different stores, and each
+ * message names the properties of its own store. A shared step-walker would have to be
+ * handed all of that, and every reader of either resolver would have to open it to see
+ * what happens.
  */
 public class QuarkusTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
 

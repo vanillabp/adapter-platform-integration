@@ -116,24 +116,6 @@ public final class PhaseOperationRegistry {
   }
 
   /**
-   * The operation a persisted name stands for - for a store or an extension which needs
-   * the operation itself rather than its dispatch, its
-   * {@link PhaseOperation#carriesActivation()} for example. The core asks for the dispatch
-   * only.
-   *
-   * @param name The persisted name of an operation
-   * @return The registered operation of that name, if any
-   */
-  public Optional<PhaseOperation> find(
-      final String name) {
-
-    return Optional
-        .ofNullable(registrations.get(name))
-        .map(Registration::operation);
-
-  }
-
-  /**
    * What to do with a call of an operation a store read back by name, so that the store
    * hands the call on without ever knowing what the operation means.
    *

@@ -155,7 +155,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   /**
    * What VanillaBP does with the records of processed task deliveries (properties
    * section <code>vanillabp.delivery</code>, overridable per workflow module - except the
-   * retention, see {@link DeliveryProperties#getRetention()}).
+   * retention, see <code>vanillabp.delivery.retention</code>).
    */
   @Builder.Default
   private DeliveryProperties delivery = new DeliveryProperties();
@@ -1767,8 +1767,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
             nor property '%s.resources-location' for VanillaBP resources (not specific to the BPMS), and the
             workflow module '%s' is not known in the classpath, so no location can be derived by convention!
 
-            If using one of the first two options then the location needs to be specific to the adapter in order to
-            avoid future problems once you wish to migrate to another adapter.
+            If using one of the first two options then the location needs to be specific to the adapter, so that
+            migrating to another adapter later costs nothing.
             Sample: 'classpath*:/workflow-resources/%s'"""
             .formatted(PREFIX, workflowModuleId, adapterId, PREFIX, adapterId, PREFIX, workflowModuleId, adapterId));
 

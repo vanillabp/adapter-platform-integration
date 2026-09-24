@@ -17,8 +17,9 @@ import io.vanillabp.spi.service.BpmsStartTrigger;
  * @param signalName The plain signal name for {@link BpmsStartTrigger.Kind#SIGNAL},
  *          <code>null</code> otherwise
  * @param description What the event is defined as (e.g. a timer's cycle or date
- *          expression) - used in log and error messages only, may be
- *          <code>null</code>
+ *          expression). Nothing is decided by it: it is shown in the messages naming the
+ *          start events of a process, next to the signal name, so a reader does not have
+ *          to look an element id up in the model. May be <code>null</code>
  */
 public record BpmsInitiatedStartSpec(
                                      String elementId,

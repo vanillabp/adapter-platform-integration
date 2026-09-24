@@ -367,7 +367,7 @@ public class PhaseTwoOutboxProperties {
      * way <code>vanillabp.outbox.mongo.enabled</code> and
      * <code>vanillabp.outbox.create-schema</code> already are; what belongs to the log
      * alone is how long a record is kept
-     * ({@link DeliveryProperties#getRetention()}).
+     * (<code>vanillabp.delivery.retention</code>).
      * <p>
      * Give it a name of its own where the database has naming rules, and keep it apart
      * from {@link #collection} and the payload collection: three stores sharing one

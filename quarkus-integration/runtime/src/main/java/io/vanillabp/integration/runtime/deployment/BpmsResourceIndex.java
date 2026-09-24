@@ -5,11 +5,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
-import lombok.Setter;
 
 /**
  * Build-time collected index of all BPMS resources and workflow modules of the
@@ -28,15 +26,15 @@ import lombok.Setter;
  */
 @Builder
 @Getter
-@Setter(AccessLevel.PACKAGE) // needed for object-serialization
 @AllArgsConstructor
 public class BpmsResourceIndex {
 
   /**
-   * An index without content, package-visible like the setters which fill it. The instance
-   * a boot works with is built by the builder of this class, in
-   * {@link DeploymentRecorder#recordBpmsResourceIndex(List, List)}, so nothing outside this
-   * package has a use for an empty one.
+   * An index without content. It is here because the index is a synthetic
+   * <code>&#64;ApplicationScoped</code> bean, and the client proxy Quarkus builds for such
+   * a bean extends this class and calls a constructor without arguments. Nothing else uses
+   * it: the instance a boot works with is built by the builder of this class, in
+   * {@link DeploymentRecorder#recordBpmsResourceIndex(List, List)}.
    */
   BpmsResourceIndex() {
   }

@@ -29,7 +29,9 @@ import java.util.List;
  * decision 4 in the repository's DECISIONS.md.
  *
  * @param workflowModuleId The workflow module of the calling process service
- * @param bpmnProcessIds The plain BPMN process ids it serves, the primary one first
+ * @param bpmnProcessIds The plain BPMN process ids it serves, in no particular order:
+ *          where the platform knows the processes of the module, the scope carries all of
+ *          them, so no id in the list is the one the call is about
  */
 public record WorkflowScope(
                             String workflowModuleId,
@@ -62,23 +64,6 @@ public record WorkflowScope(
       final String bpmnProcessId) {
 
     return new WorkflowScope(workflowModuleId, List.of(bpmnProcessId));
-
-  }
-
-  /**
-   * The first process of the scope - a convenience for a caller which has to name a single
-   * process, in a message for instance. A probe is asked about {@link #bpmnProcessIds()}
-   * as a whole, so an adapter which answers by this id alone answers about less than it
-   * was asked.
-   *
-   * @return The first BPMN process of the scope, or <code>null</code> where the scope
-   *         carries none
-   */
-  public String primaryBpmnProcessId() {
-
-    return bpmnProcessIds.isEmpty()
-        ? null
-        : bpmnProcessIds.getFirst();
 
   }
 

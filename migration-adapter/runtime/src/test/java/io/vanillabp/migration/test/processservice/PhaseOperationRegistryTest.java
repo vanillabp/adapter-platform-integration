@@ -44,9 +44,8 @@ public class PhaseOperationRegistryTest {
     final var operation = extensionOperation("my-extension:NOTIFY");
     testee.register(operation, NOOP);
 
-    assertEquals(operation, testee.find("my-extension:NOTIFY").orElseThrow());
     assertTrue(testee.dispatchFor("my-extension:NOTIFY").isPresent());
-    assertTrue(testee.find("my-extension:UNKNOWN").isEmpty());
+    assertTrue(testee.dispatchFor("my-extension:UNKNOWN").isEmpty());
     assertEquals(java.util.List.of("my-extension:NOTIFY"), testee.registeredNames());
 
   }

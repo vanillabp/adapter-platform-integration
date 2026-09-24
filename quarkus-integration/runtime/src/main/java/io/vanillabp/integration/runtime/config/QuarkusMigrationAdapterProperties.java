@@ -761,10 +761,9 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<Integer> maxOpenTasksChecked();
 
     /**
-     * How long the record of a processed task delivery is kept. Read GLOBALLY only (see
-     * the core's
-     * {@link io.vanillabp.integration.adapter.migration.config.DeliveryProperties#getRetention()}),
-     * and defaulting to <code>vanillabp.outbox.retention</code> where it is not set.
+     * How long the record of a processed task delivery is kept. It is read GLOBALLY only,
+     * under <code>vanillabp.delivery.retention</code>, and defaults to
+     * <code>vanillabp.outbox.retention</code> where it is not set.
      *
      * @return The setting, an empty Optional meaning "whatever the outbox retention says"
      */

@@ -219,25 +219,6 @@ public class VersionRange {
   }
 
   /**
-   * Whether this specification covers that version, using numbers alone.
-   * <p>
-   * A specification naming a version tag cannot be placed without the BPMS, so it matches
-   * nothing here. Use {@link #matches(String, ProcessVersionResolver)} wherever a tag may
-   * turn up.
-   *
-   * @param processVersion The version the BPMS reported
-   * @return Whether this specification covers that version - only <code>*</code>
-   *         covers <code>null</code> (see
-   *         {@link #matches(String, ProcessVersionResolver)})
-   */
-  public boolean matches(
-      final String processVersion) {
-
-    return matches(processVersion, NO_RESOLVER);
-
-  }
-
-  /**
    * A BPMS which reports NO version (<code>null</code>) is served by <code>*</code>
    * only: whether a version lies within <code>1-3</code> cannot be answered without
    * knowing the version, and answering it with "yes" would run a method for a version
@@ -399,23 +380,6 @@ public class VersionRange {
     }
     return ((here[0] == null) || (there[1] == null) || (here[0].value() <= there[1]
         .value())) && ((there[0] == null) || (here[1] == null) || (there[0].value() <= here[1].value()));
-
-  }
-
-  /**
-   * Whether two specifications cover a common version, using numbers alone.
-   * <p>
-   * For two specifications naming a tag this answers "no" unless they are written the same
-   * way, which is the honest answer as long as nothing can place a tag. Whoever needs the
-   * full answer asks again with a resolver once the process is deployed.
-   *
-   * @param other The other specification
-   * @return Whether both cover a common version, decided without asking a BPMS
-   */
-  public boolean overlaps(
-      final VersionRange other) {
-
-    return overlaps(other, NO_RESOLVER);
 
   }
 

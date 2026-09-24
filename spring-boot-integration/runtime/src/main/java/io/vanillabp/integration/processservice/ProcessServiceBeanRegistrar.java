@@ -64,20 +64,6 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
   private final List<Class<?>> aggregateServiceInterfaces;
 
   /**
-   * The registrar of an application which brings no extension offering a service per
-   * workflow aggregate.
-   *
-   * @param workflowServiceClasses The classes annotated by {@link WorkflowService} this
-   *     application registered a bean of
-   */
-  public ProcessServiceBeanRegistrar(
-      final List<Class<?>> workflowServiceClasses) {
-
-    this(workflowServiceClasses, List.of());
-
-  }
-
-  /**
    * Built by {@link WorkflowServiceDiscovery} once the bean definitions of the application
    * are complete. Both lists are read off those definitions, so they answer what THIS run
    * brings rather than what the classpath could bring (see decision 21 in the repository's

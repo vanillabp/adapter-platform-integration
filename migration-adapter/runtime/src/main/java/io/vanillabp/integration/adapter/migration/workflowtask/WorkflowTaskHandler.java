@@ -317,13 +317,6 @@ public class WorkflowTaskHandler {
   }
 
   boolean matchesVersion(
-      final String processVersion) {
-
-    return versions.matches(processVersion);
-
-  }
-
-  boolean matchesVersion(
       final String processVersion,
       final VersionRange.ProcessVersionResolver resolver) {
 

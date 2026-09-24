@@ -1,39 +1,23 @@
 package io.vanillabp.integration.deployment.config;
 
 import io.quarkus.builder.item.SimpleBuildItem;
-import io.quarkus.runtime.RuntimeValue;
-import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
-import lombok.Getter;
 
 /**
- * A build item holding the migration adapter properties object built for later initialization.
+ * Says that the migration adapter properties are built and published as a bean. A build
+ * step which generates beans injecting them asks for this item so that it runs after the
+ * step producing it.
+ * <p>
+ * The item carries no value. What the producing step holds is a
+ * {@link io.quarkus.runtime.RuntimeValue}, which exists only once the application starts,
+ * so no build step could read the properties from here anyway.
  */
-@Getter
 public final class MigrationAdapterPropertiesBuildItem extends SimpleBuildItem {
-
-  /**
-   * The runtime value of the migration adapter properties object.
-   */
-  private final RuntimeValue<MigrationAdapterProperties> properties;
 
   /**
    * Built by {@link ConfigBuildStepProcessor#buildMigrationAdapterProperties}, the step
    * which records how the properties are built and judged when the application starts.
-   * {@code ProcessServiceBuildStepProcessor} asks for this item so that it runs after that
-   * step: the beans it generates inject the properties, which the same step publishes as a
-   * synthetic bean.
-   * <p>
-   * None of the platform's own steps reads the value. It is carried here for a step which
-   * needs the object itself.
-   *
-   * @param properties The properties as the recorder will have built them when the
-   *          application starts - a build step can pass the value on, but not look into it
    */
-  public MigrationAdapterPropertiesBuildItem(
-      final RuntimeValue<MigrationAdapterProperties> properties) {
-
-    this.properties = properties;
-
+  public MigrationAdapterPropertiesBuildItem() {
   }
 
 }
