@@ -105,7 +105,9 @@ it reaches anyway.
 A feature is proven by an acceptance test per platform, against the published
 [BPMS double](./bpms-double), and coverage is measured separately per platform because a Spring test
 never covers Quarkus code. `test-coverage-report/coverage-gate` is the last module of the reactor and
-fails below 85 percent of covered instructions, while the rule is 90.
+fails below 85 percent of covered instructions, while the rule is 90. It judges what a run built.
+The reports are written in the `verify` phase, so a build which stops at `package` prints a line per
+platform saying the coverage was not checked, instead of failing over a file it never wrote.
 
 A test waits as a guard, never as its assertion. A machine carrying a few builds at once holds a
 test JVM back by a quarter of a second at a time, over and over, so no fixed window of a few hundred

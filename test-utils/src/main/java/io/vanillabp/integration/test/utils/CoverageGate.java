@@ -100,6 +100,14 @@ public final class CoverageGate {
 
   }
 
+  /**
+   * The goals which reach the <code>verify</code> phase, where JaCoCo writes the
+   * aggregated reports. A build asked for anything else stops earlier and leaves the
+   * gate nothing to read.
+   */
+  private static final Set<String> GOALS_REACHING_THE_REPORTS = Set
+      .of("verify", "install", "deploy");
+
   private static final Pattern DEPENDENCY = Pattern
       .compile("<dependency>(.*?)</dependency>", Pattern.DOTALL);
 
@@ -127,7 +135,7 @@ public final class CoverageGate {
       throw new IllegalStateException(
           """
               The coverage report '%s' was not found at '%s'! The gate can only judge a report which \
-              was built: run the full build ('mvn install verify') instead of a single module."""
+              was built: run the whole reactor ('mvn install') instead of a single module."""
               .formatted(report, jacocoCsv));
     }
 
@@ -223,6 +231,62 @@ public final class CoverageGate {
                         + ", "
                         + other)
                 .orElse(""));
+
+  }
+
+  /**
+   * Whether this run stops before the aggregated reports are written.
+   * <p>
+   * JaCoCo writes them in the <code>verify</code> phase while the gate runs in
+   * <code>test</code>, so a build which stops at <code>package</code> reaches the gate
+   * with no report on disk. Nothing is wrong in that build, and a gate which fails there
+   * sends whoever reads the log looking for a file this run could never have written.
+   * The gate says so instead, which keeps the run green without going quiet.
+   * <p>
+   * The answer comes from the command line because Maven tells a test nothing about the
+   * phase it is running towards. Its launcher script exports the command line as
+   * <code>MAVEN_CMD_LINE_ARGS</code>, and a POM hands that over as a system property.
+   *
+   * @param mavenCommandLine The command line Maven was started with, for example
+   *          <code>--batch-mode install</code>
+   * @return true if no word of it is a goal which reaches the <code>verify</code> phase.
+   *         A missing or unresolved command line answers false, and so does a path which
+   *         happens to carry one of those words: the gate then judges as before, because
+   *         a wrong "nothing to check" hides a coverage drop while a wrong failure is
+   *         only read twice
+   */
+  public static boolean stopsBeforeTheReportsAreWritten(
+      final String mavenCommandLine) {
+
+    if ((mavenCommandLine == null) || mavenCommandLine.isBlank() || mavenCommandLine.contains("${")) {
+      return false;
+    }
+    return Stream
+        .of(mavenCommandLine.trim().split("\\s+"))
+        .map(word -> word.toLowerCase(Locale.ROOT))
+        .noneMatch(GOALS_REACHING_THE_REPORTS::contains);
+
+  }
+
+  /**
+   * What the gate says in a run which writes no reports. It names the phase the reports
+   * come from, what this run was started with and the command which does check the
+   * coverage, so the reader can tell this apart from a report which is missing although
+   * it should be there.
+   *
+   * @param mavenCommandLine The command line Maven was started with
+   * @return The message
+   */
+  public static String describeRunWithoutReports(
+      final String mavenCommandLine) {
+
+    final var command = mavenCommandLine == null ? "" : mavenCommandLine.trim();
+
+    return """
+        the aggregated reports are written in the 'verify' phase, and this build was started as \
+        'mvn %s'. There is nothing to judge here, so the coverage was NOT checked - run \
+        'mvn install' for that."""
+        .formatted(command);
 
   }
 
