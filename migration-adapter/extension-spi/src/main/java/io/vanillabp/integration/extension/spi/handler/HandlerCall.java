@@ -2,6 +2,7 @@ package io.vanillabp.integration.extension.spi.handler;
 
 import java.lang.annotation.Annotation;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,7 +62,10 @@ public final class HandlerCall {
     this.workflowAggregate = builder.workflowAggregate;
     this.aggregateProvided = builder.aggregateProvided;
     this.variables = Map.copyOf(builder.variables);
-    this.multiInstances = Map.copyOf(builder.multiInstances);
+    // the order the caller added the scopes in survives, because nested multi-instance
+    // elements are read from the outside in and a map without an order would leave a
+    // reader guessing which scope is which
+    this.multiInstances = Collections.unmodifiableMap(new LinkedHashMap<>(builder.multiInstances));
     this.payload = builder.payload;
     this.savesWorkflowAggregate = builder.savesWorkflowAggregate;
 
@@ -201,8 +205,9 @@ public final class HandlerCall {
 
   /**
    * The multi-instance scopes this call runs in, one per BPMN element carrying
-   * multi-instance characteristics. Read a scope by the element id it is keyed under - the
-   * map keeps no order, whatever order it was built in.
+   * multi-instance characteristics. Read a scope by the element id it is keyed under, or
+   * walk the map: it keeps the order the scopes were added in, which for nested elements
+   * is outermost first.
    *
    * @return The multi-instance scopes of this invocation, keyed by BPMN element id
    */
@@ -400,15 +405,25 @@ public final class HandlerCall {
      * invocation runs in, nested ones included, because a parameter of the method may name
      * any of them.
      *
+     * Nested elements are added from the outside in, because that is the order the call
+     * hands them on in.
+     *
      * @param elementId The BPMN element carrying the multi-instance characteristics
      * @param multiInstance Its current iteration
      * @return This builder
+     * @throws NullPointerException If the element id or the iteration is
+     *           <code>null</code>. A scope without either is a scope nothing can be
+     *           bound from, and it is refused here rather than at the parameter which
+     *           tries
      */
     public Builder multiInstance(
         final String elementId,
         final HandlerMultiInstance multiInstance) {
 
-      multiInstances.put(elementId, multiInstance);
+      multiInstances
+          .put(
+              java.util.Objects.requireNonNull(elementId, "a multi-instance scope needs the id of its BPMN element"),
+              java.util.Objects.requireNonNull(multiInstance, "a multi-instance scope needs its current iteration"));
       return this;
 
     }

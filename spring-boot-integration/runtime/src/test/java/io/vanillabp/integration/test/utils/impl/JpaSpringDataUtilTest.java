@@ -19,10 +19,13 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.TestPropertySource;
 
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.impl.jpa.ClassWithIdOnFieldAndGetter;
+import io.vanillabp.integration.test.utils.impl.jpa.ClassWithoutId;
 import io.vanillabp.integration.test.utils.impl.jpa.DerivedEntity;
 import io.vanillabp.integration.test.utils.impl.jpa.Entity;
 import io.vanillabp.integration.test.utils.impl.jpa.Entity2;
 import io.vanillabp.integration.test.utils.impl.jpa.EntityRepository;
+import io.vanillabp.integration.test.utils.impl.jpa.EntityWithIdOnGetter;
 import io.vanillabp.integration.test.utils.impl.jpa.EntityWithoutRepository;
 import io.vanillabp.integration.utils.SpringDataUtil;
 import io.vanillabp.integration.utils.config.JpaSpringDataUtilConfiguration;
@@ -113,6 +116,47 @@ class JpaSpringDataUtilTest {
 
     final var idName2 = jpaSpringDataUtil.getIdName(Entity2.class);
     assertEquals("entityId", idName2);
+
+  }
+
+  /**
+   * JPA allows the ID annotation at the getter, and MongoDB reads it there, so the two
+   * persistences have to answer the same name for the same aggregate.
+   */
+  @Test
+  public void idAnnotationAtTheGetterIsRead() {
+
+    assertEquals("entityId", jpaSpringDataUtil.getIdName(EntityWithIdOnGetter.class));
+
+  }
+
+  @Test
+  public void theFieldWinsOverTheGetter() {
+
+    assertEquals("entityId", jpaSpringDataUtil.getIdName(ClassWithIdOnFieldAndGetter.class));
+
+  }
+
+  @Test
+  public void anAggregateWithoutIdIsToldWhereTheAnnotationBelongs() {
+
+    final var reported = Assertions
+        .assertThrows(
+            IllegalStateException.class,
+            () -> jpaSpringDataUtil.getIdName(ClassWithoutId.class));
+
+    assertTrue(
+        reported.getMessage().contains(ClassWithoutId.class.getName()),
+        () -> "the aggregate is named: "
+            + reported.getMessage());
+    assertTrue(
+        reported.getMessage().contains("@jakarta.persistence.Id"),
+        () -> "the annotation is named: "
+            + reported.getMessage());
+    assertTrue(
+        reported.getMessage().contains("getter"),
+        () -> "and both places it may sit at: "
+            + reported.getMessage());
 
   }
 

@@ -66,9 +66,10 @@ public interface HandlerContext {
 
   /**
    * The multi-instance scopes this invocation runs in, one per BPMN element carrying
-   * multi-instance characteristics. Read a scope by the element id it is keyed under: an
-   * invocation of a workflow task carries the scopes outermost first, one built as a
-   * {@link HandlerCall} carries them in no order at all.
+   * multi-instance characteristics. Read a scope by the element id it is keyed under, or
+   * walk the map: nested elements come outermost first, whether the invocation is a
+   * workflow task or a {@link HandlerCall} an extension built (see
+   * {@code NestedMultiInstancesKeepTheirOrderTest}).
    *
    * @return The multi-instance scopes of this invocation, keyed by BPMN element id
    */

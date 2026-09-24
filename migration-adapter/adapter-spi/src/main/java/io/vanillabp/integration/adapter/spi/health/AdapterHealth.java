@@ -1,5 +1,6 @@
 package io.vanillabp.integration.adapter.spi.health;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -27,7 +28,8 @@ import java.util.Map;
  * @param status What the adapter found
  * @param description One sentence for a human, e.g. what failed
  * @param details Named values an operator needs, e.g. the address and the version of
- *          the BPMS
+ *          the BPMS, in the order the adapter wrote them (see
+ *          {@link DetailsBuilder#build()})
  */
 public record AdapterHealth(
                             String adapterId,
@@ -94,13 +96,15 @@ public record AdapterHealth(
     }
 
     /**
-     * Closes the set, so what the endpoint is given cannot be changed afterwards.
+     * Closes the set, so what the endpoint is given cannot be changed afterwards. The
+     * details keep the order the adapter added them in, because that is the order
+     * somebody reading the endpoint expects to find them in.
      *
-     * @return The details which had a value
+     * @return The details which had a value, in the order they were added
      */
     public Map<String, String> build() {
 
-      return Map.copyOf(details);
+      return Collections.unmodifiableMap(new LinkedHashMap<>(details));
 
     }
 

@@ -37,6 +37,12 @@ import io.vanillabp.integration.spi.PhaseTwoOutboxAware;
  * </ol>
  * If no outbox can be attributed, a guiding {@link IllegalStateException} names the
  * beans found and the remedy (provide a {@link PhaseTwoOutboxAware} bean).
+ * <p>
+ * The delivery-log resolver next to this one walks the same three steps. The two stay
+ * apart on purpose: they look up different bean types, the JPA default of an outbox goes
+ * by two bean names while a delivery log has one, and each message names the properties of
+ * its own store. A shared step-walker would have to be handed all of that, and every
+ * reader of either resolver would have to open it to see what happens.
  */
 public class SpringPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
 

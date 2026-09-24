@@ -46,10 +46,10 @@ import io.vanillabp.integration.adapter.migration.config.WorkflowModuleConfigFil
  * <p>Files are searched in the classpath locations {@link WorkflowModuleConfigFiles}
  * names:
  * <ol>
- *   <li>{@code {filename}} — classpath root</li>
- *   <li>{@code config/{filename}} — config directory</li>
- *   <li>{@code {moduleId}/{filename}} — workflow module subdirectory</li>
- *   <li>{@code {moduleId}/config/{filename}} — config inside workflow module subdirectory</li>
+ *   <li>{@code {filename}}: classpath root</li>
+ *   <li>{@code config/{filename}}: config directory</li>
+ *   <li>{@code {moduleId}/{filename}}: workflow module subdirectory</li>
+ *   <li>{@code {moduleId}/config/{filename}}: config inside workflow module subdirectory</li>
  * </ol>
  * This allows workflow modules packaged as separate Maven/Gradle modules to
  * place their configuration files in a module-specific subdirectory, avoiding
@@ -85,7 +85,7 @@ import io.vanillabp.integration.adapter.migration.config.WorkflowModuleConfigFil
  *
  * <p><b>Limitation:</b> Multi-document YAML using
  * {@code spring.config.activate.on-profile} is not supported inside workflow
- * module config files — profile-specific values must be placed in files using
+ * module config files. Profile-specific values are placed in files using
  * the profile file-name suffix (e.g. {@code {moduleId}-{profile}.yaml}).
  */
 public class WorkflowModulePropertiesEnvironmentPostProcessor implements EnvironmentPostProcessor, Ordered {

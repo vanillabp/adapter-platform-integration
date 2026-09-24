@@ -7,6 +7,8 @@ package io.vanillabp.integration.adapter.spi;
  */
 public class BpmnParseException extends RuntimeException {
 
+  private static final long serialVersionUID = 1L;
+
   /**
    * Stops the reading of one BPMN file with a message only the adapter can write.
    *

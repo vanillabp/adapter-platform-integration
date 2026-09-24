@@ -302,7 +302,7 @@ public class ProcessVersionMatchingTest {
 
       return VersionRange
           .parse(one, "test")
-          .overlaps(VersionRange.parse(other, "test"));
+          .overlaps(VersionRange.parse(other, "test"), VersionRange.NO_RESOLVER);
 
     }
 
@@ -477,11 +477,11 @@ public class ProcessVersionMatchingTest {
   @DisplayName("An inclusive boundary is honored, as version 1's documentation promised")
   public void inclusiveBoundaries() {
 
-    assertTrue(VersionRange.parse(">=2", "test").matches("2"));
-    assertTrue(VersionRange.parse(">=2", "test").matches("3"));
-    assertFalse(VersionRange.parse(">=2", "test").matches("1"));
-    assertTrue(VersionRange.parse("<=2", "test").matches("2"));
-    assertFalse(VersionRange.parse("<=2", "test").matches("3"));
+    assertTrue(VersionRange.parse(">=2", "test").matches("2", VersionRange.NO_RESOLVER));
+    assertTrue(VersionRange.parse(">=2", "test").matches("3", VersionRange.NO_RESOLVER));
+    assertFalse(VersionRange.parse(">=2", "test").matches("1", VersionRange.NO_RESOLVER));
+    assertTrue(VersionRange.parse("<=2", "test").matches("2", VersionRange.NO_RESOLVER));
+    assertFalse(VersionRange.parse("<=2", "test").matches("3", VersionRange.NO_RESOLVER));
 
   }
 

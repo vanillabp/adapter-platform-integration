@@ -45,7 +45,7 @@ public class ConfigBuildStepProcessor {
    * @param syntheticBeanBuildItemBuildProducer Producer used to publish the properties as a bean
    *          the generated process services inject
    * @param migrationAdapterPropertiesRecorder Recorder for {@link MigrationAdapterProperties} objects
-   * @return The {@link MigrationAdapterProperties} object
+   * @return The item a step generating beans which inject the properties waits for
    */
   @Record(ExecutionTime.RUNTIME_INIT)
   @BuildStep
@@ -79,7 +79,7 @@ public class ConfigBuildStepProcessor {
                 .setRuntimeInit()
                 .done());
 
-    return new MigrationAdapterPropertiesBuildItem(migrationAdapterProperties);
+    return new MigrationAdapterPropertiesBuildItem();
 
   }
 

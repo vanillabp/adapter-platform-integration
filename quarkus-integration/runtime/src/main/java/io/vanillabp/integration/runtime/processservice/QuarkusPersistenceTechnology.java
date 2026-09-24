@@ -114,22 +114,6 @@ public class QuarkusPersistenceTechnology {
 
   }
 
-  /**
-   * Whether a MongoDB session is involved, answered from the persistence itself. The static
-   * form is for a caller which already resolved the persistence of an aggregate and would
-   * otherwise build an instance of this class to ask one question.
-   *
-   * @param persistence The persistence serving an aggregate
-   * @return Whether it is one of VanillaBP's MongoDB defaults - the only case in which
-   *         the platform knows a MongoDB session is involved
-   */
-  public static boolean isMongoDefault(
-      final AggregatePersistenceAware<?> persistence) {
-
-    return technologyOf(persistence) == Technology.MONGO;
-
-  }
-
   private static Technology technologyOf(
       final AggregatePersistenceAware<?> persistence) {
 

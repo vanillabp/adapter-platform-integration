@@ -60,7 +60,13 @@ public class AdapterProperties {
   private Boolean allowFullSyncWithBpms;
 
   /**
-   * Where to load BPMN files from, which are specific to the adapter
+   * Where to load BPMN files from, which are specific to the adapter.
+   * <p>
+   * Read at the workflow module and at the adapter, in that order, and the global
+   * <code>vanillabp.resources-location</code> follows both (see
+   * {@link MigrationAdapterProperties#getAdapterResourcesLocationsFor}). The two more
+   * specific levels cannot be read: VanillaBP finds the BPMN files before it knows which
+   * process or which task is in them.
    */
   private String resourcesLocation;
 

@@ -190,6 +190,51 @@ public class MigrationAdapterPropertiesTest {
 
   }
 
+  /**
+   * An application keeping the BPMN of all its workflow modules in one place per BPMS
+   * writes the location at the adapter. The key used to bind and do nothing.
+   */
+  @Test
+  public void theLocationAtTheAdapterIsRead() {
+
+    final var properties = new MigrationAdapterProperties();
+    properties
+        .setAdapters(
+            Map.of("adapter-test", AdapterConfigProperties
+                .builder()
+                .type("adapter2")
+                .resourcesLocation("classpath*:per-adapter")
+                .build()));
+    properties.setPrioritizedAdapters(List.of("adapter-test"));
+    properties.setResourcesLocation("classpath*:global-bpmn");
+    properties.setWorkflowModules(Map.of(
+        "module-with-its-own", WorkflowModuleAdapterProperties
+            .builder()
+            .workflowModuleId("module-with-its-own")
+            .adapters(Map.of("adapter-test", AdapterProperties
+                .builder()
+                .resourcesLocation("classpath*:specific")
+                .build()))
+            .build()));
+
+    properties.validateProperties(adaptersLoaded, List.of("module-with-its-own", "other-module"));
+
+    // the module says nothing, so the adapter answers, and it beats the global location
+    final var perAdapter = properties
+        .getAdapterResourcesLocationsFor("other-module", "adapter-test")
+        .getFirst();
+    assertEquals("classpath*:per-adapter", perAdapter.location());
+    assertFalse(perAdapter.vanillaBpBpmn(), "a location at the adapter is specific to the BPMS");
+    // ... while a module naming its own location keeps it
+    assertEquals(
+        "classpath*:specific",
+        properties
+            .getAdapterResourcesLocationsFor("module-with-its-own", "adapter-test")
+            .getFirst()
+            .location());
+
+  }
+
   @Test
   public void testWorkflowModulesConfiguredButNotInClasspath() {
 
@@ -325,65 +370,6 @@ public class MigrationAdapterPropertiesTest {
               vanillabp.prioritized-adapters => unknown-adapter1
             """,
         exception.getMessage());
-  }
-
-  @Test
-  public void testValidatePropertiesForHavingWrongPrioritizedAdapters() {
-
-    final var properties = new MigrationAdapterProperties();
-    properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
-    properties.setPrioritizedAdapters(List.of("unknown-adapter1"));
-    properties.setWorkflowModules(Map.of("test-module", WorkflowModuleAdapterProperties
-        .builder()
-        .workflowModuleId("test-module")
-        .prioritizedAdapters(List.of("unknown-adapter2"))
-        .workflows(Map.of("testProcess", WorkflowAdapterProperties
-            .builder()
-            .bpmnProcessId("testProcess")
-            .prioritizedAdapters(List.of("adapter-test", "unknown-adapter3"))
-            .build()))
-        .build()));
-
-    final var exception = assertThrowsExactly(
-        IllegalStateException.class,
-        () -> properties.validatePropertiesFor(List.of("adapter-test"), "test-module", "testProcess"));
-
-    assertEquals(
-        """
-            Property 'prioritized-adapters' of workflow-module 'test-module' and bpmn-process-id 'testProcess' contains adapters not configured in 'vanillabp.adapters.*':
-              unknown-adapter3
-            Available adapters are: 'adapter-test'!""",
-        exception.getMessage());
-
-  }
-
-  @Test
-  public void testValidatePropertiesForHavingWrongNoPrioritizedAdapters() {
-
-    final var properties = new MigrationAdapterProperties();
-    properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
-    properties.setWorkflowModules(Map.of("test-module", WorkflowModuleAdapterProperties
-        .builder()
-        .workflowModuleId("test-module")
-        .workflows(Map.of("testProcess", WorkflowAdapterProperties
-            .builder()
-            .bpmnProcessId("testProcess")
-            .build()))
-        .build()));
-
-    final var exception = assertThrowsExactly(
-        IllegalStateException.class,
-        () -> properties.validatePropertiesFor(List.of("adapter-test"), "test-module", "testProcess"));
-
-    assertEquals(
-        """
-            No adapter is configured to be used for BPMN process 'testProcess' of workflow module 'test-module'! Define at least one of these properties:
-              vanillabp.workflow-modules.test-module.workflows.testProcess.prioritized-adapters or
-              vanillabp.workflow-modules.test-module.prioritized-adapters or
-              vanillabp.prioritized-adapters
-            Available adapters are 'adapter-test'.""",
-        exception.getMessage());
-
   }
 
   @Test

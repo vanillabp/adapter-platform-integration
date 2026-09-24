@@ -87,7 +87,19 @@ public class OldProcessVersionsTest {
   /**
    * What the BPMS is asked, with every answer handed in by the test.
    */
-  private static class CatalogStub implements DeployedProcessVersionsCheck.ProcessVersionCatalogAccess {
+  private static class CatalogStub implements io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog {
+
+    @Override
+    public DeployedProcessVersion resolveVersion(
+        final String workflowModuleId,
+        final String bpmnProcessId,
+        final String versionOrVersionTag) {
+
+      // the check resolves no tags, it works through the versions it was handed
+      return null;
+
+    }
+
 
     private List<DeployedProcessVersion> versions = List.of();
 

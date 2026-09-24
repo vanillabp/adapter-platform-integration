@@ -155,7 +155,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   /**
    * What VanillaBP does with the records of processed task deliveries (properties
    * section <code>vanillabp.delivery</code>, overridable per workflow module - except the
-   * retention, see {@link DeliveryProperties#getRetention()}).
+   * retention, see <code>vanillabp.delivery.retention</code>).
    */
   @Builder.Default
   private DeliveryProperties delivery = new DeliveryProperties();
@@ -701,8 +701,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * @param bpmnProcessId The plain BPMN process id, or <code>null</code> to stop at the
    *          workflow module
    * @return The adapter ids in the order they are asked in, empty where no level names
-   *         one - which ends the startup of that workflow with a message naming the three
-   *         keys, see {@link #validatePropertiesFor(List, String, String)}
+   *         one - which the validation of the configuration turns into a message naming
+   *         the keys to write, see {@link #validateProperties(ClasspathFacts, String)}
    */
   public List<String> getPrioritizedAdaptersFor(
       final String workflowModuleId,
@@ -1696,6 +1696,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * <ol>
    * <li>the adapter-specific location
    * <code>vanillabp.workflow-modules.&lt;module&gt;.adapters.&lt;id&gt;.resources-location</code>,</li>
+   * <li>the same key at the adapter itself,
+   * <code>vanillabp.adapters.&lt;id&gt;.resources-location</code>, which is where an
+   * application keeping the BPMN of all its modules in one place per BPMS writes it,</li>
    * <li>the global <code>vanillabp.resources-location</code> for BPMN which is NOT
    * specific to a BPMS,</li>
    * <li>the <b>convention</b> - what the classpath facts imply:
@@ -1737,6 +1740,11 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       }
     }
 
+    final var adapter = adapters.get(adapterId);
+    if ((adapter != null) && (adapter.getResourcesLocation() != null) && !adapter.getResourcesLocation().isBlank()) {
+      return List.of(new ResourcesLocation(adapter.getResourcesLocation(), false));
+    }
+
     final var globalResourcesLocation = getResourcesLocation();
     if ((globalResourcesLocation != null) && !globalResourcesLocation.isBlank()) {
       return List.of(new ResourcesLocation(globalResourcesLocation, true));
@@ -1753,64 +1761,17 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
     throw new IllegalStateException(
         """
-            Neither property '%s.workflow-modules.%s.adapters.%s.resources-location' for resources specific to the BPMS
-            nor property '%s.resources-location' for VanillaBP resources (not specific to the BPMS) is set, and the
+            None of these properties is set for resources specific to the BPMS
+              '%s.workflow-modules.%s.adapters.%s.resources-location' or
+              '%s.adapters.%s.resources-location'
+            nor property '%s.resources-location' for VanillaBP resources (not specific to the BPMS), and the
             workflow module '%s' is not known in the classpath, so no location can be derived by convention!
 
-            If using the first option then the location needs to be specific to the adapter in order to avoid future
-            problems once you wish to migrate to another adapter. Sample: 'classpath*:/workflow-resources/%s'"""
-            .formatted(PREFIX, workflowModuleId, adapterId, PREFIX, workflowModuleId, adapterId));
+            If using one of the first two options then the location needs to be specific to the adapter, so that
+            migrating to another adapter later costs nothing.
+            Sample: 'classpath*:/workflow-resources/%s'"""
+            .formatted(PREFIX, workflowModuleId, adapterId, PREFIX, adapterId, PREFIX, workflowModuleId, adapterId));
 
-  }
-
-  /**
-   * Checks the adapters of ONE BPMN process: that some level names an adapter for it at
-   * all, and that every id it names is an adapter the application really has. Both
-   * messages name the keys the reader would write and the ids which do exist, the way
-   * decision 8 in the repository's DECISIONS.md asks for.
-   * <p>
-   * An id which is named but not configured is the expensive case: the workflow would
-   * start in whichever adapter is left, which is the migration going wrong silently, so
-   * the startup ends instead. <code>MigrationAdapterPropertiesTest</code> holds both
-   * cases.
-   *
-   * @param adapterIds The adapter ids the application really has
-   * @param workflowModuleId The workflow module of the process
-   * @param bpmnProcessId The plain BPMN process id
-   * @throws IllegalStateException Where no level names an adapter for that process, or
-   *           where a named id is not among <code>adapterIds</code>
-   */
-  public void validatePropertiesFor(
-      final List<String> adapterIds,
-      final String workflowModuleId,
-      final String bpmnProcessId) {
-
-    final var prioritizedAdapters = getPrioritizedAdaptersFor(workflowModuleId, bpmnProcessId);
-    if (prioritizedAdapters.isEmpty()) {
-      throw new IllegalStateException(
-          """
-              No adapter is configured to be used for BPMN process '%s' of workflow module '%s'! Define at least one of these properties:
-                %s.workflow-modules.%s.workflows.%s.prioritized-adapters or
-                %s.workflow-modules.%s.prioritized-adapters or
-                %s.prioritized-adapters
-              Available adapters are '%s'."""
-              .formatted(bpmnProcessId, workflowModuleId, PREFIX, workflowModuleId, bpmnProcessId, PREFIX,
-                  workflowModuleId, PREFIX, String
-                      .join("', '", adapterIds)));
-    }
-
-    final var listOfAdapters = String.join("', '", adapterIds);
-    final var missingAdapters = prioritizedAdapters.stream()
-        .filter(prioritizedAdapter -> !adapterIds.contains(prioritizedAdapter))
-        .collect(Collectors.joining("', '"));
-    if (!missingAdapters.isEmpty()) {
-      throw new IllegalStateException(
-          """
-              Property 'prioritized-adapters' of workflow-module '%s' and bpmn-process-id '%s' contains adapters not configured in 'vanillabp.adapters.*':
-                %s
-              Available adapters are: '%s'!"""
-              .formatted(workflowModuleId, bpmnProcessId, missingAdapters, listOfAdapters));
-    }
   }
 
   /**

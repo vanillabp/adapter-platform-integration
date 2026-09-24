@@ -1,6 +1,7 @@
 package io.vanillabp.integration.outbox.gruelbox;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -212,28 +213,25 @@ public class GruelboxOutboxWiringTest {
   }
 
   @Test
-  @DisplayName("A table name of the application switches the migration off, so that table has to exist")
-  public void aCustomTableNameSwitchesTheMigrationOff() throws Exception {
+  @DisplayName("The table of VanillaBP's own outbox does not rename gruelbox' table")
+  public void theNameOfVanillaBpsOwnTableLeavesGruelboxAlone() throws Exception {
 
+    // the two tables hold different columns, so one name for both would create the
+    // wrong schema for whichever store the application ends up running
     final var properties = new VanillaBpConfigurationProperties();
     properties.getOutbox().getJdbc().setTable("MY_OWN_OUTBOX");
     final var dataSource = h2();
 
-    final var exception = assertThrows(IllegalStateException.class, () -> buildOutbox(dataSource, properties));
-    assertTrue(exception.getMessage().contains("MY_OWN_OUTBOX"), exception.getMessage());
-
-    // with the table in place the outbox is built and gruelbox writes into it
-    try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
-      statement
-          .execute(
-              """
-                  CREATE TABLE MY_OWN_OUTBOX (
-                    id VARCHAR(36) PRIMARY KEY, uniqueRequestId VARCHAR(250), invocation TEXT,
-                    lastAttemptTime TIMESTAMP(6), nextAttemptTime TIMESTAMP(6), attempts INT,
-                    blocked BOOLEAN, processed BOOLEAN, version INT)""");
-    }
-
     assertNotNull(buildOutbox(dataSource, properties));
+
+    try (var connection = dataSource.getConnection()) {
+      assertTrue(
+          JdbcSchema.tableExists(connection, GruelboxPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_TABLE_NAME),
+          "gruelbox' migration did not run");
+      assertFalse(
+          JdbcSchema.tableExists(connection, "MY_OWN_OUTBOX"),
+          "gruelbox wrote a table named after VanillaBP's own outbox");
+    }
 
   }
 
