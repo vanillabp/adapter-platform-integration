@@ -1,16 +1,25 @@
 package io.vanillabp.integration.outbox.gruelbox;
 
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.time.Instant;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.OptionalLong;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import javax.sql.DataSource;
 
 import org.springframework.jdbc.datasource.DataSourceUtils;
 
 import com.gruelbox.transactionoutbox.AlreadyScheduledException;
+import com.gruelbox.transactionoutbox.InvocationSerializer;
 import com.gruelbox.transactionoutbox.TransactionOutbox;
 
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.PhaseTwoPayloadStore;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -100,7 +109,7 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
    * and where it did, the reference of a replaced entry stays unknown and its payload is
    * removed one retention period later (see {@link #payloadReferenceOf(String)}).
    */
-  private static final com.gruelbox.transactionoutbox.InvocationSerializer INVOCATION_SERIALIZER = com.gruelbox.transactionoutbox.InvocationSerializer
+  private static final InvocationSerializer INVOCATION_SERIALIZER = InvocationSerializer
       .createDefaultJsonSerializer();
 
   private final TransactionOutbox transactionOutbox;
@@ -121,7 +130,7 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
    * which writes the entry. Never <code>null</code>: a store is built with the place it
    * writes to, the way it is built with gruelbox' table.
    */
-  private final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore;
+  private final PhaseTwoPayloadStore payloadStore;
 
   /**
    * The store, which is what {@link GruelboxPhaseTwoOutboxAutoConfiguration} builds where
@@ -138,7 +147,7 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
       final TransactionOutbox transactionOutbox,
       final DataSource dataSource,
       final String tableName,
-      final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore) {
+      final PhaseTwoPayloadStore payloadStore) {
 
     requireGruelboxTable(dataSource, tableName);
     requirePayloadStore(payloadStore);
@@ -161,7 +170,7 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
    * @param payloadStore Where the payload of a call which carries one is written
    */
   private static void requirePayloadStore(
-      final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore) {
+      final PhaseTwoPayloadStore payloadStore) {
 
     if (payloadStore != null) {
       return;
@@ -247,7 +256,7 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
             ? OptionalLong.of(resultSet.getLong(1))
             : OptionalLong.empty();
       }
-    } catch (final java.sql.SQLException e) {
+    } catch (final SQLException e) {
       // a metric must never be the reason an application fails - the gauge reports
       // nothing for this collection and the next one tries again
       log.debug("Could not count the pending entries of gruelbox' outbox table '{}'", tableName, e);
@@ -275,7 +284,7 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
    * @return The moment of the earliest entry, or <code>null</code> where nothing is owed,
    *         which leaves the poller on the configured cap
    */
-  public java.time.Instant earliestDueAt() {
+  public Instant earliestDueAt() {
 
     final var selectEarliest = "SELECT MIN(nextAttemptTime) FROM %s WHERE processed = ? AND blocked = ?"
         .formatted(tableName);
@@ -289,7 +298,7 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
         return nextAttempt;
       }
       return nextAttempt.isBefore(retentionRunsOut) ? nextAttempt : retentionRunsOut;
-    } catch (final java.sql.SQLException e) {
+    } catch (final SQLException e) {
       // the flush which follows reports the same problem with its own message, and a
       // poller which stops asking is worse than one which asks at the cap
       log.debug("Could not read the next attempt time of gruelbox' outbox table '{}'", tableName, e);
@@ -317,17 +326,17 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
    * @param references The payloads the housekeeping is about to remove
    * @return Those of them an entry names
    */
-  public java.util.Set<String> stillNaming(
-      final java.util.Collection<String> references) {
+  public Set<String> stillNaming(
+      final Collection<String> references) {
 
     if (references.isEmpty()) {
-      return java.util.Set.copyOf(references);
+      return Set.copyOf(references);
     }
     final var condition = references
         .stream()
         .map(reference -> "invocation LIKE ?")
-        .collect(java.util.stream.Collectors.joining(" OR "));
-    final var stillNamed = new java.util.LinkedHashSet<String>();
+        .collect(Collectors.joining(" OR "));
+    final var stillNamed = new LinkedHashSet<String>();
     try (var connection = dataSource.getConnection(); var statement = connection
         .prepareStatement("SELECT invocation FROM %s WHERE %s".formatted(tableName, condition))) {
       var parameter = 1;
@@ -346,9 +355,9 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
               .forEach(stillNamed::add);
         }
       }
-    } catch (final java.sql.SQLException e) {
+    } catch (final SQLException e) {
       log.warn("Could not ask gruelbox' outbox table '{}' which payloads it still names", tableName, e);
-      return java.util.Set.copyOf(references);
+      return Set.copyOf(references);
     }
     return stillNamed;
 
@@ -362,10 +371,10 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
    * @param processed Whether to look at the entries which were dispatched already
    * @return The moment or <code>null</code> where there is no such entry
    */
-  private java.time.Instant earliest(
-      final java.sql.Connection connection,
+  private Instant earliest(
+      final Connection connection,
       final String query,
-      final boolean processed) throws java.sql.SQLException {
+      final boolean processed) throws SQLException {
 
     try (var statement = connection.prepareStatement(query)) {
       statement.setBoolean(1, processed);
@@ -506,7 +515,7 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
           call.workflowModuleId(),
           call.workflowAggregateId());
       return null;
-    } catch (final java.sql.SQLException e) {
+    } catch (final SQLException e) {
       throw new IllegalStateException(
           """
               Could not look up the phase-two outbox entry of BPMN process '%s' of workflow module \
@@ -553,7 +562,7 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
       statement.setString(1, waiting.id());
       statement.setBoolean(2, false);
       return statement.executeUpdate() == 1;
-    } catch (final java.sql.SQLException e) {
+    } catch (final SQLException e) {
       throw new IllegalStateException(
           """
               Could not replace the phase-two outbox entry of BPMN process '%s' of workflow module \

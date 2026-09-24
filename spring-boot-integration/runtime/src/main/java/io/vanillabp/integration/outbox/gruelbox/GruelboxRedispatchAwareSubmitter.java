@@ -1,5 +1,10 @@
 package io.vanillabp.integration.outbox.gruelbox;
 
+import java.time.Instant;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
+
 import com.gruelbox.transactionoutbox.Submitter;
 import com.gruelbox.transactionoutbox.TransactionOutboxEntry;
 
@@ -53,7 +58,7 @@ public final class GruelboxRedispatchAwareSubmitter implements Submitter {
    * reports. It travels the same way the flag above does, and for the same reason:
    * gruelbox invokes the scheduled method with the persisted arguments only.
    */
-  private static final ThreadLocal<java.time.Instant> WRITTEN_AT = new ThreadLocal<>();
+  private static final ThreadLocal<Instant> WRITTEN_AT = new ThreadLocal<>();
 
   /**
    * The entries this application is dispatching right now. gruelbox locks the row of
@@ -70,7 +75,7 @@ public final class GruelboxRedispatchAwareSubmitter implements Submitter {
    * counts the entry's version up and is therefore visible to every instance. See
    * {@code GruelboxPhaseTwoOutbox} for the residual this leaves.
    */
-  private static final java.util.Set<String> BEING_DISPATCHED = java.util.concurrent.ConcurrentHashMap.newKeySet();
+  private static final Set<String> BEING_DISPATCHED = ConcurrentHashMap.newKeySet();
 
   private final Submitter delegate;
 
@@ -123,7 +128,7 @@ public final class GruelboxRedispatchAwareSubmitter implements Submitter {
    *
    * @return The moment or <code>null</code>
    */
-  public static java.time.Instant whenTheEntryWasWritten() {
+  public static Instant whenTheEntryWasWritten() {
 
     return WRITTEN_AT.get();
 
@@ -167,7 +172,7 @@ public final class GruelboxRedispatchAwareSubmitter implements Submitter {
   @Override
   public void submit(
       final TransactionOutboxEntry entry,
-      final java.util.function.Consumer<TransactionOutboxEntry> localExecutor) {
+      final Consumer<TransactionOutboxEntry> localExecutor) {
 
     if (holdingBack) {
       log.debug(
