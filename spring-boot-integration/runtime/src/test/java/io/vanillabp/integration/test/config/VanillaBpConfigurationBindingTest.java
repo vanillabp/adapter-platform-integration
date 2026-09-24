@@ -26,6 +26,7 @@ import io.vanillabp.integration.adapter.AdapterConfigurationBase;
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.config.GruelboxOutboxProperties;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.workflowmodule.WorkflowModule;
@@ -39,8 +40,9 @@ import lombok.Setter;
  * in the core. Also covers the Spring-specific parts kept in the platform: the
  * "adapters found in classpath" check, the case-insensitive
  * <code>deployment-failure</code> enum conversion with a guiding failure, the
- * environment-variable misbinding validation and the coexistence of an adapter-owned
- * overlay class bound to the same <code>vanillabp</code> prefix.
+ * environment-variable misbinding validation, the coexistence of an adapter-owned
+ * overlay class bound to the same <code>vanillabp</code> prefix and the gruelbox switch,
+ * the one key of the tree which this module binds itself.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class VanillaBpConfigurationBindingTest {
@@ -213,6 +215,43 @@ public class VanillaBpConfigurationBindingTest {
           final var message = fullFailureText(context.getStartupFailure());
           assertTrue(message.contains("vanillabp.adapters.test.deployment-failure"));
           assertTrue(message.contains("must be one of 'fail' or 'warn'"));
+
+        });
+
+  }
+
+  @Test
+  @DisplayName("The switch picking the gruelbox store is bound by the Spring Boot module")
+  public void gruelboxSwitchIsBoundBySpringBoot() {
+
+    contextRunner
+        .withPropertyValues(
+            "vanillabp.resources-location=classpath*:vanillabp-processes",
+            "vanillabp.adapters.test.type=dummy",
+            // the store exists on Spring Boot only, so the key is not in the core model
+            "vanillabp.outbox.gruelbox.enabled=true")
+        .run(context -> {
+
+          assertTrue(context.getBean(GruelboxOutboxProperties.class).isEnabled());
+
+        });
+
+  }
+
+  @Test
+  @DisplayName("A gruelbox switch which is no boolean fails naming the key")
+  public void invalidGruelboxSwitchIsRejected() {
+
+    contextRunner
+        .withPropertyValues(
+            "vanillabp.resources-location=classpath*:vanillabp-processes",
+            "vanillabp.adapters.test.type=dummy",
+            "vanillabp.outbox.gruelbox.enabled=sometimes")
+        .run(context -> {
+
+          assertNotNull(context.getStartupFailure());
+          final var message = fullFailureText(context.getStartupFailure());
+          assertTrue(message.contains(GruelboxOutboxProperties.ENABLED), message);
 
         });
 

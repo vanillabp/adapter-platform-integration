@@ -27,6 +27,7 @@ import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
+import io.vanillabp.integration.config.GruelboxOutboxProperties;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 import io.vanillabp.integration.support.BpmsAdapters;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
@@ -39,10 +40,18 @@ import lombok.extern.slf4j.Slf4j;
  * {@link io.vanillabp.spi.process.ProcessService} beans are registered by the
  * {@link ProcessServiceBeanRegistrar}, once {@link WorkflowServiceDiscovery} knows
  * which workflow services this application brings.
+ * <p>
+ * It also binds {@link GruelboxOutboxProperties}, the one section of the
+ * <code>vanillabp.*</code> tree which belongs to Spring Boot alone. That happens here
+ * and not at the outbox auto-configurations, because each of those applies only for one
+ * value of the key: a value which is no boolean would then be bound by nobody and read
+ * as "off".
  */
 @Slf4j
 @AutoConfiguration(after = WorkflowModuleAutoConfiguration.class)
-@EnableConfigurationProperties(VanillaBpConfigurationProperties.class)
+@EnableConfigurationProperties({
+    VanillaBpConfigurationProperties.class, GruelboxOutboxProperties.class
+})
 public class SpringBootMigrationAdapterAutoConfiguration {
 
   static final String BEANNAME_MIGRATIONADAPERPROPERTIES = "VanillaBpMigrationAdapterProperties";

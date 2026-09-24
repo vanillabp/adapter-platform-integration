@@ -21,6 +21,10 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
  * overlay class annotated with <code>@ConfigurationProperties("vanillabp")</code> -
  * same-prefix classes coexist, and keys unknown to this core view are ignored by the
  * JavaBean binding.
+ * <p>
+ * One section of the tree belongs to this platform rather than to the core:
+ * {@link GruelboxOutboxProperties} binds <code>vanillabp.outbox.gruelbox.*</code>,
+ * because Spring Boot is the only platform which builds that store.
  */
 @ConfigurationProperties(MigrationAdapterProperties.PREFIX)
 public class VanillaBpConfigurationProperties extends MigrationAdapterProperties {
