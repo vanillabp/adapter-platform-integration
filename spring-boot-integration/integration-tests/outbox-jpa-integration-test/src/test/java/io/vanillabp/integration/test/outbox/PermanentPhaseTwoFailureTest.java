@@ -3,13 +3,16 @@ package io.vanillabp.integration.test.outbox;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+
+import javax.sql.DataSource;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -17,6 +20,8 @@ import io.vanillabp.integration.adapter.migration.observability.MicrometerVanill
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader.Entry;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
@@ -44,17 +49,6 @@ public class PermanentPhaseTwoFailureTest {
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
-  /**
-   * The entry of ONE aggregate. The key of a start ends in the aggregate's id (see
-   * {@code PhaseOperation#START_WORKFLOW}), and a count over the whole table would
-   * already be satisfied by a sibling test's entry.
-   */
-  private static final String BLOCKED_ENTRIES_OF_AGGREGATE = "select count(*) from VANILLABP_PHASE_TWO_OUTBOX "
-      + "where STATUS = 'BLOCKED' and IDEMPOTENCY_KEY like '%%|%s'";
-
-  private static final String ATTEMPTS_OF_AGGREGATE = "select max(ATTEMPTS) from VANILLABP_PHASE_TWO_OUTBOX "
-      + "where IDEMPOTENCY_KEY like '%%|%s'";
-
   @Autowired
   private ProcessService<Aggregate> processService;
 
@@ -62,7 +56,7 @@ public class PermanentPhaseTwoFailureTest {
   private TransactionTemplate transactionTemplate;
 
   @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private DataSource dataSource;
 
   @Autowired
   private RecordingPhaseTwoListener listener;
@@ -77,11 +71,51 @@ public class PermanentPhaseTwoFailureTest {
 
   }
 
-  private long count(
-      final String query) {
+  /**
+   * The entries of ONE aggregate. A count over the whole table would already be
+   * satisfied by a sibling test's entry.
+   *
+   * @param aggregateId The aggregate asked about
+   * @return Its entries
+   */
+  private List<Entry> entriesOf(
+      final Object aggregateId) {
 
-    final var count = jdbcTemplate.queryForObject(query, Long.class);
-    return count == null ? 0 : count;
+    return PhaseTwoOutboxReader
+        .ofTheVanillaBpOutbox(dataSource)
+        .entries()
+        .stream()
+        .filter(entry -> aggregateId.toString().equals(entry.aggregateId()))
+        .toList();
+
+  }
+
+  /**
+   * @param aggregateId The aggregate asked about
+   * @return How many of its entries were put aside
+   */
+  private long blockedEntriesOf(
+      final Object aggregateId) {
+
+    return entriesOf(aggregateId)
+        .stream()
+        .filter(Entry::isBlocked)
+        .count();
+
+  }
+
+  /**
+   * @param aggregateId The aggregate asked about
+   * @return The highest number of attempts one of its entries carries
+   */
+  private long attemptsOf(
+      final Object aggregateId) {
+
+    return entriesOf(aggregateId)
+        .stream()
+        .mapToInt(Entry::attempts)
+        .max()
+        .orElse(0);
 
   }
 
@@ -109,15 +143,15 @@ public class PermanentPhaseTwoFailureTest {
     listener.awaitInvocations(1, 30_000);
 
     final var deadline = System.currentTimeMillis() + 30_000;
-    while (count(BLOCKED_ENTRIES_OF_AGGREGATE.formatted(attachedAggregate.getId())) == 0) {
+    while (blockedEntriesOf(attachedAggregate.getId()) == 0) {
       assertTrue(System.currentTimeMillis() < deadline, "the entry was not blocked");
       Thread.sleep(50);
     }
 
     // exactly one attempt, and nothing retries a blocked entry
-    assertEquals(1, count(ATTEMPTS_OF_AGGREGATE.formatted(attachedAggregate.getId())));
+    assertEquals(1, attemptsOf(attachedAggregate.getId()));
     Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
-    assertEquals(1, count(ATTEMPTS_OF_AGGREGATE.formatted(attachedAggregate.getId())));
+    assertEquals(1, attemptsOf(attachedAggregate.getId()));
     assertEquals(
         1,
         listener
@@ -155,7 +189,7 @@ public class PermanentPhaseTwoFailureTest {
     final var invocations = listener.awaitInvocations(2, 30_000);
     assertEquals(attachedAggregate.getId(), invocations.get(0));
     assertEquals(attachedAggregate.getId(), invocations.get(1));
-    assertEquals(0, count(BLOCKED_ENTRIES_OF_AGGREGATE.formatted(attachedAggregate.getId())));
+    assertEquals(0, blockedEntriesOf(attachedAggregate.getId()));
 
   }
 

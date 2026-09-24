@@ -3,6 +3,8 @@ package io.vanillabp.integration.it;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+
 import javax.sql.DataSource;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +19,8 @@ import io.vanillabp.integration.test.AggregatePersistence;
 import io.vanillabp.integration.test.RecordingPhaseTwoListener;
 import io.vanillabp.integration.test.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader.Entry;
 import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
@@ -57,15 +61,6 @@ public class PermanentPhaseTwoFailureTest {
           .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
       .overrideRuntimeConfigKey("quarkus.datasource.jdbc.url", "jdbc:h2:mem:outbox-permanent-it;DB_CLOSE_DELAY=-1");
 
-  private static final String COUNT_BLOCKED_ENTRIES_OF_AGGREGATE = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX "
-      + "WHERE AGGREGATE_ID = '%s' AND STATUS = 'BLOCKED'";
-
-  private static final String ATTEMPTS_OF_AGGREGATE = "SELECT MAX(ATTEMPTS) FROM VANILLABP_PHASE_TWO_OUTBOX "
-      + "WHERE AGGREGATE_ID = '%s'";
-
-  private static final String COUNT_ENTRIES_OF_AGGREGATE = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX "
-      + "WHERE AGGREGATE_ID = '%s'";
-
   @Inject
   WorkflowService workflowService;
 
@@ -88,14 +83,51 @@ public class PermanentPhaseTwoFailureTest {
 
   }
 
-  private long count(
-      final String query) throws Exception {
+  /**
+   * The entries of ONE aggregate. A count over the whole table would already be
+   * satisfied by a sibling test's entry.
+   *
+   * @param aggregateId The aggregate asked about
+   * @return Its entries
+   */
+  private List<Entry> entriesOf(
+      final Object aggregateId) {
 
-    try (var connection = dataSource.getConnection(); var statement = connection
-        .createStatement(); var resultSet = statement.executeQuery(query)) {
-      resultSet.next();
-      return resultSet.getLong(1);
-    }
+    return PhaseTwoOutboxReader
+        .ofTheVanillaBpOutbox(dataSource)
+        .entries()
+        .stream()
+        .filter(entry -> aggregateId.toString().equals(entry.aggregateId()))
+        .toList();
+
+  }
+
+  /**
+   * @param aggregateId The aggregate asked about
+   * @return How many of its entries were put aside
+   */
+  private long blockedEntriesOf(
+      final Object aggregateId) {
+
+    return entriesOf(aggregateId)
+        .stream()
+        .filter(Entry::isBlocked)
+        .count();
+
+  }
+
+  /**
+   * @param aggregateId The aggregate asked about
+   * @return The highest number of attempts one of its entries carries
+   */
+  private long attemptsOf(
+      final Object aggregateId) {
+
+    return entriesOf(aggregateId)
+        .stream()
+        .mapToInt(Entry::attempts)
+        .max()
+        .orElse(0);
 
   }
 
@@ -113,15 +145,15 @@ public class PermanentPhaseTwoFailureTest {
     listener.awaitInvocations(1, 30_000);
 
     final var deadline = System.currentTimeMillis() + 30_000;
-    while (count(COUNT_BLOCKED_ENTRIES_OF_AGGREGATE.formatted(attachedAggregate.getId())) == 0) {
+    while (blockedEntriesOf(attachedAggregate.getId()) == 0) {
       assertTrue(System.currentTimeMillis() < deadline, "the entry was not blocked");
       Thread.sleep(50);
     }
 
     // exactly one attempt, and nothing retries a blocked entry
-    assertEquals(1, count(ATTEMPTS_OF_AGGREGATE.formatted(attachedAggregate.getId())));
+    assertEquals(1, attemptsOf(attachedAggregate.getId()));
     Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
-    assertEquals(1, count(ATTEMPTS_OF_AGGREGATE.formatted(attachedAggregate.getId())));
+    assertEquals(1, attemptsOf(attachedAggregate.getId()));
     assertEquals(
         1,
         listener
@@ -183,7 +215,7 @@ public class PermanentPhaseTwoFailureTest {
 
     listener.awaitInvocations(1, 30_000);
     final var deadline = System.currentTimeMillis() + 30_000;
-    while (count(COUNT_BLOCKED_ENTRIES_OF_AGGREGATE.formatted(attachedAggregate.getId())) == 0) {
+    while (blockedEntriesOf(attachedAggregate.getId()) == 0) {
       assertTrue(System.currentTimeMillis() < deadline, "the entry was not blocked");
       Thread.sleep(50);
     }
@@ -203,8 +235,8 @@ public class PermanentPhaseTwoFailureTest {
             .filter(attachedAggregate.getId()::equals)
             .count(),
         "the repetition of a blocked operation was discarded");
-    assertEquals(1, count(COUNT_BLOCKED_ENTRIES_OF_AGGREGATE.formatted(attachedAggregate.getId())));
-    assertEquals(2, count(COUNT_ENTRIES_OF_AGGREGATE.formatted(attachedAggregate.getId())));
+    assertEquals(1, blockedEntriesOf(attachedAggregate.getId()));
+    assertEquals(2, entriesOf(attachedAggregate.getId()).size());
 
   }
 
@@ -226,7 +258,7 @@ public class PermanentPhaseTwoFailureTest {
     final var invocations = listener.awaitInvocations(2, 30_000);
     assertEquals(attachedAggregate.getId(), invocations.get(0));
     assertEquals(attachedAggregate.getId(), invocations.get(1));
-    assertEquals(0, count(COUNT_BLOCKED_ENTRIES_OF_AGGREGATE.formatted(attachedAggregate.getId())));
+    assertEquals(0, blockedEntriesOf(attachedAggregate.getId()));
 
   }
 

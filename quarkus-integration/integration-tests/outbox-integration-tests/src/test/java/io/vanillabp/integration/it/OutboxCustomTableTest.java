@@ -18,6 +18,7 @@ import io.vanillabp.integration.test.AggregatePersistence;
 import io.vanillabp.integration.test.RecordingPhaseTwoListener;
 import io.vanillabp.integration.test.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
 import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
@@ -66,15 +67,15 @@ public class OutboxCustomTableTest {
   @Inject
   DataSource dataSource;
 
-  private long count(
-      final String table) throws Exception {
+  /**
+   * @return How many entries the configured table holds
+   */
+  private long countEntries() {
 
-    try (var connection = dataSource.getConnection(); var statement = connection
-        .createStatement(); var resultSet = statement.executeQuery("SELECT COUNT(*) FROM "
-            + table)) {
-      resultSet.next();
-      return resultSet.getLong(1);
-    }
+    return PhaseTwoOutboxReader
+        .ofTheVanillaBpOutbox(dataSource, CUSTOM_TABLE, CUSTOM_PAYLOAD_TABLE)
+        .entries()
+        .size();
 
   }
 
@@ -101,7 +102,7 @@ public class OutboxCustomTableTest {
     final Aggregate attachedAggregate;
     try {
       attachedAggregate = workflowService.startWorkflow("custom-table-test");
-      assertEquals(1, count(CUSTOM_TABLE));
+      assertEquals(1, countEntries());
     } catch (Exception e) {
       userTransaction.rollback();
       throw e;
@@ -114,7 +115,7 @@ public class OutboxCustomTableTest {
     assertEquals(attachedAggregate.getId(), invocations.getFirst());
 
     // the default table was never created
-    assertFalse(tableExists("VANILLABP_PHASE_TWO_OUTBOX"));
+    assertFalse(tableExists(PhaseTwoOutboxReader.defaultOutboxTableName()));
 
   }
 
@@ -123,7 +124,7 @@ public class OutboxCustomTableTest {
   public void thePayloadTableFollowsTheOutboxTable() throws Exception {
 
     assertTrue(tableExists(CUSTOM_PAYLOAD_TABLE));
-    assertFalse(tableExists("VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD"));
+    assertFalse(tableExists(PhaseTwoOutboxReader.defaultPayloadTableName()));
 
   }
 

@@ -3,7 +3,6 @@ package io.vanillabp.integration.it;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 
@@ -18,11 +17,13 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.runtime.outbox.JdbcPhaseTwoOutbox;
+import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.test.Aggregate;
 import io.vanillabp.integration.test.AggregatePersistence;
 import io.vanillabp.integration.test.RecordingPhaseTwoListener;
 import io.vanillabp.integration.test.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
 import jakarta.inject.Inject;
 
 /**
@@ -105,20 +106,18 @@ public class OutboxOldestPendingAgeTest {
    */
   private void writeWaitingEntry(
       final String id,
-      final Instant writtenAt) throws Exception {
+      final Instant writtenAt) {
 
-    try (var connection = dataSource.getConnection(); var statement = connection
-        .prepareStatement("""
-            INSERT INTO VANILLABP_PHASE_TWO_OUTBOX \
-            (ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, AGGREGATE_ID, DEDUP_KEY, STATUS, \
-            CREATED_AT, ATTEMPTS, NEXT_ATTEMPT_AT) \
-            VALUES (?, 'test-module', 'Test', 'START_WORKFLOW', '4711', ?, 'OPEN', ?, 0, ?)""")) {
-      statement.setString(1, id);
-      statement.setString(2, id);
-      statement.setTimestamp(3, Timestamp.from(writtenAt));
-      statement.setTimestamp(4, Timestamp.from(Instant.now().plus(Duration.ofHours(1))));
-      statement.executeUpdate();
-    }
+    PhaseTwoOutboxReader
+        .ofTheVanillaBpOutbox(dataSource)
+        .writeWaitingEntry(
+            id,
+            "test-module",
+            "Test",
+            PhaseOperation.START_WORKFLOW.name(),
+            "4711",
+            writtenAt,
+            Instant.now().plus(Duration.ofHours(1)));
 
   }
 

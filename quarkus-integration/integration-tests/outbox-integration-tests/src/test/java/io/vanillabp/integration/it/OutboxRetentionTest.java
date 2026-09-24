@@ -15,6 +15,7 @@ import io.vanillabp.integration.test.AggregatePersistence;
 import io.vanillabp.integration.test.RecordingPhaseTwoListener;
 import io.vanillabp.integration.test.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
 import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
@@ -39,9 +40,6 @@ public class OutboxRetentionTest {
       .overrideConfigKey("vanillabp.outbox.retention", "PT1S")
       .overrideRuntimeConfigKey("quarkus.datasource.jdbc.url", "jdbc:h2:mem:outbox-retention-it;DB_CLOSE_DELAY=-1");
 
-  private static final String COUNT_ENTRIES_OF_AGGREGATE = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX "
-      + "WHERE AGGREGATE_ID = '%s'";
-
   @Inject
   WorkflowService workflowService;
 
@@ -54,15 +52,19 @@ public class OutboxRetentionTest {
   @Inject
   DataSource dataSource;
 
+  /**
+   * @param aggregate The aggregate asked about
+   * @return How many entries the outbox still holds for it
+   */
   private long countEntriesOfAggregate(
-      final Aggregate aggregate) throws Exception {
+      final Aggregate aggregate) {
 
-    try (var connection = dataSource.getConnection(); var statement = connection
-        .createStatement(); var resultSet = statement
-            .executeQuery(COUNT_ENTRIES_OF_AGGREGATE.formatted(aggregate.getId()))) {
-      resultSet.next();
-      return resultSet.getLong(1);
-    }
+    return PhaseTwoOutboxReader
+        .ofTheVanillaBpOutbox(dataSource)
+        .entries()
+        .stream()
+        .filter(entry -> aggregate.getId().toString().equals(entry.aggregateId()))
+        .count();
 
   }
 

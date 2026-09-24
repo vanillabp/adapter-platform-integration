@@ -20,6 +20,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader.Entry;
 import io.vanillabp.spi.process.ProcessService;
 import io.vanillabp.spi.process.TaskNotFoundException;
 
@@ -101,15 +103,6 @@ public class TaskOperationsDispatchTest {
   @Autowired
   private DataSource dataSource;
 
-  /**
-   * What the outbox still owes for one aggregate. The idempotency key of a workflow start
-   * ends with the aggregate id, which is enough to tell this test's entries from those the
-   * classes before it left in the database they all share. A BLOCKED entry is left out for the same reason: it waits for a person, so a test
-   * which waited for it would wait for ever.
-   */
-  private static final String COUNT_ENTRIES_NOT_DISPATCHED = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX "
-      + "WHERE STATUS = 'OPEN' AND IDEMPOTENCY_KEY LIKE ?";
-
   @BeforeEach
   public void reset() {
 
@@ -177,18 +170,25 @@ public class TaskOperationsDispatchTest {
 
   }
 
+  /**
+   * What the outbox still owes for one aggregate. Reading it per aggregate is what tells
+   * this test's entries from those the classes before it left in the database they all
+   * share. An entry which was put aside is left out for the same reason: it waits for a
+   * person, so a test which waited for it would wait for ever.
+   *
+   * @param aggregate The aggregate asked about
+   * @return How many of its entries are still waiting
+   */
   private long countEntriesNotDispatched(
-      final Aggregate aggregate) throws Exception {
+      final Aggregate aggregate) {
 
-    try (var connection = dataSource.getConnection(); var statement = connection
-        .prepareStatement(COUNT_ENTRIES_NOT_DISPATCHED)) {
-      statement.setString(1, "%|"
-          + aggregate.getId());
-      try (var resultSet = statement.executeQuery()) {
-        resultSet.next();
-        return resultSet.getLong(1);
-      }
-    }
+    return PhaseTwoOutboxReader
+        .ofTheVanillaBpOutbox(dataSource)
+        .entries()
+        .stream()
+        .filter(Entry::isWaiting)
+        .filter(entry -> aggregate.getId().toString().equals(entry.aggregateId()))
+        .count();
 
   }
 
