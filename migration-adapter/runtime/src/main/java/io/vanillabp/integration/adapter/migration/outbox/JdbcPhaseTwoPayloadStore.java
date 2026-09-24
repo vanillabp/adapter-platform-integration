@@ -212,13 +212,40 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
         return 0;
       }
       final var orphans = orphansAmong(expired, entries);
-      return orphans.isEmpty() ? 0 : removePayloads(connection, orphans);
+      if (orphans.isEmpty()) {
+        return 0;
+      }
+      final var removed = removePayloads(connection, orphans);
+      logRemovedOrphans(removed);
+      return removed;
     } catch (final SQLException e) {
       log.warn("Could not remove the orphaned payloads of table '{}'", tableName, e);
       return 0;
     } finally {
       release(connection);
     }
+
+  }
+
+  /**
+   * Says that bytes were thrown away, at DEBUG and only when there were any. An orphan is a
+   * payload whose outbox entry never reached the table, so nothing was lost by removing it, and
+   * the normal count is zero. Somebody who finds payloads growing wants to see this line, and
+   * nobody else does.
+   *
+   * @param removed How many payloads went
+   */
+  private void logRemovedOrphans(
+      final int removed) {
+
+    if (removed == 0) {
+      return;
+    }
+    log
+        .debug(
+            "Removed {} payload(s) from table '{}' which no outbox entry names any more",
+            removed,
+            tableName);
 
   }
 

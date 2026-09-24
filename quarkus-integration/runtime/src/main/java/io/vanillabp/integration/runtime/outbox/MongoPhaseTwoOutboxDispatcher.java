@@ -181,6 +181,15 @@ public class MongoPhaseTwoOutboxDispatcher {
       // the third moment of the same shape: what the age of the oldest waiting entry is
       // read by, once per collection of the metrics
       outboxCollection().createIndex(Indexes.ascending("status", "createdAt"));
+      // what the housekeeping asks the entries before it removes a payload by age: which of the
+      // expired ones an entry still names. Sparse, because only an entry which carries a payload
+      // has the field, and that is the rare one. Without the index the question reads the whole
+      // collection, and it is asked on every poll for as long as one entry is stuck - see
+      // decision 76 in the repository's DECISIONS.md
+      outboxCollection()
+          .createIndex(
+              Indexes.ascending("args.%s".formatted(PhaseTwoCall.ARG_PAYLOAD_REFERENCE)),
+              new IndexOptions().sparse(true));
       // what the housekeeping of the payloads deletes along - without it that delete
       // reads every payload ever written
       payloadCollection().createIndex(Indexes.ascending("createdAt"));
@@ -438,9 +447,11 @@ public class MongoPhaseTwoOutboxDispatcher {
 
   /**
    * Which of the given payloads an entry of this collection still names, asked with one
-   * query. The reference lies in the entry's <code>args</code>, which no index spans, so
-   * the query reads the collection - and it is asked only where a payload outlived the
-   * retention, which on a healthy store is never.
+   * query. The reference lies in the entry's <code>args</code>, and MongoDB indexes a field
+   * inside a document, so a sparse index over it answers this without reading the collection
+   * (see decision 76 in the repository's DECISIONS.md). The question is asked only where a
+   * payload outlived the retention, which on a healthy store is never - but an entry which is
+   * stuck keeps its payload, so one stuck entry means this runs on every poll.
    *
    * @param collection The outbox collection
    * @param references The payloads the housekeeping is about to remove

@@ -17,6 +17,7 @@ import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfiguration;
 import io.vanillabp.integration.outbox.jdbc.JdbcPhaseTwoOutboxAutoConfiguration;
+import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import lombok.extern.slf4j.Slf4j;
 
@@ -156,6 +157,16 @@ public class MongoPhaseTwoOutboxAutoConfiguration {
           .createIndex(new Index()
               .on("status", Sort.Direction.ASC)
               .on("createdAt", Sort.Direction.ASC));
+      // what the housekeeping asks the entries before it removes a payload by age: which
+      // of the expired ones an entry still names. Sparse, because only an entry which
+      // carries a payload has the field, and that is the rare one. Without the index the
+      // question reads the whole collection, and it is asked on every poll for as long as
+      // one entry is stuck - see decision 76 in the repository's DECISIONS.md
+      mongoTemplate
+          .indexOps(collection)
+          .createIndex(new Index()
+              .on("args.%s".formatted(PhaseTwoCall.ARG_PAYLOAD_REFERENCE), Sort.Direction.ASC)
+              .sparse());
       // what the housekeeping of the payloads deletes along - without it that delete
       // reads every payload ever written
       mongoTemplate

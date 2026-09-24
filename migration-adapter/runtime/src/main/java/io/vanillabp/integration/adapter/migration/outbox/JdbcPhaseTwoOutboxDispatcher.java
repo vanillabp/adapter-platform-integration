@@ -1450,8 +1450,12 @@ public class JdbcPhaseTwoOutboxDispatcher {
   /**
    * Which of the given payloads an entry of this table still names, asked with one
    * statement. It costs a scan of the outbox table, because a reference lies inside the
-   * serialized arguments and no index reaches into them - but it is asked only where a
-   * payload outlived the retention, which on a healthy store is never.
+   * serialized arguments and no index reaches into a column of text. The question is asked
+   * only where a payload outlived the retention, which on a healthy store is never - but an
+   * entry which is stuck keeps its payload, so one stuck entry means this runs on every
+   * poll, and the payload store asks it once per hundred payloads it wants to remove. What
+   * that costs was measured, and why the table has no column to index instead is decision 76
+   * in the repository's DECISIONS.md.
    *
    * @param connection The connection to be used
    * @param references The payloads the housekeeping is about to remove
