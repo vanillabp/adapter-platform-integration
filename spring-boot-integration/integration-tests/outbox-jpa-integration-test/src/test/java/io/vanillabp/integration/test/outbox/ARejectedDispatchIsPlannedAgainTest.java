@@ -4,7 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 
 import javax.sql.DataSource;
@@ -53,6 +55,14 @@ public class ARejectedDispatchIsPlannedAgainTest {
    * which is right stops waiting as soon as the entry moved.
    */
   private static final long PATIENCE = 20000L;
+
+  /**
+   * The window a rejected dispatch names in the test below. Nothing there waits for it:
+   * the entry comes back when the test makes it due, which is why the window may be this
+   * long. It outlasts every deadline of that test many times over, so the rejected entry
+   * cannot come back on its own while the test is still running.
+   */
+  private static final Duration LONGER_THAN_THIS_TEST_CAN_TAKE = Duration.ofMinutes(5);
 
   @Autowired
   private ProcessService<Aggregate> processService;
@@ -149,6 +159,57 @@ public class ARejectedDispatchIsPlannedAgainTest {
 
   }
 
+  /**
+   * How often the store counted an attempt on the entry of that operation, and zero
+   * where no entry carries that key.
+   */
+  private int attemptsOf(
+      final String idempotencyKey) throws SQLException {
+
+    try (var connection = dataSource.getConnection(); var statement = connection
+        .prepareStatement("SELECT ATTEMPTS FROM VANILLABP_PHASE_TWO_OUTBOX WHERE IDEMPOTENCY_KEY = ?")) {
+      statement.setString(1, idempotencyKey);
+      try (var resultSet = statement.executeQuery()) {
+        return resultSet.next() ? resultSet.getInt(1) : 0;
+      }
+    }
+
+  }
+
+  /**
+   * Waits until the store counted an attempt on that entry. The store writes the count
+   * when the attempt ENDED, so this is what says that a rejection was used up and which
+   * entry used it.
+   */
+  private void awaitAttempted(
+      final String idempotencyKey) throws Exception {
+
+    final var deadline = System.currentTimeMillis() + PATIENCE;
+    while (attemptsOf(idempotencyKey) == 0) {
+      if (System.currentTimeMillis() > deadline) {
+        throw new AssertionError(
+            "The outbox entry of '%s' was never attempted".formatted(idempotencyKey));
+      }
+      Thread.sleep(50);
+    }
+
+  }
+
+  /**
+   * Makes the entry of that operation due now, whatever due time it carries.
+   */
+  private void makeDueNow(
+      final String idempotencyKey) throws SQLException {
+
+    try (var connection = dataSource.getConnection(); var statement = connection
+        .prepareStatement("UPDATE VANILLABP_PHASE_TWO_OUTBOX SET NEXT_ATTEMPT_AT = ? WHERE IDEMPOTENCY_KEY = ?")) {
+      statement.setTimestamp(1, Timestamp.from(Instant.now()));
+      statement.setString(2, idempotencyKey);
+      statement.executeUpdate();
+    }
+
+  }
+
   @Test
   @DisplayName("A call rejected once reaches the consumer exactly once and the entry is ticked off")
   public void aRejectedCallIsDispatchedOnceAndTheEntryIsDone() throws Exception {
@@ -184,29 +245,36 @@ public class ARejectedDispatchIsPlannedAgainTest {
   }
 
   /**
-   * The other half of ending a rejected attempt: one thread dispatches the entries of this
+   * The other half of ending a rejected attempt: one thread claims the due entries of this
    * store, so an entry which waited for its BPMS held every other workflow's entry with it.
    * Nothing waits any more, which is why the call of the workflow nobody is waiting for is
-   * the FIRST one the consumer sees here.
+   * the one the consumer sees here.
+   * <p>
+   * The rejected entry is given a window which outlasts the test, so it cannot come back
+   * while the test runs. The order below rests on that and not on the speed of the
+   * machine. A store which ends the rejected attempt dispatches the entry behind it at
+   * once, and a store which waits for the rejected one dispatches nothing, however long
+   * anybody waits for it. The test makes the rejected entry due itself at the end, so
+   * nothing of it is left standing for the classes which follow.
    */
   @Test
   @DisplayName("A workflow which is not searchable yet does not hold the entries behind it")
   public void anEntryWhichIsNotDueYetLetsTheOthersPass() throws Exception {
 
-    extension.rejectNextDispatches(1, Duration.ofSeconds(2));
+    extension.rejectNextDispatches(1, LONGER_THAN_THIS_TEST_CAN_TAKE);
 
     final var waiting = startWorkflowAndSchedule("not-searchable-yet", "created");
+    // the rejection belongs to this workflow, and the store counting the attempt is what
+    // says so. Scheduling the second workflow before that could hand the rejection to it
+    awaitAttempted(idempotencyKeyOf(waiting, "created"));
     final var passing = startWorkflowAndSchedule("searchable", "created");
 
-    final var dispatched = extension.awaitDispatched(2, PATIENCE);
+    final var dispatched = extension.awaitDispatched(1, PATIENCE);
 
     assertEquals(
         List
             .of(
                 passing
-                    .getId()
-                    .toString(),
-                waiting
                     .getId()
                     .toString()),
         dispatched
@@ -215,6 +283,8 @@ public class ARejectedDispatchIsPlannedAgainTest {
             .toList(),
         "the rejected entry was waited for, so everything behind it waited too");
     awaitTickedOff(idempotencyKeyOf(passing, "created"));
+
+    makeDueNow(idempotencyKeyOf(waiting, "created"));
     awaitTickedOff(idempotencyKeyOf(waiting, "created"));
 
   }
