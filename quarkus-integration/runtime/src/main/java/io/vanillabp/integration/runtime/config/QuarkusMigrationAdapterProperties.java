@@ -287,7 +287,10 @@ public interface QuarkusMigrationAdapterProperties {
      * Where to load BPMN files from, which are specific to the adapter. Optional:
      * an adapter section of a level may carry only adapter-specific keys (the
      * missing resources location is validated with a guiding message by the core
-     * where it is actually required).
+     * where it is actually required). This interface serves the workflow module, the
+     * workflow and the task alike, and the core answers a location written below the
+     * workflow module with a message naming the keys it belongs at (see decision 80
+     * in the repository's DECISIONS.md).
      *
      * @return The location this level sets, or an empty Optional where it says nothing
      *         about it. The deployment reads it at the workflow module, see

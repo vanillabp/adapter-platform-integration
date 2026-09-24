@@ -231,7 +231,7 @@ public class VanillaBpConfigurationBindingTest {
             "vanillabp.adapters.test2.type=dummy",
             "vanillabp.workflow-modules.test-module.prioritized-adapters=test,test2",
             "vanillabp.workflow-modules.test-module.workflows.MyProcess.prioritized-adapters=test2,test",
-            "vanillabp.workflow-modules.test-module.workflows.MyProcess.adapters.test2.resources-location=classpath:wf-specific")
+            "vanillabp.workflow-modules.test-module.workflows.MyProcess.adapters.test2.deduplicate-deliveries=false")
         .run(context -> {
 
           assertNotNull(context.getBean(MigrationAdapterProperties.class));
@@ -248,13 +248,36 @@ public class VanillaBpConfigurationBindingTest {
 
           // adapter-scoped keys bind at the workflow level and resolve most-specific-wins
           assertEquals(
-              "classpath:wf-specific",
+              Boolean.FALSE,
               properties.resolveForAdapter(
                   "test-module",
                   "MyProcess",
                   null,
                   "test2",
-                  AdapterProperties::getResourcesLocation));
+                  AdapterProperties::getDeduplicateDeliveries));
+
+        });
+
+  }
+
+  @Test
+  @DisplayName("A resources location below the workflow module ends the startup")
+  public void aResourcesLocationBelowTheWorkflowModuleIsRejected() {
+
+    contextRunner
+        .withPropertyValues(
+            "vanillabp.adapters.test.type=dummy",
+            "vanillabp.workflow-modules.test-module.prioritized-adapters=test",
+            "vanillabp.workflow-modules.test-module.adapters.test.resources-location=classpath:bpms-specific",
+            "vanillabp.workflow-modules.test-module.workflows.MyProcess.adapters.test.resources-location=classpath:wf-specific")
+        .run(context -> {
+
+          assertNotNull(context.getStartupFailure());
+          final var message = rootMessage(context.getStartupFailure());
+          assertTrue(message.contains(
+              "vanillabp.workflow-modules.test-module.workflows.MyProcess.adapters.test.resources-location"));
+          assertTrue(message.contains(
+              "vanillabp.workflow-modules.<workflow-module>.adapters.<adapter>.resources-location"));
 
         });
 

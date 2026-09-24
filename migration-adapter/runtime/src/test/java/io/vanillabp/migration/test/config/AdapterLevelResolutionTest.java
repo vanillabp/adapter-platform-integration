@@ -20,27 +20,30 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 /**
  * Tests the generic most-specific-wins resolution of adapter-scoped properties
  * across the four levels (task &gt; workflow &gt; workflow-module &gt; adapter). The
- * levels are exercised via the builder: workflow-level configuration is still
- * rejected at startup and the task level has no consumer yet - the
- * resolver is the structural foundation both stories build on.
+ * probe is <code>deduplicate-deliveries</code>, the key which is really read at all
+ * four of them, and neighbouring levels say the opposite so that every answer names
+ * the level it came from.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AdapterLevelResolutionTest {
 
   private static final String ADAPTER_ID = "c8-cloud";
 
-  private static AdapterProperties resources(
-      final String resourcesLocation) {
+  private static AdapterProperties deduplicating(
+      final Boolean deduplicateDeliveries) {
 
     return AdapterProperties
         .builder()
-        .resourcesLocation(resourcesLocation)
+        .deduplicateDeliveries(deduplicateDeliveries)
         .build();
 
   }
 
   /**
-   * Builds properties with a value at every one of the four levels.
+   * Builds properties with a value at every one of the four levels: the task says
+   * false, the workflow true, the workflow module false and the adapter true. Each
+   * level therefore contradicts the next less specific one, so an answer can only
+   * have come from the level the test expects.
    */
   private static MigrationAdapterProperties allLevels() {
 
@@ -49,17 +52,17 @@ public class AdapterLevelResolutionTest {
         .adapters(Map.of(ADAPTER_ID, AdapterConfigProperties
             .builder()
             .type("camunda8")
-            .resourcesLocation("adapter-level")
+            .deduplicateDeliveries(Boolean.TRUE)
             .build()))
         .workflowModules(Map.of("loan-approval", WorkflowModuleAdapterProperties
             .builder()
-            .adapters(Map.of(ADAPTER_ID, resources("module-level")))
+            .adapters(Map.of(ADAPTER_ID, deduplicating(Boolean.FALSE)))
             .workflows(Map.of("LoanApproval", WorkflowAdapterProperties
                 .builder()
-                .adapters(Map.of(ADAPTER_ID, resources("workflow-level")))
+                .adapters(Map.of(ADAPTER_ID, deduplicating(Boolean.TRUE)))
                 .tasks(Map.of("assessRisk", TaskAdapterProperties
                     .builder()
-                    .adapters(Map.of(ADAPTER_ID, resources("task-level")))
+                    .adapters(Map.of(ADAPTER_ID, deduplicating(Boolean.FALSE)))
                     .build()))
                 .build()))
             .build()))
@@ -74,9 +77,9 @@ public class AdapterLevelResolutionTest {
   public void taskLevelWins() {
 
     assertEquals(
-        "task-level",
+        Boolean.FALSE,
         allLevels().resolveForAdapter(
-            "loan-approval", "LoanApproval", "assessRisk", ADAPTER_ID, AdapterProperties::getResourcesLocation));
+            "loan-approval", "LoanApproval", "assessRisk", ADAPTER_ID, AdapterProperties::getDeduplicateDeliveries));
 
   }
 
@@ -87,13 +90,13 @@ public class AdapterLevelResolutionTest {
     final var properties = allLevels();
 
     assertEquals(
-        "workflow-level",
+        Boolean.TRUE,
         properties.resolveForAdapter(
-            "loan-approval", "LoanApproval", null, ADAPTER_ID, AdapterProperties::getResourcesLocation));
+            "loan-approval", "LoanApproval", null, ADAPTER_ID, AdapterProperties::getDeduplicateDeliveries));
     assertEquals(
-        "workflow-level",
+        Boolean.TRUE,
         properties.resolveForAdapter(
-            "loan-approval", "LoanApproval", "unknownTask", ADAPTER_ID, AdapterProperties::getResourcesLocation));
+            "loan-approval", "LoanApproval", "unknownTask", ADAPTER_ID, AdapterProperties::getDeduplicateDeliveries));
 
   }
 
@@ -104,13 +107,13 @@ public class AdapterLevelResolutionTest {
     final var properties = allLevels();
 
     assertEquals(
-        "module-level",
+        Boolean.FALSE,
         properties.resolveForAdapter(
-            "loan-approval", null, null, ADAPTER_ID, AdapterProperties::getResourcesLocation));
+            "loan-approval", null, null, ADAPTER_ID, AdapterProperties::getDeduplicateDeliveries));
     assertEquals(
-        "module-level",
+        Boolean.FALSE,
         properties.resolveForAdapter(
-            "loan-approval", "UnknownProcess", "assessRisk", ADAPTER_ID, AdapterProperties::getResourcesLocation));
+            "loan-approval", "UnknownProcess", "assessRisk", ADAPTER_ID, AdapterProperties::getDeduplicateDeliveries));
 
   }
 
@@ -121,13 +124,13 @@ public class AdapterLevelResolutionTest {
     final var properties = allLevels();
 
     assertEquals(
-        "adapter-level",
+        Boolean.TRUE,
         properties.resolveForAdapter(
-            null, null, null, ADAPTER_ID, AdapterProperties::getResourcesLocation));
+            null, null, null, ADAPTER_ID, AdapterProperties::getDeduplicateDeliveries));
     assertEquals(
-        "adapter-level",
+        Boolean.TRUE,
         properties.resolveForAdapter(
-            "unknown-module", "LoanApproval", "assessRisk", ADAPTER_ID, AdapterProperties::getResourcesLocation));
+            "unknown-module", "LoanApproval", "assessRisk", ADAPTER_ID, AdapterProperties::getDeduplicateDeliveries));
 
   }
 
@@ -145,13 +148,13 @@ public class AdapterLevelResolutionTest {
             .build()))
         .workflowModules(Map.of("loan-approval", WorkflowModuleAdapterProperties
             .builder()
-            .adapters(Map.of(ADAPTER_ID, resources("module-level")))
+            .adapters(Map.of(ADAPTER_ID, deduplicating(Boolean.FALSE)))
             .workflows(Map.of("LoanApproval", WorkflowAdapterProperties
                 .builder()
-                .adapters(Map.of(ADAPTER_ID, resources(null)))
+                .adapters(Map.of(ADAPTER_ID, deduplicating(null)))
                 .tasks(Map.of("assessRisk", TaskAdapterProperties
                     .builder()
-                    .adapters(Map.of(ADAPTER_ID, resources(null)))
+                    .adapters(Map.of(ADAPTER_ID, deduplicating(null)))
                     .build()))
                 .build()))
             .build()))
@@ -159,9 +162,9 @@ public class AdapterLevelResolutionTest {
     properties.validateAndLink();
 
     assertEquals(
-        "module-level",
+        Boolean.FALSE,
         properties.resolveForAdapter(
-            "loan-approval", "LoanApproval", "assessRisk", ADAPTER_ID, AdapterProperties::getResourcesLocation));
+            "loan-approval", "LoanApproval", "assessRisk", ADAPTER_ID, AdapterProperties::getDeduplicateDeliveries));
 
   }
 
@@ -178,9 +181,9 @@ public class AdapterLevelResolutionTest {
         .build();
 
     assertNull(properties.resolveForAdapter(
-        "loan-approval", "LoanApproval", "assessRisk", ADAPTER_ID, AdapterProperties::getResourcesLocation));
+        "loan-approval", "LoanApproval", "assessRisk", ADAPTER_ID, AdapterProperties::getDeduplicateDeliveries));
     assertNull(properties.resolveForAdapter(
-        null, null, null, "unknown-adapter", AdapterProperties::getResourcesLocation));
+        null, null, null, "unknown-adapter", AdapterProperties::getDeduplicateDeliveries));
 
   }
 

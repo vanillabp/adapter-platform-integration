@@ -1378,6 +1378,69 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
+   * Refuses a resources location written below the workflow module. The key is bound at
+   * all four levels like every other adapter setting, but it is read at the workflow
+   * module and at the adapter only: VanillaBP loads the BPMN files before it knows which
+   * process or which task is in them (see decision 80 in the repository's DECISIONS.md).
+   * A line written at the workflow or at a task would do nothing at all, so it is
+   * answered instead of ignored.
+   *
+   * @throws IllegalStateException Naming every place a location was written at and the
+   *           two keys it may be written at
+   */
+  private void refuseResourcesLocationsBelowTheWorkflowModule() {
+
+    final var misplaced = new LinkedList<String>();
+    workflowModules.forEach((
+        moduleId,
+        module) -> module
+            .getWorkflows()
+            .forEach((
+                processId,
+                workflow) -> {
+              workflow
+                  .getAdapters()
+                  .entrySet()
+                  .stream()
+                  .filter(adapter -> adapter.getValue().getResourcesLocation() != null)
+                  .forEach(adapter -> misplaced
+                      .add("%s.workflow-modules.%s.workflows.%s.adapters.%s.resources-location"
+                          .formatted(PREFIX, moduleId, processId, adapter.getKey())));
+              workflow
+                  .getTasks()
+                  .forEach((
+                      taskId,
+                      task) -> task
+                          .getAdapters()
+                          .entrySet()
+                          .stream()
+                          .filter(adapter -> adapter.getValue().getResourcesLocation() != null)
+                          .forEach(adapter -> misplaced
+                              .add(
+                                  "%s.workflow-modules.%s.workflows.%s.tasks.%s.adapters.%s.resources-location"
+                                      .formatted(PREFIX, moduleId, processId, taskId, adapter.getKey()))));
+            }));
+    if (misplaced.isEmpty()) {
+      return;
+    }
+    // the maps come from a binder and keep no order, so the message is sorted to read
+    // the same way on every boot
+    misplaced.sort(String::compareTo);
+    throw new IllegalStateException(
+        """
+            The location of an adapter's BPMN files is read at the workflow module and at \
+            the adapter, but it is configured at:
+              %s
+            Move each of them to one of these two keys:
+              %s.workflow-modules.<workflow-module>.adapters.<adapter>.resources-location: classpath*:<location>
+              %s.adapters.<adapter>.resources-location: classpath*:<location>
+            VanillaBP loads the BPMN files before it knows which process or which task is in \
+            them, so a location below the workflow module is never read."""
+            .formatted(String.join("\n  ", misplaced), PREFIX, PREFIX));
+
+  }
+
+  /**
    * Whether the given workflow module accepts a prioritized adapter which cannot
    * locate workflows next to other adapters
    * (<code>vanillabp.election.guessing-adapters</code>, overridable as
@@ -1872,6 +1935,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     outbox.validateStoreNames();
     validateMaxTaskAge();
     refuseFullSyncPermissionsOutsideAWorkflow();
+    refuseResourcesLocationsBelowTheWorkflowModule();
     reportRetentionSplit();
     reportWhatStaysAwake();
 

@@ -870,6 +870,54 @@ public class MigrationAdapterPropertiesTest {
 
   }
 
+  @Test
+  @DisplayName("A resources location below the workflow module ends the startup")
+  public void theLocationIsRefusedBelowTheWorkflowModule() {
+
+    final var properties = new MigrationAdapterProperties();
+    properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
+    properties.setPrioritizedAdapters(List.of("adapter-test"));
+    properties.setWorkflowModules(Map.of("test-module", WorkflowModuleAdapterProperties
+        .builder()
+        .workflowModuleId("test-module")
+        // the location the deployment really reads stays where it is read
+        .adapters(Map.of("adapter-test", AdapterProperties
+            .builder()
+            .resourcesLocation("classpath*:test-module/processes/test")
+            .build()))
+        .workflows(Map.of("testProcess", WorkflowAdapterProperties
+            .builder()
+            .adapters(Map.of("adapter-test", AdapterProperties
+                .builder()
+                .resourcesLocation("classpath*:one-level-too-deep")
+                .build()))
+            .tasks(Map.of("scoreApplicant", TaskAdapterProperties
+                .builder()
+                .adapters(Map.of("adapter-test", AdapterProperties
+                    .builder()
+                    .resourcesLocation("classpath*:two-levels-too-deep")
+                    .build()))
+                .build()))
+            .build()))
+        .build()));
+
+    final var refusal = assertThrowsExactly(
+        IllegalStateException.class,
+        () -> properties.validateProperties(List.of("adapter2"), List.of("test-module")));
+
+    assertEquals(
+        """
+            The location of an adapter's BPMN files is read at the workflow module and at the adapter, but it is configured at:
+              vanillabp.workflow-modules.test-module.workflows.testProcess.adapters.adapter-test.resources-location
+              vanillabp.workflow-modules.test-module.workflows.testProcess.tasks.scoreApplicant.adapters.adapter-test.resources-location
+            Move each of them to one of these two keys:
+              vanillabp.workflow-modules.<workflow-module>.adapters.<adapter>.resources-location: classpath*:<location>
+              vanillabp.adapters.<adapter>.resources-location: classpath*:<location>
+            VanillaBP loads the BPMN files before it knows which process or which task is in them, so a location below the workflow module is never read.""",
+        refusal.getMessage());
+
+  }
+
   private static AdapterConfigProperties adapterUsingPrefixes() {
 
     final var adapter = AdapterConfigProperties.ofType("camunda8");

@@ -66,7 +66,10 @@ public class AdapterProperties {
    * <code>vanillabp.resources-location</code> follows both (see
    * {@link MigrationAdapterProperties#getAdapterResourcesLocationsFor}). The two more
    * specific levels cannot be read: VanillaBP finds the BPMN files before it knows which
-   * process or which task is in them.
+   * process or which task is in them. They are bound all the same, so that a line
+   * written at a workflow or at a task is answered with a message naming the keys it
+   * belongs at, instead of being ignored (see decision 80 in the repository's
+   * DECISIONS.md).
    */
   private String resourcesLocation;
 
