@@ -1,8 +1,13 @@
 package io.vanillabp.integration.outbox.gruelbox;
 
+import java.time.Instant;
+
+import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DispatchOutcome;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.spi.PhaseTwoCall;
+import io.vanillabp.integration.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.PhaseTwoPayloadStore;
 import io.vanillabp.integration.spi.PhaseTwoRetryLater;
 
 /**
@@ -47,13 +52,13 @@ public class GruelboxPhaseTwoDispatchBean implements GruelboxPhaseTwoDispatch {
    * none - an entry which names a payload is then dispatched without it, which the
    * router's handler sees as a call carrying nothing.
    */
-  private final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore;
+  private final PhaseTwoPayloadStore payloadStore;
 
   /**
    * What the wait of a dispatched entry is reported to. Micrometer is optional, so this
    * is what an application without it uses.
    */
-  private final io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics metrics;
+  private final VanillaBpMetrics metrics;
 
   /**
    * The dispatch of an outbox whose calls carry no payload and whose waiting time nobody
@@ -77,9 +82,9 @@ public class GruelboxPhaseTwoDispatchBean implements GruelboxPhaseTwoDispatch {
    */
   public GruelboxPhaseTwoDispatchBean(
       final PhaseTwoRouter phaseTwoRouter,
-      final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore) {
+      final PhaseTwoPayloadStore payloadStore) {
 
-    this(phaseTwoRouter, payloadStore, io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.NONE);
+    this(phaseTwoRouter, payloadStore, VanillaBpMetrics.NONE);
 
   }
 
@@ -93,8 +98,8 @@ public class GruelboxPhaseTwoDispatchBean implements GruelboxPhaseTwoDispatch {
    */
   public GruelboxPhaseTwoDispatchBean(
       final PhaseTwoRouter phaseTwoRouter,
-      final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore,
-      final io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics metrics) {
+      final PhaseTwoPayloadStore payloadStore,
+      final VanillaBpMetrics metrics) {
 
     this.phaseTwoRouter = phaseTwoRouter;
     this.payloadStore = payloadStore;
@@ -160,7 +165,7 @@ public class GruelboxPhaseTwoDispatchBean implements GruelboxPhaseTwoDispatch {
    * @param outcome How the attempt ended
    */
   private void reportWait(
-      final java.time.Instant writtenAt,
+      final Instant writtenAt,
       final DispatchOutcome outcome) {
 
     if (writtenAt == null) {
@@ -170,7 +175,7 @@ public class GruelboxPhaseTwoDispatchBean implements GruelboxPhaseTwoDispatch {
         .outboxDispatchEnded(
             GruelboxPhaseTwoOutbox.class.getSimpleName(),
             outcome,
-            io.vanillabp.integration.spi.PhaseTwoOutbox
+            PhaseTwoOutbox
                 .waitedSince(writtenAt)
                 .toNanos());
 

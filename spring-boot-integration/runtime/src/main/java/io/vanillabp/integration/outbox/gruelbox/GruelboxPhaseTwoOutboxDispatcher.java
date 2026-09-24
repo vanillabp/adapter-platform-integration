@@ -1,5 +1,8 @@
 package io.vanillabp.integration.outbox.gruelbox;
 
+import java.time.Duration;
+import java.time.Instant;
+
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
@@ -9,6 +12,7 @@ import com.gruelbox.transactionoutbox.TransactionOutbox;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.outbox.DueEntryPoller;
 import io.vanillabp.integration.deployment.SpringBootDeploymentService;
+import io.vanillabp.integration.spi.PhaseTwoPayloadStore;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 
@@ -92,9 +96,9 @@ public class GruelboxPhaseTwoOutboxDispatcher {
    * <code>null</code>: a dispatcher is built with the place it house-keeps, the way the
    * store is built with the place it writes to.
    */
-  private final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore;
+  private final PhaseTwoPayloadStore payloadStore;
 
-  private final java.time.Duration retention;
+  private final Duration retention;
 
   /**
    * Polls the outbox, holds its submitter back until it does and house-keeps the
@@ -116,7 +120,7 @@ public class GruelboxPhaseTwoOutboxDispatcher {
       final PhaseTwoOutboxProperties properties,
       final GruelboxRedispatchAwareSubmitter submitter,
       final GruelboxPhaseTwoOutbox outbox,
-      final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore) {
+      final PhaseTwoPayloadStore payloadStore) {
 
     requireOutbox(outbox);
     requirePayloadStore(payloadStore);
@@ -166,7 +170,7 @@ public class GruelboxPhaseTwoOutboxDispatcher {
    * @param payloadStore Where the payloads of this outbox lie
    */
   private static void requirePayloadStore(
-      final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore) {
+      final PhaseTwoPayloadStore payloadStore) {
 
     if (payloadStore != null) {
       return;
@@ -187,7 +191,7 @@ public class GruelboxPhaseTwoOutboxDispatcher {
    *
    * @return The moment of the earliest entry gruelbox still owes something to
    */
-  private java.time.Instant earliestDueAt() {
+  private Instant earliestDueAt() {
 
     return outbox.earliestDueAt();
 
@@ -243,7 +247,7 @@ public class GruelboxPhaseTwoOutboxDispatcher {
     // the payloads of the entries the flush deleted, and what a crash between the two
     // writes of a schedule left behind. What an entry still names stays with it,
     // whether that entry waits or is blocked, and this flush was going to happen anyway
-    payloadStore.removeOrphansOlderThan(java.time.Instant.now().minus(retention), outbox::stillNaming);
+    payloadStore.removeOrphansOlderThan(Instant.now().minus(retention), outbox::stillNaming);
 
   }
 
