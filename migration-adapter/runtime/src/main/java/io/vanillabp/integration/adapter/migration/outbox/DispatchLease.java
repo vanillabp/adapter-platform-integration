@@ -16,12 +16,16 @@ import lombok.extern.slf4j.Slf4j;
  * both onto the entry, and no other poll - here or on another node - takes an entry whose
  * lease has not run out.
  * <p>
- * The lease is renewed WHILE the dispatch runs, which is the whole reason this class
- * exists. A dispatch calls a BPMS over the network and may take longer than any distance
- * chosen in advance; before the renewal, such a dispatch simply lost its entry to the next
- * poll and the operation was carried out twice. Each renewal is a short transaction of its
- * own - one <code>UPDATE</code> per tick, on a connection borrowed and given back - so
- * nothing holds a connection for the length of a dispatch.
+ * The lease is renewed from the claim until the dispatch is over, which is the whole reason
+ * this class exists. A dispatch calls a BPMS over the network and may take longer than any
+ * distance chosen in advance; before the renewal, such a dispatch simply lost its entry to
+ * the next poll and the operation was carried out twice. Each renewal is a short
+ * transaction of its own - one <code>UPDATE</code> per tick, on a connection borrowed and
+ * given back - so nothing holds a connection for the length of a dispatch.
+ * <p>
+ * The renewal covers the wait before the dispatch as well. A claimed entry may wait for the
+ * thread which dispatches its aggregate, and a wait longer than the lease would let another
+ * node take an entry this one is about to carry out.
  * <p>
  * The tick is a third of the lease, which leaves two renewals before it would run out, and
  * it never goes below {@link #SHORTEST_TICK}: an application which sets
@@ -148,7 +152,9 @@ public class DispatchLease {
   }
 
   /**
-   * Starts renewing the lease of one entry until the returned handle is closed.
+   * Starts renewing the lease of one entry until the returned handle is closed. The
+   * dispatcher opens it where it claims the entry, so the renewal covers the wait for a
+   * thread as well as the dispatch itself.
    *
    * @param entryId The entry being dispatched
    * @param renewal What one tick writes

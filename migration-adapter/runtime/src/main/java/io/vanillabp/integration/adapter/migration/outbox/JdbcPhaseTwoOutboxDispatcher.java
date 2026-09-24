@@ -42,9 +42,10 @@ import lombok.extern.slf4j.Slf4j;
  * {@link #STATUS_OPEN}) are claimed atomically (an optimistic update writing
  * <code>LEASED_BY</code> and <code>LEASED_UNTIL</code>, the lease lasting one
  * <code>vanillabp.outbox.attempt-frequency</code>), so multiple instances
- * do not dispatch the same entry concurrently. <strong>A running dispatch renews its
- * lease</strong> ({@link DispatchLease}), so an entry travelling longer than that distance
- * stays the claim of the node carrying it instead of being taken by the next poll. A
+ * do not dispatch the same entry concurrently. <strong>A claimed entry renews its
+ * lease</strong> ({@link DispatchLease}), from the claim until its dispatch is over, so an
+ * entry which waits for its lane or travels longer than that distance stays the claim of
+ * the node carrying it instead of being taken by the next poll. A
  * dispatch which FAILS writes the next attempt itself, at the growing distance of
  * {@link PhaseTwoOutboxProperties#attemptDelay(int)}
  * - doubling per attempt up to <code>vanillabp.outbox.max-attempt-frequency</code>, so
@@ -797,24 +798,80 @@ public class JdbcPhaseTwoOutboxDispatcher {
    * order matters: an entry is claimed before it is handed over, so the claim of the
    * next poll - here or on another node - finds it leased and leaves it alone.
    * <p>
-   * A lane whose queue is full makes this thread wait, holding the connection it claims
-   * with. That is the back pressure of a backlog which arrives faster than it leaves, and
-   * waiting is what keeps the backlog in the table, where it can be read.
+   * A lane whose queue is full makes this thread wait. Waiting is the back pressure of a
+   * backlog which arrives faster than it leaves, and it is what keeps the backlog in the
+   * table, where it can be read. Every step of this thread borrows its connection for the
+   * moment it needs it, so the waiting holds none: a poller keeping one would take it from
+   * the lanes, which need a connection for every write of a dispatch.
    */
   private synchronized void poll() {
+
+    try {
+      for (final var entry : dueEntries()) {
+        handOverToItsLane(entry);
+      }
+      cleanupExpiredEntries();
+    } catch (final Exception e) {
+      log.error("Polling the VanillaBP phase-two outbox failed - will retry", e);
+    }
+
+  }
+
+  /**
+   * Claims the entry and hands it to the lane of its aggregate, with the renewal of its
+   * lease already running.
+   * <p>
+   * The renewal starts here and not where the lane picks the entry up, because between the
+   * two the entry waits in the lane's queue. A wait longer than the lease would let another
+   * node claim an entry this one is about to dispatch, and both would carry the operation
+   * out. The queue is short, so the wait is short as well, but short is not the same as
+   * impossible and nothing about the queue length is promised to anybody.
+   *
+   * @param entry The due entry, as the select read it
+   */
+  private void handOverToItsLane(
+      final Entry entry) throws SQLException {
+
+    final Entry claimed;
+    Connection connection = null;
+    try {
+      connection = connections.acquire();
+      claimed = claim(connection, entry);
+    } finally {
+      release(connection);
+    }
+    if (claimed == null) {
+      return;
+    }
+    final var held = lease.renewWhile(claimed.id(), this::renewLease);
+    try {
+      lanes.runInOrderOf(claimed.orderingKey(), () -> dispatch(claimed, held));
+    } catch (final RuntimeException | Error e) {
+      // nothing will dispatch this entry, so nothing would close the renewal either
+      held.close();
+      throw e;
+    }
+
+  }
+
+  private List<Entry> dueEntries() throws SQLException {
 
     Connection connection = null;
     try {
       connection = connections.acquire();
-      for (final var entry : loadDueEntries(connection)) {
-        final var claimed = claim(connection, entry);
-        if (claimed != null) {
-          lanes.runInOrderOf(claimed.orderingKey(), () -> dispatch(claimed));
-        }
-      }
+      return loadDueEntries(connection);
+    } finally {
+      release(connection);
+    }
+
+  }
+
+  private void cleanupExpiredEntries() throws SQLException {
+
+    Connection connection = null;
+    try {
+      connection = connections.acquire();
       cleanupDoneEntries(connection);
-    } catch (final Exception e) {
-      log.error("Polling the VanillaBP phase-two outbox failed - will retry", e);
     } finally {
       release(connection);
     }
@@ -845,9 +902,8 @@ public class JdbcPhaseTwoOutboxDispatcher {
 
   /**
    * Claims an entry using an optimistic update: writing this node's name and the end of
-   * the lease makes concurrent pollers (or other instances) skip the entry, and a dispatch
-   * which outlasts the lease renews it rather than losing the entry
-   * ({@link DispatchLease}).
+   * the lease makes concurrent pollers (or other instances) skip the entry, and the claimed
+   * entry renews the lease rather than losing it ({@link DispatchLease}).
    * <p>
    * What the claim won is then READ AGAIN, and the dispatch works with that. Between
    * the select of the due entries and this update the row may have been replaced by a
@@ -868,8 +924,9 @@ public class JdbcPhaseTwoOutboxDispatcher {
 
     final var leaseEnds = lease.endsAt();
     try (var statement = connection.prepareStatement(claimEntry)) {
-      // the claim leases the entry for one attempt-frequency and the dispatch renews it
-      // for as long as it runs, which is what keeps other pollers off it. The growing
+      // the claim leases the entry for one attempt-frequency and the renewal pushes that
+      // moment along until the dispatch is over, which is what keeps other pollers off it
+      // for as long as this node has something to do with it. The growing
       // backoff belongs to a FAILED dispatch and is written there, so a node which dies
       // mid-dispatch does not leave behind the long distance of an attempt nobody made
       statement.setString(1, lease.owner());
@@ -908,15 +965,25 @@ public class JdbcPhaseTwoOutboxDispatcher {
    * that long would make the pool the limit of how many entries may travel at once. The
    * lease is renewed the same way, one short write per tick on a connection borrowed and
    * given back, so holding an entry costs no connection either.
+   * <p>
+   * The renewal ends here, before the write which says how the attempt ended. That write
+   * needs a lease which has not run out, which the last renewal gave it, and not one which
+   * is still growing - and a renewal outliving the write would find the entry no longer
+   * OPEN and report a lease it never lost.
    *
    * @param entry The claimed entry
+   * @param held The renewal which started with the claim, closed when this attempt is over
    */
   private void dispatch(
-      final Entry entry) {
+      final Entry entry,
+      final DispatchLease.Held held) {
 
-    final var args = PhaseTwoCall.deserializeArgs(entry.serializedArgs());
-    final var payloadReference = args.get(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
-    try {
+    final String payloadReference;
+    // everything the attempt does is inside, so the renewal is let go whichever way the
+    // attempt ends - reading the arguments of the entry included
+    try (held) {
+      final var args = PhaseTwoCall.deserializeArgs(entry.serializedArgs());
+      payloadReference = args.get(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
       // an entry which was taken before is one whose dispatch may have reached the BPMS
       // already (recovered/retried): the router then runs the
       // START re-dispatch mitigation. The operation travels as its persisted name -
@@ -928,8 +995,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
       final var payload = payloadReference == null
           ? null
           : payloadStore.read(payloadReference);
-      dispatchRenewingTheLease(
-          entry.id(),
+      dispatchMeasuringTheWait(
           PhaseTwoCall
               .forDispatch(
                   entry.operation(), entry.workflowModuleId(), entry.bpmnProcessId(), entry
@@ -1074,32 +1140,6 @@ public class JdbcPhaseTwoOutboxDispatcher {
       statement.setString(2, entry.id());
     });
     poller.somethingIsDueAt(nextAttempt);
-
-  }
-
-  /**
-   * Runs the attempt with the lease of its entry being renewed, and lets the renewal go the
-   * moment the attempt is over.
-   * <p>
-   * The renewal covers the attempt and not the write which says how it ended. That write needs
-   * a lease which has not run out, which the last renewal gave it, and not one which is still
-   * growing - and a renewal outliving the mark would find the entry no longer OPEN and report a
-   * lease it never lost.
-   *
-   * @param entryId The entry being dispatched
-   * @param call The call to dispatch
-   * @param previouslyAttempted Whether a dispatch has had this entry before
-   * @param writtenAt When the entry was written
-   */
-  private void dispatchRenewingTheLease(
-      final String entryId,
-      final PhaseTwoCall call,
-      final boolean previouslyAttempted,
-      final Instant writtenAt) {
-
-    try (var held = lease.renewWhile(entryId, this::renewLease)) {
-      dispatchMeasuringTheWait(call, previouslyAttempted, writtenAt);
-    }
 
   }
 

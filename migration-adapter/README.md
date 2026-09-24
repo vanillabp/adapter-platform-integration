@@ -2171,6 +2171,23 @@ Decision 75 of this repository carries the reasoning, and `DispatchLanesTest` ho
 of one aggregate (`oneAggregateKeepsItsOrder`) next to two aggregates which really do run at
 the same time (`twoAggregatesRunAtTheSameTime`).
 
+**A claimed entry which waits for its lane is still held.** The poller claims an entry and
+hands it to the lane of its aggregate, and that lane may be busy with an earlier entry of the
+same workflow. The renewal of the lease therefore starts with the claim and not where the lane
+picks the entry up. A wait longer than one `attempt-frequency` would otherwise let another node
+claim it, and both nodes would carry the same operation out. One queue is short, so the wait is
+short as well, but nothing promises a queue length to anybody and the case leaves both nodes
+looking healthy. `AnEntryWaitingForItsLaneTest#aWaitingEntryKeepsItsLease` reads the lease of a
+queued entry moving, and `#anotherNodeLeavesAWaitingEntryAlone` puts a second dispatcher on the
+same table to watch it walk past.
+
+The poller borrows its connection per step for the same reason. A lane whose queue is full makes
+the poller wait, and a poller which held a connection through that wait would hold the connection
+the lane needs to write down how its dispatch ended. With a pool of one that is a deadlock, which
+is what `#aFullLaneDoesNotHoldTheConnectionItsDispatchNeeds` measures; with a bigger pool it is a
+connection missing where the work is. Every other write of this dispatcher already borrows one for
+the moment it needs it, so the poller is now the same shape as the rest.
+
 What the threads bought, measured on 2026-09-21 in the development container of this
 repository: 200 entries of 40 workflow aggregates, written in one transaction against H2 in
 memory, with a handler which takes 20 milliseconds because that is what a call to a BPMS
