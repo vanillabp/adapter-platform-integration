@@ -203,7 +203,7 @@ entry follows from its workflow aggregate, so two operations of one workflow kee
 while operations of different workflows travel at the same time. The MongoDB claim sorts by
 the moment an entry was written, because the lanes keep the order they are handed the entries
 in and a collection answers in an order of its own.
-`MongoEntriesOfOneAggregateKeepTheirOrderTest` holds both halves, and decision 76 in
+`MongoEntriesOfOneAggregateKeepTheirOrderTest` holds both halves, and decision 77 in
 `DECISIONS.md` carries the measurement behind it.
 
 On the JDBC store the claim reads its row once more after it won it. The select of the due

@@ -2539,7 +2539,7 @@ applications run, so the store which cannot name the adapter ids of its waiting 
 start is now the exception rather than the default. What decision 47 decided - that such a store
 says it at the first dispatch instead - is unchanged and still holds for gruelbox.
 
-### 76. The MongoDB stores dispatch on lanes too, and their claim reads the oldest entry first
+### 77. The MongoDB stores dispatch on lanes too, and their claim reads the oldest entry first
 
 Decision 75 left one question open: whether the MongoDB stores need the dispatch lanes the
 relational store got, or whether an application on MongoDB is held up by something else

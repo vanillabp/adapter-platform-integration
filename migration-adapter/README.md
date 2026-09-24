@@ -2170,7 +2170,7 @@ while one thread dispatched everything. Decision 75 of this repository carries t
 and `DispatchLanesTest` holds the order of one aggregate (`oneAggregateKeepsItsOrder`) next to
 two aggregates which really do run at the same time (`twoAggregatesRunAtTheSameTime`).
 
-The two MongoDB stores dispatch the same way, since decision 76 of this repository, and their
+The two MongoDB stores dispatch the same way, since decision 77 of this repository, and their
 claim sorts by the moment an entry was written. Without that sort the lanes would keep the
 order a collection happened to answer in, which is not the order the entries were written in
 once an attempt has moved a due time. The two `MongoEntriesOfOneAggregateKeepTheirOrderTest`
