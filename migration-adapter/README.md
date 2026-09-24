@@ -2282,6 +2282,18 @@ naming `blocked` alone. Where a table was created by an earlier version the star
 index which is missing and the statement which adds it, because creating an index on a large
 table is a decision with a lock on it.
 
+On MongoDB that check has a different shape. A collection is created by the first document, so
+`vanillabp.outbox.create-schema: false` leaves nothing to verify but the indexes. `MongoSchema`
+holds one list per collection - the outbox, its payloads and the delivery log - and both
+platforms create their indexes from those lists and hold an existing collection against the same
+lists. An application which looks after its own schema reads at startup which index each
+collection is missing, with the `createIndex` statement it can paste into `mongosh`. It is a
+warning and not the end of the boot. Every question is still answered, only it is read from the
+whole collection instead of from an index. The one index which is more than speed says so in the
+message. `AMissingMongoIndexIsNamedWithItsStatementTest` holds the message and the matching,
+`MongoIndexesAreCreatedOrReportedTest` both halves against a database, and
+`MongoIndexesOfAnApplicationManagingItsOwnSchemaTest` the same on Quarkus.
+
 `vanillabp.outbox.poll-interval` is the cap on that sleep, ten seconds by default, which is the
 rhythm every application had before. It exists for work a node wrote down before it went away,
 because nothing tells a sleeping node about another node's row; raising it is what buys the

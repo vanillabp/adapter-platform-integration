@@ -15,7 +15,6 @@ import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.FindOneAndUpdateOptions;
-import com.mongodb.client.model.IndexOptions;
 import com.mongodb.client.model.Indexes;
 import com.mongodb.client.model.Sorts;
 import com.mongodb.client.model.Updates;
@@ -23,6 +22,7 @@ import com.mongodb.client.model.Updates;
 import io.quarkus.runtime.StartupEvent;
 import io.smallrye.config.SmallRyeConfig;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
+import io.vanillabp.integration.adapter.migration.mongo.MongoSchema;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DispatchOutcome;
 import io.vanillabp.integration.adapter.migration.outbox.DispatchLanes;
 import io.vanillabp.integration.adapter.migration.outbox.DispatchLease;
@@ -31,6 +31,7 @@ import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterPropertiesMapper;
 import io.vanillabp.integration.runtime.deployment.VanillaBpDeploymentRunner;
+import io.vanillabp.integration.runtime.mongo.MongoIndexes;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import jakarta.annotation.PreDestroy;
 import jakarta.annotation.Priority;
@@ -73,14 +74,16 @@ import lombok.extern.slf4j.Slf4j;
  * <code>vanillabp.outbox.block-after-attempts</code> failed attempts it is marked
  * {@link MongoPhaseTwoOutbox#STATUS_BLOCKED} and has to be cleaned up manually.
  * <p>
- * Unless <code>vanillabp.outbox.create-schema</code> is disabled, a unique index on
- * the entries' <code>dedupKey</code> is created on startup. That field carries the
- * idempotency key only while the entry waits for its dispatch, so the index
+ * Unless <code>vanillabp.outbox.create-schema</code> is disabled, the indexes of
+ * {@link MongoSchema#OUTBOX_INDEXES} and {@link MongoSchema#PAYLOAD_INDEXES} are created
+ * on startup. The unique one over <code>dedupKey</code> is what deduplicates: that field
+ * carries the idempotency key only while the entry waits for its dispatch, so it
  * deduplicates the planned operations and not the ones which already reached the BPMS
- * (see {@link MongoPhaseTwoOutbox}); marking an entry DONE writes its id there. If the
- * schema is managed manually, create that index yourself. The sparse unique index
- * earlier versions created over <code>idempotencyKey</code> is dropped where it is
- * still there - it would deduplicate dispatched entries as well.
+ * (see {@link MongoPhaseTwoOutbox}); marking an entry DONE writes its id there. Where the
+ * application manages its schema itself, the startup reads what the collections carry and
+ * names every index which is missing, with the statement which creates it. The sparse
+ * unique index earlier versions created over <code>idempotencyKey</code> is dropped where
+ * it is still there - it would deduplicate dispatched entries as well.
  * <p>
  * The database is taken from <code>quarkus.mongodb.database</code> - the same
  * database the application's aggregates live in.
@@ -179,32 +182,18 @@ public class MongoPhaseTwoOutboxDispatcher {
       return;
     }
 
+    // what each of them is read by is described once, in the core, because the Spring Boot
+    // integration creates the same ones - see decision 76 in the repository's DECISIONS.md
+    // for the one over the payload references
     if (properties.isCreateSchema()) {
-      outboxCollection().createIndex(
-          Indexes.ascending("dedupKey"),
-          new IndexOptions().unique(true));
-      // what this dispatcher asks on every wake-up, and two indexes rather than one: both questions
-      // filter the same status and order by a different moment, so an index over both moments would
-      // serve neither. Without them each question reads the whole collection, which costs more the
-      // longer the application has been running
-      outboxCollection().createIndex(Indexes.ascending("status", "nextAttemptAt"));
-      outboxCollection().createIndex(Indexes.ascending("status", "doneAt"));
-      // the third moment of the same shape: what the age of the oldest waiting entry is
-      // read by, once per collection of the metrics
-      outboxCollection().createIndex(Indexes.ascending("status", "createdAt"));
-      // what the housekeeping asks the entries before it removes a payload by age: which of the
-      // expired ones an entry still names. Sparse, because only an entry which carries a payload
-      // has the field, and that is the rare one. Without the index the question reads the whole
-      // collection, and it is asked on every poll for as long as one entry is stuck - see
-      // decision 76 in the repository's DECISIONS.md
-      outboxCollection()
-          .createIndex(
-              Indexes.ascending("args.%s".formatted(PhaseTwoCall.ARG_PAYLOAD_REFERENCE)),
-              new IndexOptions().sparse(true));
-      // what the housekeeping of the payloads deletes along - without it that delete
-      // reads every payload ever written
-      payloadCollection().createIndex(Indexes.ascending("createdAt"));
+      MongoIndexes.createOn(outboxCollection(), MongoSchema.OUTBOX_INDEXES);
+      MongoIndexes.createOn(payloadCollection(), MongoSchema.PAYLOAD_INDEXES);
       dropLegacyIdempotencyKeyIndex();
+    } else {
+      // the collections themselves need no check: MongoDB creates one with the first
+      // document, so what an application managing its own schema owes are the indexes
+      MongoIndexes.reportMissingOn(outboxCollection(), MongoSchema.OUTBOX_INDEXES);
+      MongoIndexes.reportMissingOn(payloadCollection(), MongoSchema.PAYLOAD_INDEXES);
     }
 
     lease = new DispatchLease("vanillabp-outbox-lease", properties.getAttemptFrequency());

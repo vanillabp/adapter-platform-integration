@@ -136,16 +136,19 @@ a workflow is waiting for asks the same object the process services write throug
   the delivery key (the document ID gives
   uniqueness). A duplicate is detected by a pre-check read: inside a MongoDB transaction
   a duplicate-key error would abort the whole transaction, the aggregate changes
-  included. Its auto-configuration creates a second index, on `taskId`, which is what
-  `recordOfTask` reads by, on the same collection the log writes to -
-  `MongoDeliveryCollectionNameTest` renames it and asks for both.
+  included. Its auto-configuration creates the indexes of `MongoSchema.DELIVERY_INDEXES`
+  on the same collection the log writes to, the one over `taskId` among them, which is what
+  `recordOfTask` reads by - `MongoDeliveryCollectionNameTest` renames the collection and
+  asks for them.
 - Both come with an auto-configuration of their own
   (`vanillabp.outbox.jdbc.enabled` / `.mongo.enabled`), create their schema unless
   `vanillabp.outbox.create-schema` is disabled and delete expired records per
   `vanillabp.outbox.retention` (`cleanUpExpiredRecords`, scheduled by the core's
-  `TaskDeliveryRetentionCleanup`). Table and index are created from a
+  `TaskDeliveryRetentionCleanup`). Table and indexes are created from a
   `SmartInitializingSingleton`, not while the bean is built - the DDL must not
-  materialize the data source before the application's configuration is complete.
+  materialize the data source before the application's configuration is complete. Where the
+  application looks after its own schema, the MongoDB half names the indexes it is missing
+  instead of creating them.
 - The same run refreshes the records of the tasks which are still open: the core
   collects the keys the BPMS redelivered, `cleanUpExpiredRecords` writes them before it
   deletes anything, and the JDBC store batches while the MongoDB one bulk-writes.

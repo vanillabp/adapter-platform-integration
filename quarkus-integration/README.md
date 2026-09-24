@@ -390,12 +390,13 @@ two answers as soon as one of them changes. `ExtensionEnablementTest` injects it
   resource, so the record is written
   immediately and deleted again from an interposed synchronization when the transaction
   ends in anything but a commit - the same best-effort compensation `MongoPhaseTwoOutbox`
-  does for its entries. Next to the index the retention reads it creates one on `taskId`,
-  which is what `recordOfTask` reads by. `MongoTaskDeliveryLogTest` holds the record and
+  does for its entries. It creates the indexes of `MongoSchema.DELIVERY_INDEXES`, the one
+  the retention reads and the one over `taskId` which `recordOfTask` reads by among them. `MongoTaskDeliveryLogTest` holds the record and
   its compensation (`aRecordIsWrittenAndReadBack`, `aRolledBackTransactionLeavesNoRecord`,
   `theRecordOfATaskAnswersTheElection`, `expiredRecordsAreDeleted`).
 - Both observe the `StartupEvent` to create their schema (unless
-  `vanillabp.outbox.create-schema` is disabled) and to start the core's
+  `vanillabp.outbox.create-schema` is disabled, in which case the MongoDB half names the
+  indexes the application still owes) and to start the core's
   `TaskDeliveryRetentionCleanup`, which calls `cleanUpExpiredRecords` per
   `vanillabp.outbox.retention`.
 - The same run refreshes the records of the tasks which are still open: the core
