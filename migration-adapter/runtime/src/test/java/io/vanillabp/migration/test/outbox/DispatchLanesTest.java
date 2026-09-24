@@ -1,6 +1,7 @@
 package io.vanillabp.migration.test.outbox;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -8,6 +9,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.AfterEach;
@@ -21,7 +23,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 /**
  * The two promises an outbox makes as soon as it dispatches on more than one thread: what
  * belongs to one workflow aggregate keeps its order, and what belongs to different ones
- * runs at the same time.
+ * runs at the same time. And what the handover answers, which is how a caller learns that
+ * a lane which is stopping will never run its work.
  * <p>
  * Both are asserted here rather than over a database, because a test which starts
  * workflows and waits for a BPMS double proves neither: a correct implementation and one
@@ -146,6 +149,39 @@ public class DispatchLanesTest {
         List.of("test-backpressure-0"),
         ranOn.stream().distinct().toList(),
         "something ran outside the lane of its aggregate");
+
+  }
+
+  @Test
+  @DisplayName("A lane which is stopping says that it took nothing")
+  public void aStoppingLaneSaysThatItTookNothing() {
+
+    lanes = new DispatchLanes("test-shutdown", 1);
+    final var ran = new AtomicBoolean();
+    // the lane the work is handed to below has stopped, which is what a node shutting down
+    // does while its poller is still handing entries in
+    lanes.stop();
+
+    final var taken = lanes.runInOrderOf("aggregate-1", () -> ran.set(true));
+
+    assertFalse(taken, "the caller was told that a stopped lane had taken its work");
+    assertFalse(ran.get(), "a stopped lane ran the work it was handed");
+
+  }
+
+  @Test
+  @DisplayName("A lane which is running says that it took the work")
+  public void aRunningLaneSaysThatItTookTheWork() throws Exception {
+
+    lanes = new DispatchLanes("test-accepted", 1);
+    final var ranIt = new CountDownLatch(1);
+
+    final var taken = lanes.runInOrderOf("aggregate-1", ranIt::countDown);
+
+    assertTrue(taken, "the caller was told that the lane had not taken its work");
+    assertTrue(
+        ranIt.await(UNTIL_A_LANE_COUNTS_AS_STUCK, TimeUnit.SECONDS),
+        "the lane said it took the work and never ran it");
 
   }
 

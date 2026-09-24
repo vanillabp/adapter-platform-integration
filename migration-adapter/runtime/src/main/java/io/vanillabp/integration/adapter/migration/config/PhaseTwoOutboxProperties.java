@@ -147,18 +147,16 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * How many entries the JDBC outbox dispatches at the same time. Which of the threads
-   * takes an entry is decided by the workflow aggregate, so two operations of one
-   * workflow keep the order they were written in while operations of different workflows
-   * travel at the same time (see
+   * How many entries an outbox of VanillaBP's own dispatches at the same time - the JDBC one
+   * and the MongoDB one of each platform. Which of the threads takes an entry is decided by
+   * the workflow aggregate, so two operations of one workflow keep the order they were
+   * written in while operations of different workflows travel at the same time (see
    * {@link io.vanillabp.integration.adapter.migration.outbox.DispatchLanes}).
    * <p>
    * Four of them, which is small on purpose. Everything a dispatch does costs a database
    * connection and a call to the BPMS, so a large number here only moves the limit into
    * the connection pool, where it is harder to see. Raise it where the BPMS is slow
    * enough that the threads wait for it rather than for the database.
-   * <p>
-   * The MongoDB stores dispatch on one thread and are unaffected by this.
    * <p>
    * Key <code>vanillabp.outbox.dispatch-threads</code>, four threads by default. Fewer
    * than one is refused with a message naming the key.

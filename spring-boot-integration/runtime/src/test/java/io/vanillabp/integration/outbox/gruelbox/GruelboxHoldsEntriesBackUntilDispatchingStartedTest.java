@@ -25,6 +25,7 @@ import com.gruelbox.transactionoutbox.TransactionOutbox;
 import com.gruelbox.transactionoutbox.TransactionOutboxListener;
 
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
+import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.spi.PhaseTwoCall;
@@ -63,6 +64,13 @@ public class GruelboxHoldsEntriesBackUntilDispatchingStartedTest {
   private TransactionOutbox transactionOutbox;
 
   private GruelboxPhaseTwoOutbox testee;
+
+  /**
+   * Where a payload would go. No call of this test carries one, and the store and the
+   * dispatcher are built with it anyway: the place a payload goes belongs to both of them
+   * the way gruelbox' table does.
+   */
+  private JdbcPhaseTwoPayloadStore payloadStore;
 
   private GruelboxPhaseTwoOutboxDispatcher dispatcher;
 
@@ -107,11 +115,8 @@ public class GruelboxHoldsEntriesBackUntilDispatchingStartedTest {
             context.getBeanProvider(VanillaBpMetrics.class),
             context.getBeanProvider(TransactionOutboxListener.class),
             submitter);
-    // no call of this test carries a payload, and the store is built with one anyway:
-    // the place a payload goes belongs to the outbox the way gruelbox' table does
-    testee = new GruelboxPhaseTwoOutbox(
-        transactionOutbox, dataSource, TABLE, configuration
-            .vanillaBpGruelboxPhaseTwoPayloadStore(dataSource, properties));
+    payloadStore = configuration.vanillaBpGruelboxPhaseTwoPayloadStore(dataSource, properties);
+    testee = new GruelboxPhaseTwoOutbox(transactionOutbox, dataSource, TABLE, payloadStore);
     transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
 
   }
@@ -135,7 +140,7 @@ public class GruelboxHoldsEntriesBackUntilDispatchingStartedTest {
   private GruelboxPhaseTwoOutboxDispatcher aDispatcher() {
 
     dispatcher = new GruelboxPhaseTwoOutboxDispatcher(
-        transactionOutbox, properties.getOutbox(), submitter, testee);
+        transactionOutbox, properties.getOutbox(), submitter, testee, payloadStore);
     return dispatcher;
 
   }

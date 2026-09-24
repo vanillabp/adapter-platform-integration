@@ -2140,8 +2140,8 @@ dispatch, `PhaseTwoJpaContextTest` and `PhaseTwoMongoContextTest` what an applic
 there.
 
 **What phase two must not do: wait.** One thread dispatches the entries of one workflow
-aggregate, so whatever an entry spends there is spent by every other entry of that aggregate,
-and on the MongoDB stores by every entry of the node. The case which used to spend the most is a workflow its BPMS has not made searchable
+aggregate, so whatever an entry spends there is spent by every other entry of that aggregate.
+The case which used to spend the most is a workflow its BPMS has not made searchable
 yet: the election waited out the adapter's `workflowVisibilityDelay`, ten seconds on Camunda 8,
 and a burst of "start, then correlate" pairs stalled in batches. Such an entry goes back to the
 store with that window as its due time (`PhaseTwoRetryLater`) and the thread takes the next one.
@@ -2156,9 +2156,9 @@ dispatched while the other one waits, and the bound which finally blocks it.
 on the dispatching thread instead - what that cost is decision 49.
 
 **Several entries leave at the same time, and the workflow aggregate says on which thread.**
-The JDBC store dispatches on `vanillabp.outbox.dispatch-threads` threads, four of them by
-default, and `DispatchLanes` picks the one for an entry from the workflow module, the BPMN
-process and the aggregate ID. Two operations of one workflow therefore leave in the order they
+Every store VanillaBP writes itself dispatches on `vanillabp.outbox.dispatch-threads` threads,
+four of them by default, and `DispatchLanes` picks the one for an entry from the workflow
+module, the BPMN process and the aggregate ID. Two operations of one workflow therefore leave in the order they
 were written, while operations of different workflows leave at the same time. An entry which
 names no aggregate, as a broadcast signal does, is keyed by its BPMN process instead. Handing
 the next entry to whichever thread happens to be free would be simpler and would lose that
@@ -2166,10 +2166,17 @@ order, and nothing downstream would notice until a customer did. The number of t
 bounded because an unbounded one only moves the limit into the connection pool, where it is
 harder to see. What this does NOT order is an entry whose dispatch failed: it waits for its
 backoff and the next entry of the same aggregate passes it in the meantime, exactly as it did
-while one thread dispatched everything. The MongoDB stores still dispatch on one thread.
-Decision 75 of this repository carries the reasoning, and `DispatchLanesTest` holds the order
-of one aggregate (`oneAggregateKeepsItsOrder`) next to two aggregates which really do run at
-the same time (`twoAggregatesRunAtTheSameTime`).
+while one thread dispatched everything. Decision 75 of this repository carries the reasoning,
+and `DispatchLanesTest` holds the order of one aggregate (`oneAggregateKeepsItsOrder`) next to
+two aggregates which really do run at the same time (`twoAggregatesRunAtTheSameTime`).
+
+The two MongoDB stores dispatch the same way, since decision 77 of this repository, and their
+claim sorts by the moment an entry was written. Without that sort the lanes would keep the
+order a collection happened to answer in, which is not the order the entries were written in
+once an attempt has moved a due time. The two `MongoEntriesOfOneAggregateKeepTheirOrderTest`
+classes hold both halves per platform: ten operations of one workflow arriving in the order
+they were written, and two operations of different workflows which really are inside the
+adapter at the same time.
 
 **A claimed entry which waits for its lane is still held.** The poller claims an entry and
 hands it to the lane of its aggregate, and that lane may be busy with an earlier entry of the
@@ -2188,17 +2195,43 @@ is what `#aFullLaneDoesNotHoldTheConnectionItsDispatchNeeds` measures; with a bi
 connection missing where the work is. Every other write of this dispatcher already borrows one for
 the moment it needs it, so the poller is now the same shape as the rest.
 
+The housekeeping at the end of a poll is the same shape too, and it took a second pass to get
+there. Deleting the dispatched entries, reading which payloads are old enough, asking the entries
+which of them they still name and deleting the rest are four steps, each on a connection borrowed
+and given back. Holding one across them means waiting for a connection the same thread is holding,
+because the payload table and the outbox table are read by two different classes.
+`JdbcPhaseTwoPayloadStoreTest#theSweepHoldsNoConnectionWhileItAsksTheEntries` hands the store a
+database which refuses a second connection, and
+`#aFullLaneDoesNotHoldTheConnectionItsDispatchNeeds` runs the real payload store instead of one
+with its housekeeping taken out.
+
+**A lane which is stopping says that it took nothing.** A node shuts down while its poller is
+still handing claimed entries in, and those entries used to be dropped without a word: the lane
+returned as if it had taken the work, and the renewal of the entry's lease kept ticking until
+`DispatchLease.stop()` came. Whether that happened in time was the order of two calls in
+`stop()` and nothing more. `runInOrderOf` answers now whether a lane took the work, the poller
+closes the renewal itself where none did, and it writes one line naming the operation which
+waits. Nothing is lost either way: the entry stays `OPEN` and keeps its lease, and the next poll
+of this node or of another one takes it once that lease runs out, so the cost is one
+`attempt-frequency` of delay. `DispatchLanesTest#aStoppingLaneSaysThatItTookNothing` holds the
+answer.
+
 **A node which lost its entry writes nothing.** A lease can still be lost while its dispatch
 runs: the node was away long enough for the claim to run out and another node took the entry
 over. The renewal notices it, because its write matches no row, and says so in the log. The
-dispatch itself runs to its end and its result is dropped. Every write of the JDBC store which
-says how an attempt ended carries `LEASED_BY` in its condition, so only the node holding the entry
-writes one.
+dispatch itself runs to its end and its result is dropped. Every write which says how an attempt
+ended carries the holder of the lease in its condition, so only the node holding the entry writes
+one: `LEASED_BY` on the JDBC store, `leasedBy` on the two MongoDB stores.
 Without that condition the late node could block an entry the other had just finished, and
 somebody would be asked to repair an operation which had succeeded.
 `ADispatchWhichLostItsLeaseTest` puts two dispatchers on one database and takes the lease of the
 slow one away with an `UPDATE`: the second node dispatches the entry, the first says what it lost,
 and what the table holds afterwards is what the second node wrote.
+`AMongoDispatchWhichLostItsLeaseTest` does the same with two dispatchers on one MongoDB
+collection. On Quarkus, `MongoADispatchWhichLostItsLeaseTest` plays the second node itself,
+because an application holds one dispatcher and a second real one would need a second
+application. What that test writes is what another node's dispatch leaves behind, and the write
+which has to be refused is the real dispatcher's.
 
 What the threads bought, measured on 2026-09-21 in the development container of this
 repository: 200 entries of 40 workflow aggregates, written in one transaction against H2 in

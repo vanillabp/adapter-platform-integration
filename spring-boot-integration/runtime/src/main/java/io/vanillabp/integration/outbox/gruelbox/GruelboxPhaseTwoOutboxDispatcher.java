@@ -73,10 +73,9 @@ public class GruelboxPhaseTwoOutboxDispatcher {
   private final TransactionOutbox transactionOutbox;
 
   /**
-   * The store this dispatcher polls, which is what answers when the next flush has
-   * something to do. <code>null</code> for a caller which did not hand one over - the
-   * poller then keeps to the configured cap, the rhythm every application had before the
-   * sleeping was there.
+   * The store this dispatcher polls. It answers when the next flush has something to do
+   * and which payloads its entries still name. Never <code>null</code>: both questions
+   * are asked on every poll.
    */
   private final GruelboxPhaseTwoOutbox outbox;
 
@@ -89,61 +88,28 @@ public class GruelboxPhaseTwoOutboxDispatcher {
   private final DueEntryPoller poller;
 
   /**
-   * How long a payload nobody removed is kept, and where those are removed from.
-   * <code>null</code> for a dispatcher built without a payload store - nothing is
-   * house-kept then, and the same holds for a dispatcher without the store above, which
-   * is what answers which payloads the entries still name.
+   * Where the payloads of the entries a flush finished are removed. Never
+   * <code>null</code>: a dispatcher is built with the place it house-keeps, the way the
+   * store is built with the place it writes to.
    */
   private final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore;
 
   private final java.time.Duration retention;
 
   /**
-   * Polls an outbox which dispatches right after a commit, whoever built it. Use the
-   * constructor taking VanillaBP's submitter to have the entries of the window before
-   * the deployment wait for the first poll.
-   *
-   * @param transactionOutbox The outbox to poll
-   * @param properties The bound <code>vanillabp.outbox</code> section
-   */
-  public GruelboxPhaseTwoOutboxDispatcher(
-      final TransactionOutbox transactionOutbox,
-      final PhaseTwoOutboxProperties properties) {
-
-    this(transactionOutbox, properties, null, null, null);
-
-  }
-
-  /**
-   * Polls the outbox and holds its submitter back until it does. Building this
-   * dispatcher is what closes the submitter's gate, so a submitter never waits for a
-   * dispatcher which does not exist (see
+   * Polls the outbox, holds its submitter back until it does and house-keeps the
+   * payloads nobody removed. Building this dispatcher is what closes the submitter's
+   * gate, so a submitter never waits for a dispatcher which does not exist (see
    * {@link GruelboxRedispatchAwareSubmitter}).
    *
    * @param transactionOutbox The outbox to poll
    * @param properties The bound <code>vanillabp.outbox</code> section
-   * @param submitter The submitter the outbox was built with
-   * @param outbox The store, asked when the next flush has something to do
-   */
-  public GruelboxPhaseTwoOutboxDispatcher(
-      final TransactionOutbox transactionOutbox,
-      final PhaseTwoOutboxProperties properties,
-      final GruelboxRedispatchAwareSubmitter submitter,
-      final GruelboxPhaseTwoOutbox outbox) {
-
-    this(transactionOutbox, properties, submitter, outbox, null);
-
-  }
-
-  /**
-   * Polls the outbox, holds its submitter back until it does and house-keeps the
-   * payloads nobody removed.
-   *
-   * @param transactionOutbox The outbox to poll
-   * @param properties The bound <code>vanillabp.outbox</code> section
-   * @param submitter The submitter the outbox was built with
-   * @param outbox The store, asked when the next flush has something to do
+   * @param submitter The submitter the outbox was built with, <code>null</code> where
+   *          gruelbox was built with a submitter of somebody else's
+   * @param outbox The store, asked when the next flush has something to do and which
+   *          payloads its entries still name
    * @param payloadStore Where the payloads of this outbox lie
+   * @throws IllegalArgumentException If the store or the payload store is missing
    */
   public GruelboxPhaseTwoOutboxDispatcher(
       final TransactionOutbox transactionOutbox,
@@ -152,6 +118,8 @@ public class GruelboxPhaseTwoOutboxDispatcher {
       final GruelboxPhaseTwoOutbox outbox,
       final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore) {
 
+    requireOutbox(outbox);
+    requirePayloadStore(payloadStore);
     this.transactionOutbox = transactionOutbox;
     this.submitter = submitter;
     this.outbox = outbox;
@@ -166,14 +134,62 @@ public class GruelboxPhaseTwoOutboxDispatcher {
   }
 
   /**
-   * When the next flush has something to do, or <code>null</code> where the store cannot
-   * say.
+   * Refuses a dispatcher which cannot read the store it polls.
+   *
+   * @param outbox The store this dispatcher polls
+   */
+  private static void requireOutbox(
+      final GruelboxPhaseTwoOutbox outbox) {
+
+    if (outbox != null) {
+      return;
+    }
+    throw new IllegalArgumentException(
+        """
+            This gruelbox phase-two outbox dispatcher was built without the store it polls! The \
+            store says when the next flush has something to do, so the poller sleeps until then \
+            instead of asking at the configured cap, and it says which payloads its entries still \
+            name, which is what keeps the housekeeping from removing the bytes of an entry that is \
+            still waiting. Pass a GruelboxPhaseTwoOutbox to the constructor of this class, or let \
+            VanillaBP's GruelboxPhaseTwoOutboxAutoConfiguration build the dispatcher.""");
+
+  }
+
+  /**
+   * Refuses a dispatcher which has no payloads to house-keep.
+   * <p>
+   * The store beside this class is built with the payload store as well, and for the
+   * reason it is asked here: a check which waits for the right call reports a setup
+   * problem while the application is working, and the dispatcher is built where the
+   * answer is already known.
+   *
+   * @param payloadStore Where the payloads of this outbox lie
+   */
+  private static void requirePayloadStore(
+      final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore) {
+
+    if (payloadStore != null) {
+      return;
+    }
+    throw new IllegalArgumentException(
+        """
+            This gruelbox phase-two outbox dispatcher was built without a payload store! Every \
+            flush removes the bytes of the entries it finished, and with them what a crash \
+            between the two writes of a schedule left behind. A dispatcher without that store \
+            house-keeps nothing, so the payload table grows for as long as the application runs \
+            and no error says so. Pass a PhaseTwoPayloadStore to the constructor of this class, \
+            or let VanillaBP's GruelboxPhaseTwoOutboxAutoConfiguration build the dispatcher.""");
+
+  }
+
+  /**
+   * When the next flush has something to do.
    *
    * @return The moment of the earliest entry gruelbox still owes something to
    */
   private java.time.Instant earliestDueAt() {
 
-    return outbox == null ? null : outbox.earliestDueAt();
+    return outbox.earliestDueAt();
 
   }
 
@@ -227,9 +243,7 @@ public class GruelboxPhaseTwoOutboxDispatcher {
     // the payloads of the entries the flush deleted, and what a crash between the two
     // writes of a schedule left behind. What an entry still names stays with it,
     // whether that entry waits or is blocked, and this flush was going to happen anyway
-    if ((payloadStore != null) && (outbox != null)) {
-      payloadStore.removeOrphansOlderThan(java.time.Instant.now().minus(retention), outbox::stillNaming);
-    }
+    payloadStore.removeOrphansOlderThan(java.time.Instant.now().minus(retention), outbox::stillNaming);
 
   }
 

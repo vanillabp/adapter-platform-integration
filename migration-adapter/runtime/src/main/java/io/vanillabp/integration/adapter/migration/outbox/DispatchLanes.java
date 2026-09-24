@@ -3,6 +3,7 @@ package io.vanillabp.integration.adapter.migration.outbox;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
@@ -90,6 +91,11 @@ public class DispatchLanes {
    * {@code CallerRunsPolicy} would do, and it is exactly what must not happen here - the
    * entry would then run beside the lane which holds the earlier entry of the same
    * aggregate.
+   * <p>
+   * A lane which is stopping, and a wait for a free place which is interrupted, both mean
+   * that this work will never run. The handover says so instead of returning as if the work
+   * had been taken: the caller has opened things for it - the renewal of an outbox entry's
+   * lease is the case - and only it can close them.
    *
    * @param threadName The name of this lane's thread
    * @return The executor of this lane
@@ -106,12 +112,14 @@ public class DispatchLanes {
             rejected,
             rejectedBy) -> {
           if (rejectedBy.isShutdown()) {
-            return;
+            throw new RejectedExecutionException("the lane '%s' is stopping".formatted(threadName));
           }
           try {
             rejectedBy.getQueue().put(rejected);
           } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
+            throw new RejectedExecutionException(
+                "the wait for a free place in the lane '%s' was interrupted".formatted(threadName), e);
           }
         });
 
@@ -148,17 +156,27 @@ public class DispatchLanes {
   /**
    * Runs the work on the lane of the given key, after everything handed in for that key
    * before it. Waits where the lane's queue is full.
+   * <p>
+   * The answer is what a caller which opened something for this work reads: a lane which
+   * is stopping runs nothing, and the caller closes what it opened instead of leaving it to
+   * whoever stops next.
    *
    * @param key What the work is ordered by, usually the workflow aggregate
    * @param work What to run
+   * @return Whether a lane took the work
    */
-  public void runInOrderOf(
+  public boolean runInOrderOf(
       final String key,
       final Runnable work) {
 
-    lanes
-        .get(laneOf(key, lanes.size()))
-        .execute(work);
+    try {
+      lanes
+          .get(laneOf(key, lanes.size()))
+          .execute(work);
+      return true;
+    } catch (final RejectedExecutionException e) {
+      return false;
+    }
 
   }
 

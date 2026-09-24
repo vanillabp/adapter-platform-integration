@@ -36,7 +36,6 @@ import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStor
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.spi.PhaseOperation;
-import io.vanillabp.integration.spi.PhaseTwoPayloadStore.EntriesNamingPayloads;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackgroundOutput;
 
@@ -288,49 +287,10 @@ public class AnEntryWaitingForItsLaneTest {
       final PhaseTwoRouter router,
       final String table) {
 
-    return dispatcherOf(
-        connections, properties, router, table, new JdbcPhaseTwoPayloadStore(
-            connections, table + JdbcPhaseTwoPayloadStore.TABLE_NAME_SUFFIX));
-
-  }
-
-  private JdbcPhaseTwoOutboxDispatcher dispatcherOf(
-      final JdbcConnectionAccess connections,
-      final PhaseTwoOutboxProperties properties,
-      final PhaseTwoRouter router,
-      final String table,
-      final JdbcPhaseTwoPayloadStore payloads) {
-
+    final var payloads = new JdbcPhaseTwoPayloadStore(
+        connections, table + JdbcPhaseTwoPayloadStore.TABLE_NAME_SUFFIX);
     return new JdbcPhaseTwoOutboxDispatcher(
         connections, properties, table, payloads, () -> router, () -> VanillaBpMetrics.NONE, "JdbcPhaseTwoOutbox");
-
-  }
-
-  /**
-   * The payload store of the test which lends out one connection, with its housekeeping
-   * taken out. The real store borrows a connection of its own while the poller holds the
-   * one it cleans up with, and that second question would hide the one this test asks.
-   *
-   * @param connections The database this test works on
-   * @param table The outbox table whose payloads these are
-   * @return A payload store which asks nothing while the entries are deleted
-   */
-  private static JdbcPhaseTwoPayloadStore payloadsWithoutHousekeeping(
-      final JdbcConnectionAccess connections,
-      final String table) {
-
-    return new JdbcPhaseTwoPayloadStore(connections, table + JdbcPhaseTwoPayloadStore.TABLE_NAME_SUFFIX) {
-
-      @Override
-      public int removeOrphansOlderThan(
-          final Instant threshold,
-          final EntriesNamingPayloads entries) {
-
-        return 0;
-
-      }
-
-    };
 
   }
 
@@ -559,9 +519,10 @@ public class AnEntryWaitingForItsLaneTest {
     // the default lease, so no renewal competes for the one connection while the entries
     // travel - what this test is about is the poller, not the renewal
     properties.setAttemptFrequency(Duration.ofSeconds(30));
-    final var dispatcher = dispatcherOf(
-        connections, properties, aRouterWhoseAdapterReturnsAtOnce(), table, payloadsWithoutHousekeeping(
-            connections, table));
+    // the real payload store, housekeeping and all: every step of the cleanup borrows the
+    // one connection and gives it back, so the store the application runs is what this
+    // test measures
+    final var dispatcher = dispatcherOf(connections, properties, aRouterWhoseAdapterReturnsAtOnce(), table);
     dispatcher.prepareSchema();
     final var entries = entriesOfOneAggregate(whatTheTestReadsWith, table, MORE_THAN_ONE_QUEUE_HOLDS);
 

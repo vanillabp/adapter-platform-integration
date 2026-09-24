@@ -199,26 +199,58 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
 
   }
 
+  /**
+   * {@inheritDoc}
+   * <p>
+   * Each of the three steps borrows a connection and gives it back before the next one
+   * starts. The middle one is a question to the outbox entries, and answering it is a read
+   * of their table on a connection of its own - so a store holding one across the whole
+   * housekeeping would wait for a connection it is holding itself. On a pool of one that is
+   * a deadlock.
+   */
   @Override
   public int removeOrphansOlderThan(
       final Instant threshold,
       final EntriesNamingPayloads entries) {
 
-    Connection connection = null;
     try {
-      connection = connectionAccess.acquire();
-      final var expired = expiredReferences(connection, threshold);
+      final var expired = expiredReferences(threshold);
       if (expired.isEmpty()) {
         return 0;
       }
       final var orphans = orphansAmong(expired, entries);
-      return orphans.isEmpty() ? 0 : removePayloads(connection, orphans);
+      if (orphans.isEmpty()) {
+        return 0;
+      }
+      final var removed = removePayloads(orphans);
+      logRemovedOrphans(removed);
+      return removed;
     } catch (final SQLException e) {
       log.warn("Could not remove the orphaned payloads of table '{}'", tableName, e);
       return 0;
-    } finally {
-      release(connection);
     }
+
+  }
+
+  /**
+   * Says that bytes were thrown away, at DEBUG and only when there were any. An orphan is a
+   * payload whose outbox entry never reached the table, so nothing was lost by removing it, and
+   * the normal count is zero. Somebody who finds payloads growing wants to see this line, and
+   * nobody else does.
+   *
+   * @param removed How many payloads went
+   */
+  private void logRemovedOrphans(
+      final int removed) {
+
+    if (removed == 0) {
+      return;
+    }
+    log
+        .debug(
+            "Removed {} payload(s) from table '{}' which no outbox entry names any more",
+            removed,
+            tableName);
 
   }
 
@@ -229,22 +261,26 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
    * beyond the retention either belongs to an entry which waits or belongs to no entry
    * at all.
    *
-   * @param connection The connection to be used
    * @param threshold Payloads written before this moment
    * @return Their references
    */
   private List<String> expiredReferences(
-      final Connection connection,
       final Instant threshold) throws SQLException {
 
     final var references = new ArrayList<String>();
-    try (var statement = connection.prepareStatement(selectExpiredReferences)) {
-      statement.setTimestamp(1, Timestamp.from(threshold));
-      try (var resultSet = statement.executeQuery()) {
-        while (resultSet.next()) {
-          references.add(resultSet.getString(1));
+    Connection connection = null;
+    try {
+      connection = connectionAccess.acquire();
+      try (var statement = connection.prepareStatement(selectExpiredReferences)) {
+        statement.setTimestamp(1, Timestamp.from(threshold));
+        try (var resultSet = statement.executeQuery()) {
+          while (resultSet.next()) {
+            references.add(resultSet.getString(1));
+          }
         }
       }
+    } finally {
+      release(connection);
     }
     return references;
 
@@ -280,20 +316,24 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
    * are as many of them as an application lost writes, which is none while nothing goes
    * wrong.
    *
-   * @param connection The connection to be used
    * @param references The payloads to delete
    * @return How many rows were deleted
    */
   private int removePayloads(
-      final Connection connection,
       final List<String> references) throws SQLException {
 
     var removed = 0;
-    try (var statement = connection.prepareStatement(deletePayload)) {
-      for (final var reference : references) {
-        statement.setString(1, reference);
-        removed += statement.executeUpdate();
+    Connection connection = null;
+    try {
+      connection = connectionAccess.acquire();
+      try (var statement = connection.prepareStatement(deletePayload)) {
+        for (final var reference : references) {
+          statement.setString(1, reference);
+          removed += statement.executeUpdate();
+        }
       }
+    } finally {
+      release(connection);
     }
     return removed;
 
