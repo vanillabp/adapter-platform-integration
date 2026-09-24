@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
+import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema;
 import io.vanillabp.integration.spi.TaskDelivery;
 import lombok.extern.slf4j.Slf4j;
@@ -50,9 +51,31 @@ import lombok.extern.slf4j.Slf4j;
 public class JdbcTaskDeliveryStore {
 
   /**
-   * The default name of the table holding the records.
+   * The default name of the table holding the records, used where the application names
+   * none (<code>vanillabp.outbox.jdbc.delivery-table</code>).
    */
   public static final String DEFAULT_TABLE_NAME = "VANILLABP_TASK_DELIVERY";
+
+  /**
+   * Resolves the configured table name
+   * (<code>vanillabp.outbox.jdbc.delivery-table</code>, falling back to
+   * {@link #DEFAULT_TABLE_NAME}). Both platforms ask this method instead of reading the
+   * key themselves, so an application which renames the table is followed by the store, by
+   * the startup check and by the message about two stores in one table.
+   *
+   * @param properties The outbox configuration, which carries the store settings of the
+   *          delivery log
+   * @return The table name
+   */
+  public static String tableName(
+      final PhaseTwoOutboxProperties properties) {
+
+    final var table = properties
+        .getJdbc()
+        .getDeliveryTable();
+    return table == null ? DEFAULT_TABLE_NAME : table;
+
+  }
 
   private static final String SELECT_DELIVERY = """
       SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \

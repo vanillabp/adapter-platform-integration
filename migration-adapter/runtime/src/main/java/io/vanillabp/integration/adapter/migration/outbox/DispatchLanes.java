@@ -23,23 +23,31 @@ import lombok.extern.slf4j.Slf4j;
  * <p>
  * The number of lanes is bounded (<code>vanillabp.outbox.dispatch-threads</code>) because
  * an unbounded one would only move the limit into the connection pool, where it is harder
- * to see. The queues are bounded for the same reason: a poller which claimed a backlog
- * waits for a lane to take the next entry instead of holding the whole backlog in memory.
- * Waiting is safe here and it is what keeps the order: the poller is the only thread
- * handing work in.
+ * to see. Each lane takes ONE entry beyond the one it dispatches
+ * ({@link #ENTRIES_WAITING_PER_LANE}), so the poller waits for a lane instead of claiming a
+ * backlog nobody is working on yet. Waiting is safe here and it is what keeps the order: the
+ * poller is the only thread handing work in.
  * <p>
  * Why the aggregate decides and not who is free is decision 75 in the repository's
- * DECISIONS.md.
+ * DECISIONS.md, and what a claim held too early costs is decision 79.
  */
 @Slf4j
 public class DispatchLanes {
 
   /**
-   * How many entries one lane holds before the poller has to wait for it. Enough that a
-   * lane is never idle while work is waiting, small enough that a backlog stays in the
-   * database, which is where it can be read.
+   * How many entries wait at a lane while it dispatches one. Exactly one: a lane takes it the
+   * moment it is free, so the lane is never idle, and a node holds two claims per lane instead
+   * of a queue full of them.
+   * <p>
+   * What a claim costs is why the number is so small. A claimed entry renews its lease until
+   * its dispatch is over, one write per entry and tick, and an entry which is only waiting for
+   * its lane is renewed like the one being dispatched. A deep queue therefore pays at every
+   * tick for entries nobody is working on, and where the renewals fall behind, the leases run
+   * out and the operations are carried out twice - see decision 79 in the repository's
+   * DECISIONS.md. A queue of one also leaves the backlog in the database, where another node
+   * can take it and where an operator can read it.
    */
-  static final int QUEUE_LENGTH_PER_LANE = 16;
+  static final int ENTRIES_WAITING_PER_LANE = 1;
 
   /**
    * How long a shutdown waits for the dispatches which are running. What is still on its
@@ -104,7 +112,7 @@ public class DispatchLanes {
       final String threadName) {
 
     return new ThreadPoolExecutor(
-        1, 1, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(QUEUE_LENGTH_PER_LANE), runnable -> {
+        1, 1, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(ENTRIES_WAITING_PER_LANE), runnable -> {
           final var thread = new Thread(runnable, threadName);
           thread.setDaemon(true);
           return thread;

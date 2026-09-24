@@ -33,10 +33,12 @@ import com.gruelbox.transactionoutbox.spring.SpringTransactionManager;
 
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
 import io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema;
+import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxStore;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
+import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.utils.config.JpaSpringDataUtilConfiguration;
@@ -197,7 +199,7 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
       final Map<String, PlatformTransactionManager> transactionManagers,
       final DataSource dataSource,
       final VanillaBpConfigurationProperties vanillaBpProperties,
-      final ObjectProvider<io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics> metrics,
+      final ObjectProvider<VanillaBpMetrics> metrics,
       final ObjectProvider<TransactionOutboxListener> applicationListeners,
       @Qualifier(DEFAULT_SUBMITTER_BEAN_NAME) final GruelboxRedispatchAwareSubmitter submitter) {
 
@@ -251,12 +253,12 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
   private static TransactionOutboxListener outboxListener(
       final Persistor persistor,
       final SpringTransactionManager transactionManager,
-      final ObjectProvider<io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics> metrics,
+      final ObjectProvider<VanillaBpMetrics> metrics,
       final ObjectProvider<TransactionOutboxListener> applicationListeners,
       final int blockAfterAttempts) {
 
     TransactionOutboxListener listener = new GruelboxPhaseTwoFailureListener(
-        persistor, transactionManager, () -> io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration
+        persistor, transactionManager, () -> SpringBootMigrationAdapterAutoConfiguration
             .vanillaBpMetricsOf(metrics), blockAfterAttempts);
     for (final var applicationListener : applicationListeners) {
       listener = listener.andThen(applicationListener);
@@ -366,7 +368,7 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
   public GruelboxPhaseTwoDispatch vanillaBpGruelboxPhaseTwoDispatch(
       final ObjectProvider<PhaseTwoRouter> phaseTwoRouter,
       @Qualifier(DEFAULT_PAYLOAD_STORE_BEAN_NAME) final ObjectProvider<JdbcPhaseTwoPayloadStore> payloadStore,
-      final ObjectProvider<io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics> metrics) {
+      final ObjectProvider<VanillaBpMetrics> metrics) {
 
     return (
         operation,
@@ -376,7 +378,7 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
         adapterId,
         serializedArgs) -> new GruelboxPhaseTwoDispatchBean(
             phaseTwoRouter.getObject(), payloadStore
-                .getObject(), io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration
+                .getObject(), SpringBootMigrationAdapterAutoConfiguration
                     .vanillaBpMetricsOf(metrics))
             .dispatch(
                 operation, workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, serializedArgs);

@@ -116,7 +116,14 @@ Top-level modules (by directory name) are:
    A small module providing utilities used by tests across all platforms.
    It also holds `PublishedPoms`, the assertion every VanillaBP repository calls to check what its
    published POMs hand an application. The repository names the file its modules publish and the
-   tools of its own build, and the javadoc of that class says why.
+   tools of its own build, and the javadoc of that class says why.<br>
+   `PhaseTwoOutboxReader` is where a test asks what the phase-two outbox holds. It reads the
+   entries, their state, their attempts and what each call belongs to, it reads the payloads
+   beside them, and it writes the few things a test has to write: an entry which is due now, an
+   entry which waits, and every entry opened again the way an operator repairs one. Every table
+   name and every state it uses comes from the platform class which declares it, so a rename is
+   followed in that one module instead of in every test which reads the outbox. A test which
+   spells a table or a column itself is the thing this class exists to prevent.
 7. **bpms-double:**<br>
    The BPMS double, published so that a repository outside this one can boot a VanillaBP application in a test
    without a real BPMS. It is the adapter the platform's own tests run against, which is what proves it for

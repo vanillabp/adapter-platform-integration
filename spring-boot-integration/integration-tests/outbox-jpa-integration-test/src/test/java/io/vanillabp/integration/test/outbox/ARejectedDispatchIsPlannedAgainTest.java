@@ -3,11 +3,9 @@ package io.vanillabp.integration.test.outbox;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import javax.sql.DataSource;
 
@@ -22,6 +20,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader.Entry;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
@@ -118,19 +118,30 @@ public class ARejectedDispatchIsPlannedAgainTest {
   }
 
   /**
+   * The entry of that operation, or nothing where no entry carries that key.
+   */
+  private Optional<Entry> entryOf(
+      final String idempotencyKey) {
+
+    return PhaseTwoOutboxReader
+        .ofTheVanillaBpOutbox(dataSource)
+        .entries()
+        .stream()
+        .filter(entry -> idempotencyKey.equals(entry.idempotencyKey()))
+        .findFirst();
+
+  }
+
+  /**
    * Whether the entry of that operation was ticked off: a dispatched entry is marked DONE
    * and kept until its retention runs out.
    */
   private boolean isTickedOff(
-      final String idempotencyKey) throws SQLException {
+      final String idempotencyKey) {
 
-    try (var connection = dataSource.getConnection(); var statement = connection
-        .prepareStatement("SELECT STATUS FROM VANILLABP_PHASE_TWO_OUTBOX WHERE IDEMPOTENCY_KEY = ?")) {
-      statement.setString(1, idempotencyKey);
-      try (var resultSet = statement.executeQuery()) {
-        return resultSet.next() && "DONE".equals(resultSet.getString(1));
-      }
-    }
+    return entryOf(idempotencyKey)
+        .filter(Entry::wasDispatched)
+        .isPresent();
 
   }
 
@@ -140,7 +151,7 @@ public class ARejectedDispatchIsPlannedAgainTest {
    * find the mark of an attempt which is still running.
    */
   private void awaitTickedOff(
-      final String idempotencyKey) throws Exception {
+      final String idempotencyKey) throws InterruptedException {
 
     final var deadline = System.currentTimeMillis() + PATIENCE;
     while (true) {
@@ -164,15 +175,11 @@ public class ARejectedDispatchIsPlannedAgainTest {
    * where no entry carries that key.
    */
   private int attemptsOf(
-      final String idempotencyKey) throws SQLException {
+      final String idempotencyKey) {
 
-    try (var connection = dataSource.getConnection(); var statement = connection
-        .prepareStatement("SELECT ATTEMPTS FROM VANILLABP_PHASE_TWO_OUTBOX WHERE IDEMPOTENCY_KEY = ?")) {
-      statement.setString(1, idempotencyKey);
-      try (var resultSet = statement.executeQuery()) {
-        return resultSet.next() ? resultSet.getInt(1) : 0;
-      }
-    }
+    return entryOf(idempotencyKey)
+        .map(Entry::attempts)
+        .orElse(0);
 
   }
 
@@ -182,7 +189,7 @@ public class ARejectedDispatchIsPlannedAgainTest {
    * entry used it.
    */
   private void awaitAttempted(
-      final String idempotencyKey) throws Exception {
+      final String idempotencyKey) throws InterruptedException {
 
     final var deadline = System.currentTimeMillis() + PATIENCE;
     while (attemptsOf(idempotencyKey) == 0) {
@@ -199,14 +206,11 @@ public class ARejectedDispatchIsPlannedAgainTest {
    * Makes the entry of that operation due now, whatever due time it carries.
    */
   private void makeDueNow(
-      final String idempotencyKey) throws SQLException {
+      final String idempotencyKey) {
 
-    try (var connection = dataSource.getConnection(); var statement = connection
-        .prepareStatement("UPDATE VANILLABP_PHASE_TWO_OUTBOX SET NEXT_ATTEMPT_AT = ? WHERE IDEMPOTENCY_KEY = ?")) {
-      statement.setTimestamp(1, Timestamp.from(Instant.now()));
-      statement.setString(2, idempotencyKey);
-      statement.executeUpdate();
-    }
+    PhaseTwoOutboxReader
+        .ofTheVanillaBpOutbox(dataSource)
+        .makeDueNow(idempotencyKey);
 
   }
 

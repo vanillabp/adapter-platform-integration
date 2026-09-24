@@ -223,8 +223,9 @@ with any column a later version of VanillaBP added to a table you created earlie
 The names are `VANILLABP_PHASE_TWO_OUTBOX`, `VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD` and
 `VANILLABP_TASK_DELIVERY`. An application which renames the outbox through
 `vanillabp.outbox.jdbc.table` renames the payload table with it, because that name is the outbox
-name plus a suffix unless `vanillabp.outbox.jdbc.payload-table` says otherwise. On MongoDB the
-same rule applies to the collections.
+name plus a suffix unless `vanillabp.outbox.jdbc.payload-table` says otherwise. The delivery table
+is a store of its own and gets its name from `vanillabp.outbox.jdbc.delivery-table`. On MongoDB the
+same rules apply to the collections.
 
 Where the first adapter of the priority list needs the outbox and none can be resolved, the
 application does not boot and the message names what to add. The transaction the outbox entry rides

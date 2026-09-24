@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+
 import javax.sql.DataSource;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -23,6 +25,8 @@ import io.vanillabp.integration.test.RecordingPhaseTwoListener;
 import io.vanillabp.integration.test.SampleExtension;
 import io.vanillabp.integration.test.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader.Entry;
 import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
@@ -62,39 +66,6 @@ public class ExtensionOperationDispatchTest {
       .overrideRuntimeConfigKey("quarkus.datasource.jdbc.url",
           "jdbc:h2:mem:extension-operation-dispatch-it;DB_CLOSE_DELAY=-1");
 
-  private static final String COUNT_ENTRIES_OF_OPERATION = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX "
-      + "WHERE OPERATION = '%s'".formatted(SampleExtension.OPERATION_NAME);
-
-  /**
-   * An entry deduplicates as long as it is not DONE, and the dispatcher marks it DONE
-   * one UPDATE after the extension's handler returned.
-   */
-  private static final String COUNT_ENTRIES_STILL_DEDUPLICATING = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX "
-      + "WHERE OPERATION = '"
-      + SampleExtension.OPERATION_NAME
-      + "' AND AGGREGATE_ID = '%s' AND STATUS <> 'DONE'";
-
-  /**
-   * The payload of one call, addressed by the reference its entry names.
-   */
-  private static final String COUNT_PAYLOAD_OF_REFERENCE = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD "
-      + "WHERE REFERENCE = '%s'";
-
-  private static final String COUNT_PAYLOADS = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD";
-
-  /**
-   * The entries of one key which still wait, addressed the way the store deduplicates
-   * them.
-   */
-  private static final String COUNT_ENTRIES_OF_KEY = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX "
-      + "WHERE DEDUP_KEY = '%s'";
-
-  /**
-   * The entries an aggregate has waiting, whatever they deduplicate against.
-   */
-  private static final String COUNT_OPEN_ENTRIES_OF_AGGREGATE = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX "
-      + "WHERE AGGREGATE_ID = '%s' AND STATUS = 'OPEN'";
-
   @Inject
   WorkflowService workflowService;
 
@@ -117,14 +88,95 @@ public class ExtensionOperationDispatchTest {
 
   }
 
-  private long count(
-      final String query) throws Exception {
+  /**
+   * What the outbox table holds. The data source of a Quarkus application hands out a
+   * connection of the running JTA transaction, so an entry is read while the transaction
+   * which wrote it is still open.
+   *
+   * @return The reader of the table
+   */
+  private PhaseTwoOutboxReader outboxTable() {
 
-    try (var connection = dataSource.getConnection(); var statement = connection
-        .createStatement(); var resultSet = statement.executeQuery(query)) {
-      resultSet.next();
-      return resultSet.getLong(1);
-    }
+    return PhaseTwoOutboxReader.ofTheVanillaBpOutbox(dataSource);
+
+  }
+
+  /**
+   * @return The entries of the extension's operation
+   */
+  private List<Entry> entriesOfTheOperation() {
+
+    return outboxTable()
+        .entries()
+        .stream()
+        .filter(entry -> SampleExtension.OPERATION_NAME.equals(entry.operation()))
+        .toList();
+
+  }
+
+  /**
+   * An entry deduplicates as long as it was not dispatched, and the dispatcher marks it
+   * one write after the extension's handler returned.
+   *
+   * @param aggregateId The aggregate asked about
+   * @return How many entries of that aggregate still deduplicate
+   */
+  private long entriesStillDeduplicating(
+      final Object aggregateId) {
+
+    return entriesOfTheOperation()
+        .stream()
+        .filter(entry -> aggregateId.toString().equals(entry.aggregateId()))
+        .filter(entry -> !entry.wasDispatched())
+        .count();
+
+  }
+
+  /**
+   * @param idempotencyKey The key asked about
+   * @return How many entries still carry it, which is what a second schedule of that key
+   *         meets
+   */
+  private long entriesOfKey(
+      final String idempotencyKey) {
+
+    return outboxTable()
+        .entries()
+        .stream()
+        .filter(entry -> !entry.wasDispatched())
+        .filter(entry -> idempotencyKey.equals(entry.idempotencyKey()))
+        .count();
+
+  }
+
+  /**
+   * @param aggregateId The aggregate asked about
+   * @return How many of its entries are waiting, whatever they deduplicate against
+   */
+  private long waitingEntriesOf(
+      final Object aggregateId) {
+
+    return outboxTable()
+        .entries()
+        .stream()
+        .filter(Entry::isWaiting)
+        .filter(entry -> aggregateId.toString().equals(entry.aggregateId()))
+        .count();
+
+  }
+
+  /**
+   * @param reference The reference asked about
+   * @return How many payloads lie under it
+   */
+  private long payloadsOf(
+      final String reference) {
+
+    return outboxTable()
+        .payloads()
+        .stream()
+        .filter(payload -> reference.equals(payload.reference()))
+        .count();
 
   }
 
@@ -140,7 +192,7 @@ public class ExtensionOperationDispatchTest {
       final Aggregate aggregate) throws Exception {
 
     final var deadline = System.currentTimeMillis() + 10000;
-    while (count(COUNT_ENTRIES_STILL_DEDUPLICATING.formatted(aggregate.getId())) > 0) {
+    while (entriesStillDeduplicating(aggregate.getId()) > 0) {
       assertTrue(
           System.currentTimeMillis() < deadline,
           "an entry of the extension's operation was never marked DONE");
@@ -193,9 +245,9 @@ public class ExtensionOperationDispatchTest {
 
     // one entry under that key, and the bytes of the replaced call are gone before
     // this transaction commits
-    assertEquals(1L, count(COUNT_ENTRIES_OF_KEY.formatted(first.idempotencyKey().orElseThrow())));
-    assertEquals(0L, count(COUNT_PAYLOAD_OF_REFERENCE.formatted(first.payloadReference())));
-    assertEquals(1L, count(COUNT_PAYLOAD_OF_REFERENCE.formatted(second.payloadReference())));
+    assertEquals(1L, entriesOfKey(first.idempotencyKey().orElseThrow()));
+    assertEquals(0L, payloadsOf(first.payloadReference()));
+    assertEquals(1L, payloadsOf(second.payloadReference()));
     userTransaction.commit();
 
     final var dispatched = extension.awaitDispatched(1, 10000);
@@ -221,7 +273,7 @@ public class ExtensionOperationDispatchTest {
         .call("test-module", "dummy", aggregate.getId().toString(), "kept", payloadOf("{\"amount\":2}"));
     assertFalse(outbox.schedule(second));
     // a schedule which was discarded leaves nothing behind
-    assertEquals(0L, count(COUNT_PAYLOAD_OF_REFERENCE.formatted(second.payloadReference())));
+    assertEquals(0L, payloadsOf(second.payloadReference()));
     userTransaction.commit();
 
     final var dispatched = extension.awaitDispatched(1, 10000);
@@ -267,7 +319,7 @@ public class ExtensionOperationDispatchTest {
       userTransaction.commit();
 
       // two entries wait now: the one which is on its way and the one this call became
-      assertEquals(2L, count(COUNT_OPEN_ENTRIES_OF_AGGREGATE.formatted(aggregate.getId())));
+      assertEquals(2L, waitingEntriesOf(aggregate.getId()));
     } finally {
       extension.releaseHeldDispatch();
     }
@@ -302,9 +354,9 @@ public class ExtensionOperationDispatchTest {
     assertTrue(outbox.scheduleReplacingWhatIsStillWaiting(second));
     userTransaction.rollback();
 
-    assertEquals(0L, count(COUNT_ENTRIES_OF_KEY.formatted(first.idempotencyKey().orElseThrow())));
-    assertEquals(0L, count(COUNT_PAYLOAD_OF_REFERENCE.formatted(first.payloadReference())));
-    assertEquals(0L, count(COUNT_PAYLOAD_OF_REFERENCE.formatted(second.payloadReference())));
+    assertEquals(0L, entriesOfKey(first.idempotencyKey().orElseThrow()));
+    assertEquals(0L, payloadsOf(first.payloadReference()));
+    assertEquals(0L, payloadsOf(second.payloadReference()));
 
     // wait longer than the poll interval: nothing of that transaction may be dispatched
     Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
@@ -325,7 +377,7 @@ public class ExtensionOperationDispatchTest {
     outbox.schedule(scheduled);
     // the bytes ride the very transaction the aggregate rides: they are there already,
     // and a rollback would take them with it
-    assertEquals(1L, count(COUNT_PAYLOAD_OF_REFERENCE.formatted(scheduled.payloadReference())));
+    assertEquals(1L, payloadsOf(scheduled.payloadReference()));
     userTransaction.commit();
 
     final var dispatched = extension.awaitDispatched(1, 10000);
@@ -335,7 +387,7 @@ public class ExtensionOperationDispatchTest {
 
     // the entry was dispatched, so the bytes are gone
     final var deadline = System.currentTimeMillis() + 10000;
-    while (count(COUNT_PAYLOAD_OF_REFERENCE.formatted(scheduled.payloadReference())) > 0) {
+    while (payloadsOf(scheduled.payloadReference()) > 0) {
       assertTrue(
           System.currentTimeMillis() < deadline,
           "the payload '%s' was never removed".formatted(scheduled.payloadReference()));
@@ -348,7 +400,7 @@ public class ExtensionOperationDispatchTest {
   @DisplayName("A call without a payload writes no row into the payload table")
   public void aCallWithoutAPayloadStoresNothing() throws Exception {
 
-    final var before = count(COUNT_PAYLOADS);
+    final var before = outboxTable().payloads().size();
 
     final var aggregate = startWorkflowAndSchedule("extension-no-payload", "created");
     assertNotNull(aggregate.getId());
@@ -356,7 +408,7 @@ public class ExtensionOperationDispatchTest {
     assertFalse(dispatched.getFirst().hasPayload());
     assertNull(dispatched.getFirst().payloadReference());
 
-    assertEquals(before, count(COUNT_PAYLOADS));
+    assertEquals(before, outboxTable().payloads().size());
 
   }
 
@@ -377,7 +429,7 @@ public class ExtensionOperationDispatchTest {
 
     // the entry is stored under the extension's operation NAME (the store knows
     // nothing else about it)
-    assertTrue(count(COUNT_ENTRIES_OF_OPERATION) > 0);
+    assertTrue(entriesOfTheOperation().size() > 0);
 
   }
 
@@ -444,7 +496,7 @@ public class ExtensionOperationDispatchTest {
   @DisplayName("On rollback the extension's entry is gone and never dispatched")
   public void rollbackLeavesNoExtensionEntry() throws Exception {
 
-    final var entriesBefore = count(COUNT_ENTRIES_OF_OPERATION);
+    final var entriesBefore = entriesOfTheOperation().size();
 
     userTransaction.begin();
     final var attached = workflowService.startWorkflow("extension-rollback");
@@ -454,7 +506,7 @@ public class ExtensionOperationDispatchTest {
     userTransaction.rollback();
 
     // the entry rode the rolled-back transaction
-    assertEquals(entriesBefore, count(COUNT_ENTRIES_OF_OPERATION));
+    assertEquals(entriesBefore, entriesOfTheOperation().size());
 
     // wait longer than the poll interval: nothing may ever be dispatched
     Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);

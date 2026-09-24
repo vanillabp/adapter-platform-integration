@@ -3,6 +3,8 @@ package io.vanillabp.integration.test.utils.outbox;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -25,9 +27,13 @@ import javax.sql.DataSource;
  * which is why the reader reports it as {@link State} rather than as the value a column
  * holds.
  * <p>
- * The reader uses a connection of its own, outside the transaction of the test. So it
- * reads what is committed, which is what a test about an outbox asks about anyway: an
- * entry becomes visible when the transaction which wrote it commits.
+ * The reader asks the data source it was built with for a connection, and what it sees
+ * then is what that data source hands out. A Quarkus data source enlists its connection
+ * in the running JTA transaction, so a test reading while its own transaction is open
+ * sees what that transaction wrote. A Spring Boot data source hands out a connection of
+ * its own, so the same test sees what is committed; a Spring Boot test which wants to
+ * read inside its transaction builds the reader with a
+ * <code>TransactionAwareDataSourceProxy</code> around it.
  * <p>
  * Removing entries removes the payloads beside them. An entry which carries a payload
  * keeps it in a table of its own, and a test which took the entry away without the
@@ -63,13 +69,37 @@ public final class PhaseTwoOutboxReader {
 
   /**
    * One entry of the outbox, with what a test asks about it.
+   * <p>
+   * The four names below the attempts are columns of the table VanillaBP writes itself.
+   * The gruelbox table has none of them, because gruelbox stores a call as one
+   * serialized invocation, so an entry read from it answers <code>null</code> to each of
+   * them. Its key is the one thing it does carry, under a name of its own.
    *
    * @param id The entry's own id, as the outbox table holds it
    * @param state Where the entry stands
    * @param attempts How often a dispatch took the entry - counted when the dispatch
    *          claims it, so an entry being dispatched right now already carries one
+   * @param workflowModuleId The workflow module the call belongs to, <code>null</code>
+   *          on the gruelbox table
+   * @param bpmnProcessId The BPMN process the call belongs to, <code>null</code> on the
+   *          gruelbox table
+   * @param operation What the call does, as {@code PhaseOperation} names it,
+   *          <code>null</code> on the gruelbox table
+   * @param aggregateId The workflow aggregate the call belongs to, <code>null</code> on
+   *          the gruelbox table and for a call which names none, such as a broadcast
+   *          signal
+   * @param idempotencyKey The key the entry is deduplicated by, <code>null</code> for an
+   *          operation which is never deduplicated
    */
-  public record Entry(String id, State state, int attempts) {
+  public record Entry(
+                      String id,
+                      State state,
+                      int attempts,
+                      String workflowModuleId,
+                      String bpmnProcessId,
+                      String operation,
+                      String aggregateId,
+                      String idempotencyKey) {
 
     /**
      * Tells whether the entry still has its dispatch before it.
@@ -103,6 +133,18 @@ public final class PhaseTwoOutboxReader {
       return state == State.DISPATCHED;
 
     }
+
+  }
+
+  /**
+   * One payload row, which is where the bytes of a call lie while its entry waits.
+   *
+   * @param reference What the entry names the payload by
+   * @param workflowModuleId The workflow module the call belongs to
+   * @param bpmnProcessId The BPMN process the call belongs to
+   * @param operation What the call does, as {@code PhaseOperation} names it
+   */
+  public record Payload(String reference, String workflowModuleId, String bpmnProcessId, String operation) {
 
   }
 
@@ -142,6 +184,46 @@ public final class PhaseTwoOutboxReader {
     Entry entryOf(
         ResultSet results) throws SQLException;
 
+    /**
+     * @return The statement making the entry of one idempotency key due, with the moment
+     *         and the key as its two parameters
+     */
+    String makeDueNow();
+
+    /**
+     * @return The statement putting every entry back into the state an operator leaves a
+     *         repaired one in, with the moment it is due as its one parameter
+     */
+    String openEveryEntryAgain();
+
+    /**
+     * @return The statement writing an entry which waits, with the id, the workflow
+     *         module, the BPMN process, the operation, the aggregate, the key, the
+     *         moment it was written and the moment it is due as its parameters
+     */
+    String writeWaitingEntry();
+
+  }
+
+  /**
+   * What a test is told when it asks the gruelbox table to be written. Nothing here can
+   * write it: gruelbox serializes a whole invocation into one column, and a row this
+   * class built would not be a call gruelbox can dispatch.
+   *
+   * @param what The statement which was asked for
+   * @return The failure to throw
+   */
+  private static UnsupportedOperationException gruelboxIsWrittenByGruelbox(
+      final String what) {
+
+    return new UnsupportedOperationException(
+        """
+            The gruelbox outbox cannot be %s by a test! It stores a call as one serialized \
+            invocation, so a row written here would not be a call gruelbox can dispatch. Let the \
+            application schedule the call, or write the test against the outbox VanillaBP writes \
+            itself."""
+            .formatted(what));
+
   }
 
   /**
@@ -158,7 +240,10 @@ public final class PhaseTwoOutboxReader {
     @Override
     public String selectEntries() {
 
-      return "SELECT ID, STATUS, ATTEMPTS FROM %s".formatted(name);
+      return """
+          SELECT ID, STATUS, ATTEMPTS, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, AGGREGATE_ID, \
+          IDEMPOTENCY_KEY FROM %s"""
+          .formatted(name);
 
     }
 
@@ -182,7 +267,38 @@ public final class PhaseTwoOutboxReader {
         final ResultSet results) throws SQLException {
 
       final var state = results.getString(2);
-      return new Entry(results.getString(1), stateOf(state), results.getInt(3));
+      return new Entry(
+          results.getString(1), stateOf(state), results.getInt(3), results.getString(4), results.getString(5), results
+              .getString(6), results.getString(7), results.getString(8));
+
+    }
+
+    @Override
+    public String makeDueNow() {
+
+      return """
+          UPDATE %s SET NEXT_ATTEMPT_AT = ? WHERE IDEMPOTENCY_KEY = ?"""
+          .formatted(name);
+
+    }
+
+    @Override
+    public String openEveryEntryAgain() {
+
+      return """
+          UPDATE %s SET STATUS = '%s', ATTEMPTS = 0, LEASED_BY = NULL, LEASED_UNTIL = NULL, \
+          NEXT_ATTEMPT_AT = ?"""
+          .formatted(name, waiting);
+
+    }
+
+    @Override
+    public String writeWaitingEntry() {
+
+      return """
+          INSERT INTO %s (ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, AGGREGATE_ID, DEDUP_KEY, \
+          STATUS, CREATED_AT, ATTEMPTS, NEXT_ATTEMPT_AT) VALUES (?, ?, ?, ?, ?, ?, '%s', ?, 0, ?)"""
+          .formatted(name, waiting);
 
     }
 
@@ -234,7 +350,7 @@ public final class PhaseTwoOutboxReader {
     @Override
     public String selectEntries() {
 
-      return "SELECT id, processed, blocked, attempts FROM %s".formatted(name);
+      return "SELECT id, processed, blocked, attempts, uniqueRequestId FROM %s".formatted(name);
 
     }
 
@@ -269,7 +385,28 @@ public final class PhaseTwoOutboxReader {
       } else {
         state = State.WAITING;
       }
-      return new Entry(results.getString(1), state, results.getInt(4));
+      return new Entry(results.getString(1), state, results.getInt(4), null, null, null, null, results.getString(5));
+
+    }
+
+    @Override
+    public String makeDueNow() {
+
+      throw gruelboxIsWrittenByGruelbox("made due");
+
+    }
+
+    @Override
+    public String openEveryEntryAgain() {
+
+      throw gruelboxIsWrittenByGruelbox("opened again");
+
+    }
+
+    @Override
+    public String writeWaitingEntry() {
+
+      throw gruelboxIsWrittenByGruelbox("written into");
 
     }
 
@@ -324,6 +461,29 @@ public final class PhaseTwoOutboxReader {
 
     return new PhaseTwoOutboxReader(
         dataSource, vanillaBpOutboxTable(), PhaseTwoOutboxNames.payloadTable());
+
+  }
+
+  /**
+   * The reader for an application which gave the two tables names of its own
+   * (<code>vanillabp.outbox.jdbc.table</code> and
+   * <code>vanillabp.outbox.jdbc.payload-table</code>). Only the names differ, so
+   * everything read from such a table is read the same way.
+   *
+   * @param dataSource The database of the application under test
+   * @param outboxTable The table the application configured for its entries
+   * @param payloadTable The table the application configured for the payloads
+   * @return The reader
+   */
+  public static PhaseTwoOutboxReader ofTheVanillaBpOutbox(
+      final DataSource dataSource,
+      final String outboxTable,
+      final String payloadTable) {
+
+    return new PhaseTwoOutboxReader(
+        dataSource, new VanillaBpOutboxTable(
+            outboxTable, PhaseTwoOutboxNames.waitingState(), PhaseTwoOutboxNames.dispatchedState(), PhaseTwoOutboxNames
+                .blockedState()), payloadTable);
 
   }
 
@@ -415,6 +575,42 @@ public final class PhaseTwoOutboxReader {
   }
 
   /**
+   * Names the table the payloads lie in, so a failing test can say where it looked.
+   *
+   * @return The table
+   */
+  public String payloadTableName() {
+
+    return payloadTable;
+
+  }
+
+  /**
+   * The table VanillaBP's own outbox writes as long as the application does not
+   * configure a name of its own. A test which DOES configure one asks for this name to
+   * say that the default table was not created beside it.
+   *
+   * @return The table
+   */
+  public static String defaultOutboxTableName() {
+
+    return PhaseTwoOutboxNames.vanillaBpOutboxTable();
+
+  }
+
+  /**
+   * The table the payloads lie in as long as the application does not configure a name
+   * of its own.
+   *
+   * @return The table
+   */
+  public static String defaultPayloadTableName() {
+
+    return PhaseTwoOutboxNames.payloadTable();
+
+  }
+
+  /**
    * Every entry of the outbox, dispatched ones included: an entry stays in the table
    * until the retention passes.
    *
@@ -460,6 +656,97 @@ public final class PhaseTwoOutboxReader {
   }
 
   /**
+   * The payloads waiting in the table beside the entries. An application whose calls
+   * never carry one has no such table, and then there is nothing to report either.
+   *
+   * @return The payloads, in no particular order
+   */
+  public List<Payload> payloads() {
+
+    if (!tableExists(dataSource, payloadTable)) {
+      return List.of();
+    }
+    try (var connection = dataSource.getConnection(); var select = connection
+        .prepareStatement(
+            "SELECT REFERENCE, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION FROM %s"
+                .formatted(payloadTable)); var results = select.executeQuery()) {
+      final var payloads = new ArrayList<Payload>();
+      while (results.next()) {
+        payloads
+            .add(
+                new Payload(
+                    results.getString(1), results.getString(2), results.getString(3), results.getString(4)));
+      }
+      return payloads;
+    } catch (final SQLException cannotRead) {
+      throw new IllegalStateException(
+          "Could not read the phase-two payload table '%s'!".formatted(payloadTable), cannotRead);
+    }
+
+  }
+
+  /**
+   * Makes the entry of one idempotency key due, which is how a test brings back an entry
+   * a dispatch pushed into the future.
+   *
+   * @param idempotencyKey The key of the entry
+   */
+  public void makeDueNow(
+      final String idempotencyKey) {
+
+    execute(outbox.makeDueNow(), Timestamp.from(Instant.now()), idempotencyKey);
+
+  }
+
+  /**
+   * Puts every entry back into the state an operator leaves a repaired one in: waiting,
+   * without attempts, without a lease and due a minute ago. It is also what an entry
+   * another node wrote looks like from here, which is a row nothing told this node
+   * about.
+   */
+  public void openEveryEntryAgain() {
+
+    execute(outbox.openEveryEntryAgain(), Timestamp.from(Instant.now().minusSeconds(60)));
+
+  }
+
+  /**
+   * Writes an entry which stays where it is: it waits, and the moment of its next
+   * attempt is the caller's to choose, so a test can put one an hour ahead and read what
+   * a store says about an entry nobody dispatches.
+   *
+   * @param id The entry's own id, which is also the key it deduplicates by
+   * @param workflowModuleId The workflow module the call belongs to
+   * @param bpmnProcessId The BPMN process the call belongs to
+   * @param operation What the call does, as {@code PhaseOperation} names it
+   * @param aggregateId The workflow aggregate the call belongs to
+   * @param writtenAt The moment the entry counts as written, which is what its age is
+   *          measured from
+   * @param dueAt The moment the entry asks to be dispatched at
+   */
+  public void writeWaitingEntry(
+      final String id,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String operation,
+      final String aggregateId,
+      final Instant writtenAt,
+      final Instant dueAt) {
+
+    execute(
+        outbox.writeWaitingEntry(),
+        id,
+        workflowModuleId,
+        bpmnProcessId,
+        operation,
+        aggregateId,
+        id,
+        Timestamp.from(writtenAt),
+        Timestamp.from(dueAt));
+
+  }
+
+  /**
    * Removes the entries of one BPMN process, and the payloads they name.
    * <p>
    * The payloads go by the process they were written for, which is a column of their
@@ -486,7 +773,7 @@ public final class PhaseTwoOutboxReader {
    */
   public void removeAllEntries() {
 
-    execute("DELETE FROM %s".formatted(outbox.name()), null);
+    execute("DELETE FROM %s".formatted(outbox.name()));
     removePayloads("", null);
 
   }
@@ -506,7 +793,12 @@ public final class PhaseTwoOutboxReader {
     if (!tableExists(dataSource, payloadTable)) {
       return;
     }
-    execute("DELETE FROM %s".formatted(payloadTable) + where, binding);
+    final var statement = "DELETE FROM %s".formatted(payloadTable) + where;
+    if (binding == null) {
+      execute(statement);
+      return;
+    }
+    execute(statement, binding);
 
   }
 
@@ -540,16 +832,15 @@ public final class PhaseTwoOutboxReader {
 
   /**
    * @param statement The statement to run
-   * @param binding What to bind to its one parameter, <code>null</code> where it has
-   *          none
+   * @param bindings What to bind to its parameters, in the order they stand in it
    */
   private void execute(
       final String statement,
-      final String binding) {
+      final Object... bindings) {
 
     try (var connection = dataSource.getConnection(); var update = connection.prepareStatement(statement)) {
-      if (binding != null) {
-        update.setString(1, binding);
+      for (var parameter = 0; parameter < bindings.length; parameter++) {
+        update.setObject(parameter + 1, bindings[parameter]);
       }
       update.executeUpdate();
     } catch (final SQLException cannotWrite) {

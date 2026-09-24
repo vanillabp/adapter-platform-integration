@@ -273,8 +273,9 @@ disable an unwanted default via its `enabled` flag:
    writes entries into the collection `vanillabp-phase-two-outbox` via
    `MongoTemplate` within the current transaction, persisting all `PhaseTwoCall`
    fields plus the idempotency key, deduplicating over `dedupKey` (unique index,
-   created automatically unless `create-schema` is disabled — then create it
-   manually; the sparse index earlier versions created over `idempotencyKey` is
+   created automatically unless `create-schema` is disabled — then the startup names it,
+   with the other indexes of `MongoSchema`, as something the application has to create
+   itself; the sparse index earlier versions created over `idempotencyKey` is
    dropped where it is still there). That field carries the key while the entry waits
    and the entry's own id once it was dispatched.
    `MongoPhaseTwoOutboxDispatcher` claims due OPEN entries atomically

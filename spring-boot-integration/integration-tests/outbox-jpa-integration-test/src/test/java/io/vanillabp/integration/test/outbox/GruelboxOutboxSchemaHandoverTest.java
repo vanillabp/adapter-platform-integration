@@ -78,7 +78,7 @@ public class GruelboxOutboxSchemaHandoverTest {
 
           final var message = bootFailureOf(context);
 
-          assertTrue(message.contains("TXNO_OUTBOX"), message);
+          assertTrue(message.contains(GruelboxPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_TABLE_NAME), message);
           assertTrue(message.contains("vanillabp.outbox.create-schema"), message);
           // the statements are gruelbox's, so the message must not send anybody to
           // VanillaBP's schema artifact for them
@@ -127,7 +127,10 @@ public class GruelboxOutboxSchemaHandoverTest {
               context.getStartupFailure(),
               "gruelbox creates its own table, so nothing is missing");
           try (var connection = context.getBean(javax.sql.DataSource.class).getConnection()) {
-            assertTrue(JdbcSchema.tableExists(connection, "TXNO_OUTBOX"), "gruelbox' migration did not run");
+            assertTrue(
+                JdbcSchema
+                    .tableExists(connection, GruelboxPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_TABLE_NAME),
+                "gruelbox' migration did not run");
             assertFalse(
                 JdbcSchema.tableExists(connection, "MY_OUTBOX"),
                 "gruelbox wrote a table named after VanillaBP's own outbox");

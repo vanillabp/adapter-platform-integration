@@ -13,11 +13,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusExtensionTest;
+import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.test.Aggregate;
 import io.vanillabp.integration.test.AggregatePersistence;
 import io.vanillabp.integration.test.RecordingPhaseTwoListener;
 import io.vanillabp.integration.test.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader.Entry;
 import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
@@ -52,9 +55,6 @@ public class SendSignalTest {
           .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
       .overrideRuntimeConfigKey("quarkus.datasource.jdbc.url", "jdbc:h2:mem:send-signal-it;DB_CLOSE_DELAY=-1");
 
-  private static final String COUNT_SIGNAL_ENTRIES = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX "
-      + "WHERE OPERATION = 'SEND_SIGNAL'";
-
   @Inject
   WorkflowService workflowService;
 
@@ -67,14 +67,21 @@ public class SendSignalTest {
   @Inject
   DataSource dataSource;
 
-  private long count(
-      final String query) throws Exception {
+  /**
+   * The entries of the broadcast. The data source of a Quarkus application hands out a
+   * connection of the running JTA transaction, so an entry is read while the transaction
+   * which wrote it is still open.
+   *
+   * @return The entries
+   */
+  private List<Entry> signalEntries() {
 
-    try (var connection = dataSource.getConnection(); var statement = connection
-        .createStatement(); var resultSet = statement.executeQuery(query)) {
-      resultSet.next();
-      return resultSet.getLong(1);
-    }
+    return PhaseTwoOutboxReader
+        .ofTheVanillaBpOutbox(dataSource)
+        .entries()
+        .stream()
+        .filter(entry -> PhaseOperation.SEND_SIGNAL.name().equals(entry.operation()))
+        .toList();
 
   }
 
@@ -100,7 +107,7 @@ public class SendSignalTest {
     userTransaction.begin();
     workflowService.sendSignal("OrderReceived");
     // the entry rides the transaction; nothing was broadcast yet
-    assertEquals(1, count(COUNT_SIGNAL_ENTRIES));
+    assertEquals(1, signalEntries().size());
     assertTrue(listener.getBroadcastSignals().isEmpty());
     userTransaction.commit();
 
@@ -110,9 +117,10 @@ public class SendSignalTest {
     // the entry has no aggregate: a broadcast is not about one workflow
     assertEquals(
         1,
-        count(
-            "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX WHERE OPERATION = 'SEND_SIGNAL' "
-                + "AND AGGREGATE_ID IS NULL"));
+        signalEntries()
+            .stream()
+            .filter(entry -> entry.aggregateId() == null)
+            .count());
 
   }
 
@@ -120,15 +128,15 @@ public class SendSignalTest {
   @DisplayName("On rollback the entry is gone and nothing is broadcast")
   public void rollbackBroadcastsNothing() throws Exception {
 
-    final var entriesBefore = count(COUNT_SIGNAL_ENTRIES);
+    final var entriesBefore = signalEntries().size();
     final var broadcastsBefore = listener.getBroadcastSignals().size();
 
     userTransaction.begin();
     workflowService.sendSignal("RolledBack");
-    assertEquals(entriesBefore + 1, count(COUNT_SIGNAL_ENTRIES));
+    assertEquals(entriesBefore + 1, signalEntries().size());
     userTransaction.rollback();
 
-    assertEquals(entriesBefore, count(COUNT_SIGNAL_ENTRIES));
+    assertEquals(entriesBefore, signalEntries().size());
 
     // wait longer than the poll interval: nothing may ever be broadcast
     Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);

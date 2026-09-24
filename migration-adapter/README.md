@@ -140,9 +140,9 @@ the split is drawn there. The three patiences are held by
 
 At the dispatch the same walk gains the loop the phase-one walk must not have, for a BPMS which
 cannot be reached. A workflow which is not visible yet gets no loop at all: the entry goes back to
-the store, due in the window, because this thread dispatches the entries of every other workflow
-too. Where the first picture ends in an exception, this one ends in an entry which is repeated and
-finally blocked.
+the store, due in the window, because the lane it would wait on also carries the entries of other
+workflows. Where the first picture ends in an exception, this one ends in an entry which is
+repeated and finally blocked.
 
 ```mermaid
 flowchart TB
@@ -2182,11 +2182,22 @@ adapter at the same time.
 hands it to the lane of its aggregate, and that lane may be busy with an earlier entry of the
 same workflow. The renewal of the lease therefore starts with the claim and not where the lane
 picks the entry up. A wait longer than one `attempt-frequency` would otherwise let another node
-claim it, and both nodes would carry the same operation out. One queue is short, so the wait is
-short as well, but nothing promises a queue length to anybody and the case leaves both nodes
-looking healthy. `AnEntryWaitingForItsLaneTest#aWaitingEntryKeepsItsLease` reads the lease of a
-queued entry moving, and `#anotherNodeLeavesAWaitingEntryAlone` puts a second dispatcher on the
-same table to watch it walk past.
+claim it, and both nodes would carry the same operation out. The wait is short, but nothing
+promises a length to anybody and the case leaves both nodes looking healthy.
+`AnEntryWaitingForItsLaneTest#aWaitingEntryKeepsItsLease` reads the lease of a waiting entry
+moving, and `#anotherNodeLeavesAWaitingEntryAlone` puts a second dispatcher on the same table to
+watch it walk past.
+
+**And a node claims no more than that.** A lane takes one entry beyond the one it dispatches, so
+a node holds two claims per lane plus the one the poller is holding out to a lane which is full.
+The queue used to hold sixteen, which is where a defect came from: every claimed entry is renewed
+once per tick, a tick is a third of the `attempt-frequency`, and eight lanes therefore meant 136
+writes per tick on the one thread which renews. An application with a short `attempt-frequency`
+got more than eight hundred of them a second, the thread fell behind, leases ran out under entries
+which were only waiting, and the operations were carried out twice. Holding less was measured
+against renewing on more threads, on MongoDB and on PostgreSQL, and decision 79 of this repository
+carries the numbers. `AnEntryWaitingForItsLaneTest#aNodeClaimsNoBacklogBeyondItsLanes` holds the
+bound: forty entries are due, one lane is busy, and three of them are claimed.
 
 The poller borrows its connection per step for the same reason. A lane whose queue is full makes
 the poller wait, and a poller which held a connection through that wait would hold the connection
@@ -2232,6 +2243,19 @@ collection. On Quarkus, `MongoADispatchWhichLostItsLeaseTest` plays the second n
 because an application holds one dispatcher and a second real one would need a second
 application. What that test writes is what another node's dispatch leaves behind, and the write
 which has to be refused is the real dispatcher's.
+
+**A write which never ran is not a write which matched no row.** The condition on the holder
+helps only where the statement reached the database. A statement which did not reach it, because
+the pool is empty or the connection broke, used to count as a write which took: the answer of the
+JDBC dispatcher was a number, and the `-1` it gave for a failure is not zero. The entry then
+stayed `OPEN` while its payload was removed, so the attempt after the lease had nothing left to
+send. The answer now says which of the three happened, and a write which never ran leaves the
+entry as it was: same status, same due time, same lease, and its payload beside it. The next poll
+of this node or of another one reads it once the lease runs out. Nothing is counted or reported as
+blocked either, because the row says `OPEN` and an operator reading a blocked entry would go and
+repair a row which needs no repair. `AMarkWhichDidNotGetThroughLeavesTheEntryTest` makes both
+marks fail with a second row holding the entry's id in the unique `DEDUP_KEY`, and reads the
+payload, the row and the meter afterwards.
 
 What the threads bought, measured on 2026-09-21 in the development container of this
 repository: 200 entries of 40 workflow aggregates, written in one transaction against H2 in
@@ -2281,6 +2305,18 @@ store adds nothing and shapes its question to fit: two reads naming both flags r
 naming `blocked` alone. Where a table was created by an earlier version the startup names the
 index which is missing and the statement which adds it, because creating an index on a large
 table is a decision with a lock on it.
+
+On MongoDB that check has a different shape. A collection is created by the first document, so
+`vanillabp.outbox.create-schema: false` leaves nothing to verify but the indexes. `MongoSchema`
+holds one list per collection - the outbox, its payloads and the delivery log - and both
+platforms create their indexes from those lists and hold an existing collection against the same
+lists. An application which looks after its own schema reads at startup which index each
+collection is missing, with the `createIndex` statement it can paste into `mongosh`. It is a
+warning and not the end of the boot. Every question is still answered, only it is read from the
+whole collection instead of from an index. The one index which is more than speed says so in the
+message. `AMissingMongoIndexIsNamedWithItsStatementTest` holds the message and the matching,
+`MongoIndexesAreCreatedOrReportedTest` both halves against a database, and
+`MongoIndexesOfAnApplicationManagingItsOwnSchemaTest` the same on Quarkus.
 
 `vanillabp.outbox.poll-interval` is the cap on that sleep, ten seconds by default, which is the
 rhythm every application had before. It exists for work a node wrote down before it went away,

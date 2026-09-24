@@ -30,10 +30,14 @@ import lombok.extern.slf4j.Slf4j;
  * The tick is a third of the lease, which leaves two renewals before it would run out, and
  * it never goes below {@link #SHORTEST_TICK}: an application which sets
  * <code>vanillabp.outbox.attempt-frequency</code> to a very small value gets a short lease
- * and not a loop of updates. One daemon thread carries the ticks of all entries a node
- * dispatches at once, because a renewal is a single write by primary key - a database too
- * slow to answer that within a third of the lease is one the dispatch itself is not getting
- * through either.
+ * and not a loop of updates. One daemon thread carries the ticks of all entries a node holds
+ * at once, and what makes that enough is how few those are: a node holds what its lanes
+ * dispatch plus one entry waiting at each of them
+ * ({@link DispatchLanes#ENTRIES_WAITING_PER_LANE}). A renewal is one write by primary key, so
+ * one thread writes as many of them per tick as the node has lanes, and a database too slow
+ * for that is one the dispatch itself is not getting through either. How this was measured,
+ * and why more renewal threads are not the answer, is decision 79 in the repository's
+ * DECISIONS.md.
  * <p>
  * A renewal which matches no row means the lease was lost: the entry was taken over, or it
  * was finished by somebody else. The ticking stops there and says so, because from that

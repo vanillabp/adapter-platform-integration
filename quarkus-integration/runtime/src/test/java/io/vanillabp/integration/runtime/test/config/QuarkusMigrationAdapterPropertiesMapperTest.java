@@ -311,7 +311,8 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
   private record JdbcOutboxProperties(
                                       boolean enabled,
                                       Optional<String> table,
-                                      Optional<String> payloadTable) implements QuarkusMigrationAdapterProperties.JdbcOutboxProperties {
+                                      Optional<String> payloadTable,
+                                      Optional<String> deliveryTable) implements QuarkusMigrationAdapterProperties.JdbcOutboxProperties {
   }
 
   private record MongoOutboxProperties(
@@ -504,15 +505,16 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                                                                                                                                                 1), new JdbcOutboxProperties(false, Optional
                                                                                                                                                                     .of("HOT_OUTBOX"), Optional
                                                                                                                                                                         .of(
-                                                                                                                                                                            "HOT_PAYLOAD")), new MongoOutboxProperties(
-                                                                                                                                                                                false, "hot-outbox", Optional
-                                                                                                                                                                                    .of(
-                                                                                                                                                                                        "hot-payloads"), "hot-deliveries")), new WorkflowAdapterCacheProperties(
-                                                                                                                                                                                            50_000, Duration
-                                                                                                                                                                                                .ofMinutes(
-                                                                                                                                                                                                    30), Duration
-                                                                                                                                                                                                        .ofMinutes(
-                                                                                                                                                                                                            2), true));
+                                                                                                                                                                            "HOT_PAYLOAD"), Optional
+                                                                                                                                                                                .of("HOT_DELIVERY")), new MongoOutboxProperties(
+                                                                                                                                                                                    false, "hot-outbox", Optional
+                                                                                                                                                                                        .of(
+                                                                                                                                                                                            "hot-payloads"), "hot-deliveries")), new WorkflowAdapterCacheProperties(
+                                                                                                                                                                                                50_000, Duration
+                                                                                                                                                                                                    .ofMinutes(
+                                                                                                                                                                                                        30), Duration
+                                                                                                                                                                                                            .ofMinutes(
+                                                                                                                                                                                                                2), true));
 
     final var core = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(properties);
 
@@ -574,6 +576,7 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     assertFalse(core.getOutbox().getJdbc().isEnabled());
     assertEquals("HOT_OUTBOX", core.getOutbox().getJdbc().getTable());
     assertEquals("HOT_PAYLOAD", core.getOutbox().getJdbc().getPayloadTable());
+    assertEquals("HOT_DELIVERY", core.getOutbox().getJdbc().getDeliveryTable());
     assertFalse(core.getOutbox().getMongo().isEnabled());
     assertEquals("hot-outbox", core.getOutbox().getMongo().getCollection());
     assertEquals("hot-payloads", core.getOutbox().getMongo().getPayloadCollection());

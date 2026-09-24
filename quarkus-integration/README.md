@@ -378,9 +378,10 @@ two answers as soon as one of them changes. `ExtensionEnablementTest` injects it
 `DeliveryLogUsingExtension`.
 
 - `JdbcTaskDeliveryLog` acquires its Agroal connection within the running JTA
-  transaction, so it is enlisted there. The SQL and the portable DDL of table
-  `VANILLABP_TASK_DELIVERY` live in the core (`JdbcTaskDeliveryStore`), shared with
-  Spring Boot. `recordOfTask` and `markTaskClosed` go to the same store: they are what lets
+  transaction, so it is enlisted there. The SQL and the portable DDL of the table live in
+  the core (`JdbcTaskDeliveryStore`), shared with Spring Boot. Its name is
+  `vanillabp.outbox.jdbc.delivery-table`, by default `VANILLABP_TASK_DELIVERY`
+  (`JdbcDeliveryTableNameTest`). `recordOfTask` and `markTaskClosed` go to the same store: they are what lets
   a task operation elect its BPMS from the record instead of asking one (decision 30).
 - `MongoTaskDeliveryLog` writes into the collection
   `vanillabp.outbox.mongo.delivery-collection` names, of `quarkus.mongodb.database`. The
@@ -390,12 +391,13 @@ two answers as soon as one of them changes. `ExtensionEnablementTest` injects it
   resource, so the record is written
   immediately and deleted again from an interposed synchronization when the transaction
   ends in anything but a commit - the same best-effort compensation `MongoPhaseTwoOutbox`
-  does for its entries. Next to the index the retention reads it creates one on `taskId`,
-  which is what `recordOfTask` reads by. `MongoTaskDeliveryLogTest` holds the record and
+  does for its entries. It creates the indexes of `MongoSchema.DELIVERY_INDEXES`, the one
+  the retention reads and the one over `taskId` which `recordOfTask` reads by among them. `MongoTaskDeliveryLogTest` holds the record and
   its compensation (`aRecordIsWrittenAndReadBack`, `aRolledBackTransactionLeavesNoRecord`,
   `theRecordOfATaskAnswersTheElection`, `expiredRecordsAreDeleted`).
 - Both observe the `StartupEvent` to create their schema (unless
-  `vanillabp.outbox.create-schema` is disabled) and to start the core's
+  `vanillabp.outbox.create-schema` is disabled, in which case the MongoDB half names the
+  indexes the application still owes) and to start the core's
   `TaskDeliveryRetentionCleanup`, which calls `cleanUpExpiredRecords` per
   `vanillabp.outbox.retention`.
 - The same run refreshes the records of the tasks which are still open: the core

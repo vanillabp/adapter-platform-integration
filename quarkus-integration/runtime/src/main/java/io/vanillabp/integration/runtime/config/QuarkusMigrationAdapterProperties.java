@@ -489,6 +489,17 @@ public interface QuarkusMigrationAdapterProperties {
      */
     Optional<String> payloadTable();
 
+    /**
+     * The name of the table storing the records of processed task deliveries (default
+     * <code>VANILLABP_TASK_DELIVERY</code>). The name lies in this section because the
+     * store settings of the delivery log are the outbox' ones. Unlike the payload table
+     * it does not follow a renamed outbox: it is a store of its own. An application which
+     * sets it applies the same name to <code>io.vanillabp:vanillabp-schema</code>.
+     *
+     * @return The delivery table name
+     */
+    Optional<String> deliveryTable();
+
   }
 
   /**

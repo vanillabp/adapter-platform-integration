@@ -135,7 +135,8 @@ no JTA resource, the outbox operates **best-effort**: the entry is written befor
 the commit; on rollback it is deleted best-effort (a crash in between leaves an
 orphan which ends up BLOCKED with a monitorable ERROR). Deduplication is
 enforced by a unique index over `dedupKey`, created automatically unless
-`vanillabp.outbox.create-schema` is disabled. If both Agroal and the MongoDB client
+`vanillabp.outbox.create-schema` is disabled - then the startup names it, with the other
+indexes of `MongoSchema`, as something the application has to create itself. If both Agroal and the MongoDB client
 are present, the JDBC outbox wins deterministically (consistent with Spring Boot
 where the JPA outbox is ordered first).
 
@@ -232,7 +233,10 @@ index creation to manage the schema manually, e.g. by Flyway or Liquibase — th
 also create the unique constraint on `DEDUP_KEY` / the unique index on `dedupKey`
 yourself — that column respectively field carries the idempotency key while the entry
 waits for its dispatch and the entry's own ID afterwards, which is what keeps the
-deduplication window to the operations still planned).
+deduplication window to the operations still planned). On MongoDB there is nothing else to
+create: a collection appears with its first document, so the startup reads what each of the
+three collections carries and warns with the `createIndex` statement of every index which is
+missing.
 
 ## Optional extensions and the native image
 

@@ -2,11 +2,13 @@ package io.vanillabp.integration.test.utils.outbox;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -79,9 +81,18 @@ public class PhaseTwoOutboxReaderTest {
           ? """
               CREATE TABLE %s (\
               ID VARCHAR(36) PRIMARY KEY, \
+              WORKFLOW_MODULE_ID VARCHAR(255), \
               BPMN_PROCESS_ID VARCHAR(255) NOT NULL, \
+              OPERATION VARCHAR(255), \
+              AGGREGATE_ID VARCHAR(1024), \
+              IDEMPOTENCY_KEY VARCHAR(512), \
+              DEDUP_KEY VARCHAR(512), \
               STATUS VARCHAR(16) NOT NULL, \
-              ATTEMPTS INT NOT NULL)"""
+              CREATED_AT TIMESTAMP, \
+              ATTEMPTS INT NOT NULL, \
+              NEXT_ATTEMPT_AT TIMESTAMP, \
+              LEASED_BY VARCHAR(255), \
+              LEASED_UNTIL TIMESTAMP)"""
           : """
               CREATE TABLE %s (\
               id VARCHAR(36) PRIMARY KEY, \
@@ -114,12 +125,19 @@ public class PhaseTwoOutboxReaderTest {
       if (this == VANILLABP) {
         try (var insert = connection
             .prepareStatement(
-                "INSERT INTO %s (ID, BPMN_PROCESS_ID, STATUS, ATTEMPTS) VALUES (?, ?, ?, ?)"
+                """
+                    INSERT INTO %s (ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, AGGREGATE_ID, \
+                    IDEMPOTENCY_KEY, DEDUP_KEY, STATUS, ATTEMPTS) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"""
                     .formatted(table.name()))) {
           insert.setString(1, id);
-          insert.setString(2, bpmnProcessId);
-          insert.setString(3, stateAsWritten(state));
-          insert.setInt(4, attempts);
+          insert.setString(2, "a-module");
+          insert.setString(3, bpmnProcessId);
+          insert.setString(4, "START_WORKFLOW");
+          insert.setString(5, "an-aggregate");
+          insert.setString(6, keyOf(id, bpmnProcessId));
+          insert.setString(7, keyOf(id, bpmnProcessId));
+          insert.setString(8, stateAsWritten(state));
+          insert.setInt(9, attempts);
           insert.executeUpdate();
         }
         return;
@@ -134,12 +152,29 @@ public class PhaseTwoOutboxReaderTest {
         // the key VanillaBP deduplicates by, which is where the gruelbox table carries
         // the process: operation, workflow module, process and aggregate, separated by
         // vertical bars
-        insert.setString(2, "START_WORKFLOW|a-module|%s|an-aggregate".formatted(bpmnProcessId));
+        insert.setString(2, keyOf(id, bpmnProcessId));
         insert.setBoolean(3, state == State.DISPATCHED);
         insert.setBoolean(4, state == State.BLOCKED);
         insert.setInt(5, attempts);
         insert.executeUpdate();
       }
+
+    }
+
+    /**
+     * The key both stores deduplicate an entry by: operation, workflow module, process
+     * and aggregate, separated by vertical bars. The entry's own id stands in for the
+     * aggregate, so two entries of one process keep two keys.
+     *
+     * @param id The entry's own id
+     * @param bpmnProcessId The process the entry belongs to
+     * @return The key
+     */
+    private String keyOf(
+        final String id,
+        final String bpmnProcessId) {
+
+      return "START_WORKFLOW|a-module|%s|%s".formatted(bpmnProcessId, id);
 
     }
 
@@ -314,6 +349,135 @@ public class PhaseTwoOutboxReaderTest {
   }
 
   @Test
+  @DisplayName("What a call belongs to is read from the entry, and the gruelbox table answers what it can")
+  public void whatACallBelongsToIsReadFromTheEntry() throws Exception {
+
+    givenAnOutbox(Shape.VANILLABP);
+    givenAnEntry(Shape.VANILLABP, "the-entry", "AProcess", State.WAITING, 0);
+    givenAnOutbox(Shape.GRUELBOX);
+    givenAnEntry(Shape.GRUELBOX, "the-entry", "AProcess", State.WAITING, 0);
+
+    final var ofVanillaBp = onlyEntryOf(readerOf(Shape.VANILLABP));
+
+    assertEquals("a-module", ofVanillaBp.workflowModuleId());
+    assertEquals("AProcess", ofVanillaBp.bpmnProcessId());
+    assertEquals("START_WORKFLOW", ofVanillaBp.operation());
+    assertEquals("an-aggregate", ofVanillaBp.aggregateId());
+    assertEquals("START_WORKFLOW|a-module|AProcess|the-entry", ofVanillaBp.idempotencyKey());
+
+    final var ofGruelbox = onlyEntryOf(readerOf(Shape.GRUELBOX));
+
+    assertNull(ofGruelbox.workflowModuleId(), "gruelbox serializes the call, so it holds no such column");
+    assertNull(ofGruelbox.bpmnProcessId());
+    assertNull(ofGruelbox.operation());
+    assertNull(ofGruelbox.aggregateId());
+    assertEquals("START_WORKFLOW|a-module|AProcess|the-entry", ofGruelbox.idempotencyKey());
+
+  }
+
+  @Test
+  @DisplayName("The payloads waiting beside the entries are read with what they belong to")
+  public void thePayloadsBesideTheEntriesAreRead() throws Exception {
+
+    givenAnOutbox(Shape.VANILLABP);
+    givenAPayloadTable();
+    givenAPayload("a-payload", "AProcess");
+
+    final var payloads = readerOf(Shape.VANILLABP).payloads();
+
+    assertEquals(1, payloads.size());
+    assertEquals("a-payload", payloads.getFirst().reference());
+    assertEquals("a-module", payloads.getFirst().workflowModuleId());
+    assertEquals("AProcess", payloads.getFirst().bpmnProcessId());
+    assertEquals("START_WORKFLOW", payloads.getFirst().operation());
+
+  }
+
+  @Test
+  @DisplayName("An application whose calls carry no payload reports no payloads either")
+  public void anApplicationWithoutAPayloadTableReportsNoPayloads() throws Exception {
+
+    givenAnOutbox(Shape.VANILLABP);
+
+    assertEquals(List.of(), readerOf(Shape.VANILLABP).payloads());
+
+  }
+
+  @Test
+  @DisplayName("An entry written by a test waits where it was put, and a test reads what it wrote")
+  public void anEntryWrittenByATestWaitsWhereItWasPut() throws Exception {
+
+    givenAnOutbox(Shape.VANILLABP);
+
+    final var reader = readerOf(Shape.VANILLABP);
+    reader
+        .writeWaitingEntry(
+            "written-by-the-test", "a-module", "AProcess", "START_WORKFLOW", "4711", Instant
+                .now()
+                .minusSeconds(600),
+            Instant.now().plusSeconds(3600));
+
+    final var entry = onlyEntryOf(reader);
+
+    assertEquals("written-by-the-test", entry.id());
+    assertTrue(entry.isWaiting());
+    assertEquals(0, entry.attempts());
+    assertEquals("4711", entry.aggregateId());
+
+  }
+
+  @Test
+  @DisplayName("Every entry can be opened again, which is what an operator does to a blocked one")
+  public void everyEntryCanBeOpenedAgain() throws Exception {
+
+    givenAnOutbox(Shape.VANILLABP);
+    givenAnEntry(Shape.VANILLABP, "the-entry", "AProcess", State.BLOCKED, 7);
+
+    final var reader = readerOf(Shape.VANILLABP);
+    reader.openEveryEntryAgain();
+
+    assertTrue(onlyEntryOf(reader).isWaiting());
+    assertEquals(0, onlyEntryOf(reader).attempts(), "a repaired entry starts its attempts over");
+
+  }
+
+  @Test
+  @DisplayName("The entry of one key is made due without touching the entries beside it")
+  public void theEntryOfOneKeyIsMadeDue() throws Exception {
+
+    givenAnOutbox(Shape.VANILLABP);
+    givenAnEntry(Shape.VANILLABP, "the-entry", "AProcess", State.WAITING, 1);
+
+    final var reader = readerOf(Shape.VANILLABP);
+
+    // what it does is a write, and what a test can read back is that it ran at all: the
+    // moment of the next attempt is not one this reader reports
+    reader.makeDueNow("START_WORKFLOW|a-module|AProcess|the-entry");
+
+    assertEquals(1, reader.entries().size());
+
+  }
+
+  @Test
+  @DisplayName("The gruelbox table says that a test cannot write it")
+  public void theGruelboxTableSaysThatATestCannotWriteIt() throws Exception {
+
+    givenAnOutbox(Shape.GRUELBOX);
+
+    final var reader = readerOf(Shape.GRUELBOX);
+    final var refused = assertThrows(UnsupportedOperationException.class, reader::openEveryEntryAgain);
+
+    assertTrue(refused.getMessage().contains("gruelbox"), refused.getMessage());
+    assertThrows(UnsupportedOperationException.class, () -> reader.makeDueNow("a-key"));
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> reader
+            .writeWaitingEntry("an-entry", "a-module", "AProcess", "START_WORKFLOW", "4711", Instant.now(), Instant
+                .now()));
+
+  }
+
+  @Test
   @DisplayName("A state the reader does not know is reported with the states it knows")
   public void aStateTheReaderDoesNotKnowIsReported() throws Exception {
 
@@ -322,6 +486,8 @@ public class PhaseTwoOutboxReaderTest {
         .prepareStatement(
             "INSERT INTO %s (ID, BPMN_PROCESS_ID, STATUS, ATTEMPTS) VALUES ('an-entry', 'AProcess', 'SLEEPING', 0)"
                 .formatted(OUTBOX_OF_THIS_TEST))) {
+      // every other column is left out on purpose: what this case is about is the one
+      // value the state column holds
       insert.executeUpdate();
     }
 
@@ -471,7 +637,9 @@ public class PhaseTwoOutboxReaderTest {
               """
                   CREATE TABLE %s (\
                   REFERENCE VARCHAR(36) PRIMARY KEY, \
+                  WORKFLOW_MODULE_ID VARCHAR(255), \
                   BPMN_PROCESS_ID VARCHAR(255) NOT NULL, \
+                  OPERATION VARCHAR(255), \
                   PAYLOAD BLOB NOT NULL)"""
                   .formatted(PAYLOADS_OF_THIS_TEST));
     }
@@ -484,7 +652,9 @@ public class PhaseTwoOutboxReaderTest {
 
     try (var connection = dataSource.getConnection(); var insert = connection
         .prepareStatement(
-            "INSERT INTO %s (REFERENCE, BPMN_PROCESS_ID, PAYLOAD) VALUES (?, ?, ?)"
+            """
+                INSERT INTO %s (REFERENCE, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, PAYLOAD) \
+                VALUES (?, 'a-module', ?, 'START_WORKFLOW', ?)"""
                 .formatted(PAYLOADS_OF_THIS_TEST))) {
       insert.setString(1, reference);
       insert.setString(2, bpmnProcessId);

@@ -18,6 +18,7 @@ import io.vanillabp.integration.test.CountingPoolInterceptor;
 import io.vanillabp.integration.test.RecordingPhaseTwoListener;
 import io.vanillabp.integration.test.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
 import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
@@ -151,14 +152,14 @@ public class OutboxSleepsWhileNothingIsDueTest {
 
   }
 
-  private long countOpenEntries() throws Exception {
+  /**
+   * @return How many entries of the outbox still wait for their dispatch
+   */
+  private long countOpenEntries() {
 
-    try (var connection = dataSource.getConnection(); var statement = connection
-        .createStatement(); var resultSet = statement
-            .executeQuery("SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX WHERE STATUS = 'OPEN'")) {
-      resultSet.next();
-      return resultSet.getLong(1);
-    }
+    return PhaseTwoOutboxReader
+        .ofTheVanillaBpOutbox(dataSource)
+        .entriesWaiting();
 
   }
 
@@ -193,7 +194,7 @@ public class OutboxSleepsWhileNothingIsDueTest {
     final var indexed = new java.util.LinkedHashMap<String, java.util.List<String>>();
     try (var connection = dataSource.getConnection(); var resultSet = connection
         .getMetaData()
-        .getIndexInfo(null, null, "VANILLABP_PHASE_TWO_OUTBOX", false, true)) {
+        .getIndexInfo(null, null, PhaseTwoOutboxReader.defaultOutboxTableName(), false, true)) {
       while (resultSet.next()) {
         final var name = resultSet.getString("INDEX_NAME");
         if (name != null) {
@@ -206,12 +207,14 @@ public class OutboxSleepsWhileNothingIsDueTest {
 
     assertEquals(
         java.util.List.of("STATUS", "NEXT_ATTEMPT_AT"),
-        indexed.get("VANILLABP_PHASE_TWO_OUTBOX_DUE"),
+        indexed.get(PhaseTwoOutboxReader.defaultOutboxTableName()
+            + "_DUE"),
         "the due question and the select which picks the entries up read these two: "
             + indexed);
     assertEquals(
         java.util.List.of("STATUS", "DONE_AT"),
-        indexed.get("VANILLABP_PHASE_TWO_OUTBOX_AGE"),
+        indexed.get(PhaseTwoOutboxReader.defaultOutboxTableName()
+            + "_AGE"),
         "the retention question and its delete read these two: "
             + indexed);
 

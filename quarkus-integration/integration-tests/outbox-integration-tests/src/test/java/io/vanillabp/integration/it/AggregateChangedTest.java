@@ -3,6 +3,8 @@ package io.vanillabp.integration.it;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+
 import javax.sql.DataSource;
 
 import org.junit.jupiter.api.DisplayName;
@@ -12,12 +14,15 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
+import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.test.Aggregate;
 import io.vanillabp.integration.test.AggregatePersistence;
 import io.vanillabp.integration.test.RecordingPhaseTwoListener;
 import io.vanillabp.integration.test.SteerableTaskAwarenessSource;
 import io.vanillabp.integration.test.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader.Entry;
 import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
@@ -54,9 +59,6 @@ public class AggregateChangedTest {
           .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
       .overrideRuntimeConfigKey("quarkus.datasource.jdbc.url", "jdbc:h2:mem:aggregate-changed-it;DB_CLOSE_DELAY=-1");
 
-  private static final String COUNT_ENTRIES = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX "
-      + "WHERE OPERATION = 'AGGREGATE_CHANGED'";
-
   @Inject
   WorkflowService workflowService;
 
@@ -72,14 +74,21 @@ public class AggregateChangedTest {
   @Inject
   DataSource dataSource;
 
-  private long count(
-      final String query) throws Exception {
+  /**
+   * The entries this test is about. The data source of a Quarkus application hands out a
+   * connection of the running JTA transaction, so an entry is counted while the
+   * transaction which wrote it is still open.
+   *
+   * @return The entries of the push operation
+   */
+  private List<Entry> pushEntries() {
 
-    try (var connection = dataSource.getConnection(); var statement = connection
-        .createStatement(); var resultSet = statement.executeQuery(query)) {
-      resultSet.next();
-      return resultSet.getLong(1);
-    }
+    return PhaseTwoOutboxReader
+        .ofTheVanillaBpOutbox(dataSource)
+        .entries()
+        .stream()
+        .filter(entry -> PhaseOperation.AGGREGATE_CHANGED.name().equals(entry.operation()))
+        .toList();
 
   }
 
@@ -114,7 +123,7 @@ public class AggregateChangedTest {
       // repeating the very same push writes the then-current state again - nothing
       // is deduplicated, on purpose
       workflowService.aggregateChanged(aggregate, "task-1");
-      assertEquals(3, count(COUNT_ENTRIES));
+      assertEquals(3, pushEntries().size());
       assertTrue(listener.getAggregateChanges().isEmpty(), "nothing may be pushed before the commit");
       userTransaction.commit();
     } catch (final Exception e) {
@@ -152,9 +161,11 @@ public class AggregateChangedTest {
 
     assertEquals(
         3,
-        count(
-            "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX WHERE OPERATION = 'AGGREGATE_CHANGED' "
-                + "AND IDEMPOTENCY_KEY IS NULL"));
+        pushEntries()
+            .stream()
+            .filter(entry -> entry.idempotencyKey() == null)
+            .count(),
+        "a push is never deduplicated, so its entry carries no key");
 
   }
 
@@ -163,15 +174,15 @@ public class AggregateChangedTest {
   public void rollbackPushesNothing() throws Exception {
 
     final var aggregate = startedAggregate("rolled-back");
-    final var entriesBefore = count(COUNT_ENTRIES);
+    final var entriesBefore = pushEntries().size();
     final var pushesBefore = listener.getAggregateChanges().size();
 
     userTransaction.begin();
     workflowService.aggregateChanged(aggregate);
-    assertEquals(entriesBefore + 1, count(COUNT_ENTRIES));
+    assertEquals(entriesBefore + 1, pushEntries().size());
     userTransaction.rollback();
 
-    assertEquals(entriesBefore, count(COUNT_ENTRIES));
+    assertEquals(entriesBefore, pushEntries().size());
 
     // wait longer than the poll interval: nothing may ever be pushed
     Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);

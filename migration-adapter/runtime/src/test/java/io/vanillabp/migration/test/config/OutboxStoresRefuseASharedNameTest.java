@@ -13,11 +13,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties.JdbcOutboxProperties;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties.MongoOutboxProperties;
+import io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxStore;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Two stores of one database pointed at the same table or collection. Five names can be
+ * Two stores of one database pointed at the same table or collection. Six names can be
  * set and nothing about them says that they have to differ, so the boot says it: each of
  * the two stores would read, count and delete what the other wrote.
  */
@@ -89,6 +90,25 @@ public class OutboxStoresRefuseASharedNameTest {
     assertTrue(message.contains("our_outbox"), "each key is quoted as the application wrote it: "
         + message);
     assertTrue(message.contains("OUR_OUTBOX"), message);
+
+  }
+
+  @Test
+  @DisplayName("The deliveries must not lie in the outbox table")
+  public void theDeliveriesKeepTheirOwnTable() {
+
+    final var properties = new PhaseTwoOutboxProperties();
+    properties
+        .getJdbc()
+        .setDeliveryTable(JdbcPhaseTwoOutboxStore.DEFAULT_TABLE_NAME);
+
+    final var message = assertThrows(IllegalStateException.class, properties::validateStoreNames)
+        .getMessage();
+
+    assertTrue(message.contains(JdbcOutboxProperties.TABLE_PROPERTY), message);
+    assertTrue(message.contains(JdbcOutboxProperties.DELIVERY_TABLE_PROPERTY), message);
+    assertTrue(message.contains(JdbcTaskDeliveryStore.DEFAULT_TABLE_NAME), "and the way out names the default: "
+        + message);
 
   }
 

@@ -7,13 +7,13 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProp
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.index.Index;
 import org.springframework.data.mongodb.repository.MongoRepository;
 
+import io.vanillabp.integration.adapter.migration.mongo.MongoSchema;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
+import io.vanillabp.integration.mongo.MongoIndexes;
 import io.vanillabp.integration.spi.TaskDeliveryLog;
 
 /**
@@ -24,12 +24,10 @@ import io.vanillabp.integration.spi.TaskDeliveryLog;
  * <p>
  * The records live in the collection <code>vanillabp.outbox.mongo.delivery-collection</code>
  * names and are keyed by the delivery key, so uniqueness comes from the document ID and no
- * unique index is needed. Unless
- * <code>vanillabp.outbox.create-schema</code> is disabled, two indexes are created: one on
- * the record's timestamp for the retention cleanup
- * (<code>vanillabp.delivery.retention</code>, falling back to
- * <code>vanillabp.outbox.retention</code>), and one on the task id, which is what the BPMS
- * election of a task operation reads a record by.
+ * unique index is needed. Unless <code>vanillabp.outbox.create-schema</code> is disabled,
+ * the indexes of {@link MongoSchema#DELIVERY_INDEXES} are created at startup. Where the
+ * application manages its schema itself, the startup reads what the collection carries
+ * instead and names every index which is missing, with the statement which creates it.
  */
 @AutoConfiguration(
     after = JdbcTaskDeliveryLogAutoConfiguration.class,
@@ -114,34 +112,16 @@ public class MongoTaskDeliveryLogAutoConfiguration {
       final VanillaBpConfigurationProperties vanillaBpProperties) {
 
     return () -> {
+      // what each of them is read by is described once, in the core, because the Quarkus
+      // extension creates the same ones
       if (vanillaBpProperties.getOutbox().isCreateSchema()) {
-        // the retention deletes by the moment a record was last seen, so that is
-        // the field the cleanup scans; MongoDB answers a createIndex of an index which is
-        // already there with its name, so two instances starting together do not collide
-        mongoTemplate
-            .indexOps(collectionOf(vanillaBpProperties))
-            .createIndex(new Index()
-                .on("lastSeenAt", Sort.Direction.ASC));
-        // the election of a task operation looks a record up by the task the caller
-        // names, once per operation - without this index that read is a collection scan
-        // and costs more than the BPMS round trip it saves
-        mongoTemplate
-            .indexOps(collectionOf(vanillaBpProperties))
-            .createIndex(new Index()
-                .on("taskId", Sort.Direction.ASC));
-        // an extension asks for the open tasks of one workflow aggregate once per screen
-        // it builds, and MongoDB knows no key-length limit, so the aggregate id itself is
-        // the index here - unlike in the SQL table, whose column is too wide for one
-        mongoTemplate
-            .indexOps(collectionOf(vanillaBpProperties))
-            .createIndex(new Index()
-                .on("aggregateId", Sort.Direction.ASC));
-        // the core asks for the open tasks of ONE workflow of the BPMS on every wake-up
-        // of that workflow, which is far more often than an extension builds a screen
-        mongoTemplate
-            .indexOps(collectionOf(vanillaBpProperties))
-            .createIndex(new Index()
-                .on("workflowId", Sort.Direction.ASC));
+        MongoIndexes
+            .createOn(mongoTemplate, collectionOf(vanillaBpProperties), MongoSchema.DELIVERY_INDEXES);
+      } else {
+        // the collection itself needs no check: MongoDB creates one with the first
+        // document, so what an application managing its own schema owes are the indexes
+        MongoIndexes
+            .reportMissingOn(mongoTemplate, collectionOf(vanillaBpProperties), MongoSchema.DELIVERY_INDEXES);
       }
       deliveryLog.start();
     };

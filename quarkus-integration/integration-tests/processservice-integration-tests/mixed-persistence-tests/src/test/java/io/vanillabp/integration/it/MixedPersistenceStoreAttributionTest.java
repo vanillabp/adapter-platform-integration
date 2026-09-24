@@ -19,6 +19,7 @@ import com.mongodb.client.MongoClient;
 
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.QuarkusExtensionTest;
+import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties.MongoOutboxProperties;
 import io.vanillabp.integration.runtime.processservice.PlatformDefaultStore;
 import io.vanillabp.integration.runtime.processservice.QuarkusPersistenceTechnology;
 import io.vanillabp.integration.test.mixed.JpaAggregate;
@@ -29,6 +30,8 @@ import io.vanillabp.integration.test.mixed.MongoWorkflowService;
 import io.vanillabp.integration.test.mixed.OutboxUsingExtension;
 import io.vanillabp.integration.test.mixed.PhaseTwoRecorder;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader.Entry;
 import jakarta.inject.Inject;
 
 /**
@@ -131,17 +134,15 @@ public class MixedPersistenceStoreAttributionTest {
 
   }
 
-  private List<String> aggregateIdsInJdbcOutbox() throws Exception {
+  private List<String> aggregateIdsInJdbcOutbox() {
 
-    final var ids = new ArrayList<String>();
-    try (var connection = dataSource.getConnection(); var statement = connection.prepareStatement(
-        "SELECT AGGREGATE_ID FROM VANILLABP_PHASE_TWO_OUTBOX ORDER BY AGGREGATE_ID"); var resultSet = statement
-            .executeQuery()) {
-      while (resultSet.next()) {
-        ids.add(resultSet.getString(1));
-      }
-    }
-    return ids;
+    return PhaseTwoOutboxReader
+        .ofTheVanillaBpOutbox(dataSource)
+        .entries()
+        .stream()
+        .map(Entry::aggregateId)
+        .sorted()
+        .toList();
 
   }
 
@@ -150,7 +151,7 @@ public class MixedPersistenceStoreAttributionTest {
     final var ids = new ArrayList<String>();
     for (final Document document : mongoClient
         .getDatabase(MONGO_DATABASE)
-        .getCollection("vanillabp-phase-two-outbox")
+        .getCollection(MongoOutboxProperties.DEFAULT_COLLECTION)
         .find()) {
       ids.add(document.getString("aggregateId"));
     }

@@ -62,6 +62,11 @@
       "description": "The name of the table storing the payloads of phase-two calls which carry one. Unset means the name of the outbox table plus '_PAYLOAD', so an application which renames the outbox renames the payloads with it. One table per outbox, for the reason the outbox itself has one: two applications sharing it would house-keep each other's rows."
     },
     {
+      "name": "vanillabp.outbox.jdbc.delivery-table",
+      "type": "java.lang.String",
+      "description": "The name of the table storing the records of processed task deliveries (default 'VANILLABP_TASK_DELIVERY'). Unlike the payload table it does not follow a renamed outbox: the delivery log is a store of its own. An application which sets it applies the same name to 'io.vanillabp:vanillabp-schema', through the changelog property 'vanillabp.delivery.table'."
+    },
+    {
       "name": "vanillabp.outbox.mongo.enabled",
       "type": "java.lang.Boolean",
       "description": "Whether the MongoDB-based default outbox is created when a MongoDB connection is available. Disable it if the application defines its own PhaseTwoOutbox bean and the default (including its store and background dispatcher) is unwanted.",

@@ -1269,7 +1269,7 @@ public class MigrationProcessService<A> {
   /**
    * What phase two throws while the workflow is still not findable: the entry is worth
    * repeating, because the hint says the workflow exists. Nobody waits for it here -
-   * the dispatching thread serves every other entry of the same store, and one workflow
+   * the lane dispatching it serves the other entries handed to it, and one workflow
    * whose BPMS lags behind must not hold operations of workflows which are perfectly
    * findable. So the entry goes back with the window of the adapter which should hold
    * it, which is the time that adapter itself says its read model may need.

@@ -7,6 +7,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.function.UnaryOperator;
 
+import io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxStore;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore;
 import lombok.Builder;
@@ -22,8 +23,9 @@ import lombok.experimental.SuperBuilder;
  * each platform.
  * <p>
  * The delivery log reads its store settings here as well - whether the store is created,
- * whether the MongoDB default is active, and the name of its collection. What that log
- * owns alone is the period a record is kept, which lives in {@link DeliveryProperties}.
+ * whether the MongoDB default is active, and the name of its table respectively collection.
+ * What that log owns alone is the period a record is kept, which lives in
+ * {@link DeliveryProperties}.
  */
 @Getter
 @Setter
@@ -226,7 +228,7 @@ public class PhaseTwoOutboxProperties {
    * Refuses a configuration in which two stores of one database would work on the same
    * table or collection.
    * <p>
-   * Five names can be set, and nothing about them says that they have to differ. Two
+   * Six names can be set, and nothing about them says that they have to differ. Two
    * stores sharing one place read, count and delete each other's rows, and what comes
    * out of that looks like a defect of the outbox rather than like a property somebody
    * wrote twice. The names are compared at startup because that is the last moment
@@ -268,6 +270,7 @@ public class PhaseTwoOutboxProperties {
     final var tables = new LinkedHashMap<String, String>();
     tables.put(JdbcOutboxProperties.TABLE_PROPERTY, JdbcPhaseTwoOutboxStore.tableName(this));
     tables.put(JdbcOutboxProperties.PAYLOAD_TABLE_PROPERTY, JdbcPhaseTwoOutboxStore.payloadTableName(this));
+    tables.put(JdbcOutboxProperties.DELIVERY_TABLE_PROPERTY, JdbcTaskDeliveryStore.tableName(this));
     return tables;
 
   }
@@ -336,9 +339,10 @@ public class PhaseTwoOutboxProperties {
    * How an application separates two relational stores again.
    */
   private static final String WHAT_TO_DO_ABOUT_TWO_TABLES = """
-      Give each store a table of its own, or remove one of the two keys: a payload table \
-      nobody names follows the outbox table and carries '%s' behind it."""
-      .formatted(JdbcPhaseTwoPayloadStore.TABLE_NAME_SUFFIX);
+      Give each store a table of its own, or remove the key you did not mean: a payload table \
+      nobody names follows the outbox table and carries '%s' behind it, and the deliveries lie \
+      in '%s' where nobody names them either."""
+      .formatted(JdbcPhaseTwoPayloadStore.TABLE_NAME_SUFFIX, JdbcTaskDeliveryStore.DEFAULT_TABLE_NAME);
 
   /**
    * How an application separates three MongoDB stores again.
@@ -394,6 +398,14 @@ public class PhaseTwoOutboxProperties {
         + ".jdbc.payload-table";
 
     /**
+     * The key of {@link #deliveryTable}:
+     * <code>vanillabp.outbox.jdbc.delivery-table</code>, named by the same message as
+     * {@link #TABLE_PROPERTY}.
+     */
+    public static final String DELIVERY_TABLE_PROPERTY = SECTION
+        + ".jdbc.delivery-table";
+
+    /**
      * Whether the JDBC-based default outbox is created when a data source is
      * available. Disable it if the application defines its own
      * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} bean and the
@@ -432,6 +444,28 @@ public class PhaseTwoOutboxProperties {
      */
     @Builder.Default
     private String payloadTable = null;
+
+    /**
+     * The name of the table storing the records of processed task deliveries (see
+     * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). The name lies in this
+     * section because the STORE settings of the delivery log are the outbox' ones, the
+     * way <code>vanillabp.outbox.create-schema</code> already is; what belongs to the log
+     * alone is how long a record is kept
+     * (<code>vanillabp.delivery.retention</code>). <code>null</code> means
+     * {@link io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore#DEFAULT_TABLE_NAME},
+     * and unlike the payload table this one does NOT follow a renamed outbox: it is a
+     * store of its own, and a name derived from the outbox would rename it behind the
+     * application's back.
+     * <p>
+     * An application which sets it applies the same name to
+     * <code>io.vanillabp:vanillabp-schema</code>, through the changelog property
+     * <code>vanillabp.delivery.table</code> - see decision 78 in the repository's
+     * DECISIONS.md.
+     * <p>
+     * Key <code>vanillabp.outbox.jdbc.delivery-table</code>, unset by default.
+     */
+    @Builder.Default
+    private String deliveryTable = null;
 
   }
 

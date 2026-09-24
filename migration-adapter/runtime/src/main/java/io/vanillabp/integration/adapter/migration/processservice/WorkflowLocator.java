@@ -82,8 +82,8 @@ import lombok.extern.slf4j.Slf4j;
  * repetition costs an entry another attempt rather than a connection, so that is where
  * a BPMS gets a second chance and where a read model gets the moment it needs
  * (decision 27 in the repository's DECISIONS.md) - the moment is taken by giving the
- * entry back with a due time, because the dispatching thread carries the entries of
- * every other workflow too. Two callers really sleep, and both for the same reason:
+ * entry back with a due time, because the lane carrying it also carries the entries
+ * of other workflows. Two callers really sleep, and both for the same reason:
  * there is no outbox entry behind them which could ask again later, so an answer they
  * do not wait for is an error the application sees. One is a read of the
  * viewer/history API. The other is the election an extension asks for

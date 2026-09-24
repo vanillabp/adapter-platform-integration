@@ -7,17 +7,21 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import javax.sql.DataSource;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.TransactionAwareDataSourceProxy;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader.Entry;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
@@ -43,21 +47,6 @@ public class ExtensionOperationDispatchTest {
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
-  /**
-   * One entry, addressed by the key it was stored under, and only once it is marked DONE -
-   * the state in which that key stops deduplicating.
-   */
-  private static final String COUNT_PROCESSED_ENTRY_OF_KEY = "select count(*) from VANILLABP_PHASE_TWO_OUTBOX "
-      + "where STATUS = 'DONE' and IDEMPOTENCY_KEY = ?";
-
-  /**
-   * The payload of one call, addressed by the reference its entry names.
-   */
-  private static final String COUNT_PAYLOAD_OF_REFERENCE = "select count(*) from VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD "
-      + "where REFERENCE = ?";
-
-  private static final String COUNT_PAYLOADS = "select count(*) from VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD";
-
   @Autowired
   private ProcessService<Aggregate> processService;
 
@@ -71,12 +60,56 @@ public class ExtensionOperationDispatchTest {
   private SampleExtension extension;
 
   @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private DataSource dataSource;
+
+  /**
+   * What the outbox table holds, read through the transaction this test is running: the
+   * payload of a call is asserted while the transaction which wrote it is still open.
+   */
+  private PhaseTwoOutboxReader outboxTable;
 
   @BeforeEach
   public void resetExtension() {
 
     extension.reset();
+    outboxTable = PhaseTwoOutboxReader.ofTheVanillaBpOutbox(new TransactionAwareDataSourceProxy(dataSource));
+
+  }
+
+  /**
+   * How many entries of that key were dispatched, which is the state in which a key
+   * stops deduplicating.
+   *
+   * @param idempotencyKey The key asked about
+   * @return The number of entries
+   */
+  private long dispatchedEntriesOf(
+      final String idempotencyKey) {
+
+    return outboxTable
+        .entries()
+        .stream()
+        .filter(Entry::wasDispatched)
+        .filter(entry -> idempotencyKey.equals(entry.idempotencyKey()))
+        .count();
+
+  }
+
+  /**
+   * How many payloads lie under that reference, which is one while the bytes of a call
+   * wait and none once its entry was dispatched.
+   *
+   * @param reference The reference asked about
+   * @return The number of payloads
+   */
+  private long payloadsOf(
+      final String reference) {
+
+    return outboxTable
+        .payloads()
+        .stream()
+        .filter(payload -> reference.equals(payload.reference()))
+        .count();
 
   }
 
@@ -98,7 +131,7 @@ public class ExtensionOperationDispatchTest {
         .orElseThrow();
 
     final var deadline = System.currentTimeMillis() + 10000;
-    while (jdbcTemplate.queryForObject(COUNT_PROCESSED_ENTRY_OF_KEY, Long.class, key) == 0) {
+    while (dispatchedEntriesOf(key) == 0) {
       assertTrue(
           System.currentTimeMillis() < deadline,
           "the entry of '%s' was never marked processed".formatted(key));
@@ -223,9 +256,7 @@ public class ExtensionOperationDispatchTest {
       outbox.schedule(call);
       // the bytes ride the very transaction the aggregate rides: they are there
       // already, and a rollback would take them with it
-      assertEquals(
-          1L,
-          jdbcTemplate.queryForObject(COUNT_PAYLOAD_OF_REFERENCE, Long.class, call.payloadReference()));
+      assertEquals(1L, payloadsOf(call.payloadReference()));
       return attached;
     });
     assertNotNull(aggregate);
@@ -238,7 +269,7 @@ public class ExtensionOperationDispatchTest {
     // the entry was dispatched, so the bytes are gone - removed right after the entry was
     // marked DONE
     final var deadline = System.currentTimeMillis() + 10000;
-    while (jdbcTemplate.queryForObject(COUNT_PAYLOAD_OF_REFERENCE, Long.class, reference.get()) > 0) {
+    while (payloadsOf(reference.get()) > 0) {
       assertTrue(
           System.currentTimeMillis() < deadline,
           "the payload '%s' was never removed".formatted(reference.get()));
@@ -251,7 +282,7 @@ public class ExtensionOperationDispatchTest {
   @DisplayName("A call without a payload writes no row into the payload table")
   public void aCallWithoutAPayloadStoresNothing() throws Exception {
 
-    final var before = jdbcTemplate.queryForObject(COUNT_PAYLOADS, Long.class);
+    final var before = outboxTable.payloads().size();
 
     final var aggregate = startWorkflowAndSchedule("extension-no-payload", "created");
     assertNotNull(aggregate);
@@ -259,7 +290,7 @@ public class ExtensionOperationDispatchTest {
     assertFalse(dispatched.getFirst().hasPayload());
     assertNull(dispatched.getFirst().payloadReference());
 
-    assertEquals(before, jdbcTemplate.queryForObject(COUNT_PAYLOADS, Long.class));
+    assertEquals(before, outboxTable.payloads().size());
 
   }
 

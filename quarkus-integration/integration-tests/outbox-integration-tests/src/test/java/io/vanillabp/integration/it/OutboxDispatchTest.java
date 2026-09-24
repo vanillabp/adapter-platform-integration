@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+
 import javax.sql.DataSource;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -18,6 +20,8 @@ import io.vanillabp.integration.test.AggregatePersistence;
 import io.vanillabp.integration.test.RecordingPhaseTwoListener;
 import io.vanillabp.integration.test.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader.Entry;
 import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
@@ -61,14 +65,6 @@ public class OutboxDispatchTest {
           .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
       .overrideRuntimeConfigKey("quarkus.datasource.jdbc.url", "jdbc:h2:mem:outbox-dispatch-it;DB_CLOSE_DELAY=-1");
 
-  private static final String COUNT_OUTBOX_ENTRIES = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX";
-
-  private static final String COUNT_DONE_ENTRIES_OF_AGGREGATE = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX "
-      + "WHERE AGGREGATE_ID = '%s' AND STATUS = 'DONE'";
-
-  private static final String COUNT_ENTRIES_OF_AGGREGATE = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX "
-      + "WHERE AGGREGATE_ID = '%s'";
-
   @Inject
   WorkflowService workflowService;
 
@@ -88,20 +84,38 @@ public class OutboxDispatchTest {
 
   }
 
-  private long countOutboxEntries() throws Exception {
+  /**
+   * What the outbox table holds. The data source of a Quarkus application hands out a
+   * connection of the running JTA transaction, so an entry is counted while the
+   * transaction which wrote it is still open.
+   *
+   * @return All entries
+   */
+  private List<Entry> outboxEntries() {
 
-    return count(COUNT_OUTBOX_ENTRIES);
+    return PhaseTwoOutboxReader
+        .ofTheVanillaBpOutbox(dataSource)
+        .entries();
 
   }
 
-  private long count(
-      final String query) throws Exception {
+  private long countOutboxEntries() {
 
-    try (var connection = dataSource.getConnection(); var statement = connection
-        .createStatement(); var resultSet = statement.executeQuery(query)) {
-      resultSet.next();
-      return resultSet.getLong(1);
-    }
+    return outboxEntries().size();
+
+  }
+
+  /**
+   * @param aggregateId The aggregate asked about
+   * @return Its entries
+   */
+  private List<Entry> entriesOf(
+      final Object aggregateId) {
+
+    return outboxEntries()
+        .stream()
+        .filter(entry -> aggregateId.toString().equals(entry.aggregateId()))
+        .toList();
 
   }
 
@@ -134,7 +148,7 @@ public class OutboxDispatchTest {
     // DONE instead of delete: the entry has to be marked DONE after the successful
     // dispatch and stays visible until the asynchronous retention cleanup
     final var deadline = System.currentTimeMillis() + 30_000;
-    while (count(COUNT_DONE_ENTRIES_OF_AGGREGATE.formatted(attachedAggregate.getId())) == 0) {
+    while (entriesOf(attachedAggregate.getId()).stream().noneMatch(Entry::wasDispatched)) {
       assertTrue(System.currentTimeMillis() < deadline, "outbox entry was not marked DONE");
       Thread.sleep(50);
     }
@@ -159,7 +173,7 @@ public class OutboxDispatchTest {
     // wait longer than the poll interval: no second dispatch may happen
     Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
     assertEquals(1, listener.getInvocations().size(), "only one of the two starts was planned");
-    assertEquals(1, count(COUNT_ENTRIES_OF_AGGREGATE.formatted(attachedAggregate.getId())));
+    assertEquals(1, entriesOf(attachedAggregate.getId()).size());
 
   }
 
