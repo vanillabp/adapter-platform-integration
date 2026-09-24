@@ -193,6 +193,11 @@ makes it the same optimistic lock the claim is, so the two can never both win. B
 needed, because the attempts are written when an attempt ends - a dispatch which is on its way
 still shows zero of them and is named by the lease alone.
 
+Both stores name the holder of the lease in every write which says how an attempt ended, next
+to the id: `LEASED_BY` on the JDBC store and `leasedBy` on the MongoDB one. A node whose entry
+was taken over while it dispatched therefore writes no result over the one of the node holding
+it. `MongoADispatchWhichLostItsLeaseTest` holds the MongoDB half.
+
 On the JDBC store the claim reads its row once more after it won it. The select of the due
 entries happens before the claim, and between the two the row may have been replaced, so the
 entry read then would send the dispatch to a payload reference which is gone. MongoDB needs

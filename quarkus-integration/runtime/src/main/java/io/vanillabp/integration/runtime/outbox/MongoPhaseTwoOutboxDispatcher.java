@@ -58,6 +58,8 @@ import lombok.extern.slf4j.Slf4j;
  * lease</strong> ({@link DispatchLease}), so an entry travelling longer than that distance
  * stays the claim of the node carrying it instead of being taken by the next poll; a node
  * which dies stops renewing and another one takes the entry over once the lease ran out.
+ * Every write which says how an attempt ended names the holder of the lease, so a node which
+ * lost its entry writes nothing over what the node holding it wrote.
  * <code>attempts</code> counts the attempts which ENDED, so a slow dispatch uses up no
  * attempt budget. A dispatch which FAILS writes the next
  * attempt itself, at the growing distance of
@@ -576,18 +578,21 @@ public class MongoPhaseTwoOutboxDispatcher {
                   args, payload),
           wasTakenBefore(entry),
           entry.getDate("createdAt"));
-      collection.updateOne(
-          Filters.eq("_id", entryId),
-          Updates.combine(
-              Updates.set("status", MongoPhaseTwoOutbox.STATUS_DONE),
-              Updates.set("doneAt", Date.from(Instant.now())),
-              // the deduplication window ends with the dispatch: the entry's own id
-              // takes the place of the key, which stays readable in idempotencyKey
-              Updates.set("dedupKey", entryId),
-              // the attempt is counted where it ended, and the lease given back
-              Updates.inc("attempts", 1),
-              Updates.unset("leasedBy"),
-              Updates.unset("leasedUntil")));
+      final var markedDone = Updates.combine(
+          Updates.set("status", MongoPhaseTwoOutbox.STATUS_DONE),
+          Updates.set("doneAt", Date.from(Instant.now())),
+          // the deduplication window ends with the dispatch: the entry's own id
+          // takes the place of the key, which stays readable in idempotencyKey
+          Updates.set("dedupKey", entryId),
+          // the attempt is counted where it ended, and the lease given back
+          Updates.inc("attempts", 1),
+          Updates.unset("leasedBy"),
+          Updates.unset("leasedUntil"));
+      if (!writeAsTheHolder(collection, entry, markedDone)) {
+        // the entry belongs to another node, and so do its bytes: that node may still be
+        // dispatching and would find a payload which is gone
+        return;
+      }
       // the entry is dispatched, so its bytes have done their work. Removed AFTER the
       // entry was marked, never before: a crash in between leaves a document the
       // housekeeping deletes, while the other order would leave an entry whose payload
@@ -599,9 +604,9 @@ public class MongoPhaseTwoOutboxDispatcher {
       // the adapter said that repeating cannot help - blocked right away
       // instead of after the configured attempts
       if (io.vanillabp.integration.spi.PhaseTwoPermanentFailure.isPermanent(e)) {
-        collection.updateOne(
-            Filters.eq("_id", entryId),
-            blockEntry(entryId));
+        if (!writeAsTheHolder(collection, entry, blockEntry(entryId))) {
+          return;
+        }
         countBlockedEntry(entry.getString("operation"), true);
         log.error(
             "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
@@ -616,9 +621,9 @@ public class MongoPhaseTwoOutboxDispatcher {
         return;
       }
       if (entry.getInteger("attempts") + 1 >= properties.getBlockAfterAttempts()) {
-        collection.updateOne(
-            Filters.eq("_id", entryId),
-            blockEntry(entryId));
+        if (!writeAsTheHolder(collection, entry, blockEntry(entryId))) {
+          return;
+        }
         countBlockedEntry(entry.getString("operation"), false);
         log.error(
             "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
@@ -638,9 +643,9 @@ public class MongoPhaseTwoOutboxDispatcher {
         // made searchable yet is the case - so the entry waits that long instead of the
         // configured backoff. What ends a reason which never goes away is the attempts
         // counted above, not this due time
-        collection.updateOne(
-            Filters.eq("_id", entryId),
-            dueAgainAt(Instant.now().plus(retryAfter)));
+        if (!writeAsTheHolder(collection, entry, dueAgainAt(Instant.now().plus(retryAfter)))) {
+          return;
+        }
         log.info(
             "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' cannot "
                 + "run yet - the outbox entry '{}' is dispatched again in {} ({} of {} attempts used): {}",
@@ -658,9 +663,9 @@ public class MongoPhaseTwoOutboxDispatcher {
         // attemptDelay(0) is the distance after the first failure: close, because most
         // failures are momentary
         final var retryIn = properties.attemptDelay(entry.getInteger("attempts"));
-        collection.updateOne(
-            Filters.eq("_id", entryId),
-            dueAgainAt(Instant.now().plus(retryIn)));
+        if (!writeAsTheHolder(collection, entry, dueAgainAt(Instant.now().plus(retryIn)))) {
+          return;
+        }
         log.warn(
             "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
                 + "failed - the outbox entry '{}' is dispatched again in {} ({} of {} attempts used)",
@@ -675,6 +680,65 @@ public class MongoPhaseTwoOutboxDispatcher {
             e);
       }
     }
+
+  }
+
+  /**
+   * Writes down how an attempt ended, on the entry this node holds. The name of this node is
+   * in the condition next to the id, so a node whose lease was taken over writes nothing: the
+   * node holding the entry is carrying the same operation out, and its answer is the one the
+   * collection keeps. The most expensive write to lose that race is a block over an entry the
+   * other node has just dispatched, because somebody would be asked to repair an operation
+   * which succeeded.
+   *
+   * @param collection The outbox collection
+   * @param entry The entry this attempt ran on
+   * @param update What to write on it
+   * @return Whether this node still held the entry, so the write took
+   */
+  private boolean writeAsTheHolder(
+      final MongoCollection<Document> collection,
+      final Document entry,
+      final org.bson.conversions.Bson update) {
+
+    final var written = collection.updateOne(
+        Filters
+            .and(
+                Filters.eq("_id", entry.getString("_id")),
+                Filters.eq("leasedBy", lease.owner())),
+        update);
+    if (written.getMatchedCount() != 0) {
+      return true;
+    }
+    reportResultOfALostEntry(entry);
+    return false;
+
+  }
+
+  /**
+   * Says that an attempt ended on an entry this node does not hold any more, so what it wanted
+   * to write was dropped.
+   * <p>
+   * The renewal said the same thing earlier, at the moment the entry changed hands. This
+   * message is the other end of it and is worth its own line: it names the operation which ran
+   * twice, and it is the proof that the second run did not overwrite what the node holding the
+   * entry wrote.
+   *
+   * @param entry The entry which was taken over while this node dispatched it
+   */
+  private static void reportResultOfALostEntry(
+      final Document entry) {
+
+    log
+        .warn(
+            "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' ended, but "
+                + "the outbox entry '{}' belongs to another node by now - the result of this dispatch was "
+                + "dropped and the entry says what that node wrote",
+            entry.getString("operation"),
+            entry.getString("bpmnProcessId"),
+            entry.getString("workflowModuleId"),
+            entry.getString("aggregateId"),
+            entry.getString("_id"));
 
   }
 

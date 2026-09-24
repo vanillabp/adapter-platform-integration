@@ -25,11 +25,22 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
    */
   private final java.util.concurrent.atomic.AtomicLong dispatchTakesMillis = new java.util.concurrent.atomic.AtomicLong(0);
 
+  /**
+   * The next dispatch to be stopped in the middle, taken by the dispatch which finds it. A
+   * test which needs something to happen to an outbox entry while its dispatch is under way
+   * asks for one and lets it go afterwards.
+   */
+  private final java.util.concurrent.atomic.AtomicReference<HeldDispatch> holdTheNextDispatch = new java.util.concurrent.atomic.AtomicReference<>();
+
   @Override
   public void startedWorkflowPhaseTwo(
       final Object workflowAggregateId) {
 
     invocations.add(workflowAggregateId);
+    final var hold = holdTheNextDispatch.getAndSet(null);
+    if (hold != null) {
+      hold.waitUntilTheTestLetsGo();
+    }
     final var takes = dispatchTakesMillis.get();
     if (takes > 0) {
       try {
@@ -64,6 +75,74 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
 
   }
 
+  /**
+   * Stops the dispatch which comes next until the test lets it go. The test holds the
+   * returned handle and has to end it, even where it failed in between: the thread waiting on
+   * it is the one the outbox polls with.
+   *
+   * @return The handle the test ends the held dispatch with
+   */
+  public HeldDispatch holdTheNextDispatch() {
+
+    final var hold = new HeldDispatch();
+    holdTheNextDispatch.set(hold);
+    return hold;
+
+  }
+
+  /**
+   * One dispatch stopped inside the adapter, which is where a test can work on the outbox
+   * entry of an operation that is under way.
+   */
+  public static final class HeldDispatch {
+
+    /**
+     * How long a held dispatch waits at most. It is a guard against a test which forgot to
+     * end its hold, not a distance anything is timed by.
+     */
+    private static final long UNTIL_THE_TEST_LETS_GO = 60_000;
+
+    private final java.util.concurrent.CountDownLatch released = new java.util.concurrent.CountDownLatch(1);
+
+    private volatile RuntimeException endsWith;
+
+    private void waitUntilTheTestLetsGo() {
+
+      try {
+        released.await(UNTIL_THE_TEST_LETS_GO, java.util.concurrent.TimeUnit.MILLISECONDS);
+      } catch (final InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+      if (endsWith != null) {
+        throw endsWith;
+      }
+
+    }
+
+    /**
+     * Lets the held dispatch end the way the test wants it to end.
+     *
+     * @param failure What the dispatch throws, <code>null</code> where it succeeds
+     */
+    public void endWith(
+        final RuntimeException failure) {
+
+      endsWith = failure;
+      released.countDown();
+
+    }
+
+    /**
+     * Lets the held dispatch end as a dispatch which got through.
+     */
+    public void end() {
+
+      endWith(null);
+
+    }
+
+  }
+
   public List<Object> getInvocations() {
 
     return List.copyOf(invocations);
@@ -75,6 +154,10 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
     invocations.clear();
     failuresRemaining.set(0);
     dispatchTakesMillis.set(0);
+    final var neverTaken = holdTheNextDispatch.getAndSet(null);
+    if (neverTaken != null) {
+      neverTaken.end();
+    }
 
   }
 

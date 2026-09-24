@@ -280,7 +280,10 @@ disable an unwanted default via its `enabled` flag:
    `MongoPhaseTwoOutboxDispatcher` claims due OPEN entries atomically
    (find-and-modify with attempts/backoff), marks them DONE after successful
    dispatch and deletes DONE entries once the retention passed; repeatedly failing
-   entries are marked BLOCKED. It also runs on a private single-thread executor
+   entries are marked BLOCKED. Each of those writes names `leasedBy` next to the id, so a
+   node whose entry was taken over while it dispatched writes no result over the one of the
+   node holding it (`AMongoDispatchWhichLostItsLeaseTest`).
+   It also runs on a private single-thread executor
    (no `TaskScheduler`), and it keeps that one thread: the lanes of the JDBC store are not
    tied to JDBC, but whether this store needs them is a question somebody has to measure
    first. **Note:** transactional enlisting requires MongoDB

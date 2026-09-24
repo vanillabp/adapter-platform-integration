@@ -39,8 +39,8 @@ import lombok.extern.slf4j.Slf4j;
  * was finished by somebody else. The ticking stops there and says so, because from that
  * moment on two nodes may be carrying out the same operation, which is exactly what an
  * operator has to be able to read afterwards. The dispatch which lost the entry runs to its
- * end, and every store decides for itself whether what that dispatch wants to write still
- * counts.
+ * end and its result is dropped: every store names the holder of the lease in the writes
+ * which say how an attempt ended, so the entry keeps what the node holding it wrote.
  * <p>
  * What the lease does NOT do is count. The number of attempts is written when an attempt
  * ENDED, so an entry whose dispatch is slow uses up no attempt budget (see

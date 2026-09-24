@@ -40,7 +40,9 @@ import lombok.extern.slf4j.Slf4j;
  * dispatch the same entry concurrently. <strong>A running dispatch renews its lease</strong>
  * ({@link DispatchLease}), so an entry travelling longer than that distance stays the claim
  * of the node carrying it instead of being taken by the next poll; a node which dies stops
- * renewing and another one takes the entry over once the lease ran out. A dispatch which
+ * renewing and another one takes the entry over once the lease ran out. Every write which
+ * says how an attempt ended names the holder of the lease, so a node which lost its entry
+ * writes nothing over what the node holding it wrote. A dispatch which
  * FAILS writes the next attempt itself, at the growing distance of
  * {@link io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties#attemptDelay(int)}
  * - doubling per attempt up to <code>vanillabp.outbox.max-attempt-frequency</code>. On successful dispatch the entry is marked
@@ -369,19 +371,21 @@ public class MongoPhaseTwoOutboxDispatcher {
                   entry.getAdapterId(), entry.getArgs(), payload),
           wasTakenBefore(entry),
           entry.getCreatedAt());
-      mongoTemplate.updateFirst(
-          Query.query(Criteria.where("_id").is(entry.getId())),
-          new Update()
-              .set("status", PhaseTwoOutboxEntry.STATUS_DONE)
-              .set("doneAt", Instant.now())
-              // the deduplication window ends with the dispatch: the entry's own id
-              // takes the place of the key, which stays readable in idempotencyKey
-              .set("dedupKey", entry.getId())
-              // the attempt is counted where it ended, and the lease given back
-              .inc("attempts", 1)
-              .unset("leasedBy")
-              .unset("leasedUntil"),
-          collection);
+      final var markedDone = new Update()
+          .set("status", PhaseTwoOutboxEntry.STATUS_DONE)
+          .set("doneAt", Instant.now())
+          // the deduplication window ends with the dispatch: the entry's own id
+          // takes the place of the key, which stays readable in idempotencyKey
+          .set("dedupKey", entry.getId())
+          // the attempt is counted where it ended, and the lease given back
+          .inc("attempts", 1)
+          .unset("leasedBy")
+          .unset("leasedUntil");
+      if (!writeAsTheHolder(entry, markedDone)) {
+        // the entry belongs to another node, and so do its bytes: that node may still be
+        // dispatching and would find a payload which is gone
+        return;
+      }
       // the entry is dispatched, so its bytes have done their work. Removed AFTER the
       // entry was marked, never before: a crash in between leaves a document the
       // housekeeping deletes, while the other order would leave an entry whose payload
@@ -393,10 +397,9 @@ public class MongoPhaseTwoOutboxDispatcher {
       // the adapter said that repeating cannot help - blocked right away
       // instead of after the configured attempts
       if (io.vanillabp.integration.spi.PhaseTwoPermanentFailure.isPermanent(e)) {
-        mongoTemplate.updateFirst(
-            Query.query(Criteria.where("_id").is(entry.getId())),
-            blockEntry(entry.getId()),
-            collection);
+        if (!writeAsTheHolder(entry, blockEntry(entry.getId()))) {
+          return;
+        }
         countBlockedEntry(entry.getOperation(), true);
         log.error(
             "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
@@ -411,10 +414,9 @@ public class MongoPhaseTwoOutboxDispatcher {
         return;
       }
       if (entry.getAttempts() + 1 >= properties.getBlockAfterAttempts()) {
-        mongoTemplate.updateFirst(
-            Query.query(Criteria.where("_id").is(entry.getId())),
-            blockEntry(entry.getId()),
-            collection);
+        if (!writeAsTheHolder(entry, blockEntry(entry.getId()))) {
+          return;
+        }
         countBlockedEntry(entry.getOperation(), false);
         log.error(
             "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
@@ -434,10 +436,9 @@ public class MongoPhaseTwoOutboxDispatcher {
         // made searchable yet is the case - so the entry waits that long instead of the
         // configured backoff. What ends a reason which never goes away is the attempts
         // counted above, not this due time
-        mongoTemplate.updateFirst(
-            Query.query(Criteria.where("_id").is(entry.getId())),
-            dueAgainAt(Instant.now().plus(retryAfter)),
-            collection);
+        if (!writeAsTheHolder(entry, dueAgainAt(Instant.now().plus(retryAfter)))) {
+          return;
+        }
         log.info(
             "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' cannot "
                 + "run yet - the outbox entry '{}' is dispatched again in {} ({} of {} attempts used): {}",
@@ -455,10 +456,9 @@ public class MongoPhaseTwoOutboxDispatcher {
         // the distance after the first failure: close, because most failures are
         // momentary
         final var retryIn = properties.attemptDelay(entry.getAttempts());
-        mongoTemplate.updateFirst(
-            Query.query(Criteria.where("_id").is(entry.getId())),
-            dueAgainAt(Instant.now().plus(retryIn)),
-            collection);
+        if (!writeAsTheHolder(entry, dueAgainAt(Instant.now().plus(retryIn)))) {
+          return;
+        }
         log.warn(
             "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
                 + "failed - the outbox entry '{}' is dispatched again in {} ({} of {} attempts used)",
@@ -473,6 +473,66 @@ public class MongoPhaseTwoOutboxDispatcher {
             e);
       }
     }
+
+  }
+
+  /**
+   * Writes down how an attempt ended, on the entry this node holds. The name of this node is
+   * in the condition next to the id, so a node whose lease was taken over writes nothing: the
+   * node holding the entry is carrying the same operation out, and its answer is the one the
+   * collection keeps. The most expensive write to lose that race is a block over an entry the
+   * other node has just dispatched, because somebody would be asked to repair an operation
+   * which succeeded.
+   *
+   * @param entry The entry this attempt ran on
+   * @param update What to write on it
+   * @return Whether this node still held the entry, so the write took
+   */
+  private boolean writeAsTheHolder(
+      final PhaseTwoOutboxEntry entry,
+      final Update update) {
+
+    final var written = mongoTemplate.updateFirst(
+        Query
+            .query(Criteria
+                .where("_id")
+                .is(entry.getId())
+                .and("leasedBy")
+                .is(lease.owner())),
+        update,
+        collection);
+    if (written.getMatchedCount() != 0) {
+      return true;
+    }
+    reportResultOfALostEntry(entry);
+    return false;
+
+  }
+
+  /**
+   * Says that an attempt ended on an entry this node does not hold any more, so what it wanted
+   * to write was dropped.
+   * <p>
+   * The renewal said the same thing earlier, at the moment the entry changed hands. This
+   * message is the other end of it and is worth its own line: it names the operation which ran
+   * twice, and it is the proof that the second run did not overwrite what the node holding the
+   * entry wrote.
+   *
+   * @param entry The entry which was taken over while this node dispatched it
+   */
+  private void reportResultOfALostEntry(
+      final PhaseTwoOutboxEntry entry) {
+
+    log
+        .warn(
+            "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' ended, but "
+                + "the outbox entry '{}' belongs to another node by now - the result of this dispatch was "
+                + "dropped and the entry says what that node wrote",
+            entry.getOperation(),
+            entry.getBpmnProcessId(),
+            entry.getWorkflowModuleId(),
+            entry.getAggregateId(),
+            entry.getId());
 
   }
 
