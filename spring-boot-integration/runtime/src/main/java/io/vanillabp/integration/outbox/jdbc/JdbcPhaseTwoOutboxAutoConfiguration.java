@@ -23,6 +23,7 @@ import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxStore;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
+import io.vanillabp.integration.config.GruelboxOutboxProperties;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfiguration;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
@@ -72,7 +73,7 @@ import lombok.extern.slf4j.Slf4j;
     DataSource.class, PlatformTransactionManager.class
 })
 @ConditionalOnBooleanProperty(name = "vanillabp.outbox.jdbc.enabled", matchIfMissing = true)
-@ConditionalOnProperty(name = "vanillabp.outbox.gruelbox.enabled", havingValue = "false", matchIfMissing = true)
+@ConditionalOnProperty(name = GruelboxOutboxProperties.ENABLED, havingValue = "false", matchIfMissing = true)
 @EnableConfigurationProperties(VanillaBpConfigurationProperties.class)
 @Slf4j
 public class JdbcPhaseTwoOutboxAutoConfiguration {

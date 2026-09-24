@@ -386,6 +386,27 @@ database or an existing outbox infrastructure), define a bean implementing
 `io.vanillabp.integration.spi.PhaseTwoOutbox` — the auto-configurations
 back off.
 
+### What an IDE proposes for the `vanillabp` keys
+
+Spring Boot ships the keys it knows in `META-INF/spring-configuration-metadata.json`,
+and a development environment reads that file to propose keys and show their
+documentation. The annotation processor writes it while this module is compiled, but it
+only sees the properties classes of this module. The sections below them
+(`vanillabp.outbox.*`, `vanillabp.delivery.*` and the other core sections) arrive as
+a dependency, and the processor does not look into a model it gets that way. Their keys
+come from `src/main/resources/META-INF/additional-spring-configuration-metadata.json`,
+which is written by hand.
+
+So a key added to the core model is proposed by nothing until it is described there, and
+a key which lives in a condition alone is in no properties class at all.
+`vanillabp.outbox.gruelbox.enabled` was such a key for a while. It is bound by
+`GruelboxOutboxProperties` now, a properties class of this module and not of the core,
+because the gruelbox store exists on Spring Boot alone. So the processor writes that key
+itself, and the hand-written file only gives it its description.
+`EveryKeyOfAConditionIsInTheMetadataTest` reads the conditions of every
+auto-configuration back and asks the metadata about each key they name, so the next one
+fails the build instead of somebody's editor.
+
 ### Separating workflow module properties from application properties
 
 Read the [Wiki](https://github.com/vanillabp/adapter-platform-integration/wiki/Workflow-modules) to learn about reasons for having multiple workflow modules.

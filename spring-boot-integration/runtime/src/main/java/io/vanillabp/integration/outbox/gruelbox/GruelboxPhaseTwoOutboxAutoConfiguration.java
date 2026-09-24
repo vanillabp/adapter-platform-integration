@@ -37,6 +37,7 @@ import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxStore;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
+import io.vanillabp.integration.config.GruelboxOutboxProperties;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.spi.PhaseTwoCall;
@@ -110,7 +111,7 @@ import jakarta.persistence.EntityManagerFactory;
     DataSource.class, PlatformTransactionManager.class
 })
 @ConditionalOnBooleanProperty(name = "vanillabp.outbox.jdbc.enabled", matchIfMissing = true)
-@ConditionalOnProperty(name = "vanillabp.outbox.gruelbox.enabled", havingValue = "true")
+@ConditionalOnProperty(name = GruelboxOutboxProperties.ENABLED, havingValue = "true")
 @EnableConfigurationProperties(VanillaBpConfigurationProperties.class)
 public class GruelboxPhaseTwoOutboxAutoConfiguration {
 

@@ -28,10 +28,22 @@
       "defaultValue": "30s"
     },
     {
+      "name": "vanillabp.outbox.max-attempt-frequency",
+      "type": "java.time.Duration",
+      "description": "The longest distance the growing backoff reaches. Every failed attempt doubles the wait until it arrives here, so a BPMS which comes back is noticed within this period however long it was away. The gruelbox store knows one fixed distance and does not follow this key.",
+      "defaultValue": "5m"
+    },
+    {
       "name": "vanillabp.outbox.block-after-attempts",
       "type": "java.lang.Integer",
       "description": "After how many failed attempts an entry is blocked (not retried any longer). Blocked entries have to be fixed manually (e.g. by cleaning up the outbox store).",
-      "defaultValue": 10
+      "defaultValue": 50
+    },
+    {
+      "name": "vanillabp.outbox.dispatch-threads",
+      "type": "java.lang.Integer",
+      "description": "How many entries an outbox of VanillaBP's own dispatches at the same time. The workflow aggregate decides which thread takes an entry, so two operations of one workflow keep the order they were written in. Every dispatch costs a database connection and a call to the BPMS, so a large number here only moves the limit into the connection pool.",
+      "defaultValue": 4
     },
     {
       "name": "vanillabp.outbox.create-schema",
@@ -42,19 +54,19 @@
     {
       "name": "vanillabp.outbox.retention",
       "type": "java.time.Duration",
-      "description": "How long successfully dispatched entries (marked as DONE) are retained before they are deleted asynchronously. Retained entries keep the deduplication window of the idempotency contract open beyond dispatch.",
+      "description": "How long successfully dispatched entries (marked as DONE) are retained before they are deleted asynchronously. What a retained entry buys is a dispatched operation somebody can still look at during support. It does not widen the deduplication window: that one ends with the dispatch. The records of processed task deliveries are kept for a period of their own, 'vanillabp.delivery.retention'.",
       "defaultValue": "7d"
     },
     {
       "name": "vanillabp.outbox.jdbc.enabled",
       "type": "java.lang.Boolean",
-      "description": "Whether the JDBC-based default outbox (gruelbox over the data source) is created when a data source is available. Disable it if the application defines its own PhaseTwoOutbox bean and the default (including its store and background dispatcher) is unwanted.",
+      "description": "Whether the JDBC-based default outbox is created when a data source is available. Disable it if the application defines its own PhaseTwoOutbox bean and the default (including its store and background dispatcher) is unwanted.",
       "defaultValue": true
     },
     {
       "name": "vanillabp.outbox.jdbc.table",
       "type": "java.lang.String",
-      "description": "The name of the table storing outbox entries (default 'VANILLABP_PHASE_TWO_OUTBOX'). An application which kept gruelbox ('vanillabp.outbox.gruelbox.enabled') reads this key as well, and a name of its own switches the schema migration of that library off, because it only ever targets 'TXNO_OUTBOX'. Every outbox instance needs its own store - two dispatchers polling the same table would compete and double-dispatch."
+      "description": "The name of the table storing outbox entries (default 'VANILLABP_PHASE_TWO_OUTBOX'). An application which switched to gruelbox ('vanillabp.outbox.gruelbox.enabled') stores its entries in gruelbox' own table 'TXNO_OUTBOX'. This key does not rename that table, but the payloads of that store follow the name written here. Every outbox instance needs its own store - two dispatchers polling the same table would compete and double-dispatch."
     },
     {
       "name": "vanillabp.outbox.jdbc.payload-table",
@@ -82,6 +94,18 @@
       "name": "vanillabp.outbox.mongo.payload-collection",
       "type": "java.lang.String",
       "description": "The name of the collection storing the payloads of phase-two calls which carry one. Unset means the name of the outbox collection plus '-payloads', so an application which renames the outbox renames the payloads with it. One collection per outbox, for the reason the outbox itself has one."
+    },
+    {
+      "name": "vanillabp.outbox.mongo.delivery-collection",
+      "type": "java.lang.String",
+      "description": "The name of the collection storing the records of processed task deliveries. Keep it apart from the outbox collection and from the payload collection: stores sharing one collection read each other's documents. How long a record is kept is 'vanillabp.delivery.retention'.",
+      "defaultValue": "vanillabp-task-deliveries"
+    },
+    {
+      "name": "vanillabp.outbox.gruelbox.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Whether the gruelbox-based outbox is built in place of the JDBC one VanillaBP writes itself. It needs 'com.gruelbox:transactionoutbox-core' and 'com.gruelbox:transactionoutbox-spring' on the classpath, which VanillaBP does not bring along any more. Its entries go into gruelbox' own table 'TXNO_OUTBOX'. Spring Boot is the only platform offering that store.",
+      "defaultValue": false
     },
     {
       "name": "vanillabp.workflow-modules",

@@ -26,6 +26,7 @@ import io.vanillabp.integration.adapter.AdapterConfigurationBase;
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.config.GruelboxOutboxProperties;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.workflowmodule.WorkflowModule;
@@ -39,8 +40,9 @@ import lombok.Setter;
  * in the core. Also covers the Spring-specific parts kept in the platform: the
  * "adapters found in classpath" check, the case-insensitive
  * <code>deployment-failure</code> enum conversion with a guiding failure, the
- * environment-variable misbinding validation and the coexistence of an adapter-owned
- * overlay class bound to the same <code>vanillabp</code> prefix.
+ * environment-variable misbinding validation, the coexistence of an adapter-owned
+ * overlay class bound to the same <code>vanillabp</code> prefix and the gruelbox switch,
+ * the one key of the tree which this module binds itself.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class VanillaBpConfigurationBindingTest {
@@ -219,6 +221,43 @@ public class VanillaBpConfigurationBindingTest {
   }
 
   @Test
+  @DisplayName("The switch picking the gruelbox store is bound by the Spring Boot module")
+  public void gruelboxSwitchIsBoundBySpringBoot() {
+
+    contextRunner
+        .withPropertyValues(
+            "vanillabp.resources-location=classpath*:vanillabp-processes",
+            "vanillabp.adapters.test.type=dummy",
+            // the store exists on Spring Boot only, so the key is not in the core model
+            "vanillabp.outbox.gruelbox.enabled=true")
+        .run(context -> {
+
+          assertTrue(context.getBean(GruelboxOutboxProperties.class).isEnabled());
+
+        });
+
+  }
+
+  @Test
+  @DisplayName("A gruelbox switch which is no boolean fails naming the key")
+  public void invalidGruelboxSwitchIsRejected() {
+
+    contextRunner
+        .withPropertyValues(
+            "vanillabp.resources-location=classpath*:vanillabp-processes",
+            "vanillabp.adapters.test.type=dummy",
+            "vanillabp.outbox.gruelbox.enabled=sometimes")
+        .run(context -> {
+
+          assertNotNull(context.getStartupFailure());
+          final var message = fullFailureText(context.getStartupFailure());
+          assertTrue(message.contains(GruelboxOutboxProperties.ENABLED), message);
+
+        });
+
+  }
+
+  @Test
   @DisplayName("Workflow-level configuration binds and is resolved (formerly rejected)")
   public void workflowLevelConfigurationIsAccepted() {
 
@@ -231,7 +270,7 @@ public class VanillaBpConfigurationBindingTest {
             "vanillabp.adapters.test2.type=dummy",
             "vanillabp.workflow-modules.test-module.prioritized-adapters=test,test2",
             "vanillabp.workflow-modules.test-module.workflows.MyProcess.prioritized-adapters=test2,test",
-            "vanillabp.workflow-modules.test-module.workflows.MyProcess.adapters.test2.resources-location=classpath:wf-specific")
+            "vanillabp.workflow-modules.test-module.workflows.MyProcess.adapters.test2.deduplicate-deliveries=false")
         .run(context -> {
 
           assertNotNull(context.getBean(MigrationAdapterProperties.class));
@@ -248,13 +287,36 @@ public class VanillaBpConfigurationBindingTest {
 
           // adapter-scoped keys bind at the workflow level and resolve most-specific-wins
           assertEquals(
-              "classpath:wf-specific",
+              Boolean.FALSE,
               properties.resolveForAdapter(
                   "test-module",
                   "MyProcess",
                   null,
                   "test2",
-                  AdapterProperties::getResourcesLocation));
+                  AdapterProperties::getDeduplicateDeliveries));
+
+        });
+
+  }
+
+  @Test
+  @DisplayName("A resources location below the workflow module ends the startup")
+  public void aResourcesLocationBelowTheWorkflowModuleIsRejected() {
+
+    contextRunner
+        .withPropertyValues(
+            "vanillabp.adapters.test.type=dummy",
+            "vanillabp.workflow-modules.test-module.prioritized-adapters=test",
+            "vanillabp.workflow-modules.test-module.adapters.test.resources-location=classpath:bpms-specific",
+            "vanillabp.workflow-modules.test-module.workflows.MyProcess.adapters.test.resources-location=classpath:wf-specific")
+        .run(context -> {
+
+          assertNotNull(context.getStartupFailure());
+          final var message = rootMessage(context.getStartupFailure());
+          assertTrue(message.contains(
+              "vanillabp.workflow-modules.test-module.workflows.MyProcess.adapters.test.resources-location"));
+          assertTrue(message.contains(
+              "vanillabp.workflow-modules.<workflow-module>.adapters.<adapter>.resources-location"));
 
         });
 

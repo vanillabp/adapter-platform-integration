@@ -2705,3 +2705,22 @@ the two settings cannot be told apart by them.
 
 This entry does not change decision 75, which decided the lanes and the ordering key. What it
 changes is how much a node claims ahead of them.
+
+### 80. The BPMN location is read above the workflow, so below it the startup ends
+
+`resources-location` names where an adapter's BPMN files lie. It is read for a workflow module
+and for an adapter, and the global `vanillabp.resources-location` follows both. Nothing reads it
+lower down, and nothing can: the deployment opens the files to learn which processes and which
+tasks are in them, so at the moment the location is needed there is no workflow and no task to
+ask for one.
+
+The key nevertheless binds at all four levels of decision 7, because one class carries what an
+adapter may be told and every level binds that class. So a line at a workflow or at a task can be
+written, and until now it was read by nobody and reported by nobody. Somebody moves their BPMN
+files and writes the new location one level too deep, and the application boots on the old files.
+
+`MigrationAdapterProperties.refuseResourcesLocationsBelowTheWorkflowModule` ends the startup
+there instead. The message names every place a location was written at and the two keys it may be
+written at, which is the same answer decision 66 gives for the permission to share a whole
+aggregate. Both are settings a level binds without reading, and a setting which can be written
+and does nothing is worse than one which cannot be written at all.

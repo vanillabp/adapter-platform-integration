@@ -4,6 +4,8 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
+import io.vanillabp.integration.config.GruelboxOutboxProperties;
+
 /**
  * Ends the boot of an application which asked for the gruelbox store without having
  * gruelbox on its classpath.
@@ -15,7 +17,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
  * missing here.
  */
 @AutoConfiguration
-@ConditionalOnProperty(name = "vanillabp.outbox.gruelbox.enabled", havingValue = "true")
+@ConditionalOnProperty(name = GruelboxOutboxProperties.ENABLED, havingValue = "true")
 @ConditionalOnMissingClass("com.gruelbox.transactionoutbox.TransactionOutbox")
 public class GruelboxMissingAutoConfiguration {
 
