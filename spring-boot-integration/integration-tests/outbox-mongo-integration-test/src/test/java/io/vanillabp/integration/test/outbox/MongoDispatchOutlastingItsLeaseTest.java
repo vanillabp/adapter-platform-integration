@@ -41,12 +41,13 @@ import io.vanillabp.spi.process.ProcessService;
  * What the lease of the MongoDB store is for: an entry somebody is dispatching stays that
  * node's entry however long the dispatch takes, and the attempts count what was attempted.
  * <p>
- * This store dispatches on the thread which polls, so one node cannot take its own entry
- * back - the second taker is always another node. The test plays that node: while a dispatch
- * is under way it asks the collection the question a poll of another instance asks, and the
- * answer has to stay "nothing to take" for the whole dispatch. Before the lease was renewed
- * the answer flipped after one <code>vanillabp.outbox.attempt-frequency</code>, half a second
- * here, and the operation was carried out twice.
+ * This store dispatches on lanes of its own, so its poller keeps asking while a dispatch is
+ * under way. What makes a poll leave the entry alone is the live lease, this node's next poll
+ * as much as another node's. The test plays another node: while a dispatch is under way it asks
+ * the collection the question a poll asks, and the answer has to stay "nothing to take" for the
+ * whole dispatch. Before the lease was renewed the answer flipped after one
+ * <code>vanillabp.outbox.attempt-frequency</code>, half a second here, and the operation was
+ * carried out twice.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput

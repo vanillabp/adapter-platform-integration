@@ -25,6 +25,8 @@ import io.vanillabp.integration.test.RecordingPhaseTwoListener;
 import io.vanillabp.integration.test.SteerableTaskAwarenessSource;
 import io.vanillabp.integration.test.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader.Entry;
 import io.vanillabp.spi.process.TaskNotFoundException;
 import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
@@ -110,15 +112,6 @@ public class TaskOperationsDispatchTest {
   @Inject
   DataSource dataSource;
 
-  /**
-   * An entry deduplicates and can be re-dispatched for as long as it is OPEN, which the
-   * dispatcher ends one UPDATE after the listener ran. A BLOCKED entry is left out: it has
-   * released its key and waits for a person, so a test which waited for it would wait for
-   * ever.
-   */
-  private static final String COUNT_ENTRIES_NOT_DONE = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX "
-      + "WHERE AGGREGATE_ID = '%s' AND STATUS = 'OPEN'";
-
   @BeforeEach
   public void reset() {
 
@@ -157,15 +150,25 @@ public class TaskOperationsDispatchTest {
 
   }
 
+  /**
+   * An entry deduplicates and can be dispatched again for as long as it waits, which the
+   * dispatcher ends one write after the listener ran. An entry which was put aside is
+   * left out: it has released its key and waits for a person, so a test which waited for
+   * it would wait for ever.
+   *
+   * @param aggregate The aggregate asked about
+   * @return How many of its entries are still waiting
+   */
   private long countEntriesNotDone(
-      final Aggregate aggregate) throws Exception {
+      final Aggregate aggregate) {
 
-    try (var connection = dataSource.getConnection(); var statement = connection
-        .createStatement(); var resultSet = statement
-            .executeQuery(COUNT_ENTRIES_NOT_DONE.formatted(aggregate.getId()))) {
-      resultSet.next();
-      return resultSet.getLong(1);
-    }
+    return PhaseTwoOutboxReader
+        .ofTheVanillaBpOutbox(dataSource)
+        .entries()
+        .stream()
+        .filter(Entry::isWaiting)
+        .filter(entry -> aggregate.getId().toString().equals(entry.aggregateId()))
+        .count();
 
   }
 

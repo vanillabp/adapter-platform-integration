@@ -5,16 +5,19 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import javax.sql.DataSource;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader.Entry;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
@@ -45,18 +48,6 @@ public class OutboxDispatchTest {
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
-  private static final String COUNT_OUTBOX_ENTRIES = "select count(*) from VANILLABP_PHASE_TWO_OUTBOX";
-
-  /**
-   * The entry of ONE aggregate, and only once it is marked DONE - the state in which its
-   * key stops deduplicating. A count over the whole table would already be
-   * satisfied by a sibling test's entry, which is the same mistake in a hiding place.
-   * The key of a start ends in the aggregate's ID (see
-   * {@code PhaseOperation#START_WORKFLOW}).
-   */
-  private static final String COUNT_PROCESSED_START_OF_AGGREGATE = "select count(*) from VANILLABP_PHASE_TWO_OUTBOX "
-      + "where STATUS = 'DONE' and IDEMPOTENCY_KEY like '%%|%s'";
-
   @Autowired
   private ProcessService<Aggregate> processService;
 
@@ -64,7 +55,7 @@ public class OutboxDispatchTest {
   private TransactionTemplate transactionTemplate;
 
   @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private DataSource dataSource;
 
   @Autowired
   private RecordingPhaseTwoListener listener;
@@ -78,8 +69,40 @@ public class OutboxDispatchTest {
 
   private long countOutboxEntries() {
 
-    final var count = jdbcTemplate.queryForObject(COUNT_OUTBOX_ENTRIES, Long.class);
-    return count == null ? 0 : count;
+    return outboxTable().entries().size();
+
+  }
+
+  /**
+   * What the outbox table holds. It is read outside the transaction of this test, which
+   * is what the rollback case below asks for: an entry becomes visible when the
+   * transaction which wrote it commits.
+   *
+   * @return The reader of the table
+   */
+  private PhaseTwoOutboxReader outboxTable() {
+
+    return PhaseTwoOutboxReader.ofTheVanillaBpOutbox(dataSource);
+
+  }
+
+  /**
+   * The entries of ONE aggregate which were dispatched - the state in which their key
+   * stops deduplicating. A count over the whole table would already be satisfied by a
+   * sibling test's entry, which is the same mistake in a hiding place.
+   *
+   * @param aggregateId The aggregate asked about
+   * @return The number of entries
+   */
+  private long dispatchedEntriesOf(
+      final Object aggregateId) {
+
+    return outboxTable()
+        .entries()
+        .stream()
+        .filter(Entry::wasDispatched)
+        .filter(entry -> aggregateId.toString().equals(entry.aggregateId()))
+        .count();
 
   }
 
@@ -170,10 +193,7 @@ public class OutboxDispatchTest {
     // meet the state this test is about - the listener runs inside the dispatch, before
     // the entry is processed
     final var deadline = System.currentTimeMillis() + 10000;
-    while (jdbcTemplate
-        .queryForObject(
-            COUNT_PROCESSED_START_OF_AGGREGATE.formatted(attachedAggregate.getId()),
-            Long.class) == 0) {
+    while (dispatchedEntriesOf(attachedAggregate.getId()) == 0) {
       assertTrue(System.currentTimeMillis() < deadline, "processed outbox entry was not retained");
       Thread.sleep(50);
     }

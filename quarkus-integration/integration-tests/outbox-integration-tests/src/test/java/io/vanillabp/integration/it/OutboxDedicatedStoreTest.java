@@ -18,6 +18,7 @@ import io.vanillabp.integration.test.DedicatedOutboxAware;
 import io.vanillabp.integration.test.RecordingPhaseTwoListener;
 import io.vanillabp.integration.test.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
 import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
@@ -56,14 +57,16 @@ public class OutboxDedicatedStoreTest {
   @Inject
   DataSource dataSource;
 
-  private long countDefaultTableEntries() throws Exception {
+  /**
+   * @return How many entries the outbox of the platform holds, which has to stay empty
+   *         while the dedicated one serves this aggregate
+   */
+  private long countDefaultTableEntries() {
 
-    try (var connection = dataSource.getConnection(); var statement = connection
-        .createStatement(); var resultSet = statement
-            .executeQuery("SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX")) {
-      resultSet.next();
-      return resultSet.getLong(1);
-    }
+    return PhaseTwoOutboxReader
+        .ofTheVanillaBpOutbox(dataSource)
+        .entries()
+        .size();
 
   }
 

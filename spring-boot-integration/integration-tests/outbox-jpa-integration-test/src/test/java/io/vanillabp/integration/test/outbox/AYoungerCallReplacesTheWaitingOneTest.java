@@ -9,17 +9,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicReference;
 
+import javax.sql.DataSource;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.TransactionAwareDataSourceProxy;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
@@ -45,13 +48,6 @@ public class AYoungerCallReplacesTheWaitingOneTest {
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
-  private static final String COUNT_ENTRIES_OF_KEY = "select count(*) from VANILLABP_PHASE_TWO_OUTBOX where IDEMPOTENCY_KEY = ?";
-
-  private static final String COUNT_UNPROCESSED_ENTRIES = "select count(*) from VANILLABP_PHASE_TWO_OUTBOX where STATUS = 'OPEN'";
-
-  private static final String COUNT_PAYLOAD_OF_REFERENCE = "select count(*) from VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD "
-      + "where REFERENCE = ?";
-
   @Autowired
   private ProcessService<Aggregate> processService;
 
@@ -65,12 +61,21 @@ public class AYoungerCallReplacesTheWaitingOneTest {
   private SampleExtension extension;
 
   @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private DataSource dataSource;
+
+  /**
+   * The outbox of the application, read through the transaction this test is running.
+   * Everything below is asserted while the transaction which wrote it is still open,
+   * which is the only moment a replacement can be watched, so the reader has to see what
+   * that transaction wrote.
+   */
+  private PhaseTwoOutboxReader outboxTable;
 
   @BeforeEach
   public void resetExtension() {
 
     extension.reset();
+    outboxTable = PhaseTwoOutboxReader.ofTheVanillaBpOutbox(new TransactionAwareDataSourceProxy(dataSource));
 
   }
 
@@ -84,7 +89,22 @@ public class AYoungerCallReplacesTheWaitingOneTest {
   private long countPayloadsOf(
       final String reference) {
 
-    return jdbcTemplate.queryForObject(COUNT_PAYLOAD_OF_REFERENCE, Long.class, reference);
+    return outboxTable
+        .payloads()
+        .stream()
+        .filter(payload -> reference.equals(payload.reference()))
+        .count();
+
+  }
+
+  private long countEntriesOf(
+      final String idempotencyKey) {
+
+    return outboxTable
+        .entries()
+        .stream()
+        .filter(entry -> idempotencyKey.equals(entry.idempotencyKey()))
+        .count();
 
   }
 
@@ -116,7 +136,7 @@ public class AYoungerCallReplacesTheWaitingOneTest {
 
       // one entry under that key, and the bytes of the replaced call are gone before
       // this transaction commits
-      assertEquals(1L, jdbcTemplate.queryForObject(COUNT_ENTRIES_OF_KEY, Long.class, key.get()));
+      assertEquals(1L, countEntriesOf(key.get()));
       assertEquals(0L, countPayloadsOf(older.get()));
       assertEquals(1L, countPayloadsOf(younger.get()));
       return attached;
@@ -204,7 +224,7 @@ public class AYoungerCallReplacesTheWaitingOneTest {
       assertTrue(Boolean.TRUE.equals(scheduled));
 
       // two entries wait now: the one which is on its way and the one this call became
-      assertTrue(jdbcTemplate.queryForObject(COUNT_UNPROCESSED_ENTRIES, Long.class) >= 2);
+      assertTrue(outboxTable.entriesWaiting() >= 2);
     } finally {
       extension.releaseHeldDispatch();
     }
@@ -256,7 +276,7 @@ public class AYoungerCallReplacesTheWaitingOneTest {
       assertEquals("test rollback", e.getMessage());
     }
 
-    assertEquals(0L, jdbcTemplate.queryForObject(COUNT_ENTRIES_OF_KEY, Long.class, key.get()));
+    assertEquals(0L, countEntriesOf(key.get()));
     assertEquals(0L, countPayloadsOf(older.get()));
     assertEquals(0L, countPayloadsOf(younger.get()));
 

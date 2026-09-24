@@ -21,6 +21,7 @@ import io.vanillabp.integration.test.RecordingPhaseTwoListener;
 import io.vanillabp.integration.test.SteerableTaskAwarenessSource;
 import io.vanillabp.integration.test.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
 import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
@@ -62,13 +63,6 @@ public class RepeatedOperationTest {
       .overrideRuntimeConfigKey("quarkus.datasource.jdbc.url",
           "jdbc:h2:mem:repeated-operation-it;DB_CLOSE_DELAY=-1");
 
-  /**
-   * An entry deduplicates as long as it is not DONE - that is the state these tests
-   * plan against, and the dispatcher reaches it one UPDATE after the listener ran.
-   */
-  private static final String COUNT_ENTRIES_STILL_DEDUPLICATING = "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX "
-      + "WHERE AGGREGATE_ID = '%s' AND STATUS <> 'DONE'";
-
   @Inject
   WorkflowService workflowService;
 
@@ -107,22 +101,31 @@ public class RepeatedOperationTest {
 
   }
 
-  private long count(
-      final String query) throws Exception {
+  /**
+   * An entry deduplicates as long as it was not dispatched - that is the state these
+   * tests plan against, and the dispatcher reaches it one write after the listener ran.
+   *
+   * @param aggregate The aggregate asked about
+   * @return How many of its entries still deduplicate
+   */
+  private long entriesStillDeduplicating(
+      final Aggregate aggregate) {
 
-    try (var connection = dataSource.getConnection(); var statement = connection
-        .createStatement(); var resultSet = statement.executeQuery(query)) {
-      resultSet.next();
-      return resultSet.getLong(1);
-    }
+    return PhaseTwoOutboxReader
+        .ofTheVanillaBpOutbox(dataSource)
+        .entries()
+        .stream()
+        .filter(entry -> !entry.wasDispatched())
+        .filter(entry -> aggregate.getId().toString().equals(entry.aggregateId()))
+        .count();
 
   }
 
   /**
    * Waits until no entry of this aggregate deduplicates any more.
    * <p>
-   * The listener runs INSIDE the dispatch, one UPDATE before the dispatcher sets
-   * <code>STATUS = 'DONE'</code> and <code>DEDUP_KEY = ID</code>. A repetition planned
+   * The listener runs INSIDE the dispatch, one write before the dispatcher marks the
+   * entry as dispatched and frees its key. A repetition planned
    * in that window meets an entry which is still waiting and is discarded - correct
    * behaviour, and the reason a test may not take the listener as the signal that the
    * first operation is over.
@@ -131,10 +134,10 @@ public class RepeatedOperationTest {
       final Aggregate aggregate) throws Exception {
 
     final var deadline = System.currentTimeMillis() + 30_000;
-    while (count(COUNT_ENTRIES_STILL_DEDUPLICATING.formatted(aggregate.getId())) > 0) {
+    while (entriesStillDeduplicating(aggregate) > 0) {
       assertTrue(
           System.currentTimeMillis() < deadline,
-          "an entry of aggregate '%s' was never marked DONE".formatted(aggregate.getId()));
+          "an entry of aggregate '%s' was never dispatched".formatted(aggregate.getId()));
       Thread.sleep(50);
     }
 

@@ -8,9 +8,10 @@ import java.time.Duration;
  * <p>
  * The one case today is a workflow whose BPMS has not made it searchable yet: the
  * operation is worth repeating, and the time it needs is the visibility window of the
- * adapter holding it. Waiting for that window on the dispatching thread would hold
- * every other entry of the same store, whatever workflow it belongs to, so the entry is
- * given back instead - one update rather than a parked thread.
+ * adapter holding it. A store dispatches an entry on the lane of its workflow aggregate,
+ * and waiting for that window there would hold every other entry of that lane, whatever
+ * workflow it belongs to. So the entry is given back instead - one update rather than a
+ * parked thread.
  * <p>
  * A store recognises it through {@link #retryAfter(Throwable)}, which walks the causes
  * the way {@link PhaseTwoPermanentFailure#isPermanent(Throwable)} does, and uses the

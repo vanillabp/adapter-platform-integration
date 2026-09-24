@@ -19,6 +19,8 @@ import com.zaxxer.hikari.HikariDataSource;
 import com.zaxxer.hikari.metrics.IMetricsTracker;
 
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader.Entry;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
@@ -112,9 +114,7 @@ public class OutboxSleepsWhileNothingIsDueTest {
       final DataSource dataSource) throws Exception {
 
     final var deadline = System.currentTimeMillis() + 30000;
-    while (count(
-        dataSource,
-        "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX WHERE STATUS = 'OPEN'") > 0) {
+    while (outboxTableOf(dataSource).entriesWaiting() > 0) {
       assertTrue(System.currentTimeMillis() < deadline, "an entry of the outbox was never dispatched");
       Thread.sleep(50);
     }
@@ -174,15 +174,14 @@ public class OutboxSleepsWhileNothingIsDueTest {
 
   }
 
-  private long count(
-      final DataSource dataSource,
-      final String query) throws Exception {
+  /**
+   * @param dataSource The database of the application under test
+   * @return What its outbox table holds
+   */
+  private PhaseTwoOutboxReader outboxTableOf(
+      final DataSource dataSource) {
 
-    try (var connection = dataSource.getConnection(); var statement = connection
-        .createStatement(); var resultSet = statement.executeQuery(query)) {
-      resultSet.next();
-      return resultSet.getLong(1);
-    }
+    return PhaseTwoOutboxReader.ofTheVanillaBpOutbox(dataSource);
 
   }
 
@@ -226,7 +225,10 @@ public class OutboxSleepsWhileNothingIsDueTest {
       startAWorkflow(context, "blocked-entry");
 
       final var deadline = System.currentTimeMillis() + 30000;
-      while (count(dataSource, "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX WHERE STATUS = 'BLOCKED'") == 0) {
+      while (outboxTableOf(dataSource)
+          .entries()
+          .stream()
+          .noneMatch(Entry::isBlocked)) {
         assertTrue(System.currentTimeMillis() < deadline, "the entry was never blocked");
         Thread.sleep(50);
       }
@@ -260,14 +262,7 @@ public class OutboxSleepsWhileNothingIsDueTest {
       // the row is opened again the way the wiki tells an operator to open one, which is
       // also what another node inserting an entry looks like from here: a due row nothing
       // told this node about
-      try (var connection = dataSource.getConnection(); var statement = connection
-          .createStatement()) {
-        statement.executeUpdate(
-            """
-                UPDATE VANILLABP_PHASE_TWO_OUTBOX SET STATUS = 'OPEN', ATTEMPTS = 0, \
-                LEASED_BY = NULL, LEASED_UNTIL = NULL, \
-                NEXT_ATTEMPT_AT = DATEADD('SECOND', -60, CURRENT_TIMESTAMP)""");
-      }
+      outboxTableOf(dataSource).openEveryEntryAgain();
 
       final var deadline = System.currentTimeMillis() + 30000;
       while (listener.getInvocations().size() < 2) {

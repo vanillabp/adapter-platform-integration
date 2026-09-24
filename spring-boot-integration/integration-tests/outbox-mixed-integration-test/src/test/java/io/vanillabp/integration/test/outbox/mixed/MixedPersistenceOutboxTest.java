@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import javax.sql.DataSource;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,7 +18,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
@@ -26,8 +27,10 @@ import org.testcontainers.utility.DockerImageName;
 
 import com.mongodb.ConnectionString;
 
+import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties.MongoOutboxProperties;
 import io.vanillabp.integration.test.utils.ContainerImages;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
@@ -66,12 +69,6 @@ public class MixedPersistenceOutboxTest {
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
-  private static final String COUNT_JDBC_OUTBOX_ENTRIES = "select count(*) from VANILLABP_PHASE_TWO_OUTBOX";
-
-  private static final String COUNT_HOT_OUTBOX_ENTRIES = "select count(*) from HOT_OUTBOX";
-
-  private static final String MONGO_OUTBOX_COLLECTION = "vanillabp-phase-two-outbox";
-
   @Container
   static MongoDBContainer mongoDb = new MongoDBContainer(DockerImageName.parse(ContainerImages.MONGODB))
       // MongoDB transactions require a replica set
@@ -108,7 +105,7 @@ public class MixedPersistenceOutboxTest {
   private TransactionTemplate mongoTransactionTemplate;
 
   @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private DataSource dataSource;
 
   @Autowired
   private MongoTemplate mongoTemplate;
@@ -125,21 +122,27 @@ public class MixedPersistenceOutboxTest {
 
   private long countJdbcEntries() {
 
-    final var count = jdbcTemplate.queryForObject(COUNT_JDBC_OUTBOX_ENTRIES, Long.class);
-    return count == null ? 0 : count;
+    return PhaseTwoOutboxReader
+        .ofTheVanillaBpOutbox(dataSource)
+        .entries()
+        .size();
 
   }
 
   private long countHotEntries() {
 
-    final var count = jdbcTemplate.queryForObject(COUNT_HOT_OUTBOX_ENTRIES, Long.class);
-    return count == null ? 0 : count;
+    return PhaseTwoOutboxReader
+        .ofTheVanillaBpOutbox(dataSource, TestApplication.HOT_OUTBOX_TABLE, TestApplication.HOT_PAYLOAD_TABLE)
+        .entries()
+        .size();
 
   }
 
   private long countMongoEntries() {
 
-    return mongoTemplate.getCollection(MONGO_OUTBOX_COLLECTION).countDocuments();
+    return mongoTemplate
+        .getCollection(MongoOutboxProperties.DEFAULT_COLLECTION)
+        .countDocuments();
 
   }
 
