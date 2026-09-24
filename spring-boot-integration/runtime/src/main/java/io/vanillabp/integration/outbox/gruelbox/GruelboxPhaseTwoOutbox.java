@@ -118,40 +118,21 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
 
   /**
    * Where the bytes of a call which carries a payload are written, in the transaction
-   * which writes the entry. <code>null</code> where the caller supplied none - a call
-   * carrying a payload is then refused with a message saying so, rather than reaching
-   * the BPMS without it.
+   * which writes the entry. Never <code>null</code>: a store is built with the place it
+   * writes to, the way it is built with gruelbox' table.
    */
   private final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore;
 
   /**
-   * A store for calls which carry no payload, which is what a test builds. A call which
-   * carries one is refused, with a message naming the constructor below.
-   *
-   * @param transactionOutbox The gruelbox transaction outbox
-   * @param dataSource Where gruelbox' table lives
-   * @param tableName The table gruelbox stores its entries in
-   */
-  public GruelboxPhaseTwoOutbox(
-      final TransactionOutbox transactionOutbox,
-      final DataSource dataSource,
-      final String tableName) {
-
-    this(transactionOutbox, dataSource, tableName, null);
-
-  }
-
-  /**
-   * The complete store, which is the one
-   * {@link GruelboxPhaseTwoOutboxAutoConfiguration} builds where an application asked for
-   * gruelbox.
+   * The store, which is what {@link GruelboxPhaseTwoOutboxAutoConfiguration} builds where
+   * an application asked for gruelbox.
    *
    * @param transactionOutbox The gruelbox transaction outbox
    * @param dataSource Where gruelbox' table lives
    * @param tableName The table gruelbox stores its entries in
    * @param payloadStore Where the payload of a call which carries one is written
-   * @throws IllegalArgumentException If the data source or the name of gruelbox' table is
-   *           missing
+   * @throws IllegalArgumentException If the data source, the name of gruelbox' table or
+   *           the payload store is missing
    */
   public GruelboxPhaseTwoOutbox(
       final TransactionOutbox transactionOutbox,
@@ -160,10 +141,40 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
       final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore) {
 
     requireGruelboxTable(dataSource, tableName);
+    requirePayloadStore(payloadStore);
     this.transactionOutbox = transactionOutbox;
     this.dataSource = dataSource;
     this.tableName = tableName;
     this.payloadStore = payloadStore;
+
+  }
+
+  /**
+   * Refuses a store which has nowhere to put a payload.
+   * <p>
+   * An application whose extensions pass no payload never notices the difference, and
+   * that used to be the reason this was asked at the first call which carried one. It is
+   * asked here now, because a check which waits for the right call reports a setup
+   * problem while the application is working, and the store is built where the answer is
+   * already known.
+   *
+   * @param payloadStore Where the payload of a call which carries one is written
+   */
+  private static void requirePayloadStore(
+      final io.vanillabp.integration.spi.PhaseTwoPayloadStore payloadStore) {
+
+    if (payloadStore != null) {
+      return;
+    }
+    throw new IllegalArgumentException(
+        """
+            This gruelbox phase-two outbox was built without a payload store! A phase-two \
+            call may carry the state the application saw at its sync point, and gruelbox' \
+            table has no column for those bytes, so they lie in a store of their own. A \
+            store without it would let such a call reach the BPMS without what it carries, \
+            which the handler on the other side cannot ask for again. Pass a \
+            PhaseTwoPayloadStore to the constructor of this class, or let VanillaBP's \
+            GruelboxPhaseTwoOutboxAutoConfiguration build the store.""");
 
   }
 
@@ -412,12 +423,12 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
       // this transaction, and only now, because a schedule discarded as a duplicate
       // must leave nothing behind
       if (call.hasPayload()) {
-        requirePayloadStore(call).write(call);
+        payloadStore.write(call);
       }
       // and the bytes of the entry which was replaced have no reader left: the entry
       // is gone, and no dispatch had ever taken it
       if (replacedPayloadReference != null) {
-        requirePayloadStore(call).remove(replacedPayloadReference);
+        payloadStore.remove(replacedPayloadReference);
       }
       return true;
     } catch (AlreadyScheduledException e) {
@@ -439,31 +450,6 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
       final PhaseTwoCall call) {
 
     return schedule(call.replacingWhatIsStillWaiting());
-
-  }
-
-  /**
-   * The payload store of this outbox, or a guiding error where it has none. An outbox
-   * built without one is a test setup, and a call carrying a payload must not lose it
-   * silently there either.
-   *
-   * @param call The call whose payload is about to be written
-   * @return The payload store
-   */
-  private io.vanillabp.integration.spi.PhaseTwoPayloadStore requirePayloadStore(
-      final PhaseTwoCall call) {
-
-    if (payloadStore != null) {
-      return payloadStore;
-    }
-    throw new IllegalStateException(
-        """
-            Phase two (%s) of BPMN process '%s' of workflow module '%s' carries a payload, \
-            and this outbox was built without a payload store to put it in! The \
-            auto-configuration of VanillaBP builds one; an application building its \
-            gruelbox outbox itself passes a PhaseTwoPayloadStore to the constructor of this \
-            class."""
-            .formatted(call.operation(), call.bpmnProcessId(), call.workflowModuleId()));
 
   }
 

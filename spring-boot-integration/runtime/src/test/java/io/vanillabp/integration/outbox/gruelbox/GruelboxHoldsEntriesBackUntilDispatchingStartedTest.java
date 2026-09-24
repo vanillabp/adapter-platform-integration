@@ -97,7 +97,8 @@ public class GruelboxHoldsEntriesBackUntilDispatchingStartedTest {
         .getOutbox()
         .setPollInterval(Duration.ofHours(1));
     submitter = new GruelboxRedispatchAwareSubmitter(Submitter.withDefaultExecutor());
-    transactionOutbox = new GruelboxPhaseTwoOutboxAutoConfiguration()
+    final var configuration = new GruelboxPhaseTwoOutboxAutoConfiguration();
+    transactionOutbox = configuration
         .vanillaBpTransactionOutbox(
             context,
             Map.of("transactionManager", new DataSourceTransactionManager(dataSource)),
@@ -106,7 +107,11 @@ public class GruelboxHoldsEntriesBackUntilDispatchingStartedTest {
             context.getBeanProvider(VanillaBpMetrics.class),
             context.getBeanProvider(TransactionOutboxListener.class),
             submitter);
-    testee = new GruelboxPhaseTwoOutbox(transactionOutbox, dataSource, TABLE);
+    // no call of this test carries a payload, and the store is built with one anyway:
+    // the place a payload goes belongs to the outbox the way gruelbox' table does
+    testee = new GruelboxPhaseTwoOutbox(
+        transactionOutbox, dataSource, TABLE, configuration
+            .vanillaBpGruelboxPhaseTwoPayloadStore(dataSource, properties));
     transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
 
   }
