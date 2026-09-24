@@ -91,16 +91,6 @@ public final class VanillaBpWorkflowModulesBuildItem extends SimpleBuildItem {
       return workflowModuleInSameArchive.getId();
     }
 
-    // load workflow module ID from META-INF/workflow-module of the Java module JAR
-    // the workflow service class belongs to
-    // ==== NOT YET SUPPORTED ====
-    /*
-    if (serviceClass.module() != null) {
-      serviceClass.module().moduleInfoClass()
-      ....
-    }
-     */
-
     // load workflow module ID from META-INF/workflow-module in classpath
     // (this is suitable if the entire application is one workflow module):
 
@@ -115,12 +105,9 @@ public final class VanillaBpWorkflowModulesBuildItem extends SimpleBuildItem {
         """
             No workflow module descriptor '%s' was found in any valid location:
               - in JAR/directory of class '%s'
-              - in JAR/directory of Java module (%s) of class '%s'
               - in global classpath"""
             .formatted(
                 WorkflowModule.METAINF_WORKFLOWMODULE,
-                serviceClass.name(),
-                serviceClass.module() == null ? "if defined" : serviceClass.module().name(),
                 serviceClass.name()));
 
   }

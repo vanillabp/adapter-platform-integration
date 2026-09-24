@@ -32,9 +32,7 @@ public class WorkflowModuleFileMissingTest {
             """
                 No workflow module descriptor 'META-INF/workflow-module' was found in any valid location:
                   - in JAR/directory of class '%s'
-                  - in JAR/directory of Java module (if defined) of class '%s'
-                  - in global classpath""".formatted(SampleWorkflowService.class.getName(),
-                SampleWorkflowService.class.getName()),
+                  - in global classpath""".formatted(SampleWorkflowService.class.getName()),
             rootCause.getMessage());
       });
 
