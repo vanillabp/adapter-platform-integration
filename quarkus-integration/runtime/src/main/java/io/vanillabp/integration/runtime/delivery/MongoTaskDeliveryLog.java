@@ -11,7 +11,6 @@ import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.model.BulkWriteOptions;
 import com.mongodb.client.model.Filters;
-import com.mongodb.client.model.Indexes;
 import com.mongodb.client.model.UpdateOneModel;
 import com.mongodb.client.model.Updates;
 import com.mongodb.client.model.WriteModel;
@@ -21,8 +20,10 @@ import io.smallrye.config.SmallRyeConfig;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.delivery.OpenTaskTouches;
 import io.vanillabp.integration.adapter.migration.delivery.TaskDeliveryRetentionCleanup;
+import io.vanillabp.integration.adapter.migration.mongo.MongoSchema;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterPropertiesMapper;
+import io.vanillabp.integration.runtime.mongo.MongoIndexes;
 import io.vanillabp.integration.runtime.processservice.PlatformDefaultStore;
 import io.vanillabp.integration.runtime.processservice.QuarkusPersistenceTechnology;
 import io.vanillabp.integration.spi.TaskDelivery;
@@ -191,7 +192,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   }
 
   /**
-   * Creates the index the cleanup reads (unless disabled) and starts the cleanup.
+   * Creates the indexes this log reads by, or names the missing ones where the
+   * application manages its schema itself, and starts the cleanup.
    *
    * @param event The startup event observed
    */
@@ -206,21 +208,14 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
       log.debug("'vanillabp.outbox.mongo.enabled' is false - the MongoDB-based task delivery log stays inactive");
       return;
     }
+    // what each of them is read by is described once, in the core, because the Spring Boot
+    // integration creates the same ones
     if (getProperties().isCreateSchema()) {
-      // MongoDB answers a createIndex of an index which is already there with its name, so
-      // two instances starting at the same moment do not collide over it
-      deliveryCollection().createIndex(Indexes.ascending("lastSeenAt"));
-      // the election of a task operation looks a record up by the task the caller names,
-      // once per operation - without this index that read is a collection scan and costs
-      // more than the BPMS round trip it saves
-      deliveryCollection().createIndex(Indexes.ascending("taskId"));
-      // an extension asks for the open tasks of one workflow aggregate once per screen it
-      // builds, and MongoDB knows no key-length limit, so the aggregate id itself is the
-      // index here - unlike in the SQL table, whose column is too wide for one
-      deliveryCollection().createIndex(Indexes.ascending("aggregateId"));
-      // the core asks for the open tasks of ONE workflow of the BPMS on every wake-up of
-      // that workflow, which is far more often than an extension builds a screen
-      deliveryCollection().createIndex(Indexes.ascending("workflowId"));
+      MongoIndexes.createOn(deliveryCollection(), MongoSchema.DELIVERY_INDEXES);
+    } else {
+      // the collection itself needs no check: MongoDB creates one with the first document,
+      // so what an application managing its own schema owes are the indexes
+      MongoIndexes.reportMissingOn(deliveryCollection(), MongoSchema.DELIVERY_INDEXES);
     }
     retentionCleanup = new TaskDeliveryRetentionCleanup(
         deliveryCollectionName(), getDeliveryRetention(), this::cleanUpExpiredRecords);

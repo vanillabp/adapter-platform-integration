@@ -155,6 +155,10 @@ public class MongoOutboxSleepsWhileNothingIsDueTest {
         "the retention question and its delete read these two: "
             + keys);
     assertTrue(
+        keys.contains(new org.bson.Document("status", 1).append("createdAt", 1)),
+        "the age of the oldest waiting entry is read from these two: "
+            + keys);
+    assertTrue(
         keys.contains(new org.bson.Document("args.payloadReference", 1)),
         "the housekeeping asks which of the expired payloads an entry still names, and reads this: "
             + keys);

@@ -7,17 +7,16 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProp
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.index.Index;
 import org.springframework.data.mongodb.repository.MongoRepository;
 
+import io.vanillabp.integration.adapter.migration.mongo.MongoSchema;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
+import io.vanillabp.integration.mongo.MongoIndexes;
 import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfiguration;
 import io.vanillabp.integration.outbox.jdbc.JdbcPhaseTwoOutboxAutoConfiguration;
-import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import lombok.extern.slf4j.Slf4j;
 
@@ -34,10 +33,12 @@ import lombok.extern.slf4j.Slf4j;
  * applications. Disable via <code>vanillabp.outbox.mongo.enabled</code> if the
  * default (including its collection and background dispatcher) is unwanted.
  * <p>
- * Unless <code>vanillabp.outbox.create-schema</code> is set to <code>false</code>, a
- * sparse unique index on the entries' idempotency key is created automatically - the
- * storage-level deduplication of the outbox contract. If the schema is managed
- * manually, create that index yourself (see the module's <code>README.md</code>).
+ * Unless <code>vanillabp.outbox.create-schema</code> is set to <code>false</code>, the
+ * indexes of {@link MongoSchema#OUTBOX_INDEXES} and {@link MongoSchema#PAYLOAD_INDEXES}
+ * are created at startup, the unique one over <code>dedupKey</code> among them: that is
+ * the storage-level deduplication of the outbox contract. Where the application manages
+ * its schema itself, the startup reads what the collections carry instead and names every
+ * index which is missing, with the statement which creates it.
  * <p>
  * <strong>Note:</strong> Transactional enlisting of outbox entries requires MongoDB
  * transactions, i.e. a replica set and a
@@ -126,56 +127,22 @@ public class MongoPhaseTwoOutboxAutoConfiguration {
         .getOutbox()
         .getMongo()
         .getCollection();
+    final var payloadCollection = vanillaBpProperties
+        .getOutbox()
+        .getMongo()
+        .payloadCollectionName();
+    // what each of them is read by is described once, in the core, because the Quarkus
+    // extension creates the same ones - see decision 76 in the repository's DECISIONS.md
+    // for the one over the payload references
     if (vanillaBpProperties.getOutbox().isCreateSchema()) {
-      // 'dedupKey' and not 'idempotencyKey': the key deduplicates the operations still
-      // waiting for their dispatch, and the field holds the entry's own id once it was
-      // dispatched (see MongoPhaseTwoOutbox). Present on every entry, so the index
-      // needs neither sparse nor a partial filter
-      mongoTemplate
-          .indexOps(collection)
-          .createIndex(new Index()
-              .on("dedupKey", Sort.Direction.ASC)
-              .unique());
-      // what the dispatcher asks on every wake-up, and two indexes rather than one: both questions
-      // filter the same status and order by a different moment, so an index over both moments would
-      // serve neither. Without them each question reads the whole collection, which costs more the
-      // longer the application has been running
-      mongoTemplate
-          .indexOps(collection)
-          .createIndex(new Index()
-              .on("status", Sort.Direction.ASC)
-              .on("nextAttemptAt", Sort.Direction.ASC));
-      mongoTemplate
-          .indexOps(collection)
-          .createIndex(new Index()
-              .on("status", Sort.Direction.ASC)
-              .on("doneAt", Sort.Direction.ASC));
-      // the third moment of the same shape: what the age of the oldest waiting entry is
-      // read by, once per collection of the metrics
-      mongoTemplate
-          .indexOps(collection)
-          .createIndex(new Index()
-              .on("status", Sort.Direction.ASC)
-              .on("createdAt", Sort.Direction.ASC));
-      // what the housekeeping asks the entries before it removes a payload by age: which
-      // of the expired ones an entry still names. Sparse, because only an entry which
-      // carries a payload has the field, and that is the rare one. Without the index the
-      // question reads the whole collection, and it is asked on every poll for as long as
-      // one entry is stuck - see decision 76 in the repository's DECISIONS.md
-      mongoTemplate
-          .indexOps(collection)
-          .createIndex(new Index()
-              .on("args.%s".formatted(PhaseTwoCall.ARG_PAYLOAD_REFERENCE), Sort.Direction.ASC)
-              .sparse());
-      // what the housekeeping of the payloads deletes along - without it that delete
-      // reads every payload ever written
-      mongoTemplate
-          .indexOps(vanillaBpProperties
-              .getOutbox()
-              .getMongo()
-              .payloadCollectionName())
-          .createIndex(new Index().on("createdAt", Sort.Direction.ASC));
+      MongoIndexes.createOn(mongoTemplate, collection, MongoSchema.OUTBOX_INDEXES);
+      MongoIndexes.createOn(mongoTemplate, payloadCollection, MongoSchema.PAYLOAD_INDEXES);
       dropLegacyIdempotencyKeyIndex(mongoTemplate, collection);
+    } else {
+      // the collections themselves need no check: MongoDB creates one with the first
+      // document, so what an application managing its own schema owes are the indexes
+      MongoIndexes.reportMissingOn(mongoTemplate, collection, MongoSchema.OUTBOX_INDEXES);
+      MongoIndexes.reportMissingOn(mongoTemplate, payloadCollection, MongoSchema.PAYLOAD_INDEXES);
     }
     return new MongoPhaseTwoOutbox(mongoTemplate, dispatcher, collection);
 

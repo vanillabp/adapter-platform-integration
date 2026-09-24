@@ -27,8 +27,9 @@ import io.vanillabp.integration.spi.TaskDeliveryLog;
  * different things: for a record it decides whether a late redelivery runs the business
  * code again, for a dispatched outbox entry only how long support can read it.
  * <code>vanillabp.outbox.create-schema</code> decides whether VanillaBP creates the
- * table {@value io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore#DEFAULT_TABLE_NAME},
- * <code>vanillabp.delivery.retention</code> how long a record is kept (falling back to
+ * table, <code>vanillabp.outbox.jdbc.delivery-table</code> gives it a name of the
+ * application's own ({@value io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore#DEFAULT_TABLE_NAME}
+ * where nobody names it), <code>vanillabp.delivery.retention</code> how long a record is kept (falling back to
  * <code>vanillabp.outbox.retention</code>, where it lived before the two were told
  * apart), and <code>vanillabp.outbox.jdbc.enabled</code> switches the default off for an
  * application bringing its own {@link TaskDeliveryLog} bean.
@@ -75,7 +76,7 @@ public class JdbcTaskDeliveryLogAutoConfiguration {
       final VanillaBpConfigurationProperties vanillaBpProperties) {
 
     return new JdbcTaskDeliveryLog(
-        dataSource, JdbcTaskDeliveryStore.DEFAULT_TABLE_NAME, vanillaBpProperties
+        dataSource, JdbcTaskDeliveryStore.tableName(vanillaBpProperties.getOutbox()), vanillaBpProperties
             .resolvedDeliveryRetention());
 
   }

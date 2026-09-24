@@ -35,7 +35,8 @@ import lombok.extern.slf4j.Slf4j;
  * JTA transaction it is enlisted automatically, so a record and the aggregate changes of
  * the same delivery commit together - the recording contract of {@link TaskDeliveryLog}.
  * <p>
- * The table ({@link JdbcTaskDeliveryStore#DEFAULT_TABLE_NAME}) is created at startup
+ * The table (<code>vanillabp.outbox.jdbc.delivery-table</code>, by default
+ * {@link JdbcTaskDeliveryStore#DEFAULT_TABLE_NAME}) is created at startup
  * unless <code>vanillabp.outbox.create-schema</code> is disabled, and records are
  * deleted once <code>vanillabp.delivery.retention</code> passed - the delivery log shares
  * the outbox' STORE settings and not its retention, because the two numbers mean different
@@ -142,7 +143,7 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   private JdbcTaskDeliveryStore getStore() {
 
     if (store == null) {
-      store = new JdbcTaskDeliveryStore(this, JdbcTaskDeliveryStore.DEFAULT_TABLE_NAME);
+      store = new JdbcTaskDeliveryStore(this, JdbcTaskDeliveryStore.tableName(getProperties()));
     }
     return store;
 

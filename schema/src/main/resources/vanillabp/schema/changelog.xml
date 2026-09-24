@@ -20,9 +20,9 @@
   <!-- override in your own changelog which includes this one, to match
        'vanillabp.outbox.jdbc.table' -->
   <property name="vanillabp.outbox.table" value="VANILLABP_PHASE_TWO_OUTBOX"/>
-  <!-- NOT configurable: VanillaBP creates and reads exactly this table
-       (JdbcTaskDeliveryStore.DEFAULT_TABLE_NAME), so overriding this property would
-       build a table nobody uses -->
+  <!-- override in your own changelog which includes this one, to match
+       'vanillabp.outbox.jdbc.delivery-table'. Unlike the payload table this one does not follow
+       the outbox table: it is a store of its own -->
   <property name="vanillabp.delivery.table" value="VANILLABP_TASK_DELIVERY"/>
   <!-- override in your own changelog which includes this one, to match
        'vanillabp.outbox.jdbc.payload-table'. The name follows the outbox table: where that key is
