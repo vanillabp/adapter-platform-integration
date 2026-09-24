@@ -2,9 +2,14 @@ package io.vanillabp.integration.test.outbox;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.function.Function;
+
 import javax.sql.DataSource;
 
 import org.springframework.context.ConfigurableApplicationContext;
+
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader.Entry;
 
 /**
  * What a crashed application leaves behind, read from the table the outbox keeps.
@@ -14,6 +19,10 @@ import org.springframework.context.ConfigurableApplicationContext;
  * runs INSIDE the dispatch, so a test closing the context right after it can take the
  * database away before the store counted the attempt, and the second context then
  * recovers an entry of a shape the test never meant.
+ * <p>
+ * The table and its columns belong to {@link PhaseTwoOutboxReader}, which takes every
+ * name from the platform class declaring it. So this class asks for entries and reads
+ * their attempts, and a rename of a table or of a state is followed in the reader alone.
  */
 public final class FailedAttempts {
 
@@ -25,30 +34,34 @@ public final class FailedAttempts {
   private static final long UNTIL_AN_OUTBOX_COUNTS_AS_STOPPED = 30000;
 
   /**
-   * Which store the application runs, because the two keep their attempts in tables of
-   * their own. Gruelbox is here for the one test which still asks for it
-   * (<code>vanillabp.outbox.gruelbox.enabled</code>). Each constant carries the statement
-   * which counts the waiting entries with an attempt and the one which reads the highest
-   * number of attempts among them.
+   * Which store the application runs, because the two write tables of their own.
+   * Gruelbox is here for the one test which still asks for it
+   * (<code>vanillabp.outbox.gruelbox.enabled</code>). Each constant names the reader
+   * which knows that table.
    */
   public enum Store {
 
-    VANILLABP(
-        "SELECT COUNT(*) FROM VANILLABP_PHASE_TWO_OUTBOX WHERE STATUS = 'OPEN' AND ATTEMPTS > 0", "SELECT COALESCE(MAX(ATTEMPTS), 0) FROM VANILLABP_PHASE_TWO_OUTBOX WHERE STATUS = 'OPEN'"),
+    VANILLABP(PhaseTwoOutboxReader::ofTheVanillaBpOutbox),
 
-    GRUELBOX(
-        "SELECT COUNT(*) FROM TXNO_OUTBOX WHERE processed = false AND attempts > 0", "SELECT COALESCE(MAX(attempts), 0) FROM TXNO_OUTBOX WHERE processed = false");
+    GRUELBOX(PhaseTwoOutboxReader::ofTheGruelboxOutbox);
 
-    private final String countAttempted;
-
-    private final String mostAttempts;
+    private final Function<DataSource, PhaseTwoOutboxReader> readerOfThisStore;
 
     Store(
-        final String countAttempted,
-        final String mostAttempts) {
+        final Function<DataSource, PhaseTwoOutboxReader> readerOfThisStore) {
 
-      this.countAttempted = countAttempted;
-      this.mostAttempts = mostAttempts;
+      this.readerOfThisStore = readerOfThisStore;
+
+    }
+
+    /**
+     * @param dataSource The database of the application under test
+     * @return The reader of this store's table
+     */
+    PhaseTwoOutboxReader readerOf(
+        final DataSource dataSource) {
+
+      return readerOfThisStore.apply(dataSource);
 
     }
 
@@ -83,16 +96,16 @@ public final class FailedAttempts {
       final long attempted,
       final Store store) throws Exception {
 
-    final var dataSource = context.getBean(DataSource.class);
+    final var outbox = outboxOf(context, store);
     final var deadline = System.currentTimeMillis() + UNTIL_AN_OUTBOX_COUNTS_AS_STOPPED;
-    var written = entriesCarryingAnAttempt(dataSource, store);
+    var written = entriesCarryingAnAttempt(outbox);
     while (written < attempted) {
       assertTrue(
           System.currentTimeMillis() < deadline,
           "expected %d outbox entries carrying a failed attempt but found %d"
               .formatted(attempted, written));
       Thread.sleep(50);
-      written = entriesCarryingAnAttempt(dataSource, store);
+      written = entriesCarryingAnAttempt(outbox);
     }
 
   }
@@ -125,41 +138,70 @@ public final class FailedAttempts {
       final long attempts,
       final Store store) throws Exception {
 
-    final var dataSource = context.getBean(DataSource.class);
+    final var outbox = outboxOf(context, store);
     final var deadline = System.currentTimeMillis() + UNTIL_AN_OUTBOX_COUNTS_AS_STOPPED;
-    var attempted = mostAttemptsOfOneEntry(dataSource, store);
+    var attempted = mostAttemptsOfOneEntry(outbox);
     while (attempted < attempts) {
       assertTrue(
           System.currentTimeMillis() < deadline,
           "expected an outbox entry attempted %d times but the most attempted one carries %d"
               .formatted(attempts, attempted));
       Thread.sleep(50);
-      attempted = mostAttemptsOfOneEntry(dataSource, store);
+      attempted = mostAttemptsOfOneEntry(outbox);
     }
 
   }
 
+  /**
+   * The reader of the table this application writes. It is built once per wait: reading
+   * a name costs a class lookup, while asking for the entries does not.
+   *
+   * @param context The running application
+   * @param store Which store the application runs
+   * @return The reader
+   */
+  private static PhaseTwoOutboxReader outboxOf(
+      final ConfigurableApplicationContext context,
+      final Store store) {
+
+    return store.readerOf(context.getBean(DataSource.class));
+
+  }
+
+  /**
+   * A blocked entry counts for neither of the two numbers below. It waits for a person
+   * rather than for the next attempt, so a test waiting for attempts to come would wait
+   * for something which never happens again.
+   *
+   * @param outbox The reader of the table this application writes
+   * @return The highest number of attempts one waiting entry carries
+   */
   private static long mostAttemptsOfOneEntry(
-      final DataSource dataSource,
-      final Store store) throws Exception {
+      final PhaseTwoOutboxReader outbox) {
 
-    try (var connection = dataSource.getConnection(); var statement = connection
-        .createStatement(); var resultSet = statement.executeQuery(store.mostAttempts)) {
-      resultSet.next();
-      return resultSet.getLong(1);
-    }
+    return outbox
+        .entries()
+        .stream()
+        .filter(Entry::isWaiting)
+        .mapToInt(Entry::attempts)
+        .max()
+        .orElse(0);
 
   }
 
+  /**
+   * @param outbox The reader of the table this application writes
+   * @return How many waiting entries were attempted at least once
+   */
   private static long entriesCarryingAnAttempt(
-      final DataSource dataSource,
-      final Store store) throws Exception {
+      final PhaseTwoOutboxReader outbox) {
 
-    try (var connection = dataSource.getConnection(); var statement = connection
-        .createStatement(); var resultSet = statement.executeQuery(store.countAttempted)) {
-      resultSet.next();
-      return resultSet.getLong(1);
-    }
+    return outbox
+        .entries()
+        .stream()
+        .filter(Entry::isWaiting)
+        .filter(entry -> entry.attempts() > 0)
+        .count();
 
   }
 

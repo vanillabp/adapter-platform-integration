@@ -32,7 +32,8 @@ public class GruelboxPublishesNoAgeTest {
   public void gruelboxSaysNothingAboutTheAgeOfItsOldestEntry() {
 
     final var outbox = new GruelboxPhaseTwoOutbox(
-        Mockito.mock(TransactionOutbox.class), Mockito.mock(javax.sql.DataSource.class), "TXNO_OUTBOX");
+        Mockito.mock(TransactionOutbox.class), Mockito.mock(javax.sql.DataSource.class), "TXNO_OUTBOX", Mockito
+            .mock(io.vanillabp.integration.spi.PhaseTwoPayloadStore.class));
 
     assertTrue(
         outbox

@@ -93,7 +93,8 @@ public class GruelboxDeduplicationWindowTest {
               });
       context.refresh();
     }
-    final var transactionOutbox = new GruelboxPhaseTwoOutboxAutoConfiguration()
+    final var configuration = new GruelboxPhaseTwoOutboxAutoConfiguration();
+    final var transactionOutbox = configuration
         .vanillaBpTransactionOutbox(
             context,
             Map.of("transactionManager", new DataSourceTransactionManager(dataSource)),
@@ -103,7 +104,11 @@ public class GruelboxDeduplicationWindowTest {
                 io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.class),
             context.getBeanProvider(com.gruelbox.transactionoutbox.TransactionOutboxListener.class),
             new GruelboxRedispatchAwareSubmitter(com.gruelbox.transactionoutbox.Submitter.withDefaultExecutor()));
-    return new GruelboxPhaseTwoOutbox(transactionOutbox, dataSource, TABLE);
+    // no call of this test carries a payload, and the store is built with one anyway:
+    // the place a payload goes belongs to the outbox the way gruelbox' table does
+    return new GruelboxPhaseTwoOutbox(
+        transactionOutbox, dataSource, TABLE, configuration
+            .vanillaBpGruelboxPhaseTwoPayloadStore(dataSource, new VanillaBpConfigurationProperties()));
 
   }
 

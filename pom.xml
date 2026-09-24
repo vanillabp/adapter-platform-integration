@@ -90,6 +90,9 @@
          3.37.1 manages 1.16.6, Spring Boot 4.1.0 manages 1.17.0) -->
     <micrometer.version>1.17.1</micrometer.version>
     <testcontainers.version>2.0.5</testcontainers.version>
+    <!-- Liquibase reads the changelog of the schema artifact: in the schema module, which
+         also generates the SQL with it, and in the reader of that changelog in test-utils -->
+    <liquibase.version>5.0.4</liquibase.version>
     <!-- where the build breaks, in PERCENT of covered instructions per platform,
          enforced by test-coverage-report/coverage-gate. The rule stays 90 per platform, which is
          the number the coverage badges of the README are read against. The gate stands at

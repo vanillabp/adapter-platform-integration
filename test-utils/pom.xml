@@ -67,6 +67,14 @@
       <version>4.1.1</version>
       <optional>true</optional>
     </dependency>
+    <!-- optional: only the reader of the schema changelog needs Liquibase, and a module
+         which does not read a changelog must not get it on its test classpath -->
+    <dependency>
+      <groupId>org.liquibase</groupId>
+      <artifactId>liquibase-core</artifactId>
+      <version>${liquibase.version}</version>
+      <optional>true</optional>
+    </dependency>
     <dependency>
       <groupId>ch.qos.logback</groupId>
       <artifactId>logback-classic</artifactId>

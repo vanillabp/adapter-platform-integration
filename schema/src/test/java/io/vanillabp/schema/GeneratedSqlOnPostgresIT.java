@@ -19,6 +19,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.schema.ChangelogDescription;
 
 /**
  * The SQL generated for PostgreSQL, applied to a real PostgreSQL the way a Flyway migration would

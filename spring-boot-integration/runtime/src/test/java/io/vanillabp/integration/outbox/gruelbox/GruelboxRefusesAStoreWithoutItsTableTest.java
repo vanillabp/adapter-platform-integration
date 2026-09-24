@@ -13,17 +13,19 @@ import org.mockito.Mockito;
 
 import com.gruelbox.transactionoutbox.TransactionOutbox;
 
+import io.vanillabp.integration.spi.PhaseTwoPayloadStore;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * An application which builds the gruelbox store itself and leaves out the data source or
- * the name of gruelbox' table.
+ * An application which builds the gruelbox store itself and leaves out one of the places
+ * that store works on.
  * <p>
- * Such a store hands entries to gruelbox and can do nothing else: it cannot free the key of
- * an entry which was dispatched, cannot let a younger call take the place of a waiting one,
- * and answers the payload housekeeping that every payload is still named, which is the
- * answer that keeps the payload table growing for good. None of that shows up as an error
- * later on, so it is refused where the store is built.
+ * Without the data source or the name of gruelbox' table it hands entries to gruelbox and
+ * can do nothing else: it cannot free the key of an entry which was dispatched, cannot let
+ * a younger call take the place of a waiting one, and answers the payload housekeeping that
+ * every payload is still named, which is the answer that keeps the payload table growing
+ * for good. Without a payload store it loses what a call carries. None of that shows up as
+ * an error later on, so each of them is refused where the store is built.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class GruelboxRefusesAStoreWithoutItsTableTest {
@@ -36,7 +38,8 @@ public class GruelboxRefusesAStoreWithoutItsTableTest {
 
     final var refused = assertThrows(
         IllegalArgumentException.class,
-        () -> new GruelboxPhaseTwoOutbox(Mockito.mock(TransactionOutbox.class), null, TABLE));
+        () -> new GruelboxPhaseTwoOutbox(
+            Mockito.mock(TransactionOutbox.class), null, TABLE, Mockito.mock(PhaseTwoPayloadStore.class)));
 
     final var message = refused.getMessage();
     assertTrue(message.contains("without a data source"), message);
@@ -56,7 +59,8 @@ public class GruelboxRefusesAStoreWithoutItsTableTest {
     final var refused = assertThrows(
         IllegalArgumentException.class,
         () -> new GruelboxPhaseTwoOutbox(
-            Mockito.mock(TransactionOutbox.class), Mockito.mock(DataSource.class), null));
+            Mockito.mock(TransactionOutbox.class), Mockito.mock(DataSource.class), null, Mockito
+                .mock(PhaseTwoPayloadStore.class)));
 
     final var message = refused.getMessage();
     assertTrue(
@@ -72,7 +76,8 @@ public class GruelboxRefusesAStoreWithoutItsTableTest {
 
     final var refused = assertThrows(
         IllegalArgumentException.class,
-        () -> new GruelboxPhaseTwoOutbox(Mockito.mock(TransactionOutbox.class), null, null));
+        () -> new GruelboxPhaseTwoOutbox(
+            Mockito.mock(TransactionOutbox.class), null, null, Mockito.mock(PhaseTwoPayloadStore.class)));
 
     final var message = refused.getMessage();
     assertTrue(message.contains("without a data source and the name of gruelbox' table"), message);
@@ -80,13 +85,32 @@ public class GruelboxRefusesAStoreWithoutItsTableTest {
   }
 
   @Test
-  @DisplayName("A store which can read the table is built")
-  public void aStoreWhichCanReadTheTableIsBuilt() {
+  @DisplayName("A store without a payload store is refused, naming what a call would lose")
+  public void aStoreWithoutAPayloadStoreIsRefused() {
+
+    final var refused = assertThrows(
+        IllegalArgumentException.class,
+        () -> new GruelboxPhaseTwoOutbox(
+            Mockito.mock(TransactionOutbox.class), Mockito.mock(DataSource.class), TABLE, null));
+
+    final var message = refused.getMessage();
+    assertTrue(message.contains("without a payload store"), message);
+    // what it would cost
+    assertTrue(message.contains("reach the BPMS without what it carries"), message);
+    // and the two ways to a complete store
+    assertTrue(message.contains("Pass a PhaseTwoPayloadStore"), message);
+    assertTrue(message.contains("GruelboxPhaseTwoOutboxAutoConfiguration"), message);
+
+  }
+
+  @Test
+  @DisplayName("A store with all three places is built")
+  public void aStoreWithEveryPlaceIsBuilt() {
 
     assertDoesNotThrow(
         () -> new GruelboxPhaseTwoOutbox(
-            Mockito.mock(TransactionOutbox.class), Mockito.mock(DataSource.class), TABLE),
-        "a payload store is the one part an application may leave out");
+            Mockito.mock(TransactionOutbox.class), Mockito.mock(DataSource.class), TABLE, Mockito
+                .mock(PhaseTwoPayloadStore.class)));
 
   }
 

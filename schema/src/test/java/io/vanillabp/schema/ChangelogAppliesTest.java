@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.schema.ChangelogDescription;
 import liquibase.Contexts;
 import liquibase.LabelExpression;
 import liquibase.Liquibase;

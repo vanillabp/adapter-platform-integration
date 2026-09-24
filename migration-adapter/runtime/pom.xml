@@ -37,6 +37,21 @@
       <version>2.5.250</version>
       <scope>test</scope>
     </dependency>
+    <!-- the tables this module creates at runtime are compared against the changelog of
+         the schema artifact, which needs that artifact and Liquibase to read it. Only the
+         test scope: the schema artifact stays a leaf nothing ships a dependency on -->
+    <dependency>
+      <groupId>io.vanillabp</groupId>
+      <artifactId>vanillabp-schema</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.liquibase</groupId>
+      <artifactId>liquibase-core</artifactId>
+      <version>${liquibase.version}</version>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>org.projectlombok</groupId>
       <artifactId>lombok</artifactId>
