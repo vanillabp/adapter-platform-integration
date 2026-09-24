@@ -2198,6 +2198,17 @@ database which refuses a second connection, and
 `#aFullLaneDoesNotHoldTheConnectionItsDispatchNeeds` runs the real payload store instead of one
 with its housekeeping taken out.
 
+**A lane which is stopping says that it took nothing.** A node shuts down while its poller is
+still handing claimed entries in, and those entries used to be dropped without a word: the lane
+returned as if it had taken the work, and the renewal of the entry's lease kept ticking until
+`DispatchLease.stop()` came. Whether that happened in time was the order of two calls in
+`stop()` and nothing more. `runInOrderOf` answers now whether a lane took the work, the poller
+closes the renewal itself where none did, and it writes one line naming the operation which
+waits. Nothing is lost either way: the entry stays `OPEN` and keeps its lease, and the next poll
+of this node or of another one takes it once that lease runs out, so the cost is one
+`attempt-frequency` of delay. `DispatchLanesTest#aStoppingLaneSaysThatItTookNothing` holds the
+answer.
+
 **A node which lost its entry writes nothing.** A lease can still be lost while its dispatch
 runs: the node was away long enough for the claim to run out and another node took the entry
 over. The renewal notices it, because its write matches no row, and says so in the log. The

@@ -841,6 +841,9 @@ public class JdbcPhaseTwoOutboxDispatcher {
    * node claim an entry this one is about to dispatch, and both would carry the operation
    * out. The queue is short, so the wait is short as well, but short is not the same as
    * impossible and nothing about the queue length is promised to anybody.
+   * <p>
+   * Where no lane takes the entry - this node is stopping - the renewal ends here too, and
+   * the log says which operation waits for its lease to run out.
    *
    * @param entry The due entry, as the select read it
    */
@@ -859,13 +862,48 @@ public class JdbcPhaseTwoOutboxDispatcher {
       return;
     }
     final var held = lease.renewWhile(claimed.id(), this::renewLease);
+    final boolean taken;
     try {
-      lanes.runInOrderOf(claimed.orderingKey(), () -> dispatch(claimed, held));
+      taken = lanes.runInOrderOf(claimed.orderingKey(), () -> dispatch(claimed, held));
     } catch (final RuntimeException | Error e) {
       // nothing will dispatch this entry, so nothing would close the renewal either
       held.close();
       throw e;
     }
+    if (!taken) {
+      // the same as above, for the one case which is no failure: this node is stopping and
+      // the lanes take nothing more. The renewal is closed here rather than by the order
+      // stop() happens to have, which is an agreement between two calls and holds nothing
+      held.close();
+      reportTheEntryNoLaneTook(claimed);
+    }
+
+  }
+
+  /**
+   * Says that an entry this poll claimed will not be dispatched, because the lanes take
+   * nothing any more.
+   * <p>
+   * Nothing is lost. The entry stays OPEN and keeps its lease until it runs out, and the
+   * next poll of this node or of another one takes it then. What it costs is that wait, one
+   * <code>vanillabp.outbox.attempt-frequency</code>, and this line is what says so to
+   * whoever reads the log of a shutdown.
+   *
+   * @param entry The claimed entry no lane took
+   */
+  private void reportTheEntryNoLaneTook(
+      final Entry entry) {
+
+    log
+        .info(
+            "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' was not "
+                + "handed to a dispatch thread because this node is stopping - the outbox entry '{}' stays "
+                + "open and is dispatched once its lease runs out",
+            entry.operation(),
+            entry.bpmnProcessId(),
+            entry.workflowModuleId(),
+            entry.aggregateId(),
+            entry.id());
 
   }
 
