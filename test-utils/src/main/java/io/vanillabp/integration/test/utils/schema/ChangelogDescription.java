@@ -39,6 +39,10 @@ public class ChangelogDescription {
 
   /**
    * One index of the changelog: the table it sits on, its name and the columns it spans, in order.
+   *
+   * @param table The table the index sits on
+   * @param name The name of the index
+   * @param columns The columns it spans, in the order the changelog lists them
    */
   public record Index(String table, String name, List<String> columns) {
   }
@@ -84,6 +88,8 @@ public class ChangelogDescription {
   }
 
   /**
+   * Every table of the changelog with its columns.
+   *
    * @return Every table the changelog creates, each with its columns in the order they are added
    */
   public Map<String, List<String>> tables() {
@@ -93,6 +99,8 @@ public class ChangelogDescription {
   }
 
   /**
+   * The tables of the changelog, asked for by name alone.
+   *
    * @return The names of the tables the changelog creates
    */
   public Set<String> tableNames() {
@@ -102,6 +110,8 @@ public class ChangelogDescription {
   }
 
   /**
+   * The indexes of the changelog, each on the table it belongs to.
+   *
    * @return Every index the changelog creates
    */
   public List<Index> indexes() {
