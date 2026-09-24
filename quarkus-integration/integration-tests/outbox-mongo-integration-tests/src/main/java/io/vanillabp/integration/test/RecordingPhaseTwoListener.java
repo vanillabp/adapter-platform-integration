@@ -32,6 +32,13 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
    */
   private final java.util.concurrent.atomic.AtomicReference<HeldDispatch> holdTheNextDispatch = new java.util.concurrent.atomic.AtomicReference<>();
 
+  /**
+   * Where the dispatches wait for each other, for a test about two of them travelling at the
+   * same time. Nothing waits unless a test asked for it, and a dispatch which waits in vain
+   * fails rather than going on alone.
+   */
+  private volatile java.util.concurrent.CyclicBarrier meetingPoint;
+
   @Override
   public void startedWorkflowPhaseTwo(
       final Object workflowAggregateId) {
@@ -41,6 +48,7 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
     if (hold != null) {
       hold.waitUntilTheTestLetsGo();
     }
+    meetTheOtherDispatches();
     final var takes = dispatchTakesMillis.get();
     if (takes > 0) {
       try {
@@ -74,6 +82,47 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
     failuresRemaining.set(numberOfFailures);
 
   }
+
+  /**
+   * Makes every dispatch wait until that many of them are inside the adapter at the same
+   * time. A store which dispatches one entry after the other never gets there, and the
+   * dispatches fail instead of going on alone, so their entries are not marked as done - which
+   * is what a test about two operations travelling together reads.
+   *
+   * @param howMany How many dispatches have to meet
+   */
+  public void letDispatchesMeet(
+      final int howMany) {
+
+    meetingPoint = new java.util.concurrent.CyclicBarrier(howMany);
+
+  }
+
+  /**
+   * Waits at the meeting point where a test asked for one.
+   */
+  private void meetTheOtherDispatches() {
+
+    final var meeting = meetingPoint;
+    if (meeting == null) {
+      return;
+    }
+    try {
+      meeting.await(UNTIL_THE_OTHERS_ARRIVE, java.util.concurrent.TimeUnit.MILLISECONDS);
+    } catch (final InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException("waiting for the other dispatches was interrupted", e);
+    } catch (final java.util.concurrent.BrokenBarrierException | java.util.concurrent.TimeoutException e) {
+      throw new IllegalStateException("the other dispatches never arrived", e);
+    }
+
+  }
+
+  /**
+   * How long a dispatch waits for the others at the meeting point. It is a guard against a
+   * store which dispatches one entry after the other, not a measurement of speed.
+   */
+  private static final long UNTIL_THE_OTHERS_ARRIVE = 10_000;
 
   /**
    * Stops the dispatch which comes next until the test lets it go. The test holds the
@@ -154,6 +203,7 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
     invocations.clear();
     failuresRemaining.set(0);
     dispatchTakesMillis.set(0);
+    meetingPoint = null;
     final var neverTaken = holdTheNextDispatch.getAndSet(null);
     if (neverTaken != null) {
       neverTaken.end();

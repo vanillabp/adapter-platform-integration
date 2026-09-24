@@ -2140,8 +2140,8 @@ dispatch, `PhaseTwoJpaContextTest` and `PhaseTwoMongoContextTest` what an applic
 there.
 
 **What phase two must not do: wait.** One thread dispatches the entries of one workflow
-aggregate, so whatever an entry spends there is spent by every other entry of that aggregate,
-and on the MongoDB stores by every entry of the node. The case which used to spend the most is a workflow its BPMS has not made searchable
+aggregate, so whatever an entry spends there is spent by every other entry of that aggregate.
+The case which used to spend the most is a workflow its BPMS has not made searchable
 yet: the election waited out the adapter's `workflowVisibilityDelay`, ten seconds on Camunda 8,
 and a burst of "start, then correlate" pairs stalled in batches. Such an entry goes back to the
 store with that window as its due time (`PhaseTwoRetryLater`) and the thread takes the next one.
@@ -2156,9 +2156,9 @@ dispatched while the other one waits, and the bound which finally blocks it.
 on the dispatching thread instead - what that cost is decision 49.
 
 **Several entries leave at the same time, and the workflow aggregate says on which thread.**
-The JDBC store dispatches on `vanillabp.outbox.dispatch-threads` threads, four of them by
-default, and `DispatchLanes` picks the one for an entry from the workflow module, the BPMN
-process and the aggregate ID. Two operations of one workflow therefore leave in the order they
+Every store VanillaBP writes itself dispatches on `vanillabp.outbox.dispatch-threads` threads,
+four of them by default, and `DispatchLanes` picks the one for an entry from the workflow
+module, the BPMN process and the aggregate ID. Two operations of one workflow therefore leave in the order they
 were written, while operations of different workflows leave at the same time. An entry which
 names no aggregate, as a broadcast signal does, is keyed by its BPMN process instead. Handing
 the next entry to whichever thread happens to be free would be simpler and would lose that
@@ -2166,10 +2166,17 @@ order, and nothing downstream would notice until a customer did. The number of t
 bounded because an unbounded one only moves the limit into the connection pool, where it is
 harder to see. What this does NOT order is an entry whose dispatch failed: it waits for its
 backoff and the next entry of the same aggregate passes it in the meantime, exactly as it did
-while one thread dispatched everything. The MongoDB stores still dispatch on one thread.
-Decision 75 of this repository carries the reasoning, and `DispatchLanesTest` holds the order
-of one aggregate (`oneAggregateKeepsItsOrder`) next to two aggregates which really do run at
-the same time (`twoAggregatesRunAtTheSameTime`).
+while one thread dispatched everything. Decision 75 of this repository carries the reasoning,
+and `DispatchLanesTest` holds the order of one aggregate (`oneAggregateKeepsItsOrder`) next to
+two aggregates which really do run at the same time (`twoAggregatesRunAtTheSameTime`).
+
+The two MongoDB stores dispatch the same way, since decision 76 of this repository, and their
+claim sorts by the moment an entry was written. Without that sort the lanes would keep the
+order a collection happened to answer in, which is not the order the entries were written in
+once an attempt has moved a due time. The two `MongoEntriesOfOneAggregateKeepTheirOrderTest`
+classes hold both halves per platform: ten operations of one workflow arriving in the order
+they were written, and two operations of different workflows which really are inside the
+adapter at the same time.
 
 **A claimed entry which waits for its lane is still held.** The poller claims an entry and
 hands it to the lane of its aggregate, and that lane may be busy with an earlier entry of the

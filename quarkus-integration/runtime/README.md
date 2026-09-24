@@ -198,6 +198,14 @@ to the id: `LEASED_BY` on the JDBC store and `leasedBy` on the MongoDB one. A no
 was taken over while it dispatched therefore writes no result over the one of the node holding
 it. `MongoADispatchWhichLostItsLeaseTest` holds the MongoDB half.
 
+Both stores dispatch on `vanillabp.outbox.dispatch-threads` lanes, and which lane takes an
+entry follows from its workflow aggregate, so two operations of one workflow keep their order
+while operations of different workflows travel at the same time. The MongoDB claim sorts by
+the moment an entry was written, because the lanes keep the order they are handed the entries
+in and a collection answers in an order of its own.
+`MongoEntriesOfOneAggregateKeepTheirOrderTest` holds both halves, and decision 76 in
+`DECISIONS.md` carries the measurement behind it.
+
 On the JDBC store the claim reads its row once more after it won it. The select of the due
 entries happens before the claim, and between the two the row may have been replaced, so the
 entry read then would send the dispatch to a payload reference which is gone. MongoDB needs
@@ -211,6 +219,7 @@ moment.
 | Dedup            | unique constraint `DEDUP_KEY`                         | unique index `dedupKey`                               |
 | Claim            | optimistic `UPDATE ... WHERE LEASED_UNTIL`            | `findOneAndUpdate` on a free `leasedUntil`            |
 | Lease            | `LEASED_BY`/`LEASED_UNTIL`, renewed while dispatching | `leasedBy`/`leasedUntil`, renewed the same way        |
+| Dispatch threads | `dispatch-threads` lanes, keyed by the aggregate      | `dispatch-threads` lanes, keyed by the aggregate      |
 | DONE + retention | yes                                                   | yes                                                   |
 | Selected when    | Agroal capability present                             | no Agroal, MongoDB client present                     |
 

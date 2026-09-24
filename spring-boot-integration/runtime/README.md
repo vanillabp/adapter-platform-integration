@@ -283,10 +283,12 @@ disable an unwanted default via its `enabled` flag:
    entries are marked BLOCKED. Each of those writes names `leasedBy` next to the id, so a
    node whose entry was taken over while it dispatched writes no result over the one of the
    node holding it (`AMongoDispatchWhichLostItsLeaseTest`).
-   It also runs on a private single-thread executor
-   (no `TaskScheduler`), and it keeps that one thread: the lanes of the JDBC store are not
-   tied to JDBC, but whether this store needs them is a question somebody has to measure
-   first. **Note:** transactional enlisting requires MongoDB
+   Its poller runs on a private single-thread executor
+   (no `TaskScheduler`), and the dispatch itself runs on the same
+   `vanillabp.outbox.dispatch-threads` lanes the JDBC store uses, so the entries of one
+   workflow keep their order while entries of different workflows travel at the same time
+   (`MongoEntriesOfOneAggregateKeepTheirOrderTest`, decision 76 in `DECISIONS.md`).
+   **Note:** transactional enlisting requires MongoDB
    transactions, i.e. a replica set and a `MongoTransactionManager` bean —
    otherwise scheduling is best-effort. Duplicate schedules are detected by a
    pre-check read since a duplicate-key error would abort the whole MongoDB

@@ -2538,3 +2538,40 @@ The entry above which this changes the premise of is 47: gruelbox is no longer w
 applications run, so the store which cannot name the adapter ids of its waiting entries at a
 start is now the exception rather than the default. What decision 47 decided - that such a store
 says it at the first dispatch instead - is unchanged and still holds for gruelbox.
+
+### 76. The MongoDB stores dispatch on lanes too, and their claim reads the oldest entry first
+
+Decision 75 left one question open: whether the MongoDB stores need the dispatch lanes the
+relational store got, or whether an application on MongoDB is held up by something else
+anyway. A store nobody runs under load should not get a second dispatch stage, because such
+code only ages. So the question was measured before it was answered.
+
+The measurement repeats what decision 75 was taken on: 200 outbox entries of 40 workflow
+aggregates, all due at once, with a handler which takes 20 milliseconds because that is what a
+call to a BPMS costs. It ran on 2026-09-24 in the development container of this repository,
+against MongoDB 8.2 in a container, with the outbox' own settings at their defaults.
+
+| lanes | Spring Boot | Quarkus |
+|-------|-------------|---------|
+| 1     | 4885 ms     | 4793 ms |
+| 2     | 2393 ms     |         |
+| 4     | 1291 ms     |         |
+| 8     | 703 ms      | 840 ms  |
+
+The relational store, measured the same way on H2 in memory on 2026-09-21, needed 4498 ms on
+one thread and 802 ms on eight. So the MongoDB stores have the same shape: what one thread
+spends there is the wait for the BPMS, and nothing about MongoDB moves that wait somewhere
+else. Both stores therefore dispatch the way the relational one does, on
+`vanillabp.outbox.dispatch-threads` lanes keyed by the workflow aggregate.
+
+What the lanes needed on top is a claim which reads the oldest entry first. The lanes keep the
+order they are handed the entries in, and a collection answers in an order of its own - the
+relational store has ordered its select by the moment an entry was written since it had lanes.
+Without that sort two operations of one workflow would reach the BPMS the wrong way round as
+soon as an attempt has moved a due time, and a load measurement would applaud it, because
+reordering is faster. The index over the status and that moment already exists, so the sort
+costs nothing.
+
+The numbers above are a statement about a measured past, not a promise. They say what a
+dispatch stage which waits for somebody else does with more threads, and they say nothing
+about a handler which is busy rather than waiting, or about a database under load.

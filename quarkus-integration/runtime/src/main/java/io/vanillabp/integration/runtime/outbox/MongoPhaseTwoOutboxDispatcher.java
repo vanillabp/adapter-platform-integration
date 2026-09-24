@@ -14,6 +14,7 @@ import org.eclipse.microprofile.config.ConfigProvider;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.FindOneAndUpdateOptions;
 import com.mongodb.client.model.IndexOptions;
 import com.mongodb.client.model.Indexes;
 import com.mongodb.client.model.Sorts;
@@ -23,6 +24,7 @@ import io.quarkus.runtime.StartupEvent;
 import io.smallrye.config.SmallRyeConfig;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DispatchOutcome;
+import io.vanillabp.integration.adapter.migration.outbox.DispatchLanes;
 import io.vanillabp.integration.adapter.migration.outbox.DispatchLease;
 import io.vanillabp.integration.adapter.migration.outbox.DueEntryPoller;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
@@ -140,6 +142,13 @@ public class MongoPhaseTwoOutboxDispatcher {
   private volatile DueEntryPoller poller;
 
   /**
+   * The threads the entries are dispatched on, and the rule which says that the entries of one
+   * workflow aggregate share one of them. Built with the poller, because both need the
+   * configuration.
+   */
+  private volatile DispatchLanes lanes;
+
+  /**
    * What a running dispatch holds its entry with, and what keeps that hold alive while it
    * runs. Built with the poller, because both need the configuration.
    */
@@ -190,6 +199,7 @@ public class MongoPhaseTwoOutboxDispatcher {
     }
 
     lease = new DispatchLease("vanillabp-outbox-lease", properties.getAttemptFrequency());
+    lanes = new DispatchLanes("vanillabp-outbox-dispatch", properties.getDispatchThreads());
     poller = new DueEntryPoller(
         "vanillabp-outbox", properties.getPollInterval(), this::poll, this::earliestDueAt);
     poller.start();
@@ -197,8 +207,9 @@ public class MongoPhaseTwoOutboxDispatcher {
   }
 
   /**
-   * Stops the poller and the renewal of the leases. What a dispatch was still carrying keeps
-   * its lease until it runs out, so another node takes the entry then.
+   * Stops the poller, the lanes and the renewal of the leases. What a lane was still holding
+   * stays OPEN in the collection and keeps its lease until it runs out, so another node takes
+   * the entry then.
    */
   @PreDestroy
   void shutdown() {
@@ -206,6 +217,10 @@ public class MongoPhaseTwoOutboxDispatcher {
     if (poller != null) {
       poller.stop();
       poller = null;
+    }
+    if (lanes != null) {
+      lanes.stop();
+      lanes = null;
     }
     if (lease != null) {
       lease.stop();
@@ -390,8 +405,16 @@ public class MongoPhaseTwoOutboxDispatcher {
   }
 
   /**
-   * Claims and dispatches all due entries, then deletes DONE entries whose
-   * retention passed. Exceptions are caught to keep the poller alive.
+   * Claims all due entries and hands each of them to the lane of its aggregate, then deletes
+   * DONE entries whose retention passed. Exceptions are caught to keep the poller alive.
+   * <p>
+   * The claim is what this thread does and the dispatch is what a lane does, and the order
+   * matters: an entry is claimed before it is handed over, so the claim of the next poll -
+   * here or on another node - finds it leased and leaves it alone.
+   * <p>
+   * A lane whose queue is full makes this thread wait. Waiting is the back pressure of a
+   * backlog which arrives faster than it leaves, and it is what keeps the backlog in the
+   * collection, where it can be read.
    */
   private synchronized void poll() {
 
@@ -414,11 +437,16 @@ public class MongoPhaseTwoOutboxDispatcher {
             Updates.combine(
                 Updates.set("leasedBy", lease.owner()),
                 Updates.set("leasedUntil", leaseEnds),
-                Updates.set("nextAttemptAt", leaseEnds)));
+                Updates.set("nextAttemptAt", leaseEnds)),
+            // the oldest entry first, which is what the lanes need: they keep the order they
+            // are handed the entries of one aggregate in, and a claim in whatever order the
+            // collection happens to answer in would hand them over the wrong way round. Served
+            // by the index over the status and that moment
+            new FindOneAndUpdateOptions().sort(Sorts.ascending("createdAt")));
         if (entry == null) {
           break;
         }
-        dispatch(collection, entry);
+        handOverToItsLane(collection, entry);
       }
       // asynchronous retention cleanup of the "DONE instead of delete" contract
       collection.deleteMany(
@@ -506,32 +534,50 @@ public class MongoPhaseTwoOutboxDispatcher {
   }
 
   /**
-   * Runs the attempt with the lease of its entry being renewed, and lets the renewal go the
-   * moment the attempt is over.
+   * Hands the entry the poll has just claimed to the lane of its aggregate, with the renewal
+   * of its lease already running.
    * <p>
-   * The renewal covers the attempt and not the write which says how it ended. That write needs
-   * a lease which has not run out, which the last renewal gave it, and not one which is still
-   * growing - and a renewal outliving the mark would find the entry no longer OPEN and report a
-   * lease it never lost.
+   * The renewal starts here and not where the lane picks the entry up, because between the two
+   * the entry waits in the lane's queue. A wait longer than the lease would let another node
+   * claim an entry this one is about to dispatch, and both would carry the operation out.
    *
    * @param collection The outbox collection
-   * @param entryId The entry being dispatched
-   * @param call The call to dispatch
-   * @param previouslyAttempted Whether a dispatch has had this entry before
-   * @param writtenAt When the entry was written
+   * @param entry The entry this node has just claimed
    */
-  private void dispatchRenewingTheLease(
+  private void handOverToItsLane(
       final MongoCollection<Document> collection,
-      final String entryId,
-      final PhaseTwoCall call,
-      final boolean previouslyAttempted,
-      final Date writtenAt) {
+      final Document entry) {
 
-    try (var held = lease.renewWhile(entryId, (
+    final var held = lease.renewWhile(entry.getString("_id"), (
         renewed,
-        leaseEnd) -> renewLease(collection, renewed, leaseEnd))) {
-      dispatchMeasuringTheWait(call, previouslyAttempted, writtenAt);
+        leaseEnd) -> renewLease(collection, renewed, leaseEnd));
+    try {
+      lanes.runInOrderOf(orderingKeyOf(entry), () -> dispatch(collection, entry, held));
+    } catch (final RuntimeException | Error e) {
+      // nothing will dispatch this entry, so nothing would close the renewal either
+      held.close();
+      throw e;
     }
+
+  }
+
+  /**
+   * What an entry is ordered by: its workflow aggregate. An entry which names none - a
+   * broadcast signal does not - is ordered by its BPMN process instead, so two signals of one
+   * process still leave in the order they were planned.
+   *
+   * @param entry The entry about to be dispatched
+   * @return The key deciding which lane dispatches it
+   */
+  private static String orderingKeyOf(
+      final Document entry) {
+
+    return entry.getString("aggregateId") == null
+        ? "%s|%s".formatted(entry.getString("workflowModuleId"), entry.getString("bpmnProcessId"))
+        : "%s|%s|%s"
+            .formatted(
+                entry.getString("workflowModuleId"), entry.getString("bpmnProcessId"), entry
+                    .getString("aggregateId"));
 
   }
 
@@ -540,15 +586,26 @@ public class MongoPhaseTwoOutboxDispatcher {
    * success the entry is marked DONE; on failure it stays claimed and is retried
    * after the configured backoff, until it is blocked.
    *
+   * <p>
+   * The renewal ends here, before the write which says how the attempt ended. That write needs
+   * a lease which has not run out, which the last renewal gave it, and not one which is still
+   * growing - and a renewal outliving the write would find the entry no longer OPEN and report
+   * a lease it never lost.
+   *
    * @param collection The outbox collection
    * @param entry The claimed entry (holding the state before it was claimed)
+   * @param held The renewal which started with the claim, closed when this attempt is over
    */
   private void dispatch(
       final MongoCollection<Document> collection,
-      final Document entry) {
+      final Document entry,
+      final DispatchLease.Held held) {
 
     final var entryId = entry.getString("_id");
-    try {
+    final String payloadReference;
+    // everything the attempt does is inside, so the renewal is let go whichever way the
+    // attempt ends - reading the arguments of the entry included
+    try (held) {
       final var argsDocument = entry.get("args", Document.class);
       final Map<String, String> args = new LinkedHashMap<>();
       if (argsDocument != null) {
@@ -562,13 +619,11 @@ public class MongoPhaseTwoOutboxDispatcher {
       // persisted name and is resolved by the router's operation registry
       // the one extra read this form costs, and only for an entry which names a
       // payload: a lookup by _id, once per dispatch attempt
-      final var payloadReference = args.get(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
+      payloadReference = args.get(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
       final var payload = payloadReference == null
           ? null
           : getPayloadStore().read(payloadReference);
-      dispatchRenewingTheLease(
-          collection,
-          entryId,
+      dispatchMeasuringTheWait(
           PhaseTwoCall
               .forDispatch(
                   entry.getString("operation"), entry.getString("workflowModuleId"), entry
@@ -578,107 +633,126 @@ public class MongoPhaseTwoOutboxDispatcher {
                   args, payload),
           wasTakenBefore(entry),
           entry.getDate("createdAt"));
-      final var markedDone = Updates.combine(
-          Updates.set("status", MongoPhaseTwoOutbox.STATUS_DONE),
-          Updates.set("doneAt", Date.from(Instant.now())),
-          // the deduplication window ends with the dispatch: the entry's own id
-          // takes the place of the key, which stays readable in idempotencyKey
-          Updates.set("dedupKey", entryId),
-          // the attempt is counted where it ended, and the lease given back
-          Updates.inc("attempts", 1),
-          Updates.unset("leasedBy"),
-          Updates.unset("leasedUntil"));
-      if (!writeAsTheHolder(collection, entry, markedDone)) {
-        // the entry belongs to another node, and so do its bytes: that node may still be
-        // dispatching and would find a payload which is gone
-        return;
-      }
-      // the entry is dispatched, so its bytes have done their work. Removed AFTER the
-      // entry was marked, never before: a crash in between leaves a document the
-      // housekeeping deletes, while the other order would leave an entry whose payload
-      // is gone
-      if (payloadReference != null) {
-        getPayloadStore().remove(payloadReference);
-      }
     } catch (final RuntimeException e) {
-      // the adapter said that repeating cannot help - blocked right away
-      // instead of after the configured attempts
-      if (io.vanillabp.integration.spi.PhaseTwoPermanentFailure.isPermanent(e)) {
-        if (!writeAsTheHolder(collection, entry, blockEntry(entryId))) {
-          return;
-        }
-        countBlockedEntry(entry.getString("operation"), true);
-        log.error(
-            "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
-                + "failed for a reason repeating cannot fix - the outbox entry '{}' is blocked and has "
-                + "to be cleaned up manually!",
-            entry.getString("operation"),
-            entry.getString("bpmnProcessId"),
-            entry.getString("workflowModuleId"),
-            entry.getString("aggregateId"),
-            entryId,
-            e);
+      reportFailedDispatch(collection, entry, e);
+      return;
+    }
+    final var markedDone = Updates.combine(
+        Updates.set("status", MongoPhaseTwoOutbox.STATUS_DONE),
+        Updates.set("doneAt", Date.from(Instant.now())),
+        // the deduplication window ends with the dispatch: the entry's own id
+        // takes the place of the key, which stays readable in idempotencyKey
+        Updates.set("dedupKey", entryId),
+        // the attempt is counted where it ended, and the lease given back
+        Updates.inc("attempts", 1),
+        Updates.unset("leasedBy"),
+        Updates.unset("leasedUntil"));
+    if (!writeAsTheHolder(collection, entry, markedDone)) {
+      // the entry belongs to another node, and so do its bytes: that node may still be
+      // dispatching and would find a payload which is gone
+      return;
+    }
+    // the entry is dispatched, so its bytes have done their work. Removed AFTER the
+    // entry was marked, never before: a crash in between leaves a document the
+    // housekeeping deletes, while the other order would leave an entry whose payload
+    // is gone
+    if (payloadReference != null) {
+      getPayloadStore().remove(payloadReference);
+    }
+
+  }
+
+  /**
+   * Writes down what a failed dispatch means for the entry: blocked where repeating cannot
+   * help or where the attempts are used up, and a new due time otherwise.
+   *
+   * @param collection The outbox collection
+   * @param entry The entry whose dispatch failed
+   * @param e What the dispatch threw
+   */
+  private void reportFailedDispatch(
+      final MongoCollection<Document> collection,
+      final Document entry,
+      final RuntimeException e) {
+
+    final var entryId = entry.getString("_id");
+    // the adapter said that repeating cannot help - blocked right away
+    // instead of after the configured attempts
+    if (io.vanillabp.integration.spi.PhaseTwoPermanentFailure.isPermanent(e)) {
+      if (!writeAsTheHolder(collection, entry, blockEntry(entryId))) {
         return;
       }
-      if (entry.getInteger("attempts") + 1 >= properties.getBlockAfterAttempts()) {
-        if (!writeAsTheHolder(collection, entry, blockEntry(entryId))) {
-          return;
-        }
-        countBlockedEntry(entry.getString("operation"), false);
-        log.error(
-            "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
-                + "failed {} times - the outbox entry '{}' is now blocked and has to be cleaned up manually!",
-            entry.getString("operation"),
-            entry.getString("bpmnProcessId"),
-            entry.getString("workflowModuleId"),
-            entry.getString("aggregateId"),
-            entry.getInteger("attempts") + 1,
-            entryId,
-            e);
+      countBlockedEntry(entry.getString("operation"), true);
+      log.error(
+          "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
+              + "failed for a reason repeating cannot fix - the outbox entry '{}' is blocked and has "
+              + "to be cleaned up manually!",
+          entry.getString("operation"),
+          entry.getString("bpmnProcessId"),
+          entry.getString("workflowModuleId"),
+          entry.getString("aggregateId"),
+          entryId,
+          e);
+      return;
+    }
+    if (entry.getInteger("attempts") + 1 >= properties.getBlockAfterAttempts()) {
+      if (!writeAsTheHolder(collection, entry, blockEntry(entryId))) {
         return;
       }
-      final var retryAfter = io.vanillabp.integration.spi.PhaseTwoRetryLater.retryAfter(e);
-      if (retryAfter != null) {
-        // the dispatch knows when asking again can help - a workflow the BPMS has not
-        // made searchable yet is the case - so the entry waits that long instead of the
-        // configured backoff. What ends a reason which never goes away is the attempts
-        // counted above, not this due time
-        if (!writeAsTheHolder(collection, entry, dueAgainAt(Instant.now().plus(retryAfter)))) {
-          return;
-        }
-        log.info(
-            "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' cannot "
-                + "run yet - the outbox entry '{}' is dispatched again in {} ({} of {} attempts used): {}",
-            entry.getString("operation"),
-            entry.getString("bpmnProcessId"),
-            entry.getString("workflowModuleId"),
-            entry.getString("aggregateId"),
-            entryId,
-            retryAfter,
-            entry.getInteger("attempts") + 1,
-            properties.getBlockAfterAttempts(),
-            e.getMessage());
-      } else {
-        // the attempts of the entry are the ones which ended before this one, so
-        // attemptDelay(0) is the distance after the first failure: close, because most
-        // failures are momentary
-        final var retryIn = properties.attemptDelay(entry.getInteger("attempts"));
-        if (!writeAsTheHolder(collection, entry, dueAgainAt(Instant.now().plus(retryIn)))) {
-          return;
-        }
-        log.warn(
-            "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
-                + "failed - the outbox entry '{}' is dispatched again in {} ({} of {} attempts used)",
-            entry.getString("operation"),
-            entry.getString("bpmnProcessId"),
-            entry.getString("workflowModuleId"),
-            entry.getString("aggregateId"),
-            entryId,
-            retryIn,
-            entry.getInteger("attempts") + 1,
-            properties.getBlockAfterAttempts(),
-            e);
+      countBlockedEntry(entry.getString("operation"), false);
+      log.error(
+          "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
+              + "failed {} times - the outbox entry '{}' is now blocked and has to be cleaned up manually!",
+          entry.getString("operation"),
+          entry.getString("bpmnProcessId"),
+          entry.getString("workflowModuleId"),
+          entry.getString("aggregateId"),
+          entry.getInteger("attempts") + 1,
+          entryId,
+          e);
+      return;
+    }
+    final var retryAfter = io.vanillabp.integration.spi.PhaseTwoRetryLater.retryAfter(e);
+    if (retryAfter != null) {
+      // the dispatch knows when asking again can help - a workflow the BPMS has not
+      // made searchable yet is the case - so the entry waits that long instead of the
+      // configured backoff. What ends a reason which never goes away is the attempts
+      // counted above, not this due time
+      if (!writeAsTheHolder(collection, entry, dueAgainAt(Instant.now().plus(retryAfter)))) {
+        return;
       }
+      log.info(
+          "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' cannot "
+              + "run yet - the outbox entry '{}' is dispatched again in {} ({} of {} attempts used): {}",
+          entry.getString("operation"),
+          entry.getString("bpmnProcessId"),
+          entry.getString("workflowModuleId"),
+          entry.getString("aggregateId"),
+          entryId,
+          retryAfter,
+          entry.getInteger("attempts") + 1,
+          properties.getBlockAfterAttempts(),
+          e.getMessage());
+    } else {
+      // the attempts of the entry are the ones which ended before this one, so
+      // attemptDelay(0) is the distance after the first failure: close, because most
+      // failures are momentary
+      final var retryIn = properties.attemptDelay(entry.getInteger("attempts"));
+      if (!writeAsTheHolder(collection, entry, dueAgainAt(Instant.now().plus(retryIn)))) {
+        return;
+      }
+      log.warn(
+          "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
+              + "failed - the outbox entry '{}' is dispatched again in {} ({} of {} attempts used)",
+          entry.getString("operation"),
+          entry.getString("bpmnProcessId"),
+          entry.getString("workflowModuleId"),
+          entry.getString("aggregateId"),
+          entryId,
+          retryIn,
+          entry.getInteger("attempts") + 1,
+          properties.getBlockAfterAttempts(),
+          e);
     }
 
   }
