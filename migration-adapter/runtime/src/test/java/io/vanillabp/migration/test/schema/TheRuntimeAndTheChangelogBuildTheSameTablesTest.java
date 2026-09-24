@@ -6,8 +6,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 import org.junit.jupiter.api.DisplayName;
@@ -166,6 +169,59 @@ public class TheRuntimeAndTheChangelogBuildTheSameTablesTest {
       }
     }
     return tables;
+
+  }
+
+  /**
+   * The indexes VanillaBP names itself, each with the columns it spans in their order. Only the
+   * named ones: a primary key and a unique constraint bring an index whose name the database makes
+   * up, and two databases would then differ over a name nobody wrote.
+   *
+   * @param connection The database
+   * @param table The table to read them from
+   * @return The indexes by name
+   */
+  private static Map<String, List<String>> namedIndexesOf(
+      final Connection connection,
+      final String table) throws Exception {
+
+    final var indexes = new TreeMap<String, List<String>>();
+    try (var results = connection.getMetaData().getIndexInfo(null, null, table, false, true)) {
+      while (results.next()) {
+        final var name = results.getString("INDEX_NAME");
+        if ((name == null) || !name.toUpperCase().startsWith(table
+            + "_")) {
+          continue;
+        }
+        indexes.computeIfAbsent(name.toUpperCase(), index -> new ArrayList<>()).add(results.getString("COLUMN_NAME"));
+      }
+    }
+    return indexes;
+
+  }
+
+  @Test
+  @DisplayName("Both ways build the same indexes, under the same names and over the same columns")
+  public void bothWaysBuildTheSameIndexes() throws Exception {
+
+    try (var fromTheChangelog = builtByTheChangelog(); var fromTheRuntime = builtByTheRuntime()) {
+
+      for (final var table : new TreeSet<>(ChangelogDescription.of(Map.of()).tableNames())) {
+        final var built = namedIndexesOf(fromTheChangelog, table);
+        assertFalse(built.isEmpty(), "the changelog built no index on '%s'".formatted(table));
+        assertEquals(
+            built,
+            namedIndexesOf(fromTheRuntime, table),
+            """
+                The indexes on '%s' are not the same on both ways! A store reads by the name it \
+                creates, so an index the changelog builds under another name is an index that \
+                store never uses, and an index only one way builds is a question which scans the \
+                whole table on the other. Whoever adds an index adds it in both places, under one \
+                name."""
+                .formatted(table));
+      }
+
+    }
 
   }
 

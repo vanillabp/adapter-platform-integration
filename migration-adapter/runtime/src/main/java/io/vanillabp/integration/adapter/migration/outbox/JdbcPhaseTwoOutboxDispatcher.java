@@ -291,16 +291,50 @@ public class JdbcPhaseTwoOutboxDispatcher {
   }
 
   /**
-   * The index the poller asks its question along. STATUS first and the timestamp second, which is
-   * the order both the aggregate and the select of the due entries read them in.
+   * The indexes this table is read by. One list, because the DDL which creates them and the
+   * startup check which asks an existing table for them read it, and a second list would sooner
+   * or later name something the other does not. Every one of them filters STATUS and then reads a
+   * moment, in that order, and every moment gets an index of its own: one index over two of them
+   * would serve neither question.
    */
-  private static final String CREATE_DUE_INDEX = "CREATE INDEX %s_DUE ON %s (STATUS, NEXT_ATTEMPT_AT)";
+  private static final List<TableIndex> INDEXES = List
+      .of(
+          new TableIndex("_DUE", "STATUS, NEXT_ATTEMPT_AT"),
+          new TableIndex("_AGE", "STATUS, DONE_AT"),
+          new TableIndex("_OLDEST", "STATUS, CREATED_AT"));
 
   /**
-   * The index the retention deletes along. A second one rather than more columns in the first,
-   * because the two questions filter the same STATUS and order by different timestamps.
+   * One index of the outbox table, named after that table so two outboxes on one schema keep
+   * their indexes apart the way they keep their tables apart.
+   *
+   * @param suffix What is appended to the table name to name the index
+   * @param columns The columns it spans, in the order the statements read them
    */
-  private static final String CREATE_AGE_INDEX = "CREATE INDEX %s_AGE ON %s (STATUS, DONE_AT)";
+  private record TableIndex(String suffix, String columns) {
+
+    /**
+     * @param tableName The table this outbox writes into
+     * @return The name the index carries on that table
+     */
+    private String nameOn(
+        final String tableName) {
+
+      return tableName + suffix;
+
+    }
+
+    /**
+     * @param tableName The table this outbox writes into
+     * @return The statement which creates the index on that table
+     */
+    private String createOn(
+        final String tableName) {
+
+      return "CREATE INDEX %s ON %s (%s)".formatted(nameOn(tableName), tableName, columns);
+
+    }
+
+  }
 
   private final JdbcConnectionAccess connections;
 
@@ -595,8 +629,9 @@ public class JdbcPhaseTwoOutboxDispatcher {
       }
       try (var statement = connection.createStatement()) {
         statement.executeUpdate(buildCreateTable(connection, tableName));
-        statement.executeUpdate(CREATE_DUE_INDEX.formatted(tableName, tableName));
-        statement.executeUpdate(CREATE_AGE_INDEX.formatted(tableName, tableName));
+        for (final var index : INDEXES) {
+          statement.executeUpdate(index.createOn(tableName));
+        }
       }
     } catch (final SQLException e) {
       if (createdConcurrently()) {
@@ -709,11 +744,12 @@ public class JdbcPhaseTwoOutboxDispatcher {
 
   /**
    * Names the indexes this table needs and does not have, with the statement which adds each of
-   * them. A table created by an earlier version of VanillaBP has neither, and the poller then asks
-   * its question as a sequential scan growing with everything the table ever held - which is a cost
-   * nobody sees until the table is large. A warning and not a failure: the application runs
-   * correctly without them, and creating an index on a large table is a decision with a lock on it,
-   * not something a boot should do behind its operator's back.
+   * them. A table created by an earlier version of VanillaBP is missing whichever of them that
+   * version did not know, and the question behind it is then a sequential scan growing with
+   * everything the table ever held - which is a cost nobody sees until the table is large. A
+   * warning and not a failure: the application runs correctly without them, and creating an index
+   * on a large table is a decision with a lock on it, not something a boot should do behind its
+   * operator's back.
    *
    * @param connection The connection to the database holding the table
    */
@@ -721,17 +757,10 @@ public class JdbcPhaseTwoOutboxDispatcher {
       final Connection connection) {
 
     final var missing = new ArrayList<String>();
-    if (!JdbcSchema
-        .indexExists(
-            connection, tableName, tableName
-                + "_DUE")) {
-      missing.add(CREATE_DUE_INDEX.formatted(tableName, tableName));
-    }
-    if (!JdbcSchema
-        .indexExists(
-            connection, tableName, tableName
-                + "_AGE")) {
-      missing.add(CREATE_AGE_INDEX.formatted(tableName, tableName));
+    for (final var index : INDEXES) {
+      if (!JdbcSchema.indexExists(connection, tableName, index.nameOn(tableName))) {
+        missing.add(index.createOn(tableName));
+      }
     }
     if (missing.isEmpty()) {
       return;
