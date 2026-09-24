@@ -432,9 +432,18 @@ public class MongoPhaseTwoOutboxDispatcher {
         .inc("attempts", 1)
         .unset("leasedBy")
         .unset("leasedUntil");
-    if (!writeAsTheHolder(entry, markedDone)) {
-      // the entry belongs to another node, and so do its bytes: that node may still be
-      // dispatching and would find a payload which is gone
+    try {
+      if (!writeAsTheHolder(entry, markedDone)) {
+        // the entry belongs to another node, and so do its bytes: that node may still be
+        // dispatching and would find a payload which is gone
+        return;
+      }
+    } catch (final RuntimeException e) {
+      // the dispatch got through and the mark did not, so the entry says nothing about what
+      // happened. It is planned again, which repeats the operation - the at-least-once the
+      // contract names. Said out loud through the same report a failed dispatch uses,
+      // because a mark lost in silence leaves an operation looking undone with nobody to ask
+      reportFailedDispatch(entry, e);
       return;
     }
     // the entry is dispatched, so its bytes have done their work. Removed AFTER the
