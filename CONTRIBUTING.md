@@ -211,6 +211,11 @@ getter which is not in the file. A published class which took its constructor fr
 that constructor out, because the documentation otherwise shows a parameterless one which does not
 exist.
 
+Two javadoc blocks in a row are the gap neither tool sees. Javadoc keeps the last block before an
+element and drops the earlier ones without a word, so a comment somebody wrote and kept up to date
+appears nowhere. `bin/check-orphaned-javadoc.sh` finds that shape. A block it reports describes
+something, usually the element next door, so hang it back there rather than delete it.
+
 What neither check can see is the same name written as prose, and neither says anything about
 whether a sentence is true, so the rest stays deliberately without tooling. A lint over words like
 "never" or "always" produces noise and a false sense of safety, and the habit is what does the work.
