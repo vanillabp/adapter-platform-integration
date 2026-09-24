@@ -85,6 +85,12 @@ import lombok.extern.slf4j.Slf4j;
  * them. Both nodes say in their log what happened, and the second delivery is the
  * at-least-once residual this outbox documents.
  * <p>
+ * A write the database could not run at all is the third answer, and it is kept apart from
+ * both of the above: nothing was written, so the entry keeps its
+ * status, its due time and its lease, and the next poll reads it once that lease runs out.
+ * It therefore keeps its payload as well, whatever the attempt did - an entry which is going
+ * to be dispatched again needs those bytes.
+ * <p>
  * The outbox table and the table holding the payloads of the calls which carry one are
  * created on startup unless <code>vanillabp.outbox.create-schema</code> is disabled for manually managed
  * schemas - in that case also create the unique constraint on
@@ -1126,8 +1132,10 @@ public class JdbcPhaseTwoOutboxDispatcher {
       return;
     }
     if (!markDone(entry)) {
-      // the entry belongs to another node, and so do its bytes: that node may still be
-      // dispatching and would find a payload which is gone
+      // the mark did not take, and either way the bytes stay. The entry may belong to
+      // another node, which is still dispatching and would find a payload which is gone; or
+      // the database could not be asked, and then the entry is still OPEN here and wants
+      // those bytes for the attempt which follows its lease
       return;
     }
     // the entry is dispatched, so its bytes have done their work. Removed AFTER the
@@ -1237,19 +1245,19 @@ public class JdbcPhaseTwoOutboxDispatcher {
    * not run on it, so what this write leaves behind is news to it.
    *
    * @param entry The entry which was dispatched
-   * @return Whether this node still held the entry, so the write took
+   * @return Whether the entry says it is done now, which it does where this node still held
+   *         it and the database wrote it down
    */
   private boolean markDone(
       final Entry entry) {
 
     final var doneAt = Instant.now();
-    final var written = update(markEntryDone, statement -> {
+    final var outcome = update(markEntryDone, statement -> {
       statement.setTimestamp(1, Timestamp.from(doneAt));
       statement.setString(2, entry.id());
       statement.setString(3, lease.owner());
     });
-    if (written == 0) {
-      reportResultOfALostEntry(entry);
+    if (!theEntryNowSays(entry, outcome, "that it is done")) {
       return false;
     }
     poller.somethingIsDueAt(doneAt.plus(properties.getRetention()));
@@ -1261,20 +1269,17 @@ public class JdbcPhaseTwoOutboxDispatcher {
    * Takes the entry out of what any poll reads. Nothing in VanillaBP moves it back.
    *
    * @param entry The entry nobody is to try again
-   * @return Whether this node still held the entry, so the write took
+   * @return Whether the entry says it is blocked now, which it does where this node still
+   *         held it and the database wrote it down
    */
   private boolean markBlocked(
       final Entry entry) {
 
-    final var written = update(markEntryBlocked, statement -> {
+    final var outcome = update(markEntryBlocked, statement -> {
       statement.setString(1, entry.id());
       statement.setString(2, lease.owner());
     });
-    if (written == 0) {
-      reportResultOfALostEntry(entry);
-      return false;
-    }
-    return true;
+    return theEntryNowSays(entry, outcome, "that it is blocked");
 
   }
 
@@ -1288,23 +1293,86 @@ public class JdbcPhaseTwoOutboxDispatcher {
    *
    * @param entry The entry whose dispatch failed
    * @param nextAttempt When it is to be read again
-   * @return Whether this node still held the entry, so the write took
+   * @return Whether the entry says its new due time, which it does where this node still
+   *         held it and the database wrote it down
    */
   private boolean rescheduleAt(
       final Entry entry,
       final Instant nextAttempt) {
 
-    final var written = update(rescheduleEntry, statement -> {
+    final var outcome = update(rescheduleEntry, statement -> {
       statement.setTimestamp(1, Timestamp.from(nextAttempt));
       statement.setString(2, entry.id());
       statement.setString(3, lease.owner());
     });
-    if (written == 0) {
-      reportResultOfALostEntry(entry);
+    if (!theEntryNowSays(entry, outcome, "when it is due again")) {
       return false;
     }
     poller.somethingIsDueAt(nextAttempt);
     return true;
+
+  }
+
+  /**
+   * Whether the entry carries what a write of this dispatcher wanted to put on it, and the
+   * line an operator reads where it does not.
+   * <p>
+   * The two ways a write does not take are told apart here, because only one of them is the
+   * entry having changed hands. A write the database could not run leaves the entry with
+   * this node, exactly as it was, so the caller must go on as if nothing had been written -
+   * which is what it is: the next poll reads the entry again once its lease runs out.
+   *
+   * @param entry The entry the write was about
+   * @param outcome What became of the write
+   * @param whatTheWriteSaid What the entry would say now, in the words of the report
+   * @return Whether the entry says it
+   */
+  private boolean theEntryNowSays(
+      final Entry entry,
+      final WriteOutcome outcome,
+      final String whatTheWriteSaid) {
+
+    return switch (outcome) {
+      case WRITTEN -> true;
+      case NO_ROW_MATCHED -> {
+        reportResultOfALostEntry(entry);
+        yield false;
+      }
+      case DATABASE_COULD_NOT_BE_ASKED -> {
+        reportTheWriteWhichDidNotGetThrough(entry, whatTheWriteSaid);
+        yield false;
+      }
+    };
+
+  }
+
+  /**
+   * Says that an attempt ended and that the database could not be asked to write down how.
+   * <p>
+   * The entry keeps its status, its due time and its lease, so the next poll of this node or
+   * of another one reads it once that lease runs out. Where the attempt had reached the BPMS
+   * the operation then runs a second time, which is the at-least-once this outbox documents.
+   * What the entry must not lose meanwhile is its payload: the dispatch it is waiting for
+   * needs those bytes.
+   *
+   * @param entry The entry whose write was not run
+   * @param whatTheWriteSaid What the entry would say now, had the write got through
+   */
+  private void reportTheWriteWhichDidNotGetThrough(
+      final Entry entry,
+      final String whatTheWriteSaid) {
+
+    log
+        .warn(
+            "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' ended, but "
+                + "the database could not be asked to write {} - the outbox entry '{}' stays as it is and "
+                + "is dispatched again once its lease runs out",
+            entry.operation(),
+            entry.bpmnProcessId(),
+            entry.workflowModuleId(),
+            entry.aggregateId(),
+            whatTheWriteSaid,
+            entry.id());
 
   }
 
@@ -1355,7 +1423,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
       statement.setTimestamp(2, Timestamp.from(leaseEnd));
       statement.setString(3, entryId);
       statement.setString(4, lease.owner());
-    }) != 0;
+    }) != WriteOutcome.NO_ROW_MATCHED;
 
   }
 
@@ -1369,10 +1437,9 @@ public class JdbcPhaseTwoOutboxDispatcher {
    *
    * @param sql The statement to run
    * @param arguments What to put into it
-   * @return How many rows the statement changed, or <code>-1</code> where the database
-   *         could not be asked - which is not the same answer as "no row matched"
+   * @return What became of the write
    */
-  private int update(
+  private WriteOutcome update(
       final String sql,
       final StatementArguments arguments) {
 
@@ -1381,14 +1448,43 @@ public class JdbcPhaseTwoOutboxDispatcher {
       connection = connections.acquire();
       try (var statement = connection.prepareStatement(sql)) {
         arguments.setOn(statement);
-        return statement.executeUpdate();
+        return statement.executeUpdate() == 0
+            ? WriteOutcome.NO_ROW_MATCHED
+            : WriteOutcome.WRITTEN;
       }
     } catch (final SQLException e) {
       log.error("Could not update an entry of the phase-two outbox table '{}'", tableName, e);
-      return -1;
+      return WriteOutcome.DATABASE_COULD_NOT_BE_ASKED;
     } finally {
       release(connection);
     }
+
+  }
+
+  /**
+   * What became of one write of this dispatcher. Three answers and not a number, because a
+   * write which matched no row and a write nobody could run mean opposite things for the
+   * entry: the first says somebody else owns it now, the second says the entry is exactly as
+   * it was and this node still holds it.
+   */
+  private enum WriteOutcome {
+
+    /**
+     * The row was changed, so this node held the entry and what the write says stands.
+     */
+    WRITTEN,
+
+    /**
+     * The statement ran and matched no row. Every write of an ended attempt names the holder
+     * of the lease, so this is the entry having changed hands while the dispatch ran.
+     */
+    NO_ROW_MATCHED,
+
+    /**
+     * The database could not be asked at all. Nothing was written, so the entry keeps the
+     * status, the due time and the lease it had before.
+     */
+    DATABASE_COULD_NOT_BE_ASKED
 
   }
 
