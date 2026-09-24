@@ -2620,7 +2620,7 @@ The numbers above are a statement about a measured past, not a promise. They say
 dispatch stage which waits for somebody else does with more threads, and they say nothing
 about a handler which is busy rather than waiting, or about a database under load.
 
-### 78. A node claims what its lanes are working on, and one thread renews those leases
+### 79. A node claims what its lanes are working on, and one thread renews those leases
 
 A claimed entry renews its lease from the claim until its dispatch is over, one write per
 entry and tick, and the tick is a third of `vanillabp.outbox.attempt-frequency`. Since the

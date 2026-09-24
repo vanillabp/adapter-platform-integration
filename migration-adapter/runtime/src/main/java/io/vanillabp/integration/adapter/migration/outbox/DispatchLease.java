@@ -36,7 +36,7 @@ import lombok.extern.slf4j.Slf4j;
  * ({@link DispatchLanes#ENTRIES_WAITING_PER_LANE}). A renewal is one write by primary key, so
  * one thread writes as many of them per tick as the node has lanes, and a database too slow
  * for that is one the dispatch itself is not getting through either. How this was measured,
- * and why more renewal threads are not the answer, is decision 78 in the repository's
+ * and why more renewal threads are not the answer, is decision 79 in the repository's
  * DECISIONS.md.
  * <p>
  * A renewal which matches no row means the lease was lost: the entry was taken over, or it

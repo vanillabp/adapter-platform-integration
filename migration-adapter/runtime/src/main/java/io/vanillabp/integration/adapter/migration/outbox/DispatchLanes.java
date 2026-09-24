@@ -29,7 +29,7 @@ import lombok.extern.slf4j.Slf4j;
  * poller is the only thread handing work in.
  * <p>
  * Why the aggregate decides and not who is free is decision 75 in the repository's
- * DECISIONS.md, and what a claim held too early costs is decision 78.
+ * DECISIONS.md, and what a claim held too early costs is decision 79.
  */
 @Slf4j
 public class DispatchLanes {
@@ -43,7 +43,7 @@ public class DispatchLanes {
    * its dispatch is over, one write per entry and tick, and an entry which is only waiting for
    * its lane is renewed like the one being dispatched. A deep queue therefore pays at every
    * tick for entries nobody is working on, and where the renewals fall behind, the leases run
-   * out and the operations are carried out twice - see decision 78 in the repository's
+   * out and the operations are carried out twice - see decision 79 in the repository's
    * DECISIONS.md. A queue of one also leaves the backlog in the database, where another node
    * can take it and where an operator can read it.
    */

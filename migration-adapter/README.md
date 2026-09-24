@@ -2195,7 +2195,7 @@ once per tick, a tick is a third of the `attempt-frequency`, and eight lanes the
 writes per tick on the one thread which renews. An application with a short `attempt-frequency`
 got more than eight hundred of them a second, the thread fell behind, leases ran out under entries
 which were only waiting, and the operations were carried out twice. Holding less was measured
-against renewing on more threads, on MongoDB and on PostgreSQL, and decision 78 of this repository
+against renewing on more threads, on MongoDB and on PostgreSQL, and decision 79 of this repository
 carries the numbers. `AnEntryWaitingForItsLaneTest#aNodeClaimsNoBacklogBeyondItsLanes` holds the
 bound: forty entries are due, one lane is busy, and three of them are claimed.
 
