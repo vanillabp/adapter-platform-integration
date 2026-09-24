@@ -111,13 +111,37 @@ public class MongoPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
       if (orphans.isEmpty()) {
         return 0;
       }
-      return (int) mongoTemplate
+      final var removed = (int) mongoTemplate
           .remove(Query.query(Criteria.where("_id").in(orphans)), collection)
           .getDeletedCount();
+      logRemovedOrphans(removed);
+      return removed;
     } catch (final RuntimeException e) {
       log.warn("Could not remove the orphaned payloads", e);
       return 0;
     }
+
+  }
+
+  /**
+   * Says that bytes were thrown away, at DEBUG and only when there were any. An orphan is a
+   * payload whose outbox entry never reached the collection, so nothing was lost by removing it,
+   * and the normal count is zero. Somebody who finds payloads growing wants to see this line, and
+   * nobody else does.
+   *
+   * @param removed How many payloads went
+   */
+  private void logRemovedOrphans(
+      final int removed) {
+
+    if (removed == 0) {
+      return;
+    }
+    log
+        .debug(
+            "Removed {} payload(s) from collection '{}' which no outbox entry names any more",
+            removed,
+            collection);
 
   }
 

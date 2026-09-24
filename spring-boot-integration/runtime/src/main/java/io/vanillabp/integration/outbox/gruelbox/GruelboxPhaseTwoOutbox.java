@@ -305,8 +305,10 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
    * <p>
    * gruelbox keeps a call as one serialized invocation, so there is no column to join
    * on: the statement looks for the reference anywhere in that text. It costs a scan of
-   * the table, and it is asked only where a payload outlived the retention, which on a
-   * healthy store is never.
+   * the table, and no index can take that away - gruelbox owns this table, so VanillaBP
+   * cannot add a column to it at all (see decision 76 in the repository's DECISIONS.md).
+   * The question is asked only where a payload outlived the retention, which on a healthy
+   * store is never, but an entry gruelbox blocked keeps its payload.
    * <p>
    * Where the table does not answer, every payload counts as still named. Keeping bytes
    * nobody needs costs space; removing the bytes of an entry somebody is about to open

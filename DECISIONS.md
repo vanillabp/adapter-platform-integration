@@ -2538,3 +2538,47 @@ The entry above which this changes the premise of is 47: gruelbox is no longer w
 applications run, so the store which cannot name the adapter ids of its waiting entries at a
 start is now the exception rather than the default. What decision 47 decided - that such a store
 says it at the first dispatch instead - is unchanged and still holds for gruelbox.
+
+### 76. The orphan question runs over an index where the store can index a field, and over a scan where it cannot
+
+Before the housekeeping removes a payload by age it asks the entries whether one of them still
+names it. Decision 62 put that reference among the arguments, and the retention counts at the
+entry, so age alone does not say a payload may go. On a healthy store the question is never asked,
+because a payload goes with the dispatch of its entry. An entry which is stuck keeps
+its payload, so one stuck entry means the question is asked on every poll, which is every ten
+seconds by default.
+
+That was measured in September 2026, and the result is not the same on both kinds of store.
+
+On MongoDB the reference is a field inside the entry document, so an index reaches it. A sparse
+index over `args.payloadReference` is created with the other indexes of the collection, and the
+question is answered from it. Measured against MongoDB 8.2 with a hundred stuck entries, the
+question took 4 ms with ten thousand dispatched entries beside them, 35 ms with a hundred thousand
+and 341 ms with a million, while the index answered in 0 to 2 ms at every size. Sparse, because
+only an entry which carries a payload has the field: in a collection of twenty thousand entries of
+which two hundred carried one, the index held 20 KB. The write pays for it, and the measurement
+could not tell that cost apart from the run-to-run spread of the same write: four indexes took 149
+to 183 microseconds per insert and five took 162 to 202, which says the index is well below what
+the round trip of one write costs.
+
+On a relational database the reference lies inside a column of text, and no index reaches into it.
+The only index there would be an index over a column of its own, and that column is what decision
+62 refused: the reference is an identifier and travels where identifiers travel, in one form for
+all four stores, and gruelbox owns its table so a column there was never possible at all. So the
+JDBC stores keep the scan, and what it costs is written down here rather than left to be
+discovered: with a hundred stuck entries the pass took 121 ms against ten thousand dispatched
+entries, 413 ms against a hundred thousand and 4.1 s against a million, on PostgreSQL 16.15. It
+gets worse than linear when the stuck entries themselves pile up, because the payload store asks
+in chunks of a hundred and every chunk is a scan of its own: a thousand stuck entries took 1.4 s
+and ten thousand took 47 s.
+
+Those last numbers are the price of keeping one form, and they are a price nobody pays while the
+outbox is healthy. Whether they are worth a column in `VANILLABP_PHASE_TWO_OUTBOX`, for the three
+stores which could carry one, is a question about decision 62 and belongs to whoever reopens that
+one. Until then an application which finds its housekeeping slow has the same fix it always had:
+repair or remove the entries which are stuck.
+
+A payload the housekeeping did remove is said at DEBUG with its count, and nothing is said when
+there was none. An orphan means a payload was written and its entry never was, so the count is
+zero unless a process died between those two writes, and a line which is always zero teaches a
+reader to stop reading it.
