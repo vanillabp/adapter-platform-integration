@@ -105,7 +105,9 @@ it reaches anyway.
 A feature is proven by an acceptance test per platform, against the published
 [BPMS double](./bpms-double), and coverage is measured separately per platform because a Spring test
 never covers Quarkus code. `test-coverage-report/coverage-gate` is the last module of the reactor and
-fails below 85 percent of covered instructions, while the rule is 90.
+fails below 85 percent of covered instructions, while the rule is 90. It judges what a run built.
+The reports are written in the `verify` phase, so a build which stops at `package` prints a line per
+platform saying the coverage was not checked, instead of failing over a file it never wrote.
 
 A test waits as a guard, never as its assertion. A machine carrying a few builds at once holds a
 test JVM back by a quarter of a second at a time, over and over, so no fixed window of a few hundred
@@ -208,6 +210,11 @@ and Lombok writes bytecode. So a published comment names a property in words rat
 getter which is not in the file. A published class which took its constructor from Lombok writes
 that constructor out, because the documentation otherwise shows a parameterless one which does not
 exist.
+
+Two javadoc blocks in a row are the gap neither tool sees. Javadoc keeps the last block before an
+element and drops the earlier ones without a word, so a comment somebody wrote and kept up to date
+appears nowhere. `bin/check-orphaned-javadoc.sh` finds that shape. A block it reports describes
+something, usually the element next door, so hang it back there rather than delete it.
 
 What neither check can see is the same name written as prose, and neither says anything about
 whether a sentence is true, so the rest stays deliberately without tooling. A lint over words like
