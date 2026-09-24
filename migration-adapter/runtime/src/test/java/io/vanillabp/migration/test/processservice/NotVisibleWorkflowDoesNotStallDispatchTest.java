@@ -36,12 +36,12 @@ import io.vanillabp.migration.test.TestPhaseOperations;
 /**
  * One workflow whose BPMS has not made it searchable yet used to hold every other entry
  * of the same store: the dispatch waited out the adapter's visibility window on the one
- * thread which dispatches everything, ten seconds on Camunda 8. So a burst of "start,
- * then correlate" pairs stalled in batches, and the workflows in it had nothing to do
- * with each other.
+ * thread which dispatched everything back then, ten seconds on Camunda 8. So a burst of
+ * "start, then correlate" pairs stalled in batches, and the workflows in it had nothing
+ * to do with each other.
  * <p>
  * What happens instead is here: the entry is handed back with the window as its due
- * time, and the thread goes on to the next entry. The store counts the attempt like any
+ * time, and the lane goes on to the next entry. The store counts the attempt like any
  * other, which is what ends a workflow that never becomes visible - after
  * <code>block-after-attempts</code> of them the entry is blocked, and with the defaults
  * that is ten attempts, one hundred seconds of a Camunda 8 window.

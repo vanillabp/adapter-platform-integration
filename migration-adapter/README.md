@@ -140,9 +140,9 @@ the split is drawn there. The three patiences are held by
 
 At the dispatch the same walk gains the loop the phase-one walk must not have, for a BPMS which
 cannot be reached. A workflow which is not visible yet gets no loop at all: the entry goes back to
-the store, due in the window, because this thread dispatches the entries of every other workflow
-too. Where the first picture ends in an exception, this one ends in an entry which is repeated and
-finally blocked.
+the store, due in the window, because the lane it would wait on also carries the entries of other
+workflows. Where the first picture ends in an exception, this one ends in an entry which is
+repeated and finally blocked.
 
 ```mermaid
 flowchart TB
