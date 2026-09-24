@@ -841,6 +841,9 @@ public class JdbcPhaseTwoOutboxDispatcher {
    * node claim an entry this one is about to dispatch, and both would carry the operation
    * out. The queue is short, so the wait is short as well, but short is not the same as
    * impossible and nothing about the queue length is promised to anybody.
+   * <p>
+   * Where no lane takes the entry - this node is stopping - the renewal ends here too, and
+   * the log says which operation waits for its lease to run out.
    *
    * @param entry The due entry, as the select read it
    */
@@ -859,13 +862,48 @@ public class JdbcPhaseTwoOutboxDispatcher {
       return;
     }
     final var held = lease.renewWhile(claimed.id(), this::renewLease);
+    final boolean taken;
     try {
-      lanes.runInOrderOf(claimed.orderingKey(), () -> dispatch(claimed, held));
+      taken = lanes.runInOrderOf(claimed.orderingKey(), () -> dispatch(claimed, held));
     } catch (final RuntimeException | Error e) {
       // nothing will dispatch this entry, so nothing would close the renewal either
       held.close();
       throw e;
     }
+    if (!taken) {
+      // the same as above, for the one case which is no failure: this node is stopping and
+      // the lanes take nothing more. The renewal is closed here rather than by the order
+      // stop() happens to have, which is an agreement between two calls and holds nothing
+      held.close();
+      reportTheEntryNoLaneTook(claimed);
+    }
+
+  }
+
+  /**
+   * Says that an entry this poll claimed will not be dispatched, because the lanes take
+   * nothing any more.
+   * <p>
+   * Nothing is lost. The entry stays OPEN and keeps its lease until it runs out, and the
+   * next poll of this node or of another one takes it then. What it costs is that wait, one
+   * <code>vanillabp.outbox.attempt-frequency</code>, and this line is what says so to
+   * whoever reads the log of a shutdown.
+   *
+   * @param entry The claimed entry no lane took
+   */
+  private void reportTheEntryNoLaneTook(
+      final Entry entry) {
+
+    log
+        .info(
+            "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' was not "
+                + "handed to a dispatch thread because this node is stopping - the outbox entry '{}' stays "
+                + "open and is dispatched once its lease runs out",
+            entry.operation(),
+            entry.bpmnProcessId(),
+            entry.workflowModuleId(),
+            entry.aggregateId(),
+            entry.id());
 
   }
 
@@ -881,12 +919,48 @@ public class JdbcPhaseTwoOutboxDispatcher {
 
   }
 
+  /**
+   * Deletes successfully dispatched (DONE) entries whose retention period passed - the
+   * asynchronous cleanup of the "DONE instead of delete" contract - and then the payloads
+   * which belong to no entry any more.
+   * <p>
+   * The order is what makes the retention count at the entry: the payload of an entry
+   * deleted a moment ago is named by nothing now, so it goes with it, while the payload
+   * of an entry which waits or is blocked is named and stays, however long the repair
+   * takes.
+   * <p>
+   * Every step borrows its connection for the moment it needs it, the way the rest of this
+   * dispatcher does. The payload store borrows one of its own, and it asks this class back
+   * which payloads the entries still name, which borrows a third - so a thread holding one
+   * across the whole cleanup would wait for a connection it is holding itself. On a pool of
+   * one that is a deadlock.
+   */
   private void cleanupExpiredEntries() throws SQLException {
+
+    final var expiredBefore = Instant.now().minus(properties.getRetention());
+    deleteEntriesDoneBefore(expiredBefore);
+    // the payloads of the entries just deleted, and what a crash between the two writes
+    // of a schedule left behind. Nothing else is old enough to be gone, and what an
+    // entry still names is not removed by age at all
+    payloadStore.removeOrphansOlderThan(expiredBefore, this::referencesStillNamed);
+
+  }
+
+  /**
+   * Deletes the entries which were dispatched long enough ago.
+   *
+   * @param expiredBefore Entries dispatched before this moment
+   */
+  private void deleteEntriesDoneBefore(
+      final Instant expiredBefore) throws SQLException {
 
     Connection connection = null;
     try {
       connection = connections.acquire();
-      cleanupDoneEntries(connection);
+      try (var statement = connection.prepareStatement(deleteExpiredDoneEntries)) {
+        statement.setTimestamp(1, Timestamp.from(expiredBefore));
+        statement.executeUpdate();
+      }
     } finally {
       release(connection);
     }
@@ -1391,45 +1465,16 @@ public class JdbcPhaseTwoOutboxDispatcher {
   }
 
   /**
-   * Deletes successfully dispatched (DONE) entries whose retention period passed - the
-   * asynchronous cleanup of the "DONE instead of delete" contract - and then the
-   * payloads which belong to no entry any more.
-   * <p>
-   * The order is what makes the retention count at the entry: the payload of an entry
-   * deleted a moment ago is named by nothing now, so it goes with it, while the payload
-   * of an entry which waits or is blocked is named and stays, however long the repair
-   * takes.
-   *
-   * @param connection The connection to be used
-   */
-  private void cleanupDoneEntries(
-      final Connection connection) throws SQLException {
-
-    final var expiredBefore = Instant.now().minus(properties.getRetention());
-    try (var statement = connection.prepareStatement(deleteExpiredDoneEntries)) {
-      statement.setTimestamp(1, Timestamp.from(expiredBefore));
-      statement.executeUpdate();
-    }
-    // the payloads of the entries just deleted, and what a crash between the two writes
-    // of a schedule left behind. Nothing else is old enough to be gone, and what an
-    // entry still names is not removed by age at all
-    payloadStore
-        .removeOrphansOlderThan(expiredBefore, references -> referencesStillNamed(connection, references));
-
-  }
-
-  /**
    * Which of the given payloads an entry of this table still names, asked with one
-   * statement. It costs a scan of the outbox table, because a reference lies inside the
-   * serialized arguments and no index reaches into them - but it is asked only where a
-   * payload outlived the retention, which on a healthy store is never.
+   * statement on a connection of its own. It costs a scan of the outbox table, because a
+   * reference lies inside the serialized arguments and no index reaches into them - but
+   * it is asked only where a payload outlived the retention, which on a healthy store is
+   * never.
    *
-   * @param connection The connection to be used
    * @param references The payloads the housekeeping is about to remove
    * @return Those of them an entry names
    */
   private Set<String> referencesStillNamed(
-      final Connection connection,
       final Collection<String> references) {
 
     final var condition = references
@@ -1437,20 +1482,24 @@ public class JdbcPhaseTwoOutboxDispatcher {
         .map(reference -> "ARGS LIKE ?")
         .collect(Collectors.joining(" OR "));
     final var stillNamed = new LinkedHashSet<String>();
-    try (var statement = connection.prepareStatement(SELECT_ARGS_NAMING.formatted(tableName, condition))) {
-      var parameter = 1;
-      for (final var reference : references) {
-        statement.setString(parameter++, "%%%s%%".formatted(reference));
-      }
-      try (var resultSet = statement.executeQuery()) {
-        while (resultSet.next()) {
-          // read properly rather than trusted from the pattern: LIKE matches a
-          // reference wherever it stands, and what counts is the argument itself
-          final var named = PhaseTwoCall
-              .deserializeArgs(resultSet.getString(1))
-              .get(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
-          if ((named != null) && references.contains(named)) {
-            stillNamed.add(named);
+    Connection connection = null;
+    try {
+      connection = connections.acquire();
+      try (var statement = connection.prepareStatement(SELECT_ARGS_NAMING.formatted(tableName, condition))) {
+        var parameter = 1;
+        for (final var reference : references) {
+          statement.setString(parameter++, "%%%s%%".formatted(reference));
+        }
+        try (var resultSet = statement.executeQuery()) {
+          while (resultSet.next()) {
+            // read properly rather than trusted from the pattern: LIKE matches a
+            // reference wherever it stands, and what counts is the argument itself
+            final var named = PhaseTwoCall
+                .deserializeArgs(resultSet.getString(1))
+                .get(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
+            if ((named != null) && references.contains(named)) {
+              stillNamed.add(named);
+            }
           }
         }
       }
@@ -1459,6 +1508,8 @@ public class JdbcPhaseTwoOutboxDispatcher {
       // from an entry which still waits costs the dispatch
       log.warn("Could not ask the outbox table '{}' which payloads it still names", tableName, e);
       return Set.copyOf(references);
+    } finally {
+      release(connection);
     }
     return stillNamed;
 
