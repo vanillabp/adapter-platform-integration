@@ -378,9 +378,10 @@ two answers as soon as one of them changes. `ExtensionEnablementTest` injects it
 `DeliveryLogUsingExtension`.
 
 - `JdbcTaskDeliveryLog` acquires its Agroal connection within the running JTA
-  transaction, so it is enlisted there. The SQL and the portable DDL of table
-  `VANILLABP_TASK_DELIVERY` live in the core (`JdbcTaskDeliveryStore`), shared with
-  Spring Boot. `recordOfTask` and `markTaskClosed` go to the same store: they are what lets
+  transaction, so it is enlisted there. The SQL and the portable DDL of the table live in
+  the core (`JdbcTaskDeliveryStore`), shared with Spring Boot. Its name is
+  `vanillabp.outbox.jdbc.delivery-table`, by default `VANILLABP_TASK_DELIVERY`
+  (`JdbcDeliveryTableNameTest`). `recordOfTask` and `markTaskClosed` go to the same store: they are what lets
   a task operation elect its BPMS from the record instead of asking one (decision 30).
 - `MongoTaskDeliveryLog` writes into the collection
   `vanillabp.outbox.mongo.delivery-collection` names, of `quarkus.mongodb.database`. The

@@ -104,6 +104,23 @@ public class OutboxStoresRefuseASharedNameTest {
   }
 
   @Test
+  @DisplayName("The deliveries in the outbox table end the start as well")
+  public void theDeliveriesInTheOutboxTableEndTheStart() {
+
+    final var failure = assertThrows(
+        IllegalStateException.class,
+        () -> starting(
+            Map.of(
+                "vanillabp.outbox.jdbc.delivery-table",
+                "VANILLABP_PHASE_TWO_OUTBOX")));
+
+    final var message = failure.getMessage();
+    assertTrue(message.contains(JdbcOutboxProperties.TABLE_PROPERTY), message);
+    assertTrue(message.contains(JdbcOutboxProperties.DELIVERY_TABLE_PROPERTY), message);
+
+  }
+
+  @Test
   @DisplayName("Names of their own let the application start")
   public void namesOfTheirOwnAreFine() {
 
@@ -112,6 +129,7 @@ public class OutboxStoresRefuseASharedNameTest {
             Map.of(
                 "vanillabp.outbox.jdbc.table", "OUR_OUTBOX",
                 "vanillabp.outbox.jdbc.payload-table", "OUR_OUTBOX_PAYLOAD",
+                "vanillabp.outbox.jdbc.delivery-table", "OUR_DELIVERIES",
                 "vanillabp.outbox.mongo.collection", "our-outbox",
                 "vanillabp.outbox.mongo.payload-collection", "our-payloads",
                 "vanillabp.outbox.mongo.delivery-collection", "our-deliveries")));

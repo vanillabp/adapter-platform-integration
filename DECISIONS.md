@@ -2619,3 +2619,28 @@ costs nothing.
 The numbers above are a statement about a measured past, not a promise. They say what a
 dispatch stage which waits for somebody else does with more threads, and they say nothing
 about a handler which is busy rather than waiting, or about a database under load.
+
+### 78. All three tables explain their name the same way, and the generated SQL keeps the default
+
+`vanillabp.outbox.jdbc` named the outbox table and the payload table. The table of the
+delivery log had no key at all, so an application with naming rules in its database could
+rename two of its three tables and not the third, and nothing said why. On MongoDB all
+three collections had their key since the delivery collection got one.
+
+So the delivery table gets its key as well, `vanillabp.outbox.jdbc.delivery-table`. It does
+NOT follow a renamed outbox the way the payload table does. The payload table belongs to
+one outbox and is house-kept with it, while the delivery log is a store of its own which
+answers a different question, and a name derived from the outbox would rename it behind the
+application's back.
+
+The schema artifact takes the same name: the changelog property `vanillabp.delivery.table`
+was fixed before and is now overridden like the other two. The generated Flyway files are
+the part which cannot follow. They are generated while `io.vanillabp:vanillabp-schema` is
+built, and nobody knows an application's names then. An application which renames a table
+therefore applies the changelog with Liquibase, or edits the generated statements before it
+applies them. That is the answer the outbox table and the payload table already gave, so
+the three are alike again rather than one being worse off.
+
+Not chosen: leaving the name fixed, which keeps the imbalance and the question with it, and
+letting the key count only where `vanillabp.outbox.create-schema` is `false`, which would
+have made one property mean two things.
