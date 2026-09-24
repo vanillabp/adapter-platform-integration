@@ -1,4 +1,4 @@
-package io.vanillabp.schema;
+package io.vanillabp.integration.test.utils.schema;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -17,8 +17,8 @@ import liquibase.parser.ChangeLogParserFactory;
 import liquibase.resource.ClassLoaderResourceAccessor;
 
 /**
- * The tables, columns and indexes the changelog of this module describes, read from the changelog
- * itself. A test which types them out instead notices a table gone missing but never a table newly
+ * The tables, columns and indexes the changelog of <code>io.vanillabp:vanillabp-schema</code>
+ * describes, read from the changelog itself. A test which types them out instead notices a table gone missing but never a table newly
  * arrived, and that is the miss which let the payload table of the phase-two outbox travel in this
  * artifact for months while nothing here knew about it.
  *
@@ -28,15 +28,19 @@ import liquibase.resource.ClassLoaderResourceAccessor;
  * application overrides and the names come out renamed, the same way.
  * </p>
  */
-class ChangelogDescription {
+public class ChangelogDescription {
 
-  /** The master changelog of the artifact, the file an application includes. */
-  static final String CHANGELOG = "vanillabp/schema/changelog.xml";
+  /**
+   * The master changelog of the schema artifact, the file an application includes. A module
+   * which reads it needs that artifact and Liquibase on its test classpath; this module brings
+   * neither, because every other reader of it would then get Liquibase as well.
+   */
+  public static final String CHANGELOG = "vanillabp/schema/changelog.xml";
 
   /**
    * One index of the changelog: the table it sits on, its name and the columns it spans, in order.
    */
-  record Index(String table, String name, List<String> columns) {
+  public record Index(String table, String name, List<String> columns) {
   }
 
   private final Map<String, List<String>> columnsPerTable = new LinkedHashMap<>();
@@ -54,7 +58,7 @@ class ChangelogDescription {
    * @return What the changelog describes
    * @throws Exception If the changelog cannot be read.
    */
-  static ChangelogDescription of(
+  public static ChangelogDescription of(
       final Map<String, String> changelogProperties) throws Exception {
 
     final var description = new ChangelogDescription();
@@ -82,7 +86,7 @@ class ChangelogDescription {
   /**
    * @return Every table the changelog creates, each with its columns in the order they are added
    */
-  Map<String, List<String>> tables() {
+  public Map<String, List<String>> tables() {
 
     return columnsPerTable;
 
@@ -91,7 +95,7 @@ class ChangelogDescription {
   /**
    * @return The names of the tables the changelog creates
    */
-  Set<String> tableNames() {
+  public Set<String> tableNames() {
 
     return columnsPerTable.keySet();
 
@@ -100,7 +104,7 @@ class ChangelogDescription {
   /**
    * @return Every index the changelog creates
    */
-  List<Index> indexes() {
+  public List<Index> indexes() {
 
     return indexes;
 

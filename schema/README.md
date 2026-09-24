@@ -126,3 +126,11 @@ name them too. They are compared against the changelog rather than trusted, so a
 brings a fourth table turns the test red and the new name reaches all three places.
 `GeneratedSqlOnPostgresIT#postgresAcceptsTheGeneratedSql` runs the generated statements against a
 PostgreSQL container and asks the changelog for the same names.
+
+Both tests hold the changelog against a database the changelog itself built, which says nothing
+about the tables VanillaBP creates while it starts. An application may use either way and move
+from one to the other, so the two have to agree. That comparison needs the runtime and this
+artifact on one classpath, which is why it lives next to the runtime's own DDL:
+`TheRuntimeAndTheChangelogBuildTheSameTablesTest` of `migration-adapter/runtime` builds one
+database each way and holds the columns of the one against the other. Both modules read the
+changelog with the same code, `ChangelogDescription` of `io.vanillabp:test-utils`.
