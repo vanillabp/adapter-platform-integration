@@ -79,6 +79,12 @@ import lombok.extern.slf4j.Slf4j;
  * which dies while dispatching stops renewing, its lease runs out, and the next poll of
  * any node takes the entry over. The retention cleanup is a plain idempotent DELETE.
  * <p>
+ * Where a node which is still alive loses its entry that way, its dispatch runs to its end
+ * and the result is dropped: the writes which say how an attempt ended carry
+ * <code>LEASED_BY</code> in their condition, so only the node holding the entry writes
+ * them. Both nodes say in their log what happened, and the second delivery is the
+ * at-least-once residual this outbox documents.
+ * <p>
  * The outbox table and the table holding the payloads of the calls which carry one are
  * created on startup unless <code>vanillabp.outbox.create-schema</code> is disabled for manually managed
  * schemas - in that case also create the unique constraint on
@@ -203,12 +209,15 @@ public class JdbcPhaseTwoOutboxDispatcher {
    * <p>
    * This is also where the attempt is counted, because this is where it ended, and where
    * the lease is given back.
+   * <p>
+   * <code>LEASED_BY</code> is in the condition for the reason {@link #MARK_ENTRY_BLOCKED}
+   * and {@link #RESCHEDULE_ENTRY} carry it: a node which lost the entry writes nothing.
    */
   private static final String MARK_ENTRY_DONE = """
       UPDATE %s \
       SET STATUS = '%s', DONE_AT = ?, DEDUP_KEY = ID, ATTEMPTS = ATTEMPTS + 1, \
       LEASED_BY = NULL, LEASED_UNTIL = NULL \
-      WHERE ID = ?""";
+      WHERE ID = ? AND LEASED_BY = ?""";
 
   /**
    * Blocking releases DEDUP_KEY the way marking an entry DONE does, and for a reason
@@ -225,17 +234,23 @@ public class JdbcPhaseTwoOutboxDispatcher {
       UPDATE %s \
       SET STATUS = '%s', DEDUP_KEY = ID, ATTEMPTS = ATTEMPTS + 1, \
       LEASED_BY = NULL, LEASED_UNTIL = NULL \
-      WHERE ID = ?""";
+      WHERE ID = ? AND LEASED_BY = ?""";
 
   /**
    * Says when the entry is to be read again after an attempt which did not get through,
    * counts that attempt and gives the lease back. All three in one write, because an entry
    * which is due again while still leased would be waited out to the end of the lease.
+   * <p>
+   * <code>LEASED_BY</code> is in the condition of this write and of the two marks above,
+   * so a node whose lease was taken over writes nothing. Its dispatch runs to its end, but
+   * what the entry says is the business of the node holding it now: an attempt which failed
+   * here must not schedule an entry the other node has just finished, and it must not block
+   * one either.
    */
   private static final String RESCHEDULE_ENTRY = """
       UPDATE %s \
       SET NEXT_ATTEMPT_AT = ?, ATTEMPTS = ATTEMPTS + 1, LEASED_BY = NULL, LEASED_UNTIL = NULL \
-      WHERE ID = ?""";
+      WHERE ID = ? AND LEASED_BY = ?""";
 
   private static final String DELETE_EXPIRED_DONE_ENTRIES = """
       DELETE FROM %s \
@@ -1007,7 +1022,11 @@ public class JdbcPhaseTwoOutboxDispatcher {
       reportFailedDispatch(entry, e);
       return;
     }
-    markDone(entry);
+    if (!markDone(entry)) {
+      // the entry belongs to another node, and so do its bytes: that node may still be
+      // dispatching and would find a payload which is gone
+      return;
+    }
     // the entry is dispatched, so its bytes have done their work. Removed AFTER the
     // entry was marked, never before: a crash in between leaves a row the housekeeping
     // deletes, while the other order would leave an entry whose payload is gone
@@ -1031,7 +1050,9 @@ public class JdbcPhaseTwoOutboxDispatcher {
     // the adapter said that repeating cannot help - blocked right away
     // instead of after the configured attempts
     if (PhaseTwoPermanentFailure.isPermanent(e)) {
-      update(markEntryBlocked, statement -> statement.setString(1, entry.id()));
+      if (!markBlocked(entry)) {
+        return;
+      }
       countBlockedEntry(entry.operation(), true);
       log.error(
           "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
@@ -1046,7 +1067,9 @@ public class JdbcPhaseTwoOutboxDispatcher {
       return;
     }
     if (entry.attempts() + 1 >= properties.getBlockAfterAttempts()) {
-      update(markEntryBlocked, statement -> statement.setString(1, entry.id()));
+      if (!markBlocked(entry)) {
+        return;
+      }
       countBlockedEntry(entry.operation(), false);
       log.error(
           "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
@@ -1066,7 +1089,9 @@ public class JdbcPhaseTwoOutboxDispatcher {
       // made searchable yet is the case - so the entry waits that long instead of the
       // configured backoff. What ends a reason which never goes away is the attempts
       // counted above, not this due time
-      rescheduleAt(entry, Instant.now().plus(retryAfter));
+      if (!rescheduleAt(entry, Instant.now().plus(retryAfter))) {
+        return;
+      }
       log.info(
           "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' cannot "
               + "run yet - the outbox entry '{}' is dispatched again in {} ({} of {} attempts used): {}",
@@ -1085,7 +1110,9 @@ public class JdbcPhaseTwoOutboxDispatcher {
     // attemptDelay(0) is the distance after the first failure: close, because most
     // failures are momentary
     final var retryIn = properties.attemptDelay(entry.attempts());
-    rescheduleAt(entry, Instant.now().plus(retryIn));
+    if (!rescheduleAt(entry, Instant.now().plus(retryIn))) {
+      return;
+    }
     log.warn(
         "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
             + "failed - the outbox entry '{}' is dispatched again in {} ({} of {} attempts used)",
@@ -1107,16 +1134,44 @@ public class JdbcPhaseTwoOutboxDispatcher {
    * not run on it, so what this write leaves behind is news to it.
    *
    * @param entry The entry which was dispatched
+   * @return Whether this node still held the entry, so the write took
    */
-  private void markDone(
+  private boolean markDone(
       final Entry entry) {
 
     final var doneAt = Instant.now();
-    update(markEntryDone, statement -> {
+    final var written = update(markEntryDone, statement -> {
       statement.setTimestamp(1, Timestamp.from(doneAt));
       statement.setString(2, entry.id());
+      statement.setString(3, lease.owner());
     });
+    if (written == 0) {
+      reportResultOfALostEntry(entry);
+      return false;
+    }
     poller.somethingIsDueAt(doneAt.plus(properties.getRetention()));
+    return true;
+
+  }
+
+  /**
+   * Takes the entry out of what any poll reads. Nothing in VanillaBP moves it back.
+   *
+   * @param entry The entry nobody is to try again
+   * @return Whether this node still held the entry, so the write took
+   */
+  private boolean markBlocked(
+      final Entry entry) {
+
+    final var written = update(markEntryBlocked, statement -> {
+      statement.setString(1, entry.id());
+      statement.setString(2, lease.owner());
+    });
+    if (written == 0) {
+      reportResultOfALostEntry(entry);
+      return false;
+    }
+    return true;
 
   }
 
@@ -1130,16 +1185,50 @@ public class JdbcPhaseTwoOutboxDispatcher {
    *
    * @param entry The entry whose dispatch failed
    * @param nextAttempt When it is to be read again
+   * @return Whether this node still held the entry, so the write took
    */
-  private void rescheduleAt(
+  private boolean rescheduleAt(
       final Entry entry,
       final Instant nextAttempt) {
 
-    update(rescheduleEntry, statement -> {
+    final var written = update(rescheduleEntry, statement -> {
       statement.setTimestamp(1, Timestamp.from(nextAttempt));
       statement.setString(2, entry.id());
+      statement.setString(3, lease.owner());
     });
+    if (written == 0) {
+      reportResultOfALostEntry(entry);
+      return false;
+    }
     poller.somethingIsDueAt(nextAttempt);
+    return true;
+
+  }
+
+  /**
+   * Says that an attempt ended on an entry this node does not hold any more, so what it
+   * wanted to write was dropped.
+   * <p>
+   * The renewal said the same thing earlier, at the moment the entry changed hands. This
+   * message is the other end of it and is worth its own line: it names the operation which
+   * ran twice, and it is the proof that the second run did not overwrite what the node
+   * holding the entry wrote.
+   *
+   * @param entry The entry which was taken over while this node dispatched it
+   */
+  private void reportResultOfALostEntry(
+      final Entry entry) {
+
+    log
+        .warn(
+            "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' ended, but "
+                + "the outbox entry '{}' belongs to another node by now - the result of this dispatch was "
+                + "dropped and the entry says what that node wrote",
+            entry.operation(),
+            entry.bpmnProcessId(),
+            entry.workflowModuleId(),
+            entry.aggregateId(),
+            entry.id());
 
   }
 

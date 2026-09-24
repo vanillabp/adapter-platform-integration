@@ -2188,6 +2188,18 @@ is what `#aFullLaneDoesNotHoldTheConnectionItsDispatchNeeds` measures; with a bi
 connection missing where the work is. Every other write of this dispatcher already borrows one for
 the moment it needs it, so the poller is now the same shape as the rest.
 
+**A node which lost its entry writes nothing.** A lease can still be lost while its dispatch
+runs: the node was away long enough for the claim to run out and another node took the entry
+over. The renewal notices it, because its write matches no row, and says so in the log. The
+dispatch itself runs to its end and its result is dropped. Every write of the JDBC store which
+says how an attempt ended carries `LEASED_BY` in its condition, so only the node holding the entry
+writes one.
+Without that condition the late node could block an entry the other had just finished, and
+somebody would be asked to repair an operation which had succeeded.
+`ADispatchWhichLostItsLeaseTest` puts two dispatchers on one database and takes the lease of the
+slow one away with an `UPDATE`: the second node dispatches the entry, the first says what it lost,
+and what the table holds afterwards is what the second node wrote.
+
 What the threads bought, measured on 2026-09-21 in the development container of this
 repository: 200 entries of 40 workflow aggregates, written in one transaction against H2 in
 memory, with a handler which takes 20 milliseconds because that is what a call to a BPMS
