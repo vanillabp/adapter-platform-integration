@@ -1,5 +1,6 @@
 package io.vanillabp.integration.test.outbox;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -16,6 +17,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import com.gruelbox.transactionoutbox.TransactionOutbox;
 
+import io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema;
 import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfiguration;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
@@ -24,10 +26,12 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * (<code>vanillabp.outbox.gruelbox.enabled</code>) stores its entries in the table
  * <code>TXNO_OUTBOX</code>, and that is the one table a schema handover does NOT get from
  * <code>io.vanillabp:vanillabp-schema</code> - the schema belongs to gruelbox. Switching
- * VanillaBP's table creation off switches gruelbox's migrator off with it, and a custom table
- * name does the same silently, so the table's existence is verified at startup exactly like
- * VanillaBP's own two. Without that check an application which forgot the table boots cleanly
- * and fails at the first workflow it starts.
+ * VanillaBP's table creation off switches gruelbox's migrator off with it, so the table's
+ * existence is verified at startup exactly like VanillaBP's own two. Without that check an
+ * application which forgot the table boots cleanly and fails at the first workflow it starts.
+ * <p>
+ * <code>vanillabp.outbox.jdbc.table</code> is not part of that: it names VanillaBP's own
+ * table, whose columns are not gruelbox' columns.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class GruelboxOutboxSchemaHandoverTest {
@@ -110,8 +114,8 @@ public class GruelboxOutboxSchemaHandoverTest {
   }
 
   @Test
-  @DisplayName("A custom table name is checked as well - it switches the migration off silently")
-  public void aMissingCustomOutboxTableEndsTheBoot() {
+  @DisplayName("The name of VanillaBP's own table does not reach gruelbox' migrator")
+  public void aCustomVanillaBpTableLeavesGruelboxAlone() {
 
     applicationOn(
         "schema-handover-custom",
@@ -119,11 +123,15 @@ public class GruelboxOutboxSchemaHandoverTest {
         "vanillabp.outbox.jdbc.table=MY_OUTBOX")
         .run(context -> {
 
-          final var message = bootFailureOf(context);
-
-          assertTrue(message.contains("MY_OUTBOX"), message);
-          assertTrue(message.contains("vanillabp.outbox.jdbc.table"), message);
-          assertTrue(message.contains("gruelbox"), message);
+          assertNull(
+              context.getStartupFailure(),
+              "gruelbox creates its own table, so nothing is missing");
+          try (var connection = context.getBean(javax.sql.DataSource.class).getConnection()) {
+            assertTrue(JdbcSchema.tableExists(connection, "TXNO_OUTBOX"), "gruelbox' migration did not run");
+            assertFalse(
+                JdbcSchema.tableExists(connection, "MY_OUTBOX"),
+                "gruelbox wrote a table named after VanillaBP's own outbox");
+          }
 
         });
 

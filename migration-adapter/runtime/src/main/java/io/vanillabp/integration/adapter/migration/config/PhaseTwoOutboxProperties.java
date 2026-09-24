@@ -250,11 +250,11 @@ public class PhaseTwoOutboxProperties {
      * The name of the table storing outbox entries. Every outbox instance needs its
      * own store - two dispatchers polling the same table would compete and
      * double-dispatch. <code>null</code> means
-     * <code>VANILLABP_PHASE_TWO_OUTBOX</code>, on both platforms. An application which
-     * kept gruelbox (<code>vanillabp.outbox.gruelbox.enabled</code>) reads this key as
-     * well, and there a name of its own switches the schema migration of that library
-     * off, because it only ever targets <code>TXNO_OUTBOX</code> - the table has to be
-     * created by hand then, which is verified at startup.
+     * <code>VANILLABP_PHASE_TWO_OUTBOX</code>, on both platforms. The table meant here
+     * is the one VanillaBP writes itself. An application which kept gruelbox
+     * (<code>vanillabp.outbox.gruelbox.enabled</code>) stores its entries in gruelbox'
+     * own <code>TXNO_OUTBOX</code>, which this key does not rename, because that table
+     * and its columns belong to the library.
      * <p>
      * Key <code>vanillabp.outbox.jdbc.table</code>, unset by default.
      */

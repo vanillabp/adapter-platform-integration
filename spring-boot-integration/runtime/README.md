@@ -320,9 +320,10 @@ disable an unwanted default via its `enabled` flag:
    `TXNO_OUTBOX` is created by gruelbox's auto-DDL — set
    `vanillabp.outbox.create-schema: false` to manage the schema manually (use
    gruelbox's `DefaultPersistor.writeSchema(Writer)`, which emits its migrations as
-   SQL for the configured dialect). NOTE: gruelbox's migrations always target the
-   DEFAULT table, so a custom `vanillabp.outbox.jdbc.table` requires that table
-   (structured like `TXNO_OUTBOX`) to be created manually. Wherever the migration is
+   SQL for the configured dialect). NOTE: `vanillabp.outbox.jdbc.table` names the table
+   VanillaBP writes itself and does not rename `TXNO_OUTBOX`, whose columns belong to
+   gruelbox; an application which needs another name builds the `TransactionOutbox` bean
+   itself under the name `vanillaBpTransactionOutbox`. Where the migration is
    off, the auto-configuration verifies AT STARTUP that the table exists
    (`validateOutboxTableExists`) and ends the boot naming table and property. This
    table is the one piece of a schema handover `io.vanillabp:vanillabp-schema` does

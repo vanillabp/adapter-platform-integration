@@ -24,6 +24,7 @@ import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxStore
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
+import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfiguration;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.utils.config.JpaSpringDataUtilConfiguration;
 import jakarta.persistence.EntityManagerFactory;
@@ -91,9 +92,12 @@ public class JdbcPhaseTwoOutboxAutoConfiguration {
 
   /**
    * The table gruelbox stored its entries in, which is where an application upgrading
-   * from that store may still have entries waiting.
+   * from that store may still have entries waiting. The name comes from the
+   * configuration which builds that store, so both halves of the upgrade read it in one
+   * place. It is a compile-time constant, so this class does not load the gruelbox
+   * configuration at runtime and works without the library on the classpath.
    */
-  private static final String FORMER_OUTBOX_TABLE_NAME = "TXNO_OUTBOX";
+  private static final String FORMER_OUTBOX_TABLE_NAME = GruelboxPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_TABLE_NAME;
 
   /**
    * Built by Spring Boot while it applies its auto-configurations, and only where the
