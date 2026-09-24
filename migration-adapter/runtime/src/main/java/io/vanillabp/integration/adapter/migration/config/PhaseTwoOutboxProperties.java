@@ -1,7 +1,14 @@
 package io.vanillabp.integration.adapter.migration.config;
 
 import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.function.UnaryOperator;
 
+import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxStore;
+import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
@@ -37,6 +44,14 @@ public class PhaseTwoOutboxProperties {
     this(builder());
 
   }
+
+  /**
+   * The section an application writes these keys below: <code>vanillabp.outbox</code>.
+   * Built from the prefix rather than written out, so a message names the section the way
+   * the application has to spell it.
+   */
+  public static final String SECTION = MigrationAdapterProperties.PREFIX
+      + ".outbox";
 
   /**
    * The longest a store's background poller sleeps while it owes nothing. Key
@@ -210,6 +225,135 @@ public class PhaseTwoOutboxProperties {
   private MongoOutboxProperties mongo = new MongoOutboxProperties();
 
   /**
+   * Refuses a configuration in which two stores of one database would work on the same
+   * table or collection.
+   * <p>
+   * Five names can be set, and nothing about them says that they have to differ. Two
+   * stores sharing one place read, count and delete each other's rows, and what comes
+   * out of that looks like a defect of the outbox rather than like a property somebody
+   * wrote twice. The names are compared at startup because that is the last moment
+   * before the first store works on the wrong place.
+   * <p>
+   * Both databases are checked whether their outbox is switched on or not. A name which
+   * is wrong is wrong the moment somebody turns the store on, and telling them now
+   * spares them the search then.
+   */
+  public void validateStoreNames() {
+
+    if (jdbc == null) {
+      // a binder mapping an absent section onto null must not cost the defaults
+      jdbc = new JdbcOutboxProperties();
+    }
+    if (mongo == null) {
+      // a binder mapping an absent section onto null must not cost the defaults
+      mongo = new MongoOutboxProperties();
+    }
+    refuseTwoStoresInOnePlace(
+        tablesOfTheRelationalStores(),
+        name -> name.toUpperCase(Locale.ROOT),
+        "table",
+        WHAT_TO_DO_ABOUT_TWO_TABLES);
+    refuseTwoStoresInOnePlace(
+        collectionsOfTheMongoStores(),
+        UnaryOperator.identity(),
+        "collection",
+        WHAT_TO_DO_ABOUT_TWO_COLLECTIONS);
+
+  }
+
+  /**
+   * @return What each key of the relational stores names, the resolved name where the
+   *         application set none
+   */
+  private Map<String, String> tablesOfTheRelationalStores() {
+
+    final var tables = new LinkedHashMap<String, String>();
+    tables.put(JdbcOutboxProperties.TABLE_PROPERTY, JdbcPhaseTwoOutboxStore.tableName(this));
+    tables.put(JdbcOutboxProperties.PAYLOAD_TABLE_PROPERTY, JdbcPhaseTwoOutboxStore.payloadTableName(this));
+    return tables;
+
+  }
+
+  /**
+   * @return What each key of the MongoDB stores names, the resolved name where the
+   *         application set none
+   */
+  private Map<String, String> collectionsOfTheMongoStores() {
+
+    final var collections = new LinkedHashMap<String, String>();
+    collections.put(MongoOutboxProperties.COLLECTION_PROPERTY, mongo.getCollection());
+    collections.put(MongoOutboxProperties.PAYLOAD_COLLECTION_PROPERTY, mongo.payloadCollectionName());
+    collections.put(MongoOutboxProperties.DELIVERY_COLLECTION_PROPERTY, mongo.getDeliveryCollection());
+    return collections;
+
+  }
+
+  /**
+   * Throws where two of the given keys name the same place.
+   *
+   * @param namesByProperty What each key names, in the order the message lists them
+   * @param asTheDatabaseReadsThem How the database decides that two names are one place.
+   *          A relational database looks the table up in capitals whatever the
+   *          application wrote, while MongoDB tells two spellings of a collection apart
+   * @param whatIsShared The word for the place, for the message
+   * @param whatToDo How the application gets out of it again
+   * @throws IllegalStateException Naming both keys, what each of them says, and the way
+   *           out
+   */
+  private static void refuseTwoStoresInOnePlace(
+      final Map<String, String> namesByProperty,
+      final UnaryOperator<String> asTheDatabaseReadsThem,
+      final String whatIsShared,
+      final String whatToDo) {
+
+    final var properties = List.copyOf(namesByProperty.keySet());
+    for (var first = 0; first < properties.size(); first++) {
+      for (var second = first + 1; second < properties.size(); second++) {
+        final var oneKey = properties.get(first);
+        final var otherKey = properties.get(second);
+        final var oneName = namesByProperty.get(oneKey);
+        final var otherName = namesByProperty.get(otherKey);
+        if ((oneName == null) || (otherName == null)) {
+          continue;
+        }
+        if (!asTheDatabaseReadsThem
+            .apply(oneName)
+            .equals(asTheDatabaseReadsThem.apply(otherName))) {
+          continue;
+        }
+        throw new IllegalStateException(
+            """
+                Two VanillaBP stores would work on the same %s:
+                  '%s' names '%s'
+                  '%s' names '%s'
+                Each of them would then read, count and delete what the other wrote, and every \
+                report about it would name the outbox rather than this configuration. %s"""
+                .formatted(whatIsShared, oneKey, oneName, otherKey, otherName, whatToDo));
+      }
+    }
+
+  }
+
+  /**
+   * How an application separates two relational stores again.
+   */
+  private static final String WHAT_TO_DO_ABOUT_TWO_TABLES = """
+      Give each store a table of its own, or remove one of the two keys: a payload table \
+      nobody names follows the outbox table and carries '%s' behind it."""
+      .formatted(JdbcPhaseTwoPayloadStore.TABLE_NAME_SUFFIX);
+
+  /**
+   * How an application separates three MongoDB stores again.
+   */
+  private static final String WHAT_TO_DO_ABOUT_TWO_COLLECTIONS = """
+      Give each store a collection of its own, or remove the key you did not mean: a payload \
+      collection nobody names follows the outbox collection and carries '%s' behind it, and the \
+      deliveries lie in '%s' where nobody names them either."""
+      .formatted(
+          MongoOutboxProperties.PAYLOAD_COLLECTION_SUFFIX,
+          MongoOutboxProperties.DEFAULT_DELIVERY_COLLECTION);
+
+  /**
    * The keys of the JDBC default outbox (properties section
    * <code>vanillabp.outbox.jdbc.*</code>): whether it is built at all, and the two tables
    * it works on.
@@ -234,6 +378,22 @@ public class PhaseTwoOutboxProperties {
       this(JdbcOutboxProperties.builder());
 
     }
+
+    /**
+     * The key of {@link #table}: <code>vanillabp.outbox.jdbc.table</code>. It is a
+     * constant because the message about two stores in one table names it and a test
+     * reads the key from here instead of writing it a second time.
+     */
+    public static final String TABLE_PROPERTY = SECTION
+        + ".jdbc.table";
+
+    /**
+     * The key of {@link #payloadTable}:
+     * <code>vanillabp.outbox.jdbc.payload-table</code>, named by the same message as
+     * {@link #TABLE_PROPERTY}.
+     */
+    public static final String PAYLOAD_TABLE_PROPERTY = SECTION
+        + ".jdbc.payload-table";
 
     /**
      * Whether the JDBC-based default outbox is created when a data source is
@@ -302,6 +462,31 @@ public class PhaseTwoOutboxProperties {
       this(MongoOutboxProperties.builder());
 
     }
+
+    /**
+     * The key of {@link #collection}:
+     * <code>vanillabp.outbox.mongo.collection</code>. It is a constant because the
+     * message about two stores in one collection names it and a test reads the key from
+     * here instead of writing it a second time.
+     */
+    public static final String COLLECTION_PROPERTY = SECTION
+        + ".mongo.collection";
+
+    /**
+     * The key of {@link #payloadCollection}:
+     * <code>vanillabp.outbox.mongo.payload-collection</code>, named by the same message
+     * as {@link #COLLECTION_PROPERTY}.
+     */
+    public static final String PAYLOAD_COLLECTION_PROPERTY = SECTION
+        + ".mongo.payload-collection";
+
+    /**
+     * The key of {@link #deliveryCollection}:
+     * <code>vanillabp.outbox.mongo.delivery-collection</code>, named by the same message
+     * as {@link #COLLECTION_PROPERTY}.
+     */
+    public static final String DELIVERY_COLLECTION_PROPERTY = SECTION
+        + ".mongo.delivery-collection";
 
     /**
      * The name of the collection the entries go into where the application configures

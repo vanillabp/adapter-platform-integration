@@ -1904,6 +1904,11 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       metrics = new MetricsProperties();
     }
     metrics.validate();
+    if (outbox == null) {
+      // a binder mapping an absent section onto null must not cost the defaults
+      outbox = new PhaseTwoOutboxProperties();
+    }
+    outbox.validateStoreNames();
     validateMaxTaskAge();
     refuseFullSyncPermissionsOutsideAWorkflow();
     reportRetentionSplit();
