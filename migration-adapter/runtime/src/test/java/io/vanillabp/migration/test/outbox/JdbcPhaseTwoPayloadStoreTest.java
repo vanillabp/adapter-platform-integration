@@ -8,12 +8,15 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -157,6 +160,87 @@ public class JdbcPhaseTwoPayloadStoreTest {
         "the state an entry is still waiting to send".getBytes(StandardCharsets.UTF_8),
         store.read(named.payloadReference()));
     assertNull(store.read(orphan.payloadReference()));
+
+  }
+
+  @Test
+  @DisplayName("The sweep asks the entries without holding the connection they read with")
+  public void theSweepHoldsNoConnectionWhileItAsksTheEntries() {
+
+    final var connections = lendingOneConnectionAtATime("payload-sweep-one-connection");
+    final var store = new JdbcPhaseTwoPayloadStore(connections, TABLE_NAME);
+    store.createSchemaIfNotExists();
+    final var orphan = callWith("written by a process which then died");
+    store.write(orphan);
+
+    // the outbox entries lie in a table of their own, so answering this question is a read
+    // which borrows a connection of its own. A store holding one while it asks would wait
+    // for a connection it is holding itself, which on a pool of one never comes back
+    final var removed = store
+        .removeOrphansOlderThan(Instant.now().plus(Duration.ofSeconds(1)), references -> {
+          borrowAndGiveBack(connections);
+          return Set.of();
+        });
+
+    assertEquals(1, removed, "the sweep did not get through while it asked the entries");
+    assertNull(store.read(orphan.payloadReference()));
+
+  }
+
+  /**
+   * The same database, handing out one connection at a time and refusing a second one
+   * rather than making its caller wait. A pool makes the second caller wait, and a test
+   * doing that would hang instead of failing; refusing turns the same mistake into a
+   * message.
+   *
+   * @param name The database this test works on
+   * @return Connections to it, one at a time
+   */
+  private static JdbcConnectionAccess lendingOneConnectionAtATime(
+      final String name) {
+
+    final var lentOut = new AtomicBoolean();
+    return new JdbcConnectionAccess() {
+
+      @Override
+      public Connection acquire() throws SQLException {
+
+        if (!lentOut.compareAndSet(false, true)) {
+          throw new SQLException("somebody asked for a second connection while the first one was out");
+        }
+        return h2(name).acquire();
+
+      }
+
+      @Override
+      public void release(
+          final Connection connection) throws SQLException {
+
+        try {
+          connection.close();
+        } finally {
+          lentOut.set(false);
+        }
+
+      }
+
+    };
+
+  }
+
+  /**
+   * What a read of the outbox entries does to the connections while the sweep asks it.
+   *
+   * @param connections The database this test works on
+   */
+  private static void borrowAndGiveBack(
+      final JdbcConnectionAccess connections) {
+
+    try {
+      connections.release(connections.acquire());
+    } catch (final SQLException e) {
+      throw new IllegalStateException("the entries could not be asked", e);
+    }
 
   }
 

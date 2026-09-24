@@ -2188,6 +2188,16 @@ is what `#aFullLaneDoesNotHoldTheConnectionItsDispatchNeeds` measures; with a bi
 connection missing where the work is. Every other write of this dispatcher already borrows one for
 the moment it needs it, so the poller is now the same shape as the rest.
 
+The housekeeping at the end of a poll is the same shape too, and it took a second pass to get
+there. Deleting the dispatched entries, reading which payloads are old enough, asking the entries
+which of them they still name and deleting the rest are four steps, each on a connection borrowed
+and given back. Holding one across them means waiting for a connection the same thread is holding,
+because the payload table and the outbox table are read by two different classes.
+`JdbcPhaseTwoPayloadStoreTest#theSweepHoldsNoConnectionWhileItAsksTheEntries` hands the store a
+database which refuses a second connection, and
+`#aFullLaneDoesNotHoldTheConnectionItsDispatchNeeds` runs the real payload store instead of one
+with its housekeeping taken out.
+
 **A node which lost its entry writes nothing.** A lease can still be lost while its dispatch
 runs: the node was away long enough for the claim to run out and another node took the entry
 over. The renewal notices it, because its write matches no row, and says so in the log. The
