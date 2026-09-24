@@ -86,6 +86,20 @@ public class AnEntryWaitingForItsLaneTest {
    */
   private static final int MORE_THAN_ONE_QUEUE_HOLDS = 40;
 
+  /**
+   * How many entries of one aggregate one lane holds claimed at the same time: the one it
+   * dispatches, the one waiting at it, and the one the poller is holding out to it. Everything
+   * beyond that is an entry nobody works on whose lease this node renews at every tick.
+   */
+  private static final int AS_MANY_AS_ONE_LANE_HOLDS = 3;
+
+  /**
+   * How long the test watches the claims after the poller stopped claiming. Long enough for a
+   * poller which wanted more to have taken it - it claims by primary key and the entries are
+   * all there - and it is not a measurement of speed.
+   */
+  private static final long WATCHING_THE_CLAIMS_MILLIS = 500;
+
   private static final String MODULE = "test-module";
 
   private static final String PROCESS = "TestProcess";
@@ -349,6 +363,29 @@ public class AnEntryWaitingForItsLaneTest {
   }
 
   /**
+   * How many entries of the table this node holds a claim on right now.
+   *
+   * @param connections The database to read
+   * @param table The outbox table
+   * @return The number of claimed entries
+   */
+  private long claimedEntries(
+      final JdbcConnectionAccess connections,
+      final String table) throws SQLException {
+
+    final var connection = connections.acquire();
+    try (var statement = connection
+        .prepareStatement("SELECT COUNT(*) FROM %s WHERE LEASED_BY IS NOT NULL"
+            .formatted(table)); var resultSet = statement.executeQuery()) {
+      resultSet.next();
+      return resultSet.getLong(1);
+    } finally {
+      connections.release(connection);
+    }
+
+  }
+
+  /**
    * @return The entry as the table shows it now
    */
   private Entry entryOf(
@@ -414,8 +451,8 @@ public class AnEntryWaitingForItsLaneTest {
     final var dispatcher = dispatcherOf(
         connections, oneLaneLeasingFor(A_LEASE_LONG_ENOUGH_TO_WATCH), aRouterWhoseAdapterHoldsTheLane(), table);
     dispatcher.prepareSchema();
-    // three entries of one aggregate meet one lane: the first holds it and the other two
-    // wait in its queue
+    // three entries of one aggregate meet one lane: the first holds it, the second waits at
+    // the lane and the third waits in the hand of the poller
     final var entries = entriesOfOneAggregate(connections, table, 3);
     final var waiting = entries.get(2);
 
@@ -448,6 +485,47 @@ public class AnEntryWaitingForItsLaneTest {
           claimedBy,
           entryOf(connections, table, waiting).leasedBy(),
           "the entry changed hands while it was waiting for its lane");
+    } finally {
+      letTheLaneGo.countDown();
+      dispatcher.stop();
+    }
+
+  }
+
+  @Test
+  @DisplayName("A node claims what its lane dispatches, the one waiting at it and the one in its hand")
+  public void aNodeClaimsNoBacklogBeyondItsLanes() throws Exception {
+
+    final var table = "OUTBOX_A_NODE_CLAIMS_NO_BACKLOG";
+    final var connections = databaseNamed("a-node-claims-no-backlog");
+    final var dispatcher = dispatcherOf(
+        connections, oneLaneLeasingFor(A_LEASE_LONG_ENOUGH_TO_WATCH), aRouterWhoseAdapterHoldsTheLane(), table);
+    dispatcher.prepareSchema();
+    // far more entries than the lane can take, all of them due and all of them of the one
+    // aggregate that lane serves
+    entriesOfOneAggregate(connections, table, MORE_THAN_ONE_QUEUE_HOLDS);
+
+    try {
+      dispatcher.start();
+      assertTrue(
+          theFirstCallStarted.await(UNTIL_IT_HAPPENED.toSeconds(), TimeUnit.SECONDS),
+          "the first entry was never dispatched");
+      waitUntil(
+          "the poller never claimed the entries around the one being dispatched",
+          () -> claimedEntries(connections, table) >= AS_MANY_AS_ONE_LANE_HOLDS);
+
+      // and there it stops: the poller waits for the lane instead of claiming the backlog.
+      // Every further claim would be an entry nobody dispatches, renewed at every tick of
+      // the lease and hidden from the other nodes meanwhile
+      final var watchUntil = System.currentTimeMillis() + WATCHING_THE_CLAIMS_MILLIS;
+      while (System.currentTimeMillis() < watchUntil) {
+        assertEquals(
+            AS_MANY_AS_ONE_LANE_HOLDS,
+            claimedEntries(connections, table),
+            "this node claimed more than its lane works on, so it renews leases of entries which "
+                + "are only waiting and keeps them from every other node");
+        Thread.sleep(20);
+      }
     } finally {
       letTheLaneGo.countDown();
       dispatcher.stop();

@@ -2182,11 +2182,22 @@ adapter at the same time.
 hands it to the lane of its aggregate, and that lane may be busy with an earlier entry of the
 same workflow. The renewal of the lease therefore starts with the claim and not where the lane
 picks the entry up. A wait longer than one `attempt-frequency` would otherwise let another node
-claim it, and both nodes would carry the same operation out. One queue is short, so the wait is
-short as well, but nothing promises a queue length to anybody and the case leaves both nodes
-looking healthy. `AnEntryWaitingForItsLaneTest#aWaitingEntryKeepsItsLease` reads the lease of a
-queued entry moving, and `#anotherNodeLeavesAWaitingEntryAlone` puts a second dispatcher on the
-same table to watch it walk past.
+claim it, and both nodes would carry the same operation out. The wait is short, but nothing
+promises a length to anybody and the case leaves both nodes looking healthy.
+`AnEntryWaitingForItsLaneTest#aWaitingEntryKeepsItsLease` reads the lease of a waiting entry
+moving, and `#anotherNodeLeavesAWaitingEntryAlone` puts a second dispatcher on the same table to
+watch it walk past.
+
+**And a node claims no more than that.** A lane takes one entry beyond the one it dispatches, so
+a node holds two claims per lane plus the one the poller is holding out to a lane which is full.
+The queue used to hold sixteen, which is where a defect came from: every claimed entry is renewed
+once per tick, a tick is a third of the `attempt-frequency`, and eight lanes therefore meant 136
+writes per tick on the one thread which renews. An application with a short `attempt-frequency`
+got more than eight hundred of them a second, the thread fell behind, leases ran out under entries
+which were only waiting, and the operations were carried out twice. Holding less was measured
+against renewing on more threads, on MongoDB and on PostgreSQL, and decision 78 of this repository
+carries the numbers. `AnEntryWaitingForItsLaneTest#aNodeClaimsNoBacklogBeyondItsLanes` holds the
+bound: forty entries are due, one lane is busy, and three of them are claimed.
 
 The poller borrows its connection per step for the same reason. A lane whose queue is full makes
 the poller wait, and a poller which held a connection through that wait would hold the connection

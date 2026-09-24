@@ -2619,3 +2619,64 @@ costs nothing.
 The numbers above are a statement about a measured past, not a promise. They say what a
 dispatch stage which waits for somebody else does with more threads, and they say nothing
 about a handler which is busy rather than waiting, or about a database under load.
+
+### 78. A node claims what its lanes are working on, and one thread renews those leases
+
+A claimed entry renews its lease from the claim until its dispatch is over, one write per
+entry and tick, and the tick is a third of `vanillabp.outbox.attempt-frequency`. Since the
+lanes a node claimed much more than it was dispatching: every lane took sixteen entries into
+its queue, so eight lanes meant 136 claims and 136 writes every tick. With an
+attempt-frequency of half a second that is more than eight hundred writes a second, on the one
+thread which renews. Where that thread falls behind, a lease runs out while its entry is still
+waiting in a queue, another poll takes the entry over and the operation is carried out twice.
+
+Two ways out were measured on both stores: more renewal threads, or a node which holds fewer
+entries. The second one wins, so a lane now takes ONE entry beyond the one it dispatches
+(`DispatchLanes.ENTRIES_WAITING_PER_LANE`). A node then holds two claims per lane plus the one
+the poller is holding out, the renewals per tick are the number of lanes, and the rest of the
+backlog stays in the table, where another node can take it and an operator can read it.
+
+The measurement ran on 2026-09-24 in the development container of this repository, against
+MongoDB 8.2 and PostgreSQL 16 in containers, with eight lanes and an attempt-frequency of half
+a second. Three shapes, each run with the deep queue and the queue of one, one after the other
+in the same JVM so both meet the same machine. The machine was busy with other work at the
+time, which is why the durations of one setting vary as much as they do; what the measurement
+is about are the two other columns.
+
+MongoDB, and the writes counted are the renewals alone:
+
+|                    shape                     | queue |       duration       | renewals  | delivered twice |
+|----------------------------------------------|-------|----------------------|-----------|-----------------|
+| 200 entries of 40 aggregates, 20 ms handler  | 16    | 853 / 684 / 670 ms   | 221-280   | 0 / 0 / 0       |
+| 200 entries of 40 aggregates, 20 ms handler  | 1     | 694 / 671 / 685 ms   | 200       | 0 / 0 / 0       |
+| 200 entries of 40 aggregates, 600 ms handler | 16    | 18.1 / 22.1 / 22.1 s | ~7500     | 0 / 3 / 8       |
+| 200 entries of 40 aggregates, 600 ms handler | 1     | 18.1 / 18.2 / 18.2 s | ~1250     | 0 / 0 / 0       |
+| 2000 entries of 400 aggregates, 20 ms        | 16    | 13.1 / 11.1 / 10.0 s | 2000-2779 | 0 / 0 / 52      |
+| 2000 entries of 400 aggregates, 20 ms        | 1     | 19.1 / 7.4 / 6.7 s   | 2000-2003 | 1 / 0 / 0       |
+
+PostgreSQL, where the number counts every updated row, so two of them per entry are the claim
+and the mark:
+
+|                    shape                     | queue |   duration    | rows updated | delivered twice |
+|----------------------------------------------|-------|---------------|--------------|-----------------|
+| 200 entries of 40 aggregates, 20 ms handler  | 16    | 2179 ms       | 403          | 0               |
+| 200 entries of 40 aggregates, 20 ms handler  | 1     | 2225 ms       | 400          | 0               |
+| 200 entries of 40 aggregates, 600 ms handler | 16    | 22.1 / 18.6 s | 3550 / 2855  | 6 / 4           |
+| 200 entries of 40 aggregates, 600 ms handler | 1     | 18.2 / 22.4 s | 1449 / 1493  | 0 / 0           |
+| 2000 entries of 400 aggregates, 20 ms        | 16    | 15.7 / 23.6 s | 4001 / 4000  | 0 / 0           |
+| 2000 entries of 400 aggregates, 20 ms        | 1     | 21.7 / 12.1 s | 4000 / 4000  | 0 / 0           |
+
+Eight renewal threads instead of one were measured on MongoDB in the same way. They removed
+the repeated deliveries where the handler was slow, and they did not remove them where the
+backlog was large: one of those runs still delivered an entry twice. They also leave the
+writes where they are, because the entries are still claimed. So the threads treat what the
+claims cost instead of not spending it, and there is nothing they buy on top of the queue of
+one.
+
+What the shorter queue does not cost is throughput. A lane which finishes takes the entry
+waiting at it and the poller refills the place at once, so the lane idles for the length of
+one claim rather than for a round trip to the BPMS. The durations above say the same thing:
+the two settings cannot be told apart by them.
+
+This entry does not change decision 75, which decided the lanes and the ordering key. What it
+changes is how much a node claims ahead of them.

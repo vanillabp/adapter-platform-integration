@@ -41,7 +41,8 @@ public class EntriesOfOneAggregateKeepTheirOrderTest {
   /**
    * How many operations of one workflow wait for their dispatch at the same moment. Ten
    * of them: enough that a dispatcher which took its entries in any other order would be
-   * caught, few enough that they all fit into the queue of one lane.
+   * caught. Most of them wait in the table meanwhile, because a lane takes one entry beyond
+   * the one it dispatches, and the order is what the poller hands them over in either way.
    */
   private static final int OPERATIONS_OF_ONE_WORKFLOW = 10;
 
