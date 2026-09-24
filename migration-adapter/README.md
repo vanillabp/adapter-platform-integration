@@ -2233,6 +2233,19 @@ because an application holds one dispatcher and a second real one would need a s
 application. What that test writes is what another node's dispatch leaves behind, and the write
 which has to be refused is the real dispatcher's.
 
+**A write which never ran is not a write which matched no row.** The condition on the holder
+helps only where the statement reached the database. A statement which did not reach it, because
+the pool is empty or the connection broke, used to count as a write which took: the answer of the
+JDBC dispatcher was a number, and the `-1` it gave for a failure is not zero. The entry then
+stayed `OPEN` while its payload was removed, so the attempt after the lease had nothing left to
+send. The answer now says which of the three happened, and a write which never ran leaves the
+entry as it was: same status, same due time, same lease, and its payload beside it. The next poll
+of this node or of another one reads it once the lease runs out. Nothing is counted or reported as
+blocked either, because the row says `OPEN` and an operator reading a blocked entry would go and
+repair a row which needs no repair. `AMarkWhichDidNotGetThroughLeavesTheEntryTest` makes both
+marks fail with a second row holding the entry's id in the unique `DEDUP_KEY`, and reads the
+payload, the row and the meter afterwards.
+
 What the threads bought, measured on 2026-09-21 in the development container of this
 repository: 200 entries of 40 workflow aggregates, written in one transaction against H2 in
 memory, with a handler which takes 20 milliseconds because that is what a call to a BPMS
