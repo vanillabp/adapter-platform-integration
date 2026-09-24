@@ -2,7 +2,6 @@ package io.vanillabp.integration.test.outbox;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
@@ -10,6 +9,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -75,6 +75,8 @@ public class MongoBlockedEntryKeepsItsPayloadTest {
    */
   private static final long UNTIL_THE_HOUSEKEEPING_RAN = 30_000;
 
+  private static final String KEPT_FOR_THE_OPERATOR = "the state an operator will send once the cause is gone";
+
   @Container
   static MongoDBContainer mongoDb = new MongoDBContainer(DockerImageName.parse(ContainerImages.MONGODB))
       // MongoDB transactions require a replica set
@@ -101,19 +103,19 @@ public class MongoBlockedEntryKeepsItsPayloadTest {
    * Writes a payload the way a call which carried one wrote it, old enough to be
    * removed by age.
    *
-   * @return The reference the entry names it by
+   * @param reference The reference an entry names it by
+   * @param content What the call carried
    */
-  private String payloadOlderThanTheRetention(
+  private void payloadOlderThanTheRetention(
+      final String reference,
       final String content) {
 
-    final var reference = UUID.randomUUID().toString();
     mongoTemplate
         .insert(
             new PhaseTwoPayloadDocument(
                 reference, "test-module", "TestProcess", "sample:NOTIFY", content
                     .getBytes(StandardCharsets.UTF_8), LONG_BEFORE_THE_RETENTION),
             PAYLOAD_COLLECTION);
-    return reference;
 
   }
 
@@ -158,33 +160,57 @@ public class MongoBlockedEntryKeepsItsPayloadTest {
 
   }
 
+  /**
+   * Waits until the housekeeping removed one document, and says what was expected of it
+   * where it never did.
+   * <p>
+   * Every document this test waits for is one the assertion is about. A sweep which ran
+   * before the test had written everything down removes none of them, so the wait goes on
+   * until the next sweep. Waiting for another document is what used to end this test early:
+   * the orphaned payload was gone after a sweep which had not seen the dispatched entry
+   * yet, and that entry was then still there.
+   *
+   * @param document Reads the document, <code>null</code> once it is gone
+   * @param whatIsExpected What the housekeeping owes this document
+   */
+  private void awaitRemoved(
+      final Supplier<Object> document,
+      final String whatIsExpected) throws InterruptedException {
+
+    final var deadline = System.currentTimeMillis() + UNTIL_THE_HOUSEKEEPING_RAN;
+    while (document.get() != null) {
+      assertTrue(System.currentTimeMillis() < deadline, whatIsExpected);
+      Thread.sleep(50);
+    }
+
+  }
+
   @Test
   @DisplayName("A blocked entry keeps its payload, a dispatched entry takes its own with it, an orphan goes")
   public void theRetentionCountsAtTheEntry() throws Exception {
 
-    final var blockedPayload = payloadOlderThanTheRetention("the state an operator will send once the cause is gone");
-    final var dispatchedPayload = payloadOlderThanTheRetention("the state a dispatch already carried");
-    final var orphanPayload = payloadOlderThanTheRetention("written by a write which was rolled back");
+    final var blockedPayload = UUID.randomUUID().toString();
+    final var dispatchedPayload = UUID.randomUUID().toString();
+    final var orphanPayload = UUID.randomUUID().toString();
+    // an entry is written before the payload it names, because a sweep between the two
+    // writes would meet a payload nothing names yet and remove the very payload this
+    // test says is kept
     final var blockedEntry = entry(blockedPayload, PhaseTwoOutboxEntry.STATUS_BLOCKED, null);
     final var dispatchedEntry = entry(
         dispatchedPayload, PhaseTwoOutboxEntry.STATUS_DONE, LONG_BEFORE_THE_RETENTION);
+    payloadOlderThanTheRetention(blockedPayload, KEPT_FOR_THE_OPERATOR);
+    payloadOlderThanTheRetention(dispatchedPayload, "the state a dispatch already carried");
+    payloadOlderThanTheRetention(orphanPayload, "written by a write which was rolled back");
 
-    // the payload sweep is the last thing a poll does, so a gone orphan says that the
-    // whole housekeeping ran
-    final var deadline = System.currentTimeMillis() + UNTIL_THE_HOUSEKEEPING_RAN;
-    while (payload(orphanPayload) != null) {
-      assertTrue(System.currentTimeMillis() < deadline, "the housekeeping did not remove the orphaned payload");
-      Thread.sleep(50);
-    }
+    awaitRemoved(() -> entryOf(dispatchedEntry), "a dispatched entry goes when its retention ran out");
+    awaitRemoved(() -> payload(dispatchedPayload), "the entry took its payload with it");
+    awaitRemoved(() -> payload(orphanPayload), "a payload no entry names is removed by age");
 
     assertNotNull(entryOf(blockedEntry), "a blocked entry waits for a person and no retention removes it");
     assertArrayEquals(
-        "the state an operator will send once the cause is gone".getBytes(StandardCharsets.UTF_8),
+        KEPT_FOR_THE_OPERATOR.getBytes(StandardCharsets.UTF_8),
         payload(blockedPayload).getPayload(),
         "the entry is still there, so its payload has to be there as well");
-
-    assertNull(entryOf(dispatchedEntry), "a dispatched entry goes when its retention ran out");
-    assertNull(payload(dispatchedPayload), "the entry took its payload with it");
 
   }
 
