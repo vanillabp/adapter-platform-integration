@@ -10,7 +10,32 @@ name: Checks
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  # One run of the checks per branch, and the newest run wins. The diagram job below pulls
+  # a headless browser the first time it renders, so two pushes in a row paid for that
+  # download twice, and the older run answers about a commit nobody will merge.
+  #
+  # Cancelling is right here and wrong for the publish group of
+  # deploy-to-github-packages.yaml. A publish carries work which cannot be repeated, a
+  # check can run again any time. A cancelled run does not turn green either: the one
+  # green answer of 'diagrams-verified' below reads an output which a cancelled job never
+  # writes, so the job ends red where it knows nothing.
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
+  # Javadoc keeps the last block in front of an element and drops every earlier one, and it
+  # says nothing while it does. The script finds such a pair. It needs a checkout and
+  # nothing else, so it answers in seconds, while the Maven build of
+  # deploy-to-github-packages.yaml is still running. That is why the check stands here and
+  # not in that build: whoever left a dropped block behind reads about it right away and
+  # not when the build is through.
+  orphaned-javadoc-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: No javadoc block stands in front of another one
+        run: bin/check-orphaned-javadoc.sh
+
   # Three kinds of change can break a picture: a Markdown file, which is where a Mermaid
   # block lives; bin/render-diagrams.sh, which renders it; and this workflow, which says
   # when that happens. The names of the changed files show all three, and the script renders
