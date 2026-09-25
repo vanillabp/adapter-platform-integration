@@ -53,6 +53,20 @@ a module which was only packaged is the one from the run before. `install` alone
 every compiler warning twice. [`README.md`](./README.md#building) says the same with the reasoning
 around it, and the modules are described in the `README.md` of each module.
 
+`spotless:check -N` at the root is not the whole check, and a green run there says less than it
+looks like. `-N` builds the root module alone. The POM and Markdown formatters carry the patterns
+`**/pom.xml` and `**/*.md`, so they walk the whole tree from wherever they start, and at the root
+they cover all 73 POMs and all 20 Markdown files. The Java formatter has no such pattern. It reads
+the source folders of the module it runs in, and the root module has none, so a root run never
+opens a single one of the 1195 Java files. Measured on 2026-09-25: an unused import in
+`spring-boot-integration/runtime` passed the root run and failed
+`spotless:check -pl spring-boot-integration/runtime`.
+
+Nothing is missing from the rules. `removeUnusedImports` is configured, and the `check` goal runs in
+`process-sources` of every module, so a plain `./mvnw install` from the root finds it and so does
+the pipeline. What misleads is the shortcut: run `spotless:apply` without `-N` before you commit,
+and read a `-N` run as a statement about POMs and Markdown only.
+
 Docker is needed for the tests which start a database in a container, MongoDB above all. The rest
 runs without it. The version of such an image is pinned, so a run says what it ran against and a new
 release of the image cannot change a result overnight. The pins live in
