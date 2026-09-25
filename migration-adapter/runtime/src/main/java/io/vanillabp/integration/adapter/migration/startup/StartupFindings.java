@@ -55,6 +55,14 @@ public class StartupFindings {
   private static final Logger log = LoggerFactory.getLogger(StartupFindings.class);
 
   /**
+   * Builds an empty collection of findings. One of these belongs to one start of one
+   * application: it gathers what the checks noticed and writes it once at the end, so the
+   * constructor takes nothing and the checks hand their findings over afterwards.
+   */
+  public StartupFindings() {
+  }
+
+  /**
    * The line above and below the box. The one fixed width in it: the messages name the way
    * out and are long for that reason, so a frame around each of them would take the room
    * they need. A ruler costs one line and survives a narrow terminal, because nothing is
