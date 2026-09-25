@@ -55,8 +55,11 @@ public interface ExtensionWiringService<BPMN, PC> {
    * which runs before all of them either way (see the type javadoc), and two extensions of the same
    * order run in the order the platform collected them in, which nobody promises.
    *
-   * @return The order of this service. Defaults to <code>0</code>, so implementations (especially
-   *         adapters) only need to implement this method if a specific order is required.
+   * @return The order of this service. Defaults to <code>0</code>, so an extension implements it
+   *         only where it has to run before or after another one. A BPMS adapter leaves it at the
+   *         default: the core takes the adapters out of this list before it sorts, so an adapter's
+   *         number is never read, and which adapter of a workflow module goes first comes from
+   *         <code>vanillabp.prioritized-adapters</code> instead
    */
   default int getOrder() {
 
@@ -101,7 +104,17 @@ public interface ExtensionWiringService<BPMN, PC> {
       PC context);
 
   /**
-   * Start running the workflows BPMN processes previously deployed.
+   * Start running the workflows BPMN processes previously deployed. For a BPMS adapter
+   * this is where workers, subscriptions and job executors open; before it nothing of that
+   * module runs.
+   * <p>
+   * It is called once per workflow module, after every adapter of that module finished
+   * deploying, and the adapters of a module are started before any extension of it. The
+   * call runs on the thread which boots the application, so an adapter which needs threads
+   * of its own starts them here and bounds their number itself - every running handler
+   * holds a database connection. Throwing ends the boot, and unlike a failure while
+   * deploying it is not softened by
+   * <code>vanillabp.adapters.&lt;id&gt;.deployment-failure</code>.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmsProcessingContext The processing context specific to the BPMS

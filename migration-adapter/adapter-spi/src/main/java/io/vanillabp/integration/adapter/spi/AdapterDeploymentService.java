@@ -84,13 +84,31 @@ public interface AdapterDeploymentService<BPMN, PC> extends ExtensionWiringServi
   }
 
   /**
-   * Reads the given BPMN input stream and transforms it into the model type.
+   * Reads the given BPMN input stream and transforms it into the model type. This is the
+   * first call of the deployment pipeline and it runs once per BPMN file of a workflow
+   * module.
+   * <p>
+   * One file may declare several executable processes, and they all live in ONE parsed
+   * model. So the usual answer is one entry per executable process, all of them carrying
+   * the same model object, which is what both Camunda adapters return. A non-executable
+   * process is left out of the list. An empty list is allowed and says that the file holds
+   * nothing this BPMS can run: the pipeline then warns once, naming the file, and goes on
+   * with the next one.
+   * <p>
+   * Everything which rewrites the model belongs into {@link #prepareBpmn}, not here.
    *
    * @param workflowModuleId The workflow module ID
    * @param filename The filename of the BPMN file (used for logging and error messages)
    * @param bpmn The BPMN input stream. It is owned and closed by the deployment
    *        pipeline - implementations must NOT close it.
-   * @param isVanillaBpBpmn Whether the input stream is VanillaBP or specific to the adapter's BPMS
+   * @param isVanillaBpBpmn Where the file came from: <code>true</code> for
+   *        <code>vanillabp.resources-location</code>, the location which is the same for
+   *        every BPMS, and <code>false</code> for a location configured at one adapter or
+   *        derived for it, whose files are written for that BPMS. It says nothing about
+   *        what is IN the file, because nothing reads the file before this call. Today no
+   *        adapter acts on it and reading the same dialect either way is a correct
+   *        implementation; it is passed because only an adapter can decide what a file of
+   *        the neutral location is allowed to contain
    * @return The models of the executable processes found in the BPMN (key is the process ID, value is the model)
    * @throws BpmnParseException If the parsing fails
    */
@@ -102,12 +120,21 @@ public interface AdapterDeploymentService<BPMN, PC> extends ExtensionWiringServi
 
   /**
    * Prepares the given model according to the feature of the adapter (e.g. setting defaults, etc.).
+   * This is where a model is REWRITTEN: listeners attached, identifiers scoped, defaults of
+   * this BPMS filled in. Wiring reads the model afterwards and changes nothing.
+   * <p>
+   * It is called once per executable PROCESS, while all processes of one file share ONE
+   * model object. So a rewrite which is about the file - and scoping identifiers is - has
+   * to run for the first process of that file and be remembered in the context; both
+   * Camunda adapters keep such a guard. Doing it per process instead stacks the rewrite:
+   * two prefixes on one identifier, two listeners on one element, and a deployment which
+   * looks correct until a workflow reaches that element.
    *
    * @param workflowModuleId The workflow module ID
    * @param existingContext The existing context (usually from a previous BPMN) or null for the first BPMN
    * @param filename The filename of the BPMN file (used for logging and error messages)
    * @param bpmnProcessId The BPMN process ID
-   * @param model The model
+   * @param model The model, shared with every other executable process of the same file
    * @return The context passed to startProcessing (usually used to collect wiring
    *         information); must NEVER be null - it is threaded through the whole
    *         deployment pipeline
@@ -204,7 +231,27 @@ public interface AdapterDeploymentService<BPMN, PC> extends ExtensionWiringServi
   }
 
   /**
-   * Deploys the resources (process, decision matrix) to the target BPMS.
+   * Deploys the resources (process, decision matrix) to the target BPMS. It is called once
+   * per workflow module, after every file of that module was read, prepared and wired.
+   * <p>
+   * Three calls belong at the end of it, and an adapter which leaves them out compiles and
+   * deploys and then loses what they buy:
+   * <ul>
+   * <li>{@link NameClashAvoidanceSupport#validateNoCollidingProcessIds}
+   * with the PLAIN process ids of this module, which ends the boot where two BPMN processes
+   * would reach this BPMS under one identifier;</li>
+   * <li>{@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#registerDeployedVersion}
+   * per process, also where the BPMS deployed nothing because nothing had changed - only
+   * the adapter can find out which version a process ended up on, and the core needs that
+   * border between the model of this boot and the older ones;</li>
+   * <li>{@link NameClashAvoidanceSupport#reportIdentifiersTheModelsDeclare} with the names
+   * this module's models declare, and, where this BPMS keeps a searchable repository,
+   * {@link NameClashAvoidanceSupport#reportIdentifiersTheBpmsAlreadyHolds}.</li>
+   * </ul>
+   * <p>
+   * Throwing is the whole of what an adapter does about a failed deployment. Whether that
+   * ends the boot or lets a lower-priority adapter fail without stopping the application is
+   * <code>vanillabp.adapters.&lt;id&gt;.deployment-failure</code>, and the core decides it.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmsProcessingContext The processing context specific to the BPMS; never

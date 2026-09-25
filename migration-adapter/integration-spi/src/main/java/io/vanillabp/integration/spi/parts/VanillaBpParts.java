@@ -147,9 +147,18 @@ public final class VanillaBpParts {
 
   /**
    * Fails if the given BPMS adapter and the platform integration on the classpath do not
-   * belong together, and warns if that cannot be told.
+   * belong together, and warns if that cannot be told. An adapter calls this from the
+   * constructor of its deployment service, because a platform integration older than this
+   * check cannot contain the check and the adapter is then the only part able to report
+   * the pair.
+   * <p>
+   * What is judged is the descriptor the adapter ships,
+   * <code>META-INF/vanillabp/adapter-&lt;adapterType&gt;.properties</code> - see the type
+   * javadoc for the three keys and for what is read when the file is missing or
+   * incomplete. Without that file there is nothing to judge and this call warns once.
    *
-   * @param adapterType The adapter's type (e.g. <code>camunda7</code>)
+   * @param adapterType The adapter's type (e.g. <code>camunda7</code>), which also names
+   *        the descriptor
    * @param adapterClass A class of the adapter, used as the source of the class loader
    *        the descriptor is read from
    * @throws IllegalStateException If the two must not run together

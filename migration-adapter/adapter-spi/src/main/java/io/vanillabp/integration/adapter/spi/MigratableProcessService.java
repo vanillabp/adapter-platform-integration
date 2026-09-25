@@ -121,6 +121,22 @@ public interface MigratableProcessService<A> {
    * ({@link PhaseOperationNotSupported}). An operation which IS required and is missing
    * fails the boot instead, naming this adapter.
    * <p>
+   * Seven of the nine core operations are required of every adapter, and they are the
+   * shortest description of what a BPMS has to be able to do to carry VanillaBP:
+   * {@link PhaseOperation#START_WORKFLOW}, {@link PhaseOperation#START_WORKFLOW_BY_MESSAGE},
+   * {@link PhaseOperation#COMPLETE_TASK}, {@link PhaseOperation#CANCEL_TASK},
+   * {@link PhaseOperation#COMPLETE_USER_TASK}, {@link PhaseOperation#CANCEL_USER_TASK} and
+   * {@link PhaseOperation#CORRELATE_MESSAGE}. The two which may be left out are
+   * {@link PhaseOperation#SEND_SIGNAL} and {@link PhaseOperation#AGGREGATE_CHANGED}.
+   * {@link PhaseOperation#CORE_OPERATIONS} is the list at runtime, and
+   * {@link PhaseOperation#requiredOfEveryAdapter()} the flag, so an operation added later
+   * answers for itself rather than making this paragraph stale.
+   * <p>
+   * Registering a required operation with a handler which only throws is a third way, and
+   * it is the better one where the BPMS has the concept but this adapter cannot reach it:
+   * the message then comes from the adapter and says which API is missing, rather than from
+   * the core saying that the operation is unsupported.
+   * <p>
    * An adapter which serves an operation only under some condition - a BPMS whose
    * signal API is optional, say - leaves it out where that condition does not hold: the
    * map is built while the application boots and may be built fresh here.
