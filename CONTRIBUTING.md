@@ -53,6 +53,20 @@ a module which was only packaged is the one from the run before. `install` alone
 every compiler warning twice. [`README.md`](./README.md#building) says the same with the reasoning
 around it, and the modules are described in the `README.md` of each module.
 
+`spotless:check -N` at the root is not the whole check, and a green run there says less than it
+looks like. `-N` builds the root module alone. The POM and Markdown formatters carry the patterns
+`**/pom.xml` and `**/*.md`, so they walk the whole tree from wherever they start, and at the root
+they cover all 73 POMs and all 20 Markdown files. The Java formatter has no such pattern. It reads
+the source folders of the module it runs in, and the root module has none, so a root run never
+opens a single one of the 1195 Java files. Measured on 2026-09-25: an unused import in
+`spring-boot-integration/runtime` passed the root run and failed
+`spotless:check -pl spring-boot-integration/runtime`.
+
+Nothing is missing from the rules. `removeUnusedImports` is configured, and the `check` goal runs in
+`process-sources` of every module, so a plain `./mvnw install` from the root finds it and so does
+the pipeline. What misleads is the shortcut: run `spotless:apply` without `-N` before you commit,
+and read a `-N` run as a statement about POMs and Markdown only.
+
 Docker is needed for the tests which start a database in a container, MongoDB above all. The rest
 runs without it. The version of such an image is pinned, so a run says what it ran against and a new
 release of the image cannot change a result overnight. The pins live in
@@ -133,6 +147,18 @@ none themselves and compiled against the copy another module passed on.
 [`PublishedPomsTest`](./migration-adapter/runtime/src/test/java/io/vanillabp/migration/test/PublishedPomsTest.java)
 reads the POMs of this repository, which are the files we publish, and fails when a tool of the
 build is declared so an application gets it.
+
+## A POM comment says what this POM does
+
+A comment in a POM says what this POM sets and why it differs from what it would get for free. It
+does not repeat what the parent sets. `io.vanillabp:release-parent` is released on its own schedule,
+so a copy of its settings in a child here goes stale without anything noticing. The javadoc
+comments of three POMs in this organisation did exactly that: they said the parent switched the
+javadoc check off, after a release of it had switched the check on.
+
+Where a module really does rely on something its parent does or does not do, say so as an
+assumption and name the version it was checked against, as `bom/pom.xml` does. Then the next reader
+can check it again in one command, `mvn help:effective-pom`, instead of believing a sentence.
 
 ## How we write
 

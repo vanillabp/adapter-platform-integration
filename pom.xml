@@ -219,22 +219,14 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-javadoc-plugin</artifactId>
-          <version>3.12.0</version>
           <configuration>
-            <!-- javadoc runs in every build. A goal nobody runs stops working without
-                 anybody noticing, and the release is a bad moment to find that out, because
-                 that is when the javadoc artifact is built.
-                 It breaks on errors, which is a reference javadoc cannot resolve or broken
-                 HTML, and it breaks on warnings too, which is mostly a comment nobody
-                 wrote. What this repository publishes is read by the author of an
-                 application, by whoever writes the next BPMS adapter and by whoever writes
-                 an extension of the deployment pipeline, so a missing sentence is a gap for
-                 a reader with no other source. The gaps here were written once. Letting a
-                 warning pass again would park the next one in a build which looks green.
-               The release parent lets a warning pass, because not every repository which
-               inherits it has written its comments yet. Here a warning is an error. -->
-            <doclint>all</doclint>
-            <failOnError>true</failOnError>
+            <!-- a warning fails the build here. What this repository publishes is read by
+                 the author of an application, by whoever writes the next BPMS adapter and
+                 by whoever writes an extension of the deployment pipeline, so a comment
+                 nobody wrote is a gap for a reader with no other source. The gaps here
+                 were written once, and a warning which passes parks the next one in a
+                 build which looks green. Everything else about the check comes from the
+                 parent. -->
             <failOnWarnings>true</failOnWarnings>
             <!-- two kinds of source file in this build are generated, and generated code
                  carries no comments. The Quarkus extension processor writes an accessor
@@ -246,33 +238,11 @@
               <sourceFileExclude>**/*$$accessor.java</sourceFileExclude>
               <sourceFileExclude>**/*MapperImpl.java</sourceFileExclude>
             </sourceFileExcludes>
-            <!-- no link into the JDK API: that link is fetched over the network, and the
-                 check should give the same answer on a machine without one. No link into
-                 the javadoc of the other modules either: it is not built at this point,
-                 and every module would report the miss -->
-            <detectJavaApiLink>false</detectJavaApiLink>
-            <detectOfflineLinks>false</detectOfflineLinks>
           </configuration>
-          <executions>
-            <execution>
-              <id>check-javadoc</id>
-              <goals>
-                <!-- no fork: the sources are there by this phase -->
-                <goal>javadoc-no-fork</goal>
-              </goals>
-              <!-- after the tests, so a javadoc error does not hide a test result, and
-                   still inside a plain 'mvn install' -->
-              <phase>package</phase>
-            </execution>
-          </executions>
         </plugin>
       </plugins>
     </pluginManagement>
     <plugins>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-javadoc-plugin</artifactId>
-      </plugin>
       <plugin>
         <groupId>com.diffplug.spotless</groupId>
         <artifactId>spotless-maven-plugin</artifactId>
