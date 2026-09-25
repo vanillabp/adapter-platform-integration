@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -1459,6 +1460,96 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
+   * An adapter setting which is about a whole BPMN process: the name it is written under,
+   * and how to tell that a level wrote it.
+   *
+   * @param key The last segment of the property key
+   * @param writtenHere Whether the given level says anything about the setting
+   */
+  private record SettingOfAWholeProcess(
+                                        String key,
+                                        Predicate<AdapterProperties> writtenHere) {
+  }
+
+  /**
+   * The adapter settings which are about a whole BPMN process. Everything reading one of
+   * them asks for a workflow and never for a task, so a line at a task is refused by
+   * {@link #refuseSettingsOfAWholeProcessWrittenAtATask()}.
+   */
+  private static final List<SettingOfAWholeProcess> SETTINGS_OF_A_WHOLE_PROCESS = List.of(
+      new SettingOfAWholeProcess(
+          "name-clash-avoidance", adapter -> adapter.getNameClashAvoidance() != null),
+      new SettingOfAWholeProcess(
+          "prefix-task-definitions-per-process", adapter -> adapter.getPrefixTaskDefinitionsPerProcess() != null),
+      new SettingOfAWholeProcess(
+          "outfaded-versions", adapter -> (adapter.getOutfadedVersions() != null) && !adapter.getOutfadedVersions()
+              .isEmpty()),
+      new SettingOfAWholeProcess(
+          "outfaded-versions-in-use", adapter -> adapter.getOutfadedVersionsInUse() != null));
+
+  /**
+   * Refuses a setting of a whole BPMN process written at a single task. The keys bind at
+   * all four levels like every other adapter setting, because one class carries what an
+   * adapter may be told, but the task level is read by nobody:
+   * {@link io.vanillabp.integration.adapter.migration.scoping.NameClashAvoidanceService}
+   * and {@code OutfadedProcessVersions} both ask
+   * {@link #resolveForAdapter(String, String, String, String, Function)} without a task.
+   * A line there would do nothing at all, so it is answered instead of ignored (see
+   * decision 89 in the repository's DECISIONS.md). It reads like every other misplaced
+   * setting, see {@link MisplacedSettings}.
+   *
+   * @throws IllegalStateException Naming every task a setting was written at and the
+   *           three levels it may be written at
+   */
+  private void refuseSettingsOfAWholeProcessWrittenAtATask() {
+
+    final var misplaced = new LinkedList<String>();
+    workflowModules.forEach((
+        moduleId,
+        module) -> module
+            .getWorkflows()
+            .forEach((
+                processId,
+                workflow) -> workflow
+                    .getTasks()
+                    .forEach((
+                        taskId,
+                        task) -> task
+                            .getAdapters()
+                            .forEach((
+                                adapterId,
+                                adapter) -> SETTINGS_OF_A_WHOLE_PROCESS
+                                    .stream()
+                                    .filter(setting -> setting.writtenHere().test(adapter))
+                                    .forEach(setting -> misplaced
+                                        .add("%s.workflow-modules.%s.workflows.%s.tasks.%s.adapters.%s.%s"
+                                            .formatted(
+                                                PREFIX,
+                                                moduleId,
+                                                processId,
+                                                taskId,
+                                                adapterId,
+                                                setting.key())))))));
+    if (misplaced.isEmpty()) {
+      return;
+    }
+    throw MisplacedSettings.refuse(
+        "A setting about a whole BPMN process is read at the workflow, at the workflow module "
+            + "and at the adapter",
+        misplaced,
+        "the workflow, to its workflow module or to the adapter",
+        List.of(
+            "%s.workflow-modules.<workflow-module>.workflows.<bpmn-process-id>.adapters.<adapter>.<setting>"
+                .formatted(PREFIX),
+            "%s.workflow-modules.<workflow-module>.adapters.<adapter>.<setting>".formatted(PREFIX),
+            "%s.adapters.<adapter>.<setting>".formatted(PREFIX)),
+        """
+            VanillaBP scopes the identifiers of a whole process at once, and a version \
+            belongs to a process as well, so neither is ever asked for a single task.""");
+
+  }
+
+  /**
    * Whether the given workflow module accepts a prioritized adapter which cannot
    * locate workflows next to other adapters
    * (<code>vanillabp.election.guessing-adapters</code>, overridable as
@@ -1957,6 +2048,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     validateMaxTaskAge();
     refuseFullSyncPermissionsOutsideAWorkflow();
     refuseResourcesLocationsBelowTheWorkflowModule();
+    refuseSettingsOfAWholeProcessWrittenAtATask();
     reportRetentionSplit();
     reportWhatStaysAwake();
 

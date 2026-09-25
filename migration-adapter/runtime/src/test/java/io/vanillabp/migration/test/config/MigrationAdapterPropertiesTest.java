@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,9 +28,11 @@ import io.vanillabp.integration.adapter.migration.config.ClasspathFacts;
 import io.vanillabp.integration.adapter.migration.config.DeliveryProperties;
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.config.OutfadedVersionsInUsePolicy;
 import io.vanillabp.integration.adapter.migration.config.TaskAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
+import io.vanillabp.integration.adapter.spi.NameClashAvoidance;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import lombok.extern.slf4j.Slf4j;
 
@@ -918,6 +921,147 @@ public class MigrationAdapterPropertiesTest {
               vanillabp.adapters.<adapter>.resources-location: classpath*:<location>
             VanillaBP loads the BPMN files before it knows which process or which task is in them, so a location below the workflow module is never read.""",
         refusal.getMessage());
+
+  }
+
+  @Nested
+  @DisplayName("A setting about a whole process written at a task ends the startup")
+  class ASettingOfAWholeProcessIsRefusedAtATask {
+
+    @Test
+    @DisplayName("name-clash-avoidance")
+    public void theScopingModeIsRefused() {
+
+      assertEquals(
+          refusalNaming("name-clash-avoidance"),
+          refusalOf(adapter -> adapter.setNameClashAvoidance(NameClashAvoidance.USE_PREFIX)));
+
+    }
+
+    @Test
+    @DisplayName("prefix-task-definitions-per-process")
+    public void theScopingOfTaskDefinitionsIsRefused() {
+
+      assertEquals(
+          refusalNaming("prefix-task-definitions-per-process"),
+          refusalOf(adapter -> adapter.setPrefixTaskDefinitionsPerProcess(Boolean.FALSE)));
+
+    }
+
+    @Test
+    @DisplayName("outfaded-versions")
+    public void theOutfadedVersionsAreRefused() {
+
+      assertEquals(
+          refusalNaming("outfaded-versions"),
+          refusalOf(adapter -> adapter.setOutfadedVersions(List.of("<4"))));
+
+    }
+
+    @Test
+    @DisplayName("outfaded-versions-in-use")
+    public void theOutfadedVersionsInUsePolicyIsRefused() {
+
+      assertEquals(
+          refusalNaming("outfaded-versions-in-use"),
+          refusalOf(adapter -> adapter.setOutfadedVersionsInUse(OutfadedVersionsInUsePolicy.FAIL)));
+
+    }
+
+    @Test
+    @DisplayName("An empty outfaded-versions list says nothing, so nothing is refused")
+    public void anEmptyListOfVersionsIsNotASetting() {
+
+      propertiesWithATaskConfiguring(adapter -> adapter.setOutfadedVersions(List.of()))
+          .validateProperties(List.of("adapter2"), List.of("test-module"));
+
+    }
+
+    @Test
+    @DisplayName("The same keys at the workflow start the application")
+    public void theSameKeysAtTheWorkflowAreRead() {
+
+      final var properties = new MigrationAdapterProperties();
+      properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
+      properties.setPrioritizedAdapters(List.of("adapter-test"));
+      properties.setWorkflowModules(Map.of("test-module", WorkflowModuleAdapterProperties
+          .builder()
+          .workflowModuleId("test-module")
+          .workflows(Map.of("testProcess", WorkflowAdapterProperties
+              .builder()
+              .adapters(Map.of("adapter-test", AdapterProperties
+                  .builder()
+                  .nameClashAvoidance(NameClashAvoidance.USE_PREFIX)
+                  .prefixTaskDefinitionsPerProcess(Boolean.FALSE)
+                  .outfadedVersions(List.of("<4"))
+                  .outfadedVersionsInUse(OutfadedVersionsInUsePolicy.FAIL)
+                  .build()))
+              .build()))
+          .build()));
+
+      properties.validateProperties(List.of("adapter2"), List.of("test-module"));
+
+      assertEquals(
+          NameClashAvoidance.USE_PREFIX,
+          properties.resolveForAdapter(
+              "test-module",
+              "testProcess",
+              null,
+              "adapter-test",
+              AdapterProperties::getNameClashAvoidance));
+
+    }
+
+    private String refusalNaming(
+        final String key) {
+
+      return """
+          A setting about a whole BPMN process is read at the workflow, at the workflow module and at the adapter, but it is configured at:
+            vanillabp.workflow-modules.test-module.workflows.testProcess.tasks.scoreApplicant.adapters.adapter-test.%s
+          Move each of them to the workflow, to its workflow module or to the adapter:
+            vanillabp.workflow-modules.<workflow-module>.workflows.<bpmn-process-id>.adapters.<adapter>.<setting>
+            vanillabp.workflow-modules.<workflow-module>.adapters.<adapter>.<setting>
+            vanillabp.adapters.<adapter>.<setting>
+          VanillaBP scopes the identifiers of a whole process at once, and a version belongs to a process as well, so neither is ever asked for a single task."""
+          .formatted(key);
+
+    }
+
+    private String refusalOf(
+        final Consumer<AdapterProperties> whatTheTaskSays) {
+
+      final var properties = propertiesWithATaskConfiguring(whatTheTaskSays);
+
+      return assertThrowsExactly(
+          IllegalStateException.class,
+          () -> properties.validateProperties(List.of("adapter2"), List.of("test-module")))
+          .getMessage();
+
+    }
+
+    private MigrationAdapterProperties propertiesWithATaskConfiguring(
+        final Consumer<AdapterProperties> whatTheTaskSays) {
+
+      final var task = new AdapterProperties();
+      whatTheTaskSays.accept(task);
+
+      final var properties = new MigrationAdapterProperties();
+      properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
+      properties.setPrioritizedAdapters(List.of("adapter-test"));
+      properties.setWorkflowModules(Map.of("test-module", WorkflowModuleAdapterProperties
+          .builder()
+          .workflowModuleId("test-module")
+          .workflows(Map.of("testProcess", WorkflowAdapterProperties
+              .builder()
+              .tasks(Map.of("scoreApplicant", TaskAdapterProperties
+                  .builder()
+                  .adapters(Map.of("adapter-test", task))
+                  .build()))
+              .build()))
+          .build()));
+      return properties;
+
+    }
 
   }
 
