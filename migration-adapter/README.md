@@ -2222,18 +2222,30 @@ fitted when the next night starts. `HousekeepingBatchSizeTest` holds every step 
 `HousekeepingWindowTest` holds the clock, including a window which crosses midnight and the two
 nights around a change of the clock.
 
-The sweep of the payloads itself took two passes to get right. It used to read which payloads were
+The sweep of the payloads itself took three passes to get right. It used to read which payloads were
 old enough, ask the entries which of them they still named and delete the rest, each step on a
 connection borrowed and given back, and each step carrying a set of unknown size through the
 application. It is one statement now: the payload store deletes the payloads which are old enough
 and which no entry names, asking the entries inside its own condition. What that condition looks
 like is the store's own business and differs per store, which is why the store is built with the
 table its entries lie in and the column they name a payload in
-(`JdbcPhaseTwoPayloadStore.EntriesNamingTheirPayload`).
+(`JdbcPhaseTwoPayloadStore.EntriesNamingTheirPayload`). The outbox VanillaBP writes itself has a
+column for it, `PAYLOAD_REFERENCE` with an index over it, so the condition there is an equality;
+gruelbox owns its table, so its reference lives inside a serialized invocation and the condition is
+a `LIKE` which scans. Decisions 62 and 76 carry the numbers.
 `JdbcPhaseTwoPayloadStoreTest#theSweepHoldsOneConnectionAtATime` hands the store a database which
 refuses a second connection, `#theSweepRemovesAtMostWhatItWasAllowedTo` holds the ceiling, and
 `#aFullLaneDoesNotHoldTheConnectionItsDispatchNeeds` runs the real payload store instead of one
 with its housekeeping taken out.
+
+**An entry planned before the column existed gets it filled at the startup.** The reference has
+always travelled among the arguments and travels there still, so such an entry dispatches correctly
+- what it does not do is answer the housekeeping, and its payload would go as an orphan. The
+backfill reads only the entries which still WAIT, in rounds of a thousand, because a dispatched
+entry gave its payload back at the dispatch and the dispatched entries are the part of the table
+which grows. On PostgreSQL 16.15 that read took 166 ms against a million rows with a hundred
+entries to fill. `AnEntryPlannedBeforeTheColumnGetsItFilledTest` holds both halves: what is filled
+and what is left alone.
 
 **A lane which is stopping says that it took nothing.** A node shuts down while its poller is
 still handing claimed entries in, and those entries used to be dropped without a word: the lane

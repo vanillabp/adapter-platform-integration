@@ -55,12 +55,13 @@ public class JdbcPhaseTwoPayloadStoreTest {
   /**
    * The outbox table, reduced to what the sweep looks at. The real one carries a dozen
    * more columns, and none of them takes part in the question which payloads are still
-   * named.
+   * named - that question reads the column an entry names its payload in.
    */
   private static final String CREATE_ENTRIES = """
       CREATE TABLE IF NOT EXISTS %s (\
       ID VARCHAR(36) PRIMARY KEY, \
-      ARGS VARCHAR(2048))"""
+      ARGS VARCHAR(2048), \
+      PAYLOAD_REFERENCE VARCHAR(36))"""
       .formatted(OUTBOX_TABLE_NAME);
 
   private static JdbcConnectionAccess h2(
@@ -97,7 +98,7 @@ public class JdbcPhaseTwoPayloadStoreTest {
 
   /**
    * Writes an outbox entry naming a payload, the way the outbox store writes it: the
-   * reference stands among the serialized arguments.
+   * reference stands among the serialized arguments and in a column of its own.
    *
    * @param database The database this test works on
    * @param call The call whose payload the entry names
@@ -108,12 +109,13 @@ public class JdbcPhaseTwoPayloadStoreTest {
 
     execute(
         h2(database),
-        "INSERT INTO %s (ID, ARGS) VALUES ('%s', '%s')"
+        "INSERT INTO %s (ID, ARGS, PAYLOAD_REFERENCE) VALUES ('%s', '%s', '%s')"
             .formatted(
                 OUTBOX_TABLE_NAME,
                 call.payloadReference(),
                 PhaseTwoCall
-                    .serializeArgs(Map.of(PhaseTwoCall.ARG_PAYLOAD_REFERENCE, call.payloadReference()))));
+                    .serializeArgs(Map.of(PhaseTwoCall.ARG_PAYLOAD_REFERENCE, call.payloadReference())),
+                call.payloadReference()));
 
   }
 

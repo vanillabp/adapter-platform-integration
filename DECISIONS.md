@@ -1970,6 +1970,20 @@ expensive at that store alone. When that sweep runs, and how much of it fits, is
 What stays of this entry is the rest of it - the payload lies beside the entry and the entry
 names it.*
 
+*With the sentence went the refusal decision 76 recorded: on the same day Stephan decided that the
+relational outbox gets a COLUMN for the reference, `PAYLOAD_REFERENCE`, with an index over it. The
+reference still travels among the arguments, because that is where the dispatch reads it and
+because it is an identifier; the column carries the same value in a shape an index reaches, which
+is what the housekeeping asks. Measured on PostgreSQL 16.15 on 2026-09-25 with a hundred blocked
+entries, one pass over the arguments took 2 ms against ten thousand dispatched entries beside them,
+18 ms against a hundred thousand and 112 ms against a million, while the lookup over the column
+took 1 ms at every one of those sizes; with ten thousand blocked entries the scan took 7.8 s and
+the lookup 20 ms. The column is written after the idempotency key was derived, exactly as the
+argument is, so no derivation ever sees it - that promise stands unchanged. An entry written before
+the column existed carries it empty, and the startup fills it for the entries which still wait; a
+dispatched entry is left alone, because its payload went with the dispatch and the history is the
+part of the table which grows. gruelbox keeps the scan: its table is not ours.*
+
 The price is named rather than hidden: one extra read per dispatch attempt of a call which
 carries a payload, by primary key, and none at all for a call which carries none.
 
@@ -2583,6 +2597,16 @@ outbox is healthy. Whether they are worth a column in `VANILLABP_PHASE_TWO_OUTBO
 stores which could carry one, is a question about decision 62 and belongs to whoever reopens that
 one. Until then an application which finds its housekeeping slow has the same fix it always had:
 repair or remove the entries which are stuck.
+
+*Stephan reopened it on 2026-09-24 and the column was built: `VANILLABP_PHASE_TWO_OUTBOX` carries
+`PAYLOAD_REFERENCE` with an index over it, and decision 62 records what that changes and what it
+measured. Two things about the numbers above went with it. The question is no longer asked in
+chunks of a hundred - it is one condition inside the delete which removes the orphans, so the row
+of a thousand blocked entries is no longer 1.4 s but 100 ms, and ten thousand are 7.8 s rather than
+47 s. And on the relational stores which own their table the question is now a lookup: 1 ms
+wherever the scan was, 20 ms where it was 7.8 s. What stays of this entry is gruelbox, which owns
+its table and therefore keeps the scan, and the shape of the argument - a question which grows with
+the table is a question decision 19 forbids, and the column is what took it out.*
 
 A payload the housekeeping did remove is said at DEBUG with its count, and nothing is said when
 there was none. An orphan means a payload was written and its entry never was, so the count is

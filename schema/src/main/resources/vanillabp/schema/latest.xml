@@ -359,4 +359,30 @@
     </modifySql>
   </changeSet>
 
+  <changeSet author="VanillaBP" id="vanillabp-phase-two-outbox-payload-reference-2.0.0" labels="2.0.0">
+    <comment>
+      Which payload an entry carries, in a column of its own. The reference has always travelled
+      among the serialized arguments, where identifiers travel, and it travels there still - the
+      dispatch reads it from there. What this column is for is the other question: before the
+      housekeeping removes a payload by age it asks the entries whether one of them still names it,
+      and inside a column of text that question is a scan of the whole table, once per candidate.
+      Measured on PostgreSQL 16.15 in September 2026 with a hundred blocked entries, one pass took
+      2 ms against ten thousand dispatched entries beside them, 18 ms against a hundred thousand
+      and 112 ms against a million; over this column with its index it took 1 ms at every one of
+      those sizes. With ten thousand blocked entries the scan took 7.8 s and the lookup 20 ms. See
+      decision 62 of the repository, which the column changes, and decision 76, which carries the
+      numbers. Nullable, because an entry which carries no payload names none, and because an entry
+      written before this changeset ran has it empty until the runtime fills it - which it does at
+      startup, and only for the entries which are still waiting, because a dispatched entry gave
+      its payload back at the dispatch. A changeset of its own rather than a column added to the
+      one which created the table, because that one was applied already.
+    </comment>
+    <addColumn tableName="${vanillabp.outbox.table}">
+      <column name="PAYLOAD_REFERENCE" type="VARCHAR(36)" />
+    </addColumn>
+    <createIndex tableName="${vanillabp.outbox.table}" indexName="${vanillabp.outbox.table}_PAYLOAD_REF">
+      <column name="PAYLOAD_REFERENCE" />
+    </createIndex>
+  </changeSet>
+
 </databaseChangeLog>

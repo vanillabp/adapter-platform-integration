@@ -1,6 +1,5 @@
 package io.vanillabp.integration.outbox.gruelbox;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.OptionalLong;
 import java.util.function.Supplier;
@@ -102,8 +101,6 @@ public class GruelboxPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Stor
    */
   private final PhaseTwoPayloadStore payloadStore;
 
-  private final Duration retention;
-
   /**
    * Where this node says that it is house-keeping this store tonight, so no other node
    * measures its work at the same time.
@@ -148,7 +145,6 @@ public class GruelboxPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Stor
     this.submitter = submitter;
     this.outbox = outbox;
     this.payloadStore = payloadStore;
-    this.retention = properties.getRetention();
     this.housekeepingLease = housekeepingLease;
     this.housekeeping = new OutboxHousekeeping(this, properties, metrics);
     this.poller = new DueEntryPoller(
@@ -333,17 +329,6 @@ public class GruelboxPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Stor
       final Instant threshold) {
 
     return outbox.countDispatchedEntriesPastTheirRetention();
-
-  }
-
-  /**
-   * What the housekeeping removes the payloads with, in the moment it asks for them.
-   *
-   * @return The moment before which a payload is old enough to go
-   */
-  Duration getRetention() {
-
-    return retention;
 
   }
 

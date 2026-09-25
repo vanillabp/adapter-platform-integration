@@ -66,8 +66,8 @@ public class ABlockedEntryKeepsItsPayloadTest {
   private static final String INSERT_ENTRY = """
       INSERT INTO %s \
       (ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, AGGREGATE_ID, ADAPTER_ID, ARGS, \
-      IDEMPOTENCY_KEY, DEDUP_KEY, STATUS, CREATED_AT, ATTEMPTS, NEXT_ATTEMPT_AT, DONE_AT) \
-      VALUES (?, 'module', 'Process', ?, '42', 'dummy', ?, NULL, ?, ?, ?, 0, ?, ?)"""
+      PAYLOAD_REFERENCE, IDEMPOTENCY_KEY, DEDUP_KEY, STATUS, CREATED_AT, ATTEMPTS, NEXT_ATTEMPT_AT, DONE_AT) \
+      VALUES (?, 'module', 'Process', ?, '42', 'dummy', ?, ?, NULL, ?, ?, ?, 0, ?, ?)"""
       .formatted(OUTBOX_TABLE);
 
   private static final String AGE_PAYLOAD = "UPDATE %s SET CREATED_AT = ? WHERE REFERENCE = ?"
@@ -106,13 +106,14 @@ public class ABlockedEntryKeepsItsPayloadTest {
       statement.setString(1, id);
       statement.setString(2, call.operation());
       statement.setString(3, PhaseTwoCall.serializeArgs(call.args()));
+      statement.setString(4, call.payloadReference());
       // the key of a blocked entry is released the way a dispatched one releases it,
       // which is why both carry their own id here
-      statement.setString(4, id);
-      statement.setString(5, status);
-      statement.setTimestamp(6, Timestamp.from(LONG_BEFORE_THE_RETENTION));
+      statement.setString(5, id);
+      statement.setString(6, status);
       statement.setTimestamp(7, Timestamp.from(LONG_BEFORE_THE_RETENTION));
-      statement.setTimestamp(8, doneAt == null ? null : Timestamp.from(doneAt));
+      statement.setTimestamp(8, Timestamp.from(LONG_BEFORE_THE_RETENTION));
+      statement.setTimestamp(9, doneAt == null ? null : Timestamp.from(doneAt));
       statement.executeUpdate();
     }
     return id;

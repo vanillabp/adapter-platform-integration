@@ -6,6 +6,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.OptionalLong;
 import java.util.function.Supplier;
@@ -266,12 +267,49 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   private static final String EXPIRED_DONE_ENTRIES_WHERE = "STATUS = '%s' AND DONE_AT < ?";
 
   /**
+   * The entries written before the column existed which still need it: they wait or they
+   * are blocked, they name a payload among their arguments, and the column is empty. A
+   * dispatched entry is left out on purpose - its payload went with the dispatch, so
+   * nothing asks about it any more, and the history is the part of the table which is
+   * large.
+   */
+  private static final String ENTRIES_MISSING_THEIR_PAYLOAD_REFERENCE_FROM = "FROM %s";
+
+  private static final String ENTRIES_MISSING_THEIR_PAYLOAD_REFERENCE_WHERE = "PAYLOAD_REFERENCE IS NULL AND STATUS <> '%s' AND ARGS LIKE ?";
+
+  /**
+   * The pattern which finds an entry whose arguments name a payload. It is the argument's
+   * own name, so a rename of that constant carries this statement with it.
+   */
+  private static final String ARGS_NAMING_A_PAYLOAD = "%"
+      + PhaseTwoCall.ARG_PAYLOAD_REFERENCE
+      + "%";
+
+  private static final String WRITE_PAYLOAD_REFERENCE = "UPDATE %s SET PAYLOAD_REFERENCE = ? WHERE ID = ?";
+
+  /**
+   * How many entries one round of the backfill reads. It is the same thousand the
+   * housekeeping starts a night with, and for the same reason: a bound keeps one
+   * statement short on every database.
+   */
+  private static final int BACKFILL_PER_ROUND = 1_000;
+
+  /**
    * How many dispatched entries the housekeeping still owes - the number a window
    * publishes when it closes. It reads the index over STATUS and DONE_AT, the one the
    * delete above reads.
    */
   private static final String COUNT_EXPIRED_DONE_ENTRIES = """
       SELECT COUNT(*) FROM %s WHERE STATUS = '%s' AND DONE_AT < ?""";
+
+  /**
+   * The column an entry names its payload in. The reference travels among the arguments
+   * as well, where identifiers travel (decision 62 in the repository's DECISIONS.md), and
+   * this column carries the same value in a shape an index reaches: the housekeeping asks
+   * the entries whether one of them still names a payload, and inside a column of text
+   * that question is a scan (decision 76).
+   */
+  public static final String PAYLOAD_REFERENCE_COLUMN = "PAYLOAD_REFERENCE";
 
   /**
    * The columns a later version of VanillaBP added to this table. A table created by an
@@ -284,7 +322,9 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
           new AddedColumn(
               "LEASED_BY", "VARCHAR(255) (nullable: an entry nobody is dispatching is leased by nobody)", "an entry cannot be claimed, so nothing is dispatched at all"),
           new AddedColumn(
-              "LEASED_UNTIL", "TIMESTAMP (the type your database uses for the existing column NEXT_ATTEMPT_AT), nullable", "an entry cannot be claimed, so nothing is dispatched at all"));
+              "LEASED_UNTIL", "TIMESTAMP (the type your database uses for the existing column NEXT_ATTEMPT_AT), nullable", "an entry cannot be claimed, so nothing is dispatched at all"),
+          new AddedColumn(
+              PAYLOAD_REFERENCE_COLUMN, "VARCHAR(36) (nullable: an entry which carries no payload names none)", "the housekeeping cannot tell which payloads are still needed, so it removes none of them and the payload table grows"));
 
   /**
    * A column this version of VanillaBP reads which an older table does not have.
@@ -307,7 +347,8 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       .of(
           new TableIndex("_DUE", "STATUS, NEXT_ATTEMPT_AT"),
           new TableIndex("_AGE", "STATUS, DONE_AT"),
-          new TableIndex("_OLDEST", "STATUS, CREATED_AT"));
+          new TableIndex("_OLDEST", "STATUS, CREATED_AT"),
+          new TableIndex("_PAYLOAD_REF", PAYLOAD_REFERENCE_COLUMN));
 
   /**
    * One index of the outbox table, named after that table so two outboxes on one schema keep
@@ -566,6 +607,7 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       payloadStore.validateSchemaExists();
       housekeepingLease.validateSchemaExists();
     }
+    fillPayloadReferencesOfWaitingEntries();
 
   }
 
@@ -862,6 +904,7 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
         AGGREGATE_ID VARCHAR(1024), \
         ADAPTER_ID VARCHAR(255), \
         ARGS VARCHAR(2048), \
+        PAYLOAD_REFERENCE VARCHAR(36), \
         IDEMPOTENCY_KEY VARCHAR(512), \
         DEDUP_KEY VARCHAR(512) NOT NULL UNIQUE, \
         STATUS VARCHAR(16) NOT NULL, \
@@ -988,6 +1031,114 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
     try {
       connection = connections.acquire();
       return loadDueEntries(connection);
+    } finally {
+      release(connection);
+    }
+
+  }
+
+  /**
+   * Writes the payload reference of the entries which were planned before the column
+   * existed.
+   * <p>
+   * The reference has always travelled among the arguments, and it travels there still;
+   * the column is what the housekeeping asks. An entry written by an earlier version
+   * therefore names its payload where the dispatch reads it and nowhere the housekeeping
+   * looks, and that payload would be removed as an orphan - taking the bytes away from a
+   * dispatch which is still to come.
+   * <p>
+   * <strong>What this costs on a large table.</strong> Only the entries which still WAIT
+   * are read: a dispatched entry gave its payload back at the dispatch, so nothing asks
+   * about it any more. Those are the entries the outbox owes something to plus the ones
+   * somebody has to repair, which is a small number on any application whose outbox is
+   * healthy and a known number on one whose outbox is not. The history, which is the part
+   * that grows, is never touched. The work is done in rounds of
+   * {@link #BACKFILL_PER_ROUND} rows, so no statement holds a lock on more than that, and
+   * it runs before the poller starts, because an entry dispatched meanwhile would leave a
+   * payload behind.
+   * <p>
+   * It costs one read per start once the column is filled, and that read is answered by
+   * the index over the column.
+   */
+  private void fillPayloadReferencesOfWaitingEntries() {
+
+    var filled = 0;
+    try {
+      while (true) {
+        final var round = fillOneRoundOfPayloadReferences();
+        if (round == 0) {
+          break;
+        }
+        filled += round;
+      }
+    } catch (final SQLException e) {
+      // the entries which were not reached keep their payload reference among their
+      // arguments, so their dispatch works; what is at risk is the payload of one of them
+      // being removed as an orphan, and that is worth a line somebody can act on
+      log
+          .warn(
+              "Could not write the payload reference of the entries of table '{}' which were planned before "
+                  + "the column existed - the housekeeping may remove the payload of such an entry. Run the "
+                  + "migration of 'io.vanillabp:vanillabp-schema' or restart the application",
+              tableName,
+              e);
+    }
+    if (filled > 0) {
+      log
+          .info(
+              "Wrote the payload reference of {} entrie(s) of table '{}' which were planned before the column "
+                  + "existed",
+              filled,
+              tableName);
+    }
+
+  }
+
+  /**
+   * One round of the backfill.
+   *
+   * @return How many entries were written, zero where there is nothing left to do
+   */
+  private int fillOneRoundOfPayloadReferences() throws SQLException {
+
+    Connection connection = null;
+    try {
+      connection = connections.acquire();
+      final var references = new LinkedHashMap<String, String>();
+      final var select = JdbcDialect
+          .of(connection)
+          .selectAtMost(
+              "ID, ARGS",
+              ENTRIES_MISSING_THEIR_PAYLOAD_REFERENCE_FROM.formatted(tableName),
+              ENTRIES_MISSING_THEIR_PAYLOAD_REFERENCE_WHERE.formatted(STATUS_DONE),
+              BACKFILL_PER_ROUND);
+      try (var statement = connection.prepareStatement(select)) {
+        statement.setString(1, ARGS_NAMING_A_PAYLOAD);
+        try (var resultSet = statement.executeQuery()) {
+          while (resultSet.next()) {
+            final var reference = PhaseTwoCall
+                .deserializeArgs(resultSet.getString(2))
+                .get(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
+            if (reference != null) {
+              references.put(resultSet.getString(1), reference);
+            }
+          }
+        }
+      }
+      if (references.isEmpty()) {
+        // either nothing is left or what is left names no payload after all, and both
+        // mean the same here: another round would read the same rows again
+        return 0;
+      }
+      try (var statement = connection.prepareStatement(WRITE_PAYLOAD_REFERENCE.formatted(tableName))) {
+        for (final var entry : references.entrySet()) {
+          statement.setString(1, entry.getValue());
+          statement.setString(2, entry.getKey());
+          statement.addBatch();
+        }
+        statement.executeBatch();
+      }
+      return references.size();
     } finally {
       release(connection);
     }

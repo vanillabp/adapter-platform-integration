@@ -77,7 +77,13 @@ public class MongoBlockedEntryKeepsItsPayloadTest {
           .addClass(WorkflowService.class)
           .addClass(RecordingPhaseTwoListener.class)
           .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
-      .overrideConfigKey("quarkus.mongodb.database", DATABASE);
+      .overrideConfigKey("quarkus.mongodb.database", DATABASE)
+      // the housekeeping runs in a window at night, and this test watches it work now.
+      // A window which ends before it starts crosses midnight, so this one is open all
+      // day but for the first minute of it
+      .overrideConfigKey("vanillabp.outbox.housekeeping.start", "00:01")
+      .overrideConfigKey("vanillabp.outbox.housekeeping.end", "00:00")
+      .overrideConfigKey("vanillabp.outbox.housekeeping.zone", "Europe/Vienna");
 
   @Inject
   MongoClient mongoClient;
