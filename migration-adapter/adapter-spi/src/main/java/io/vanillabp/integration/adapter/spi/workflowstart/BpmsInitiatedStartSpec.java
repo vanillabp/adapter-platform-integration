@@ -3,10 +3,14 @@ package io.vanillabp.integration.adapter.spi.workflowstart;
 import io.vanillabp.spi.service.BpmsStartTrigger;
 
 /**
- * One start event of a deployed BPMN process which fires WITHOUT the application
- * starting the workflow: a timer, signal or conditional start event. Reported by
- * the adapter during <code>wireBpmn</code> through
+ * One start event a deployed BPMN process can begin with. Every start event of the process
+ * is reported, whichever event definition it carries, because what a start means is read
+ * from the state of the workflow and not from the kind of its start event. Reported by the
+ * adapter during <code>wireBpmn</code> through
  * {@link BpmsInitiatedStartInvoker#validateBpmsInitiatedStarts}.
+ * <p>
+ * A start event of an event subprocess is not one of them: it fires inside a workflow which
+ * already runs and starts none.
  * <p>
  * The signal name is the PLAIN one as modelled - name-clash avoidance
  * stays invisible above the BPMS boundary, so an adapter which scopes identifiers

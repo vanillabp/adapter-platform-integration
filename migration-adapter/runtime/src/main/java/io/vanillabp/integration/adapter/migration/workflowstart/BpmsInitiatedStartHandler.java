@@ -29,7 +29,7 @@ public class BpmsInitiatedStartHandler {
 
   /**
    * The BPMN id of the start event this method serves, or <code>null</code> for
-   * every BPMS-initiated start event of the process.
+   * every start event of the process.
    */
   private final String startEventId;
 
@@ -62,7 +62,7 @@ public class BpmsInitiatedStartHandler {
    * is decision 1 in the repository's DECISIONS.md.
    *
    * @return The BPMN id of the start event, or <code>null</code> where the method serves
-   *         every BPMS-initiated start event of the process
+   *         every start event of the process
    */
   public String getStartEventId() {
 
@@ -84,7 +84,7 @@ public class BpmsInitiatedStartHandler {
 
   /**
    * What this method serves, in the words of a message: one named start event, or every
-   * BPMS-initiated start event of the process. Two methods are a defect only where both
+   * start event of the process. Two methods are a defect only where both
    * describe the same thing, which is why the message quotes this rather than the id
    * alone.
    *
@@ -93,7 +93,7 @@ public class BpmsInitiatedStartHandler {
   public String describeWiring() {
 
     return startEventId == null
-        ? "every BPMS-initiated start event"
+        ? "every start event"
         : "start event '%s'".formatted(startEventId);
 
   }

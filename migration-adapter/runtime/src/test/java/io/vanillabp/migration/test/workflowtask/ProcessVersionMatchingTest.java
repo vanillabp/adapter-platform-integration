@@ -649,7 +649,7 @@ public class ProcessVersionMatchingTest {
 
     @WorkflowStartedByBpms(version = "1-3")
     public Aggregate old(
-        @TaskParam("id") final String id) {
+        @TaskParam("chosenId") final String id) {
 
       final var aggregate = new Aggregate();
       aggregate.id = id;
@@ -659,7 +659,7 @@ public class ProcessVersionMatchingTest {
 
     @WorkflowStartedByBpms(version = "2")
     public Aggregate newer(
-        @TaskParam("id") final String id) {
+        @TaskParam("chosenId") final String id) {
 
       final var aggregate = new Aggregate();
       aggregate.id = id;
@@ -673,7 +673,7 @@ public class ProcessVersionMatchingTest {
 
     @WorkflowStartedByBpms(version = "1-2")
     public Aggregate upToTwo(
-        @TaskParam("id") final String id) {
+        @TaskParam("chosenId") final String id) {
 
       final var aggregate = new Aggregate();
       aggregate.id = id;
@@ -684,7 +684,7 @@ public class ProcessVersionMatchingTest {
 
     @WorkflowStartedByBpms(version = ">2")
     public Aggregate afterTwo(
-        @TaskParam("id") final String id) {
+        @TaskParam("chosenId") final String id) {
 
       final var aggregate = new Aggregate();
       aggregate.id = id;
@@ -730,7 +730,7 @@ public class ProcessVersionMatchingTest {
   }
 
   private BpmsInitiatedStartContext startContext(
-      final String naturalIdentity,
+      final String chosenId,
       final String processVersion) {
 
     return new BpmsInitiatedStartContext() {
@@ -746,19 +746,11 @@ public class ProcessVersionMatchingTest {
       }
 
       @Override
-      public Instant getStartInstant() {
-        return Instant.parse("2026-08-13T09:15:00Z");
-      }
-
-      @Override
-      public String getNaturalIdentity() {
-        return naturalIdentity;
-      }
-
-      @Override
       public java.util.Map<String, Object> getVariables() {
-        // the model carries the id the application builds its aggregate under
-        return java.util.Map.of("id", naturalIdentity);
+        // the model carries the value the application names its aggregate after. It is
+        // NOT called after the aggregate's id attribute: a variable of that name would be
+        // the name the BPMS already holds for the workflow, and no aggregate carries it
+        return java.util.Map.of("chosenId", chosenId);
       }
 
       @Override
@@ -813,8 +805,7 @@ public class ProcessVersionMatchingTest {
     testee.startWorkflowByBpms(MODULE, PROCESS, startContext("4711", "2"));
     assertEquals("upToTwo", persistence.aggregates.get("4711").servedBy);
 
-    // another workflow: a start reporting an identity known already reuses its
-    // aggregate and calls no method at all
+    // another workflow, served by the method of the version the BPMS reported
     testee.startWorkflowByBpms(MODULE, PROCESS, startContext("4712", "3"));
     assertEquals("afterTwo", persistence.aggregates.get("4712").servedBy);
 
@@ -824,7 +815,7 @@ public class ProcessVersionMatchingTest {
         IllegalStateException.class,
         () -> testee.startWorkflowByBpms(MODULE, PROCESS, startContext("4713", null)));
     assertTrue(
-        unserved.getMessage().contains("nothing can build the workflow aggregate"),
+        unserved.getMessage().contains("nothing builds its workflow aggregate"),
         unserved.getMessage());
     assertTrue(
         unserved.getMessage().contains("reports no process version"),
@@ -1106,7 +1097,7 @@ public class ProcessVersionMatchingTest {
 
       @WorkflowStartedByBpms
       public Aggregate started(
-          @TaskParam("id") final String id) {
+          @TaskParam("chosenId") final String id) {
 
         final var aggregate = new Aggregate();
         aggregate.id = id;

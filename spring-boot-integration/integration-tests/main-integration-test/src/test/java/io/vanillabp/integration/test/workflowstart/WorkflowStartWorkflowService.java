@@ -38,15 +38,17 @@ public class WorkflowStartWorkflowService {
   @WorkflowStartedByBpms(id = "DailyTimer")
   public WorkflowStartAggregate aggregateOfTimerStart(
       final BpmsStartTrigger trigger,
+      @TaskParam("startedAt") final String startedAt,
       @TaskParam("region") final String region,
-      // a wrapper rather than the primitive: the second notification of the same timer
-      // carries no amount, and a primitive would end the start instead of finding the
-      // aggregate which is already there
+      // a wrapper rather than the primitive: a notification which carries no amount
+      // would end the start instead of building the aggregate
       @TaskParam("amount") final Integer amount) {
 
     final var aggregate = new WorkflowStartAggregate();
-    // the trigger time as the id: the same timer reported twice finds this aggregate
-    aggregate.setId(trigger.time().toString());
+    // the time is the application's own value, filled by an expression in the model and
+    // read here - the trigger brings none, because no BPMS hands a start listener the
+    // time it scheduled the start for
+    aggregate.setId(startedAt);
     aggregate.setStartedBy(trigger.kind().name());
     aggregate.setRegion(region);
     aggregate.setAmount(amount == null

@@ -3,10 +3,10 @@ package io.vanillabp.migration.test.workflowstart;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,7 +46,7 @@ public class BpmsInitiatedStartTest {
 
   private static final String TIMER_EVENT = "DailyTimer";
 
-  private static final Instant TRIGGER_TIME = Instant.parse("2026-08-12T04:00:00Z");
+  private static final String NONE_EVENT = "StartEvent_1";
 
   public static class Aggregate {
 
@@ -199,8 +199,9 @@ public class BpmsInitiatedStartTest {
         final BpmsStartTrigger trigger) {
 
       final var aggregate = new Aggregate();
+      // an id of the application's own choosing, stable across a repeated delivery
       aggregate.setId("settlement-"
-          + trigger.time());
+          + trigger.startEventId());
       aggregate.setRegion("built by "
           + trigger.kind());
       return aggregate;
@@ -445,7 +446,31 @@ public class BpmsInitiatedStartTest {
       final String startEventId,
       final Map<String, Object> variables) {
 
+    return context(kind, startEventId, variables, null);
+
+  }
+
+  /**
+   * A notification of a BPMS which keeps a business key, the way Camunda 7 reports one: the
+   * key is the name that workflow already goes by.
+   */
+  private BpmsInitiatedStartContext context(
+      final BpmsStartTrigger.Kind kind,
+      final String startEventId,
+      final Map<String, Object> variables,
+      final String businessKey) {
+
     return new BpmsInitiatedStartContext() {
+
+      @Override
+      public String getBusinessKey() {
+        return businessKey;
+      }
+
+      @Override
+      public String getNativeInstanceId() {
+        return "instance-1";
+      }
 
       @Override
       public String getStartEventId() {
@@ -455,11 +480,6 @@ public class BpmsInitiatedStartTest {
       @Override
       public BpmsStartTrigger.Kind getKind() {
         return kind;
-      }
-
-      @Override
-      public Instant getStartInstant() {
-        return TRIGGER_TIME;
       }
 
       @Override
@@ -501,7 +521,7 @@ public class BpmsInitiatedStartTest {
 
     assertTrue(result.created());
     assertEquals("settlement-"
-        + TRIGGER_TIME, result.workflowAggregateId());
+        + TIMER_EVENT, result.workflowAggregateId());
     assertEquals("id", result.workflowAggregateIdName());
     // the ID variable is what a remote BPMS needs to address the workflow later
     assertEquals(result.workflowAggregateId(), result.variables().get("id"));
@@ -534,12 +554,11 @@ public class BpmsInitiatedStartTest {
     assertEquals(BpmsStartTrigger.Kind.SIGNAL, service.seenTrigger.kind());
     assertEquals("OrderReceived", service.seenTrigger.signalName());
     assertEquals("SignalStart", service.seenTrigger.startEventId());
-    assertEquals(TRIGGER_TIME, service.seenTrigger.time());
 
   }
 
   @Test
-  @DisplayName("An id the application derives from the trigger makes a repeated notification harmless")
+  @DisplayName("An id the application chooses itself makes a repeated notification harmless")
   public void repeatedNotificationCreatesNothingTwice() {
 
     final var persistence = stringIdPersistence();
@@ -803,7 +822,7 @@ public class BpmsInitiatedStartTest {
   }
 
   @Test
-  @DisplayName("A method for a process the BPMS never starts on its own fails the boot")
+  @DisplayName("A method for a process no adapter reported a start event of fails the boot")
   public void methodWithoutSuchStartEventFailsTheBoot() {
 
     final var testee = registry(new TransactionRunnerStub());
@@ -818,7 +837,8 @@ public class BpmsInitiatedStartTest {
 
     assertTrue(exception.getMessage().contains(SignalService.class.getName()));
     assertTrue(exception.getMessage().contains(PROCESS));
-    assertTrue(exception.getMessage().contains("startWorkflow"));
+    assertTrue(exception.getMessage().contains("no adapter reported a start event"), exception.getMessage());
+    assertTrue(exception.getMessage().contains("event subprocess"), exception.getMessage());
 
   }
 
@@ -952,6 +972,220 @@ public class BpmsInitiatedStartTest {
 
     assertTrue(exception.getMessage().contains("@TaskParam"));
     assertTrue(exception.getMessage().contains(BpmsStartTrigger.class.getName()));
+
+  }
+
+
+  // --- what a start means is read from the state of the workflow, see DECISIONS.pending/653.md
+
+  @Test
+  @DisplayName("A workflow the BPMS already names and which has its aggregate is left alone")
+  public void aWorkflowTheBpmsAlreadyNamesIsLeftAlone() {
+
+    final var persistence = stringIdPersistence();
+    final var started = new Aggregate();
+    started.setId("named-by-the-application");
+    started.setRegion("set while starting");
+    persistence.save(started);
+
+    final var service = new SignalService();
+    final var testee = registry(new TransactionRunnerStub());
+    testee
+        .registerWorkflowService(
+            MODULE, PROCESS, SignalService.class, () -> service, type -> null, processService(
+                persistence, Aggregate.class));
+
+    final var result = testee
+        .startWorkflowByBpms(
+            MODULE,
+            PROCESS,
+            context(BpmsStartTrigger.Kind.NONE, NONE_EVENT, Map.of(), "named-by-the-application"));
+
+    assertFalse(result.created());
+    assertEquals("named-by-the-application", result.workflowAggregateId());
+    // the method never ran: this workflow was started by the application
+    assertNull(service.seenTrigger);
+    assertEquals("set while starting", persistence.aggregates.get("named-by-the-application").getRegion());
+    assertEquals(1, persistence.aggregates.size());
+
+  }
+
+  @Test
+  @DisplayName("A name the BPMS holds which no workflow aggregate carries is refused")
+  public void aNameNoWorkflowAggregateCarriesIsRefused() {
+
+    final var persistence = stringIdPersistence();
+    final var testee = registry(new TransactionRunnerStub());
+    testee
+        .registerWorkflowService(
+            MODULE, PROCESS, SignalService.class, SignalService::new, type -> null, processService(
+                persistence, Aggregate.class));
+
+    final var exception = assertThrows(
+        IllegalStateException.class,
+        () -> testee
+            .startWorkflowByBpms(
+                MODULE,
+                PROCESS,
+                context(BpmsStartTrigger.Kind.NONE, NONE_EVENT, Map.of(), "somebody-elses-key")));
+
+    assertEquals(
+        "The start of BPMN process 'TestProcess' of workflow module 'test-module' at start event "
+            + "'StartEvent_1' is refused: the BPMS knows this workflow as 'somebody-elses-key' (its "
+            + "business key) and no workflow aggregate of class '"
+            + Aggregate.class.getName()
+            + "' carries that id (workflow 'instance-1' in the BPMS). VanillaBP names a workflow and "
+            + "nobody else: the id of a workflow is the id of its workflow aggregate, and the "
+            + "application gives it in a @WorkflowStartedByBpms method. Either start this workflow "
+            + "through ProcessService, which writes that id into the BPMS, or start it without a name "
+            + "of your own and let that method name it. Refusing is all VanillaBP does here - what "
+            + "follows is what this BPMS does with any failing handler.",
+        exception.getMessage());
+    assertTrue(persistence.aggregates.isEmpty());
+
+  }
+
+  @Test
+  @DisplayName("Where the BPMS keeps no business key, the id variable is the name it holds")
+  public void theIdVariableIsTheNameWhereThereIsNoBusinessKey() {
+
+    final var persistence = stringIdPersistence();
+    final var started = new Aggregate();
+    started.setId("carried-in-a-variable");
+    persistence.save(started);
+
+    final var service = new SignalService();
+    final var testee = registry(new TransactionRunnerStub());
+    testee
+        .registerWorkflowService(
+            MODULE, PROCESS, SignalService.class, () -> service, type -> null, processService(
+                persistence, Aggregate.class));
+
+    final var result = testee
+        .startWorkflowByBpms(
+            MODULE,
+            PROCESS,
+            context(
+                BpmsStartTrigger.Kind.NONE, NONE_EVENT, Map.of("id", "carried-in-a-variable")));
+
+    assertFalse(result.created());
+    assertEquals("carried-in-a-variable", result.workflowAggregateId());
+    assertNull(service.seenTrigger);
+
+  }
+
+  @Test
+  @DisplayName("A name held in the id variable which nothing carries is refused naming that variable")
+  public void aNameInTheIdVariableWhichNothingCarriesIsRefused() {
+
+    final var testee = registry(new TransactionRunnerStub());
+    testee
+        .registerWorkflowService(
+            MODULE, PROCESS, SignalService.class, SignalService::new, type -> null, processService(
+                stringIdPersistence(), Aggregate.class));
+
+    final var exception = assertThrows(
+        IllegalStateException.class,
+        () -> testee
+            .startWorkflowByBpms(
+                MODULE,
+                PROCESS,
+                context(BpmsStartTrigger.Kind.NONE, NONE_EVENT, Map.of("id", "nothing-carries-this"))));
+
+    assertTrue(
+        exception.getMessage().contains("as 'nothing-carries-this' (the process variable 'id')"),
+        exception.getMessage());
+
+  }
+
+  @Test
+  @DisplayName("A second delivery of the same listener job builds no second aggregate")
+  public void aSecondDeliveryBuildsNoSecondAggregate() {
+
+    final var persistence = stringIdPersistence();
+    final var testee = registry(new TransactionRunnerStub());
+    testee
+        .registerWorkflowService(
+            MODULE, PROCESS, BuildingService.class, BuildingService::new, type -> null, processService(
+                persistence, Aggregate.class));
+
+    // the first delivery finds no name, so the application builds and names the workflow
+    final var first = testee
+        .startWorkflowByBpms(
+            MODULE, PROCESS, context(BpmsStartTrigger.Kind.TIMER, TIMER_EVENT, Map.of()));
+    assertTrue(first.created());
+    persistence.aggregates.get(first.workflowAggregateId()).setRegion("changed meanwhile");
+
+    // the adapter wrote that name into the BPMS before the job was handed out again
+    final var second = testee
+        .startWorkflowByBpms(
+            MODULE,
+            PROCESS,
+            context(
+                BpmsStartTrigger.Kind.TIMER,
+                TIMER_EVENT,
+                Map.of("id", first.workflowAggregateId())));
+
+    assertFalse(second.created());
+    assertEquals(first.workflowAggregateId(), second.workflowAggregateId());
+    assertEquals(1, persistence.aggregates.size());
+    assertEquals("changed meanwhile", persistence.aggregates.get(second.workflowAggregateId()).getRegion());
+
+  }
+
+  @Test
+  @DisplayName("A start nobody builds is refused with the method to write")
+  public void aStartNobodyBuildsIsRefusedWithTheMethodToWrite() {
+
+    final var persistence = stringIdPersistence();
+    final var testee = registry(new TransactionRunnerStub());
+    testee
+        .registerWorkflowService(
+            MODULE, PROCESS, SimpleService.class, SimpleService::new, type -> null, processService(
+                persistence, Aggregate.class));
+
+    final var exception = assertThrows(
+        IllegalStateException.class,
+        () -> testee
+            .startWorkflowByBpms(
+                MODULE, PROCESS, context(BpmsStartTrigger.Kind.NONE, NONE_EVENT, Map.of())));
+
+    assertEquals(
+        ("The start of BPMN process 'TestProcess' of workflow module 'test-module' at start event "
+            + "'StartEvent_1' is refused: this workflow reached the application without VanillaBP "
+            + "starting it, and no @WorkflowStartedByBpms method builds a workflow aggregate for it. "
+            + "Either start this workflow through ProcessService, or, where it is meant to be started "
+            + "past VanillaBP, write the method in the @WorkflowService class of this process:%n%n"
+            + "  @WorkflowStartedByBpms(id = \"StartEvent_1\")%n"
+            + "  public Aggregate buildAggregate(final BpmsStartTrigger trigger) {%n"
+            + "    return new Aggregate(...);%n"
+            + "  }%n%n"
+            + "The id may be left out where one method serves every start event of the process, and "
+            + "the aggregate it returns carries the id the workflow goes by. Refusing is all VanillaBP "
+            + "does here - what follows is what this BPMS does with any failing handler.").formatted(),
+        exception.getMessage());
+    assertTrue(persistence.aggregates.isEmpty());
+
+  }
+
+  @Test
+  @DisplayName("A none start event needs no method as long as nobody starts the process past VanillaBP")
+  public void aNoneStartEventNeedsNoMethodAtBoot() {
+
+    final var testee = registry(new TransactionRunnerStub());
+    testee
+        .registerWorkflowService(
+            MODULE, PROCESS, SimpleService.class, SimpleService::new, type -> null, processService(
+                stringIdPersistence(), Aggregate.class));
+
+    assertDoesNotThrow(
+        () -> testee
+            .validateBpmsInitiatedStarts(
+                MODULE,
+                PROCESS,
+                List.of(
+                    BpmsInitiatedStartSpec.of(NONE_EVENT, BpmsStartTrigger.Kind.NONE),
+                    BpmsInitiatedStartSpec.of("MessageStart", BpmsStartTrigger.Kind.MESSAGE))));
 
   }
 

@@ -190,7 +190,8 @@ public class BusinessKeyIsTheAggregateIdTest {
         final BpmsStartTrigger trigger) {
 
       final var aggregate = new Aggregate();
-      aggregate.id = trigger.time().toString();
+      aggregate.id = "started-at-"
+          + trigger.startEventId();
       return aggregate;
 
     }
@@ -327,11 +328,6 @@ public class BusinessKeyIsTheAggregateIdTest {
       @Override
       public BpmsStartTrigger.Kind getKind() {
         return BpmsStartTrigger.Kind.TIMER;
-      }
-
-      @Override
-      public Instant getStartInstant() {
-        return TRIGGER_TIME;
       }
 
       @Override

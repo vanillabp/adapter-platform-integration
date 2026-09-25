@@ -2140,11 +2140,6 @@ public class WorkflowTaskRegistryTest {
                   return io.vanillabp.spi.service.BpmsStartTrigger.Kind.TIMER;
                 }
 
-                @Override
-                public java.time.Instant getStartInstant() {
-                  return java.time.Instant.EPOCH;
-                }
-
               }));
 
       assertTrue(exception.getMessage().contains("TimerStart_1"), exception.getMessage());
