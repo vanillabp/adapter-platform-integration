@@ -1966,8 +1966,9 @@ one which passes payloads has asked for the table.
 2026-09-24. It said that the way a payload is found and removed has to be the same everywhere,
 which made the cheapest store pay what the most expensive one costs. Stephan decided the
 opposite: every store may optimize how it sweeps, and where it is expensive it should be
-expensive at that store alone. What stays of this entry is the rest of it - the payload lies
-beside the entry and the entry names it.*
+expensive at that store alone. When that sweep runs, and how much of it fits, is decision 91.
+What stays of this entry is the rest of it - the payload lies beside the entry and the entry
+names it.*
 
 The price is named rather than hidden: one extra read per dispatch attempt of a call which
 carries a payload, by primary key, and none at all for a call which carries none.
@@ -2747,6 +2748,81 @@ the same way on every boot.
 The rule this shape carries is the general one: a key which binds below the level it is read at
 ends the startup. Dropping the binding is the other way out and it is not open to us, because one
 class serves all four levels and a key dropped there is dropped everywhere.
+
+### 91. The housekeeping gets a window at night, one node per store, and it measures how much fits
+
+The outbox used to house-keep at the end of every poll: it deleted the entries whose retention had
+passed and then the payloads no entry named any more. Every application paid for that all day long,
+and nobody could say what one poll cost, because the cost depended on a table nobody measured.
+
+Stephan's design of 2026-09-24: give the housekeeping an hour at night and let it take as much as
+fits. The window is `vanillabp.outbox.housekeeping.start` to `.end`, four to five in the morning
+where nothing is configured, and it governs both sweeps. The entries go first: they are the mass,
+and the table they leave behind is the one the question about the orphaned payloads searches.
+
+**How much fits is measured rather than configured.** Nobody can name that number in advance - it
+depends on the database, on the machine, on how much history the store carries and on what else runs
+at that hour. So the first batch of a night is a thousand rows, the time is measured, and the next
+batch is twice as large while twice the time would still fit in what is left of the window. A batch
+which runs past the end halves the size, because one wrong guess would otherwise eat the rest of the
+window. The next night starts at HALF of the largest batch which fitted, not at that batch: the
+database changed over night, and half is the distance kept from a measurement which is a day old.
+Every batch is measured again rather than extrapolated, and the ramp is capped, because on the
+gruelbox store the time grows with the table and not with the batch - every batch scans - and a rule
+which doubled on the strength of one measurement would climb forever there. The rule lives in the
+core (`HousekeepingBatchSize`) and not in the stores: four copies of the same awkward arithmetic
+would make every claim about it depend on four copies staying equal.
+
+Nothing of this is persisted, and it is not owed. The ramp is geometric, so a thousand reaches a
+million in ten steps; a pod which restarts every day loses a few seconds at the beginning of its
+window and nothing else.
+
+**One node per store.** Two nodes house-keeping at once would each measure the other's work, and the
+number they arrive at would be nonsense. A node therefore claims the store in the store's own
+database, in `VANILLABP_HOUSEKEEPING` respectively the collection `vanillabp-housekeeping`, one row
+per store. The shared Hazelcast cache was refused for this: it hangs on the election cache, it is
+optional, and an application without it would then house-keep either not at all or uncoordinated,
+while a database is something every application with an outbox has. The claim is per STORE and not
+per application, because an application in a migration has a JPA outbox and a MongoDB outbox - two
+databases, which two nodes may house-keep one each.
+
+The claim is NOT renewed while the work runs, unlike the lease of a dispatch (decision 79). A
+dispatch calls a BPMS and has no end anybody knows in advance; a window has one, so the claim is
+taken until the window closes and given back when it does. A node which dies inside the window holds
+the store until that end, which costs the rest of one night and is visible in the meters. What a
+renewal would buy is a few minutes of one night, and what it would cost is a second thread and a
+second reason for a lease to be lost.
+
+A table of its own, and not a row in the outbox: a claim is neither an entry nor a payload, and
+gruelbox owns its table, so a row could not go there at all. On gruelbox the window governs the
+payloads alone - that library deletes its own dispatched entries in its flush, and its table is not
+ours to bound.
+
+**Three meters, read together.** `vanillabp.outbox.housekeeping.remaining` says what the window did
+not get to, `.removed` how many rows it took and `.window.used` how much of the window it needed.
+All three are set when the window closes and held until the next one closes, so reading a gauge
+reads a field. The remainder alone would say nothing: a store with work left may have run out of
+window or may never have house-kept at all. With all three the condition to alert on is a window
+which was used up AND something left over, and the answer to that is a wider window. The remainder
+costs one `COUNT`, which is the expensive question of decision 19 - once a night instead of once a
+poll, and along the index the retention delete already reads. The orphaned payloads are not counted
+with it, because on the stores which cannot index the reference that count is the very scan this
+change took out of the poll.
+
+**A JVM on UTC without a configured zone does not start.** A window without a zone is not an
+instruction, so the zone is configurable and otherwise the zone of the JVM. A container runs on UTC
+unless somebody sets its zone, and "four in the morning" then means four UTC, which in most places
+is the middle of the working day - the housekeeping would run at that hour and nothing would say so.
+The refusal is deliberate and hard, and the message names both ways out, because this is noticed
+when somebody installs the application on a server rather than while it is written: set `TZ` on the
+container, or set the environment variable of the property. Neither needs a new build. Every
+spelling which means UTC counts, and an application which really wants UTC writes it down and then
+starts. The test JVMs of this repository are given a zone in the root POM for the same reason a
+server has one.
+
+A node which is down for the whole window does not house-keep that night, and nothing catches it up.
+A mechanism for that would be a guess; the meters show the night which was missed, and the
+documentation says so instead.
 
 ### 92. A workflow the BPMS starts builds its own aggregate, and the platform builds none
 

@@ -353,14 +353,22 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                       boolean enabled,
                                       Optional<String> table,
                                       Optional<String> payloadTable,
-                                      Optional<String> deliveryTable) implements QuarkusMigrationAdapterProperties.JdbcOutboxProperties {
+                                      Optional<String> deliveryTable,
+                                      Optional<String> housekeepingTable) implements QuarkusMigrationAdapterProperties.JdbcOutboxProperties {
   }
 
   private record MongoOutboxProperties(
                                        boolean enabled,
                                        String collection,
                                        Optional<String> payloadCollection,
-                                       String deliveryCollection) implements QuarkusMigrationAdapterProperties.MongoOutboxProperties {
+                                       String deliveryCollection,
+                                       String housekeepingCollection) implements QuarkusMigrationAdapterProperties.MongoOutboxProperties {
+  }
+
+  private record HousekeepingProperties(
+                                        java.time.LocalTime start,
+                                        java.time.LocalTime end,
+                                        Optional<String> zone) implements QuarkusMigrationAdapterProperties.HousekeepingProperties {
   }
 
   private record OutboxProperties(
@@ -371,6 +379,7 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                   int dispatchThreads,
                                   boolean createSchema,
                                   Duration retention,
+                                  QuarkusMigrationAdapterProperties.HousekeepingProperties housekeeping,
                                   QuarkusMigrationAdapterProperties.JdbcOutboxProperties jdbc,
                                   QuarkusMigrationAdapterProperties.MongoOutboxProperties mongo) implements QuarkusMigrationAdapterProperties.PhaseTwoOutboxProperties {
   }
@@ -553,19 +562,28 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                                                                                                                                     .ofSeconds(
                                                                                                                                                         20), 3, 2, false, Duration
                                                                                                                                                             .ofDays(
-                                                                                                                                                                1), new JdbcOutboxProperties(false, Optional
-                                                                                                                                                                    .of("HOT_OUTBOX"), Optional
+                                                                                                                                                                1), new HousekeepingProperties(
+                                                                                                                                                                    java.time.LocalTime
                                                                                                                                                                         .of(
-                                                                                                                                                                            "HOT_PAYLOAD"), Optional
-                                                                                                                                                                                .of("HOT_DELIVERY")), new MongoOutboxProperties(
-                                                                                                                                                                                    false, "hot-outbox", Optional
-                                                                                                                                                                                        .of(
-                                                                                                                                                                                            "hot-payloads"), "hot-deliveries")), new WorkflowAdapterCacheProperties(
-                                                                                                                                                                                                50_000, Duration
-                                                                                                                                                                                                    .ofMinutes(
-                                                                                                                                                                                                        30), Duration
-                                                                                                                                                                                                            .ofMinutes(
-                                                                                                                                                                                                                2), true));
+                                                                                                                                                                            1,
+                                                                                                                                                                            30), java.time.LocalTime
+                                                                                                                                                                                .of(
+                                                                                                                                                                                    2,
+                                                                                                                                                                                    45), Optional
+                                                                                                                                                                                        .of("Europe/Vienna")), new JdbcOutboxProperties(false, Optional
+                                                                                                                                                                                            .of("HOT_OUTBOX"), Optional
+                                                                                                                                                                                                .of(
+                                                                                                                                                                                                    "HOT_PAYLOAD"), Optional
+                                                                                                                                                                                                        .of("HOT_DELIVERY"), Optional
+                                                                                                                                                                                                            .of("HOT_HOUSEKEEPING")), new MongoOutboxProperties(
+                                                                                                                                                                                                                false, "hot-outbox", Optional
+                                                                                                                                                                                                                    .of(
+                                                                                                                                                                                                                        "hot-payloads"), "hot-deliveries", "hot-housekeeping")), new WorkflowAdapterCacheProperties(
+                                                                                                                                                                                                                            50_000, Duration
+                                                                                                                                                                                                                                .ofMinutes(
+                                                                                                                                                                                                                                    30), Duration
+                                                                                                                                                                                                                                        .ofMinutes(
+                                                                                                                                                                                                                                            2), true));
 
     final var core = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(properties);
 

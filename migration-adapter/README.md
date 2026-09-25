@@ -2205,16 +2205,31 @@ is what `#aFullLaneDoesNotHoldTheConnectionItsDispatchNeeds` measures; with a bi
 connection missing where the work is. Every other write of this dispatcher already borrows one for
 the moment it needs it, so the poller is now the same shape as the rest.
 
-The housekeeping at the end of a poll is the same shape too, and it took two passes to get there.
-It used to read which payloads were old enough, ask the entries which of them they still named and
-delete the rest, each step on a connection borrowed and given back, and each step carrying a set of
-unknown size through the application. It is one statement now: the payload store deletes the
-payloads which are old enough and which no entry names, asking the entries inside its own
-condition. What that condition looks like is the store's own business and differs per store, which
-is why the store is built with the table its entries lie in and the column they name a payload in
-(`JdbcPhaseTwoPayloadStore.EntriesNamingTheirPayload`). Every run removes at most
-`Housekeeping.ROWS_PER_RUN` rows, so a store with a backlog is worked off over several runs instead
-of in one statement nobody measured.
+**The housekeeping left the poll.** Deleting the dispatched entries whose retention had passed and
+the payloads no entry named any more used to be the last thing every poll did, so every application
+paid for it all day long and nobody could say what one poll cost. It runs in a window at night now,
+`vanillabp.outbox.housekeeping.start` to `.end`, and `OutboxHousekeeping` is what drives it: it
+looks at the clock, claims the store for the window, removes the entries first and the payloads
+afterwards, and publishes three numbers when the window closes. The entries go first because they
+are the mass, and the table they leave behind is the one the question about the orphaned payloads
+searches. Decision 91 of this repository carries the reasoning, including why one node per store
+does it and why the claim is not renewed while the work runs.
+
+How much one batch takes on is measured rather than configured (`HousekeepingBatchSize`): a
+thousand rows to start with, twice as many while twice the time would still fit in what is left of
+the window, half as many after a batch which ran past the end, and half of the largest batch which
+fitted when the next night starts. `HousekeepingBatchSizeTest` holds every step of that, and
+`HousekeepingWindowTest` holds the clock, including a window which crosses midnight and the two
+nights around a change of the clock.
+
+The sweep of the payloads itself took two passes to get right. It used to read which payloads were
+old enough, ask the entries which of them they still named and delete the rest, each step on a
+connection borrowed and given back, and each step carrying a set of unknown size through the
+application. It is one statement now: the payload store deletes the payloads which are old enough
+and which no entry names, asking the entries inside its own condition. What that condition looks
+like is the store's own business and differs per store, which is why the store is built with the
+table its entries lie in and the column they name a payload in
+(`JdbcPhaseTwoPayloadStore.EntriesNamingTheirPayload`).
 `JdbcPhaseTwoPayloadStoreTest#theSweepHoldsOneConnectionAtATime` hands the store a database which
 refuses a second connection, `#theSweepRemovesAtMostWhatItWasAllowedTo` holds the ceiling, and
 `#aFullLaneDoesNotHoldTheConnectionItsDispatchNeeds` runs the real payload store instead of one

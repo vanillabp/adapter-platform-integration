@@ -24,9 +24,10 @@ the JAR from the classpath.
 | `vanillabp/schema/latest.xml`                                         | the changesets of the version under development              |
 | `vanillabp/schema/flyway/<database>/V<version>__vanillabp_schema.sql` | the same statements as SQL, generated at build time          |
 
-Three tables are described: the phase-two outbox (`VANILLABP_PHASE_TWO_OUTBOX`), the log of
-processed task deliveries (`VANILLABP_TASK_DELIVERY`) and the payloads of the phase-two calls which
-carry one (`VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD`). All three serve a Spring Boot and a Quarkus
+Four tables are described: the phase-two outbox (`VANILLABP_PHASE_TWO_OUTBOX`), the log of
+processed task deliveries (`VANILLABP_TASK_DELIVERY`), the payloads of the phase-two calls which
+carry one (`VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD`) and the claim which says who removes the old rows
+of a store tonight (`VANILLABP_HOUSEKEEPING`). All four serve a Spring Boot and a Quarkus
 application alike, because both run the same JDBC store. Not described: `TXNO_OUTBOX`, the table of
 the gruelbox store a Spring Boot application can still opt into
 (`vanillabp.outbox.gruelbox.enabled`) - that schema belongs to gruelbox and its own migrator.
@@ -41,9 +42,14 @@ property `vanillabp.payload.table` of the changelog. Both tables belong to one o
 applications which separate themselves on one schema by the outbox name have to separate the
 payloads as well.
 
-All three names are properties of the changelog, so a renamed table needs no fork of it:
-`vanillabp.outbox.table`, `vanillabp.payload.table` and `vanillabp.delivery.table` match the runtime
-keys `vanillabp.outbox.jdbc.table`, `.payload-table` and `.delivery-table`. Set the same name on both
+The housekeeping table carries one row per store: the outbox of VanillaBP writes one, and so does
+the gruelbox store, whose payloads VanillaBP house-keeps although the entries belong to the library.
+Like the delivery table it does not follow a renamed outbox, because it belongs to no single store.
+
+All four names are properties of the changelog, so a renamed table needs no fork of it:
+`vanillabp.outbox.table`, `vanillabp.payload.table`, `vanillabp.delivery.table` and
+`vanillabp.housekeeping.table` match the runtime keys `vanillabp.outbox.jdbc.table`,
+`.payload-table`, `.delivery-table` and `.housekeeping-table`. Set the same name on both
 sides, or the runtime looks for a table the changelog did not build. The generated Flyway files carry
 the default names, because they are generated while this artifact is built and nobody knows your
 names then. An application which renames a table applies the changelog with Liquibase, or edits the

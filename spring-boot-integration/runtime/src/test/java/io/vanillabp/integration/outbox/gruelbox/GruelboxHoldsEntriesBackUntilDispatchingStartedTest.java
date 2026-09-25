@@ -25,6 +25,7 @@ import com.gruelbox.transactionoutbox.TransactionOutbox;
 import com.gruelbox.transactionoutbox.TransactionOutboxListener;
 
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
+import io.vanillabp.integration.adapter.migration.outbox.JdbcHousekeepingLease;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 import io.vanillabp.integration.spi.PhaseOperation;
@@ -134,13 +135,31 @@ public class GruelboxHoldsEntriesBackUntilDispatchingStartedTest {
   }
 
   /**
+   * The claim of this outbox, on the same database the payloads lie in.
+   *
+   * @return The claim, with its table in place
+   */
+  private JdbcHousekeepingLease aHousekeepingLease() {
+
+    final var lease = new JdbcHousekeepingLease(
+        io.vanillabp.integration.outbox.jdbc.JdbcPhaseTwoOutbox.connectionsOf(dataSource), properties
+            .getOutbox()
+            .getJdbc()
+            .housekeepingTableName());
+    lease.createSchemaIfNotExists();
+    return lease;
+
+  }
+
+  /**
    * The dispatcher of this outbox. Building it closes the submitter's gate, so a test
    * which wants an entry to wait builds it before it schedules.
    */
   private GruelboxPhaseTwoOutboxDispatcher aDispatcher() {
 
     dispatcher = new GruelboxPhaseTwoOutboxDispatcher(
-        transactionOutbox, properties.getOutbox(), submitter, testee, payloadStore);
+        transactionOutbox, properties
+            .getOutbox(), submitter, testee, payloadStore, aHousekeepingLease(), () -> VanillaBpMetrics.NONE);
     return dispatcher;
 
   }

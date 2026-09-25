@@ -79,6 +79,11 @@
       "description": "The name of the table storing the records of processed task deliveries (default 'VANILLABP_TASK_DELIVERY'). Unlike the payload table it does not follow a renamed outbox: the delivery log is a store of its own. An application which sets it applies the same name to 'io.vanillabp:vanillabp-schema', through the changelog property 'vanillabp.delivery.table'."
     },
     {
+      "name": "vanillabp.outbox.jdbc.housekeeping-table",
+      "type": "java.lang.String",
+      "description": "The name of the table the nightly housekeeping takes its lease in (default 'VANILLABP_HOUSEKEEPING') - one row per store, holding who is house-keeping it and until when, so only one node of a cluster measures its own work. Like the delivery table it does not follow a renamed outbox. An application which sets it applies the same name to 'io.vanillabp:vanillabp-schema', through the changelog property 'vanillabp.housekeeping.table'."
+    },
+    {
       "name": "vanillabp.outbox.mongo.enabled",
       "type": "java.lang.Boolean",
       "description": "Whether the MongoDB-based default outbox is created when a MongoDB connection is available. Disable it if the application defines its own PhaseTwoOutbox bean and the default (including its store and background dispatcher) is unwanted.",
@@ -100,6 +105,29 @@
       "type": "java.lang.String",
       "description": "The name of the collection storing the records of processed task deliveries. Keep it apart from the outbox collection and from the payload collection: stores sharing one collection read each other's documents. How long a record is kept is 'vanillabp.delivery.retention'.",
       "defaultValue": "vanillabp-task-deliveries"
+    },
+    {
+      "name": "vanillabp.outbox.mongo.housekeeping-collection",
+      "type": "java.lang.String",
+      "description": "The name of the collection the nightly housekeeping takes its lease in - one document per store, holding who is house-keeping it and until when, so only one node of a cluster measures its own work. Keep it apart from the other three collections.",
+      "defaultValue": "vanillabp-housekeeping"
+    },
+    {
+      "name": "vanillabp.outbox.housekeeping.start",
+      "type": "java.time.LocalTime",
+      "description": "When the nightly housekeeping of the outbox opens its window. Inside it the entries whose retention passed and the payloads no entry names are removed, as much as fits; outside it neither costs anything. A window whose end lies before its start crosses midnight.",
+      "defaultValue": "04:00"
+    },
+    {
+      "name": "vanillabp.outbox.housekeeping.end",
+      "type": "java.time.LocalTime",
+      "description": "When the housekeeping window closes. It is a deadline and not a promise: a batch which is running then runs to its end, and the next one does not start. Widen it where 'vanillabp.outbox.housekeeping.remaining' stays above zero.",
+      "defaultValue": "05:00"
+    },
+    {
+      "name": "vanillabp.outbox.housekeeping.zone",
+      "type": "java.lang.String",
+      "description": "The time zone the housekeeping window is read in, written the way ZoneId spells one (e.g. 'Europe/Vienna'). Unset means the zone of the JVM - and a JVM standing on UTC without this key ends the startup, because 'four in the morning' would then mean four UTC. Write 'UTC' here if that is what you mean."
     },
     {
       "name": "vanillabp.conventional-resources-locations",

@@ -148,6 +148,22 @@ public class ABlockedEntryKeepsItsPayloadTest {
 
   }
 
+  /**
+   * The outbox with a housekeeping window which is open while this test runs. The default
+   * window is an hour of the night, so a test which wants to watch the housekeeping work
+   * says when it may.
+   *
+   * @return The configuration to build the dispatcher with
+   */
+  private static PhaseTwoOutboxProperties houseKeepingRightNow() {
+
+    final var properties = new PhaseTwoOutboxProperties();
+    properties.getHousekeeping().setStart(java.time.LocalTime.MIN);
+    properties.getHousekeeping().setEnd(java.time.LocalTime.MAX);
+    return properties;
+
+  }
+
   @Test
   @DisplayName("A blocked entry keeps its payload, a dispatched entry takes its own with it, an orphan goes")
   public void theRetentionCountsAtTheEntry() throws Exception {
@@ -155,7 +171,7 @@ public class ABlockedEntryKeepsItsPayloadTest {
     final var payloadStore = new JdbcPhaseTwoPayloadStore(
         connections, PAYLOAD_TABLE, JdbcPhaseTwoOutboxStore.entriesNamingTheirPayload(OUTBOX_TABLE));
     final var dispatcher = new JdbcPhaseTwoOutboxDispatcher(
-        connections, new PhaseTwoOutboxProperties(), OUTBOX_TABLE, payloadStore, () -> null, () -> null, "JdbcPhaseTwoOutbox");
+        connections, houseKeepingRightNow(), OUTBOX_TABLE, payloadStore, () -> null, () -> null, "JdbcPhaseTwoOutbox");
     dispatcher.prepareSchema();
 
     final var blocked = callWith("the state an operator will send once the cause is gone");
@@ -170,8 +186,8 @@ public class ABlockedEntryKeepsItsPayloadTest {
 
     try {
       dispatcher.start();
-      // the payload sweep is the last thing a poll does, so a gone orphan says that the
-      // whole housekeeping ran
+      // the payload sweep is the last thing the housekeeping does, so a gone orphan says
+      // that the whole window ran
       final var deadline = System.currentTimeMillis() + UNTIL_THE_HOUSEKEEPING_RAN;
       while (payloadStore.read(orphan.payloadReference()) != null) {
         assertTrue(System.currentTimeMillis() < deadline, "the housekeeping did not remove the orphaned payload");

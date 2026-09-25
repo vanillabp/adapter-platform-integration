@@ -2171,6 +2171,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       outbox = new PhaseTwoOutboxProperties();
     }
     outbox.validateStoreNames();
+    outbox.validateHousekeeping();
     validateMaxTaskAge();
     refuseFullSyncPermissionsOutsideAWorkflow();
     refuseResourcesLocationsBelowTheWorkflowModule();

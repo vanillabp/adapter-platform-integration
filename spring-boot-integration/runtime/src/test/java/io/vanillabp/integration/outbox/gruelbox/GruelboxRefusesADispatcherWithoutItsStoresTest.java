@@ -14,6 +14,8 @@ import org.mockito.Mockito;
 import com.gruelbox.transactionoutbox.TransactionOutbox;
 
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
+import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
+import io.vanillabp.integration.adapter.migration.outbox.JdbcHousekeepingLease;
 import io.vanillabp.integration.spi.PhaseTwoPayloadStore;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
@@ -47,13 +49,14 @@ public class GruelboxRefusesADispatcherWithoutItsStoresTest {
         IllegalArgumentException.class,
         () -> new GruelboxPhaseTwoOutboxDispatcher(
             Mockito.mock(TransactionOutbox.class), new PhaseTwoOutboxProperties(), null, null, Mockito
-                .mock(PhaseTwoPayloadStore.class)));
+                .mock(PhaseTwoPayloadStore.class), Mockito
+                    .mock(JdbcHousekeepingLease.class), () -> VanillaBpMetrics.NONE));
 
     final var message = refused.getMessage();
     assertTrue(message.contains("without the store it polls"), message);
     // what it would cost, in both of its shapes
     assertTrue(message.contains("asking at the configured cap"), message);
-    assertTrue(message.contains("still waiting"), message);
+    assertTrue(message.contains("has not deleted yet"), message);
     // and the two ways to a complete dispatcher
     assertTrue(message.contains("Pass a GruelboxPhaseTwoOutbox"), message);
     assertTrue(message.contains("GruelboxPhaseTwoOutboxAutoConfiguration"), message);
@@ -67,7 +70,8 @@ public class GruelboxRefusesADispatcherWithoutItsStoresTest {
     final var refused = assertThrows(
         IllegalArgumentException.class,
         () -> new GruelboxPhaseTwoOutboxDispatcher(
-            Mockito.mock(TransactionOutbox.class), new PhaseTwoOutboxProperties(), null, aStore(), null));
+            Mockito.mock(TransactionOutbox.class), new PhaseTwoOutboxProperties(), null, aStore(), null, Mockito
+                .mock(JdbcHousekeepingLease.class), () -> VanillaBpMetrics.NONE));
 
     final var message = refused.getMessage();
     assertTrue(message.contains("without a payload store"), message);
@@ -86,7 +90,8 @@ public class GruelboxRefusesADispatcherWithoutItsStoresTest {
     assertDoesNotThrow(
         () -> new GruelboxPhaseTwoOutboxDispatcher(
             Mockito.mock(TransactionOutbox.class), new PhaseTwoOutboxProperties(), null, aStore(), Mockito
-                .mock(PhaseTwoPayloadStore.class)));
+                .mock(PhaseTwoPayloadStore.class), Mockito
+                    .mock(JdbcHousekeepingLease.class), () -> VanillaBpMetrics.NONE));
 
   }
 

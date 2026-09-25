@@ -1,6 +1,8 @@
 package io.vanillabp.integration.adapter.migration.config;
 
 import java.time.Duration;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -225,6 +227,30 @@ public class PhaseTwoOutboxProperties {
   private MongoOutboxProperties mongo = new MongoOutboxProperties();
 
   /**
+   * When the housekeeping of the outbox runs and in which time zone (properties section
+   * <code>vanillabp.outbox.housekeeping.*</code>).
+   */
+  @Builder.Default
+  private HousekeepingProperties housekeeping = new HousekeepingProperties();
+
+  /**
+   * Refuses a configuration the housekeeping cannot run on: a window which is no window,
+   * a time zone nobody knows, and the one case where a correct-looking configuration
+   * would house-keep at the wrong hour - a JVM on UTC without a zone of its own.
+   *
+   * @throws IllegalStateException Naming the key and the way out
+   */
+  public void validateHousekeeping() {
+
+    if (housekeeping == null) {
+      // a binder mapping an absent section onto null must not cost the defaults
+      housekeeping = new HousekeepingProperties();
+    }
+    housekeeping.validate();
+
+  }
+
+  /**
    * Refuses a configuration in which two stores of one database would work on the same
    * table or collection.
    * <p>
@@ -271,6 +297,7 @@ public class PhaseTwoOutboxProperties {
     tables.put(JdbcOutboxProperties.TABLE_PROPERTY, JdbcPhaseTwoOutboxStore.tableName(this));
     tables.put(JdbcOutboxProperties.PAYLOAD_TABLE_PROPERTY, JdbcPhaseTwoOutboxStore.payloadTableName(this));
     tables.put(JdbcOutboxProperties.DELIVERY_TABLE_PROPERTY, JdbcTaskDeliveryStore.tableName(this));
+    tables.put(JdbcOutboxProperties.HOUSEKEEPING_TABLE_PROPERTY, jdbc.housekeepingTableName());
     return tables;
 
   }
@@ -285,6 +312,7 @@ public class PhaseTwoOutboxProperties {
     collections.put(MongoOutboxProperties.COLLECTION_PROPERTY, mongo.getCollection());
     collections.put(MongoOutboxProperties.PAYLOAD_COLLECTION_PROPERTY, mongo.payloadCollectionName());
     collections.put(MongoOutboxProperties.DELIVERY_COLLECTION_PROPERTY, mongo.getDeliveryCollection());
+    collections.put(MongoOutboxProperties.HOUSEKEEPING_COLLECTION_PROPERTY, mongo.getHousekeepingCollection());
     return collections;
 
   }
@@ -406,6 +434,20 @@ public class PhaseTwoOutboxProperties {
         + ".jdbc.delivery-table";
 
     /**
+     * The key of {@link #housekeepingTable}:
+     * <code>vanillabp.outbox.jdbc.housekeeping-table</code>, named by the same message as
+     * {@link #TABLE_PROPERTY}.
+     */
+    public static final String HOUSEKEEPING_TABLE_PROPERTY = SECTION
+        + ".jdbc.housekeeping-table";
+
+    /**
+     * The name of the table the housekeeping of a relational outbox takes its lease in
+     * where the application configures none.
+     */
+    public static final String DEFAULT_HOUSEKEEPING_TABLE = "VANILLABP_HOUSEKEEPING";
+
+    /**
      * Whether the JDBC-based default outbox is created when a data source is
      * available. Disable it if the application defines its own
      * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} bean and the
@@ -466,6 +508,38 @@ public class PhaseTwoOutboxProperties {
      */
     @Builder.Default
     private String deliveryTable = null;
+
+    /**
+     * The name of the table the nightly housekeeping takes its lease in - one row per
+     * store, holding who is house-keeping it and until when, so only one node of a
+     * cluster measures its own work (see decision 91 in the repository's DECISIONS.md).
+     * <code>null</code> means {@link #DEFAULT_HOUSEKEEPING_TABLE}. Like the delivery
+     * table and unlike the payload table this one does NOT follow a renamed outbox: it
+     * carries a row per store rather than belonging to one.
+     * <p>
+     * An application which sets it applies the same name to
+     * <code>io.vanillabp:vanillabp-schema</code>, through the changelog property
+     * <code>vanillabp.housekeeping.table</code> - see decision 78 in the repository's
+     * DECISIONS.md.
+     * <p>
+     * Key <code>vanillabp.outbox.jdbc.housekeeping-table</code>, unset by default.
+     */
+    @Builder.Default
+    private String housekeepingTable = null;
+
+    /**
+     * The table the housekeeping takes its lease in: the configured name where there is
+     * one, and {@link #DEFAULT_HOUSEKEEPING_TABLE} otherwise. Read this instead of the
+     * plain getter, which answers what the application wrote and is <code>null</code>
+     * most of the time.
+     *
+     * @return The housekeeping table name
+     */
+    public String housekeepingTableName() {
+
+      return housekeepingTable == null ? DEFAULT_HOUSEKEEPING_TABLE : housekeepingTable;
+
+    }
 
   }
 
@@ -543,6 +617,20 @@ public class PhaseTwoOutboxProperties {
     public static final String DEFAULT_DELIVERY_COLLECTION = "vanillabp-task-deliveries";
 
     /**
+     * The key of {@link #housekeepingCollection}:
+     * <code>vanillabp.outbox.mongo.housekeeping-collection</code>, named by the same
+     * message as {@link #COLLECTION_PROPERTY}.
+     */
+    public static final String HOUSEKEEPING_COLLECTION_PROPERTY = SECTION
+        + ".mongo.housekeeping-collection";
+
+    /**
+     * The name of the collection the housekeeping takes its lease in where the
+     * application configures none.
+     */
+    public static final String DEFAULT_HOUSEKEEPING_COLLECTION = "vanillabp-housekeeping";
+
+    /**
      * Whether the MongoDB-based default outbox is created when a MongoDB connection
      * is available. Disable it if the application defines its own
      * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} bean and the
@@ -597,6 +685,20 @@ public class PhaseTwoOutboxProperties {
     private String deliveryCollection = DEFAULT_DELIVERY_COLLECTION;
 
     /**
+     * The name of the collection the nightly housekeeping takes its lease in - one
+     * document per store, holding who is house-keeping it and until when, so only one
+     * node of a cluster measures its own work (see decision 91 in the repository's
+     * DECISIONS.md). Like the delivery collection and unlike the payload collection it
+     * does not follow a renamed outbox: it carries a document per store rather than
+     * belonging to one.
+     * <p>
+     * Key <code>vanillabp.outbox.mongo.housekeeping-collection</code>,
+     * {@value #DEFAULT_HOUSEKEEPING_COLLECTION} by default.
+     */
+    @Builder.Default
+    private String housekeepingCollection = DEFAULT_HOUSEKEEPING_COLLECTION;
+
+    /**
      * The collection both MongoDB stores write their payloads into: the configured
      * name where there is one, and otherwise the name of the outbox collection plus
      * {@link #PAYLOAD_COLLECTION_SUFFIX}. Read this instead of the plain getter, which
@@ -609,6 +711,221 @@ public class PhaseTwoOutboxProperties {
       return payloadCollection == null
           ? collection + PAYLOAD_COLLECTION_SUFFIX
           : payloadCollection;
+
+    }
+
+  }
+
+
+  /**
+   * When the outbox house-keeps and in which time zone (properties section
+   * <code>vanillabp.outbox.housekeeping.*</code>).
+   * <p>
+   * The housekeeping deletes the entries whose retention passed and the payloads no entry
+   * names any more. Both used to run at the end of every poll, which made every
+   * application pay for them all day long. They run in a window at night now, and inside
+   * that window the outbox works off as much as fits (see decision 91 in the repository's
+   * DECISIONS.md).
+   */
+  @Getter
+  @Setter
+  @SuperBuilder
+  public static class HousekeepingProperties {
+
+    /**
+     * The empty section a configuration binder starts from, and the section an application
+     * which writes nothing about the housekeeping gets.
+     * <p>
+     * It asks the builder for the values, and that is not a detour: Lombok moves the
+     * initializer of a field with a default into the builder, so a constructor which sets
+     * nothing itself would hand an application which configures no outbox a window from
+     * <code>null</code> to <code>null</code>.
+     */
+    public HousekeepingProperties() {
+
+      this(HousekeepingProperties.builder());
+
+    }
+
+    /**
+     * The key of {@link #start}: <code>vanillabp.outbox.housekeeping.start</code>.
+     */
+    public static final String START_PROPERTY = SECTION
+        + ".housekeeping.start";
+
+    /**
+     * The key of {@link #end}: <code>vanillabp.outbox.housekeeping.end</code>.
+     */
+    public static final String END_PROPERTY = SECTION
+        + ".housekeeping.end";
+
+    /**
+     * The key of {@link #zone}: <code>vanillabp.outbox.housekeeping.zone</code>. It is a
+     * constant because the message refusing a JVM on UTC names it, and a test reads the
+     * key from here instead of writing it a second time.
+     */
+    public static final String ZONE_PROPERTY = SECTION
+        + ".housekeeping.zone";
+
+    /**
+     * The environment variable which carries {@link #ZONE_PROPERTY}. The message about a
+     * JVM on UTC names it rather than the property, because that message is read by
+     * whoever installs the application on a server and their way in is the environment,
+     * not a rebuild.
+     */
+    public static final String ZONE_ENVIRONMENT_VARIABLE = "VANILLABP_OUTBOX_HOUSEKEEPING_ZONE";
+
+    /**
+     * The default of {@link #start}: four in the morning, which on most installations is
+     * the quietest hour of the day.
+     */
+    public static final LocalTime DEFAULT_START = LocalTime.of(4, 0);
+
+    /**
+     * The default of {@link #end}: five in the morning.
+     */
+    public static final LocalTime DEFAULT_END = LocalTime.of(5, 0);
+
+    /**
+     * The spellings which all mean UTC. A JVM standing on one of them without a zone
+     * configured here is refused, because "four in the morning" then means four UTC,
+     * which is almost never what somebody meant.
+     */
+    private static final List<String> MEANS_UTC = List.of("UTC", "ETC/UTC", "GMT", "ETC/GMT", "Z", "ZULU", "UCT");
+
+    /**
+     * When the window opens, in the zone below. Key
+     * <code>vanillabp.outbox.housekeeping.start</code>, <code>04:00</code> by default.
+     * <p>
+     * A window which ends before it starts is read as crossing midnight, so
+     * <code>23:00</code> to <code>01:00</code> is two hours and not a mistake.
+     */
+    @Builder.Default
+    private LocalTime start = DEFAULT_START;
+
+    /**
+     * When the window closes. Key <code>vanillabp.outbox.housekeeping.end</code>,
+     * <code>05:00</code> by default.
+     * <p>
+     * It is a deadline and not a promise: a batch which is running when the window closes
+     * runs to its end, and the next one does not start. Widen the window where the meters
+     * say that the outbox did not get through (see
+     * {@link io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics#HOUSEKEEPING_REMAINING}).
+     */
+    @Builder.Default
+    private LocalTime end = DEFAULT_END;
+
+    /**
+     * The zone the two times above are read in. Key
+     * <code>vanillabp.outbox.housekeeping.zone</code>, unset by default, which means the
+     * zone of the JVM.
+     * <p>
+     * Written the way {@link ZoneId} spells one, for example <code>Europe/Vienna</code>.
+     */
+    @Builder.Default
+    private String zone = null;
+
+    /**
+     * The zone the window is read in: the configured one where there is one, and the
+     * zone of the JVM otherwise.
+     *
+     * @return The zone
+     */
+    public ZoneId resolvedZone() {
+
+      return (zone == null) || zone.isBlank()
+          ? ZoneId.systemDefault()
+          : ZoneId.of(zone.trim());
+
+    }
+
+    /**
+     * Refuses a window which is none, a zone nobody knows, and a JVM on UTC which was
+     * given no zone of its own.
+     *
+     * @throws IllegalStateException Naming the key and the way out
+     */
+    public void validate() {
+
+      refuseAWindowWhichIsNone();
+      refuseAZoneNobodyKnows();
+      refuseAnUnsaidUtc();
+
+    }
+
+    private void refuseAWindowWhichIsNone() {
+
+      if ((start == null) || (end == null) || start.equals(end)) {
+        throw new IllegalStateException(
+            """
+                The housekeeping window of the outbox is '%s' to '%s', which is no window! The \
+                entries whose retention passed and the payloads no entry names are removed inside \
+                it, so an application with no window never removes either. Remove both keys to get \
+                the default of %s to %s, or write a start and an end which differ:
+                  %s: '04:00'
+                  %s: '05:00'
+                A window whose end lies before its start crosses midnight and is allowed."""
+                .formatted(start, end, DEFAULT_START, DEFAULT_END, START_PROPERTY, END_PROPERTY));
+      }
+
+    }
+
+    private void refuseAZoneNobodyKnows() {
+
+      if ((zone == null) || zone.isBlank()) {
+        return;
+      }
+      try {
+        ZoneId.of(zone.trim());
+      } catch (final RuntimeException e) {
+        throw new IllegalStateException(
+            """
+                The property '%s' is '%s', which is no time zone this JVM knows! Write it the way \
+                the zone database spells it, for example 'Europe/Vienna' or 'America/New_York', or \
+                remove the property to use the zone of the JVM."""
+                .formatted(ZONE_PROPERTY, zone), e);
+      }
+
+    }
+
+    /**
+     * Refuses the one configuration which looks right and is wrong: a JVM standing on UTC
+     * with nobody having said which zone the window is meant in.
+     * <p>
+     * A container runs on UTC unless somebody sets its zone, so "four in the morning"
+     * becomes four UTC, which in most places is the middle of the working day. The
+     * application would house-keep at that hour and nothing would say so. It therefore
+     * does not start, and the message names both ways out, because this is noticed when
+     * somebody installs the application on a server rather than while it is written -
+     * and neither way needs a new build.
+     * <p>
+     * An application which really wants UTC writes it down, and then it starts.
+     */
+    private void refuseAnUnsaidUtc() {
+
+      if ((zone != null) && !zone.isBlank()) {
+        return;
+      }
+      final var jvmZone = ZoneId.systemDefault();
+      if (!MEANS_UTC.contains(jvmZone.getId().toUpperCase(Locale.ROOT))) {
+        return;
+      }
+      throw new IllegalStateException(
+          """
+              This JVM stands on '%s' and no time zone was configured for the housekeeping of the \
+              VanillaBP outbox! It would then run from %s to %s UTC, which is the middle of the \
+              working day in most places, and nothing would say so. Say which zone you mean, in one \
+              of two ways, neither of which needs a new build:
+                - set the zone of the container, for example TZ=Europe/Vienna, or
+                - set the zone of the housekeeping alone, for example \
+              %s=Europe/Vienna (property '%s').
+              Write 'UTC' there if UTC is what you mean."""
+              .formatted(
+                  jvmZone.getId(),
+                  start,
+                  end,
+                  ZONE_ENVIRONMENT_VARIABLE,
+                  ZONE_PROPERTY));
 
     }
 

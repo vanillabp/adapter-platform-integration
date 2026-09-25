@@ -38,6 +38,11 @@ public class TestJvmArgs {
       final List<String> jvmArgs) {
 
     jvmArgs.add("-Xmx192m"); // see QuarkusProdModeTest#jvmArgs
+    // a time zone, because VanillaBP refuses to start a JVM which stands on UTC without one
+    // being configured for the housekeeping of its outbox (decision 91 of
+    // adapter-platform-integration). A forked application inherits neither the zone of the
+    // runner nor the argument the surefire configuration gives the test JVM
+    jvmArgs.add("-Duser.timezone=Europe/Vienna");
 
     return jvmArgs;
 

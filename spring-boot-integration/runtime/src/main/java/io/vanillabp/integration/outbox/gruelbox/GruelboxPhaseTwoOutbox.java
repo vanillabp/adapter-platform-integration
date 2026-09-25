@@ -304,6 +304,52 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
   }
 
   /**
+   * The table gruelbox stores its entries in, asked from outside where the housekeeping
+   * needs a name to claim this store by.
+   *
+   * @return The table of this store
+   */
+  public String getTableName() {
+
+    return tableName;
+
+  }
+
+  /**
+   * How many dispatched entries gruelbox has not deleted yet - what its flushes still
+   * owe. VanillaBP removes none of them itself on this store, so this is the number the
+   * housekeeping publishes when its window closes.
+   * <p>
+   * gruelbox marks a dispatched entry <code>processed</code> and pushes its
+   * <code>nextAttemptTime</code> out by the retention threshold, which is
+   * <code>vanillabp.outbox.retention</code>, so an entry whose moment has come is one a
+   * flush would delete. It reads gruelbox' own index over
+   * <code>processed, blocked, nextAttemptTime</code>.
+   *
+   * @return How many there are, empty where the table could not be asked
+   */
+  public OptionalLong countDispatchedEntriesPastTheirRetention() {
+
+    final var countExpired = "SELECT COUNT(*) FROM %s WHERE processed = ? AND blocked = ? AND nextAttemptTime <= ?"
+        .formatted(tableName);
+    try (var connection = dataSource.getConnection(); var statement = connection.prepareStatement(countExpired)) {
+      statement.setBoolean(1, true);
+      statement.setBoolean(2, false);
+      statement.setTimestamp(3, java.sql.Timestamp.from(Instant.now()));
+      try (var resultSet = statement.executeQuery()) {
+        return resultSet.next()
+            ? OptionalLong.of(resultSet.getLong(1))
+            : OptionalLong.empty();
+      }
+    } catch (final SQLException e) {
+      // a number which could not be read stays a gap in the meter rather than a zero
+      log.debug("Could not count the dispatched entries of gruelbox' outbox table '{}'", tableName, e);
+      return OptionalLong.empty();
+    }
+
+  }
+
+  /**
    * The earliest moment one of the two kinds of entry wants something.
    *
    * @param connection The connection to ask on

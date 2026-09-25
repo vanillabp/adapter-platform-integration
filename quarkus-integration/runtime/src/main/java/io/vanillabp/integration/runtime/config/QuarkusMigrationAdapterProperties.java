@@ -1,6 +1,7 @@
 package io.vanillabp.integration.runtime.config;
 
 import java.time.Duration;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -448,6 +449,13 @@ public interface QuarkusMigrationAdapterProperties {
     Duration retention();
 
     /**
+     * When the outbox house-keeps and in which time zone.
+     *
+     * @return The housekeeping configuration
+     */
+    HousekeepingProperties housekeeping();
+
+    /**
      * The configuration of the JDBC/Agroal-based default outbox.
      *
      * @return The JDBC outbox configuration
@@ -460,6 +468,44 @@ public interface QuarkusMigrationAdapterProperties {
      * @return The MongoDB outbox configuration
      */
     MongoOutboxProperties mongo();
+
+  }
+
+  /**
+   * When the outbox removes the entries whose retention passed and the payloads no entry
+   * names any more (<code>vanillabp.outbox.housekeeping.*</code>). Both used to run at
+   * the end of every poll; they run in a window at night now, and inside that window the
+   * outbox works off as much as fits.
+   */
+  interface HousekeepingProperties {
+
+    /**
+     * When the window opens, in the zone below. A window whose end lies before its start
+     * crosses midnight, so <code>23:00</code> to <code>01:00</code> is two hours.
+     *
+     * @return The local time the window opens at
+     */
+    @WithDefault("04:00")
+    LocalTime start();
+
+    /**
+     * When the window closes. It is a deadline and not a promise: a batch which is
+     * running when the window closes runs to its end, and the next one does not start.
+     *
+     * @return The local time the window closes at
+     */
+    @WithDefault("05:00")
+    LocalTime end();
+
+    /**
+     * The zone the two times above are read in, written the way <code>ZoneId</code>
+     * spells one, for example <code>Europe/Vienna</code>. Unset means the zone of the
+     * JVM - and a JVM standing on UTC without this key ends the startup, because "four
+     * in the morning" would then mean four UTC.
+     *
+     * @return The zone of the window
+     */
+    Optional<String> zone();
 
   }
 
@@ -510,6 +556,18 @@ public interface QuarkusMigrationAdapterProperties {
      * @return The delivery table name
      */
     Optional<String> deliveryTable();
+
+    /**
+     * The name of the table the nightly housekeeping takes its lease in (default
+     * <code>VANILLABP_HOUSEKEEPING</code>) - one row per store, holding who is
+     * house-keeping it and until when, so only one node of a cluster measures its own
+     * work. Like the delivery table it does not follow a renamed outbox: it carries a row
+     * per store rather than belonging to one. An application which sets it applies the
+     * same name to <code>io.vanillabp:vanillabp-schema</code>.
+     *
+     * @return The housekeeping table name
+     */
+    Optional<String> housekeepingTable();
 
   }
 
@@ -563,6 +621,17 @@ public interface QuarkusMigrationAdapterProperties {
      */
     @WithDefault("vanillabp-task-deliveries")
     String deliveryCollection();
+
+    /**
+     * The name of the collection the nightly housekeeping takes its lease in - one
+     * document per store, holding who is house-keeping it and until when, so only one
+     * node of a cluster measures its own work. Keep it apart from the three collections
+     * above.
+     *
+     * @return The housekeeping collection name
+     */
+    @WithDefault("vanillabp-housekeeping")
+    String housekeepingCollection();
 
   }
 

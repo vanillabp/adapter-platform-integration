@@ -1,6 +1,7 @@
 package io.vanillabp.integration.outbox.mongo;
 
 import java.time.Instant;
+import java.util.OptionalLong;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -13,11 +14,12 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
+import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DispatchOutcome;
 import io.vanillabp.integration.adapter.migration.outbox.DispatchLanes;
 import io.vanillabp.integration.adapter.migration.outbox.DispatchLease;
 import io.vanillabp.integration.adapter.migration.outbox.DueEntryPoller;
-import io.vanillabp.integration.adapter.migration.outbox.Housekeeping;
+import io.vanillabp.integration.adapter.migration.outbox.OutboxHousekeeping;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import jakarta.annotation.PreDestroy;
@@ -64,7 +66,7 @@ import lombok.extern.slf4j.Slf4j;
  * stays unaffected.
  */
 @Slf4j
-public class MongoPhaseTwoOutboxDispatcher {
+public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
 
   private final MongoTemplate mongoTemplate;
 
@@ -104,6 +106,17 @@ public class MongoPhaseTwoOutboxDispatcher {
   private final MongoPhaseTwoPayloadStore payloadStore;
 
   /**
+   * Where this node says that it is house-keeping this store tonight, so no other node
+   * measures its work at the same time.
+   */
+  private final MongoHousekeepingLease housekeepingLease;
+
+  /**
+   * What removes the dispatched entries and the orphaned payloads, and when.
+   */
+  private final OutboxHousekeeping housekeeping;
+
+  /**
    * Builds the dispatcher together with its payload store, its lease and its poller. The
    * poller does not run yet: it is started once workflow processing did, so nothing is
    * carried to a BPMS which has not seen the models.
@@ -132,6 +145,12 @@ public class MongoPhaseTwoOutboxDispatcher {
         "vanillabp-outbox", properties.getPollInterval(), this::poll, this::earliestDueAt);
     this.lanes = new DispatchLanes("vanillabp-outbox-dispatch", properties.getDispatchThreads());
     this.lease = new DispatchLease("vanillabp-outbox-lease", properties.getAttemptFrequency());
+    this.housekeepingLease = new MongoHousekeepingLease(
+        mongoTemplate, properties
+            .getMongo()
+            .getHousekeepingCollection());
+    this.housekeeping = new OutboxHousekeeping(
+        this, properties, () -> metrics.getIfAvailable(() -> VanillaBpMetrics.NONE));
 
   }
 
@@ -216,6 +235,7 @@ public class MongoPhaseTwoOutboxDispatcher {
   public void startPolling() {
 
     poller.start();
+    housekeeping.start();
 
   }
 
@@ -230,6 +250,7 @@ public class MongoPhaseTwoOutboxDispatcher {
     poller.stop();
     lanes.stop();
     lease.stop();
+    housekeeping.stop();
 
   }
 
@@ -290,7 +311,6 @@ public class MongoPhaseTwoOutboxDispatcher {
         }
         handOverToItsLane(entry);
       }
-      cleanupDoneEntries();
     } catch (Exception e) {
       log.error("Polling the VanillaBP phase-two outbox failed - will retry", e);
     }
@@ -738,30 +758,104 @@ public class MongoPhaseTwoOutboxDispatcher {
 
   }
 
-  /**
-   * Deletes successfully dispatched (DONE) entries whose retention period passed - the
-   * asynchronous cleanup of the "DONE instead of delete" contract - and then the
-   * payloads which belong to no entry any more.
-   * <p>
-   * The order is what makes the retention count at the entry: the payload of an entry
-   * deleted a moment ago is named by nothing now, so it goes with it, while the payload
-   * of an entry which waits or is blocked is named and stays, however long the repair
-   * takes.
-   */
-  private void cleanupDoneEntries() {
+  @Override
+  public String storeName() {
 
-    final var expiredBefore = Instant.now().minus(properties.getRetention());
-    mongoTemplate.remove(
-        Query.query(Criteria
+    return getClass().getSimpleName();
+
+  }
+
+  @Override
+  public boolean claimHousekeepingUntil(
+      final String owner,
+      final Instant until) {
+
+    return housekeepingLease.claimUntil(collection, owner, until);
+
+  }
+
+  @Override
+  public void releaseHousekeeping(
+      final String owner) {
+
+    housekeepingLease.release(collection, owner);
+
+  }
+
+  /**
+   * {@inheritDoc}
+   * <p>
+   * MongoDB knows no bound on a delete, so the ids of the entries which may go are read
+   * first, at most as many as asked for, and they go into one <code>deleteMany</code>.
+   * The read is served by the index over the status and the moment an entry was
+   * dispatched.
+   */
+  @Override
+  public int removeDispatchedEntriesOlderThan(
+      final Instant threshold,
+      final int maxRows) {
+
+    if (maxRows < 1) {
+      return 0;
+    }
+    final var expired = Query
+        .query(Criteria
             .where("status")
             .is(PhaseTwoOutboxEntry.STATUS_DONE)
             .and("doneAt")
-            .lt(expiredBefore)),
-        collection);
-    // the payloads of the entries just deleted, and what a rollback without a MongoDB
-    // transaction left behind. What an entry still names is not removed by age at all -
-    // the store joins the entries itself, in the database
-    payloadStore.removeOrphansOlderThan(expiredBefore, Housekeeping.ROWS_PER_RUN);
+            .lt(threshold))
+        .limit(maxRows);
+    expired.fields().include("_id");
+    final var ids = mongoTemplate
+        .find(expired, PhaseTwoOutboxEntry.class, collection)
+        .stream()
+        .map(PhaseTwoOutboxEntry::getId)
+        .toList();
+    if (ids.isEmpty()) {
+      return 0;
+    }
+    return (int) mongoTemplate
+        .remove(Query.query(Criteria.where("_id").in(ids)), collection)
+        .getDeletedCount();
+
+  }
+
+  /**
+   * {@inheritDoc}
+   * <p>
+   * The entries were removed first, so the payloads they named are named by nothing now
+   * and go with this call. What an entry still names - an entry which waits, and an entry
+   * which is blocked until somebody repairs it - is not removed by age at all, which the
+   * payload store asks its own entries about.
+   */
+  @Override
+  public int removeOrphanedPayloadsOlderThan(
+      final Instant threshold,
+      final int maxRows) {
+
+    return payloadStore.removeOrphansOlderThan(threshold, maxRows);
+
+  }
+
+  @Override
+  public OptionalLong countDispatchedEntriesOlderThan(
+      final Instant threshold) {
+
+    try {
+      return OptionalLong
+          .of(mongoTemplate
+              .count(
+                  Query.query(Criteria
+                      .where("status")
+                      .is(PhaseTwoOutboxEntry.STATUS_DONE)
+                      .and("doneAt")
+                      .lt(threshold)),
+                  collection));
+    } catch (final RuntimeException e) {
+      // a number which could not be read stays a gap in the meter rather than a zero
+      log.debug("Could not count the dispatched entries of the outbox collection '{}'", collection, e);
+      return OptionalLong.empty();
+    }
 
   }
 

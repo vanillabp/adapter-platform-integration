@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.OptionalLong;
 
 import org.bson.Document;
 import org.eclipse.microprofile.config.ConfigProvider;
@@ -24,7 +25,7 @@ import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics
 import io.vanillabp.integration.adapter.migration.outbox.DispatchLanes;
 import io.vanillabp.integration.adapter.migration.outbox.DispatchLease;
 import io.vanillabp.integration.adapter.migration.outbox.DueEntryPoller;
-import io.vanillabp.integration.adapter.migration.outbox.Housekeeping;
+import io.vanillabp.integration.adapter.migration.outbox.OutboxHousekeeping;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterPropertiesMapper;
@@ -88,7 +89,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @ApplicationScoped
 @Slf4j
-public class MongoPhaseTwoOutboxDispatcher {
+public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
 
   @Inject
   Instance<MongoClient> mongoClient;
@@ -156,6 +157,14 @@ public class MongoPhaseTwoOutboxDispatcher {
   private volatile DispatchLease lease;
 
   /**
+   * What removes the dispatched entries and the orphaned payloads, and when. Built with
+   * the poller, because both need the configuration.
+   */
+  private volatile OutboxHousekeeping housekeeping;
+
+  private volatile MongoHousekeepingLease housekeepingLease;
+
+  /**
    * Creates the unique index (unless disabled) and starts the fixed-delay poller.
    * The first run is executed immediately, dispatching committed-but-unprocessed
    * entries of a previously crashed instance. The observer priority guarantees that
@@ -199,6 +208,10 @@ public class MongoPhaseTwoOutboxDispatcher {
     poller = new DueEntryPoller(
         "vanillabp-outbox", properties.getPollInterval(), this::poll, this::earliestDueAt);
     poller.start();
+    housekeeping = new OutboxHousekeeping(
+        this, properties, () -> io.vanillabp.integration.runtime.processservice.PhaseTwoRouterProducer
+            .vanillaBpMetricsOf(vanillaBpMetrics));
+    housekeeping.start();
 
   }
 
@@ -221,6 +234,10 @@ public class MongoPhaseTwoOutboxDispatcher {
     if (lease != null) {
       lease.stop();
       lease = null;
+    }
+    if (housekeeping != null) {
+      housekeeping.stop();
+      housekeeping = null;
     }
 
   }
@@ -445,18 +462,6 @@ public class MongoPhaseTwoOutboxDispatcher {
         }
         handOverToItsLane(collection, entry);
       }
-      // asynchronous retention cleanup of the "DONE instead of delete" contract
-      collection.deleteMany(
-          Filters.and(
-              Filters.eq("status", MongoPhaseTwoOutbox.STATUS_DONE),
-              Filters.lt("doneAt", Date.from(Instant.now().minus(properties.getRetention())))));
-      // the payloads of the entries just deleted, and what a rollback without a MongoDB
-      // transaction left behind. What an entry still names is not removed by age at all,
-      // so an entry which waits or is blocked keeps its bytes until it is dispatched - the
-      // store joins the entries itself, in the database
-      getPayloadStore()
-          .removeOrphansOlderThan(
-              Instant.now().minus(properties.getRetention()), Housekeeping.ROWS_PER_RUN);
     } catch (final RuntimeException e) {
       log.error("Polling the VanillaBP phase-two outbox failed - will retry", e);
     }
@@ -922,6 +927,139 @@ public class MongoPhaseTwoOutboxDispatcher {
             Updates.inc("attempts", 1),
             Updates.unset("leasedBy"),
             Updates.unset("leasedUntil"));
+
+  }
+
+
+  @Override
+  public String storeName() {
+
+    return MongoPhaseTwoOutbox.class.getSimpleName();
+
+  }
+
+  @Override
+  public boolean claimHousekeepingUntil(
+      final String owner,
+      final Instant until) {
+
+    return housekeepingLease().claimUntil(collectionName(), owner, until);
+
+  }
+
+  @Override
+  public void releaseHousekeeping(
+      final String owner) {
+
+    housekeepingLease().release(collectionName(), owner);
+
+  }
+
+  /**
+   * {@inheritDoc}
+   * <p>
+   * MongoDB knows no bound on a delete, so the ids of the entries which may go are read
+   * first, at most as many as asked for, and they go into one <code>deleteMany</code>.
+   * The read is served by the index over the status and the moment an entry was
+   * dispatched.
+   */
+  @Override
+  public int removeDispatchedEntriesOlderThan(
+      final Instant threshold,
+      final int maxRows) {
+
+    if (maxRows < 1) {
+      return 0;
+    }
+    final var collection = outboxCollection();
+    final var expired = Filters
+        .and(
+            Filters.eq("status", MongoPhaseTwoOutbox.STATUS_DONE),
+            Filters.lt("doneAt", Date.from(threshold)));
+    final var ids = new java.util.ArrayList<Object>();
+    collection
+        .find(expired)
+        .projection(com.mongodb.client.model.Projections.include("_id"))
+        .limit(maxRows)
+        .forEach(document -> ids.add(document.get("_id")));
+    if (ids.isEmpty()) {
+      return 0;
+    }
+    return (int) collection
+        .deleteMany(Filters.in("_id", ids))
+        .getDeletedCount();
+
+  }
+
+  /**
+   * {@inheritDoc}
+   * <p>
+   * The entries were removed first, so the payloads they named are named by nothing now
+   * and go with this call. What an entry still names - an entry which waits, and an entry
+   * which is blocked until somebody repairs it - is not removed by age at all, which the
+   * payload store asks its own entries about.
+   */
+  @Override
+  public int removeOrphanedPayloadsOlderThan(
+      final Instant threshold,
+      final int maxRows) {
+
+    return getPayloadStore().removeOrphansOlderThan(threshold, maxRows);
+
+  }
+
+  @Override
+  public OptionalLong countDispatchedEntriesOlderThan(
+      final Instant threshold) {
+
+    try {
+      return OptionalLong
+          .of(outboxCollection()
+              .countDocuments(
+                  Filters
+                      .and(
+                          Filters.eq("status", MongoPhaseTwoOutbox.STATUS_DONE),
+                          Filters.lt("doneAt", Date.from(threshold)))));
+    } catch (final RuntimeException e) {
+      // a number which could not be read stays a gap in the meter rather than a zero
+      log.debug("Could not count the dispatched entries of the outbox collection", e);
+      return OptionalLong.empty();
+    }
+
+  }
+
+  /**
+   * The name of the collection this store polls, which is what the housekeeping claims it
+   * by.
+   *
+   * @return The outbox collection name
+   */
+  private String collectionName() {
+
+    return getProperties()
+        .getMongo()
+        .getCollection();
+
+  }
+
+  /**
+   * Where this node says that it is house-keeping this store tonight, built on first use
+   * for the reason the payload store is: the collection name is read lazily.
+   *
+   * @return The claim of this outbox
+   */
+  private MongoHousekeepingLease housekeepingLease() {
+
+    if (housekeepingLease == null) {
+      housekeepingLease = new MongoHousekeepingLease(
+          () -> mongoClient
+              .get()
+              .getDatabase(databaseName())
+              .getCollection(getProperties()
+                  .getMongo()
+                  .getHousekeepingCollection()));
+    }
+    return housekeepingLease;
 
   }
 

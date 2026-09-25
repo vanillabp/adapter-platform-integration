@@ -48,6 +48,17 @@ public class MongoIndexesOfAnApplicationManagingItsOwnSchemaTest {
 
   private static final String OUTBOX_COLLECTION = PhaseTwoOutboxProperties.MongoOutboxProperties.DEFAULT_COLLECTION;
 
+  /**
+   * The hour before the last one, whenever this test runs. A window from it to the hour
+   * after it never contains the present moment, whatever time of day that is - a window
+   * whose end lies before its start crosses midnight, and this one does that exactly when
+   * the two hours lie on either side of it.
+   */
+  private static final java.time.LocalTime AN_HOUR_WHICH_IS_OVER = java.time.LocalTime
+      .now()
+      .minusHours(2)
+      .withNano(0);
+
   @RegisterExtension
   static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .withApplicationRoot(jar -> jar
@@ -58,7 +69,13 @@ public class MongoIndexesOfAnApplicationManagingItsOwnSchemaTest {
           .addClass(RecordingPhaseTwoListener.class)
           .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
       .overrideConfigKey("quarkus.mongodb.database", DATABASE)
-      .overrideConfigKey("vanillabp.outbox.create-schema", "false");
+      .overrideConfigKey("vanillabp.outbox.create-schema", "false")
+      // the application.yaml of this module leaves the housekeeping window open all day,
+      // which every other test here needs. This one asks what the STARTUP created, and a
+      // housekeeping which runs writes its claim - a document, and with it a collection.
+      // So the window is shut for this test: an hour which is over whenever it runs
+      .overrideConfigKey("vanillabp.outbox.housekeeping.start", AN_HOUR_WHICH_IS_OVER.toString())
+      .overrideConfigKey("vanillabp.outbox.housekeeping.end", AN_HOUR_WHICH_IS_OVER.plusHours(1).toString());
 
   @Inject
   MongoClient mongoClient;

@@ -7,10 +7,12 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.function.Supplier;
 
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
+import io.vanillabp.integration.adapter.migration.jdbc.JdbcDialect;
 import io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DispatchOutcome;
@@ -100,7 +102,7 @@ import lombok.extern.slf4j.Slf4j;
  * MySQL's unique-index key-length limit (3072 bytes with utf8mb4) is respected.
  */
 @Slf4j
-public class JdbcPhaseTwoOutboxDispatcher {
+public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
 
   /**
    * What the <code>STATUS</code> column holds while an entry still has to be dispatched -
@@ -254,9 +256,22 @@ public class JdbcPhaseTwoOutboxDispatcher {
       SET NEXT_ATTEMPT_AT = ?, ATTEMPTS = ATTEMPTS + 1, LEASED_BY = NULL, LEASED_UNTIL = NULL \
       WHERE ID = ? AND LEASED_BY = ?""";
 
-  private static final String DELETE_EXPIRED_DONE_ENTRIES = """
-      DELETE FROM %s \
-      WHERE STATUS = '%s' AND DONE_AT < ?""";
+  /**
+   * What the housekeeping picks up: the entries which were dispatched long enough ago.
+   * The bound is not part of it, because the three databases spell one in three ways -
+   * {@link io.vanillabp.integration.adapter.migration.jdbc.JdbcDialect} adds it.
+   */
+  private static final String EXPIRED_DONE_ENTRIES_FROM = "FROM %s";
+
+  private static final String EXPIRED_DONE_ENTRIES_WHERE = "STATUS = '%s' AND DONE_AT < ?";
+
+  /**
+   * How many dispatched entries the housekeeping still owes - the number a window
+   * publishes when it closes. It reads the index over STATUS and DONE_AT, the one the
+   * delete above reads.
+   */
+  private static final String COUNT_EXPIRED_DONE_ENTRIES = """
+      SELECT COUNT(*) FROM %s WHERE STATUS = '%s' AND DONE_AT < ?""";
 
   /**
    * The columns a later version of VanillaBP added to this table. A table created by an
@@ -368,7 +383,39 @@ public class JdbcPhaseTwoOutboxDispatcher {
 
   private final String rescheduleEntry;
 
-  private final String deleteExpiredDoneEntries;
+  private final String countExpiredDoneEntries;
+
+  /**
+   * Where this node says that it is house-keeping this store tonight, so no other node
+   * measures its work at the same time.
+   */
+  private final JdbcHousekeepingLease housekeepingLease;
+
+  /**
+   * What removes the dispatched entries and the orphaned payloads, and when.
+   */
+  private final OutboxHousekeeping housekeeping;
+
+  /**
+   * The bounded delete of the dispatched entries, built on the first housekeeping run.
+   * It needs the database product, which is read from a connection, so it cannot be built
+   * in the constructor next to the other statements.
+   */
+  private String deleteExpiredDoneEntries;
+
+  /**
+   * How many entries {@link #deleteExpiredDoneEntries} was built for. The bound is part
+   * of the statement on every database, so a batch of another size builds it again.
+   */
+  private int deleteExpiredDoneEntriesBoundedAt;
+
+  /**
+   * What the two fields above are guarded by. A lock of its own and not this dispatcher:
+   * the poll holds the dispatcher's monitor while it hands entries to the lanes, and it
+   * waits there when a lane is full - the housekeeping runs on a thread of its own and
+   * must not queue behind that.
+   */
+  private final Object deleteExpiredDoneEntriesLock = new Object();
 
   private final DueEntryPoller poller;
 
@@ -485,7 +532,12 @@ public class JdbcPhaseTwoOutboxDispatcher {
     this.markEntryDone = MARK_ENTRY_DONE.formatted(tableName, STATUS_DONE);
     this.markEntryBlocked = MARK_ENTRY_BLOCKED.formatted(tableName, STATUS_BLOCKED);
     this.rescheduleEntry = RESCHEDULE_ENTRY.formatted(tableName);
-    this.deleteExpiredDoneEntries = DELETE_EXPIRED_DONE_ENTRIES.formatted(tableName, STATUS_DONE);
+    this.countExpiredDoneEntries = COUNT_EXPIRED_DONE_ENTRIES.formatted(tableName, STATUS_DONE);
+    this.housekeepingLease = new JdbcHousekeepingLease(
+        connections, properties
+            .getJdbc()
+            .housekeepingTableName());
+    this.housekeeping = new OutboxHousekeeping(this, properties, metrics);
     this.poller = new DueEntryPoller(
         "vanillabp-outbox", properties.getPollInterval(), this::poll, this::earliestDueAt);
     this.lanes = new DispatchLanes("vanillabp-outbox-dispatch", properties.getDispatchThreads());
@@ -505,12 +557,14 @@ public class JdbcPhaseTwoOutboxDispatcher {
     if (properties.isCreateSchema()) {
       createTableIfNotExists();
       payloadStore.createSchemaIfNotExists();
+      housekeepingLease.createSchemaIfNotExists();
     } else {
       // the application creates its schema itself - a missing table is then a
       // deployment which forgot to apply the migration, and it is said at startup instead of at
       // the first workflow start
       validateTableExists();
       payloadStore.validateSchemaExists();
+      housekeepingLease.validateSchemaExists();
     }
 
   }
@@ -523,6 +577,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
   public void start() {
 
     poller.start();
+    housekeeping.start();
 
   }
 
@@ -536,6 +591,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
     poller.stop();
     lanes.stop();
     lease.stop();
+    housekeeping.stop();
 
   }
 
@@ -845,7 +901,6 @@ public class JdbcPhaseTwoOutboxDispatcher {
       for (final var entry : dueEntries()) {
         handOverToItsLane(entry);
       }
-      cleanupExpiredEntries();
     } catch (final Exception e) {
       log.error("Polling the VanillaBP phase-two outbox failed - will retry", e);
     }
@@ -939,51 +994,131 @@ public class JdbcPhaseTwoOutboxDispatcher {
 
   }
 
-  /**
-   * Deletes successfully dispatched (DONE) entries whose retention period passed - the
-   * asynchronous cleanup of the "DONE instead of delete" contract - and then the payloads
-   * which belong to no entry any more.
-   * <p>
-   * The order is what makes the retention count at the entry: the payload of an entry
-   * deleted a moment ago is named by nothing now, so it goes with it, while the payload
-   * of an entry which waits or is blocked is named and stays, however long the repair
-   * takes.
-   * <p>
-   * Every step borrows its connection for the moment it needs it, the way the rest of this
-   * dispatcher does. The payload store borrows one of its own, for one statement which asks
-   * the entries about the payloads itself - so a thread holding a connection across the whole
-   * cleanup would wait for a connection it is holding itself. On a pool of one that is a
-   * deadlock.
-   */
-  private void cleanupExpiredEntries() throws SQLException {
+  @Override
+  public String storeName() {
 
-    final var expiredBefore = Instant.now().minus(properties.getRetention());
-    deleteEntriesDoneBefore(expiredBefore);
-    // the payloads of the entries just deleted, and what a crash between the two writes
-    // of a schedule left behind. Nothing else is old enough to be gone, and what an
-    // entry still names is not removed by age at all - the store asks its own entries
-    // about that, in its own database
-    payloadStore.removeOrphansOlderThan(expiredBefore, Housekeeping.ROWS_PER_RUN);
+    return storeName;
+
+  }
+
+  @Override
+  public boolean claimHousekeepingUntil(
+      final String owner,
+      final Instant until) {
+
+    return housekeepingLease.claimUntil(storeName
+        + "@"
+        + tableName, owner, until);
+
+  }
+
+  @Override
+  public void releaseHousekeeping(
+      final String owner) {
+
+    housekeepingLease.release(storeName
+        + "@"
+        + tableName, owner);
 
   }
 
   /**
-   * Deletes the entries which were dispatched long enough ago.
-   *
-   * @param expiredBefore Entries dispatched before this moment
+   * {@inheritDoc}
+   * <p>
+   * One statement, on a connection borrowed for it and given back, the way every other
+   * step of this dispatcher borrows one. The bound is inside the statement because
+   * <code>DELETE ... LIMIT</code> is no portable SQL.
    */
-  private void deleteEntriesDoneBefore(
-      final Instant expiredBefore) throws SQLException {
+  @Override
+  public int removeDispatchedEntriesOlderThan(
+      final Instant threshold,
+      final int maxRows) {
+
+    if (maxRows < 1) {
+      return 0;
+    }
+    Connection connection = null;
+    try {
+      connection = connections.acquire();
+      try (var statement = connection.prepareStatement(deleteExpiredDoneEntries(connection, maxRows))) {
+        statement.setTimestamp(1, Timestamp.from(threshold));
+        return statement.executeUpdate();
+      }
+    } catch (final SQLException e) {
+      log.warn("Could not remove the dispatched entries of the outbox table '{}'", tableName, e);
+      return 0;
+    } finally {
+      release(connection);
+    }
+
+  }
+
+  /**
+   * {@inheritDoc}
+   * <p>
+   * The entries were removed first, so the payloads they named are named by nothing now
+   * and go with this call. What an entry still names - an entry which waits, and an entry
+   * which is blocked until somebody repairs it - is not removed by age at all, which the
+   * payload store asks its own entries about.
+   */
+  @Override
+  public int removeOrphanedPayloadsOlderThan(
+      final Instant threshold,
+      final int maxRows) {
+
+    return payloadStore.removeOrphansOlderThan(threshold, maxRows);
+
+  }
+
+  @Override
+  public OptionalLong countDispatchedEntriesOlderThan(
+      final Instant threshold) {
 
     Connection connection = null;
     try {
       connection = connections.acquire();
-      try (var statement = connection.prepareStatement(deleteExpiredDoneEntries)) {
-        statement.setTimestamp(1, Timestamp.from(expiredBefore));
-        statement.executeUpdate();
+      try (var statement = connection.prepareStatement(countExpiredDoneEntries)) {
+        statement.setTimestamp(1, Timestamp.from(threshold));
+        try (var resultSet = statement.executeQuery()) {
+          return resultSet.next() ? OptionalLong.of(resultSet.getLong(1)) : OptionalLong.empty();
+        }
       }
+    } catch (final SQLException e) {
+      // a number which could not be read stays a gap in the meter rather than a zero
+      log.debug("Could not count the dispatched entries of the outbox table '{}'", tableName, e);
+      return OptionalLong.empty();
     } finally {
       release(connection);
+    }
+
+  }
+
+  /**
+   * The delete of at most so many dispatched entries, built once per ceiling and kept
+   * afterwards.
+   *
+   * @param connection The connection, read for the database product
+   * @param maxRows The most rows the statement may remove
+   * @return The statement to run
+   */
+  private String deleteExpiredDoneEntries(
+      final Connection connection,
+      final int maxRows) throws SQLException {
+
+    synchronized (deleteExpiredDoneEntriesLock) {
+      if ((deleteExpiredDoneEntries != null) && (deleteExpiredDoneEntriesBoundedAt == maxRows)) {
+        return deleteExpiredDoneEntries;
+      }
+      final var dialect = JdbcDialect.of(connection);
+      final var expired = dialect
+          .selectAtMost(
+              "ID",
+              EXPIRED_DONE_ENTRIES_FROM.formatted(tableName),
+              EXPIRED_DONE_ENTRIES_WHERE.formatted(STATUS_DONE),
+              maxRows);
+      deleteExpiredDoneEntries = dialect.deleteWhatWasPicked(tableName, "ID", expired);
+      deleteExpiredDoneEntriesBoundedAt = maxRows;
+      return deleteExpiredDoneEntries;
     }
 
   }
