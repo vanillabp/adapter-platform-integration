@@ -3738,6 +3738,22 @@ Every verdict the check can reach is a case of `OldProcessVersionsTest`, from
 `anUnservedVersionWithInstancesIsAnError` and `anUnservedVersionWithoutInstancesWarns` to
 `outfadingTheDeployedVersionFailsTheBoot` and `aMethodServingNoHeldVersionIsReported`.
 
+### The multi-instance shape of a held version
+
+An element which iterates without naming the value of a round - a Camunda 7 element without
+`camunda:elementVariable`, a Camunda 8 one without `inputElement` - hands a handler reading its
+item a `null`. While a model is DEPLOYED, the adapter asks
+`WorkflowTaskWiring#multiInstanceElementNames` and refuses that pairing. A version the BPMS only
+still holds is never deployed again, so nobody asked, while the methods of the application serve
+it because their version ranges say so.
+
+`BpmnTaskSpec#multiInstanceElementsWithoutAnItem` closes that: the adapter fills it from the
+model it read for `tasksOfVersion`, and the core holds it against what the methods serving that
+version read. `null` means this adapter does not read the shape, and then nothing is asked at
+all - decision 38. The finding is a warning in the block a start writes at its end, because
+nobody can change a held model any more and a `null` item there may be what the application
+means. `TheMultiInstanceShapeOfAHeldVersionTest` holds every case.
+
 ### A BPMN process nothing was deployed under
 
 Renaming a BPMN process is the one refactoring which reaches into the BPMS: the old

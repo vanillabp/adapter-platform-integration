@@ -282,7 +282,11 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     this.deployedVersionsCheck = new DeployedProcessVersionsCheck(
         processVersions, outfadedVersions, this::tasksNotServedInVersion, this::handlersNotServingAnyVersion, this, this::reportConcurrentTokenElementsOfHeldVersions, scoping == null
             ? null
-            : scoping::reportIdentifiersOfHeldVersion);
+            : scoping::reportIdentifiersOfHeldVersion, this::itemsAHeldVersionNeverNames, properties == null
+                // a registry built without a configuration is a test fixture, and it has no
+                // start to close either
+                ? new io.vanillabp.integration.adapter.migration.startup.StartupFindings()
+                : properties.startupFindings());
     this.rollbackRuleRemedies = transactionAnnotations
         .stream()
         .filter(TransactionAnnotationSpec::honored)
@@ -1461,6 +1465,55 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
             taskDefinitionOrActivityId) || sameWiring(candidate.getActivityId(), taskDefinitionOrActivityId))
         .map(WorkflowTaskHandler::getTaskParameters)
         .flatMap(List::stream)
+        .distinct()
+        .sorted()
+        .toList();
+
+  }
+
+  /**
+   * Which elements of one task of one held version are iterated without naming the value
+   * of a round although a method serving that version reads it.
+   * <p>
+   * The two halves meet here for the same reason
+   * {@link #tasksNotServedInVersion(String, String, String, Collection)} lives here: only
+   * the adapter can read the model a BPMS still holds, and only this registry knows what a
+   * method asks for and which versions it serves.
+   * <p>
+   * An element the method reads the item of which is NOT in the list handed over is no
+   * finding. The multi-instance chain crosses a call activity, so a task of a called
+   * process asks for an element of its caller, and the model at hand is the wrong place to
+   * look for it - the same rule the deployment-time question follows.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @param version The version identifier the BPMS reported
+   * @param task The task, as the model that version holds describes it
+   * @return The element ids whose item a method serving that version reads and that
+   *         version's model never names
+   */
+  private Collection<String> itemsAHeldVersionNeverNames(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String version,
+      final BpmnTaskSpec task) {
+
+    final var withoutAnItem = task.multiInstanceElementsWithoutAnItem();
+    if ((withoutAnItem == null) || withoutAnItem.isEmpty()) {
+      return List.of();
+    }
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    if (entry == null) {
+      return List.of();
+    }
+    final var resolver = processVersions.resolverFor(workflowModuleId, bpmnProcessId);
+    return entry.handlers
+        .stream()
+        .filter(handler -> matches(handler, task))
+        .filter(handler -> handler.matchesVersion(version, resolver))
+        .map(WorkflowTaskHandler::getMultiInstanceElementNames)
+        .flatMap(List::stream)
+        .filter(withoutAnItem::contains)
         .distinct()
         .sorted()
         .toList();
