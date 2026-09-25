@@ -18,8 +18,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.config.GruelboxOutboxProperties;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
@@ -54,12 +52,6 @@ public class EveryKeyOfAConditionIsInTheMetadataTest {
    * brings this file, which is why the lines are filtered by package below.
    */
   private static final String AUTO_CONFIGURATIONS = "META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports";
-
-  /**
-   * Where the configuration metadata of a module lies, the one this build generates as
-   * well as the ones the framework ships.
-   */
-  private static final String METADATA = "META-INF/spring-configuration-metadata.json";
 
   /**
    * The section every key of VanillaBP starts with. What a condition names outside it
@@ -106,7 +98,8 @@ public class EveryKeyOfAConditionIsInTheMetadataTest {
             These keys are read by a condition but unknown to the configuration metadata, so no \
             development environment proposes them: %s
             Add each of them to a properties class - the core model where every platform has the \
-            key, this module where Spring Boot has it alone - and describe it in \
+            key, this module where Spring Boot has it alone. A key this module compiles is \
+            described by the javadoc of its field, a key whose type arrives as a dependency in \
             'META-INF/additional-spring-configuration-metadata.json'."""
             .formatted(missing));
 
@@ -253,40 +246,11 @@ public class EveryKeyOfAConditionIsInTheMetadataTest {
    */
   private static Set<String> keysOfOurMetadata() throws IOException {
 
-    final var mapper = new ObjectMapper();
     final var keys = new TreeSet<String>();
-    for (final var resource : resources(METADATA)) {
-      if (!isOneOfOurArtifacts(resource)) {
-        continue;
-      }
-      try (var content = resource.openStream()) {
-        mapper
-            .readTree(content)
-            .path("properties")
-            .forEach(property -> keys.add(property.path("name").asText()));
-      }
-    }
+    SpringConfigurationMetadata
+        .propertiesOf(SpringConfigurationMetadata.GENERATED)
+        .forEach(property -> keys.add(property.path("name").asText()));
     return keys;
-
-  }
-
-  /**
-   * Whether the given metadata file belongs to VanillaBP. Every framework jar brings a file
-   * of the same name, and one of them describing a <code>vanillabp</code> key would answer
-   * for us: the test would pass while our own metadata says nothing about that key.
-   * <p>
-   * A module of this build writes its metadata into its own <code>target</code> directory,
-   * and a module which is already released lies below the group's directory in a Maven
-   * repository. Nothing else of ours reaches a classpath.
-   *
-   * @param metadata Where a metadata file was found
-   * @return Whether it is one of ours
-   */
-  private static boolean isOneOfOurArtifacts(
-      final URL metadata) {
-
-    final var location = metadata.toString();
-    return location.contains("/target/classes/") || location.contains("/io/vanillabp/");
 
   }
 

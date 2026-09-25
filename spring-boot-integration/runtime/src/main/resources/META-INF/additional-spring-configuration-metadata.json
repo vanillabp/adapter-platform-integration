@@ -102,12 +102,6 @@
       "defaultValue": "vanillabp-task-deliveries"
     },
     {
-      "name": "vanillabp.outbox.gruelbox.enabled",
-      "type": "java.lang.Boolean",
-      "description": "Whether the gruelbox-based outbox is built in place of the JDBC one VanillaBP writes itself. It needs 'com.gruelbox:transactionoutbox-core' and 'com.gruelbox:transactionoutbox-spring' on the classpath, which VanillaBP does not bring along any more. Its entries go into gruelbox' own table 'TXNO_OUTBOX'. Spring Boot is the only platform offering that store.",
-      "defaultValue": false
-    },
-    {
       "name": "vanillabp.workflow-modules",
       "type": "java.util.Map<java.lang.String,io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties>",
       "description": "The properties of all workflow modules, keyed by the workflow module's ID: per-module adapter priorities ('prioritized-adapters') and per-module adapter properties ('adapters.<id>.resources-location' for BPMS-specific BPMN)."
