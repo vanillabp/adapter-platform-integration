@@ -15,13 +15,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.slf4j.LoggerFactory;
 
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties.HousekeepingProperties;
+import io.vanillabp.integration.adapter.migration.startup.StartupFindings;
+import io.vanillabp.integration.adapter.migration.startup.StartupTopic;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
@@ -34,6 +32,10 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * variable. It is a warning and not a refusal, because UTC is the normal case for a
  * container and a refused start would cost the deployment - see decision 91 in the
  * repository's DECISIONS.md.
+ * <p>
+ * The warning does not go into the log where it is found. It is left with the findings of
+ * the start and reaches the reader in the box at the end of it (decision &lt;pending:
+ * 579&gt;), which is why these tests read the findings rather than a log appender.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class HousekeepingWindowConfigurationTest {
@@ -52,29 +54,28 @@ public class HousekeepingWindowConfigurationTest {
 
   }
 
-  private ListAppender<ILoggingEvent> logWatcher;
+  /**
+   * Where the validation leaves what it noticed, one per test.
+   */
+  private StartupFindings findings;
 
   @BeforeEach
-  public void watchTheLog() {
+  public void startWithAnEmptyCollection() {
 
-    logWatcher = new ListAppender<>();
-    logWatcher.start();
-    ((Logger) LoggerFactory.getLogger(HousekeepingProperties.class)).addAppender(logWatcher);
+    findings = new StartupFindings();
 
   }
 
-  @AfterEach
-  public void stopWatchingTheLog() {
+  /**
+   * What the validation noticed, as one text - the same thing the box shows, without its
+   * frame.
+   */
+  private String whatWasNoticed() {
 
-    ((Logger) LoggerFactory.getLogger(HousekeepingProperties.class)).detachAndStopAllAppenders();
-
-  }
-
-  private String loggedLines() {
-
-    return logWatcher.list
+    return findings
+        .findings()
         .stream()
-        .map(ILoggingEvent::getFormattedMessage)
+        .map(StartupFindings.Finding::message)
         .collect(Collectors.joining("\n"));
 
   }
@@ -110,7 +111,7 @@ public class HousekeepingWindowConfigurationTest {
 
     final var refused = assertThrows(
         IllegalStateException.class,
-        () -> outboxWith(housekeeping).validateHousekeeping());
+        () -> outboxWith(housekeeping).validateHousekeeping(findings));
 
     final var message = refused.getMessage();
     assertTrue(message.contains(HousekeepingProperties.START_PROPERTY), message);
@@ -129,7 +130,7 @@ public class HousekeepingWindowConfigurationTest {
     housekeeping.setEnd(LocalTime.of(1, 0));
     housekeeping.setZone("Europe/Vienna");
 
-    assertDoesNotThrow(() -> outboxWith(housekeeping).validateHousekeeping());
+    assertDoesNotThrow(() -> outboxWith(housekeeping).validateHousekeeping(findings));
 
   }
 
@@ -142,7 +143,7 @@ public class HousekeepingWindowConfigurationTest {
 
     final var refused = assertThrows(
         IllegalStateException.class,
-        () -> outboxWith(housekeeping).validateHousekeeping());
+        () -> outboxWith(housekeeping).validateHousekeeping(findings));
 
     final var message = refused.getMessage();
     assertTrue(message.contains(HousekeepingProperties.ZONE_PROPERTY), message);
@@ -158,9 +159,9 @@ public class HousekeepingWindowConfigurationTest {
 
     TimeZone.setDefault(TimeZone.getTimeZone("Etc/UTC"));
 
-    outboxWith(new HousekeepingProperties()).validateHousekeeping();
+    outboxWith(new HousekeepingProperties()).validateHousekeeping(findings);
 
-    final var warning = loggedLines();
+    final var warning = whatWasNoticed();
     // what is happening, and why
     assertTrue(warning.contains("middle of the working day"), warning);
     // and the two ways out, neither of which needs a new build
@@ -180,7 +181,7 @@ public class HousekeepingWindowConfigurationTest {
 
     // UTC is what a container ships with, so refusing such a start would invent a
     // precondition rather than uncover a mistake
-    assertDoesNotThrow(() -> outboxWith(new HousekeepingProperties()).validateHousekeeping());
+    assertDoesNotThrow(() -> outboxWith(new HousekeepingProperties()).validateHousekeeping(findings));
 
   }
 
@@ -193,9 +194,9 @@ public class HousekeepingWindowConfigurationTest {
     housekeeping.setStart(LocalTime.of(23, 30));
     housekeeping.setEnd(LocalTime.of(1, 15));
 
-    outboxWith(housekeeping).validateHousekeeping();
+    outboxWith(housekeeping).validateHousekeeping(findings);
 
-    final var warning = loggedLines();
+    final var warning = whatWasNoticed();
     assertTrue(warning.contains("23:30"), warning);
     assertTrue(warning.contains("01:15"), warning);
 
@@ -208,13 +209,13 @@ public class HousekeepingWindowConfigurationTest {
     for (final var spelling : new String[]{
         "UTC", "Etc/UTC", "GMT", "Z", "Etc/GMT"
     }) {
-      logWatcher.list.clear();
+      findings = new StartupFindings();
       TimeZone.setDefault(TimeZone.getTimeZone(ZoneId.of(spelling)));
 
-      outboxWith(new HousekeepingProperties()).validateHousekeeping();
+      outboxWith(new HousekeepingProperties()).validateHousekeeping(findings);
 
       assertTrue(
-          loggedLines().contains("middle of the working day"),
+          whatWasNoticed().contains("middle of the working day"),
           "a JVM on '%s' means UTC as much as the others do".formatted(spelling));
     }
 
@@ -228,9 +229,9 @@ public class HousekeepingWindowConfigurationTest {
     final var housekeeping = new HousekeepingProperties();
     housekeeping.setZone("UTC");
 
-    assertDoesNotThrow(() -> outboxWith(housekeeping).validateHousekeeping());
+    assertDoesNotThrow(() -> outboxWith(housekeeping).validateHousekeeping(findings));
 
-    assertEquals("", loggedLines(), "somebody who wrote UTC down is not told about UTC");
+    assertEquals("", whatWasNoticed(), "somebody who wrote UTC down is not told about UTC");
 
   }
 
@@ -240,9 +241,27 @@ public class HousekeepingWindowConfigurationTest {
 
     TimeZone.setDefault(TimeZone.getTimeZone("Europe/Vienna"));
 
-    assertDoesNotThrow(() -> outboxWith(new HousekeepingProperties()).validateHousekeeping());
+    assertDoesNotThrow(() -> outboxWith(new HousekeepingProperties()).validateHousekeeping(findings));
 
-    assertEquals("", loggedLines());
+    assertEquals("", whatWasNoticed());
+
+  }
+
+  @Test
+  @DisplayName("The zone is a warning of the configuration, and it names the section it is about")
+  public void theWarningIsFiledUnderTheConfiguration() {
+
+    TimeZone.setDefault(TimeZone.getTimeZone("Etc/UTC"));
+
+    outboxWith(new HousekeepingProperties()).validateHousekeeping(findings);
+
+    assertEquals(1, findings.findings().size(), whatWasNoticed());
+    final var finding = findings.findings().get(0);
+    assertEquals(StartupFindings.Severity.WARNING, finding.severity());
+    // the fix is a line of configuration or an environment variable, so the box sends the
+    // reader to the configuration
+    assertEquals(StartupTopic.CONFIGURATION, finding.topic());
+    assertEquals(HousekeepingProperties.HOUSEKEEPING_PREFIX, finding.scope());
 
   }
 
@@ -253,7 +272,7 @@ public class HousekeepingWindowConfigurationTest {
     final var properties = new PhaseTwoOutboxProperties();
     properties.setHousekeeping(null);
 
-    properties.validateHousekeeping();
+    properties.validateHousekeeping(findings);
 
     assertEquals(LocalTime.of(4, 0), properties.getHousekeeping().getStart());
     assertEquals(LocalTime.of(5, 0), properties.getHousekeeping().getEnd());

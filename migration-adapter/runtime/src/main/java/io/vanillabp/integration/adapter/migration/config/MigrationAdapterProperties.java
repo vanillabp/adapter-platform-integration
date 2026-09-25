@@ -178,6 +178,36 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   private MetricsProperties metrics = new MetricsProperties();
 
   /**
+   * Where every startup check leaves what it found, so the whole start says it once, at
+   * its end, instead of a line per check (see
+   * {@link io.vanillabp.integration.adapter.migration.startup.StartupFindings}).
+   * <p>
+   * It sits on the configuration because the configuration is what everything doing a
+   * startup check already holds, and it carries no accessors a binder would take for a
+   * property: nothing below <code>vanillabp</code> configures it.
+   */
+  @Builder.Default
+  @lombok.Getter(lombok.AccessLevel.NONE)
+  @lombok.Setter(lombok.AccessLevel.NONE)
+  private io.vanillabp.integration.adapter.migration.startup.StartupFindings startupFindings = new io.vanillabp.integration.adapter.migration.startup.StartupFindings();
+
+  /**
+   * Where a startup check reports what it found.
+   *
+   * @return The findings of this start, never <code>null</code>
+   */
+  public io.vanillabp.integration.adapter.migration.startup.StartupFindings startupFindings() {
+
+    if (startupFindings == null) {
+      // a builder of an older call site, and a binder which maps what it does not know
+      // onto null: neither must cost a check its place to report to
+      startupFindings = new io.vanillabp.integration.adapter.migration.startup.StartupFindings();
+    }
+    return startupFindings;
+
+  }
+
+  /**
    * Adapter ids this application USED to have and deliberately does not configure any
    * more - the last step of a BPMS migration, once nothing runs in the old BPMS any
    * more.
@@ -2171,7 +2201,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       outbox = new PhaseTwoOutboxProperties();
     }
     outbox.validateStoreNames();
-    outbox.validateHousekeeping();
+    outbox.validateHousekeeping(startupFindings());
     validateMaxTaskAge();
     refuseFullSyncPermissionsOutsideAWorkflow();
     refuseResourcesLocationsBelowTheWorkflowModule();

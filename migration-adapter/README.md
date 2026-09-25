@@ -3935,6 +3935,54 @@ The core answers the part it owns, and only that part:
 `otherFailuresArePassedThroughSilently`, `theWarningIsGivenOncePerProcess`), and each
 platform runs the same conflict through a booted application.
 
+## What a start says about itself
+
+A start used to say each of its findings where it found it, so they stood between the lines of
+every other library. Now a check reports its finding to `StartupFindings` and the whole start
+says it once, at its end, as one block between two rulers:
+
+```
+------------------------------------------------------------------------------------------------------
+VanillaBP 2.0 looked at this application and found 2 things worth a look. None of them stopped the start.
+
+CONFIGURATION (1)
+  vanillabp.outbox.housekeeping
+      The housekeeping of the VanillaBP outbox runs from 04:00 to 05:00 UTC, because this JVM stands
+      on 'Etc/UTC' and no time zone was configured for it. [...]
+
+DEPLOYED VERSIONS (1)
+  process 'loan-approval', adapter 'cloud'
+      Version 2 of BPMN process 'loan-approval' [...]
+------------------------------------------------------------------------------------------------------
+```
+
+A few rules hold it together.
+
+The block is written in ONE call of the logger. Written line by line, the next library writes into
+it.
+
+The headings are the artifact a fix lies in - parts and versions, configuration, code, BPMN models,
+the versions a BPMS still holds, stored state, infrastructure - in the order a developer walks
+them, each with the count a reader skims. `StartupTopic` is that list.
+
+An application with nothing to notice gets nothing. No ruler, no heading, no empty message.
+
+What ENDS a start is collected too and thrown once, grouped and counted the same way, so a
+developer who put two things wrong learns both in one start. What was noticed before the refusal
+fell due is written first: a warning does not become less true because a later check ends the
+start. A check which cannot let the start walk on throws where it stands and says so in its
+javadoc.
+
+The end of a start is the end of `DeploymentService#startWorkflowProcessing`, because nothing a
+start can notice comes later. What Quarkus refuses while it BUILDS never reaches the block, and an
+application which was never built never starts.
+
+A finding carries its scope beside its text rather than inside it, because the same finding arrives
+once per workflow module, per BPMN process, per adapter id and per method: two findings of one
+topic carrying the same text become one entry naming both scopes.
+
+`TheBoxAtTheEndOfAStartTest` holds every word of it, the shape included.
+
 ## What an operator gets to see
 
 Three things about one delivery, built in the core because every BPMS passes through it:

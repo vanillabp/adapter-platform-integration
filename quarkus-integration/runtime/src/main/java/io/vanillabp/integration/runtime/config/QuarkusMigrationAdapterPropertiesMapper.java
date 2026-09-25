@@ -77,6 +77,9 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
   // derived from the classpath facts by MigrationAdapterProperties#normalize, not
   // bound from properties (the resources-location convention)
   @Mapping(target = "conventionalResourcesLocations", ignore = true)
+  // where the startup checks leave what they found: it is filled while the application
+  // starts, never bound from a key
+  @Mapping(target = "startupFindings", ignore = true)
   MigrationAdapterProperties toCore(
       QuarkusMigrationAdapterProperties properties);
 
