@@ -1191,6 +1191,25 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   }
 
+  /**
+   * The configured adapter ids for a message which lists them, sorted: the sections come
+   * from a binder and keep no order, so the same configuration would otherwise name them
+   * differently from one boot to the next.
+   *
+   * @param separator What goes between two ids
+   * @return The ids, joined
+   */
+  private String configuredAdapterIdsJoinedBy(
+      final String separator) {
+
+    return adapters
+        .keySet()
+        .stream()
+        .sorted()
+        .collect(Collectors.joining(separator));
+
+  }
+
   private Stream<String> unknownAdapterKeys(
       final Map<String, ? extends AdapterProperties> adaptersOfLevel,
       final String keyPrefixOfLevel) {
@@ -1364,6 +1383,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     if (misplaced.isEmpty()) {
       return;
     }
+    // the maps come from a binder and keep no order, so the message is sorted to read
+    // the same way on every boot
+    misplaced.sort(String::compareTo);
     throw new IllegalStateException(
         """
             Sharing a whole workflow aggregate is allowed at the workflow and nowhere else, \
@@ -1726,6 +1748,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     if (offenders.isEmpty()) {
       return;
     }
+    // the maps come from a binder and keep no order, so the message is sorted to read
+    // the same way on every boot
+    offenders.sort(String::compareTo);
     throw new IllegalStateException(
         """
             A negative maximum age was configured for open tasks:
@@ -1981,11 +2006,14 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
               platformConfigurationNote));
     }
 
+    // adapterTypes() collects into a hash map, so the lines are sorted to read the same
+    // way on every boot
     final var adaptersNotInClasspath = adapterTypes()
         .entrySet()
         .stream()
         .filter(entry -> !adaptersLoaded.contains(entry.getValue()))
         .map(entry -> "%s of type %s".formatted(entry.getKey(), entry.getValue()))
+        .sorted()
         .collect(Collectors.joining(",\n  "));
     if (!adaptersNotInClasspath.isEmpty()) {
       throw new IllegalStateException(
@@ -2003,6 +2031,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     // unknown workflow-module properties
     final var workflowModulesConfiguredButNotInClasspath = new LinkedList<>(getWorkflowModules().keySet());
     workflowModulesConfiguredButNotInClasspath.removeAll(knownWorkflowModuleIds);
+    // the map comes from a binder and keeps no order, so the message is sorted to read
+    // the same way on every boot
+    workflowModulesConfiguredButNotInClasspath.sort(String::compareTo);
     if (!workflowModulesConfiguredButNotInClasspath.isEmpty()) {
       final var propPrefix = "\n  %s.workflow-modules.".formatted(PREFIX);
       logger.warn(
@@ -2050,7 +2081,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
               These properties refer to adapter ids not configured in 'vanillabp.adapters.*' - they are never used:
                 %s
               Configured adapter ids are: '%s'. Fix the adapter id or add a section 'vanillabp.adapters.<id>'."""
-              .formatted(unusedModuleAdapterEntries, String.join("', '", adapters.keySet())));
+              .formatted(unusedModuleAdapterEntries, configuredAdapterIdsJoinedBy("', '")));
     }
 
     // duplicates in prioritized-adapters lists
@@ -2066,7 +2097,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
               The property '%s.prioritized-adapters' must list all the adapters configured in '%s.adapters.*' to define
               the order in which adapters are addressed to find workflows running.
               Configured adapters are: %s."""
-              .formatted(PREFIX, PREFIX, String.join(", ", adapters.keySet())));
+              .formatted(PREFIX, PREFIX, configuredAdapterIdsJoinedBy(", ")));
     }
     getWorkflowModules()
         .values()
@@ -2100,6 +2131,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
                 .isBlank();
           })
           .map(Map.Entry::getKey)
+          // the map comes from a binder and keeps no order, so the message is sorted to
+          // read the same way on every boot
+          .sorted()
           .toList();
       if (!specificBpmnResources.isEmpty()) {
         final var propPrefix = "%s.workflow-modules.".formatted(PREFIX);
@@ -2168,10 +2202,19 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
               There are VanillaBP adapters referenced not found in any property section 'vanillabp.adapters.*':
                 %s
               """
+              // the keys and the ids below them sit in hash collections, so both are
+              // sorted to read the same way on every boot
               .formatted(notConfiguredAdapters
                   .entrySet()
                   .stream()
-                  .map(entry -> "%s => %s".formatted(entry.getKey(), String.join(",", entry.getValue())))
+                  .sorted(Map.Entry.comparingByKey())
+                  .map(entry -> "%s => %s".formatted(
+                      entry.getKey(),
+                      entry
+                          .getValue()
+                          .stream()
+                          .sorted()
+                          .collect(Collectors.joining(","))))
                   .collect(Collectors.joining("\n  "))));
     }
 
@@ -2248,6 +2291,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     }
 
     if (!violations.isEmpty()) {
+      // the variables arrive in whatever order the platform hands them over, so the
+      // message is sorted to read the same way on every boot
+      violations.sort(String::compareTo);
       throw new IllegalStateException(
           """
               Environment variables addressing the '%s' configuration were NOT taken over by the configuration binding:
@@ -2281,7 +2327,12 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
                   sectionKey,
                   configuredIds.isEmpty()
                       ? "none configured"
-                      : "'%s'".formatted(String.join("', '", configuredIds))));
+                      // the ids come from a binder's map and keep no order
+                      : "'%s'".formatted(
+                          configuredIds
+                              .stream()
+                              .sorted()
+                              .collect(Collectors.joining("', '")))));
     }
 
   }

@@ -203,8 +203,8 @@ public class FullSyncCheckTest {
     assertEquals(
         """
             Sharing a whole workflow aggregate is allowed at the workflow and nowhere else, but it is configured at:
-              vanillabp.allow-full-sync-with-bpms
               vanillabp.adapters.saas.allow-full-sync-with-bpms
+              vanillabp.allow-full-sync-with-bpms
               vanillabp.workflow-modules.loan-approval.allow-full-sync-with-bpms
             Move each of them to the workflow it is meant for:
               vanillabp.workflow-modules.<workflow-module>.workflows.<bpmn-process-id>.allow-full-sync-with-bpms: true

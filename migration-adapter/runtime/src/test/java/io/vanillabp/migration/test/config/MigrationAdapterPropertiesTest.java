@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -22,6 +24,7 @@ import ch.qos.logback.core.read.ListAppender;
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.ClasspathFacts;
+import io.vanillabp.integration.adapter.migration.config.DeliveryProperties;
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.TaskAdapterProperties;
@@ -366,8 +369,8 @@ public class MigrationAdapterPropertiesTest {
     assertEquals(
         """
             There are VanillaBP adapters referenced not found in any property section 'vanillabp.adapters.*':
-              vanillabp.workflow-modules.test-module.prioritized-adapters => unknown-adapter2
               vanillabp.prioritized-adapters => unknown-adapter1
+              vanillabp.workflow-modules.test-module.prioritized-adapters => unknown-adapter2
             """,
         exception.getMessage());
   }
@@ -915,6 +918,118 @@ public class MigrationAdapterPropertiesTest {
               vanillabp.adapters.<adapter>.resources-location: classpath*:<location>
             VanillaBP loads the BPMN files before it knows which process or which task is in them, so a location below the workflow module is never read.""",
         refusal.getMessage());
+
+  }
+
+  @Nested
+  @DisplayName("A message listing keys reads the same on every boot")
+  class AMessageListingKeysIsSorted {
+
+    @Test
+    @DisplayName("Two misplaced permissions are listed in the same order either way")
+    public void twoMisplacedPermissionsAreListedTheSameWay() {
+
+      final var oneWayRound = refusalOfPermissionsGivenTo("saas", "on-prem");
+
+      assertEquals(oneWayRound, refusalOfPermissionsGivenTo("on-prem", "saas"));
+      assertEquals(
+          """
+              Sharing a whole workflow aggregate is allowed at the workflow and nowhere else, but it is configured at:
+                vanillabp.adapters.on-prem.allow-full-sync-with-bpms
+                vanillabp.adapters.saas.allow-full-sync-with-bpms
+              Move each of them to the workflow it is meant for:
+                vanillabp.workflow-modules.<workflow-module>.workflows.<bpmn-process-id>.allow-full-sync-with-bpms: true
+              An inherited permission would cover the next workflow somebody adds to the module as well, and that is the workflow nobody looked at.""",
+          oneWayRound);
+
+    }
+
+    @Test
+    @DisplayName("Two negative task ages are listed in the same order either way")
+    public void twoNegativeTaskAgesAreListedTheSameWay() {
+
+      final var oneWayRound = refusalOfNegativeTaskAgesIn("second-module", "first-module");
+
+      assertEquals(oneWayRound, refusalOfNegativeTaskAgesIn("first-module", "second-module"));
+      assertEquals(
+          """
+              A negative maximum age was configured for open tasks:
+                vanillabp.workflow-modules.first-module.delivery.max-task-age
+                vanillabp.workflow-modules.second-module.delivery.max-task-age
+              The value says how long a task may wait for its asynchronous completion before VanillaBP reports it, so it has to be positive - the default is P30D. Use '0' to switch the report off for that scope.""",
+          oneWayRound);
+
+    }
+
+    private String refusalOfPermissionsGivenTo(
+        final String firstAdapterId,
+        final String secondAdapterId) {
+
+      final var adapters = new LinkedHashMap<String, AdapterConfigProperties>();
+      adapters.put(firstAdapterId, permissionGivenTo(AdapterConfigProperties.ofType("adapter2")));
+      adapters.put(secondAdapterId, permissionGivenTo(AdapterConfigProperties.ofType("adapter2")));
+
+      final var properties = new MigrationAdapterProperties();
+      properties.setAdapters(adapters);
+      properties.setPrioritizedAdapters(List.of(firstAdapterId, secondAdapterId));
+      properties.setWorkflowModules(Map.of("test-module", WorkflowModuleAdapterProperties
+          .builder()
+          .workflowModuleId("test-module")
+          .build()));
+
+      return refusalOf(properties, List.of("test-module"));
+
+    }
+
+    private String refusalOfNegativeTaskAgesIn(
+        final String firstModuleId,
+        final String secondModuleId) {
+
+      final var modules = new LinkedHashMap<String, WorkflowModuleAdapterProperties>();
+      modules.put(firstModuleId, moduleWaitingForeverOnTasks(firstModuleId));
+      modules.put(secondModuleId, moduleWaitingForeverOnTasks(secondModuleId));
+
+      final var properties = new MigrationAdapterProperties();
+      properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
+      properties.setPrioritizedAdapters(List.of("adapter-test"));
+      properties.setWorkflowModules(modules);
+
+      return refusalOf(properties, List.of(firstModuleId, secondModuleId));
+
+    }
+
+    private String refusalOf(
+        final MigrationAdapterProperties properties,
+        final List<String> workflowModuleIds) {
+
+      return assertThrowsExactly(
+          IllegalStateException.class,
+          () -> properties.validateProperties(List.of("adapter2"), workflowModuleIds))
+          .getMessage();
+
+    }
+
+    private AdapterConfigProperties permissionGivenTo(
+        final AdapterConfigProperties adapter) {
+
+      adapter.setAllowFullSyncWithBpms(Boolean.TRUE);
+      return adapter;
+
+    }
+
+    private WorkflowModuleAdapterProperties moduleWaitingForeverOnTasks(
+        final String workflowModuleId) {
+
+      return WorkflowModuleAdapterProperties
+          .builder()
+          .workflowModuleId(workflowModuleId)
+          .delivery(DeliveryProperties
+              .builder()
+              .maxTaskAge(Duration.ofDays(-1))
+              .build())
+          .build();
+
+    }
 
   }
 

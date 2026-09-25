@@ -30,7 +30,7 @@ public class NoPrioritizedAdapterConfigurationTest {
           """
               The property 'vanillabp.prioritized-adapters' must list all the adapters configured in 'vanillabp.adapters.*' to define
               the order in which adapters are addressed to find workflows running.
-              Configured adapters are: test2, test."""));
+              Configured adapters are: test, test2."""));
 
   @Test
   public void testAdapterConfiguration() {
