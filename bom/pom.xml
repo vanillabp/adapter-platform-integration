@@ -48,7 +48,7 @@
   <properties>
     <!-- Keep in sync with the property 'vanillabp.version' of the aggregator pom. The
          BOM cannot inherit it (see the comment on the parent above). -->
-    <spi-for-java.version>1.2.0-SNAPSHOT</spi-for-java.version>
+    <spi-for-java.version>2.0.0-SNAPSHOT</spi-for-java.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!-- This pom is formatted by the aggregator's Spotless run (it includes
          '**/pom.xml'), but the plugin itself is not inherited here (see the parent
