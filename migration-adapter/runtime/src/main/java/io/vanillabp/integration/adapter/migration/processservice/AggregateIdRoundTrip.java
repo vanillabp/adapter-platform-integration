@@ -118,8 +118,7 @@ public final class AggregateIdRoundTrip {
    * This is the answer a caller needs which has a string and a question rather than a
    * string it already knows to be an ID: a business key somebody else chose is looked up
    * as an aggregate's ID, and where it cannot be one, the lookup has to end with "there
-   * is none" instead of a failing query or an invented ID (see
-   * {@link io.vanillabp.integration.adapter.migration.workflowstart.BpmsInitiatedStartId}).
+   * is none" instead of a failing query or an invented ID.
    *
    * @param serializedAggregateId The aggregate ID in serialized form
    * @param aggregateIdType The type the aggregate ID should be converted to, or

@@ -408,7 +408,9 @@ not read one keeps compiling and keeps behaving as it did.
 
 If your BPMS can start a workflow by itself, ask `BpmsInitiatedStartInvoker` to validate the start
 events you found, and throw where your BPMS cannot report such a start at all: a workflow running
-without an aggregate is worse than a deployment which failed. Ask `WorkflowEndedInvoker` whether a
+without an aggregate is worse than a deployment which failed. That validation is also where the
+application learns that a start event of its process has no `@WorkflowStartedByBpms` method, which
+is why the call matters even for an application which wrote none. Ask `WorkflowEndedInvoker` whether a
 handler for the end of a workflow exists at all, and attach your listener only where it does.
 
 If your BPMS counts no versions of a process, say so with `reportNoProcessVersionCatalog`. It costs
@@ -592,22 +594,23 @@ terminate end event ends the instance as COMPLETED while taking an open task wit
 does not read the kind before it derives (decision 73).
 
 `BpmsInitiatedStartInvoker.startWorkflowByBpms(...)` reports a workflow your BPMS started on its
-own, through a timer, a signal or a conditional start event, and the core builds the aggregate for
-it. The id it derives comes from your `getNaturalIdentity()` first, then from `getStartInstant()`,
-then from a generated value. That order is the whole reason the second method is not called a
-trigger time: what it ideally reports is the instant the engine scheduled the start for, because a
-cyclic timer firing the same instant twice then addresses the same aggregate, but where your BPMS
-does not hand that time to a listener you report the moment of the notification instead, and the
-method's name does not then contradict you. If your notification can repeat after the aggregate was
-committed, report a natural identity, because that is what keeps a repeated notification from
-building a second aggregate.
+own, through a timer, a signal or a conditional start event. The core does NOT build the aggregate:
+it asks the application's `@WorkflowStartedByBpms` method for one and saves what it gets, and a
+process which can be started this way and has no such method never got past the deployment (see
+decision 92).
 
-Report one as well where your BPMS keeps a business key and that key is where the workflow
-aggregate's id lives. A key then says which aggregate the workflow means, not who started the
-workflow, so the core looks for an aggregate of that id: one which exists makes this the
-application's own start, and one which does not makes it a workflow somebody started past
-VanillaBP, which is built under the key it was started with. Your adapter learns which of the two
-it was from `BpmsInitiatedStartResult#created()`.
+`getStartInstant()` is what the application usually turns into the aggregate's id, so report the
+instant the engine scheduled the start for where your BPMS hands it to a listener. A cyclic timer
+firing the same instant twice then addresses the same aggregate, and a repeated notification saves
+nothing twice. Where your BPMS does not hand that time over, report the moment of the notification
+instead; that is the whole reason the method is not called a trigger time.
+
+`getNaturalIdentity()` and `getBusinessKey()` keep their meaning for the check which refuses a
+delivery whose business key is not the aggregate's id. Report the key where your BPMS keeps one. It
+no longer becomes the aggregate's id, because the id is the application's choice now, so a workflow
+somebody started past VanillaBP under a key of their own fails at its first delivery like any
+other. Your adapter learns whether the notification created an aggregate or found one from
+`BpmsInitiatedStartResult#created()`.
 
 ### 3.4 Letting the core work cancellations out for you
 

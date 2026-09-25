@@ -10,10 +10,14 @@ import io.vanillabp.spi.service.WorkflowStartedByBpms;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * The workflow service of the acceptance test of BPMS-initiated starts. It serves
- * ONE of the two start events of its process, which proves both paths at once: the
- * timer start is built by VanillaBP alone, the signal start passes through the
- * application's method.
+ * The workflow service of the acceptance test of BPMS-initiated starts. Its process has
+ * two start events the BPMS fires on its own, and it serves both: a process which can be
+ * started by the BPMS and has no method for one of its start events does not let the
+ * application boot.
+ * <p>
+ * The two methods also show the two ways an aggregate gets its id. The timer takes the
+ * trigger time, which is what makes a repeated notification harmless; the signal has no
+ * such value and builds one from what the model set.
  */
 @ApplicationScoped
 @WorkflowService(
@@ -33,16 +37,40 @@ public class StartWorkflowService {
 
   }
 
+  @WorkflowStartedByBpms(id = "DailyTimer")
+  public StartAggregate aggregateOfTimerStart(
+      final BpmsStartTrigger trigger,
+      @TaskParam("region") final String region,
+      // a wrapper rather than the primitive: the second notification of the same timer
+      // carries no amount, and a primitive would end the start instead of finding the
+      // aggregate which is already there
+      @TaskParam("amount") final Integer amount) {
+
+    final var aggregate = new StartAggregate();
+    // the trigger time as the id: the same timer reported twice finds this aggregate
+    aggregate.setId(trigger.time().toString());
+    aggregate.setStartedBy(trigger.kind().name());
+    aggregate.setRegion(region);
+    aggregate.setAmount(amount == null
+        ? 0
+        : amount);
+    return aggregate;
+
+  }
+
   @WorkflowStartedByBpms(id = "SignalStart")
-  public void aggregateOfSignalStart(
-      final StartAggregate aggregate,
+  public StartAggregate aggregateOfSignalStart(
       final BpmsStartTrigger trigger,
       @TaskParam("region") final String region) {
 
+    final var aggregate = new StartAggregate();
+    aggregate.setId("signal-"
+        + region);
     aggregate.setStartedBy("%s/%s".formatted(trigger.kind(), trigger.signalName()));
     aggregate.setRegion(region == null
         ? null
         : region.toUpperCase());
+    return aggregate;
 
   }
 

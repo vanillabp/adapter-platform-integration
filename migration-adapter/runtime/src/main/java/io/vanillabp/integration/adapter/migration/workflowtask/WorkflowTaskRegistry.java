@@ -1247,7 +1247,15 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
       final String bpmnProcessId,
       final Collection<BpmsInitiatedStartSpec> startEvents) {
 
-    bpmsInitiatedStarts.validate(workflowModuleId, bpmnProcessId, startEvents);
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    bpmsInitiatedStarts
+        .validate(
+            workflowModuleId,
+            bpmnProcessId,
+            startEvents,
+            (entry != null) && (entry.processService != null)
+                ? entry.processService.getWorkflowAggregateClass()
+                : null);
 
   }
 

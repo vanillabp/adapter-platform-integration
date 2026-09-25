@@ -186,8 +186,12 @@ public class BusinessKeyIsTheAggregateIdTest {
     }
 
     @WorkflowStartedByBpms(id = TIMER_EVENT)
-    public void startedByTheBpms(
-        final Aggregate aggregate) {
+    public Aggregate startedByTheBpms(
+        final BpmsStartTrigger trigger) {
+
+      final var aggregate = new Aggregate();
+      aggregate.id = trigger.time().toString();
+      return aggregate;
 
     }
 

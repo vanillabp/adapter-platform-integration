@@ -39,6 +39,7 @@ import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.BpmsStartTrigger;
+import io.vanillabp.spi.service.TaskParam;
 import io.vanillabp.spi.service.WorkflowEnded;
 import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowStartedByBpms;
@@ -647,13 +648,23 @@ public class ProcessVersionMatchingTest {
   static class TwoStartsOneEventService {
 
     @WorkflowStartedByBpms(version = "1-3")
-    public void old(
-        final Aggregate aggregate) {
+    public Aggregate old(
+        @TaskParam("id") final String id) {
+
+      final var aggregate = new Aggregate();
+      aggregate.id = id;
+      return aggregate;
+
     }
 
     @WorkflowStartedByBpms(version = "2")
-    public void newer(
-        final Aggregate aggregate) {
+    public Aggregate newer(
+        @TaskParam("id") final String id) {
+
+      final var aggregate = new Aggregate();
+      aggregate.id = id;
+      return aggregate;
+
     }
 
   }
@@ -661,18 +672,24 @@ public class ProcessVersionMatchingTest {
   static class VersionedStartsService {
 
     @WorkflowStartedByBpms(version = "1-2")
-    public void upToTwo(
-        final Aggregate aggregate) {
+    public Aggregate upToTwo(
+        @TaskParam("id") final String id) {
 
+      final var aggregate = new Aggregate();
+      aggregate.id = id;
       aggregate.servedBy = "upToTwo";
+      return aggregate;
 
     }
 
     @WorkflowStartedByBpms(version = ">2")
-    public void afterTwo(
-        final Aggregate aggregate) {
+    public Aggregate afterTwo(
+        @TaskParam("id") final String id) {
 
+      final var aggregate = new Aggregate();
+      aggregate.id = id;
       aggregate.servedBy = "afterTwo";
+      return aggregate;
 
     }
 
@@ -739,6 +756,12 @@ public class ProcessVersionMatchingTest {
       }
 
       @Override
+      public java.util.Map<String, Object> getVariables() {
+        // the model carries the id the application builds its aggregate under
+        return java.util.Map.of("id", naturalIdentity);
+      }
+
+      @Override
       public String getProcessVersion() {
         return processVersion;
       }
@@ -795,15 +818,17 @@ public class ProcessVersionMatchingTest {
     testee.startWorkflowByBpms(MODULE, PROCESS, startContext("4712", "3"));
     assertEquals("afterTwo", persistence.aggregates.get("4712").servedBy);
 
-    // without a reported version no ranged method runs: the aggregate is built anyway,
-    // since the BPMS created that workflow either way - and it is said out loud
-    final var messages = loggedBy(
-        io.vanillabp.integration.adapter.migration.workflowstart.BpmsInitiatedStarts.class,
+    // without a reported version no ranged method runs, and then nothing builds the
+    // aggregate at all: the start ends naming the methods wired to that start event
+    final var unserved = assertThrows(
+        IllegalStateException.class,
         () -> testee.startWorkflowByBpms(MODULE, PROCESS, startContext("4713", null)));
-    assertNull(persistence.aggregates.get("4713").servedBy, "no method initialized the aggregate");
     assertTrue(
-        messages.stream().anyMatch(message -> message.contains("reports no process version")),
-        messages.toString());
+        unserved.getMessage().contains("nothing can build the workflow aggregate"),
+        unserved.getMessage());
+    assertTrue(
+        unserved.getMessage().contains("reports no process version"),
+        unserved.getMessage());
 
   }
 
@@ -1080,10 +1105,13 @@ public class ProcessVersionMatchingTest {
     class StartedAndEndedService {
 
       @WorkflowStartedByBpms
-      public void started(
-          final Aggregate aggregate) {
+      public Aggregate started(
+          @TaskParam("id") final String id) {
 
+        final var aggregate = new Aggregate();
+        aggregate.id = id;
         aggregate.servedBy = "started";
+        return aggregate;
 
       }
 
@@ -1236,10 +1264,11 @@ public class ProcessVersionMatchingTest {
       testee.workflowEnded(MODULE, PROCESS, endedContext("2"));
       assertEquals("ended", persistence.aggregates.get("4711").servedBy);
 
-      // version 3 lies outside the class' range: the start builds the aggregate
-      // without initialization and the end reaches nobody
-      testee.startWorkflowByBpms(MODULE, PROCESS, startContext("4712", "3"));
-      assertNull(persistence.aggregates.get("4712").servedBy, "no method initialized the aggregate");
+      // version 3 lies outside the class' range: nothing builds the aggregate, and the
+      // end reaches nobody
+      assertThrows(
+          IllegalStateException.class,
+          () -> testee.startWorkflowByBpms(MODULE, PROCESS, startContext("4712", "3")));
 
     }
 

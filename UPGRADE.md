@@ -499,6 +499,13 @@ text does not carry the value back, they stay refused, and the message names the
 instead. The measurement is decision 57 and the reasoning decision 55 in
 [`DECISIONS.md`](./DECISIONS.md).
 
+#### A workflow the BPMS starts needs a method which builds its aggregate
+
+Version 1 did not support a process the BPMS starts on its own, so there is nothing to migrate.
+Where you model a timer, signal or conditional start event in version 2, the workflow service of
+that process needs a `@WorkflowStartedByBpms` method which RETURNS the workflow aggregate. Without
+one the application does not start, and the message shows the method to write.
+
 #### `version` decides which method serves a task
 
 The `version` attribute of `@WorkflowTask` exists since version 1 and was never read there, so every

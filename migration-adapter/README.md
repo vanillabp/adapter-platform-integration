@@ -1268,9 +1268,8 @@ nothing to check. Held by `WorkflowTaskRegistryTest#theNamedElementIsReported`,
 
 An adapter hands the value over as its BPMS deserialized it and converts nothing. The
 conversion into the declared type happens once, in the platform, in `ValueConversion`,
-which serves the parameters of a `@WorkflowTask` method, the parameters of a
-`@WorkflowStartedByBpms` method and the attributes an aggregate gets when the BPMS started
-the workflow.
+which serves the parameters of a `@WorkflowTask` method and the parameters of a
+`@WorkflowStartedByBpms` method.
 
 What it does:
 
@@ -2955,27 +2954,31 @@ Adapters use the SPI (`io.vanillabp.integration.adapter.spi.workflowstart`) twic
   identity of the start, the variables the model set, and whether the aggregate has to
   be built in the CALLER's transaction (embedded BPMS) or in a new one (remote BPMS).
 
-What the core does, in one transaction: derive the ID, reuse an aggregate already
-carrying it (a repeated notification builds nothing twice), otherwise instantiate the
-class, write the ID and the variables into it, run the optional
-`@WorkflowStartedByBpms` method and save. The result carries the aggregate's ID, the
-name of its ID attribute and the variables the adapter writes back - the ID variable
+What the core does, in one transaction: call the application's `@WorkflowStartedByBpms`
+method, take the aggregate it returns, reuse the one already carrying that id (a repeated
+notification saves nothing twice), otherwise save. The result carries the aggregate's ID,
+the name of its ID attribute and the variables the adapter writes back - the ID variable
 plus the values shared per `@SyncWithBPMS` where the adapter asks for them
 (`AggregateSyncMode`).
 
-The ID rules live in `BpmsInitiatedStartId`: what the BPMS identifies the start by
-wins (a remote BPMS' instance key, stable across redeliveries), then a timer's trigger
-time, then a generated ID - and where none of them fits the ID attribute's type,
-nothing is assigned and the persistence layer generates one while saving.
+The core builds no aggregate of its own, and the annotation is required for a process the
+BPMS can start. An object which comes into existence without the application does not
+carry the application's values, and here that would be the first thing which ever happens
+to the workflow; see decision 92 in the repository's DECISIONS.md. The ID is the
+application's choice as well, so whether a repeated notification can be recognized at all
+is decided by the method: a timer brings its time in the `BpmsStartTrigger`, a signal and a
+condition bring nothing.
 
 The `@WorkflowStartedByBpms` methods are scanned by `BpmsInitiatedStartScanner` and
 held by `BpmsInitiatedStarts`, to which `WorkflowTaskRegistry` delegates the second
 adapter-facing interface. The scanner builds its parameters from `CoreParameterBinders`,
-the one place the workflow aggregate and `@TaskParam` are bound - shared with the scanners
-of `@WorkflowTask` and `@WorkflowEnded` and with the [handler contracts of an
-extension](#the-extensions-own-annotation-handler-contracts). What stays its own is
-everything a start has and a task does not: which start event a method serves, the ID
-rules, and the aggregate which does not exist yet.
+the one place `@TaskParam` is bound - shared with the scanners of `@WorkflowTask` and
+`@WorkflowEnded` and with the [handler contracts of an
+extension](#the-extensions-own-annotation-handler-contracts). The aggregate is NOT among
+the parameters here, because it does not exist before this method runs. What stays its own
+is which start event a method serves, and the check that every start event the BPMS fires
+has a method: judged per start event, so a process with a timer and a signal cannot serve
+one of them and fire the other into nothing.
 
 An adapter whose BPMS cannot report such a start implements none of this and fails the
 deployment of such a process with a guiding message instead - a workflow which could
@@ -2992,7 +2995,7 @@ sequenceDiagram
   participant AD as Adapter
   participant BS as BpmsInitiatedStartInvoker (core)
   participant AG as Aggregate persistence
-  participant App as @WorkflowStartedByBpms (optional)
+  participant App as @WorkflowStartedByBpms (required)
   Note over AD: wiring time: validateBpmsInitiatedStarts(module, process, start events) — PEA throws here (no API), deployment-failure policy applies
   alt Camunda 7
     BPMS->>AD: execution listener on the start event (engine tx)
@@ -3001,10 +3004,8 @@ sequenceDiagram
     BPMS->>AD: job of the injected `end` execution listener on the start event (worker thread)
     AD->>BS: startWorkflowByBpms(ctx: nativeInstanceId=processInstanceKey, runInCurrentTransaction=false)
   end
-  BS->>BS: derive id: BPMS identity › trigger time › generated › left to persistence
-  BS->>AG: find existing aggregate with that id (repeated notification builds nothing twice)
-  BS->>BS: instantiate, write id + variables the model set
-  BS->>App: optional hook builds/enriches the aggregate
+  BS->>App: the application's method builds the aggregate and chooses its id
+  BS->>AG: find existing aggregate with that id (repeated notification saves nothing twice)
   BS->>AG: save   [C7: engine tx · C8: requireNew]
   BS-->>AD: result: aggregateId, idName, variables to write back
   alt Camunda 7

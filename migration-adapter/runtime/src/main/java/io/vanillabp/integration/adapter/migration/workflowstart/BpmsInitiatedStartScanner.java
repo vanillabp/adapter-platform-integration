@@ -24,19 +24,20 @@ import io.vanillabp.spi.service.WorkflowStartedByBpms;
  * <p>
  * The binding surface is deliberately smaller than the one of
  * <code>&#64;WorkflowTask</code>: there is no task, so no task ID, no task event and
- * no multi-instance context. What a method may ask for is the workflow aggregate,
- * the {@link BpmsStartTrigger} and process variables via
- * <code>&#64;TaskParam</code>.
+ * no multi-instance context. There is no workflow aggregate either - the method is the
+ * place it comes into existence. What a method may ask for is the
+ * {@link BpmsStartTrigger} and process variables via <code>&#64;TaskParam</code>, and
+ * what it has to do is RETURN the aggregate.
  */
 public final class BpmsInitiatedStartScanner {
 
   /**
    * A workflow the BPMS started has no task around it, so no multi-instance scope
-   * either - what such a method may take is the aggregate and the process variables the
-   * model set.
+   * either, and no aggregate yet - what such a method may take is the process variables
+   * the model set.
    */
   private static final java.util.Set<CoreHandlerParameter> CORE_PARAMETERS = java.util.Set
-      .of(CoreHandlerParameter.WORKFLOW_AGGREGATE, CoreHandlerParameter.TASK_PARAM);
+      .of(CoreHandlerParameter.TASK_PARAM);
 
   /**
    * No parameter of such a method resolves a bean - the only kind which would is
@@ -99,10 +100,7 @@ public final class BpmsInitiatedStartScanner {
     // plain reflection - lift the check once at scan time
     method.trySetAccessible();
 
-    final var returnsAggregate = validateReturnType(
-        method,
-        workflowAggregateClass,
-        location);
+    validateReturnType(method, workflowAggregateClass, location);
     final var binders = Arrays
         .stream(method.getParameters())
         .map(parameter -> buildParameterBinder(
@@ -111,16 +109,6 @@ public final class BpmsInitiatedStartScanner {
             "parameter '%s' of @WorkflowStartedByBpms method '%s'"
                 .formatted(parameter.getName(), location)))
         .toList();
-    if (!returnsAggregate && Arrays
-        .stream(method.getParameters())
-        .noneMatch(parameter -> parameter.getType().isAssignableFrom(workflowAggregateClass))) {
-      throw new IllegalStateException(
-          """
-              The @WorkflowStartedByBpms method '%s' returns void but does not take the workflow \
-              aggregate of class '%s' either! Take the aggregate VanillaBP built as a parameter to \
-              enrich it, or return an aggregate you built yourself."""
-              .formatted(location, workflowAggregateClass.getName()));
-    }
 
     final var versions = inherited
         .effectiveFor(ServedVersions.parse(annotation.version(), location));
@@ -129,26 +117,28 @@ public final class BpmsInitiatedStartScanner {
         : annotation.id();
 
     return new BpmsInitiatedStartHandler(
-        workflowServiceClass, method, workflowServiceBean, binders, startEventId, versions, returnsAggregate);
+        workflowServiceClass, method, workflowServiceBean, binders, startEventId, versions);
 
   }
 
-  private static boolean validateReturnType(
+  /**
+   * The method has to hand the aggregate over. A <code>void</code> method would leave the
+   * workflow without any data at all, and there is nothing for it to fill either: the
+   * aggregate does not exist before this method runs.
+   */
+  private static void validateReturnType(
       final Method method,
       final Class<?> workflowAggregateClass,
       final String location) {
 
-    if (method.getReturnType().equals(void.class)) {
-      return false;
-    }
-    if (method.getReturnType().isAssignableFrom(workflowAggregateClass)) {
-      return true;
+    if (method.getReturnType().isAssignableFrom(workflowAggregateClass) && !method.getReturnType().equals(void.class)) {
+      return;
     }
     throw new IllegalStateException(
         """
-            The @WorkflowStartedByBpms method '%s' returns '%s' which is not the workflow aggregate \
-            of class '%s'! Return the aggregate you built, or declare the method void and modify \
-            the aggregate VanillaBP passes in."""
+            The @WorkflowStartedByBpms method '%s' returns '%s' instead of the workflow aggregate \
+            of class '%s'! The workflow the BPMS started has no aggregate until this method \
+            builds one, so the method has to return it."""
             .formatted(location, method.getReturnType().getName(), workflowAggregateClass.getName()));
 
   }
@@ -176,10 +166,11 @@ public final class BpmsInitiatedStartScanner {
 
     throw new IllegalStateException(
         """
-            The %s is neither annotated with @TaskParam nor of the workflow-aggregate type '%s' nor \
-            of type '%s'! A method building the aggregate of a BPMS-initiated start may ask for the \
-            aggregate, the trigger and process variables - nothing else exists at that moment."""
-            .formatted(location, workflowAggregateClass.getName(), BpmsStartTrigger.class.getName()));
+            The %s is neither annotated with @TaskParam nor of type '%s'! A method building the \
+            aggregate of a BPMS-initiated start may ask for the trigger and for process variables \
+            - nothing else exists at that moment, the aggregate included, which is what this \
+            method is there to build."""
+            .formatted(location, BpmsStartTrigger.class.getName()));
 
   }
 

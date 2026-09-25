@@ -249,18 +249,25 @@ public class BpmsInitiatedStarts {
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
    * @param startEvents The BPMS-initiated start events of the process
-   * @throws IllegalStateException If a method serves a process without such a start
-   *           event, or names a start event the process does not have
+   * @param workflowAggregateClass The workflow aggregate of that process, written into the
+   *          method the message hands out; may be <code>null</code>
+   * @throws IllegalStateException If a start event the BPMS fires has no method, if a
+   *           method serves a process without such a start event, or if a method names a
+   *           start event the process does not have
    */
   public void validate(
       final String workflowModuleId,
       final String bpmnProcessId,
-      final Collection<BpmsInitiatedStartSpec> startEvents) {
+      final Collection<BpmsInitiatedStartSpec> startEvents,
+      final Class<?> workflowAggregateClass) {
 
     final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
     if (entry == null) {
-      // no application method for this process: the core builds the aggregate on
-      // its own, which is the whole point of the hook being optional
+      // the process has no @WorkflowStartedByBpms method at all. Where the BPMS can
+      // start it, that ends the boot: nobody would build the aggregate when the timer
+      // fires, and three in the morning is a bad moment to find out
+      refuseStartEventsWithoutAMethod(
+          workflowModuleId, bpmnProcessId, startEvents, List.of(), workflowAggregateClass);
       return;
     }
     synchronized (entry) {
@@ -270,6 +277,9 @@ public class BpmsInitiatedStarts {
               .stream()
               .noneMatch(known -> known.elementId().equals(spec.elementId())))
           .forEach(entry.startEvents::add);
+
+      refuseStartEventsWithoutAMethod(
+          workflowModuleId, bpmnProcessId, entry.startEvents, entry.handlers, workflowAggregateClass);
 
       if (entry.startEvents.isEmpty()) {
         throw new IllegalStateException(
@@ -572,23 +582,27 @@ public class BpmsInitiatedStarts {
                 processService.getBpmnProcessId())))
         .findFirst()
         .orElse(null);
-    if ((handler == null) && !wired.isEmpty()) {
-      // the aggregate is built either way, but the method meant to initialize it does
-      // not run - said out loud, because an empty aggregate looks like a defect later
-      log
-          .warn(
-              "No @WorkflowStartedByBpms method of BPMN process '{}' (workflow module '{}') serves "
-                  + "start event '{}' of process version '{}' - the aggregate is built without "
-                  + "initialization. Methods wired to that start event: {}.{}",
-              processService.getBpmnProcessId(),
-              processService.getWorkflowModuleId(),
-              context.getStartEventId(),
-              context.getProcessVersion(),
-              describeHandlers(wired),
-              io.vanillabp.integration.adapter.migration.workflowtask.VersionRange
-                  .noVersionReportedHint(
-                      context.getProcessVersion(),
-                      wired.stream().anyMatch(BpmsInitiatedStartHandler::inheritsVersions)));
+    if (handler == null) {
+      // nothing builds the aggregate, so there is no workflow to start. The boot check
+      // covers the process which has no method at all, this covers the version which
+      // none of its methods serves
+      throw new IllegalStateException(
+          """
+              No @WorkflowStartedByBpms method of BPMN process '%s' (workflow module '%s') serves \
+              start event '%s' of process version '%s', so nothing can build the workflow \
+              aggregate. Methods wired to that start event: %s.%s"""
+              .formatted(
+                  processService.getBpmnProcessId(),
+                  processService.getWorkflowModuleId(),
+                  context.getStartEventId(),
+                  context.getProcessVersion(),
+                  wired.isEmpty()
+                      ? "none"
+                      : describeHandlers(wired),
+                  io.vanillabp.integration.adapter.migration.workflowtask.VersionRange
+                      .noVersionReportedHint(
+                          context.getProcessVersion(),
+                          wired.stream().anyMatch(BpmsInitiatedStartHandler::inheritsVersions))));
     }
 
     final var result = BpmsInitiatedStartExecution.run(processService, handler, context, transactionRunner);
@@ -597,6 +611,74 @@ public class BpmsInitiatedStarts {
       processService.rememberWorkflowAdapter(result.workflowAggregateId(), context.getAdapterId());
     }
     return result;
+
+  }
+
+  /**
+   * Ends the boot where the BPMS can start the process and the application did not say
+   * how. The message names the process, the start event and the method to write, so a
+   * developer can copy it out of the log.
+   * <p>
+   * Judged per START EVENT rather than per process: a process with a timer and a signal
+   * start may have a method for one of them and none for the other, and the one without
+   * would fire into nothing. A method serving every start event of the process
+   * ({@code @WorkflowStartedByBpms} without an id) covers all of them.
+   * <p>
+   * The version a method serves is not read here. A method kept for an older version of
+   * the model still says that the application knows about this start event, and refusing
+   * a boot over a version range would be a second verdict on top of the one the startup
+   * check about dead handlers already makes.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param startEvents The start events the BPMS fires on its own
+   * @param handlers The methods registered for this process
+   * @param workflowAggregateClass The aggregate the method has to return, or
+   *          <code>null</code> where it is not known here
+   */
+  private static void refuseStartEventsWithoutAMethod(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Collection<BpmsInitiatedStartSpec> startEvents,
+      final List<BpmsInitiatedStartHandler> handlers,
+      final Class<?> workflowAggregateClass) {
+
+    final var unserved = startEvents
+        .stream()
+        .filter(spec -> handlers
+            .stream()
+            .noneMatch(handler -> handler.matchesStartEvent(spec.elementId())))
+        .toList();
+    if (unserved.isEmpty()) {
+      return;
+    }
+    final var aggregateName = workflowAggregateClass != null
+        ? workflowAggregateClass.getSimpleName()
+        : "YourWorkflowAggregate";
+    throw new IllegalStateException(
+        """
+            BPMN process '%s' of workflow module '%s' has start event(s) the BPMS fires on its \
+            own, and no @WorkflowStartedByBpms method builds the workflow aggregate for them: %s.
+
+            Such a workflow has no aggregate until your code builds one, and nobody is there to \
+            ask when the timer fires. Write the method in the @WorkflowService class of this \
+            process:
+
+              @WorkflowStartedByBpms(id = "%s")
+              public %s buildAggregate(final BpmsStartTrigger trigger) {
+                return new %s(...);
+              }
+
+            The id may be left out where one method serves every such start event of the process. \
+            The trigger says which start event fired and, for a timer, when; the ID of the \
+            aggregate is yours to choose."""
+            .formatted(
+                bpmnProcessId,
+                workflowModuleId,
+                describeStartEvents(unserved),
+                unserved.getFirst().elementId(),
+                aggregateName,
+                aggregateName));
 
   }
 
