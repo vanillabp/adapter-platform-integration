@@ -176,7 +176,7 @@ public class JdbcPhaseTwoOutboxAutoConfiguration {
    * <p>
    * Two ways out, and the message names both: drain the entries with the version which
    * still dispatched them, or keep running gruelbox by setting
-   * <code>vanillabp.outbox.gruelbox.enabled</code> to <code>true</code>. A warning and
+   * {@link GruelboxOutboxProperties#ENABLED} to <code>true</code>. A warning and
    * not a failure, because the entries may as well be the remains of an application which
    * left that store behind long ago.
    *
@@ -201,13 +201,16 @@ public class JdbcPhaseTwoOutboxAutoConfiguration {
                 forever. Either
                 - start the previous version of this application once and let it dispatch what is \
                 left, or
-                - set 'vanillabp.outbox.gruelbox.enabled' to 'true' to keep using gruelbox.
+                - set '{}' to 'true' to keep using gruelbox.
                 Once '{}' holds nothing undispatched, this message is gone and the table can be \
                 dropped.""",
             FORMER_OUTBOX_TABLE_NAME,
             waiting,
             tableName,
             FORMER_OUTBOX_TABLE_NAME,
+            // the key comes from the constant the condition of this class reads, so a
+            // rename cannot leave this line naming a key which is gone
+            GruelboxOutboxProperties.ENABLED,
             FORMER_OUTBOX_TABLE_NAME);
 
   }

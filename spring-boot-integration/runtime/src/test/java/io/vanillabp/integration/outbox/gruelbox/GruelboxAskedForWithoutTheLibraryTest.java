@@ -1,8 +1,8 @@
 package io.vanillabp.integration.outbox.gruelbox;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,6 +14,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import com.gruelbox.transactionoutbox.TransactionOutbox;
 
+import io.vanillabp.integration.config.GruelboxOutboxProperties;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
@@ -51,17 +52,20 @@ public class GruelboxAskedForWithoutTheLibraryTest {
   public void theBootEndsNamingWhatIsMissing() {
 
     applicationWithoutGruelbox()
-        .withPropertyValues("vanillabp.outbox.gruelbox.enabled=true")
+        .withPropertyValues("%s=true".formatted(GruelboxOutboxProperties.ENABLED))
         .run(context -> {
 
-          final var message = bootFailureOf(context);
-
-          assertTrue(message.contains("vanillabp.outbox.gruelbox.enabled"), message);
-          assertTrue(message.contains("com.gruelbox:transactionoutbox-core"), message);
-          assertTrue(message.contains("com.gruelbox:transactionoutbox-spring"), message);
-          // the way back has to name the table the default writes into, because that is
-          // where the entries of an application which stops opting in go
-          assertTrue(message.contains("VANILLABP_PHASE_TWO_OUTBOX"), message);
+          // the key comes from the constant, not from the text of this test: a rename
+          // there has to reach the message, and the way back has to name the table the
+          // default writes into, because that is where the entries of an application
+          // which stops opting in go
+          assertEquals(
+              """
+                  '%s' is 'true', but gruelbox is not on the classpath! VanillaBP writes its own phase-two outbox since release 2.0 and does not bring that library along any more. Either
+                  - add the dependencies 'com.gruelbox:transactionoutbox-core' and 'com.gruelbox:transactionoutbox-spring' to your application, or
+                  - remove '%s' and let VanillaBP store the entries in its own table 'VANILLABP_PHASE_TWO_OUTBOX'. Entries which are still waiting in gruelbox' table are reported at startup, so dispatch them with your previous version before you switch."""
+                  .formatted(GruelboxOutboxProperties.ENABLED, GruelboxOutboxProperties.ENABLED),
+              bootFailureOf(context));
 
         });
 
