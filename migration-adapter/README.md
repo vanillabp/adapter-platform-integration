@@ -3738,6 +3738,25 @@ Every verdict the check can reach is a case of `OldProcessVersionsTest`, from
 `anUnservedVersionWithInstancesIsAnError` and `anUnservedVersionWithoutInstancesWarns` to
 `outfadingTheDeployedVersionFailsTheBoot` and `aMethodServingNoHeldVersionIsReported`.
 
+### A name the current deployment no longer declares
+
+The same models a held version is read out of answer one more question: a message name or
+a signal name which no model of this deployment declares any more. Workflows on that
+version wait at their event for something nothing sends, and nothing else says so, because
+the name lives in a model the BPMS holds and in no file of the application.
+`NameClashAvoidanceService#reportIdentifiersOfHeldVersion` reports it next to the name
+clash it was built for.
+
+Messages and signals only. An error code and an escalation code are thrown by the model
+which carries them, and a task definition nobody serves has its own check which says more
+than this could. A version nobody is on is silent - nothing waits there - and so is an
+adapter which never reported what the current models declare, because then every old name
+would look new.
+
+The line says "look at it" rather than "write this": a rename whose old workflows were
+finished by hand looks exactly like a rename nobody finished.
+`ANameTheCurrentDeploymentNoLongerDeclaresTest` holds every case.
+
 ### The multi-instance shape of a held version
 
 An element which iterates without naming the value of a round - a Camunda 7 element without
