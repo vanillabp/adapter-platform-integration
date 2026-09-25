@@ -925,6 +925,128 @@ public class MigrationAdapterPropertiesTest {
   }
 
   @Nested
+  @DisplayName("A delivery setting written deeper than it is read ends the startup")
+  class ADeliverySettingIsRefusedBelowTheLevelItIsReadAt {
+
+    /**
+     * The configuration both tests below start from: one workflow module with one
+     * workflow and one task in it, each of them given the delivery section the test
+     * fills.
+     */
+    private MigrationAdapterProperties applicationWriting(
+        final Consumer<DeliveryProperties> whatTheLevelSays) {
+
+      final var ofTheTask = new DeliveryProperties();
+      whatTheLevelSays.accept(ofTheTask);
+      final var ofTheWorkflow = new DeliveryProperties();
+      whatTheLevelSays.accept(ofTheWorkflow);
+      final var ofTheModule = new DeliveryProperties();
+      whatTheLevelSays.accept(ofTheModule);
+
+      final var properties = new MigrationAdapterProperties();
+      properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
+      properties.setPrioritizedAdapters(List.of("adapter-test"));
+      properties
+          .setWorkflowModules(Map.of("test-module", WorkflowModuleAdapterProperties
+              .builder()
+              .workflowModuleId("test-module")
+              .delivery(ofTheModule)
+              .adapters(Map.of("adapter-test", AdapterProperties
+                  .builder()
+                  .resourcesLocation("classpath*:test-module/processes/test")
+                  .build()))
+              .workflows(Map.of("testProcess", WorkflowAdapterProperties
+                  .builder()
+                  .delivery(ofTheWorkflow)
+                  .tasks(Map.of("scoreApplicant", TaskAdapterProperties
+                      .builder()
+                      .delivery(ofTheTask)
+                      .build()))
+                  .build()))
+              .build()));
+      return properties;
+
+    }
+
+    @Test
+    @DisplayName("vanillabp.delivery.retention is read for the whole application")
+    public void theRetentionIsRefusedBelowTheApplication() {
+
+      final var properties = applicationWriting(delivery -> delivery.setRetention(Duration.ofDays(3)));
+
+      final var refusal = assertThrowsExactly(
+          IllegalStateException.class,
+          () -> properties.validateProperties(List.of("adapter2"), List.of("test-module")));
+
+      assertEquals(
+          """
+              How long the records of processed task deliveries are kept is read for the whole application, but it is configured at:
+                vanillabp.workflow-modules.test-module.delivery.retention
+                vanillabp.workflow-modules.test-module.workflows.testProcess.delivery.retention
+                vanillabp.workflow-modules.test-module.workflows.testProcess.tasks.scoreApplicant.delivery.retention
+              Move each of them to the section of the whole application:
+                vanillabp.delivery.retention: 7d
+              One sweep of the housekeeping removes the records of every workflow module, and it asks for one number before it knows whose records it is about.""",
+          refusal.getMessage());
+
+    }
+
+    @Test
+    @DisplayName("vanillabp.delivery.release-on-workflow-end is read at the workflow module")
+    public void theReleaseIsRefusedBelowTheWorkflowModule() {
+
+      final var properties = applicationWriting(delivery -> delivery.setReleaseOnWorkflowEnd(true));
+
+      final var refusal = assertThrowsExactly(
+          IllegalStateException.class,
+          () -> properties.validateProperties(List.of("adapter2"), List.of("test-module")));
+
+      assertEquals(
+          """
+              Whether an ended workflow releases its delivery records is read at the workflow module and for the whole application, but it is configured at:
+                vanillabp.workflow-modules.test-module.workflows.testProcess.delivery.release-on-workflow-end
+                vanillabp.workflow-modules.test-module.workflows.testProcess.tasks.scoreApplicant.delivery.release-on-workflow-end
+              Move each of them to the workflow module the workflows belong to, or to the whole application:
+                vanillabp.workflow-modules.<workflow-module>.delivery.release-on-workflow-end: true
+                vanillabp.delivery.release-on-workflow-end: true
+              What this decides is a listener an adapter attaches to a whole deployed process, and a process is deployed for its workflow module rather than for one workflow or one task.""",
+          refusal.getMessage());
+
+    }
+
+    @Test
+    @DisplayName("The level each of them IS read at stays untouched")
+    public void whatIsReadWhereItStandsIsKept() {
+
+      final var properties = new MigrationAdapterProperties();
+      properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
+      properties.setPrioritizedAdapters(List.of("adapter-test"));
+      final var ofTheApplication = new DeliveryProperties();
+      ofTheApplication.setRetention(Duration.ofDays(3));
+      properties.setDelivery(ofTheApplication);
+      final var ofTheModule = new DeliveryProperties();
+      ofTheModule.setReleaseOnWorkflowEnd(true);
+      properties
+          .setWorkflowModules(Map.of("test-module", WorkflowModuleAdapterProperties
+              .builder()
+              .workflowModuleId("test-module")
+              .delivery(ofTheModule)
+              .adapters(Map.of("adapter-test", AdapterProperties
+                  .builder()
+                  .resourcesLocation("classpath*:test-module/processes/test")
+                  .build()))
+              .build()));
+
+      properties.validateProperties(List.of("adapter2"), List.of("test-module"));
+
+      assertEquals(Duration.ofDays(3), properties.resolvedDeliveryRetention());
+      assertTrue(properties.releasesDeliveryRecordsOnWorkflowEnd("test-module"));
+
+    }
+
+  }
+
+  @Nested
   @DisplayName("A setting about a whole process written at a task ends the startup")
   class ASettingOfAWholeProcessIsRefusedAtATask {
 
