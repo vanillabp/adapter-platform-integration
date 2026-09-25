@@ -160,9 +160,7 @@ public class EveryPropertyIsOfferedByTheIdeTest {
 
     return type
         .getName()
-        .startsWith("io.vanillabp.")
-        && !type.isEnum()
-        && !VALUE_TYPES.contains(type);
+        .startsWith("io.vanillabp.") && !type.isEnum() && !VALUE_TYPES.contains(type);
 
   }
 
@@ -171,12 +169,10 @@ public class EveryPropertyIsOfferedByTheIdeTest {
 
     final var getters = new ArrayList<Method>();
     for (final var method : type.getMethods()) {
-      if (Modifier.isStatic(method.getModifiers())
-          || (method.getParameterCount() != 0)
-          || !method
-              .getDeclaringClass()
-              .getName()
-              .startsWith("io.vanillabp.")) {
+      if (Modifier.isStatic(method.getModifiers()) || (method.getParameterCount() != 0) || !method
+          .getDeclaringClass()
+          .getName()
+          .startsWith("io.vanillabp.")) {
         continue;
       }
       final var name = method.getName();
