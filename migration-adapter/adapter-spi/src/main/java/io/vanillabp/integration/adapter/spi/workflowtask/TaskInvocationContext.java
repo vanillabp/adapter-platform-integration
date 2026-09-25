@@ -115,6 +115,14 @@ public interface TaskInvocationContext {
   /**
    * The value of a local variable mapped in the BPMN (input mapping), passed to
    * parameters annotated with <code>&#64;TaskParam</code>.
+   * <p>
+   * These are values the MODEL produced, never values of the workflow aggregate. The names
+   * asked for are the ones
+   * {@link WorkflowTaskWiring#taskParameterNames(String, String, String)} answered while the
+   * module was wired, and they are plain: a name is what the modeller wrote, and nothing
+   * about it is scoped. Hand the value back the way the BPMS deserialized it and convert
+   * nothing - the core converts it into the type the handler declared, so one handler does
+   * not answer differently per BPMS.
    *
    * @param name The name of the local variable
    * @return The value or <code>null</code> if not present

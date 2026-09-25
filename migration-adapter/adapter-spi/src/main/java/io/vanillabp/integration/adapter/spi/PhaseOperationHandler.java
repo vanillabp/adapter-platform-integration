@@ -55,6 +55,13 @@ public interface PhaseOperationHandler<A> {
    * outbox retries; a failure repeating cannot fix is what
    * {@link MigratableProcessService#isPhaseTwoFailureRepeatable(Throwable)} says
    * <code>false</code> about, and it blocks the entry instead.
+   * <p>
+   * There is a third answer between those two, and it is the one an eventually consistent
+   * BPMS needs: throw
+   * {@link io.vanillabp.integration.spi.PhaseTwoRetryLater} with the window the BPMS needs,
+   * and the entry comes back after exactly that window on every store VanillaBP ships. Never
+   * sleep here instead. The thread dispatching this belongs to the store, so waiting on it
+   * holds back the operations of every other workflow.
    *
    * @param request What the operation is about, see {@link PhaseTwoRequest}
    */

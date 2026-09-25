@@ -2725,6 +2725,37 @@ written at, which is the same answer decision 66 gives for the permission to sha
 aggregate. Both are settings a level binds without reading, and a setting which can be written
 and does nothing is worse than one which cannot be written at all.
 
+### 81. A published class carries no Lombok and no MapStruct annotation
+
+Javadoc does not run Lombok. So the published documentation of every `config/*Properties` class shows a
+class without a single accessor, while the bytecode has one per field. The other direction happens too:
+`PhaseTwoOutboxEntry`, `TaskDeliveryDocument` and `PhaseTwoPayloadDocument` carry `@AllArgsConstructor`
+beside a hand-written constructor, so the jar has two public constructors and the documentation shows
+one. Whoever reads what we publish sees a different API from the one they can call, and that is the
+whole point of publishing javadoc.
+
+MapStruct is the heavier half, because it costs more than a wrong page. `org.mapstruct:mapstruct` sits
+in `quarkus-integration/runtime/pom.xml` with no scope, so it is on the compile classpath of every
+application which pulls our Quarkus integration - a library those applications never asked for, on the
+classpath only because we generate one properties mapper with it. Lombok is `provided` in the root POM
+and never reaches an application, so there the argument is the javadoc alone.
+
+The rule: a class in the `src/main` of a module we publish carries neither a Lombok nor a MapStruct
+annotation. Test code, integration-test modules and the build tools are free to use both. `@Slf4j` is
+included in the rule although it generates no API, because an exception nobody can check by looking at
+the class is an exception which grows.
+
+What this costs is written down rather than guessed: 136 files across the platform and the four adapter
+repositories, 85 of them carrying `@Slf4j` alone, 51 generating API, plus the MapStruct mapper of the
+Quarkus integration, whose generated implementation is 366 lines. The order to convert them in is the
+public API first - the configuration classes and the three MongoDB documents an application's javadoc
+shows - then the internal classes which generate API, then the loggers. The mapper waits for the
+portable-values work to land, because that work changes the same file.
+
+The check which catches the next case belongs beside `PublishedPoms` and `TestClassConventions` in
+`test-utils`, with one caller per repository, and it is switched on per stage rather than all at once:
+a gate which fails on 136 files on the day it is written is a gate nobody can merge.
+
 ### 89. A setting written below the level it is read at ends the startup, and all of them say it the same way
 
 One class carries what an adapter may be told, and all four levels of decision 7 bind that class.
@@ -2783,3 +2814,28 @@ which no longer exists. What those decisions decide is untouched, because it is 
 `@TaskParam`; only their closing consequence is gone.
 
 Version 1 is not affected. It did not support a process the BPMS starts on its own.
+
+### 93. An adapter's retry window means the same thing on every store
+
+An adapter which rejects a phase-two call with `PhaseTwoRetryLater` says how long its BPMS needs
+before asking again can help. The relational store of the core and both MongoDB stores wrote that
+window onto the entry as it was named. The gruelbox store read it as an upper bound instead: it
+wrote the window only where it was closer than `vanillabp.outbox.attempt-frequency`, and left its
+own distance standing otherwise. So the same adapter on the same application answered differently
+depending on which store the application had chosen, and the difference lived in the name of a
+test rather than anywhere an adapter author reads.
+
+The gruelbox store writes the window unconditionally now. An adapter naming a window knows
+something about its BPMS which a store configured once for every workflow does not know, and
+asking earlier than that costs a failed attempt out of the budget which blocks the entry. The
+price is that an adapter can push an entry past a backoff a store keeps shorter on purpose, and
+that is the adapter's call to make: the window is a statement about the BPMS, not a hint.
+
+What a store still adds on its own is the poll it takes to pick a due entry up, at most
+`vanillabp.outbox.poll-interval` (decision 49). That is a property of polling and not of the
+window, and it is the same on all four stores.
+
+The promise is written where an adapter author meets it: in the javadoc of `PhaseTwoRetryLater`
+and on the outbox page of both platform wikis.
+`GruelboxWritesTheDueTimeADispatchAskedForTest#aLongerWindowIsWrittenToo` holds the case which
+used to go the other way.

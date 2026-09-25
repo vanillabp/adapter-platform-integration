@@ -102,6 +102,43 @@ of each per configured adapter id. Both live in `io.vanillabp.integration.adapte
 the artifact `io.vanillabp:vanillabp-adapter-spi`, which is the one dependency your core needs from
 VanillaBP: the integration SPI and the extension SPI arrive with it.
 
+### 2.0 The dependencies you take, and the version you pin them to
+
+Pin one VanillaBP version in a property of your own and import the platform's BOM with it. Every
+artifact below is then managed and you write no second version anywhere:
+
+```xml
+<properties>
+  <adapter-platform.version>2.0.0</adapter-platform.version>
+</properties>
+<dependencyManagement>
+  <dependencies>
+    <dependency>
+      <groupId>io.vanillabp</groupId>
+      <artifactId>vanillabp-bom</artifactId>
+      <version>${adapter-platform.version}</version>
+      <type>pom</type>
+      <scope>import</scope>
+    </dependency>
+  </dependencies>
+</dependencyManagement>
+```
+
+Your `core` module takes `io.vanillabp:vanillabp-adapter-spi`. Your `spring-boot` module adds
+`io.vanillabp:vanillabp-spring-boot-integration`, your Quarkus runtime module
+`io.vanillabp:vanillabp-quarkus-integration` and your Quarkus deployment module
+`io.vanillabp:vanillabp-quarkus-integration-deployment`. For tests there are
+`io.vanillabp:test-utils` and the BPMS double of section 7. Your application-facing artifact brings
+the platform integration along, so an application adds your adapter and nothing else of VanillaBP.
+
+BPMS adapters are deliberately not in that BOM, and yours should not be either: adapters are released
+on their own schedule, and an application gives your dependency a version of its own.
+
+The property name `adapter-platform.version` is the convention because the descriptor of the next
+section names it, and nothing enforces it. What matters is that the one version in that property is
+the version the BOM was imported with and the version the descriptor reports; three places drifting
+apart is what that descriptor exists to catch.
+
 ### 2.1 The deployment pipeline
 
 `AdapterDeploymentService` extends `ExtensionWiringService`, so its methods arrive in a fixed
@@ -136,6 +173,22 @@ matching both types, so declaring interfaces rather than concrete classes widens
 | `validateDistinctAdapterInstances(ids)`                            | once per type at startup, only with more than one id                               | fail the boot where two ids of your type cannot be told apart                                                                               | two ids silently address one backend, and the election has nothing to distinguish them by                                                                                                                                                |
 | `checkHealth()`                                                    | the platform's health endpoint, on the request thread                              | the cheapest question your BPMS answers, returning within a bounded time                                                                    | throwing is turned into `DOWN` as a backstop; an unconfigured connection is `UNKNOWN`, never `DOWN`                                                                                                                                      |
 
+Four of those rows have a default which is a real answer, so leaving them alone is a decision and not
+an omission. `checkHealth()` reports nothing, which is right for a BPMS with no cheap question.
+`getOrder()` is never read for an adapter at all, because the core takes the adapters out of that list
+before it sorts; which adapter of a workflow module goes first comes from `prioritized-adapters`.
+`defaultNameClashAvoidance()` answers `BY_ADAPTER` and `warnAboutUnscopedIdentifiers` says nothing, and
+those two belong together.
+
+That pair has a consequence worth knowing before you write a line, because it decides what every
+application on your adapter has to configure. `BY_ADAPTER` means "my BPMS keeps the workflow modules
+apart itself", a tenant on both Camunda adapters. If your BPMS has no isolation of its own, the default
+is a promise you cannot keep, and the answer is not to change the default: keep it, and refuse the mode
+while you deploy with `scoping.validateNativeIsolationSupported(adapterId, module, whatYourBpmsIs)`,
+which ends the boot with a message naming `use-prefix` and `none` as the ways out. Every application on
+your adapter then has to choose one of the two, in every workflow module. Say that in your wiki on the
+first page an application reads, because it is the first thing they will hit.
+
 A failure thrown out of `wireBpmn` or `deployResources` is subject to
 `vanillabp.adapters.<id>.deployment-failure`. The default `fail` ends the boot; `warn` lets an
 adapter which is not first in the priority order fail without preventing the application from
@@ -150,8 +203,14 @@ In your constructor, call
 ```
 part.version=${project.version}
 part.artifact=${project.groupId}:${project.artifactId}
-platform.version=${the property naming the VanillaBP platform you build against}
+platform.version=${adapter-platform.version}
 ```
+
+`<type>` in the file name is what `getAdapterType()` answers, letter for letter, and
+`adapter-platform.version` is the property of section 2.0 - a property of YOUR build, not something
+the platform injects. Switch resource filtering on for that resource, or the file ships with the three
+`${...}` unresolved and is read as a descriptor which says nothing. On Quarkus, register the file as a
+resource of your extension so a native image still holds it.
 
 The platform reads the same file while it boots and ends the boot of an application whose parts
 do not belong together, naming both versions and the dependency to change. Without the descriptor
@@ -890,11 +949,14 @@ searchable yet (`PhaseTwoRetryLater`, with the window your BPMS may need) does n
 dispatching thread for that window. The attempt ends and the entry is planned again, and the calls
 of every other workflow go out while it waits.
 
-So the window you name is a due time, and here is how soon the entry comes back. On the stores
-VanillaBP wrote itself it is the window you named. On gruelbox, which a Spring Boot application
-with JPA may still opt into, it is the window as well, written onto the entry after the failed
-attempt, plus the poll it takes to pick the entry up - `vanillabp.outbox.poll-interval`, ten
-seconds by default.
+So the window you name is a due time, and every store VanillaBP ships makes the entry due after it:
+the relational store of the core, the two MongoDB stores, and gruelbox, which a Spring Boot
+application with JPA may still opt into and where the window is written onto the entry after the
+failed attempt. None of them shortens your window and none of them stretches it, so a window longer
+than `vanillabp.outbox.attempt-frequency` is waited out and a shorter one is not waited past. That
+is what lets your documentation name a number (decision 93). What a store adds on top is the poll
+it takes to pick a due entry up, `vanillabp.outbox.poll-interval`, ten seconds by default.
+
 Name a window your BPMS really needs, because the entry sits for it: a window of ten seconds for a
 read model which is a second behind costs nine seconds per call.
 
@@ -1002,6 +1064,14 @@ contributor-facing and carries the rationale, the alternatives you considered an
 mechanics. A deliberate mode which conforms fully is not a deviation; document it with the
 configuration which enables it.
 
+One rule about the classes themselves, because it is about what a reader of your documentation sees.
+A class in the `src/main` of a module you publish carries no Lombok and no MapStruct annotation
+(decision 81 of this repository). Javadoc does not run either of them, so a configuration class with
+`@Getter` is published as a class with no accessor at all, and the person reading it cannot call what
+you shipped. The second half costs more than a wrong page: a code generator whose annotations reach
+your published POM puts its runtime library on the classpath of every application which adds your
+adapter, and they never asked for it. Both tools are welcome in your tests and in your build tools.
+
 `DECISIONS.md` holds the numbered decisions several places in your repository rely on, and it is
 the only thing your code is allowed to cite, in the plain form `see decision 7 in the repository's
 DECISIONS.md`. A citation into another repository's log does not resolve; a decision spanning two
@@ -1081,35 +1151,76 @@ against the real thing; the double is for the tests where a BPMS is in the way.
 
 ## 8. The checklist before your first pull request
 
+### The floor, and how far above it the checklist sits
+
+Two different questions get mixed up here, so they are answered separately. What STOPS an application
+from booting is a short list and the platform checks every item of it. What makes an adapter good is
+the checklist after it, and nothing checks most of that.
+
+This is the floor. Clear it and an application boots with your adapter; miss an item and the boot ends
+naming you:
+
+|                                                     What is checked                                                     |     Where you satisfy it     |
+|-------------------------------------------------------------------------------------------------------------------------|------------------------------|
+| The five mandatory collaborators are in the `AdapterCollaborators` you were built with                                  | your registration, section 6 |
+| Your `phaseOperations()` map carries the seven operations `requiredOfEveryAdapter()`                                    | section 2.2                  |
+| A phase-two outbox and a transaction runner exist for the application                                                   | the platform's, not yours    |
+| Your part descriptor does not pair you with a platform you were not built against                                       | section 2.1                  |
+| On Quarkus: an extension publishing the capability `io.vanillabp.adapter.<type>`, and a configured section of that type | section 6                    |
+| On Spring Boot: an `AdapterConfigurationBase` bean announcing your type                                                 | section 6                    |
+| Every `@WorkflowTask` method of a module is wired to a task, which needs your `validateTaskWiring` calls                | section 3.2                  |
+
+Three more boots end, and each of them is your adapter saying so rather than the platform judging you:
+two ids of your type which `validateDistinctAdapterInstances` cannot tell apart, a `canLocateWorkflows()`
+of `false` next to a second adapter in a workflow module whose `guessing-adapters` is not `ACCEPTED`,
+and a name-clash mode you refused while deploying.
+
+Everything else is either a warning or silence. A missing `registerDeployedVersion` switches the version
+checks off; a `processVersionCatalogOf` left at `null` keeps the renamed-process check quiet; an
+`OpenTaskProbe` you do not supply means the application never hears about the tasks a workflow took with
+it; a `checkHealth()` you do not override reports nothing. None of that fails anything, which is exactly
+why the checklist below exists and why the Process-Engine-API adapter writes down every one of those in
+a `GAPS.md`.
+
+### The checklist
+
 1. One `MigratableProcessService` and one `AdapterDeploymentService` per configured adapter id,
    and two ids of your type refused at boot where nothing tells them apart. Configuration under
    `vanillabp.adapters.<id>.*`, validated at startup with messages naming the keys to add, and an
    unconfigured application still boots.
 2. The pipeline in order: `readBpmn`, then `prepareBpmn` rewriting once per file, then `wireBpmn`
-   with the wiring calls, then `deployResources` ending with `registerDeployedVersion` per process,
-   then `startWorkflowProcessing` and `stopWorkflowProcessing`. Every name-clash mode either served
-   or refused with a message. The module-level checks which follow the deployment are the core's
-   and you call none of them; two things come back to you there. `processVersionCatalogOf` answers
-   for an id the application declares without deploying it,
-   scoped the way you scope every other id, and `ownIsolationSeparatesWorkflowModules` answers
-   whether your BPMS would put two given workflow modules into scopes of its own, which decides
-   whether two plain process ids reaching it as one string are a collision. Those declared ids are also yours to ask about, with
+   with the wiring calls, then `deployResources`, then `startWorkflowProcessing` and
+   `stopWorkflowProcessing`. Every name-clash mode either served or refused with a message. The
+   module-level checks which follow the deployment are the core's and you call none of them; two
+   things come back to you there. `processVersionCatalogOf` answers for an id the application
+   declares without deploying it, scoped the way you scope every other id, and
+   `ownIsolationSeparatesWorkflowModules` answers whether your BPMS would put two given workflow
+   modules into scopes of its own, which decides whether two plain process ids reaching it as one
+   string are a collision. Those declared ids are also yours to ask about, with
    `taskWiringOfProcessesNobodyDeployed`, wherever your BPMS hands the work of a renamed
    process out under a name your subscriptions do not carry.
-3. A handler per operation your BPMS can serve, and only the operations which allow it left out.
+3. Everything about versions, where your BPMS has versions at all: `registerDeployedVersion` per
+   process at the end of `deployResources`, a catalog registered while wiring, and
+   `processVersionCatalogOf` for the ids nobody deployed. A BPMS which counts no versions does the
+   opposite and does it just as deliberately: `reportNoProcessVersionCatalog` per process, nothing
+   registered, `processVersionCatalogOf` left at `null`, `predatesDeployedVersion()` answered
+   `false`, and the gap written down. The Process-Engine-API adapter is that case. What you may not
+   do is neither - the core then cannot tell "this BPMS has no versions" from "this adapter is not
+   finished", and it points a developer at the wrong thing.
+4. A handler per operation your BPMS can serve, and only the operations which allow it left out.
    Phase one asks, phase two acts, idempotently, throwing on anything but "already gone".
-4. Probes scoped, never advancing, `UNKNOWN_TO_BPMS` and `BPMS_UNAVAILABLE` mapped honestly, the
+5. Probes scoped, never advancing, `UNKNOWN_TO_BPMS` and `BPMS_UNAVAILABLE` mapped honestly, the
    redispatch probe never optimistic, a visibility delay reported where your reads lag, and
    `canLocateWorkflows()` answered `false` where your BPMS cannot be asked about a workflow at all.
-5. Inbound contexts carrying the delivery id, the activation id, the adapter id and the process
+6. Inbound contexts carrying the delivery id, the activation id, the adapter id and the process
    version, and identifiers unscoped on the way in. Act on the outcome, send the shared values plus
    the variable named after the aggregate's id with every command, and never report a task as
    completed after an exception.
-6. Permanent phase-two failures classified narrowly, your shutdown policy written down, your
+7. Permanent phase-two failures classified narrowly, your shutdown policy written down, your
    inbound threads bounded.
-7. Your gaps written down honestly, and a deployment which fails where a missing capability would
+8. Your gaps written down honestly, and a deployment which fails where a missing capability would
    produce a workflow without an aggregate.
-8. Both platforms, with the exemplary end-to-end flow running on each of them against your real
+9. Both platforms, with the exemplary end-to-end flow running on each of them against your real
    BPMS.
 
 ## Where to look next
@@ -1123,7 +1234,7 @@ election does with your answers, how the outbox dispatches, what the platform ha
 Read it when you want to know why the SPI looks the way it does.
 
 [`DECISIONS.md`](../DECISIONS.md) of this repository is where the reasoning lives which several
-places rely on. This document points at entries 3, 4, 10, 17, 19, 26, 27, 28, 29 and 30.
+places rely on. This document points at entries 3, 4, 10, 17, 19, 26, 27, 28, 29, 30, 81 and 93.
 
 If something here is wrong, or if you need a promise this SPI does not make, tell us. The SPI was
 finalised before an adapter written outside this repository existed, precisely so that the shape
