@@ -20,9 +20,21 @@ import java.time.Duration;
  * different branches of the same failure handling. It changes nothing
  * else: the attempt is counted like any other, so an entry coming back again and again
  * is blocked after <code>vanillabp.outbox.block-after-attempts</code> attempts, which is
- * what stops a workflow which never becomes visible. A store which cannot express a
- * per-entry due time may ignore the duration and use its own backoff - the operation is
- * then repeated later than it had to be, never sooner.
+ * what stops a workflow which never becomes visible.
+ * <p>
+ * <b>What this promises an adapter.</b> Every store VanillaBP ships makes the entry due
+ * after the window, and none of them shortens it or stretches it: the relational store of
+ * the core, the two MongoDB stores and the gruelbox store a Spring Boot application with JPA
+ * may opt into. A window longer than <code>vanillabp.outbox.attempt-frequency</code> is
+ * therefore waited out, and a window shorter than it is not waited past, so an adapter
+ * naming thirty seconds gets the same answer whichever store the application chose
+ * (decision 93 of <code>adapter-platform-integration</code>). What a store adds on top is
+ * the time it takes to pick a due entry up, which is one poll of
+ * <code>vanillabp.outbox.poll-interval</code>.
+ * <p>
+ * The price of that promise is the adapter's to pay. The entry sits for the window it named
+ * and for one of its attempts, so a window of ten seconds for a read model which is a second
+ * behind costs nine seconds per call. Name what your BPMS really needs.
  */
 public class PhaseTwoRetryLater extends RuntimeException {
 

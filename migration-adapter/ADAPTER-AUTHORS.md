@@ -890,11 +890,14 @@ searchable yet (`PhaseTwoRetryLater`, with the window your BPMS may need) does n
 dispatching thread for that window. The attempt ends and the entry is planned again, and the calls
 of every other workflow go out while it waits.
 
-So the window you name is a due time, and here is how soon the entry comes back. On the stores
-VanillaBP wrote itself it is the window you named. On gruelbox, which a Spring Boot application
-with JPA may still opt into, it is the window as well, written onto the entry after the failed
-attempt, plus the poll it takes to pick the entry up - `vanillabp.outbox.poll-interval`, ten
-seconds by default.
+So the window you name is a due time, and every store VanillaBP ships makes the entry due after it:
+the relational store of the core, the two MongoDB stores, and gruelbox, which a Spring Boot
+application with JPA may still opt into and where the window is written onto the entry after the
+failed attempt. None of them shortens your window and none of them stretches it, so a window longer
+than `vanillabp.outbox.attempt-frequency` is waited out and a shorter one is not waited past. That
+is what lets your documentation name a number (decision 93). What a store adds on top is the poll
+it takes to pick a due entry up, `vanillabp.outbox.poll-interval`, ten seconds by default.
+
 Name a window your BPMS really needs, because the entry sits for it: a window of ten seconds for a
 read model which is a second behind costs nine seconds per call.
 

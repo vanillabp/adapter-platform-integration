@@ -30,9 +30,10 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
  * Gruelbox knows one distance for the whole outbox, and a dispatch which was rejected
- * because the BPMS has not made the workflow searchable yet knows a shorter one. This test
- * reads the row back to prove that the shorter one is what the table holds, and that the
- * store's own backoff stays where a dispatch says nothing about a moment.
+ * because the BPMS has not made the workflow searchable yet names a window of its own. This
+ * test reads the row back to prove that the window is what the table holds, whether it is
+ * the closer of the two or the farther one, and that the store's own backoff stays where a
+ * dispatch says nothing about a moment.
  * <p>
  * The entry is saved and handed to the listener directly rather than scheduled, so the row
  * an assertion reads is the row this test wrote and nothing races a dispatcher thread. The
@@ -47,6 +48,8 @@ public class GruelboxWritesTheDueTimeADispatchAskedForTest {
   private static final Duration ATTEMPT_FREQUENCY = Duration.ofSeconds(30);
 
   private static final Duration WINDOW = Duration.ofSeconds(10);
+
+  private static final Duration A_SLOW_WINDOW = Duration.ofMinutes(5);
 
   private SingleConnectionDataSource dataSource;
 
@@ -150,20 +153,30 @@ public class GruelboxWritesTheDueTimeADispatchAskedForTest {
   }
 
   /**
-   * The window is a shortcut, never a delay: a store may ask later than a dispatch asked
-   * for, and never sooner than its own backoff where that one is the closer of the two.
+   * A window is what the adapter knows about its BPMS, so it replaces the distance of the
+   * store even where it is the farther of the two. The stores VanillaBP writes itself do it
+   * that way, and an adapter's window means the same thing on all of them (decision 93).
    */
   @Test
-  @DisplayName("A window longer than the store's own distance leaves the row alone")
-  public void aLongerWindowIsNotWritten() throws Exception {
+  @DisplayName("A window longer than the store's own distance is written as well")
+  public void aLongerWindowIsWrittenToo() throws Exception {
 
     final var entry = anEntryWhoseAttemptFailed();
     final var gruelboxWrote = entry.getNextAttemptTime();
 
-    listener().failure(entry, new PhaseTwoRetryLater("this cluster is slow", Duration.ofMinutes(5)));
+    final var beforeTheWrite = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+    listener().failure(entry, new PhaseTwoRetryLater("this cluster is slow", A_SLOW_WINDOW));
 
-    assertEquals(gruelboxWrote, entry.getNextAttemptTime());
-    assertEquals(gruelboxWrote, dueAtInTheTable(entry.getId()));
+    final var dueAt = dueAtInTheTable(entry.getId());
+    assertTrue(
+        dueAt.isAfter(gruelboxWrote),
+        "the entry is due before the adapter said it would be: "
+            + dueAt);
+    assertFalse(
+        dueAt.isBefore(beforeTheWrite.plus(A_SLOW_WINDOW)),
+        "the entry waits less than the adapter asked for: "
+            + dueAt);
+    assertEquals(dueAt, entry.getNextAttemptTime(), "what the table holds is what the entry says");
 
   }
 

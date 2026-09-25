@@ -2783,3 +2783,28 @@ which no longer exists. What those decisions decide is untouched, because it is 
 `@TaskParam`; only their closing consequence is gone.
 
 Version 1 is not affected. It did not support a process the BPMS starts on its own.
+
+### 93. An adapter's retry window means the same thing on every store
+
+An adapter which rejects a phase-two call with `PhaseTwoRetryLater` says how long its BPMS needs
+before asking again can help. The relational store of the core and both MongoDB stores wrote that
+window onto the entry as it was named. The gruelbox store read it as an upper bound instead: it
+wrote the window only where it was closer than `vanillabp.outbox.attempt-frequency`, and left its
+own distance standing otherwise. So the same adapter on the same application answered differently
+depending on which store the application had chosen, and the difference lived in the name of a
+test rather than anywhere an adapter author reads.
+
+The gruelbox store writes the window unconditionally now. An adapter naming a window knows
+something about its BPMS which a store configured once for every workflow does not know, and
+asking earlier than that costs a failed attempt out of the budget which blocks the entry. The
+price is that an adapter can push an entry past a backoff a store keeps shorter on purpose, and
+that is the adapter's call to make: the window is a statement about the BPMS, not a hint.
+
+What a store still adds on its own is the poll it takes to pick a due entry up, at most
+`vanillabp.outbox.poll-interval` (decision 49). That is a property of polling and not of the
+window, and it is the same on all four stores.
+
+The promise is written where an adapter author meets it: in the javadoc of `PhaseTwoRetryLater`
+and on the outbox page of both platform wikis.
+`GruelboxWritesTheDueTimeADispatchAskedForTest#aLongerWindowIsWrittenToo` holds the case which
+used to go the other way.

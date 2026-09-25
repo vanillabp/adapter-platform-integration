@@ -42,9 +42,12 @@ import lombok.extern.slf4j.Slf4j;
  * made searchable yet) would otherwise wait for
  * <code>vanillabp.outbox.attempt-frequency</code>, thirty seconds by default, where the ten
  * of a Camunda 8 cluster were asked for. Gruelbox has just written its own distance onto the
- * row, and this listener writes the shorter one over it. Nothing waits on the dispatching
- * thread for it, which is the whole difference to how this store used to answer that case
- * (see {@link GruelboxPhaseTwoDispatchBean}).
+ * row, and this listener writes the adapter's window over it, whether that window is the
+ * closer of the two or the farther one. The adapter knows something about its BPMS which no
+ * store knows, so its window means the same thing on every store VanillaBP ships (decision
+ * 93 in the repository's DECISIONS.md). Nothing waits on the dispatching thread for it,
+ * which is the whole difference to how this store used to answer that case (see
+ * {@link GruelboxPhaseTwoDispatchBean}).
  * <p>
  * An entry which is not a phase-two dispatch is left alone. The outbox bean belongs to
  * VanillaBP, but an application may schedule work of its own on it, and blocking
@@ -139,9 +142,12 @@ public class GruelboxPhaseTwoFailureListener implements TransactionOutboxListene
 
   /**
    * Writes the due time a dispatch asked for. Gruelbox has one distance for the whole
-   * outbox and has just written it onto the row, so the shorter one of the two is what
-   * stays: the dispatch says when asking again can help, and no store may ask sooner than
-   * its own backoff would.
+   * outbox and has just written it onto the row, and the window of the dispatch replaces it
+   * either way: an adapter naming a window knows when its BPMS can answer, which is more
+   * than a store configured once for every workflow knows. A window farther away than the
+   * store's own distance therefore delays the entry rather than being dropped, which is what
+   * makes the same window mean the same thing on every store VanillaBP ships (decision 93 in
+   * the repository's DECISIONS.md).
    *
    * @param entry The entry whose attempt was rejected
    * @param cause What the dispatch was rejected with
@@ -160,9 +166,6 @@ public class GruelboxPhaseTwoFailureListener implements TransactionOutboxListene
         .now()
         .plus(retryAfter)
         .truncatedTo(ChronoUnit.MILLIS);
-    if (!askedFor.isBefore(entry.getNextAttemptTime())) {
-      return;
-    }
     final var gruelboxWrote = entry.getNextAttemptTime();
     try {
       entry.setNextAttemptTime(askedFor);
