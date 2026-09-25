@@ -407,6 +407,12 @@ itself, and the hand-written file only gives it its description.
 auto-configuration back and asks the metadata about each key they name, so the next one
 fails the build instead of somebody's editor.
 
+The other direction is `EveryPropertyIsOfferedByTheIdeTest`: it walks the core's
+properties classes the way the binder walks them and compares what it finds against the
+file, in both directions. A property added without its entry fails the build, and so does
+an entry left behind by a key which was renamed. Both tests exist because the file is
+written by hand, and a file written by hand is a file somebody forgets.
+
 ### Separating workflow module properties from application properties
 
 Read the [Wiki](https://github.com/vanillabp/adapter-platform-integration/wiki/Workflow-modules) to learn about reasons for having multiple workflow modules.
