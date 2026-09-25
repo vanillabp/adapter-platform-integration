@@ -130,6 +130,14 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   private Boolean allowFullSyncWithBpms;
 
   /**
+   * The <code>&#64;TaskParam</code> parameters of the whole application whose type the
+   * developer declared (<code>vanillabp.declared-task-params</code>). The least specific of
+   * the four levels the declaration may be written at, and the one to reach for where every
+   * task of the application reads the same value.
+   */
+  private java.util.List<String> declaredTaskParams;
+
+  /**
    * Configuration of the default election cache
    * {@link io.vanillabp.integration.spi.WorkflowAdapterCache} (properties section
    * <code>vanillabp.workflow-adapter-cache</code>).
@@ -1320,6 +1328,118 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
             .get(bpmnProcessId)
         : null;
     return (workflow != null) && Boolean.TRUE.equals(workflow.getAllowFullSyncWithBpms());
+
+  }
+
+  /**
+   * The values of its workflow aggregate that workflow declares for the BPMS
+   * (<code>vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;process&gt;.declared-aggregate-values</code>).
+   * <p>
+   * Read at the workflow, because the values belong to the aggregate of one workflow.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @return The entries as written, never <code>null</code>
+   */
+  public List<String> declaredAggregateValues(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    final var module = workflowModuleId != null
+        ? workflowModules.get(workflowModuleId)
+        : null;
+    if (module == null) {
+      return List.of();
+    }
+    final var workflow = bpmnProcessId != null
+        ? module
+            .getWorkflows()
+            .get(bpmnProcessId)
+        : null;
+    if ((workflow == null) || (workflow.getDeclaredAggregateValues() == null)) {
+      return List.of();
+    }
+    return List.copyOf(workflow.getDeclaredAggregateValues());
+
+  }
+
+  /**
+   * The property declaring what {@link #declaredAggregateValues(String, String)} reads, for
+   * the message which has to hand the developer a line to copy.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @return The property key at the workflow
+   */
+  public static String declaredAggregateValuesProperty(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return "%s.workflow-modules.%s.workflows.%s.declared-aggregate-values"
+        .formatted(PREFIX, workflowModuleId, bpmnProcessId);
+
+  }
+
+  /**
+   * The <code>&#64;TaskParam</code> names the application declared for that task, with the
+   * most specific level winning: the task, then the workflow, then the workflow module,
+   * then the application. A level which says nothing is skipped, so a declaration at the
+   * application covers every task which does not name its own.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param taskId The task ID (task definition) or <code>null</code>
+   * @return The declared parameter names, never <code>null</code>
+   */
+  public List<String> declaredTaskParams(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String taskId) {
+
+    final var module = workflowModuleId != null
+        ? workflowModules.get(workflowModuleId)
+        : null;
+    final var workflow = (module != null) && (bpmnProcessId != null)
+        ? module
+            .getWorkflows()
+            .get(bpmnProcessId)
+        : null;
+    final var task = (workflow != null) && (taskId != null)
+        ? workflow
+            .getTasks()
+            .get(taskId)
+        : null;
+    if ((task != null) && (task.getDeclaredTaskParams() != null)) {
+      return List.copyOf(task.getDeclaredTaskParams());
+    }
+    if ((workflow != null) && (workflow.getDeclaredTaskParams() != null)) {
+      return List.copyOf(workflow.getDeclaredTaskParams());
+    }
+    if ((module != null) && (module.getDeclaredTaskParams() != null)) {
+      return List.copyOf(module.getDeclaredTaskParams());
+    }
+    return declaredTaskParams != null
+        ? List.copyOf(declaredTaskParams)
+        : List.of();
+
+  }
+
+  /**
+   * The property declaring what {@link #declaredTaskParams(String, String, String)} reads,
+   * at the level it belongs at: the single task.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param taskId The task ID (task definition)
+   * @return The property key at the task
+   */
+  public static String declaredTaskParamsProperty(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String taskId) {
+
+    return "%s.workflow-modules.%s.workflows.%s.tasks.%s.declared-task-params"
+        .formatted(PREFIX, workflowModuleId, bpmnProcessId, taskId);
 
   }
 

@@ -169,6 +169,7 @@ public class ProcessVersionsTest {
             workflows:
               VersionedProcess:
                 allow-full-sync-with-bpms: true
+                declared-aggregate-values: [ "*" ]
       """;
 
   private ConfigurableApplicationContext runTestApplication(

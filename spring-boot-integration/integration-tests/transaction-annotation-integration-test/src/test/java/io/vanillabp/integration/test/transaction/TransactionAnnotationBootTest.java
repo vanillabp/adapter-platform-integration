@@ -62,6 +62,7 @@ public class TransactionAnnotationBootTest {
             workflows:
               TransactionalProcess:
                 allow-full-sync-with-bpms: true
+                declared-aggregate-values: [ "*" ]
       """;
 
   @Configuration

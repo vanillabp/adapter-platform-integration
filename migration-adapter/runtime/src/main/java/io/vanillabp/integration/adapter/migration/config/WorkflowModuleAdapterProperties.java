@@ -75,6 +75,13 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
   private Boolean allowFullSyncWithBpms;
 
   /**
+   * The <code>&#64;TaskParam</code> parameters of this workflow module whose type the
+   * developer declared (<code>declared-task-params</code>). The second least specific of
+   * the four levels; a task, and then a workflow, outranks it.
+   */
+  private java.util.List<String> declaredTaskParams;
+
+  /**
    * Overrides <code>vanillabp.transactions</code> for this workflow module. A setting
    * left undefined here means the global one applies, so a single module can accept
    * unguarded writes while every other one keeps failing the startup check.

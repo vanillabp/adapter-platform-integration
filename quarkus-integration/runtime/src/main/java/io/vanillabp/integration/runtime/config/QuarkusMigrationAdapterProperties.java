@@ -67,6 +67,14 @@ public interface QuarkusMigrationAdapterProperties {
   Optional<Boolean> allowFullSyncWithBpms();
 
   /**
+   * The <code>&#64;TaskParam</code> parameters whose type the developer declared, by the
+   * name the input mapping gives the value.
+   *
+   * @return The declared parameter names
+   */
+  Optional<List<String>> declaredTaskParams();
+
+  /**
    * Where to load VanillaBP BPMN files from, which are NOT specific to any adapter.
    * An empty Optional arrives as <code>null</code> in the core model, which then derives
    * the location from what the classpath says rather than asking for it (see decision 8
@@ -666,6 +674,14 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<Boolean> allowFullSyncWithBpms();
 
     /**
+     * The <code>&#64;TaskParam</code> parameters whose type the developer declared, by the
+     * name the input mapping gives the value.
+     *
+     * @return The declared parameter names
+     */
+    Optional<List<String>> declaredTaskParams();
+
+    /**
      * Overrides <code>vanillabp.transactions</code> for this workflow module.
      *
      * @return The transaction configuration of this workflow module
@@ -829,6 +845,23 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<Boolean> allowFullSyncWithBpms();
 
     /**
+     * The values of the workflow aggregate this workflow declares for the BPMS. An entry
+     * names a path in the aggregate and may name what is shared while the path does not
+     * resolve.
+     *
+     * @return The declared values
+     */
+    Optional<List<String>> declaredAggregateValues();
+
+    /**
+     * The <code>&#64;TaskParam</code> parameters whose type the developer declared, by the
+     * name the input mapping gives the value.
+     *
+     * @return The declared parameter names
+     */
+    Optional<List<String>> declaredTaskParams();
+
+    /**
      * Overrides <code>vanillabp.delivery</code> for this workflow.
      *
      * @return The delivery configuration of this workflow
@@ -868,6 +901,14 @@ public interface QuarkusMigrationAdapterProperties {
      * @return The delivery configuration of this task
      */
     DeliveryProperties delivery();
+
+    /**
+     * The <code>&#64;TaskParam</code> parameters whose type the developer declared, by the
+     * name the input mapping gives the value.
+     *
+     * @return The declared parameter names
+     */
+    Optional<List<String>> declaredTaskParams();
 
     /**
      * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this task, keyed

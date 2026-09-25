@@ -4,6 +4,8 @@ import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
 
+import io.vanillabp.integration.adapter.spi.values.ValueDirection;
+import io.vanillabp.integration.adapter.spi.values.ValueTypeVerdict;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
@@ -420,6 +422,39 @@ public interface MigratableProcessService<A> {
   default boolean deliversTasksAtLeastOnce() {
 
     return false;
+
+  }
+
+  /**
+   * What this BPMS does with one Java type, asked once per type while the application
+   * starts. The core knows which values travel and in which direction, this answer says
+   * what happens to them on the way.
+   * <p>
+   * Asked for both directions, because the two are decided by different things. A value
+   * of the workflow aggregate is read by the expression language of the BPMS
+   * ({@link ValueDirection#TO_BPMS}); a value arriving in a
+   * <code>&#64;TaskParam</code> parameter is read by nobody but the handler, so only the
+   * serialization decides ({@link ValueDirection#FROM_BPMS}).
+   * <p>
+   * How the adapter arrives at its answer is its own business. It may hold a list of the
+   * types its BPMS stores, and it may send a value through its own serializer and read it
+   * back. What it must not do is guess: the default answer is
+   * {@link ValueTypeVerdict#cannotSay(String)}, and a startup never ends on that answer.
+   * Camunda 8 drops the scale of a decimal inside the broker, which no adapter sees
+   * without a running cluster, and an application whose BPMS is unreachable while it boots
+   * still has to boot.
+   *
+   * @param valueType The declared Java type of the value
+   * @param direction Which way the value travels
+   * @return What this BPMS does with the type, never <code>null</code>
+   */
+  default ValueTypeVerdict whatThisBpmsDoesWith(
+      final Class<?> valueType,
+      final ValueDirection direction) {
+
+    return ValueTypeVerdict
+        .cannotSay(
+            "the adapter '%s' says nothing about the types its BPMS stores".formatted(getAdapterId()));
 
   }
 

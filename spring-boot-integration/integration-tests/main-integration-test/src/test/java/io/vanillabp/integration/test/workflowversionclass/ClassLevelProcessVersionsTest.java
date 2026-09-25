@@ -161,6 +161,7 @@ public class ClassLevelProcessVersionsTest {
             workflows:
               ClassVersionedProcess:
                 allow-full-sync-with-bpms: true
+                declared-aggregate-values: [ "*" ]
       """;
 
   private ConfigurableApplicationContext runTestApplication(

@@ -39,21 +39,13 @@ public class BpmsInitiatedStartHandler {
    */
   private final ServedVersions versions;
 
-  /**
-   * Whether the method RETURNS the aggregate (instead of modifying the one passed
-   * in). Both shapes are allowed; a returned aggregate replaces what VanillaBP
-   * built.
-   */
-  private final boolean returnsAggregate;
-
   BpmsInitiatedStartHandler(
       final Class<?> workflowServiceClass,
       final Method method,
       final Supplier<Object> workflowServiceBean,
       final List<HandlerValueSource> binders,
       final String startEventId,
-      final ServedVersions versions,
-      final boolean returnsAggregate) {
+      final ServedVersions versions) {
 
     this.workflowServiceClass = workflowServiceClass;
     this.method = method;
@@ -61,7 +53,6 @@ public class BpmsInitiatedStartHandler {
     this.binders = binders;
     this.startEventId = startEventId;
     this.versions = versions;
-    this.returnsAggregate = returnsAggregate;
 
   }
 
@@ -76,19 +67,6 @@ public class BpmsInitiatedStartHandler {
   public String getStartEventId() {
 
     return startEventId;
-
-  }
-
-  /**
-   * Which of the two shapes this method has, which decides what happens with its return
-   * value: a returned aggregate replaces the one VanillaBP built, and a method which
-   * returns nothing is expected to have filled the aggregate it was passed.
-   *
-   * @return Whether the method returns the workflow aggregate
-   */
-  public boolean isReturningAggregate() {
-
-    return returnsAggregate;
 
   }
 
@@ -220,19 +198,17 @@ public class BpmsInitiatedStartHandler {
 
   /**
    * Invokes the method with bound parameters. Runtime exceptions of the method
-   * propagate unchanged - the transaction of the start rolls back, so no aggregate
-   * exists and the BPMS retries.
+   * propagate unchanged - the transaction of the start rolls back, so nothing was
+   * written and the BPMS retries.
    *
-   * @param workflowAggregate The aggregate VanillaBP built
    * @param context The adapter's notification
-   * @return The aggregate the method returned, or <code>null</code> for a
-   *         <code>void</code> method
+   * @return The workflow aggregate the method built
    */
   Object invoke(
-      final Object workflowAggregate,
       final BpmsInitiatedStartContext context) {
 
-    final var handlerContext = HandlerContexts.of(workflowAggregate, context, context.getVariables());
+    // no aggregate is passed: this method is the place it comes into existence
+    final var handlerContext = HandlerContexts.of(null, context, context.getVariables());
     final var arguments = binders
         .stream()
         .map(binder -> binder.valueFor(handlerContext))

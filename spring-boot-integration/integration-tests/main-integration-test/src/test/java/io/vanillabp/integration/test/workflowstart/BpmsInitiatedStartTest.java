@@ -38,12 +38,12 @@ import io.vanillabp.spi.service.BpmsStartTrigger;
 import io.vanillabp.spi.service.WorkflowEnd;
 
 /**
- * Acceptance test of workflows the BPMS starts on its own, with the dummy
- * adapter standing in for a BPMS reporting a timer, signal or conditional start. It
- * covers what an application gets without writing a line of code (the aggregate is
- * built, the timer's trigger time is its ID, the process variables land in it), that
- * a repeated notification creates nothing twice, and what an optional
- * <code>&#64;WorkflowStartedByBpms</code> method adds on top.
+ * Acceptance test of workflows the BPMS starts on its own, with the dummy adapter
+ * standing in for a BPMS reporting a timer, signal or conditional start. The
+ * application's <code>&#64;WorkflowStartedByBpms</code> method builds the aggregate, and
+ * the two start events of the process show the two ways it gets an id: the timer takes
+ * the trigger time, so a repeated notification creates nothing twice, and the signal
+ * builds one from what the model set.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class BpmsInitiatedStartTest {
@@ -199,6 +199,7 @@ public class BpmsInitiatedStartTest {
             workflows:
               TimerProcess:
                 allow-full-sync-with-bpms: true
+                declared-aggregate-values: [ "*" ]
       """;
 
   private ConfigurableApplicationContext runTestApplication(
@@ -284,8 +285,8 @@ public class BpmsInitiatedStartTest {
       final var dummyAdapter = context
           .getBean("DummyAdapter_DeploymentService_test", DummyDeploymentService.class);
 
-      // (a) a timer start without any application code: the aggregate is built, the
-      // trigger time is its ID and the variables the model set land in it
+      // (a) a timer start: the method serving that start event builds the aggregate,
+      // takes the trigger time as its ID and reads the variables the model set
       final var timerStart = dummyAdapter
           .startWorkflowByBpms(
               MODULE,
@@ -305,8 +306,7 @@ public class BpmsInitiatedStartTest {
       Assertions.assertNotNull(timerAggregate);
       Assertions.assertEquals("north", timerAggregate.getRegion());
       Assertions.assertEquals(42, timerAggregate.getAmount());
-      // the method of the workflow service serves the SIGNAL start event only
-      Assertions.assertNull(timerAggregate.getStartedBy());
+      Assertions.assertEquals("TIMER", timerAggregate.getStartedBy());
 
       // (b) the same timer time reported again (a retried notification): nothing is
       // created twice and business data written meanwhile survives
@@ -330,8 +330,8 @@ public class BpmsInitiatedStartTest {
               MODULE, PROCESS, context(BpmsStartTrigger.Kind.SIGNAL, SIGNAL_EVENT, Map.of("region", "south")));
 
       Assertions.assertTrue(signalStart.created());
-      // a signal has no natural identity, so the ID is generated
-      Assertions.assertNotEquals(TRIGGER_TIME.toString(), signalStart.workflowAggregateId());
+      // the signal has no natural identity, so the method built one of its own
+      Assertions.assertEquals("signal-south", signalStart.workflowAggregateId());
       final var signalAggregate = WorkflowStartConfiguration.AGGREGATES
           .get(signalStart.workflowAggregateId());
       Assertions.assertEquals("SIGNAL/OrderReceived", signalAggregate.getStartedBy());

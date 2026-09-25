@@ -2742,3 +2742,44 @@ the same way on every boot.
 The rule this shape carries is the general one: a key which binds below the level it is read at
 ends the startup. Dropping the binding is the other way out and it is not open to us, because one
 class serves all four levels and a key dropped there is dropped everywhere.
+
+### 92. A workflow the BPMS starts builds its own aggregate, and the platform builds none
+
+A workflow started by a timer, a signal or a conditional start event has no aggregate, and
+somebody has to build one. Until now VanillaBP did it: it instantiated the aggregate class,
+derived an id from the trigger and copied the process variables of the model into equally named
+attributes by reflection (`AggregatePropertyWriter`). An application could take over with
+`@WorkflowStartedByBpms`, in two shapes, and that annotation was optional.
+
+It is the same trap that was turned down for the `null` sub-objects of an aggregate: an
+object which comes into existence without the application does not carry the application's
+values. Lombok writes the defaults of `@Builder.Default` in the builder, so an instance built
+with the no-argument constructor carries `null` where the application would have a value. A
+private constructor makes the instantiation impossible at all, and a mandatory field breaks it at
+the next change of the class. For a workflow the BPMS started this is not a detail somewhere in
+the middle, it is the FIRST thing that ever happens to that workflow.
+
+So the annotation is required, the enriching shape is gone, and the method returns the aggregate.
+The platform saves what it is given and nothing else. The id is the application's choice as well:
+the trigger carries a timer's time, and taking it as the id is what makes a repeated notification
+harmless, while a signal and a condition carry no such value and an application which needs one
+brings its own.
+
+The check runs while the models are deployed, not when the start fires. What the BPMS can start
+on its own stands in the model, and which methods exist is what the scan knows, so both halves are
+there while the application boots. Finding out at three in the morning, when the timer fires and
+nothing happens, is the outcome this avoids. A process with such a start event and no method ends
+the startup with a message naming the process, the start event and the method to write.
+
+This also removes the third direction values could travel in. The rule about portable values
+(`PortableValuesCheck`) covers the aggregate on its way to the BPMS and the `@TaskParam` on its
+way back; BPMS into an aggregate was the third, and it existed only because the platform did
+something which belongs to the application.
+
+Two earlier entries close with a sentence about `AggregatePropertyWriter`: decision 55 says that
+the same conversion writes the attributes of an aggregate a BPMS-initiated start builds, and
+decision 57 says the same about value types and their texts. Both sentences are about a class
+which no longer exists. What those decisions decide is untouched, because it is about
+`@TaskParam`; only their closing consequence is gone.
+
+Version 1 is not affected. It did not support a process the BPMS starts on its own.

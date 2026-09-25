@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
@@ -34,10 +33,9 @@ import jakarta.inject.Inject;
 
 /**
  * Acceptance test of workflows the BPMS starts on its own on Quarkus,
- * with the dummy adapter standing in for a BPMS reporting a timer or signal start:
- * the aggregate is built without a line of application code, a repeated
- * notification creates nothing twice, and an optional
- * <code>&#64;WorkflowStartedByBpms</code> method adds what the application wants.
+ * with the dummy adapter standing in for a BPMS reporting a timer or signal start: the
+ * application's <code>&#64;WorkflowStartedByBpms</code> method builds the aggregate, and
+ * a repeated notification creates nothing twice where the id it chose says so.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class BpmsInitiatedStartTest {
@@ -133,7 +131,7 @@ public class BpmsInitiatedStartTest {
     // the tests of this class share one application and therefore one store
     final var aggregatesBefore = persistence.count();
 
-    // (a) a timer start without any application code
+    // (a) a timer start, built by the method serving that start event
     final var timerStart = dummyAdapter
         .startWorkflowByBpms(
             MODULE,
@@ -151,8 +149,7 @@ public class BpmsInitiatedStartTest {
     assertNotNull(timerAggregate);
     assertEquals("north", timerAggregate.getRegion());
     assertEquals(42, timerAggregate.getAmount());
-    // the application's method serves the SIGNAL start event only
-    assertNull(timerAggregate.getStartedBy());
+    assertEquals("TIMER", timerAggregate.getStartedBy());
 
     // (b) the same timer time reported again: nothing is created twice and business
     // data written meanwhile survives

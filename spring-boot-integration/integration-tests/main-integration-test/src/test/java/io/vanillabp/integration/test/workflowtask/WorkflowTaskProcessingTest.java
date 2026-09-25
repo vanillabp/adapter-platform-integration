@@ -189,6 +189,7 @@ public class WorkflowTaskProcessingTest {
                 resources-location: classpath*:test-module/processes/workflowtask
             workflows:
               TaskProcess:
+                declared-aggregate-values: [ "*" ]
                 tasks:
                   processTask:
                     adapters:

@@ -16,3 +16,5 @@ vanillabp:
       workflows:
         FullSyncProcess:
           allow-full-sync-with-bpms: true
+          declared-aggregate-values:
+            - '*'

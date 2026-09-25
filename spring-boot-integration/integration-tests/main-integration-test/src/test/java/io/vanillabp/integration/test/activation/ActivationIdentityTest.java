@@ -224,6 +224,7 @@ public class ActivationIdentityTest {
             workflows:
               ActivationProcess:
                 allow-full-sync-with-bpms: true
+                declared-aggregate-values: [ "*" ]
       """;
 
   private ConfigurableApplicationContext runTestApplication(

@@ -179,6 +179,7 @@ public class DeliveryRecordReleaseTest {
             workflows:
               DeliveryProcess:
                 allow-full-sync-with-bpms: true
+                declared-aggregate-values: [ "*" ]
       """;
 
   private ConfigurableApplicationContext runTestApplication(

@@ -340,10 +340,13 @@ public class InheritedWorkflowServiceTest {
               workflows:
                 InheritingWorkflowService:
                   allow-full-sync-with-bpms: true
+                  declared-aggregate-values: [ "*" ]
                 InvisibleHandlers:
                   allow-full-sync-with-bpms: true
+                  declared-aggregate-values: [ "*" ]
                 SharedProcess:
                   allow-full-sync-with-bpms: true
+                  declared-aggregate-values: [ "*" ]
         """
         .formatted(resourcesLocation);
 

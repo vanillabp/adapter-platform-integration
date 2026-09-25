@@ -143,6 +143,16 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
 
     }
 
+    /**
+     * None of these fixtures declares a task parameter either.
+     */
+    @Override
+    public Optional<List<String>> declaredTaskParams() {
+
+      return Optional.empty();
+
+    }
+
   }
 
   private record WorkflowProperties(
@@ -186,6 +196,27 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
         final Map<String, QuarkusMigrationAdapterProperties.TaskProperties> tasks) {
 
       this(prioritizedAdapters, adapters, tasks, null);
+
+    }
+
+    /**
+     * None of these fixtures declares an aggregate value. What a value is declared as
+     * belongs to a workflow, and the mapping is held by the fixtures which write one.
+     */
+    @Override
+    public Optional<List<String>> declaredAggregateValues() {
+
+      return Optional.empty();
+
+    }
+
+    /**
+     * None of these fixtures declares a task parameter either.
+     */
+    @Override
+    public Optional<List<String>> declaredTaskParams() {
+
+      return Optional.empty();
 
     }
 
@@ -254,6 +285,16 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
         final QuarkusMigrationAdapterProperties.TransactionsProperties transactions) {
 
       this(prioritizedAdapters, adapters, workflows, transactions, null);
+
+    }
+
+    /**
+     * None of these fixtures declares a task parameter either.
+     */
+    @Override
+    public Optional<List<String>> declaredTaskParams() {
+
+      return Optional.empty();
 
     }
 
@@ -448,6 +489,16 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
 
       this(
           prioritizedAdapters, resourcesLocation, adapters, workflowModules, outbox, workflowAdapterCache, transactions, delivery, null);
+
+    }
+
+    /**
+     * None of these fixtures declares a task parameter either.
+     */
+    @Override
+    public Optional<List<String>> declaredTaskParams() {
+
+      return Optional.empty();
 
     }
 

@@ -73,6 +73,7 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
   @Mapping(target = "prioritizedAdapters", qualifiedByName = "unwrapStringList")
   @Mapping(target = "retiredAdapters", qualifiedByName = "unwrapStringList")
   @Mapping(target = "allowFullSyncWithBpms", qualifiedByName = "unwrapBoolean")
+  @Mapping(target = "declaredTaskParams", qualifiedByName = "unwrapStringList")
   // derived from the classpath facts by MigrationAdapterProperties#normalize, not
   // bound from properties (the resources-location convention)
   @Mapping(target = "conventionalResourcesLocations", ignore = true)
@@ -231,6 +232,7 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
   @Mapping(target = "workflowModuleId", ignore = true)
   @Mapping(target = "prioritizedAdapters", qualifiedByName = "unwrapStringList")
   @Mapping(target = "allowFullSyncWithBpms", qualifiedByName = "unwrapBoolean")
+  @Mapping(target = "declaredTaskParams", qualifiedByName = "unwrapStringList")
   WorkflowModuleAdapterProperties toCore(
       QuarkusMigrationAdapterProperties.WorkflowModuleProperties workflowModuleProperties);
 
@@ -248,6 +250,8 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
   @Mapping(target = "workflowModule", ignore = true)
   @Mapping(target = "prioritizedAdapters", qualifiedByName = "unwrapStringList")
   @Mapping(target = "allowFullSyncWithBpms", qualifiedByName = "unwrapBoolean")
+  @Mapping(target = "declaredAggregateValues", qualifiedByName = "unwrapStringList")
+  @Mapping(target = "declaredTaskParams", qualifiedByName = "unwrapStringList")
   WorkflowAdapterProperties toCore(
       QuarkusMigrationAdapterProperties.WorkflowProperties workflowProperties);
 
@@ -260,6 +264,7 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
    *          of a workflow
    * @return The core's section of that task
    */
+  @Mapping(target = "declaredTaskParams", qualifiedByName = "unwrapStringList")
   TaskAdapterProperties toCore(
       QuarkusMigrationAdapterProperties.TaskProperties taskProperties);
 

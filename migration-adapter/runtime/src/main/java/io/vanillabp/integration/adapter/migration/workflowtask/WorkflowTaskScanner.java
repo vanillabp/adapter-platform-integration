@@ -176,6 +176,32 @@ class WorkflowTaskScanner {
 
   }
 
+  /**
+   * The key the CONFIGURATION knows a <code>&#64;WorkflowTask</code> method under, which is
+   * the task definition where the annotation names one, the activity id where it names that
+   * instead, and the method's name where it names neither.
+   * <p>
+   * This is not the same as the task definition the handler is wired by: a method naming
+   * only an activity id is wired by that id and has no task definition at all, while the
+   * configuration still has to call it something.
+   *
+   * @param method The annotated method
+   * @param annotation Its annotation
+   * @return The key a task section of the configuration is written under
+   */
+  static String taskConfigurationKeyOf(
+      final Method method,
+      final WorkflowTask annotation) {
+
+    if (!annotation.taskDefinition().equals(WorkflowTask.USE_METHOD_NAME)) {
+      return annotation.taskDefinition();
+    }
+    return annotation.id().equals(WorkflowTask.USE_METHOD_NAME)
+        ? method.getName()
+        : annotation.id();
+
+  }
+
   private static WorkflowTaskHandler buildHandler(
       final Class<?> workflowServiceClass,
       final Method method,

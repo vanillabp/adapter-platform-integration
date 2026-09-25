@@ -375,6 +375,76 @@ attributes of a class which states no mode ends the boot naming the class and th
 Nothing is ever read back: a process variable never updates the aggregate, and the only variables
 VanillaBP reads are those a `@TaskParam` asks for.
 
+#### Only a boolean and a text reach the BPMS unasked
+
+Once your aggregate says what it shares, version 2 looks at the TYPES of those values. A value of
+the aggregate travels so that a model can decide on it, and the thing reading it is the expression
+language of the BPMS. Two types mean the same in every expression language: the plain `boolean` and
+a text. Everything else is declared first, and an aggregate sharing an undeclared decimal, date or
+number does not start.
+
+Your Java code does not have to change for this. The declaration is configuration, one entry per
+value:
+
+```yaml
+vanillabp:
+  workflow-modules:
+    my-module:
+      workflows:
+        MyProcess:
+          declared-aggregate-values:
+            - amount
+            - shipping.*
+```
+
+An entry names a path in the aggregate. A plain name is the attribute itself, `shipping.*` is every
+value below `shipping`, and `shipping.express` is one value below it. A lone `*` covers every value
+of the aggregate, which is the one line a workflow that already allows the full sync needs. Writing
+the entries before you upgrade means the upgrade does not begin with a failed start.
+
+The better answer, where you have the time, is a getter. A `boolean isLargeAmount()` on the
+aggregate carries the expression in Java, the model reads nothing but its name, and a change to your
+data model cannot break a model nobody touched. A decision table is the case where declaring is the
+intended way rather than a shortcut: its inputs are numbers and dates, that is what a decision table
+is for.
+
+The wrapper `Boolean` is not the plain `boolean`, and the message says so in its own words. A `null`
+in a gateway condition means something different on every BPMS, and a value nobody computed must not
+carry a decision.
+
+The other direction is softer, because no expression language is involved: a `@TaskParam` is read by
+your handler and by nobody else. Such a parameter is named only where an adapter says that its BPMS
+hands the type back as something else, and where the declaration names no type at all. A
+`@TaskParam Object` is the second case: Camunda 7 answers it with a `BigDecimal` and Camunda 8 with a
+`Double`, so it has to be declared and covered with tests.
+
+```yaml
+vanillabp:
+  workflow-modules:
+    my-module:
+      workflows:
+        MyProcess:
+          tasks:
+            myTask:
+              declared-task-params:
+                - amount
+```
+
+That key may also stand at the workflow, at the workflow module or at `vanillabp` itself, and the
+most specific level wins.
+
+An adapter is allowed to answer that it cannot say what its BPMS does with a type. That answer costs
+a warning and never a failed start: Camunda 8 drops the scale of a decimal inside the broker, which
+no adapter sees without a running cluster, and an application whose BPMS is unreachable while it
+boots still has to boot.
+
+A value the aggregate declares also has to be readable. A section of a larger process usually sits
+as a sub-object, and while the section has not run that object is `null`, so `shipping.express`
+resolves to nothing. That stops the workflow with a message naming the path and the link which is
+`null`, and the way out is either a boolean getter on the top level or a declared substitute,
+`shipping.express=false`. Writing `false` on its own would be the worst answer of all, because
+nobody can tell it from a `false` somebody computed.
+
 #### A `java.util.Calendar` is refused, a `Date` travels as an instant
 
 An attribute of type `java.util.Calendar` cannot be shared. The text a `Calendar` prints is the
@@ -428,6 +498,13 @@ has to change on upgrading. `java.util.Calendar` and `java.util.Locale` are the 
 text does not carry the value back, they stay refused, and the message names the type to declare
 instead. The measurement is decision 57 and the reasoning decision 55 in
 [`DECISIONS.md`](./DECISIONS.md).
+
+#### A workflow the BPMS starts needs a method which builds its aggregate
+
+Version 1 did not support a process the BPMS starts on its own, so there is nothing to migrate.
+Where you model a timer, signal or conditional start event in version 2, the workflow service of
+that process needs a `@WorkflowStartedByBpms` method which RETURNS the workflow aggregate. Without
+one the application does not start, and the message shows the method to write.
 
 #### `version` decides which method serves a task
 

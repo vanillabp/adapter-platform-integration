@@ -83,9 +83,11 @@ public class StartEventsOfARenamedProcessTest {
     }
 
     @WorkflowStartedByBpms(id = TIMER_EVENT)
-    public void startedByTheOldTimer(
-        final Aggregate aggregate,
+    public Aggregate startedByTheOldTimer(
         final BpmsStartTrigger trigger) {
+
+      return new Aggregate();
+
     }
 
   }
@@ -106,9 +108,11 @@ public class StartEventsOfARenamedProcessTest {
     }
 
     @WorkflowStartedByBpms(id = "DailyTimerr")
-    public void neverRuns(
-        final Aggregate aggregate,
+    public Aggregate neverRuns(
         final BpmsStartTrigger trigger) {
+
+      return new Aggregate();
+
     }
 
   }
@@ -129,9 +133,11 @@ public class StartEventsOfARenamedProcessTest {
     }
 
     @WorkflowStartedByBpms
-    public void neverRuns(
-        final Aggregate aggregate,
+    public Aggregate neverRuns(
         final BpmsStartTrigger trigger) {
+
+      return new Aggregate();
+
     }
 
   }

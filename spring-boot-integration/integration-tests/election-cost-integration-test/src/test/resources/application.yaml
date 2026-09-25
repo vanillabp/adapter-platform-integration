@@ -21,5 +21,7 @@ vanillabp:
       workflows:
         CostProcess:
           allow-full-sync-with-bpms: true
+          declared-aggregate-values:
+            - '*'
 election-cost-module:
   nothing: there

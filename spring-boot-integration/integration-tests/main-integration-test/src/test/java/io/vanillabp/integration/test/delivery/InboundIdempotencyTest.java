@@ -185,6 +185,7 @@ public class InboundIdempotencyTest {
             workflows:
               DeliveryProcess:
                 allow-full-sync-with-bpms: true
+                declared-aggregate-values: [ "*" ]
                 tasks:
                   undeduplicatedTask:
                     adapters:
