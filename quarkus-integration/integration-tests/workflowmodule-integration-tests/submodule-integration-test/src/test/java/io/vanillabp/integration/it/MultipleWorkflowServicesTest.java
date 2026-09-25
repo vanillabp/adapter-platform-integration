@@ -13,7 +13,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusProdModeTest;
 import io.restassured.RestAssured;
-import io.vanillabp.integration.test.utils.FreePortUtil;
+import io.vanillabp.integration.test.utils.OneFreePortPerJvm;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 @ExtendWith(SuppressOutputExtension.class)
@@ -28,7 +28,7 @@ public class MultipleWorkflowServicesTest {
       .setJVMArgs(testCoverageJavaAgent(quarkusProdModeTestDefaults()))
       .setRun(true)
       .setRuntimeProperties(Map.of(
-          "quarkus.http.port", Integer.toString(FreePortUtil.getFreePort()),
+          "quarkus.http.port", Integer.toString(OneFreePortPerJvm.getPort()),
           "quarkus.log.file.enable", "true",
           "quarkus.log.file.path", Path.of("target", "mws-app.log").toAbsolutePath().toString()));
 
@@ -39,7 +39,7 @@ public class MultipleWorkflowServicesTest {
     Map<String, String> workflowModules = RestAssured
         .given()
         .baseUri("http://localhost")
-        .port(FreePortUtil.getFreePort())
+        .port(OneFreePortPerJvm.getPort())
         .get("introspect/workflow-modules")
         .then()
         .statusCode(200)

@@ -13,7 +13,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import io.quarkus.test.QuarkusProdModeTest;
 import io.restassured.RestAssured;
 import io.vanillabp.integration.test.NoIndexModuleIntrospectionController;
-import io.vanillabp.integration.test.utils.FreePortUtil;
+import io.vanillabp.integration.test.utils.OneFreePortPerJvm;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
@@ -39,7 +39,7 @@ public class WorkflowModuleWithoutJandexIndexTest {
       // JVM args needed for tracking coverage. Check pom.xml for <systemPropertyVariables> tag
       .setJVMArgs(testCoverageJavaAgent(quarkusProdModeTestDefaults()))
       .setRun(true)
-      .setRuntimeProperties(Map.of("quarkus.http.port", Integer.toString(FreePortUtil.getFreePort())));
+      .setRuntimeProperties(Map.of("quarkus.http.port", Integer.toString(OneFreePortPerJvm.getPort())));
 
   @Test
   public void testWorkflowModuleWithoutJandexIndexIsDetected() {
@@ -47,7 +47,7 @@ public class WorkflowModuleWithoutJandexIndexTest {
     RestAssured
         .given()
         .baseUri("http://localhost")
-        .port(FreePortUtil.getFreePort())
+        .port(OneFreePortPerJvm.getPort())
         .get("introspect/no-index-module-test-property")
         .then()
         .statusCode(200)

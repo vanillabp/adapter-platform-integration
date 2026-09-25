@@ -12,7 +12,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusProdModeTest;
 import io.restassured.RestAssured;
-import io.vanillabp.integration.test.utils.FreePortUtil;
+import io.vanillabp.integration.test.utils.OneFreePortPerJvm;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
@@ -33,7 +33,7 @@ public class ApplicationPropertiesAndYamlTest {
       // JVM args needed for tracking coverage. Check pom.xml for systemPropertyVariables
       .setJVMArgs(testCoverageJavaAgent(quarkusProdModeTestDefaults()))
       .setRun(true)
-      .setRuntimeProperties(Map.of("quarkus.http.port", Integer.toString(FreePortUtil.getFreePort())));
+      .setRuntimeProperties(Map.of("quarkus.http.port", Integer.toString(OneFreePortPerJvm.getPort())));
 
   @Test
   public void testProperties() {
@@ -42,7 +42,7 @@ public class ApplicationPropertiesAndYamlTest {
     Map<String, Integer> workflowModules = RestAssured
         .given()
         .baseUri("http://localhost")
-        .port(FreePortUtil.getFreePort())
+        .port(OneFreePortPerJvm.getPort())
         .get("introspect/test-properties")
         .then()
         .statusCode(200)
@@ -65,7 +65,7 @@ public class ApplicationPropertiesAndYamlTest {
     Map<String, Integer> workflowModules = RestAssured
         .given()
         .baseUri("http://localhost")
-        .port(FreePortUtil.getFreePort())
+        .port(OneFreePortPerJvm.getPort())
         .get("introspect/test2-properties")
         .then()
         .statusCode(200)
@@ -88,7 +88,7 @@ public class ApplicationPropertiesAndYamlTest {
     Map<String, Integer> workflowModules = RestAssured
         .given()
         .baseUri("http://localhost")
-        .port(FreePortUtil.getFreePort())
+        .port(OneFreePortPerJvm.getPort())
         .get("introspect/unmodified-properties")
         .then()
         .statusCode(200)

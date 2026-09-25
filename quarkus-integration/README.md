@@ -348,12 +348,12 @@ one answers the second build's requests, so the run reads like a test which got 
 value rather than like a clash. Measured on 2026-09-20: two copies of
 `main-integration-test` built at the same time were red in two different classes, while
 the same four classes are green when the module builds alone. Each dev-mode test in
-`integration-tests/main-integration-test` therefore writes a port from `FreePortUtil` into
-the `application.properties` of the application it assembles, and asks RestAssured for that
-port.
+`integration-tests/main-integration-test` therefore writes a port from
+`OneFreePortPerJvm` into the `application.properties` of the application it assembles,
+and asks RestAssured for that port.
 
 A `QuarkusProdModeTest` forks its application and passes `quarkus.http.port` to it. Those
-tests take their port from `FreePortUtil` as well, which picks one free port per test JVM.
+tests take their port from `OneFreePortPerJvm` as well.
 `MultipleWorkflowServicesTest` in `integration-tests/workflowmodule-integration-tests` is
 the example.
 

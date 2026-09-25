@@ -15,32 +15,29 @@ import io.vanillabp.spi.service.BpmsStartTrigger;
  * @param elementId The BPMN id of the start event
  * @param kind Which kind of start event it is
  * @param signalName The plain signal name for {@link BpmsStartTrigger.Kind#SIGNAL},
- *          <code>null</code> otherwise
- * @param description What the event is defined as (e.g. a timer's cycle or date
- *          expression). Nothing is decided by it: it is shown in the messages naming the
- *          start events of a process, next to the signal name, so a reader does not have
- *          to look an element id up in the model. May be <code>null</code>
+ *          <code>null</code> otherwise. Nothing is decided by it: it is shown in the
+ *          messages naming the start events of a process, so a reader does not have to
+ *          look an element id up in the model
  */
 public record BpmsInitiatedStartSpec(
                                      String elementId,
                                      BpmsStartTrigger.Kind kind,
-                                     String signalName,
-                                     String description) {
+                                     String signalName) {
 
   /**
    * The spec of a start event an adapter can say no more about than its id and its kind.
-   * The core matches a reported start event by the element id, so the two values left out
-   * change no decision - they make what is reported about it easier to read.
+   * The core matches a reported start event by the element id, so the signal name left
+   * out changes no decision - it makes what is reported about the event easier to read.
    *
    * @param elementId The BPMN id of the start event
    * @param kind Which kind of start event it is
-   * @return The spec without a signal name and description
+   * @return The spec without a signal name
    */
   public static BpmsInitiatedStartSpec of(
       final String elementId,
       final BpmsStartTrigger.Kind kind) {
 
-    return new BpmsInitiatedStartSpec(elementId, kind, null, null);
+    return new BpmsInitiatedStartSpec(elementId, kind, null);
 
   }
 

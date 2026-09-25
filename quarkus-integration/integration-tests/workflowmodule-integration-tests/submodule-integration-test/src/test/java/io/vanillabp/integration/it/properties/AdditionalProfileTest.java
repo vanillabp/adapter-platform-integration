@@ -12,7 +12,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusProdModeTest;
 import io.restassured.RestAssured;
-import io.vanillabp.integration.test.utils.FreePortUtil;
+import io.vanillabp.integration.test.utils.OneFreePortPerJvm;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
@@ -34,7 +34,7 @@ public class AdditionalProfileTest {
       // JVM args needed for tracking coverage. Check pom.xml for systemPropertyVariables
       .setJVMArgs(testCoverageJavaAgent(quarkusProdModeTestDefaults()))
       .setRun(true)
-      .setRuntimeProperties(Map.of("quarkus.http.port", Integer.toString(FreePortUtil.getFreePort()),
+      .setRuntimeProperties(Map.of("quarkus.http.port", Integer.toString(OneFreePortPerJvm.getPort()),
           "quarkus.profile", "prod,testprofile"));
 
   @Test
@@ -44,7 +44,7 @@ public class AdditionalProfileTest {
     Map<String, Integer> workflowModules = RestAssured
         .given()
         .baseUri("http://localhost")
-        .port(FreePortUtil.getFreePort())
+        .port(OneFreePortPerJvm.getPort())
         .get("introspect/test-properties")
         .then()
         .statusCode(200)
@@ -69,7 +69,7 @@ public class AdditionalProfileTest {
     Map<String, Integer> workflowModules = RestAssured
         .given()
         .baseUri("http://localhost")
-        .port(FreePortUtil.getFreePort())
+        .port(OneFreePortPerJvm.getPort())
         .get("introspect/test2-properties")
         .then()
         .statusCode(200)
@@ -92,7 +92,7 @@ public class AdditionalProfileTest {
     final Map<String, String> properties = RestAssured
         .given()
         .baseUri("http://localhost")
-        .port(FreePortUtil.getFreePort())
+        .port(OneFreePortPerJvm.getPort())
         .get("introspect/precedence-properties")
         .then()
         .statusCode(200)
@@ -117,7 +117,7 @@ public class AdditionalProfileTest {
     Map<String, Integer> workflowModules = RestAssured
         .given()
         .baseUri("http://localhost")
-        .port(FreePortUtil.getFreePort())
+        .port(OneFreePortPerJvm.getPort())
         .get("introspect/unmodified-properties")
         .then()
         .statusCode(200)
