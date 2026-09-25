@@ -6,8 +6,10 @@
        on purpose. Importing a BOM imports its EFFECTIVE dependencyManagement, which
        includes all entries inherited from its parents. Inheriting from
        'adapter-platform-integration' would therefore silently pin the versions of
-       Lombok, SLF4J, Testcontainers, ... in every application importing this BOM. The
-       release parent has no dependencyManagement at all. -->
+       Lombok, SLF4J, Testcontainers, ... in every application importing this BOM. So the
+       parent of this module has to be one without dependencyManagement of its own. That
+       is an assumption about a POM released elsewhere: 'mvn help:effective-pom -pl bom'
+       shows what this BOM really hands on, and it held for release-parent 1.2.1. -->
   <parent>
     <groupId>io.vanillabp</groupId>
     <artifactId>release-parent</artifactId>
