@@ -282,6 +282,12 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * workflow module ID, value the location WITHOUT the adapter ID (which is
    * appended per adapter, see
    * {@link #getAdapterResourcesLocationsFor(String, String)}).
+   * <p>
+   * Spring Boot binds a map through its getter, so this one is a configuration key
+   * whatever accessors it carries. It is therefore marked unsupported in
+   * <code>META-INF/additional-spring-configuration-metadata.json</code> of the Spring Boot
+   * module, which keeps a development environment from offering a key whose value the next
+   * derivation throws away.
    */
   @Builder.Default
   private Map<String, List<String>> conventionalResourcesLocations = Map.of();

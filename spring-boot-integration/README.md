@@ -92,7 +92,9 @@ a dependency, the processor cannot reach it and
 `additional-spring-configuration-metadata.json` describes it instead. Do not
 write both: Spring merges the two files and the hand-written text wins, so the
 javadoc is shown to nobody and is free to say something else.
-`AKeyIsDescribedInOnePlaceTest` fails a key which is described twice.
+`AKeyIsDescribedInOnePlaceTest` fails a key which is described twice, and
+`EveryKeyOfASectionIsDescribedTest` fails a key of a section of the core model
+which nobody described at all.
 
 BPMS adapters contribute their own keys to the same tree (e.g.
 `vanillabp.adapters.<id>.rest-address`) by binding an adapter-owned second
