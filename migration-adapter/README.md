@@ -3803,6 +3803,45 @@ the declarations in the code, which change when somebody edits them. The guards 
 measure time: `OldProcessVersionsTest#theQuestionsDoNotDependOnHowManyWorkflowsRun` here,
 `Camunda7StartupQuestionCostTest` and `Camunda8StartupQuestionCostTest` in the adapters.
 
+## Only portable values reach the BPMS
+
+The sync model says WHICH values of an aggregate travel. `PortableValuesCheck` says whether their
+TYPES survive the way there and back, and it runs right after the sync model was validated. That
+order is the rule rather than an accident of the startup sequence: judged first, the check would
+judge the types of values which never leave.
+
+The two directions are decided by different things.
+
+Outbound, a value of the aggregate exists so that a model can decide on it, and the reader is the
+expression language of the BPMS. Only the plain `boolean` and a text mean the same in every
+expression language, so those two travel and everything else is declared first. The wrapper
+`Boolean` is refused with a sentence of its own, because a `null` in a gateway condition means
+something different on every BPMS.
+
+Inbound, a `@TaskParam` is read by the handler alone, so the serialization decides and nothing else.
+A type is named there only where an adapter says its BPMS hands it back as something else, and where
+the declaration names no type at all (`Object`, a raw collection, a `Map`).
+
+What a BPMS does with a type is the adapter's answer, `MigratableProcessService#whatThisBpmsDoesWith`
+with a `ValueDirection` and a `ValueTypeVerdict`. `CANNOT_SAY` is a legitimate answer and never ends
+a startup: Camunda 8 drops the scale of a decimal inside the broker, which needs a running cluster to
+see, and an application whose BPMS is unreachable while it boots still has to boot. It costs one
+warning naming the value and the adapters which stayed silent.
+
+The declarations are configuration, read once per workflow and kept per aggregate class in
+`DeclaredAggregateValues`, which the sync model owns. The class is the key because an adapter asks
+for the shared values with the aggregate in hand and without naming a workflow.
+
+`DeclaredAggregateValues` carries the second half of the story: a declared path of more than one
+segment has to RESOLVE at every sync point. A section of a larger process usually sits as a
+sub-object, and while the section has not run that object is `null`, so `shipping.express` reaches
+the BPMS as nothing. That ends the sync with a message naming the path and the `null` link, unless
+the declaration names what to share instead (`shipping.express=false`). Writing `false` by itself
+would be the worst answer, since nobody can tell it from a computed `false`.
+
+Held by `PortableValuesCheckTest` and `DeclaredAggregateValuesTest`, both of which read the messages
+rather than only counting that something was thrown.
+
 ## Two writers on one workflow aggregate
 
 A workflow aggregate has one workflow, which reads like one writer - until the process holds

@@ -20,5 +20,9 @@ vanillabp:
       workflows:
         JpaProcess:
           allow-full-sync-with-bpms: true
+          declared-aggregate-values:
+            - '*'
         MongoProcess:
           allow-full-sync-with-bpms: true
+          declared-aggregate-values:
+            - '*'

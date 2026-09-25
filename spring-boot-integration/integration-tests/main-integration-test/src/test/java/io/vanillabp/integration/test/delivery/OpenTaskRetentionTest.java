@@ -172,6 +172,7 @@ public class OpenTaskRetentionTest {
             workflows:
               DeliveryProcess:
                 allow-full-sync-with-bpms: true
+                declared-aggregate-values: [ "*" ]
       """;
 
   private ConfigurableApplicationContext runTestApplication(

@@ -259,6 +259,7 @@ public class SecondaryProcessDeliveryTest {
             workflows:
               Ordering:
                 allow-full-sync-with-bpms: true
+                declared-aggregate-values: [ "*" ]
       """;
 
   private SpringBootTestApplication buildTestApp() throws IOException {

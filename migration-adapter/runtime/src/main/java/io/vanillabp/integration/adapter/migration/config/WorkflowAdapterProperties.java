@@ -85,6 +85,29 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   private Boolean allowFullSyncWithBpms;
 
   /**
+   * The values of the workflow aggregate this workflow declares for the BPMS
+   * (<code>declared-aggregate-values</code>). An entry names a path in the aggregate:
+   * <code>amount</code> is the attribute itself, <code>shipping.*</code> is every value
+   * below <code>shipping</code>, and <code>shipping.express</code> is one value below it.
+   * <p>
+   * An entry says that the developer looked at the value, which is what lets a value whose
+   * type is neither a <code>boolean</code> nor a text reach the BPMS. It may also say what
+   * is shared while the path does not resolve, as in
+   * <code>shipping.express=false</code>.
+   * <p>
+   * Read at the workflow, because the values belong to the aggregate of one workflow.
+   */
+  private java.util.List<String> declaredAggregateValues;
+
+  /**
+   * The <code>&#64;TaskParam</code> parameters of this workflow whose type the developer
+   * declared (<code>declared-task-params</code>), by the name the input mapping gives the
+   * value. The most specific level wins: the task, then the workflow, then the workflow
+   * module, then the application.
+   */
+  private java.util.List<String> declaredTaskParams;
+
+  /**
    * Overrides <code>vanillabp.delivery</code> for this workflow. Only the settings which
    * belong to a single workflow are read here - the maximum age of an open task, since
    * one process may wait for a partner for weeks while every other one is done in

@@ -14,3 +14,7 @@ vanillabp:
       adapters:
         demo1:
           resources-location: classpath:processes/unclaimed
+      workflows:
+        Calling:
+          declared-aggregate-values:
+            - '*'

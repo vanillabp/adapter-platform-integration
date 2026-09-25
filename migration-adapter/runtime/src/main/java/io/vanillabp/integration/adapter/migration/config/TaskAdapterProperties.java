@@ -60,6 +60,14 @@ public class TaskAdapterProperties {
   private Map<String, Map<String, String>> extensions = Map.of();
 
   /**
+   * The <code>&#64;TaskParam</code> parameters of this task whose type the developer
+   * declared (<code>declared-task-params</code>), by the name the input mapping gives the
+   * value. This is the most specific of the four levels the declaration may be written at,
+   * and it is where it belongs: a <code>&#64;TaskParam</code> belongs to one task.
+   */
+  private java.util.List<String> declaredTaskParams;
+
+  /**
    * Overrides <code>vanillabp.delivery</code> for this task - the most specific level
    * the maximum age of an open task may be set at, which is where it belongs: the one
    * task waiting for a signature is the reason the whole application does not get a

@@ -92,6 +92,9 @@ public class ObservabilityTest {
             adapters:
               test:
                 resources-location: classpath*:test-module/processes/workflowtask
+            workflows:
+              TaskProcess:
+                declared-aggregate-values: [ "*" ]
       """;
 
   private ConfigurableApplicationContext runTestApplication(

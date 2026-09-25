@@ -324,6 +324,18 @@ public class MigrationProcessService<A> {
   }
 
   /**
+   * The adapters serving this workflow, in the order they are elected in. Read by the
+   * startup checks which have to ask every BPMS of a workflow the same question.
+   *
+   * @return The process services of the prioritized adapters, never <code>null</code>
+   */
+  public List<MigratableProcessService<A>> getAdaptersOfThisWorkflow() {
+
+    return adapterProcessServices;
+
+  }
+
+  /**
    * Validates AFTER THE DEPLOYMENT that every prioritized adapter of this BPMN process
    * can locate workflows, and refuses a combination in which one of them cannot.
    * <p>

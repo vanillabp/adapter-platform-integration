@@ -167,6 +167,13 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   private final io.vanillabp.integration.adapter.migration.sync.FullSyncCheck fullSyncCheck;
 
   /**
+   * The second half of the startup verdict about the values of a workflow: the sync model
+   * says WHICH of them travel, this one says whether their types survive the way there and
+   * back.
+   */
+  private final PortableValuesCheck portableValuesCheck;
+
+  /**
    * The process versions this application declares obsolete.
    */
   private final OutfadedProcessVersions outfadedVersions;
@@ -270,6 +277,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     this.transactionAnnotations = transactionAnnotations;
     this.properties = properties;
     this.fullSyncCheck = new io.vanillabp.integration.adapter.migration.sync.FullSyncCheck(aggregateSync, properties);
+    this.portableValuesCheck = new PortableValuesCheck(aggregateSync, properties);
     this.outfadedVersions = new OutfadedProcessVersions(properties);
     this.deployedVersionsCheck = new DeployedProcessVersionsCheck(
         processVersions, outfadedVersions, this::tasksNotServedInVersion, this::handlersNotServingAnyVersion, this, this::reportConcurrentTokenElementsOfHeldVersions, scoping == null
@@ -349,6 +357,17 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
         workflowServiceClass,
         processService.getWorkflowAggregateClass(),
         aggregateIdAttributeOf(processService));
+
+    // and the third: the sync annotations decided which values leave, so now their TYPES
+    // can be judged. That order is the rule and not an accident of the startup sequence -
+    // judged first, the check would judge the types of values which never travel
+    portableValuesCheck.refuseValuesWhichDoNotTravelWell(
+        workflowModuleId,
+        bpmnProcessId,
+        workflowServiceClass,
+        processService.getWorkflowAggregateClass(),
+        aggregateIdAttributeOf(processService),
+        processService.getAdaptersOfThisWorkflow());
 
     reportHandlerMethodsNobodySees(workflowServiceClass);
 

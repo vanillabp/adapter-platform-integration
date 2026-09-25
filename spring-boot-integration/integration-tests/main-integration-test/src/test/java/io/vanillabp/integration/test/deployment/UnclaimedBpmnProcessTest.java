@@ -258,6 +258,7 @@ public class UnclaimedBpmnProcessTest {
             workflows:
               Calling:
                 allow-full-sync-with-bpms: true
+                declared-aggregate-values: [ "*" ]
       """;
 
   private SpringBootTestApplication buildTestApp() throws IOException {

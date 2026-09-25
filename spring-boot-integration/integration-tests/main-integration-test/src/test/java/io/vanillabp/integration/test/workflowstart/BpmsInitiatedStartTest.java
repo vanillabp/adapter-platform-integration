@@ -199,6 +199,7 @@ public class BpmsInitiatedStartTest {
             workflows:
               TimerProcess:
                 allow-full-sync-with-bpms: true
+                declared-aggregate-values: [ "*" ]
       """;
 
   private ConfigurableApplicationContext runTestApplication(

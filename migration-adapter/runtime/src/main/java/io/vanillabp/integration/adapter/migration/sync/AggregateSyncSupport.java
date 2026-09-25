@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
+import io.vanillabp.integration.adapter.migration.values.DeclaredAggregateValues;
 import io.vanillabp.integration.adapter.migration.values.TextValueTypes;
 import io.vanillabp.integration.adapter.spi.AggregateSyncMode;
 import io.vanillabp.integration.adapter.spi.WorkflowAggregateSync;
@@ -164,6 +165,26 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   public AggregateSyncSupport() {
   }
 
+  /**
+   * What the application declared about the values of its aggregates - read from the
+   * configuration while the application starts, and applied at every sync point. Never
+   * <code>null</code>, empty where nothing was declared.
+   */
+  private final DeclaredAggregateValues declaredValues = new DeclaredAggregateValues();
+
+  /**
+   * The declarations of the application, so the startup check can fill them and the sync
+   * points can read them. There is one of them per application, and it belongs to the sync
+   * model because that is where the values are built.
+   *
+   * @return The declarations, never <code>null</code>
+   */
+  public DeclaredAggregateValues getDeclaredValues() {
+
+    return declaredValues;
+
+  }
+
   @Override
   public Map<String, Object> syncedValues(
       final Object workflowAggregate,
@@ -176,11 +197,15 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
     final var effective = declared != null
         ? declared
         : adapterDefault == AggregateSyncMode.FULL;
-    return valuesOf(
+    final var values = valuesOf(
         workflowAggregate,
         effective,
         0,
         java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>()));
+    // a value the application declared has to be there, and the declaration may say what
+    // to share while the object holding it is still null
+    declaredValues.completeOrRefuse(workflowAggregate.getClass(), values);
+    return values;
 
   }
 
@@ -258,6 +283,130 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
         .map(Property::name)
         .filter(name -> !name.equals(aggregateIdAttribute))
         .toList();
+
+  }
+
+  /**
+   * EVERY value of that aggregate class which reaches the BPMS, named by the path a BPMN
+   * expression reads it under and by the type the attribute declares.
+   * <p>
+   * The walk follows the sync model the way {@link #syncedValues} follows it and stops
+   * where a value carries no members of its own: a number, a text, a boolean, an enum and
+   * the JDK types which travel as their text are leaves, everything else is walked into. A
+   * collection is walked as its element type, because that is what a model navigating into
+   * it reads.
+   * <p>
+   * Where the declared types decide nothing the walk reports the attribute itself as the
+   * leaf: an {@code Object}, a {@link Map}, a raw collection, an interface and an abstract
+   * type all hold whatever they were given, and what travels below them is not knowable
+   * from the source.
+   *
+   * @param workflowAggregateClass The workflow-aggregate class (may be <code>null</code>)
+   * @param adapterDefault The adapter's default for aggregates carrying no annotation of
+   *          their own
+   * @return One entry per value which reaches the BPMS, never <code>null</code>
+   */
+  public List<SharedValue> valuesSharedWithBpms(
+      final Class<?> workflowAggregateClass,
+      final AggregateSyncMode adapterDefault) {
+
+    if (workflowAggregateClass == null) {
+      return List.of();
+    }
+    final var declared = baseModeOf(workflowAggregateClass);
+    final var inherited = declared != null
+        ? declared
+        : adapterDefault == AggregateSyncMode.FULL;
+    final var values = new LinkedList<SharedValue>();
+    collectSharedValues(
+        workflowAggregateClass,
+        inherited,
+        "",
+        0,
+        java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>()),
+        values);
+    return List.copyOf(values);
+
+  }
+
+  /**
+   * One value of a workflow aggregate which reaches the BPMS.
+   *
+   * @param path The path a BPMN expression reads it under, attribute names joined by dots
+   * @param declaredType The type the attribute declares
+   */
+  public record SharedValue(
+                            String path,
+                            Class<?> declaredType) {
+  }
+
+  /**
+   * Collects the leaves below one type, threading the inherited mode exactly the way
+   * {@link #walk} threads it.
+   *
+   * @param owner The type whose attributes are read
+   * @param inherited What an attribute without an annotation of its own does
+   * @param prefix The path walked so far, empty at the aggregate itself
+   * @param depth The current nesting depth
+   * @param onThePath The types above this one, so a cyclic type graph ends
+   * @param values Collects the leaves
+   */
+  private void collectSharedValues(
+      final Class<?> owner,
+      final boolean inherited,
+      final String prefix,
+      final int depth,
+      final java.util.Set<Class<?>> onThePath,
+      final List<SharedValue> values) {
+
+    if (depth >= MAX_DEPTH) {
+      // the values themselves are cut here (see convert), so nothing below travels
+      return;
+    }
+    if (!onThePath.add(owner)) {
+      return;
+    }
+    try {
+      for (final var property : propertiesOf(owner)) {
+        final var synced = property.synced() != null
+            ? property.synced()
+            : inherited;
+        if (!synced) {
+          continue;
+        }
+        final var path = prefix.isEmpty()
+            ? property.name()
+            : "%s.%s".formatted(prefix, property.name());
+        final var declaredType = property.getter().getReturnType();
+        if (travelsAsASingleValue(declaredType)) {
+          values.add(new SharedValue(path, declaredType));
+          continue;
+        }
+        final var behind = typeBehind(property.getter().getGenericReturnType());
+        if ((behind == null) || travelsAsASingleValue(behind) || holdsWhateverItWasGiven(behind) || behind
+            .isInterface() || Modifier.isAbstract(behind.getModifiers())) {
+          // either the elements of a collection are a value of their own, or the
+          // declared type decides nothing at all - both end the walk here
+          values
+              .add(new SharedValue(path, behind != null
+                  ? behind
+                  : declaredType));
+          continue;
+        }
+        final var ofType = baseModeOf(behind);
+        collectSharedValues(
+            behind,
+            ofType != null
+                ? ofType
+                : synced,
+            path,
+            depth + 1,
+            onThePath,
+            values);
+      }
+    } finally {
+      onThePath.remove(owner);
+    }
 
   }
 
