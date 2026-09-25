@@ -192,6 +192,8 @@
           <artifactId>maven-failsafe-plugin</artifactId>
           <version>3.6.0</version>
           <configuration>
+            <!-- a time zone, for the reason the surefire configuration below gives one -->
+            <argLine>-Duser.timezone=Europe/Vienna</argLine>
             <!-- deterministic order: the default 'filesystem' differs between a
                  developer machine and the GitHub runner, which hid an order-dependent
                  test for a day -->
@@ -204,7 +206,14 @@
           <configuration>
             <!-- see https://javadoc.io/doc/org.mockito/mockito-core/latest/org.mockito/org/mockito/Mockito.html#mockito-instrumentation -->
             <!-- property 'jacoco.agent' is filled by jacoco-maven-plugin blow in this file -->
-            <argLine>@{jacoco.agent} -Xshare:off -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
+            <!-- a time zone, because the housekeeping window of the outbox is read in one
+                 (decision 91). A GitHub runner stands on UTC and a developer machine usually
+                 does not, so a test JVM without a zone of its own would run the window tests
+                 against a different clock per machine and would make every booted test
+                 application warn about the zone it was not given. The warning itself is tested
+                 where it belongs, in HousekeepingWindowConfigurationTest, which moves the zone
+                 of the JVM itself and puts it back. -->
+            <argLine>@{jacoco.agent} -Xshare:off -Duser.timezone=Europe/Vienna -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
             <!-- deterministic order, see the failsafe configuration above -->
             <runOrder>alphabetical</runOrder>
           </configuration>

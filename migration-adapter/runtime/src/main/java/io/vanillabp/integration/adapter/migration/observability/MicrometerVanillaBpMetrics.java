@@ -99,6 +99,27 @@ public class MicrometerVanillaBpMetrics implements VanillaBpMetrics, MeterBinder
    */
   private final Map<String, Supplier<OptionalLong>> oldestPendingOutboxEntryAges = new ConcurrentHashMap<>();
 
+  /**
+   * What each store's housekeeping says about its last window, held for the reason the
+   * two above are: a store registers while the beans are built, long before a registry
+   * exists.
+   */
+  private final Map<String, Housekeeping> housekeepings = new ConcurrentHashMap<>();
+
+  /**
+   * The three numbers of one store's last housekeeping window, kept together because
+   * they are registered together and re-registered together when a registry arrives.
+   *
+   * @param remaining What was left when the window closed
+   * @param removed How many rows the window removed
+   * @param windowUsedInMillis How much of the window was used
+   */
+  private record Housekeeping(
+                              Supplier<OptionalLong> remaining,
+                              Supplier<OptionalLong> removed,
+                              Supplier<OptionalLong> windowUsedInMillis) {
+  }
+
   @Override
   public void bindTo(
       final MeterRegistry meterRegistry) {
@@ -113,6 +134,9 @@ public class MicrometerVanillaBpMetrics implements VanillaBpMetrics, MeterBinder
     oldestPendingOutboxEntryAges.forEach((
         store,
         age) -> registerOldestPendingAgeGauge(meterRegistry, store, age));
+    housekeepings.forEach((
+        store,
+        housekeeping) -> registerHousekeepingGauges(meterRegistry, store, housekeeping));
 
   }
 
@@ -393,6 +417,111 @@ public class MicrometerVanillaBpMetrics implements VanillaBpMetrics, MeterBinder
     if (meterRegistry != null) {
       registerOldestPendingAgeGauge(meterRegistry, store, held);
     }
+
+  }
+
+  /**
+   * The three values are held by the housekeeping itself, which measured them when it
+   * closed its window, so nothing is cached around them: reading a gauge here reads a
+   * field.
+   */
+  @Override
+  public void registerHousekeeping(
+      final String store,
+      final Supplier<OptionalLong> remaining,
+      final Supplier<OptionalLong> removed,
+      final Supplier<Optional<Duration>> windowUsed) {
+
+    final Supplier<OptionalLong> inMillis = () -> {
+      final var used = windowUsed.get();
+      return ((used == null) || used.isEmpty())
+          ? OptionalLong.empty()
+          : OptionalLong.of(used
+              .get()
+              .toMillis());
+    };
+    final var held = new Housekeeping(remaining, removed, inMillis);
+    housekeepings.put(store, held);
+    final var meterRegistry = registry;
+    if (meterRegistry != null) {
+      registerHousekeepingGauges(meterRegistry, store, held);
+    }
+
+  }
+
+  /**
+   * Publishes the three numbers of one store's housekeeping. A store whose window has
+   * never closed reports NaN on all three, the gap this class leaves wherever a
+   * measurement was not taken - a zero would read as "nothing was left", which is a
+   * claim nobody checked.
+   *
+   * @param meterRegistry Where the gauges go
+   * @param store The store they belong to
+   * @param housekeeping What that store's housekeeping holds
+   */
+  private static void registerHousekeepingGauges(
+      final MeterRegistry meterRegistry,
+      final String store,
+      final Housekeeping housekeeping) {
+
+    registerCountGauge(
+        meterRegistry,
+        HOUSEKEEPING_REMAINING,
+        "What the last housekeeping window did not get to",
+        store,
+        housekeeping.remaining());
+    registerCountGauge(
+        meterRegistry,
+        HOUSEKEEPING_REMOVED,
+        "How many rows the last housekeeping window removed",
+        store,
+        housekeeping.removed());
+    Gauge
+        .builder(
+            HOUSEKEEPING_WINDOW_USED,
+            housekeeping.windowUsedInMillis(),
+            supplier -> supplier
+                .get()
+                .stream()
+                .mapToDouble(millis -> millis / 1000.0)
+                .findFirst()
+                .orElse(Double.NaN))
+        .tags(Tags.of(TAG_STORE, store))
+        .baseUnit("seconds")
+        .description("How much of the last housekeeping window was used")
+        .register(meterRegistry);
+
+  }
+
+  /**
+   * One gauge over a count which may be absent.
+   *
+   * @param meterRegistry Where the gauge goes
+   * @param name The name of the meter
+   * @param description What it says about itself
+   * @param store The store it belongs to
+   * @param count What it reads
+   */
+  private static void registerCountGauge(
+      final MeterRegistry meterRegistry,
+      final String name,
+      final String description,
+      final String store,
+      final Supplier<OptionalLong> count) {
+
+    Gauge
+        .builder(
+            name,
+            count,
+            supplier -> supplier
+                .get()
+                .stream()
+                .mapToDouble(value -> value)
+                .findFirst()
+                .orElse(Double.NaN))
+        .tags(Tags.of(TAG_STORE, store))
+        .description(description)
+        .register(meterRegistry);
 
   }
 

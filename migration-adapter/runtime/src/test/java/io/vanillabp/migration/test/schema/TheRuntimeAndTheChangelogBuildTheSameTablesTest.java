@@ -105,7 +105,9 @@ public class TheRuntimeAndTheChangelogBuildTheSameTablesTest {
     final var name = "schema-from-the-runtime";
     final JdbcConnectionAccess connections = () -> h2(name);
     new JdbcPhaseTwoOutboxDispatcher(
-        connections, new PhaseTwoOutboxProperties(), JdbcPhaseTwoOutboxStore.DEFAULT_TABLE_NAME, new JdbcPhaseTwoPayloadStore(connections, JdbcPhaseTwoPayloadStore.DEFAULT_TABLE_NAME), () -> null, () -> null, "JdbcPhaseTwoOutbox")
+        connections, new PhaseTwoOutboxProperties(), JdbcPhaseTwoOutboxStore.DEFAULT_TABLE_NAME, new JdbcPhaseTwoPayloadStore(connections, JdbcPhaseTwoPayloadStore.DEFAULT_TABLE_NAME, JdbcPhaseTwoOutboxStore
+            .entriesNamingTheirPayload(
+                JdbcPhaseTwoOutboxStore.DEFAULT_TABLE_NAME)), () -> null, () -> null, "JdbcPhaseTwoOutbox")
         .prepareSchema();
     new JdbcTaskDeliveryStore(connections, JdbcTaskDeliveryStore.DEFAULT_TABLE_NAME)
         .createSchemaIfNotExists();
@@ -207,8 +209,10 @@ public class TheRuntimeAndTheChangelogBuildTheSameTablesTest {
     try (var fromTheChangelog = builtByTheChangelog(); var fromTheRuntime = builtByTheRuntime()) {
 
       for (final var table : new TreeSet<>(ChangelogDescription.of(Map.of()).tableNames())) {
+        // a table which is read by its primary key alone carries no index VanillaBP named,
+        // and the claim of the housekeeping is one of those. That both ways build the
+        // table at all is what the assertion over the columns holds
         final var built = namedIndexesOf(fromTheChangelog, table);
-        assertFalse(built.isEmpty(), "the changelog built no index on '%s'".formatted(table));
         assertEquals(
             built,
             namedIndexesOf(fromTheRuntime, table),

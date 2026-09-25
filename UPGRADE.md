@@ -683,6 +683,21 @@ workflow in the thread which was already there, a job executor thread on Camunda
 thread on Camunda 8, so this is a new place where your database connections are used. Count the
 threads into the pool of the database your workflow aggregates live in.
 
+The outbox removes what it does not need any more in a window at night, four to five in the morning
+where nothing else is configured (`vanillabp.outbox.housekeeping.start` and `.end`). Inside it the
+dispatched entries whose retention passed and the payloads no entry names any more are removed, as
+much as fits; outside it neither costs anything. Three meters say whether the window is wide enough
+(`vanillabp.outbox.housekeeping.remaining`, `.removed` and `.window.used`), and a window which was
+used up with something still left over is the sign to widen it. Only one node of a cluster
+house-keeps a store per night, and a node which is down for the whole window does not house-keep
+that night.
+
+The window is read in a time zone, and an application whose JVM stands on UTC - which is what a
+container does unless somebody sets its zone - is warned about it once while it starts, because
+"four in the morning" is then four UTC. It starts either way. Set `TZ` on the container or the
+environment variable `VANILLABP_OUTBOX_HOUSEKEEPING_ZONE` to say something else, write `UTC` there
+if UTC is what you mean, and the line goes away.
+
 The records of processed task deliveries have a retention of their own,
 `vanillabp.delivery.retention`, which follows the outbox retention where it is not set. The two
 windows point in different directions: on the outbox side the retention only decides how long a

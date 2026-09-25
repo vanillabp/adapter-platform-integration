@@ -106,6 +106,7 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
    * @return The settings of the outbox which stores into a relational database
    */
   @Mapping(target = "table", qualifiedByName = "unwrapString")
+  @Mapping(target = "housekeepingTable", qualifiedByName = "unwrapString")
   PhaseTwoOutboxProperties.JdbcOutboxProperties toCore(
       QuarkusMigrationAdapterProperties.JdbcOutboxProperties jdbcOutboxProperties);
 
@@ -120,6 +121,19 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
    */
   PhaseTwoOutboxProperties.MongoOutboxProperties toCore(
       QuarkusMigrationAdapterProperties.MongoOutboxProperties mongoOutboxProperties);
+
+  /**
+   * Copies the section of the housekeeping
+   * (<code>vanillabp.outbox.housekeeping.*</code>): the window and the zone it is read
+   * in.
+   *
+   * @param housekeepingProperties What SmallRye bound below
+   *          <code>vanillabp.outbox.housekeeping</code>
+   * @return When the outbox house-keeps
+   */
+  @Mapping(target = "zone", qualifiedByName = "unwrapString")
+  PhaseTwoOutboxProperties.HousekeepingProperties toCore(
+      QuarkusMigrationAdapterProperties.HousekeepingProperties housekeepingProperties);
 
   /**
    * Copies the section of the election cache

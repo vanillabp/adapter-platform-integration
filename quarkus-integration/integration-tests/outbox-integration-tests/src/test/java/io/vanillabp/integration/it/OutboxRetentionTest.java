@@ -38,6 +38,12 @@ public class OutboxRetentionTest {
           .addClass(RecordingPhaseTwoListener.class)
           .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
       .overrideConfigKey("vanillabp.outbox.retention", "PT1S")
+      // the housekeeping runs in a window at night, and this test watches it work now.
+      // A window which ends before it starts crosses midnight, so this one is open all
+      // day but for the first minute of it
+      .overrideConfigKey("vanillabp.outbox.housekeeping.start", "00:01")
+      .overrideConfigKey("vanillabp.outbox.housekeeping.end", "00:00")
+      .overrideConfigKey("vanillabp.outbox.housekeeping.zone", "Europe/Vienna")
       .overrideRuntimeConfigKey("quarkus.datasource.jdbc.url", "jdbc:h2:mem:outbox-retention-it;DB_CLOSE_DELAY=-1");
 
   @Inject

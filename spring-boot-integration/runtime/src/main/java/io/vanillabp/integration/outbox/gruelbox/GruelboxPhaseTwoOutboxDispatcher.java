@@ -1,7 +1,8 @@
 package io.vanillabp.integration.outbox.gruelbox;
 
-import java.time.Duration;
 import java.time.Instant;
+import java.util.OptionalLong;
+import java.util.function.Supplier;
 
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -10,7 +11,10 @@ import org.springframework.core.annotation.Order;
 import com.gruelbox.transactionoutbox.TransactionOutbox;
 
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
+import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.outbox.DueEntryPoller;
+import io.vanillabp.integration.adapter.migration.outbox.JdbcHousekeepingLease;
+import io.vanillabp.integration.adapter.migration.outbox.OutboxHousekeeping;
 import io.vanillabp.integration.deployment.SpringBootDeploymentService;
 import io.vanillabp.integration.spi.PhaseTwoPayloadStore;
 import jakarta.annotation.PreDestroy;
@@ -72,14 +76,13 @@ import lombok.extern.slf4j.Slf4j;
  * due again.
  */
 @Slf4j
-public class GruelboxPhaseTwoOutboxDispatcher {
+public class GruelboxPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
 
   private final TransactionOutbox transactionOutbox;
 
   /**
-   * The store this dispatcher polls. It answers when the next flush has something to do
-   * and which payloads its entries still name. Never <code>null</code>: both questions
-   * are asked on every poll.
+   * The store this dispatcher polls. It answers when the next flush has something to do.
+   * Never <code>null</code>: that question is asked on every poll.
    */
   private final GruelboxPhaseTwoOutbox outbox;
 
@@ -98,7 +101,17 @@ public class GruelboxPhaseTwoOutboxDispatcher {
    */
   private final PhaseTwoPayloadStore payloadStore;
 
-  private final Duration retention;
+  /**
+   * Where this node says that it is house-keeping this store tonight, so no other node
+   * measures its work at the same time.
+   */
+  private final JdbcHousekeepingLease housekeepingLease;
+
+  /**
+   * What removes the orphaned payloads, and when. The dispatched entries are gruelbox'
+   * own business - see {@link #removeDispatchedEntriesOlderThan(Instant, int)}.
+   */
+  private final OutboxHousekeeping housekeeping;
 
   /**
    * Polls the outbox, holds its submitter back until it does and house-keeps the
@@ -110,9 +123,11 @@ public class GruelboxPhaseTwoOutboxDispatcher {
    * @param properties The bound <code>vanillabp.outbox</code> section
    * @param submitter The submitter the outbox was built with, <code>null</code> where
    *          gruelbox was built with a submitter of somebody else's
-   * @param outbox The store, asked when the next flush has something to do and which
-   *          payloads its entries still name
+   * @param outbox The store, asked when the next flush has something to do
    * @param payloadStore Where the payloads of this outbox lie
+   * @param housekeepingLease Where this node says that it is house-keeping this store
+   *          tonight
+   * @param metrics What the numbers of a closed housekeeping window are published to
    * @throws IllegalArgumentException If the store or the payload store is missing
    */
   public GruelboxPhaseTwoOutboxDispatcher(
@@ -120,7 +135,9 @@ public class GruelboxPhaseTwoOutboxDispatcher {
       final PhaseTwoOutboxProperties properties,
       final GruelboxRedispatchAwareSubmitter submitter,
       final GruelboxPhaseTwoOutbox outbox,
-      final PhaseTwoPayloadStore payloadStore) {
+      final PhaseTwoPayloadStore payloadStore,
+      final JdbcHousekeepingLease housekeepingLease,
+      final Supplier<VanillaBpMetrics> metrics) {
 
     requireOutbox(outbox);
     requirePayloadStore(payloadStore);
@@ -128,7 +145,8 @@ public class GruelboxPhaseTwoOutboxDispatcher {
     this.submitter = submitter;
     this.outbox = outbox;
     this.payloadStore = payloadStore;
-    this.retention = properties.getRetention();
+    this.housekeepingLease = housekeepingLease;
+    this.housekeeping = new OutboxHousekeeping(this, properties, metrics);
     this.poller = new DueEntryPoller(
         "vanillabp-outbox", properties.getPollInterval(), this::flush, this::earliestDueAt);
     if (submitter != null) {
@@ -152,9 +170,9 @@ public class GruelboxPhaseTwoOutboxDispatcher {
         """
             This gruelbox phase-two outbox dispatcher was built without the store it polls! The \
             store says when the next flush has something to do, so the poller sleeps until then \
-            instead of asking at the configured cap, and it says which payloads its entries still \
-            name, which is what keeps the housekeeping from removing the bytes of an entry that is \
-            still waiting. Pass a GruelboxPhaseTwoOutbox to the constructor of this class, or let \
+            instead of asking at the configured cap, and it says how many dispatched entries \
+            gruelbox has not deleted yet, which is the number the housekeeping publishes when its \
+            window closes. Pass a GruelboxPhaseTwoOutbox to the constructor of this class, or let \
             VanillaBP's GruelboxPhaseTwoOutboxAutoConfiguration build the dispatcher.""");
 
   }
@@ -216,6 +234,7 @@ public class GruelboxPhaseTwoOutboxDispatcher {
       submitter.dispatchingStarted();
     }
     poller.start();
+    housekeeping.start();
 
   }
 
@@ -227,6 +246,7 @@ public class GruelboxPhaseTwoOutboxDispatcher {
   public void stopPolling() {
 
     poller.stop();
+    housekeeping.stop();
 
   }
 
@@ -244,10 +264,71 @@ public class GruelboxPhaseTwoOutboxDispatcher {
     } catch (Exception e) {
       log.error("Flushing the VanillaBP phase-two outbox failed - will retry", e);
     }
-    // the payloads of the entries the flush deleted, and what a crash between the two
-    // writes of a schedule left behind. What an entry still names stays with it,
-    // whether that entry waits or is blocked, and this flush was going to happen anyway
-    payloadStore.removeOrphansOlderThan(Instant.now().minus(retention), outbox::stillNaming);
+  }
+
+  @Override
+  public String storeName() {
+
+    return getClass().getSimpleName();
+
+  }
+
+  @Override
+  public boolean claimHousekeepingUntil(
+      final String owner,
+      final Instant until) {
+
+    return housekeepingLease.claimUntil(outbox.getTableName(), owner, until);
+
+  }
+
+  @Override
+  public void releaseHousekeeping(
+      final String owner) {
+
+    housekeepingLease.release(outbox.getTableName(), owner);
+
+  }
+
+  /**
+   * {@inheritDoc}
+   * <p>
+   * Nothing, because gruelbox deletes its own dispatched entries. A flush of that library
+   * removes what its retention threshold lets go, and the threshold is
+   * <code>vanillabp.outbox.retention</code>. The table belongs to gruelbox, so this is
+   * written down rather than changed: on this store the window governs the payloads
+   * alone, and the entries leave on the rhythm of the flush as they always did.
+   */
+  @Override
+  public int removeDispatchedEntriesOlderThan(
+      final Instant threshold,
+      final int maxRows) {
+
+    return 0;
+
+  }
+
+  @Override
+  public int removeOrphanedPayloadsOlderThan(
+      final Instant threshold,
+      final int maxRows) {
+
+    return payloadStore.removeOrphansOlderThan(threshold, maxRows);
+
+  }
+
+  /**
+   * {@inheritDoc}
+   * <p>
+   * What gruelbox has not deleted yet. This node removes none of them itself, so the
+   * number says how far the flushes of the library have got rather than how far the
+   * window did - which is the truth an operator of this store needs.
+   */
+  @Override
+  public OptionalLong countDispatchedEntriesOlderThan(
+      final Instant threshold) {
+
+    return outbox.countDispatchedEntriesPastTheirRetention();
 
   }
 

@@ -32,5 +32,9 @@ vanillabp:
   outbox:
     poll-interval: PT0.5S
     attempt-frequency: PT0.5S
+    housekeeping:
+      start: 00:01
+      end: 00:00
+      zone: Europe/Vienna
 test-module:
   nothing: there

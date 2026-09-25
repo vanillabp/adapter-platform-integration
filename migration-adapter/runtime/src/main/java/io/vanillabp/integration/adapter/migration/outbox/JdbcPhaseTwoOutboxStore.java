@@ -86,8 +86,8 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
   private static final String INSERT_ENTRY = """
       INSERT INTO %s \
       (ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, OPERATION, AGGREGATE_ID, ADAPTER_ID, ARGS, \
-      IDEMPOTENCY_KEY, DEDUP_KEY, STATUS, CREATED_AT, ATTEMPTS, NEXT_ATTEMPT_AT) \
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '%s', ?, 0, ?)""";
+      PAYLOAD_REFERENCE, IDEMPOTENCY_KEY, DEDUP_KEY, STATUS, CREATED_AT, ATTEMPTS, NEXT_ATTEMPT_AT) \
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '%s', ?, 0, ?)""";
 
   private static final String SELECT_PENDING_ENTRY = """
       SELECT ID, ARGS, ATTEMPTS FROM %s WHERE DEDUP_KEY = ?""";
@@ -114,7 +114,8 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
    */
   private static final String REPLACE_PENDING_ENTRY = """
       UPDATE %s \
-      SET OPERATION = ?, AGGREGATE_ID = ?, ADAPTER_ID = ?, ARGS = ?, CREATED_AT = ?, NEXT_ATTEMPT_AT = ? \
+      SET OPERATION = ?, AGGREGATE_ID = ?, ADAPTER_ID = ?, ARGS = ?, PAYLOAD_REFERENCE = ?, \
+      CREATED_AT = ?, NEXT_ATTEMPT_AT = ? \
       WHERE ID = ? AND ATTEMPTS = 0 AND (LEASED_UNTIL IS NULL OR LEASED_UNTIL <= ?)""";
 
   /**
@@ -137,6 +138,38 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
     return table == null
         ? tableName(properties) + JdbcPhaseTwoPayloadStore.TABLE_NAME_SUFFIX
         : table;
+
+  }
+
+  /**
+   * Where the entries of this store say which payload they carry, which is what its
+   * payload store house-keeps along.
+   *
+   * @param properties The outbox configuration
+   * @return The description to build the payload store with
+   */
+  public static JdbcPhaseTwoPayloadStore.EntriesNamingTheirPayload entriesNamingTheirPayload(
+      final PhaseTwoOutboxProperties properties) {
+
+    return entriesNamingTheirPayload(tableName(properties));
+
+  }
+
+  /**
+   * Where the entries of one table of this shape say which payload they carry: in a
+   * column of their own, which an index reaches. The reference travels among the
+   * serialized arguments as well (decision 62 in the repository's DECISIONS.md), and the
+   * column is written from the same value - the arguments are what the dispatch reads,
+   * the column is what the housekeeping asks.
+   *
+   * @param tableName The table the entries lie in
+   * @return The description to build a payload store with
+   */
+  public static JdbcPhaseTwoPayloadStore.EntriesNamingTheirPayload entriesNamingTheirPayload(
+      final String tableName) {
+
+    return JdbcPhaseTwoPayloadStore.EntriesNamingTheirPayload
+        .inAColumn(tableName, JdbcPhaseTwoOutboxDispatcher.PAYLOAD_REFERENCE_COLUMN);
 
   }
 
@@ -396,10 +429,12 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
         statement.setString(5, call.workflowAggregateId());
         statement.setString(6, call.adapterId());
         statement.setString(7, PhaseTwoCall.serializeArgs(call.args()));
-        statement.setString(8, idempotencyKey);
-        statement.setString(9, dedupKey);
-        statement.setTimestamp(10, Timestamp.from(now));
+        // the same value the arguments carry, in a column the housekeeping can index
+        statement.setString(8, call.payloadReference());
+        statement.setString(9, idempotencyKey);
+        statement.setString(10, dedupKey);
         statement.setTimestamp(11, Timestamp.from(now));
+        statement.setTimestamp(12, Timestamp.from(now));
         statement.executeUpdate();
       }
     } catch (final SQLException e) {
@@ -497,10 +532,12 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
       statement.setString(2, call.workflowAggregateId());
       statement.setString(3, call.adapterId());
       statement.setString(4, PhaseTwoCall.serializeArgs(call.args()));
-      statement.setTimestamp(5, Timestamp.from(now));
+      // the younger call brings its own payload, so the column follows the arguments
+      statement.setString(5, call.payloadReference());
       statement.setTimestamp(6, Timestamp.from(now));
-      statement.setString(7, waiting.id());
-      statement.setTimestamp(8, Timestamp.from(now));
+      statement.setTimestamp(7, Timestamp.from(now));
+      statement.setString(8, waiting.id());
+      statement.setTimestamp(9, Timestamp.from(now));
       replaced = statement.executeUpdate() == 1;
     }
     if (!replaced) {

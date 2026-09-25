@@ -331,4 +331,58 @@
     </createIndex>
   </changeSet>
 
+  <changeSet author="VanillaBP" id="vanillabp-housekeeping-2.0.0" labels="2.0.0">
+    <comment>
+      Which node removes the old rows of an outbox store tonight. The housekeeping of the outbox -
+      the entries whose retention passed and the payloads no entry names - runs in a window at
+      night, and it works out how much fits by measuring what it does. Two nodes doing that at the
+      same time would each measure the other's work, so a node writes its name and the end of the
+      window here and the others leave that store alone until then. One row per store, keyed by the
+      name the store is known under, so a database carrying two outboxes lets two nodes house-keep
+      one each. A table of its own and not a row in the outbox: a claim is neither an entry nor a
+      payload, and one of the four stores does not own its table at all (gruelbox). The claim is not
+      renewed while the work runs, because a window has a known end - see decision 91 of the
+      repository. Neither column is indexed: a row is read by its primary key.
+    </comment>
+    <createTable tableName="${vanillabp.housekeeping.table}">
+      <column name="STORE" type="VARCHAR(255)">
+        <constraints primaryKey="true" nullable="false" />
+      </column>
+      <column name="LEASED_BY" type="VARCHAR(255)" />
+      <column name="LEASED_UNTIL" type="TIMESTAMP" />
+    </createTable>
+    <!-- MySQL's TIMESTAMP ends in 2038 and auto-initializes, which is why the runtime creates
+         DATETIME(6) there as well - an application which starts with the runtime's tables and
+         later switches to this changelog has to end up with the same columns. -->
+    <modifySql dbms="mysql,mariadb">
+      <replace replace="timestamp" with="datetime(6)" />
+    </modifySql>
+  </changeSet>
+
+  <changeSet author="VanillaBP" id="vanillabp-phase-two-outbox-payload-reference-2.0.0" labels="2.0.0">
+    <comment>
+      Which payload an entry carries, in a column of its own. The reference has always travelled
+      among the serialized arguments, where identifiers travel, and it travels there still - the
+      dispatch reads it from there. What this column is for is the other question: before the
+      housekeeping removes a payload by age it asks the entries whether one of them still names it,
+      and inside a column of text that question is a scan of the whole table, once per candidate.
+      Measured on PostgreSQL 16.15 in September 2026 with a hundred blocked entries, one pass took
+      2 ms against ten thousand dispatched entries beside them, 18 ms against a hundred thousand
+      and 112 ms against a million; over this column with its index it took 1 ms at every one of
+      those sizes. With ten thousand blocked entries the scan took 7.8 s and the lookup 20 ms. See
+      decision 62 of the repository, which the column changes, and decision 76, which carries the
+      numbers. Nullable, because an entry which carries no payload names none, and because an entry
+      written before this changeset ran has it empty until the runtime fills it - which it does at
+      startup, and only for the entries which are still waiting, because a dispatched entry gave
+      its payload back at the dispatch. A changeset of its own rather than a column added to the
+      one which created the table, because that one was applied already.
+    </comment>
+    <addColumn tableName="${vanillabp.outbox.table}">
+      <column name="PAYLOAD_REFERENCE" type="VARCHAR(36)" />
+    </addColumn>
+    <createIndex tableName="${vanillabp.outbox.table}" indexName="${vanillabp.outbox.table}_PAYLOAD_REF">
+      <column name="PAYLOAD_REFERENCE" />
+    </createIndex>
+  </changeSet>
+
 </databaseChangeLog>

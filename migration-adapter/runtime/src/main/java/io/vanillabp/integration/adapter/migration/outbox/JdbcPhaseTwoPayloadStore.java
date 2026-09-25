@@ -4,10 +4,9 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
 
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
+import io.vanillabp.integration.adapter.migration.jdbc.JdbcDialect;
 import io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoPayloadStore;
@@ -15,15 +14,20 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * The payload store of every JDBC-backed outbox VanillaBP ships: the gruelbox store on
- * Spring Boot and the own store on Quarkus write into the same table with the same
+ * Spring Boot and the own store of each platform write into the same table with the same
  * statements, and only the way a connection joins the running transaction differs
  * between the two platforms ({@link JdbcConnectionAccess}).
  * <p>
  * One row per phase-two call which carries a payload, written in the transaction which
  * writes the outbox entry and read once per dispatch attempt of that entry. The row is
  * removed when the entry was dispatched and again with the dispatched entry itself;
- * {@link #removeOrphansOlderThan(Instant, EntriesNamingPayloads)} removes what a crash
- * between the two writes left behind, and only that.
+ * {@link #removeOrphansOlderThan(Instant, int)} removes what a crash between the two
+ * writes left behind, and only that.
+ * <p>
+ * What the store has to know for that is where the ENTRIES are and how one of them says
+ * which payload it carries ({@link EntriesNamingTheirPayload}). It is a constructor
+ * argument rather than something handed in per call, because it is a property of the
+ * outbox this store belongs to and does not change while the application runs.
  * <p>
  * The table is VanillaBP's own, so it is described in
  * <code>io.vanillabp:vanillabp-schema</code> like the other two and created at startup
@@ -31,6 +35,57 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
+
+  /**
+   * Where the entries of one outbox lie and how one of them says which payload it
+   * carries. The housekeeping turns this into one condition inside its delete, so the
+   * question which payloads are still needed is answered by the database and no set of
+   * references travels through the application.
+   *
+   * @param table The table the outbox entries lie in
+   * @param column The column of that table carrying the reference
+   * @param wholeColumn Whether the column holds the reference and nothing else. Where it
+   *        does, the condition is an equality and an index over the column answers it.
+   *        Where it does not, the reference stands somewhere inside a column of text and
+   *        the condition is a <code>LIKE</code>, which no index reaches - that is a scan
+   *        of the entries per payload row, and it is what an outbox whose table VanillaBP
+   *        does not own pays
+   */
+  public record EntriesNamingTheirPayload(String table, String column, boolean wholeColumn) {
+
+    /**
+     * Entries which keep the reference in a column of their own.
+     *
+     * @param table The table the entries lie in
+     * @param column The column holding the reference
+     * @return The description to build a payload store with
+     */
+    public static EntriesNamingTheirPayload inAColumn(
+        final String table,
+        final String column) {
+
+      return new EntriesNamingTheirPayload(table, column, true);
+
+    }
+
+    /**
+     * Entries which keep the reference somewhere inside a column of text - the
+     * serialized arguments of the call, or the serialized invocation of a library
+     * which owns the table.
+     *
+     * @param table The table the entries lie in
+     * @param column The column of text the reference stands in
+     * @return The description to build a payload store with
+     */
+    public static EntriesNamingTheirPayload insideAText(
+        final String table,
+        final String column) {
+
+      return new EntriesNamingTheirPayload(table, column, false);
+
+    }
+
+  }
 
   /**
    * What is appended to the name of the outbox table to get the name of the payload
@@ -62,20 +117,6 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
   private static final String DELETE_PAYLOAD = "DELETE FROM %s WHERE REFERENCE = ?";
 
   /**
-   * The payloads old enough to go, read before any of them is deleted: which of them
-   * really may go is the entries' answer, and only what nothing names is an orphan.
-   */
-  private static final String SELECT_EXPIRED_REFERENCES = "SELECT REFERENCE FROM %s WHERE CREATED_AT < ?";
-
-  /**
-   * How many references the store puts into one question to the entries. The entries
-   * answer a chunk with one statement, and a chunk of this size keeps the number of its
-   * parameters far below what a database accepts (SQL Server stops at about two
-   * thousand).
-   */
-  private static final int REFERENCES_PER_QUESTION = 100;
-
-  /**
    * The index the housekeeping reads along. Without it the question which payloads are
    * old enough reads every payload ever written, which is the cost this table can least
    * afford.
@@ -86,32 +127,49 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
 
   private final String tableName;
 
+  private final EntriesNamingTheirPayload entries;
+
   private final String insertPayload;
 
   private final String selectPayload;
 
   private final String deletePayload;
 
-  private final String selectExpiredReferences;
+  /**
+   * The bounded delete of the orphans, built on the first housekeeping run of this
+   * store. It needs the database product, which is read from a connection, so it cannot
+   * be built in the constructor next to the other three.
+   */
+  private String deleteOrphans;
 
   /**
-   * Builds the payload store of one outbox: the statements for the table it was given.
-   * The table itself is created by the dispatcher of that outbox.
+   * How many rows {@link #deleteOrphans} was built for. The bound is part of the
+   * statement on every database, so a run with another ceiling builds it again.
+   */
+  private int deleteOrphansBoundedAt;
+
+  /**
+   * Builds the payload store of one outbox: the statements for the table it was given,
+   * and where its entries say which payload they carry. The table itself is created by
+   * the dispatcher of that outbox.
    *
    * @param connectionAccess How this platform hands out a connection taking part in the
    *        transaction currently running
    * @param tableName The table to store payloads in
+   * @param entries Where the entries of this outbox lie and how one of them names its
+   *        payload
    */
   public JdbcPhaseTwoPayloadStore(
       final JdbcConnectionAccess connectionAccess,
-      final String tableName) {
+      final String tableName,
+      final EntriesNamingTheirPayload entries) {
 
     this.connectionAccess = connectionAccess;
     this.tableName = tableName;
+    this.entries = entries;
     this.insertPayload = INSERT_PAYLOAD.formatted(tableName);
     this.selectPayload = SELECT_PAYLOAD.formatted(tableName);
     this.deletePayload = DELETE_PAYLOAD.formatted(tableName);
-    this.selectExpiredReferences = SELECT_EXPIRED_REFERENCES.formatted(tableName);
 
   }
 
@@ -202,33 +260,73 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
   /**
    * {@inheritDoc}
    * <p>
-   * Each of the three steps borrows a connection and gives it back before the next one
-   * starts. The middle one is a question to the outbox entries, and answering it is a read
-   * of their table on a connection of its own - so a store holding one across the whole
-   * housekeeping would wait for a connection it is holding itself. On a pool of one that is
-   * a deadlock.
+   * One statement, on one connection, whatever the table holds. It deletes the payloads
+   * which are old enough and which no entry of the outbox names, and the question about
+   * the entries is a condition inside it rather than a question asked back - so nothing
+   * of the two sets travels through the application, and the pool never waits for a
+   * connection this method is holding itself.
+   * <p>
+   * Where the entries keep the reference inside a column of text the condition is a
+   * <code>LIKE</code> with the reference in the middle. That is a scan of the entries
+   * per candidate row and it is the expensive shape; what it buys is that this remains
+   * one command. A reference which stands inside some other value of the same text is
+   * read as "still named", and a payload kept one run too long is the harmless direction
+   * of that mistake.
    */
   @Override
   public int removeOrphansOlderThan(
       final Instant threshold,
-      final EntriesNamingPayloads entries) {
+      final int maxEntries) {
 
+    if (maxEntries < 1) {
+      return 0;
+    }
+    Connection connection = null;
     try {
-      final var expired = expiredReferences(threshold);
-      if (expired.isEmpty()) {
-        return 0;
+      connection = connectionAccess.acquire();
+      try (var statement = connection.prepareStatement(deleteOrphans(connection, maxEntries))) {
+        statement.setTimestamp(1, Timestamp.from(threshold));
+        final var removed = statement.executeUpdate();
+        logRemovedOrphans(removed);
+        return removed;
       }
-      final var orphans = orphansAmong(expired, entries);
-      if (orphans.isEmpty()) {
-        return 0;
-      }
-      final var removed = removePayloads(orphans);
-      logRemovedOrphans(removed);
-      return removed;
     } catch (final SQLException e) {
       log.warn("Could not remove the orphaned payloads of table '{}'", tableName, e);
       return 0;
+    } finally {
+      release(connection);
     }
+
+  }
+
+  /**
+   * The delete of at most so many orphans, built once per ceiling and kept afterwards.
+   *
+   * @param connection The connection, read for the database product
+   * @param maxEntries The most rows the statement may remove
+   * @return The statement to run
+   */
+  private synchronized String deleteOrphans(
+      final Connection connection,
+      final int maxEntries) throws SQLException {
+
+    if ((deleteOrphans != null) && (deleteOrphansBoundedAt == maxEntries)) {
+      return deleteOrphans;
+    }
+    final var dialect = JdbcDialect.of(connection);
+    final var namedByAnEntry = entries.wholeColumn()
+        ? "ENTRY.%s = PAYLOAD.REFERENCE".formatted(entries.column())
+        : "ENTRY.%s LIKE %s".formatted(entries.column(), dialect.anywhereInside("PAYLOAD.REFERENCE"));
+    final var orphans = dialect
+        .selectAtMost(
+            "PAYLOAD.REFERENCE",
+            "FROM %s PAYLOAD".formatted(tableName),
+            "PAYLOAD.CREATED_AT < ? AND NOT EXISTS (SELECT 1 FROM %s ENTRY WHERE %s)"
+                .formatted(entries.table(), namedByAnEntry),
+            maxEntries);
+    deleteOrphans = dialect.deleteWhatWasPicked(tableName, "REFERENCE", orphans);
+    deleteOrphansBoundedAt = maxEntries;
+    return deleteOrphans;
 
   }
 
@@ -251,91 +349,6 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
             "Removed {} payload(s) from table '{}' which no outbox entry names any more",
             removed,
             tableName);
-
-  }
-
-  /**
-   * The payloads which are old enough to go, read along the index over
-   * <code>CREATED_AT</code>. On a healthy store this reads nothing: a payload is removed
-   * with the dispatch of its entry and with the deletion of that entry, so what stays
-   * beyond the retention either belongs to an entry which waits or belongs to no entry
-   * at all.
-   *
-   * @param threshold Payloads written before this moment
-   * @return Their references
-   */
-  private List<String> expiredReferences(
-      final Instant threshold) throws SQLException {
-
-    final var references = new ArrayList<String>();
-    Connection connection = null;
-    try {
-      connection = connectionAccess.acquire();
-      try (var statement = connection.prepareStatement(selectExpiredReferences)) {
-        statement.setTimestamp(1, Timestamp.from(threshold));
-        try (var resultSet = statement.executeQuery()) {
-          while (resultSet.next()) {
-            references.add(resultSet.getString(1));
-          }
-        }
-      }
-    } finally {
-      release(connection);
-    }
-    return references;
-
-  }
-
-  /**
-   * Asks the entries about the expired payloads, a chunk at a time, and keeps what no
-   * entry named.
-   *
-   * @param expired The payloads which are old enough to go
-   * @param entries The entries of the outbox this store belongs to
-   * @return The references nothing points at any more
-   */
-  private static List<String> orphansAmong(
-      final List<String> expired,
-      final EntriesNamingPayloads entries) {
-
-    final var orphans = new ArrayList<String>();
-    for (var from = 0; from < expired.size(); from += REFERENCES_PER_QUESTION) {
-      final var chunk = expired.subList(from, Math.min(from + REFERENCES_PER_QUESTION, expired.size()));
-      final var stillNamed = entries.stillNaming(chunk);
-      chunk
-          .stream()
-          .filter(reference -> !stillNamed.contains(reference))
-          .forEach(orphans::add);
-    }
-    return orphans;
-
-  }
-
-  /**
-   * Deletes the given payloads by their primary key, one statement per payload. There
-   * are as many of them as an application lost writes, which is none while nothing goes
-   * wrong.
-   *
-   * @param references The payloads to delete
-   * @return How many rows were deleted
-   */
-  private int removePayloads(
-      final List<String> references) throws SQLException {
-
-    var removed = 0;
-    Connection connection = null;
-    try {
-      connection = connectionAccess.acquire();
-      try (var statement = connection.prepareStatement(deletePayload)) {
-        for (final var reference : references) {
-          statement.setString(1, reference);
-          removed += statement.executeUpdate();
-        }
-      }
-    } finally {
-      release(connection);
-    }
-    return removed;
 
   }
 

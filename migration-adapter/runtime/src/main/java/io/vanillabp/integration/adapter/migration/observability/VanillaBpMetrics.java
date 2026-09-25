@@ -148,6 +148,33 @@ public interface VanillaBpMetrics {
   String OUTBOX_OLDEST_PENDING_AGE = "vanillabp.outbox.oldest.pending.age";
 
   /**
+   * What the nightly housekeeping of an outbox store did not get to: the dispatched
+   * entries whose retention had passed when the window closed. Set once per window and
+   * held until the next one, because counting them is a query and this is the answer of
+   * a moment which is over.
+   * <p>
+   * It is read together with {@link #HOUSEKEEPING_REMOVED} and
+   * {@link #HOUSEKEEPING_WINDOW_USED}, and alone it says nothing: a store with something
+   * left may have run out of window or may not have house-kept at all. The condition to
+   * alert on is a window which was used up AND something left over - then the window is
+   * too small.
+   */
+  String HOUSEKEEPING_REMAINING = "vanillabp.outbox.housekeeping.remaining";
+
+  /**
+   * How many rows the last housekeeping window removed from an outbox store, entries and
+   * payloads together. Set when the window closes and held until the next one.
+   */
+  String HOUSEKEEPING_REMOVED = "vanillabp.outbox.housekeeping.removed";
+
+  /**
+   * How much of the last housekeeping window was used, in seconds. A number close to the
+   * length of the configured window means the outbox worked until the deadline, which
+   * with {@link #HOUSEKEEPING_REMAINING} above zero is the window being too small.
+   */
+  String HOUSEKEEPING_WINDOW_USED = "vanillabp.outbox.housekeeping.window.used";
+
+  /**
    * The configured adapter id which did the work - the <code>id</code> of
    * <code>vanillabp.adapters.&lt;id&gt;</code>, not the BPMS type. An application may run
    * two adapters of the same BPMS, and during a migration it usually does, so this tag is
@@ -460,6 +487,35 @@ public interface VanillaBpMetrics {
       final String store,
       final DispatchOutcome outcome,
       final long waitedNanos) {
+
+  }
+
+  /**
+   * Registers what the nightly housekeeping of one store leaves behind, removes and uses
+   * of its window. Called once per store by the housekeeping itself, with three values it
+   * holds from one window to the next.
+   * <p>
+   * One call for all three, because they are one measurement of one night and are read
+   * together: a store which published only what was left would say nothing about whether
+   * the window was too small or whether it never ran, and that is the question an
+   * operator asks. Nothing is queried while a gauge is read, unlike
+   * {@link #registerPendingOutboxEntries(String, Supplier)} - the housekeeping measured
+   * these when it closed its window.
+   *
+   * @param store The name of the outbox store, used as the <code>store</code> tag - the
+   *          same value its {@link #registerPendingOutboxEntries(String, Supplier)} uses
+   * @param remaining What the store still had to remove when the window closed, empty
+   *          where no window has closed yet or the count could not be taken
+   * @param removed How many rows the last window removed, empty where no window has
+   *          closed yet
+   * @param windowUsed How much of the window was used, empty where no window has closed
+   *          yet
+   */
+  default void registerHousekeeping(
+      final String store,
+      final Supplier<OptionalLong> remaining,
+      final Supplier<OptionalLong> removed,
+      final Supplier<Optional<Duration>> windowUsed) {
 
   }
 

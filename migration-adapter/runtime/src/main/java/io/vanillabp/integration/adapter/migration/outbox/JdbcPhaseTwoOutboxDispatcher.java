@@ -6,15 +6,14 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Set;
+import java.util.OptionalLong;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
+import io.vanillabp.integration.adapter.migration.jdbc.JdbcDialect;
 import io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DispatchOutcome;
@@ -104,7 +103,7 @@ import lombok.extern.slf4j.Slf4j;
  * MySQL's unique-index key-length limit (3072 bytes with utf8mb4) is respected.
  */
 @Slf4j
-public class JdbcPhaseTwoOutboxDispatcher {
+public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
 
   /**
    * What the <code>STATUS</code> column holds while an entry still has to be dispatched -
@@ -258,20 +257,59 @@ public class JdbcPhaseTwoOutboxDispatcher {
       SET NEXT_ATTEMPT_AT = ?, ATTEMPTS = ATTEMPTS + 1, LEASED_BY = NULL, LEASED_UNTIL = NULL \
       WHERE ID = ? AND LEASED_BY = ?""";
 
-  private static final String DELETE_EXPIRED_DONE_ENTRIES = """
-      DELETE FROM %s \
-      WHERE STATUS = '%s' AND DONE_AT < ?""";
+  /**
+   * What the housekeeping picks up: the entries which were dispatched long enough ago.
+   * The bound is not part of it, because the three databases spell one in three ways -
+   * {@link io.vanillabp.integration.adapter.migration.jdbc.JdbcDialect} adds it.
+   */
+  private static final String EXPIRED_DONE_ENTRIES_FROM = "FROM %s";
+
+  private static final String EXPIRED_DONE_ENTRIES_WHERE = "STATUS = '%s' AND DONE_AT < ?";
 
   /**
-   * The arguments of the entries which name one of the payloads the housekeeping is
-   * about to remove. There is no column for a payload reference - the entry keeps it
-   * among its arguments, which is where an identifier belongs (decision 62 in the
-   * repository's DECISIONS.md) - so the reference is looked for inside the serialized
-   * arguments and the rows which come back are read properly afterwards. The condition
-   * is repeated per reference asked about, joined by OR.
+   * The entries written before the column existed which still need it: they wait or they
+   * are blocked, they name a payload among their arguments, and the column is empty. A
+   * dispatched entry is left out on purpose - its payload went with the dispatch, so
+   * nothing asks about it any more, and the history is the part of the table which is
+   * large.
    */
-  private static final String SELECT_ARGS_NAMING = """
-      SELECT ARGS FROM %s WHERE %s""";
+  private static final String ENTRIES_MISSING_THEIR_PAYLOAD_REFERENCE_FROM = "FROM %s";
+
+  private static final String ENTRIES_MISSING_THEIR_PAYLOAD_REFERENCE_WHERE = "PAYLOAD_REFERENCE IS NULL AND STATUS <> '%s' AND ARGS LIKE ?";
+
+  /**
+   * The pattern which finds an entry whose arguments name a payload. It is the argument's
+   * own name, so a rename of that constant carries this statement with it.
+   */
+  private static final String ARGS_NAMING_A_PAYLOAD = "%"
+      + PhaseTwoCall.ARG_PAYLOAD_REFERENCE
+      + "%";
+
+  private static final String WRITE_PAYLOAD_REFERENCE = "UPDATE %s SET PAYLOAD_REFERENCE = ? WHERE ID = ?";
+
+  /**
+   * How many entries one round of the backfill reads. It is the same thousand the
+   * housekeeping starts a night with, and for the same reason: a bound keeps one
+   * statement short on every database.
+   */
+  private static final int BACKFILL_PER_ROUND = 1_000;
+
+  /**
+   * How many dispatched entries the housekeeping still owes - the number a window
+   * publishes when it closes. It reads the index over STATUS and DONE_AT, the one the
+   * delete above reads.
+   */
+  private static final String COUNT_EXPIRED_DONE_ENTRIES = """
+      SELECT COUNT(*) FROM %s WHERE STATUS = '%s' AND DONE_AT < ?""";
+
+  /**
+   * The column an entry names its payload in. The reference travels among the arguments
+   * as well, where identifiers travel (decision 62 in the repository's DECISIONS.md), and
+   * this column carries the same value in a shape an index reaches: the housekeeping asks
+   * the entries whether one of them still names a payload, and inside a column of text
+   * that question is a scan (decision 76).
+   */
+  public static final String PAYLOAD_REFERENCE_COLUMN = "PAYLOAD_REFERENCE";
 
   /**
    * The columns a later version of VanillaBP added to this table. A table created by an
@@ -284,7 +322,9 @@ public class JdbcPhaseTwoOutboxDispatcher {
           new AddedColumn(
               "LEASED_BY", "VARCHAR(255) (nullable: an entry nobody is dispatching is leased by nobody)", "an entry cannot be claimed, so nothing is dispatched at all"),
           new AddedColumn(
-              "LEASED_UNTIL", "TIMESTAMP (the type your database uses for the existing column NEXT_ATTEMPT_AT), nullable", "an entry cannot be claimed, so nothing is dispatched at all"));
+              "LEASED_UNTIL", "TIMESTAMP (the type your database uses for the existing column NEXT_ATTEMPT_AT), nullable", "an entry cannot be claimed, so nothing is dispatched at all"),
+          new AddedColumn(
+              PAYLOAD_REFERENCE_COLUMN, "VARCHAR(36) (nullable: an entry which carries no payload names none)", "the housekeeping cannot tell which payloads are still needed, so it removes none of them and the payload table grows"));
 
   /**
    * A column this version of VanillaBP reads which an older table does not have.
@@ -307,7 +347,8 @@ public class JdbcPhaseTwoOutboxDispatcher {
       .of(
           new TableIndex("_DUE", "STATUS, NEXT_ATTEMPT_AT"),
           new TableIndex("_AGE", "STATUS, DONE_AT"),
-          new TableIndex("_OLDEST", "STATUS, CREATED_AT"));
+          new TableIndex("_OLDEST", "STATUS, CREATED_AT"),
+          new TableIndex("_PAYLOAD_REF", PAYLOAD_REFERENCE_COLUMN));
 
   /**
    * One index of the outbox table, named after that table so two outboxes on one schema keep
@@ -383,7 +424,39 @@ public class JdbcPhaseTwoOutboxDispatcher {
 
   private final String rescheduleEntry;
 
-  private final String deleteExpiredDoneEntries;
+  private final String countExpiredDoneEntries;
+
+  /**
+   * Where this node says that it is house-keeping this store tonight, so no other node
+   * measures its work at the same time.
+   */
+  private final JdbcHousekeepingLease housekeepingLease;
+
+  /**
+   * What removes the dispatched entries and the orphaned payloads, and when.
+   */
+  private final OutboxHousekeeping housekeeping;
+
+  /**
+   * The bounded delete of the dispatched entries, built on the first housekeeping run.
+   * It needs the database product, which is read from a connection, so it cannot be built
+   * in the constructor next to the other statements.
+   */
+  private String deleteExpiredDoneEntries;
+
+  /**
+   * How many entries {@link #deleteExpiredDoneEntries} was built for. The bound is part
+   * of the statement on every database, so a batch of another size builds it again.
+   */
+  private int deleteExpiredDoneEntriesBoundedAt;
+
+  /**
+   * What the two fields above are guarded by. A lock of its own and not this dispatcher:
+   * the poll holds the dispatcher's monitor while it hands entries to the lanes, and it
+   * waits there when a lane is full - the housekeeping runs on a thread of its own and
+   * must not queue behind that.
+   */
+  private final Object deleteExpiredDoneEntriesLock = new Object();
 
   private final DueEntryPoller poller;
 
@@ -500,7 +573,12 @@ public class JdbcPhaseTwoOutboxDispatcher {
     this.markEntryDone = MARK_ENTRY_DONE.formatted(tableName, STATUS_DONE);
     this.markEntryBlocked = MARK_ENTRY_BLOCKED.formatted(tableName, STATUS_BLOCKED);
     this.rescheduleEntry = RESCHEDULE_ENTRY.formatted(tableName);
-    this.deleteExpiredDoneEntries = DELETE_EXPIRED_DONE_ENTRIES.formatted(tableName, STATUS_DONE);
+    this.countExpiredDoneEntries = COUNT_EXPIRED_DONE_ENTRIES.formatted(tableName, STATUS_DONE);
+    this.housekeepingLease = new JdbcHousekeepingLease(
+        connections, properties
+            .getJdbc()
+            .housekeepingTableName());
+    this.housekeeping = new OutboxHousekeeping(this, properties, metrics);
     this.poller = new DueEntryPoller(
         "vanillabp-outbox", properties.getPollInterval(), this::poll, this::earliestDueAt);
     this.lanes = new DispatchLanes("vanillabp-outbox-dispatch", properties.getDispatchThreads());
@@ -520,13 +598,16 @@ public class JdbcPhaseTwoOutboxDispatcher {
     if (properties.isCreateSchema()) {
       createTableIfNotExists();
       payloadStore.createSchemaIfNotExists();
+      housekeepingLease.createSchemaIfNotExists();
     } else {
       // the application creates its schema itself - a missing table is then a
       // deployment which forgot to apply the migration, and it is said at startup instead of at
       // the first workflow start
       validateTableExists();
       payloadStore.validateSchemaExists();
+      housekeepingLease.validateSchemaExists();
     }
+    fillPayloadReferencesOfWaitingEntries();
 
   }
 
@@ -538,6 +619,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
   public void start() {
 
     poller.start();
+    housekeeping.start();
 
   }
 
@@ -551,6 +633,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
     poller.stop();
     lanes.stop();
     lease.stop();
+    housekeeping.stop();
 
   }
 
@@ -821,6 +904,7 @@ public class JdbcPhaseTwoOutboxDispatcher {
         AGGREGATE_ID VARCHAR(1024), \
         ADAPTER_ID VARCHAR(255), \
         ARGS VARCHAR(2048), \
+        PAYLOAD_REFERENCE VARCHAR(36), \
         IDEMPOTENCY_KEY VARCHAR(512), \
         DEDUP_KEY VARCHAR(512) NOT NULL UNIQUE, \
         STATUS VARCHAR(16) NOT NULL, \
@@ -860,7 +944,6 @@ public class JdbcPhaseTwoOutboxDispatcher {
       for (final var entry : dueEntries()) {
         handOverToItsLane(entry);
       }
-      cleanupExpiredEntries();
     } catch (final Exception e) {
       log.error("Polling the VanillaBP phase-two outbox failed - will retry", e);
     }
@@ -955,49 +1038,238 @@ public class JdbcPhaseTwoOutboxDispatcher {
   }
 
   /**
-   * Deletes successfully dispatched (DONE) entries whose retention period passed - the
-   * asynchronous cleanup of the "DONE instead of delete" contract - and then the payloads
-   * which belong to no entry any more.
+   * Writes the payload reference of the entries which were planned before the column
+   * existed.
    * <p>
-   * The order is what makes the retention count at the entry: the payload of an entry
-   * deleted a moment ago is named by nothing now, so it goes with it, while the payload
-   * of an entry which waits or is blocked is named and stays, however long the repair
-   * takes.
+   * The reference has always travelled among the arguments, and it travels there still;
+   * the column is what the housekeeping asks. An entry written by an earlier version
+   * therefore names its payload where the dispatch reads it and nowhere the housekeeping
+   * looks, and that payload would be removed as an orphan - taking the bytes away from a
+   * dispatch which is still to come.
    * <p>
-   * Every step borrows its connection for the moment it needs it, the way the rest of this
-   * dispatcher does. The payload store borrows one of its own, and it asks this class back
-   * which payloads the entries still name, which borrows a third - so a thread holding one
-   * across the whole cleanup would wait for a connection it is holding itself. On a pool of
-   * one that is a deadlock.
+   * <strong>What this costs on a large table.</strong> Only the entries which still WAIT
+   * are read: a dispatched entry gave its payload back at the dispatch, so nothing asks
+   * about it any more. Those are the entries the outbox owes something to plus the ones
+   * somebody has to repair, which is a small number on any application whose outbox is
+   * healthy and a known number on one whose outbox is not. The history, which is the part
+   * that grows, is never touched. The work is done in rounds of
+   * {@link #BACKFILL_PER_ROUND} rows, so no statement holds a lock on more than that, and
+   * it runs before the poller starts, because an entry dispatched meanwhile would leave a
+   * payload behind.
+   * <p>
+   * It costs one read per start once the column is filled, and that read is answered by
+   * the index over the column.
    */
-  private void cleanupExpiredEntries() throws SQLException {
+  private void fillPayloadReferencesOfWaitingEntries() {
 
-    final var expiredBefore = Instant.now().minus(properties.getRetention());
-    deleteEntriesDoneBefore(expiredBefore);
-    // the payloads of the entries just deleted, and what a crash between the two writes
-    // of a schedule left behind. Nothing else is old enough to be gone, and what an
-    // entry still names is not removed by age at all
-    payloadStore.removeOrphansOlderThan(expiredBefore, this::referencesStillNamed);
+    var filled = 0;
+    try {
+      while (true) {
+        final var round = fillOneRoundOfPayloadReferences();
+        if (round == 0) {
+          break;
+        }
+        filled += round;
+      }
+    } catch (final SQLException e) {
+      // the entries which were not reached keep their payload reference among their
+      // arguments, so their dispatch works; what is at risk is the payload of one of them
+      // being removed as an orphan, and that is worth a line somebody can act on
+      log
+          .warn(
+              "Could not write the payload reference of the entries of table '{}' which were planned before "
+                  + "the column existed - the housekeeping may remove the payload of such an entry. Run the "
+                  + "migration of 'io.vanillabp:vanillabp-schema' or restart the application",
+              tableName,
+              e);
+    }
+    if (filled > 0) {
+      log
+          .info(
+              "Wrote the payload reference of {} entrie(s) of table '{}' which were planned before the column "
+                  + "existed",
+              filled,
+              tableName);
+    }
 
   }
 
   /**
-   * Deletes the entries which were dispatched long enough ago.
+   * One round of the backfill.
    *
-   * @param expiredBefore Entries dispatched before this moment
+   * @return How many entries were written, zero where there is nothing left to do
    */
-  private void deleteEntriesDoneBefore(
-      final Instant expiredBefore) throws SQLException {
+  private int fillOneRoundOfPayloadReferences() throws SQLException {
 
     Connection connection = null;
     try {
       connection = connections.acquire();
-      try (var statement = connection.prepareStatement(deleteExpiredDoneEntries)) {
-        statement.setTimestamp(1, Timestamp.from(expiredBefore));
-        statement.executeUpdate();
+      final var references = new LinkedHashMap<String, String>();
+      final var select = JdbcDialect
+          .of(connection)
+          .selectAtMost(
+              "ID, ARGS",
+              ENTRIES_MISSING_THEIR_PAYLOAD_REFERENCE_FROM.formatted(tableName),
+              ENTRIES_MISSING_THEIR_PAYLOAD_REFERENCE_WHERE.formatted(STATUS_DONE),
+              BACKFILL_PER_ROUND);
+      try (var statement = connection.prepareStatement(select)) {
+        statement.setString(1, ARGS_NAMING_A_PAYLOAD);
+        try (var resultSet = statement.executeQuery()) {
+          while (resultSet.next()) {
+            final var reference = PhaseTwoCall
+                .deserializeArgs(resultSet.getString(2))
+                .get(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
+            if (reference != null) {
+              references.put(resultSet.getString(1), reference);
+            }
+          }
+        }
       }
+      if (references.isEmpty()) {
+        // either nothing is left or what is left names no payload after all, and both
+        // mean the same here: another round would read the same rows again
+        return 0;
+      }
+      try (var statement = connection.prepareStatement(WRITE_PAYLOAD_REFERENCE.formatted(tableName))) {
+        for (final var entry : references.entrySet()) {
+          statement.setString(1, entry.getValue());
+          statement.setString(2, entry.getKey());
+          statement.addBatch();
+        }
+        statement.executeBatch();
+      }
+      return references.size();
     } finally {
       release(connection);
+    }
+
+  }
+
+  @Override
+  public String storeName() {
+
+    return storeName;
+
+  }
+
+  @Override
+  public boolean claimHousekeepingUntil(
+      final String owner,
+      final Instant until) {
+
+    return housekeepingLease.claimUntil(storeName
+        + "@"
+        + tableName, owner, until);
+
+  }
+
+  @Override
+  public void releaseHousekeeping(
+      final String owner) {
+
+    housekeepingLease.release(storeName
+        + "@"
+        + tableName, owner);
+
+  }
+
+  /**
+   * {@inheritDoc}
+   * <p>
+   * One statement, on a connection borrowed for it and given back, the way every other
+   * step of this dispatcher borrows one. The bound is inside the statement because
+   * <code>DELETE ... LIMIT</code> is no portable SQL.
+   */
+  @Override
+  public int removeDispatchedEntriesOlderThan(
+      final Instant threshold,
+      final int maxRows) {
+
+    if (maxRows < 1) {
+      return 0;
+    }
+    Connection connection = null;
+    try {
+      connection = connections.acquire();
+      try (var statement = connection.prepareStatement(deleteExpiredDoneEntries(connection, maxRows))) {
+        statement.setTimestamp(1, Timestamp.from(threshold));
+        return statement.executeUpdate();
+      }
+    } catch (final SQLException e) {
+      log.warn("Could not remove the dispatched entries of the outbox table '{}'", tableName, e);
+      return 0;
+    } finally {
+      release(connection);
+    }
+
+  }
+
+  /**
+   * {@inheritDoc}
+   * <p>
+   * The entries were removed first, so the payloads they named are named by nothing now
+   * and go with this call. What an entry still names - an entry which waits, and an entry
+   * which is blocked until somebody repairs it - is not removed by age at all, which the
+   * payload store asks its own entries about.
+   */
+  @Override
+  public int removeOrphanedPayloadsOlderThan(
+      final Instant threshold,
+      final int maxRows) {
+
+    return payloadStore.removeOrphansOlderThan(threshold, maxRows);
+
+  }
+
+  @Override
+  public OptionalLong countDispatchedEntriesOlderThan(
+      final Instant threshold) {
+
+    Connection connection = null;
+    try {
+      connection = connections.acquire();
+      try (var statement = connection.prepareStatement(countExpiredDoneEntries)) {
+        statement.setTimestamp(1, Timestamp.from(threshold));
+        try (var resultSet = statement.executeQuery()) {
+          return resultSet.next() ? OptionalLong.of(resultSet.getLong(1)) : OptionalLong.empty();
+        }
+      }
+    } catch (final SQLException e) {
+      // a number which could not be read stays a gap in the meter rather than a zero
+      log.debug("Could not count the dispatched entries of the outbox table '{}'", tableName, e);
+      return OptionalLong.empty();
+    } finally {
+      release(connection);
+    }
+
+  }
+
+  /**
+   * The delete of at most so many dispatched entries, built once per ceiling and kept
+   * afterwards.
+   *
+   * @param connection The connection, read for the database product
+   * @param maxRows The most rows the statement may remove
+   * @return The statement to run
+   */
+  private String deleteExpiredDoneEntries(
+      final Connection connection,
+      final int maxRows) throws SQLException {
+
+    synchronized (deleteExpiredDoneEntriesLock) {
+      if ((deleteExpiredDoneEntries != null) && (deleteExpiredDoneEntriesBoundedAt == maxRows)) {
+        return deleteExpiredDoneEntries;
+      }
+      final var dialect = JdbcDialect.of(connection);
+      final var expired = dialect
+          .selectAtMost(
+              "ID",
+              EXPIRED_DONE_ENTRIES_FROM.formatted(tableName),
+              EXPIRED_DONE_ENTRIES_WHERE.formatted(STATUS_DONE),
+              maxRows);
+      deleteExpiredDoneEntries = dialect.deleteWhatWasPicked(tableName, "ID", expired);
+      deleteExpiredDoneEntriesBoundedAt = maxRows;
+      return deleteExpiredDoneEntries;
     }
 
   }
@@ -1586,60 +1858,6 @@ public class JdbcPhaseTwoOutboxDispatcher {
     metrics
         .get()
         .outboxEntryBlocked(storeName, operation, permanent);
-
-  }
-
-  /**
-   * Which of the given payloads an entry of this table still names, asked with one
-   * statement on a connection of its own. It costs a scan of the outbox table, because a
-   * reference lies inside the serialized arguments and no index reaches into a column of
-   * text. The question is asked only where a payload outlived the retention, which on a
-   * healthy store is never - but an entry which is stuck keeps its payload, so one stuck
-   * entry means this runs on every poll, and the payload store asks it once per hundred
-   * payloads it wants to remove. What that costs was measured, and why the table has no
-   * column to index instead is decision 76 in the repository's DECISIONS.md.
-   *
-   * @param references The payloads the housekeeping is about to remove
-   * @return Those of them an entry names
-   */
-  private Set<String> referencesStillNamed(
-      final Collection<String> references) {
-
-    final var condition = references
-        .stream()
-        .map(reference -> "ARGS LIKE ?")
-        .collect(Collectors.joining(" OR "));
-    final var stillNamed = new LinkedHashSet<String>();
-    Connection connection = null;
-    try {
-      connection = connections.acquire();
-      try (var statement = connection.prepareStatement(SELECT_ARGS_NAMING.formatted(tableName, condition))) {
-        var parameter = 1;
-        for (final var reference : references) {
-          statement.setString(parameter++, "%%%s%%".formatted(reference));
-        }
-        try (var resultSet = statement.executeQuery()) {
-          while (resultSet.next()) {
-            // read properly rather than trusted from the pattern: LIKE matches a
-            // reference wherever it stands, and what counts is the argument itself
-            final var named = PhaseTwoCall
-                .deserializeArgs(resultSet.getString(1))
-                .get(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
-            if ((named != null) && references.contains(named)) {
-              stillNamed.add(named);
-            }
-          }
-        }
-      }
-    } catch (final SQLException e) {
-      // nothing is removed then: a payload kept too long costs space, a payload removed
-      // from an entry which still waits costs the dispatch
-      log.warn("Could not ask the outbox table '{}' which payloads it still names", tableName, e);
-      return Set.copyOf(references);
-    } finally {
-      release(connection);
-    }
-    return stillNamed;
 
   }
 

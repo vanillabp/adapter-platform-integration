@@ -1,8 +1,6 @@
 package io.vanillabp.integration.spi;
 
 import java.time.Instant;
-import java.util.Collection;
-import java.util.Set;
 
 /**
  * Where the payload of a {@link PhaseTwoCall} lies while its outbox entry waits for its
@@ -26,7 +24,7 @@ import java.util.Set;
  * It is removed where the entry is finished, in the update marking the entry dispatched,
  * and one retention period later with the dispatched entry itself. A payload nothing
  * points at any more is removed by age, which is what
- * {@link #removeOrphansOlderThan(Instant, EntriesNamingPayloads)} does.
+ * {@link #removeOrphansOlderThan(Instant, int)} does.
  * <p>
  * The age never decides about a payload an entry still names. An entry which waits, and
  * an entry which is blocked until somebody repairs it, keeps its bytes however long that
@@ -63,46 +61,30 @@ public interface PhaseTwoPayloadStore {
       String reference);
 
   /**
-   * Removes the payloads written before the given moment which no outbox entry names
-   * any more. Such a payload is an orphan: a write which was rolled back, or one whose
+   * Removes payloads written before the given moment which no outbox entry names any
+   * more. Such a payload is an orphan: a write which was rolled back, or one whose
    * process died before it could write the entry.
    * <p>
-   * Age alone is not enough to delete, so the store asks the entries first. A payload of
-   * an entry which is blocked is older than the retention as soon as the repair takes
+   * Age alone is not enough to delete, because the retention counts at the ENTRY. A
+   * payload of a blocked entry is older than the retention as soon as the repair takes
    * longer than that, and deleting it would take the bytes away from the very dispatch
-   * the operator is preparing.
+   * the operator is preparing. So every store asks its own entries, and it asks them in
+   * the database: nothing about this call travels through the application, whatever the
+   * store holds.
+   * <p>
+   * How a store asks is its own business, and the four VanillaBP ships ask in four ways.
+   * That is the point of this signature: a store which can join its entries in one
+   * command does so, and a store whose entries lie in a table it does not own pays for
+   * that alone rather than making the others pay with it.
    *
    * @param threshold Payloads written before this moment are candidates
-   * @param entries Asked which of the candidates the outbox still names
-   * @return The number of payloads removed
+   * @param maxEntries The most payloads this call may remove. It is a ceiling and not a
+   *        target: a store removes what it finds up to this many, and the caller reads
+   *        a full count as "there was more" and comes back
+   * @return How many payloads were removed, never more than <code>maxEntries</code>
    */
   int removeOrphansOlderThan(
       Instant threshold,
-      EntriesNamingPayloads entries);
-
-  /**
-   * The entries of an outbox, asked by their payload store which payloads they still
-   * name. Every store VanillaBP ships answers this from the column respectively field
-   * its entries keep {@link PhaseTwoCall#ARG_PAYLOAD_REFERENCE} in.
-   * <p>
-   * The store asks with the payloads which are old enough to go, and it asks only when
-   * there are any, so a housekeeping run over a store nothing outlived costs one
-   * question to the payloads and nothing else.
-   */
-  @FunctionalInterface
-  interface EntriesNamingPayloads {
-
-    /**
-     * Asks the outbox which of these payloads it still needs. Naming too many only leaves
-     * an orphan behind for one more run; naming too few takes the bytes away from an entry
-     * which is still to be dispatched.
-     *
-     * @param references The references of the payloads the store is about to remove
-     * @return Those of them an entry of the outbox still names, in any state
-     */
-    Set<String> stillNaming(
-        Collection<String> references);
-
-  }
+      int maxEntries);
 
 }

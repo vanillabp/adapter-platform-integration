@@ -3,11 +3,7 @@ package io.vanillabp.integration.outbox.gruelbox;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Instant;
-import java.util.Collection;
-import java.util.LinkedHashSet;
 import java.util.OptionalLong;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 import javax.sql.DataSource;
 
@@ -308,58 +304,48 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
   }
 
   /**
-   * Which of the given payloads an entry of gruelbox' table still names, asked by the
-   * payload store before it removes anything by age. An entry which waits, and an entry
-   * gruelbox blocked, keeps its bytes for as long as it is there.
-   * <p>
-   * gruelbox keeps a call as one serialized invocation, so there is no column to join
-   * on: the statement looks for the reference anywhere in that text. It costs a scan of
-   * the table, and no index can take that away - gruelbox owns this table, so VanillaBP
-   * cannot add a column to it at all (see decision 76 in the repository's DECISIONS.md).
-   * The question is asked only where a payload outlived the retention, which on a healthy
-   * store is never, but an entry gruelbox blocked keeps its payload.
-   * <p>
-   * Where the table does not answer, every payload counts as still named. Keeping bytes
-   * nobody needs costs space; removing the bytes of an entry somebody is about to open
-   * again costs the dispatch.
+   * The table gruelbox stores its entries in, asked from outside where the housekeeping
+   * needs a name to claim this store by.
    *
-   * @param references The payloads the housekeeping is about to remove
-   * @return Those of them an entry names
+   * @return The table of this store
    */
-  public Set<String> stillNaming(
-      final Collection<String> references) {
+  public String getTableName() {
 
-    if (references.isEmpty()) {
-      return Set.copyOf(references);
-    }
-    final var condition = references
-        .stream()
-        .map(reference -> "invocation LIKE ?")
-        .collect(Collectors.joining(" OR "));
-    final var stillNamed = new LinkedHashSet<String>();
-    try (var connection = dataSource.getConnection(); var statement = connection
-        .prepareStatement("SELECT invocation FROM %s WHERE %s".formatted(tableName, condition))) {
-      var parameter = 1;
-      for (final var reference : references) {
-        statement.setString(parameter++, "%%%s%%".formatted(reference));
-      }
+    return tableName;
+
+  }
+
+  /**
+   * How many dispatched entries gruelbox has not deleted yet - what its flushes still
+   * owe. VanillaBP removes none of them itself on this store, so this is the number the
+   * housekeeping publishes when its window closes.
+   * <p>
+   * gruelbox marks a dispatched entry <code>processed</code> and pushes its
+   * <code>nextAttemptTime</code> out by the retention threshold, which is
+   * <code>vanillabp.outbox.retention</code>, so an entry whose moment has come is one a
+   * flush would delete. It reads gruelbox' own index over
+   * <code>processed, blocked, nextAttemptTime</code>.
+   *
+   * @return How many there are, empty where the table could not be asked
+   */
+  public OptionalLong countDispatchedEntriesPastTheirRetention() {
+
+    final var countExpired = "SELECT COUNT(*) FROM %s WHERE processed = ? AND blocked = ? AND nextAttemptTime <= ?"
+        .formatted(tableName);
+    try (var connection = dataSource.getConnection(); var statement = connection.prepareStatement(countExpired)) {
+      statement.setBoolean(1, true);
+      statement.setBoolean(2, false);
+      statement.setTimestamp(3, java.sql.Timestamp.from(Instant.now()));
       try (var resultSet = statement.executeQuery()) {
-        while (resultSet.next()) {
-          final var invocation = resultSet.getString(1);
-          // the text is searched rather than deserialized: an application may build its
-          // persistor with a serializer of its own, and an entry this store cannot read
-          // still names its payload
-          references
-              .stream()
-              .filter(invocation::contains)
-              .forEach(stillNamed::add);
-        }
+        return resultSet.next()
+            ? OptionalLong.of(resultSet.getLong(1))
+            : OptionalLong.empty();
       }
     } catch (final SQLException e) {
-      log.warn("Could not ask gruelbox' outbox table '{}' which payloads it still names", tableName, e);
-      return Set.copyOf(references);
+      // a number which could not be read stays a gap in the meter rather than a zero
+      log.debug("Could not count the dispatched entries of gruelbox' outbox table '{}'", tableName, e);
+      return OptionalLong.empty();
     }
-    return stillNamed;
 
   }
 

@@ -34,11 +34,13 @@ import com.gruelbox.transactionoutbox.spring.SpringTransactionManager;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
 import io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
+import io.vanillabp.integration.adapter.migration.outbox.JdbcHousekeepingLease;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxStore;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.config.GruelboxOutboxProperties;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
+import io.vanillabp.integration.outbox.jdbc.JdbcPhaseTwoOutbox;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
@@ -143,6 +145,12 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
    * so an application may replace it.
    */
   public static final String DEFAULT_PAYLOAD_STORE_BEAN_NAME = "vanillaBpGruelboxPhaseTwoPayloadStore";
+
+  /**
+   * The name of the bean holding the housekeeping claim of this outbox. It is named
+   * because the dispatcher asks for it by name, the way it asks for the payload store.
+   */
+  public static final String DEFAULT_HOUSEKEEPING_LEASE_BEAN_NAME = "vanillaBpGruelboxHousekeepingLease";
 
   /**
    * The table gruelbox stores outbox entries in. It is the name the library itself
@@ -318,7 +326,13 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
             DataSourceUtils.releaseConnection(connection, dataSource);
 
           }
-        }, payloadTable);
+        }, payloadTable,
+        // gruelbox owns its table and keeps a call as one serialized invocation, so
+        // there is no column to join on: the housekeeping looks for the reference
+        // inside that text, which costs a scan of the entries (see decision 76 in the
+        // repository's DECISIONS.md)
+        JdbcPhaseTwoPayloadStore.EntriesNamingTheirPayload
+            .insideAText(DEFAULT_OUTBOX_TABLE_NAME, "invocation"));
     if (vanillaBpProperties.getOutbox().isCreateSchema()) {
       store.createSchemaIfNotExists();
     } else {
@@ -387,6 +401,38 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
   }
 
   /**
+   * Where this node says that it is house-keeping the payloads of this outbox tonight.
+   * <p>
+   * gruelbox deletes its own dispatched entries, so what the window governs here is the
+   * payload table alone - but that table is VanillaBP's, and two nodes sweeping it at the
+   * same time would each measure the other's work.
+   *
+   * @param dataSource The data source the claim lives in
+   * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree, naming the table
+   *          where the application configured one of its own
+   * @return The claim of this outbox
+   */
+  @Bean(DEFAULT_HOUSEKEEPING_LEASE_BEAN_NAME)
+  @ConditionalOnMissingBean(name = DEFAULT_HOUSEKEEPING_LEASE_BEAN_NAME)
+  public JdbcHousekeepingLease vanillaBpGruelboxHousekeepingLease(
+      final DataSource dataSource,
+      final VanillaBpConfigurationProperties vanillaBpProperties) {
+
+    final var lease = new JdbcHousekeepingLease(
+        JdbcPhaseTwoOutbox.connectionsOf(dataSource), vanillaBpProperties
+            .getOutbox()
+            .getJdbc()
+            .housekeepingTableName());
+    if (vanillaBpProperties.getOutbox().isCreateSchema()) {
+      lease.createSchemaIfNotExists();
+    } else {
+      lease.validateSchemaExists();
+    }
+    return lease;
+
+  }
+
+  /**
    * What flushes gruelbox: it dispatches the entries a crashed instance left behind, gives
    * a failed one its next attempt once the due time passed, and deletes what the retention
    * released. It also opens the gate of the submitter, so nothing reaches a BPMS before the
@@ -402,6 +448,8 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
    *          can sleep until then
    * @param payloadStore Where the payloads of the entries a flush finished are removed, and
    *          with them what a crash between the two writes of a schedule left behind
+   * @param housekeepingLease Where this node says that it is house-keeping tonight
+   * @param metrics What the numbers of a closed housekeeping window are published to
    * @return The dispatcher polling the outbox for recovery, retries and retention
    *         cleanup (private single-thread executor - no
    *         {@link org.springframework.scheduling.TaskScheduler} involved)
@@ -412,10 +460,14 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
       final VanillaBpConfigurationProperties vanillaBpProperties,
       @Qualifier(DEFAULT_SUBMITTER_BEAN_NAME) final GruelboxRedispatchAwareSubmitter submitter,
       @Qualifier(DEFAULT_OUTBOX_BEAN_NAME) final GruelboxPhaseTwoOutbox outbox,
-      @Qualifier(DEFAULT_PAYLOAD_STORE_BEAN_NAME) final JdbcPhaseTwoPayloadStore payloadStore) {
+      @Qualifier(DEFAULT_PAYLOAD_STORE_BEAN_NAME) final JdbcPhaseTwoPayloadStore payloadStore,
+      @Qualifier(DEFAULT_HOUSEKEEPING_LEASE_BEAN_NAME) final JdbcHousekeepingLease housekeepingLease,
+      final ObjectProvider<VanillaBpMetrics> metrics) {
 
     return new GruelboxPhaseTwoOutboxDispatcher(
-        transactionOutbox, vanillaBpProperties.getOutbox(), submitter, outbox, payloadStore);
+        transactionOutbox, vanillaBpProperties
+            .getOutbox(), submitter, outbox, payloadStore, housekeepingLease, () -> metrics
+                .getIfAvailable(() -> VanillaBpMetrics.NONE));
 
   }
 

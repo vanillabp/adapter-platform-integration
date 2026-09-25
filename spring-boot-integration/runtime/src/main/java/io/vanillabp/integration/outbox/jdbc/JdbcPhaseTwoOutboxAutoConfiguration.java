@@ -129,7 +129,8 @@ public class JdbcPhaseTwoOutboxAutoConfiguration {
 
     return new JdbcPhaseTwoPayloadStore(
         JdbcPhaseTwoOutbox.connectionsOf(dataSource), JdbcPhaseTwoOutboxStore
-            .payloadTableName(vanillaBpProperties.getOutbox()));
+            .payloadTableName(vanillaBpProperties.getOutbox()), JdbcPhaseTwoOutboxStore
+                .entriesNamingTheirPayload(vanillaBpProperties.getOutbox()));
 
   }
 

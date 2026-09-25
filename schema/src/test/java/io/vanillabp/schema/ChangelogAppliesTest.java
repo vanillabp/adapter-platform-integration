@@ -54,7 +54,8 @@ public class ChangelogAppliesTest {
       .of(
           "VANILLABP_PHASE_TWO_OUTBOX",
           "VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD",
-          "VANILLABP_TASK_DELIVERY");
+          "VANILLABP_TASK_DELIVERY",
+          "VANILLABP_HOUSEKEEPING");
 
   private static Connection h2(
       final String name) throws Exception {
@@ -247,11 +248,12 @@ public class ChangelogAppliesTest {
         .of(
             "vanillabp.outbox.table", "MY_OUTBOX",
             "vanillabp.delivery.table", "MY_DELIVERIES",
-            "vanillabp.payload.table", "MY_PAYLOADS");
+            "vanillabp.payload.table", "MY_PAYLOADS",
+            "vanillabp.housekeeping.table", "MY_HOUSEKEEPING");
 
     final var changelog = ChangelogDescription.of(renamed);
     assertEquals(
-        Set.of("MY_OUTBOX", "MY_DELIVERIES", "MY_PAYLOADS"),
+        Set.of("MY_OUTBOX", "MY_DELIVERIES", "MY_PAYLOADS", "MY_HOUSEKEEPING"),
         changelog.tableNames(),
         """
             Every table of the changelog takes its name from a property an application can \

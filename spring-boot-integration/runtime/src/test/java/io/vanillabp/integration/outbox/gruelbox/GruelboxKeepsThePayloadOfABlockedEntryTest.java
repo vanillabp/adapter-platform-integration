@@ -110,6 +110,16 @@ public class GruelboxKeepsThePayloadOfABlockedEntryTest {
     properties
         .getOutbox()
         .setPollInterval(Duration.ofHours(1));
+    // the default housekeeping window is an hour of the night, and this test wants to
+    // watch the sweep work now
+    properties
+        .getOutbox()
+        .getHousekeeping()
+        .setStart(java.time.LocalTime.MIN);
+    properties
+        .getOutbox()
+        .getHousekeeping()
+        .setEnd(java.time.LocalTime.MAX);
     submitter = new GruelboxRedispatchAwareSubmitter(Submitter.withDefaultExecutor());
     final var configuration = new GruelboxPhaseTwoOutboxAutoConfiguration();
     final TransactionOutbox transactionOutbox = configuration
@@ -126,7 +136,8 @@ public class GruelboxKeepsThePayloadOfABlockedEntryTest {
     // building the dispatcher closes the submitter's gate, so an entry scheduled below
     // waits for the flush this test starts instead of going out at the commit
     dispatcher = new GruelboxPhaseTwoOutboxDispatcher(
-        transactionOutbox, properties.getOutbox(), submitter, outbox, payloadStore);
+        transactionOutbox, properties.getOutbox(), submitter, outbox, payloadStore, configuration
+            .vanillaBpGruelboxHousekeepingLease(dataSource, properties), () -> VanillaBpMetrics.NONE);
     transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
 
   }
