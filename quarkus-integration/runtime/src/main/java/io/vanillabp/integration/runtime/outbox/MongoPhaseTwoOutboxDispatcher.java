@@ -1,12 +1,9 @@
 package io.vanillabp.integration.runtime.outbox;
 
 import java.time.Instant;
-import java.util.Collection;
 import java.util.Date;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.Map;
-import java.util.Set;
 
 import org.bson.Document;
 import org.eclipse.microprofile.config.ConfigProvider;
@@ -27,6 +24,7 @@ import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics
 import io.vanillabp.integration.adapter.migration.outbox.DispatchLanes;
 import io.vanillabp.integration.adapter.migration.outbox.DispatchLease;
 import io.vanillabp.integration.adapter.migration.outbox.DueEntryPoller;
+import io.vanillabp.integration.adapter.migration.outbox.Housekeeping;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterPropertiesMapper;
@@ -396,7 +394,8 @@ public class MongoPhaseTwoOutboxDispatcher {
   MongoPhaseTwoPayloadStore getPayloadStore() {
 
     if (payloadStore == null) {
-      payloadStore = new MongoPhaseTwoPayloadStore(this::payloadCollection, txRegistry);
+      payloadStore = new MongoPhaseTwoPayloadStore(
+          this::payloadCollection, () -> getProperties().getMongo().getCollection(), txRegistry);
     }
     return payloadStore;
 
@@ -453,46 +452,14 @@ public class MongoPhaseTwoOutboxDispatcher {
               Filters.lt("doneAt", Date.from(Instant.now().minus(properties.getRetention())))));
       // the payloads of the entries just deleted, and what a rollback without a MongoDB
       // transaction left behind. What an entry still names is not removed by age at all,
-      // so an entry which waits or is blocked keeps its bytes until it is dispatched
+      // so an entry which waits or is blocked keeps its bytes until it is dispatched - the
+      // store joins the entries itself, in the database
       getPayloadStore()
           .removeOrphansOlderThan(
-              Instant.now().minus(properties.getRetention()),
-              references -> referencesStillNamed(collection, references));
+              Instant.now().minus(properties.getRetention()), Housekeeping.ROWS_PER_RUN);
     } catch (final RuntimeException e) {
       log.error("Polling the VanillaBP phase-two outbox failed - will retry", e);
     }
-
-  }
-
-  /**
-   * Which of the given payloads an entry of this collection still names, asked with one
-   * query. The reference lies in the entry's <code>args</code>, and MongoDB indexes a field
-   * inside a document, so a sparse index over it answers this without reading the collection
-   * (see decision 76 in the repository's DECISIONS.md). The question is asked only where a
-   * payload outlived the retention, which on a healthy store is never - but an entry which is
-   * stuck keeps its payload, so one stuck entry means this runs on every poll.
-   *
-   * @param collection The outbox collection
-   * @param references The payloads the housekeeping is about to remove
-   * @return Those of them an entry names
-   */
-  private Set<String> referencesStillNamed(
-      final MongoCollection<Document> collection,
-      final Collection<String> references) {
-
-    final var named = "args.%s".formatted(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
-    final var stillNamed = new LinkedHashSet<String>();
-    try {
-      collection
-          .distinct(named, Filters.in(named, references), String.class)
-          .forEach(stillNamed::add);
-    } catch (final RuntimeException e) {
-      // nothing is removed then: a payload kept too long costs space, a payload removed
-      // from an entry which still waits costs the dispatch
-      log.warn("Could not ask the outbox collection which payloads it still names", e);
-      return Set.copyOf(references);
-    }
-    return stillNamed;
 
   }
 

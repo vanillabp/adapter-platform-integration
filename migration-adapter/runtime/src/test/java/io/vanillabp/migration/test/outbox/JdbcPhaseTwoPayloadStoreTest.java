@@ -3,6 +3,7 @@ package io.vanillabp.migration.test.outbox;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -11,11 +12,11 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.DisplayName;
@@ -23,16 +24,21 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
+import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxStore;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore;
 import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.spi.PhaseTwoCall;
-import io.vanillabp.integration.spi.PhaseTwoPayloadStore;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
  * The table every JDBC-backed outbox of VanillaBP puts its payloads in: what is written
  * comes back byte for byte, what was dispatched is removed, and what a crash left behind
  * is removed by the age sweep.
+ * <p>
+ * The sweep is one statement which asks the entries itself, so every test about it needs
+ * a table of entries beside the payloads. It is built here with the columns the outbox
+ * store writes, and the entries are written by hand: what is under test is the question
+ * the sweep asks, not the way an entry gets into the table.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class JdbcPhaseTwoPayloadStoreTest {
@@ -44,11 +50,18 @@ public class JdbcPhaseTwoPayloadStoreTest {
 
   private static final String TABLE_NAME = "VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD";
 
+  private static final String OUTBOX_TABLE_NAME = JdbcPhaseTwoOutboxStore.DEFAULT_TABLE_NAME;
+
   /**
-   * The answer of an outbox whose entries name none of the payloads asked about - the
-   * store of a test which is about the sweep itself.
+   * The outbox table, reduced to what the sweep looks at. The real one carries a dozen
+   * more columns, and none of them takes part in the question which payloads are still
+   * named.
    */
-  private static final PhaseTwoPayloadStore.EntriesNamingPayloads NO_ENTRY_NAMES_ANY = references -> Set.of();
+  private static final String CREATE_ENTRIES = """
+      CREATE TABLE IF NOT EXISTS %s (\
+      ID VARCHAR(36) PRIMARY KEY, \
+      ARGS VARCHAR(2048))"""
+      .formatted(OUTBOX_TABLE_NAME);
 
   private static JdbcConnectionAccess h2(
       final String name) {
@@ -61,7 +74,70 @@ public class JdbcPhaseTwoPayloadStoreTest {
   private static JdbcPhaseTwoPayloadStore storeOn(
       final String database) {
 
-    return new JdbcPhaseTwoPayloadStore(h2(database), TABLE_NAME);
+    return new JdbcPhaseTwoPayloadStore(
+        h2(database), TABLE_NAME, JdbcPhaseTwoOutboxStore.entriesNamingTheirPayload(OUTBOX_TABLE_NAME));
+
+  }
+
+  /**
+   * Builds the payload table and the table of entries beside it.
+   *
+   * @param database The database this test works on
+   * @return The store to work with
+   */
+  private static JdbcPhaseTwoPayloadStore preparedStoreOn(
+      final String database) {
+
+    final var store = storeOn(database);
+    store.createSchemaIfNotExists();
+    execute(h2(database), CREATE_ENTRIES);
+    return store;
+
+  }
+
+  /**
+   * Writes an outbox entry naming a payload, the way the outbox store writes it: the
+   * reference stands among the serialized arguments.
+   *
+   * @param database The database this test works on
+   * @param call The call whose payload the entry names
+   */
+  private static void writeEntryNaming(
+      final String database,
+      final PhaseTwoCall call) {
+
+    execute(
+        h2(database),
+        "INSERT INTO %s (ID, ARGS) VALUES ('%s', '%s')"
+            .formatted(
+                OUTBOX_TABLE_NAME,
+                call.payloadReference(),
+                PhaseTwoCall
+                    .serializeArgs(Map.of(PhaseTwoCall.ARG_PAYLOAD_REFERENCE, call.payloadReference()))));
+
+  }
+
+  private static void execute(
+      final JdbcConnectionAccess connections,
+      final String statement) {
+
+    Connection connection = null;
+    try {
+      connection = connections.acquire();
+      try (var command = connection.createStatement()) {
+        command.executeUpdate(statement);
+      }
+    } catch (final SQLException e) {
+      throw new IllegalStateException("could not run '%s'".formatted(statement), e);
+    } finally {
+      if (connection != null) {
+        try {
+          connections.release(connection);
+        } catch (final SQLException e) {
+          throw new IllegalStateException("could not give the connection back", e);
+        }
+      }
+    }
 
   }
 
@@ -79,8 +155,7 @@ public class JdbcPhaseTwoPayloadStoreTest {
   @DisplayName("What was written comes back byte for byte")
   public void aPayloadComesBackUnchanged() {
 
-    final var store = storeOn("payload-roundtrip");
-    store.createSchemaIfNotExists();
+    final var store = preparedStoreOn("payload-roundtrip");
 
     final var call = callWith("the state at the sync point");
     store.write(call);
@@ -95,8 +170,7 @@ public class JdbcPhaseTwoPayloadStoreTest {
   @DisplayName("A reference nothing was written for reads as nothing")
   public void anUnknownReferenceReadsAsNothing() {
 
-    final var store = storeOn("payload-unknown");
-    store.createSchemaIfNotExists();
+    final var store = preparedStoreOn("payload-unknown");
 
     assertNull(store.read("no-such-reference"));
 
@@ -106,8 +180,7 @@ public class JdbcPhaseTwoPayloadStoreTest {
   @DisplayName("A dispatched payload is removed, and removing it twice is no error")
   public void aDispatchedPayloadIsRemoved() {
 
-    final var store = storeOn("payload-remove");
-    store.createSchemaIfNotExists();
+    final var store = preparedStoreOn("payload-remove");
 
     final var call = callWith("gone after the dispatch");
     store.write(call);
@@ -122,19 +195,18 @@ public class JdbcPhaseTwoPayloadStoreTest {
   @DisplayName("The age sweep removes what a crash between the two writes left behind")
   public void theAgeSweepRemovesOrphans() {
 
-    final var store = storeOn("payload-sweep");
-    store.createSchemaIfNotExists();
+    final var store = preparedStoreOn("payload-sweep");
 
     final var orphan = callWith("written by a process which then died");
     store.write(orphan);
 
     // nothing is old enough yet, so the sweep of a moment in the past removes none
-    assertEquals(0, store.removeOrphansOlderThan(Instant.now().minus(Duration.ofDays(1)), NO_ENTRY_NAMES_ANY));
+    assertEquals(0, store.removeOrphansOlderThan(Instant.now().minus(Duration.ofDays(1)), 100));
     assertArrayEquals(
         "written by a process which then died".getBytes(StandardCharsets.UTF_8),
         store.read(orphan.payloadReference()));
 
-    assertEquals(1, store.removeOrphansOlderThan(Instant.now().plus(Duration.ofSeconds(1)), NO_ENTRY_NAMES_ANY));
+    assertEquals(1, store.removeOrphansOlderThan(Instant.now().plus(Duration.ofSeconds(1)), 100));
     assertNull(store.read(orphan.payloadReference()));
 
   }
@@ -143,17 +215,15 @@ public class JdbcPhaseTwoPayloadStoreTest {
   @DisplayName("The age sweep leaves a payload an entry still names, however old it is")
   public void theAgeSweepLeavesWhatAnEntryNames() {
 
-    final var store = storeOn("payload-sweep-named");
-    store.createSchemaIfNotExists();
+    final var store = preparedStoreOn("payload-sweep-named");
 
     final var named = callWith("the state an entry is still waiting to send");
     final var orphan = callWith("written by a process which then died");
     store.write(named);
     store.write(orphan);
+    writeEntryNaming("payload-sweep-named", named);
 
-    final var removed = store
-        .removeOrphansOlderThan(
-            Instant.now().plus(Duration.ofSeconds(1)), references -> Set.of(named.payloadReference()));
+    final var removed = store.removeOrphansOlderThan(Instant.now().plus(Duration.ofSeconds(1)), 100);
 
     assertEquals(1, removed, "only the payload no entry names may go");
     assertArrayEquals(
@@ -164,25 +234,56 @@ public class JdbcPhaseTwoPayloadStoreTest {
   }
 
   @Test
-  @DisplayName("The sweep asks the entries without holding the connection they read with")
-  public void theSweepHoldsNoConnectionWhileItAsksTheEntries() {
+  @DisplayName("The sweep removes at most as many payloads as it was allowed to")
+  public void theSweepRemovesAtMostWhatItWasAllowedTo() {
 
-    final var connections = lendingOneConnectionAtATime("payload-sweep-one-connection");
-    final var store = new JdbcPhaseTwoPayloadStore(connections, TABLE_NAME);
-    store.createSchemaIfNotExists();
+    final var store = preparedStoreOn("payload-sweep-bounded");
+
+    final var orphans = new PhaseTwoCall[5];
+    for (var index = 0; index < orphans.length; index++) {
+      orphans[index] = callWith("orphan number %d".formatted(index));
+      store.write(orphans[index]);
+    }
+
+    final var expired = Instant.now().plus(Duration.ofSeconds(1));
+    assertEquals(2, store.removeOrphansOlderThan(expired, 2), "the ceiling was not kept");
+    assertEquals(2, store.removeOrphansOlderThan(expired, 2), "the next run takes the next two");
+    assertEquals(1, store.removeOrphansOlderThan(expired, 2), "a run which comes back short is the last one");
+    assertEquals(0, store.removeOrphansOlderThan(expired, 2));
+
+  }
+
+  @Test
+  @DisplayName("A ceiling of nothing removes nothing and asks the database nothing")
+  public void aCeilingOfNothingRemovesNothing() {
+
+    final var store = preparedStoreOn("payload-sweep-no-room");
     final var orphan = callWith("written by a process which then died");
     store.write(orphan);
 
-    // the outbox entries lie in a table of their own, so answering this question is a read
-    // which borrows a connection of its own. A store holding one while it asks would wait
-    // for a connection it is holding itself, which on a pool of one never comes back
-    final var removed = store
-        .removeOrphansOlderThan(Instant.now().plus(Duration.ofSeconds(1)), references -> {
-          borrowAndGiveBack(connections);
-          return Set.of();
-        });
+    assertEquals(0, store.removeOrphansOlderThan(Instant.now().plus(Duration.ofSeconds(1)), 0));
+    assertNotNull(store.read(orphan.payloadReference()));
 
-    assertEquals(1, removed, "the sweep did not get through while it asked the entries");
+  }
+
+  @Test
+  @DisplayName("The sweep is one statement, so it never holds two connections at once")
+  public void theSweepHoldsOneConnectionAtATime() {
+
+    final var connections = lendingOneConnectionAtATime("payload-sweep-one-connection");
+    final var store = new JdbcPhaseTwoPayloadStore(
+        connections, TABLE_NAME, JdbcPhaseTwoOutboxStore.entriesNamingTheirPayload(OUTBOX_TABLE_NAME));
+    store.createSchemaIfNotExists();
+    execute(connections, CREATE_ENTRIES);
+    final var orphan = callWith("written by a process which then died");
+    store.write(orphan);
+
+    // the entries lie in a table of their own, and the sweep reads it inside its own
+    // statement rather than on a second connection. A store borrowing one per step would
+    // wait for a connection it is holding itself, which on a pool of one never comes back
+    final var removed = store.removeOrphansOlderThan(Instant.now().plus(Duration.ofSeconds(1)), 100);
+
+    assertEquals(1, removed, "the sweep did not get through on one connection");
     assertNull(store.read(orphan.payloadReference()));
 
   }
@@ -225,22 +326,6 @@ public class JdbcPhaseTwoPayloadStoreTest {
       }
 
     };
-
-  }
-
-  /**
-   * What a read of the outbox entries does to the connections while the sweep asks it.
-   *
-   * @param connections The database this test works on
-   */
-  private static void borrowAndGiveBack(
-      final JdbcConnectionAccess connections) {
-
-    try {
-      connections.release(connections.acquire());
-    } catch (final SQLException e) {
-      throw new IllegalStateException("the entries could not be asked", e);
-    }
 
   }
 
@@ -292,6 +377,40 @@ public class JdbcPhaseTwoPayloadStoreTest {
       }
       assertTrue(found, "the sweep deletes by CREATED_AT and needs the index over it");
     }
+
+  }
+
+  /**
+   * A payload written at a moment of the test's choosing, which is how a test about the
+   * age sweep gets a row older than the retention without waiting for it.
+   *
+   * @param database The database this test works on
+   * @param reference The payload to age
+   * @param writtenAt The moment it is to have been written at
+   */
+  private static void age(
+      final String database,
+      final String reference,
+      final Instant writtenAt) {
+
+    execute(
+        h2(database),
+        "UPDATE %s SET CREATED_AT = '%s' WHERE REFERENCE = '%s'"
+            .formatted(TABLE_NAME, Timestamp.from(writtenAt), reference));
+
+  }
+
+  @Test
+  @DisplayName("A payload younger than the threshold stays, whatever nothing names it")
+  public void aYoungPayloadStays() {
+
+    final var store = preparedStoreOn("payload-young");
+    final var young = callWith("written a moment ago");
+    store.write(young);
+    age("payload-young", young.payloadReference(), Instant.now().plus(Duration.ofHours(1)));
+
+    assertEquals(0, store.removeOrphansOlderThan(Instant.now(), 100));
+    assertNotNull(store.read(young.payloadReference()));
 
   }
 

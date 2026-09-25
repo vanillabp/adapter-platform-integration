@@ -10,6 +10,7 @@ import org.bson.Document;
 import org.bson.types.Binary;
 
 import com.mongodb.client.MongoCollection;
+import com.mongodb.client.model.Aggregates;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Projections;
 
@@ -32,13 +33,27 @@ import lombok.extern.slf4j.Slf4j;
  * The document is written through the session of the running transaction where MongoDB
  * Panache provides one, exactly like the outbox entry, so the two commit together.
  * Without such a session the write is immediate and a rollback can leave a document
- * behind, which is what {@link #removeOrphansOlderThan(Instant, EntriesNamingPayloads)}
- * is for.
+ * behind, which is what {@link #removeOrphansOlderThan(Instant, int)} is for.
  */
 @Slf4j
 public class MongoPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
 
+  /**
+   * The field the lookup writes the entries naming a payload into. It exists for the
+   * length of the pipeline and is never stored, and it is spelled once because the stage
+   * which fills it and the stage which reads it have to agree.
+   */
+  private static final String NAMING_ENTRIES = "namingEntries";
+
   private final Supplier<MongoCollection<Document>> collection;
+
+  /**
+   * The collection the outbox entries lie in. The housekeeping joins it, so the question
+   * which payloads are still named is answered in the database rather than by a set of
+   * references travelling through the application. A supplier for the same reason the
+   * payload collection is one: the name is read lazily.
+   */
+  private final Supplier<String> entryCollection;
 
   private final TransactionSynchronizationRegistry txRegistry;
 
@@ -48,13 +63,17 @@ public class MongoPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
    * lazily, the same way the outbox reads its own.
    *
    * @param collection Where the payload documents live
+   * @param entryCollection The name of the collection the outbox entries lie in, joined by
+   *          the housekeeping
    * @param txRegistry Used to find the session of the running transaction
    */
   public MongoPhaseTwoPayloadStore(
       final Supplier<MongoCollection<Document>> collection,
+      final Supplier<String> entryCollection,
       final TransactionSynchronizationRegistry txRegistry) {
 
     this.collection = collection;
+    this.entryCollection = entryCollection;
     this.txRegistry = txRegistry;
 
   }
@@ -109,21 +128,26 @@ public class MongoPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
 
   }
 
+  /**
+   * {@inheritDoc}
+   * <p>
+   * The entries are joined in the database: the pipeline reads the payloads which are old
+   * enough, looks each of them up among the entries and keeps the ones nothing found. Only
+   * the ids of those come back, at most as many as asked for, and they go into one
+   * <code>deleteMany</code>. The lookup reads the sparse index over the reference inside an
+   * entry's arguments, which is what makes it a lookup rather than a scan (see decision 76
+   * in the repository's DECISIONS.md).
+   */
   @Override
   public int removeOrphansOlderThan(
       final Instant threshold,
-      final EntriesNamingPayloads entries) {
+      final int maxEntries) {
 
+    if (maxEntries < 1) {
+      return 0;
+    }
     try {
-      final var expired = expiredReferences(threshold);
-      if (expired.isEmpty()) {
-        return 0;
-      }
-      final var stillNamed = entries.stillNaming(expired);
-      final var orphans = expired
-          .stream()
-          .filter(reference -> !stillNamed.contains(reference))
-          .toList();
+      final var orphans = orphanedReferences(threshold, maxEntries);
       if (orphans.isEmpty()) {
         return 0;
       }
@@ -137,6 +161,35 @@ public class MongoPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
       log.warn("Could not remove the orphaned payloads", e);
       return 0;
     }
+
+  }
+
+  /**
+   * The payloads which are old enough to go and which no entry names any more, read in one
+   * pipeline.
+   *
+   * @param threshold Payloads written before this moment are candidates
+   * @param maxEntries The most references to bring back
+   * @return Their references
+   */
+  private List<String> orphanedReferences(
+      final Instant threshold,
+      final int maxEntries) {
+
+    final var namedBy = "args.%s".formatted(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
+    final var references = new ArrayList<String>();
+    collection
+        .get()
+        .aggregate(
+            List
+                .of(
+                    Aggregates.match(Filters.lt("createdAt", Date.from(threshold))),
+                    Aggregates.lookup(entryCollection.get(), "_id", namedBy, NAMING_ENTRIES),
+                    Aggregates.match(Filters.size(NAMING_ENTRIES, 0)),
+                    Aggregates.limit(maxEntries),
+                    Aggregates.project(Projections.include("_id"))))
+        .forEach(document -> references.add(document.getString("_id")));
+    return references;
 
   }
 
@@ -158,29 +211,6 @@ public class MongoPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
         .debug(
             "Removed {} payload(s) which no outbox entry names any more",
             removed);
-
-  }
-
-  /**
-   * The payloads which are old enough to go, read along the index over
-   * <code>createdAt</code>. On a healthy store this reads nothing: a payload is removed
-   * with the dispatch of its entry and with the deletion of that entry, so what stays
-   * beyond the retention either belongs to an entry which waits or belongs to no entry
-   * at all.
-   *
-   * @param threshold Payloads written before this moment
-   * @return Their references
-   */
-  private List<String> expiredReferences(
-      final Instant threshold) {
-
-    final var references = new ArrayList<String>();
-    collection
-        .get()
-        .find(Filters.lt("createdAt", Date.from(threshold)))
-        .projection(Projections.include("_id"))
-        .forEach(document -> references.add(document.getString("_id")));
-    return references;
 
   }
 

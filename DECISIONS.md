@@ -1956,13 +1956,18 @@ where identifiers belong. The reference is added after the idempotency key was d
 no derivation rule ever sees it - a fresh reference per call would otherwise make every call
 unique and deduplicate nothing.
 
-One form for all four stores. Gruelbox owns its table, so a column there was never an option,
-and a second form for the three stores which could take one would mean two lifecycles to get
-right instead of one. Decision 47 weighed a table of VanillaBP's own for a different question
-and refused it, because it would have added a table to the one setup chosen for bringing none.
-That argument does not carry here: a call without a payload writes no row, so an application
-which passes none keeps the setup it had, and one which passes payloads has asked for the
-table.
+A table of its own for the payloads, whichever store an application runs. Decision 47 weighed a
+table of VanillaBP's own for a different question and refused it, because it would have added a
+table to the one setup chosen for bringing none. That argument does not carry here: a call
+without a payload writes no row, so an application which passes none keeps the setup it had, and
+one which passes payloads has asked for the table.
+
+*This entry used to go on with "one form for all four stores", and that sentence fell on
+2026-09-24. It said that the way a payload is found and removed has to be the same everywhere,
+which made the cheapest store pay what the most expensive one costs. Stephan decided the
+opposite: every store may optimize how it sweeps, and where it is expensive it should be
+expensive at that store alone. What stays of this entry is the rest of it - the payload lies
+beside the entry and the entry names it.*
 
 The price is named rather than hidden: one extra read per dispatch attempt of a call which
 carries a payload, by primary key, and none at all for a call which carries none.

@@ -105,7 +105,9 @@ public class TheRuntimeAndTheChangelogBuildTheSameTablesTest {
     final var name = "schema-from-the-runtime";
     final JdbcConnectionAccess connections = () -> h2(name);
     new JdbcPhaseTwoOutboxDispatcher(
-        connections, new PhaseTwoOutboxProperties(), JdbcPhaseTwoOutboxStore.DEFAULT_TABLE_NAME, new JdbcPhaseTwoPayloadStore(connections, JdbcPhaseTwoPayloadStore.DEFAULT_TABLE_NAME), () -> null, () -> null, "JdbcPhaseTwoOutbox")
+        connections, new PhaseTwoOutboxProperties(), JdbcPhaseTwoOutboxStore.DEFAULT_TABLE_NAME, new JdbcPhaseTwoPayloadStore(connections, JdbcPhaseTwoPayloadStore.DEFAULT_TABLE_NAME, JdbcPhaseTwoOutboxStore
+            .entriesNamingTheirPayload(
+                JdbcPhaseTwoOutboxStore.DEFAULT_TABLE_NAME)), () -> null, () -> null, "JdbcPhaseTwoOutbox")
         .prepareSchema();
     new JdbcTaskDeliveryStore(connections, JdbcTaskDeliveryStore.DEFAULT_TABLE_NAME)
         .createSchemaIfNotExists();

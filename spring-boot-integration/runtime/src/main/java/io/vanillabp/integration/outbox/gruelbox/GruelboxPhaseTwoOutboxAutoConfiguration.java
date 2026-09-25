@@ -318,7 +318,13 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
             DataSourceUtils.releaseConnection(connection, dataSource);
 
           }
-        }, payloadTable);
+        }, payloadTable,
+        // gruelbox owns its table and keeps a call as one serialized invocation, so
+        // there is no column to join on: the housekeeping looks for the reference
+        // inside that text, which costs a scan of the entries (see decision 76 in the
+        // repository's DECISIONS.md)
+        JdbcPhaseTwoPayloadStore.EntriesNamingTheirPayload
+            .insideAText(DEFAULT_OUTBOX_TABLE_NAME, "invocation"));
     if (vanillaBpProperties.getOutbox().isCreateSchema()) {
       store.createSchemaIfNotExists();
     } else {

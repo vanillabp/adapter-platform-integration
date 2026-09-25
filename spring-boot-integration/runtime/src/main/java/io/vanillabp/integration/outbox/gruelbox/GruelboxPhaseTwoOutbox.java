@@ -3,11 +3,7 @@ package io.vanillabp.integration.outbox.gruelbox;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Instant;
-import java.util.Collection;
-import java.util.LinkedHashSet;
 import java.util.OptionalLong;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 import javax.sql.DataSource;
 
@@ -304,62 +300,6 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
       log.debug("Could not read the next attempt time of gruelbox' outbox table '{}'", tableName, e);
       return null;
     }
-
-  }
-
-  /**
-   * Which of the given payloads an entry of gruelbox' table still names, asked by the
-   * payload store before it removes anything by age. An entry which waits, and an entry
-   * gruelbox blocked, keeps its bytes for as long as it is there.
-   * <p>
-   * gruelbox keeps a call as one serialized invocation, so there is no column to join
-   * on: the statement looks for the reference anywhere in that text. It costs a scan of
-   * the table, and no index can take that away - gruelbox owns this table, so VanillaBP
-   * cannot add a column to it at all (see decision 76 in the repository's DECISIONS.md).
-   * The question is asked only where a payload outlived the retention, which on a healthy
-   * store is never, but an entry gruelbox blocked keeps its payload.
-   * <p>
-   * Where the table does not answer, every payload counts as still named. Keeping bytes
-   * nobody needs costs space; removing the bytes of an entry somebody is about to open
-   * again costs the dispatch.
-   *
-   * @param references The payloads the housekeeping is about to remove
-   * @return Those of them an entry names
-   */
-  public Set<String> stillNaming(
-      final Collection<String> references) {
-
-    if (references.isEmpty()) {
-      return Set.copyOf(references);
-    }
-    final var condition = references
-        .stream()
-        .map(reference -> "invocation LIKE ?")
-        .collect(Collectors.joining(" OR "));
-    final var stillNamed = new LinkedHashSet<String>();
-    try (var connection = dataSource.getConnection(); var statement = connection
-        .prepareStatement("SELECT invocation FROM %s WHERE %s".formatted(tableName, condition))) {
-      var parameter = 1;
-      for (final var reference : references) {
-        statement.setString(parameter++, "%%%s%%".formatted(reference));
-      }
-      try (var resultSet = statement.executeQuery()) {
-        while (resultSet.next()) {
-          final var invocation = resultSet.getString(1);
-          // the text is searched rather than deserialized: an application may build its
-          // persistor with a serializer of its own, and an entry this store cannot read
-          // still names its payload
-          references
-              .stream()
-              .filter(invocation::contains)
-              .forEach(stillNamed::add);
-        }
-      }
-    } catch (final SQLException e) {
-      log.warn("Could not ask gruelbox' outbox table '{}' which payloads it still names", tableName, e);
-      return Set.copyOf(references);
-    }
-    return stillNamed;
 
   }
 

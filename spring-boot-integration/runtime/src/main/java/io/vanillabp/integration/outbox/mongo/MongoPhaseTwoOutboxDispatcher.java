@@ -1,8 +1,6 @@
 package io.vanillabp.integration.outbox.mongo;
 
 import java.time.Instant;
-import java.util.Collection;
-import java.util.Set;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -19,6 +17,7 @@ import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics
 import io.vanillabp.integration.adapter.migration.outbox.DispatchLanes;
 import io.vanillabp.integration.adapter.migration.outbox.DispatchLease;
 import io.vanillabp.integration.adapter.migration.outbox.DueEntryPoller;
+import io.vanillabp.integration.adapter.migration.outbox.Housekeeping;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import jakarta.annotation.PreDestroy;
@@ -128,7 +127,7 @@ public class MongoPhaseTwoOutboxDispatcher {
     this.collection = collection;
     this.metrics = metrics;
     this.payloadStore = new MongoPhaseTwoPayloadStore(
-        mongoTemplate, properties.getMongo().payloadCollectionName());
+        mongoTemplate, properties.getMongo().payloadCollectionName(), collection);
     this.poller = new DueEntryPoller(
         "vanillabp-outbox", properties.getPollInterval(), this::poll, this::earliestDueAt);
     this.lanes = new DispatchLanes("vanillabp-outbox-dispatch", properties.getDispatchThreads());
@@ -760,36 +759,9 @@ public class MongoPhaseTwoOutboxDispatcher {
             .lt(expiredBefore)),
         collection);
     // the payloads of the entries just deleted, and what a rollback without a MongoDB
-    // transaction left behind. What an entry still names is not removed by age at all
-    payloadStore.removeOrphansOlderThan(expiredBefore, this::referencesStillNamed);
-
-  }
-
-  /**
-   * Which of the given payloads an entry of this collection still names, asked with one
-   * query. The reference lies in the entry's <code>args</code>, and MongoDB indexes a field
-   * inside a document, so a sparse index over it answers this without reading the collection
-   * (see decision 76 in the repository's DECISIONS.md). The question is asked only where a
-   * payload outlived the retention, which on a healthy store is never - but an entry which is
-   * stuck keeps its payload, so one stuck entry means this runs on every poll.
-   *
-   * @param references The payloads the housekeeping is about to remove
-   * @return Those of them an entry names
-   */
-  private Set<String> referencesStillNamed(
-      final Collection<String> references) {
-
-    final var named = "args.%s".formatted(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
-    try {
-      return Set.copyOf(
-          mongoTemplate.findDistinct(
-              Query.query(Criteria.where(named).in(references)), named, collection, String.class));
-    } catch (final RuntimeException e) {
-      // nothing is removed then: a payload kept too long costs space, a payload removed
-      // from an entry which still waits costs the dispatch
-      log.warn("Could not ask the outbox collection '{}' which payloads it still names", collection, e);
-      return Set.copyOf(references);
-    }
+    // transaction left behind. What an entry still names is not removed by age at all -
+    // the store joins the entries itself, in the database
+    payloadStore.removeOrphansOlderThan(expiredBefore, Housekeeping.ROWS_PER_RUN);
 
   }
 

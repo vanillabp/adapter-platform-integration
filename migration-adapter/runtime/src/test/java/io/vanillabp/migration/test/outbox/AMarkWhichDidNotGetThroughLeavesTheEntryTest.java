@@ -35,6 +35,7 @@ import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxPropertie
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxDispatcher;
+import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxStore;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
@@ -203,9 +204,10 @@ public class AMarkWhichDidNotGetThroughLeavesTheEntryTest {
 
     private PayloadStoreCountingRemovals(
         final JdbcConnectionAccess connectionAccess,
-        final String tableName) {
+        final String tableName,
+        final EntriesNamingTheirPayload entries) {
 
-      super(connectionAccess, tableName);
+      super(connectionAccess, tableName, entries);
 
     }
 
@@ -341,7 +343,8 @@ public class AMarkWhichDidNotGetThroughLeavesTheEntryTest {
     final var table = "OUTBOX_FAILED_MARK_DONE";
     final var connections = databaseNamed("a-mark-which-did-not-get-through");
     final var payloadStore = new PayloadStoreCountingRemovals(
-        connections, table + JdbcPhaseTwoPayloadStore.TABLE_NAME_SUFFIX);
+        connections, table + JdbcPhaseTwoPayloadStore.TABLE_NAME_SUFFIX, JdbcPhaseTwoOutboxStore
+            .entriesNamingTheirPayload(table));
     final var dispatcher = dispatcherOf(connections, payloadStore, aRouterWhoseDispatch(null), table);
     dispatcher.prepareSchema();
     final var call = callWith("the state the next attempt has to carry");
@@ -384,7 +387,8 @@ public class AMarkWhichDidNotGetThroughLeavesTheEntryTest {
     final var table = "OUTBOX_FAILED_MARK_BLOCKED";
     final var connections = databaseNamed("a-blocking-which-did-not-get-through");
     final var payloadStore = new JdbcPhaseTwoPayloadStore(
-        connections, table + JdbcPhaseTwoPayloadStore.TABLE_NAME_SUFFIX);
+        connections, table + JdbcPhaseTwoPayloadStore.TABLE_NAME_SUFFIX, JdbcPhaseTwoOutboxStore
+            .entriesNamingTheirPayload(table));
     // the failure which blocks an entry with one attempt, so the blocking write is the
     // first thing the dispatcher tries after the attempt
     final var permanent = new PhaseTwoPermanentFailure("the adapter says repeating cannot help", null);

@@ -17,6 +17,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
+import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxStore;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
@@ -217,7 +218,8 @@ public class TestApplication {
 
     return new JdbcPhaseTwoOutbox(
         dataSource, vanillaBpProperties.getOutbox(), HOT_OUTBOX_TABLE, new JdbcPhaseTwoPayloadStore(
-            JdbcPhaseTwoOutbox.connectionsOf(dataSource), HOT_PAYLOAD_TABLE), phaseTwoRouter, metrics);
+            JdbcPhaseTwoOutbox.connectionsOf(dataSource), HOT_PAYLOAD_TABLE, JdbcPhaseTwoOutboxStore
+                .entriesNamingTheirPayload(HOT_OUTBOX_TABLE)), phaseTwoRouter, metrics);
 
   }
 

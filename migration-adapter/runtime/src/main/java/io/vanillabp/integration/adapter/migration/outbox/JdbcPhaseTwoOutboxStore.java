@@ -141,6 +141,36 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
   }
 
   /**
+   * Where the entries of this store say which payload they carry, which is what its
+   * payload store house-keeps along.
+   *
+   * @param properties The outbox configuration
+   * @return The description to build the payload store with
+   */
+  public static JdbcPhaseTwoPayloadStore.EntriesNamingTheirPayload entriesNamingTheirPayload(
+      final PhaseTwoOutboxProperties properties) {
+
+    return entriesNamingTheirPayload(tableName(properties));
+
+  }
+
+  /**
+   * Where the entries of one table of this shape say which payload they carry. The
+   * reference stands among the serialized arguments, where an identifier belongs
+   * (decision 62 in the repository's DECISIONS.md), so the entries are asked with a
+   * condition looking into that text.
+   *
+   * @param tableName The table the entries lie in
+   * @return The description to build a payload store with
+   */
+  public static JdbcPhaseTwoPayloadStore.EntriesNamingTheirPayload entriesNamingTheirPayload(
+      final String tableName) {
+
+    return JdbcPhaseTwoPayloadStore.EntriesNamingTheirPayload.insideAText(tableName, "ARGS");
+
+  }
+
+  /**
    * Resolves the configured table name (<code>vanillabp.outbox.jdbc.table</code>,
    * falling back to {@link #DEFAULT_TABLE_NAME}).
    *

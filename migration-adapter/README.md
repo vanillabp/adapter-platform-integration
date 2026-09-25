@@ -2205,13 +2205,18 @@ is what `#aFullLaneDoesNotHoldTheConnectionItsDispatchNeeds` measures; with a bi
 connection missing where the work is. Every other write of this dispatcher already borrows one for
 the moment it needs it, so the poller is now the same shape as the rest.
 
-The housekeeping at the end of a poll is the same shape too, and it took a second pass to get
-there. Deleting the dispatched entries, reading which payloads are old enough, asking the entries
-which of them they still name and deleting the rest are four steps, each on a connection borrowed
-and given back. Holding one across them means waiting for a connection the same thread is holding,
-because the payload table and the outbox table are read by two different classes.
-`JdbcPhaseTwoPayloadStoreTest#theSweepHoldsNoConnectionWhileItAsksTheEntries` hands the store a
-database which refuses a second connection, and
+The housekeeping at the end of a poll is the same shape too, and it took two passes to get there.
+It used to read which payloads were old enough, ask the entries which of them they still named and
+delete the rest, each step on a connection borrowed and given back, and each step carrying a set of
+unknown size through the application. It is one statement now: the payload store deletes the
+payloads which are old enough and which no entry names, asking the entries inside its own
+condition. What that condition looks like is the store's own business and differs per store, which
+is why the store is built with the table its entries lie in and the column they name a payload in
+(`JdbcPhaseTwoPayloadStore.EntriesNamingTheirPayload`). Every run removes at most
+`Housekeeping.ROWS_PER_RUN` rows, so a store with a backlog is worked off over several runs instead
+of in one statement nobody measured.
+`JdbcPhaseTwoPayloadStoreTest#theSweepHoldsOneConnectionAtATime` hands the store a database which
+refuses a second connection, `#theSweepRemovesAtMostWhatItWasAllowedTo` holds the ceiling, and
 `#aFullLaneDoesNotHoldTheConnectionItsDispatchNeeds` runs the real payload store instead of one
 with its housekeeping taken out.
 

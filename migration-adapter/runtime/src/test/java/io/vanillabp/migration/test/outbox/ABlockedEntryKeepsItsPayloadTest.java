@@ -22,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxDispatcher;
+import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxStore;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore;
 import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.spi.PhaseTwoCall;
@@ -151,7 +152,8 @@ public class ABlockedEntryKeepsItsPayloadTest {
   @DisplayName("A blocked entry keeps its payload, a dispatched entry takes its own with it, an orphan goes")
   public void theRetentionCountsAtTheEntry() throws Exception {
 
-    final var payloadStore = new JdbcPhaseTwoPayloadStore(connections, PAYLOAD_TABLE);
+    final var payloadStore = new JdbcPhaseTwoPayloadStore(
+        connections, PAYLOAD_TABLE, JdbcPhaseTwoOutboxStore.entriesNamingTheirPayload(OUTBOX_TABLE));
     final var dispatcher = new JdbcPhaseTwoOutboxDispatcher(
         connections, new PhaseTwoOutboxProperties(), OUTBOX_TABLE, payloadStore, () -> null, () -> null, "JdbcPhaseTwoOutbox");
     dispatcher.prepareSchema();

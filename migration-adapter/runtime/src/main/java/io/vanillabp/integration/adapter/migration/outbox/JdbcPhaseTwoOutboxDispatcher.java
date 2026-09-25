@@ -6,12 +6,8 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
@@ -261,17 +257,6 @@ public class JdbcPhaseTwoOutboxDispatcher {
   private static final String DELETE_EXPIRED_DONE_ENTRIES = """
       DELETE FROM %s \
       WHERE STATUS = '%s' AND DONE_AT < ?""";
-
-  /**
-   * The arguments of the entries which name one of the payloads the housekeeping is
-   * about to remove. There is no column for a payload reference - the entry keeps it
-   * among its arguments, which is where an identifier belongs (decision 62 in the
-   * repository's DECISIONS.md) - so the reference is looked for inside the serialized
-   * arguments and the rows which come back are read properly afterwards. The condition
-   * is repeated per reference asked about, joined by OR.
-   */
-  private static final String SELECT_ARGS_NAMING = """
-      SELECT ARGS FROM %s WHERE %s""";
 
   /**
    * The columns a later version of VanillaBP added to this table. A table created by an
@@ -965,10 +950,10 @@ public class JdbcPhaseTwoOutboxDispatcher {
    * takes.
    * <p>
    * Every step borrows its connection for the moment it needs it, the way the rest of this
-   * dispatcher does. The payload store borrows one of its own, and it asks this class back
-   * which payloads the entries still name, which borrows a third - so a thread holding one
-   * across the whole cleanup would wait for a connection it is holding itself. On a pool of
-   * one that is a deadlock.
+   * dispatcher does. The payload store borrows one of its own, for one statement which asks
+   * the entries about the payloads itself - so a thread holding a connection across the whole
+   * cleanup would wait for a connection it is holding itself. On a pool of one that is a
+   * deadlock.
    */
   private void cleanupExpiredEntries() throws SQLException {
 
@@ -976,8 +961,9 @@ public class JdbcPhaseTwoOutboxDispatcher {
     deleteEntriesDoneBefore(expiredBefore);
     // the payloads of the entries just deleted, and what a crash between the two writes
     // of a schedule left behind. Nothing else is old enough to be gone, and what an
-    // entry still names is not removed by age at all
-    payloadStore.removeOrphansOlderThan(expiredBefore, this::referencesStillNamed);
+    // entry still names is not removed by age at all - the store asks its own entries
+    // about that, in its own database
+    payloadStore.removeOrphansOlderThan(expiredBefore, Housekeeping.ROWS_PER_RUN);
 
   }
 
@@ -1586,60 +1572,6 @@ public class JdbcPhaseTwoOutboxDispatcher {
     metrics
         .get()
         .outboxEntryBlocked(storeName, operation, permanent);
-
-  }
-
-  /**
-   * Which of the given payloads an entry of this table still names, asked with one
-   * statement on a connection of its own. It costs a scan of the outbox table, because a
-   * reference lies inside the serialized arguments and no index reaches into a column of
-   * text. The question is asked only where a payload outlived the retention, which on a
-   * healthy store is never - but an entry which is stuck keeps its payload, so one stuck
-   * entry means this runs on every poll, and the payload store asks it once per hundred
-   * payloads it wants to remove. What that costs was measured, and why the table has no
-   * column to index instead is decision 76 in the repository's DECISIONS.md.
-   *
-   * @param references The payloads the housekeeping is about to remove
-   * @return Those of them an entry names
-   */
-  private Set<String> referencesStillNamed(
-      final Collection<String> references) {
-
-    final var condition = references
-        .stream()
-        .map(reference -> "ARGS LIKE ?")
-        .collect(Collectors.joining(" OR "));
-    final var stillNamed = new LinkedHashSet<String>();
-    Connection connection = null;
-    try {
-      connection = connections.acquire();
-      try (var statement = connection.prepareStatement(SELECT_ARGS_NAMING.formatted(tableName, condition))) {
-        var parameter = 1;
-        for (final var reference : references) {
-          statement.setString(parameter++, "%%%s%%".formatted(reference));
-        }
-        try (var resultSet = statement.executeQuery()) {
-          while (resultSet.next()) {
-            // read properly rather than trusted from the pattern: LIKE matches a
-            // reference wherever it stands, and what counts is the argument itself
-            final var named = PhaseTwoCall
-                .deserializeArgs(resultSet.getString(1))
-                .get(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
-            if ((named != null) && references.contains(named)) {
-              stillNamed.add(named);
-            }
-          }
-        }
-      }
-    } catch (final SQLException e) {
-      // nothing is removed then: a payload kept too long costs space, a payload removed
-      // from an entry which still waits costs the dispatch
-      log.warn("Could not ask the outbox table '{}' which payloads it still names", tableName, e);
-      return Set.copyOf(references);
-    } finally {
-      release(connection);
-    }
-    return stillNamed;
 
   }
 

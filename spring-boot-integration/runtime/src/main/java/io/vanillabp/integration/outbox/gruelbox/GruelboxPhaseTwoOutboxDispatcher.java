@@ -11,6 +11,7 @@ import com.gruelbox.transactionoutbox.TransactionOutbox;
 
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.outbox.DueEntryPoller;
+import io.vanillabp.integration.adapter.migration.outbox.Housekeeping;
 import io.vanillabp.integration.deployment.SpringBootDeploymentService;
 import io.vanillabp.integration.spi.PhaseTwoPayloadStore;
 import jakarta.annotation.PreDestroy;
@@ -77,9 +78,8 @@ public class GruelboxPhaseTwoOutboxDispatcher {
   private final TransactionOutbox transactionOutbox;
 
   /**
-   * The store this dispatcher polls. It answers when the next flush has something to do
-   * and which payloads its entries still name. Never <code>null</code>: both questions
-   * are asked on every poll.
+   * The store this dispatcher polls. It answers when the next flush has something to do.
+   * Never <code>null</code>: that question is asked on every poll.
    */
   private final GruelboxPhaseTwoOutbox outbox;
 
@@ -110,8 +110,7 @@ public class GruelboxPhaseTwoOutboxDispatcher {
    * @param properties The bound <code>vanillabp.outbox</code> section
    * @param submitter The submitter the outbox was built with, <code>null</code> where
    *          gruelbox was built with a submitter of somebody else's
-   * @param outbox The store, asked when the next flush has something to do and which
-   *          payloads its entries still name
+   * @param outbox The store, asked when the next flush has something to do
    * @param payloadStore Where the payloads of this outbox lie
    * @throws IllegalArgumentException If the store or the payload store is missing
    */
@@ -246,8 +245,9 @@ public class GruelboxPhaseTwoOutboxDispatcher {
     }
     // the payloads of the entries the flush deleted, and what a crash between the two
     // writes of a schedule left behind. What an entry still names stays with it,
-    // whether that entry waits or is blocked, and this flush was going to happen anyway
-    payloadStore.removeOrphansOlderThan(Instant.now().minus(retention), outbox::stillNaming);
+    // whether that entry waits or is blocked, and the store asks gruelbox' table about
+    // that itself, in one statement
+    payloadStore.removeOrphansOlderThan(Instant.now().minus(retention), Housekeeping.ROWS_PER_RUN);
 
   }
 

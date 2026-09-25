@@ -32,6 +32,7 @@ import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxPropertie
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxDispatcher;
+import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxStore;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
@@ -302,7 +303,8 @@ public class AnEntryWaitingForItsLaneTest {
       final String table) {
 
     final var payloads = new JdbcPhaseTwoPayloadStore(
-        connections, table + JdbcPhaseTwoPayloadStore.TABLE_NAME_SUFFIX);
+        connections, table + JdbcPhaseTwoPayloadStore.TABLE_NAME_SUFFIX, JdbcPhaseTwoOutboxStore
+            .entriesNamingTheirPayload(table));
     return new JdbcPhaseTwoOutboxDispatcher(
         connections, properties, table, payloads, () -> router, () -> VanillaBpMetrics.NONE, "JdbcPhaseTwoOutbox");
 

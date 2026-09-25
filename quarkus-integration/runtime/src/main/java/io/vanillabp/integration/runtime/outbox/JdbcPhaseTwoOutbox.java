@@ -252,7 +252,8 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
 
     if (payloadStore == null) {
       payloadStore = new JdbcPhaseTwoPayloadStore(
-          connections(), JdbcPhaseTwoOutboxStore.payloadTableName(properties()));
+          connections(), JdbcPhaseTwoOutboxStore.payloadTableName(properties()), JdbcPhaseTwoOutboxStore
+              .entriesNamingTheirPayload(properties()));
     }
     return payloadStore;
 
