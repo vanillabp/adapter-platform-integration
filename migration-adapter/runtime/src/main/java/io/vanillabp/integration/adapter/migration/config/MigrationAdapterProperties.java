@@ -1336,7 +1336,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   /**
    * Refuses the permission of {@link #allowsFullSyncWithBpms(String, String)} wherever it
    * stands somewhere else than at a workflow. Every level it can be written at is bound,
-   * so the line is answered rather than ignored, and the answer says where it belongs.
+   * so the line is answered rather than ignored, and the answer says where it belongs. It
+   * reads like every other misplaced setting, see {@link MisplacedSettings}.
    *
    * @throws IllegalStateException Naming the place the permission was written at and the
    *           key it belongs under
@@ -1383,19 +1384,16 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     if (misplaced.isEmpty()) {
       return;
     }
-    // the maps come from a binder and keep no order, so the message is sorted to read
-    // the same way on every boot
-    misplaced.sort(String::compareTo);
-    throw new IllegalStateException(
+    throw MisplacedSettings.refuse(
+        "Sharing a whole workflow aggregate is allowed at the workflow and nowhere else",
+        misplaced,
+        "the workflow it is meant for",
+        List.of(
+            "%s.workflow-modules.<workflow-module>.workflows.<bpmn-process-id>.allow-full-sync-with-bpms: true"
+                .formatted(PREFIX)),
         """
-            Sharing a whole workflow aggregate is allowed at the workflow and nowhere else, \
-            but it is configured at:
-              %s
-            Move each of them to the workflow it is meant for:
-              %s.workflow-modules.<workflow-module>.workflows.<bpmn-process-id>.allow-full-sync-with-bpms: true
             An inherited permission would cover the next workflow somebody adds to the module \
-            as well, and that is the workflow nobody looked at."""
-            .formatted(String.join("\n  ", misplaced), PREFIX));
+            as well, and that is the workflow nobody looked at.""");
 
   }
 
@@ -1405,7 +1403,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * module and at the adapter only: VanillaBP loads the BPMN files before it knows which
    * process or which task is in them (see decision 80 in the repository's DECISIONS.md).
    * A line written at the workflow or at a task would do nothing at all, so it is
-   * answered instead of ignored.
+   * answered instead of ignored. It reads like every other misplaced setting, see
+   * {@link MisplacedSettings}.
    *
    * @throws IllegalStateException Naming every place a location was written at and the
    *           two keys it may be written at
@@ -1445,20 +1444,17 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     if (misplaced.isEmpty()) {
       return;
     }
-    // the maps come from a binder and keep no order, so the message is sorted to read
-    // the same way on every boot
-    misplaced.sort(String::compareTo);
-    throw new IllegalStateException(
+    throw MisplacedSettings.refuse(
+        "The location of an adapter's BPMN files is read at the workflow module and at the adapter",
+        misplaced,
+        "one of these two keys",
+        List.of(
+            "%s.workflow-modules.<workflow-module>.adapters.<adapter>.resources-location: classpath*:<location>"
+                .formatted(PREFIX),
+            "%s.adapters.<adapter>.resources-location: classpath*:<location>".formatted(PREFIX)),
         """
-            The location of an adapter's BPMN files is read at the workflow module and at \
-            the adapter, but it is configured at:
-              %s
-            Move each of them to one of these two keys:
-              %s.workflow-modules.<workflow-module>.adapters.<adapter>.resources-location: classpath*:<location>
-              %s.adapters.<adapter>.resources-location: classpath*:<location>
             VanillaBP loads the BPMN files before it knows which process or which task is in \
-            them, so a location below the workflow module is never read."""
-            .formatted(String.join("\n  ", misplaced), PREFIX, PREFIX));
+            them, so a location below the workflow module is never read.""");
 
   }
 

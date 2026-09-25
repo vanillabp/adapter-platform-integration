@@ -2724,3 +2724,21 @@ there instead. The message names every place a location was written at and the t
 written at, which is the same answer decision 66 gives for the permission to share a whole
 aggregate. Both are settings a level binds without reading, and a setting which can be written
 and does nothing is worse than one which cannot be written at all.
+
+### 89. A setting written below the level it is read at ends the startup, and all of them say it the same way
+
+One class carries what an adapter may be told, and all four levels of decision 7 bind that class.
+A key therefore binds at a workflow and at a task even where the code reading it never asks a
+task. Such a line can be written, nothing complains, and nothing happens. The application boots
+and the setting is not there.
+
+Decision 66 ended the startup for the permission to share a whole aggregate, decision 80 for the
+location of the BPMN files. Each wrote its own message in its own words, and the next key would
+have written a third. `MisplacedSettings.refuse` is the shape all of them use now. It names which
+levels read the setting, the keys the application wrote, the keys it may write instead, and why
+the written level cannot be read. The keys are printed sorted, so the same configuration reads
+the same way on every boot.
+
+The rule this shape carries is the general one: a key which binds below the level it is read at
+ends the startup. Dropping the binding is the other way out and it is not open to us, because one
+class serves all four levels and a key dropped there is dropped everywhere.
