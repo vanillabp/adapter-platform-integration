@@ -612,9 +612,8 @@ public class BpmsInitiatedStarts {
 
   /**
    * Names the start events the BPMS reported, for a message which has to say which ones
-   * were there. What an adapter added about an event is shown behind its kind: a signal
-   * event without its name, or a timer without its cycle, leaves the reader with an
-   * element id to look up in the model.
+   * were there. A signal event is shown with its name behind its kind, because without it
+   * the reader is left with an element id to look up in the model.
    *
    * @param startEvents The start events the adapter reported
    * @return One text naming every event
@@ -632,12 +631,9 @@ public class BpmsInitiatedStarts {
   private static String describeStartEvent(
       final BpmsInitiatedStartSpec spec) {
 
-    final var addedByTheAdapter = spec.signalName() != null
-        ? spec.signalName()
-        : spec.description();
-    return addedByTheAdapter == null
+    return spec.signalName() == null
         ? "'%s' (%s)".formatted(spec.elementId(), spec.kind())
-        : "'%s' (%s: %s)".formatted(spec.elementId(), spec.kind(), addedByTheAdapter);
+        : "'%s' (%s: %s)".formatted(spec.elementId(), spec.kind(), spec.signalName());
 
   }
 

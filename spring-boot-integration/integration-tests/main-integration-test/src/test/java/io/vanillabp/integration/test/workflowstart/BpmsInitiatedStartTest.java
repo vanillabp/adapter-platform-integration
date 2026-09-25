@@ -159,7 +159,7 @@ public class BpmsInitiatedStartTest {
                   .of(
                       BpmsInitiatedStartSpec.of(TIMER_EVENT, BpmsStartTrigger.Kind.TIMER),
                       new BpmsInitiatedStartSpec(
-                          SIGNAL_EVENT, BpmsStartTrigger.Kind.SIGNAL, "OrderReceived", null))
+                          SIGNAL_EVENT, BpmsStartTrigger.Kind.SIGNAL, "OrderReceived"))
               : List.of();
 
     }
