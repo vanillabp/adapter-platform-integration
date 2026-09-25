@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -281,6 +282,12 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * workflow module ID, value the location WITHOUT the adapter ID (which is
    * appended per adapter, see
    * {@link #getAdapterResourcesLocationsFor(String, String)}).
+   * <p>
+   * Spring Boot binds a map through its getter, so this one is a configuration key
+   * whatever accessors it carries. It is therefore marked unsupported in
+   * <code>META-INF/additional-spring-configuration-metadata.json</code> of the Spring Boot
+   * module, which keeps a development environment from offering a key whose value the next
+   * derivation throws away.
    */
   @Builder.Default
   private Map<String, List<String>> conventionalResourcesLocations = Map.of();
@@ -1191,6 +1198,25 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   }
 
+  /**
+   * The configured adapter ids for a message which lists them, sorted: the sections come
+   * from a binder and keep no order, so the same configuration would otherwise name them
+   * differently from one boot to the next.
+   *
+   * @param separator What goes between two ids
+   * @return The ids, joined
+   */
+  private String configuredAdapterIdsJoinedBy(
+      final String separator) {
+
+    return adapters
+        .keySet()
+        .stream()
+        .sorted()
+        .collect(Collectors.joining(separator));
+
+  }
+
   private Stream<String> unknownAdapterKeys(
       final Map<String, ? extends AdapterProperties> adaptersOfLevel,
       final String keyPrefixOfLevel) {
@@ -1317,7 +1343,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   /**
    * Refuses the permission of {@link #allowsFullSyncWithBpms(String, String)} wherever it
    * stands somewhere else than at a workflow. Every level it can be written at is bound,
-   * so the line is answered rather than ignored, and the answer says where it belongs.
+   * so the line is answered rather than ignored, and the answer says where it belongs. It
+   * reads like every other misplaced setting, see {@link MisplacedSettings}.
    *
    * @throws IllegalStateException Naming the place the permission was written at and the
    *           key it belongs under
@@ -1364,16 +1391,16 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     if (misplaced.isEmpty()) {
       return;
     }
-    throw new IllegalStateException(
+    throw MisplacedSettings.refuse(
+        "Sharing a whole workflow aggregate is allowed at the workflow and nowhere else",
+        misplaced,
+        "the workflow it is meant for",
+        List.of(
+            "%s.workflow-modules.<workflow-module>.workflows.<bpmn-process-id>.allow-full-sync-with-bpms: true"
+                .formatted(PREFIX)),
         """
-            Sharing a whole workflow aggregate is allowed at the workflow and nowhere else, \
-            but it is configured at:
-              %s
-            Move each of them to the workflow it is meant for:
-              %s.workflow-modules.<workflow-module>.workflows.<bpmn-process-id>.allow-full-sync-with-bpms: true
             An inherited permission would cover the next workflow somebody adds to the module \
-            as well, and that is the workflow nobody looked at."""
-            .formatted(String.join("\n  ", misplaced), PREFIX));
+            as well, and that is the workflow nobody looked at.""");
 
   }
 
@@ -1383,7 +1410,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * module and at the adapter only: VanillaBP loads the BPMN files before it knows which
    * process or which task is in them (see decision 80 in the repository's DECISIONS.md).
    * A line written at the workflow or at a task would do nothing at all, so it is
-   * answered instead of ignored.
+   * answered instead of ignored. It reads like every other misplaced setting, see
+   * {@link MisplacedSettings}.
    *
    * @throws IllegalStateException Naming every place a location was written at and the
    *           two keys it may be written at
@@ -1423,20 +1451,107 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     if (misplaced.isEmpty()) {
       return;
     }
-    // the maps come from a binder and keep no order, so the message is sorted to read
-    // the same way on every boot
-    misplaced.sort(String::compareTo);
-    throw new IllegalStateException(
+    throw MisplacedSettings.refuse(
+        "The location of an adapter's BPMN files is read at the workflow module and at the adapter",
+        misplaced,
+        "one of these two keys",
+        List.of(
+            "%s.workflow-modules.<workflow-module>.adapters.<adapter>.resources-location: classpath*:<location>"
+                .formatted(PREFIX),
+            "%s.adapters.<adapter>.resources-location: classpath*:<location>".formatted(PREFIX)),
         """
-            The location of an adapter's BPMN files is read at the workflow module and at \
-            the adapter, but it is configured at:
-              %s
-            Move each of them to one of these two keys:
-              %s.workflow-modules.<workflow-module>.adapters.<adapter>.resources-location: classpath*:<location>
-              %s.adapters.<adapter>.resources-location: classpath*:<location>
             VanillaBP loads the BPMN files before it knows which process or which task is in \
-            them, so a location below the workflow module is never read."""
-            .formatted(String.join("\n  ", misplaced), PREFIX, PREFIX));
+            them, so a location below the workflow module is never read.""");
+
+  }
+
+  /**
+   * An adapter setting which is about a whole BPMN process: the name it is written under,
+   * and how to tell that a level wrote it.
+   *
+   * @param key The last segment of the property key
+   * @param writtenHere Whether the given level says anything about the setting
+   */
+  private record SettingOfAWholeProcess(
+                                        String key,
+                                        Predicate<AdapterProperties> writtenHere) {
+  }
+
+  /**
+   * The adapter settings which are about a whole BPMN process. Everything reading one of
+   * them asks for a workflow and never for a task, so a line at a task is refused by
+   * {@link #refuseSettingsOfAWholeProcessWrittenAtATask()}.
+   */
+  private static final List<SettingOfAWholeProcess> SETTINGS_OF_A_WHOLE_PROCESS = List.of(
+      new SettingOfAWholeProcess(
+          "name-clash-avoidance", adapter -> adapter.getNameClashAvoidance() != null),
+      new SettingOfAWholeProcess(
+          "prefix-task-definitions-per-process", adapter -> adapter.getPrefixTaskDefinitionsPerProcess() != null),
+      new SettingOfAWholeProcess(
+          "outfaded-versions", adapter -> (adapter.getOutfadedVersions() != null) && !adapter.getOutfadedVersions()
+              .isEmpty()),
+      new SettingOfAWholeProcess(
+          "outfaded-versions-in-use", adapter -> adapter.getOutfadedVersionsInUse() != null));
+
+  /**
+   * Refuses a setting of a whole BPMN process written at a single task. The keys bind at
+   * all four levels like every other adapter setting, because one class carries what an
+   * adapter may be told, but the task level is read by nobody:
+   * {@link io.vanillabp.integration.adapter.migration.scoping.NameClashAvoidanceService}
+   * and {@code OutfadedProcessVersions} both ask
+   * {@link #resolveForAdapter(String, String, String, String, Function)} without a task.
+   * A line there would do nothing at all, so it is answered instead of ignored (see
+   * decision 89 in the repository's DECISIONS.md). It reads like every other misplaced
+   * setting, see {@link MisplacedSettings}.
+   *
+   * @throws IllegalStateException Naming every task a setting was written at and the
+   *           three levels it may be written at
+   */
+  private void refuseSettingsOfAWholeProcessWrittenAtATask() {
+
+    final var misplaced = new LinkedList<String>();
+    workflowModules.forEach((
+        moduleId,
+        module) -> module
+            .getWorkflows()
+            .forEach((
+                processId,
+                workflow) -> workflow
+                    .getTasks()
+                    .forEach((
+                        taskId,
+                        task) -> task
+                            .getAdapters()
+                            .forEach((
+                                adapterId,
+                                adapter) -> SETTINGS_OF_A_WHOLE_PROCESS
+                                    .stream()
+                                    .filter(setting -> setting.writtenHere().test(adapter))
+                                    .forEach(setting -> misplaced
+                                        .add("%s.workflow-modules.%s.workflows.%s.tasks.%s.adapters.%s.%s"
+                                            .formatted(
+                                                PREFIX,
+                                                moduleId,
+                                                processId,
+                                                taskId,
+                                                adapterId,
+                                                setting.key())))))));
+    if (misplaced.isEmpty()) {
+      return;
+    }
+    throw MisplacedSettings.refuse(
+        "A setting about a whole BPMN process is read at the workflow, at the workflow module "
+            + "and at the adapter",
+        misplaced,
+        "the workflow, to its workflow module or to the adapter",
+        List.of(
+            "%s.workflow-modules.<workflow-module>.workflows.<bpmn-process-id>.adapters.<adapter>.<setting>"
+                .formatted(PREFIX),
+            "%s.workflow-modules.<workflow-module>.adapters.<adapter>.<setting>".formatted(PREFIX),
+            "%s.adapters.<adapter>.<setting>".formatted(PREFIX)),
+        """
+            VanillaBP scopes the identifiers of a whole process at once, and a version \
+            belongs to a process as well, so neither is ever asked for a single task.""");
 
   }
 
@@ -1726,6 +1841,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     if (offenders.isEmpty()) {
       return;
     }
+    // the maps come from a binder and keep no order, so the message is sorted to read
+    // the same way on every boot
+    offenders.sort(String::compareTo);
     throw new IllegalStateException(
         """
             A negative maximum age was configured for open tasks:
@@ -1936,6 +2054,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     validateMaxTaskAge();
     refuseFullSyncPermissionsOutsideAWorkflow();
     refuseResourcesLocationsBelowTheWorkflowModule();
+    refuseSettingsOfAWholeProcessWrittenAtATask();
     reportRetentionSplit();
     reportWhatStaysAwake();
 
@@ -1981,11 +2100,14 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
               platformConfigurationNote));
     }
 
+    // adapterTypes() collects into a hash map, so the lines are sorted to read the same
+    // way on every boot
     final var adaptersNotInClasspath = adapterTypes()
         .entrySet()
         .stream()
         .filter(entry -> !adaptersLoaded.contains(entry.getValue()))
         .map(entry -> "%s of type %s".formatted(entry.getKey(), entry.getValue()))
+        .sorted()
         .collect(Collectors.joining(",\n  "));
     if (!adaptersNotInClasspath.isEmpty()) {
       throw new IllegalStateException(
@@ -2003,6 +2125,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     // unknown workflow-module properties
     final var workflowModulesConfiguredButNotInClasspath = new LinkedList<>(getWorkflowModules().keySet());
     workflowModulesConfiguredButNotInClasspath.removeAll(knownWorkflowModuleIds);
+    // the map comes from a binder and keeps no order, so the message is sorted to read
+    // the same way on every boot
+    workflowModulesConfiguredButNotInClasspath.sort(String::compareTo);
     if (!workflowModulesConfiguredButNotInClasspath.isEmpty()) {
       final var propPrefix = "\n  %s.workflow-modules.".formatted(PREFIX);
       logger.warn(
@@ -2050,7 +2175,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
               These properties refer to adapter ids not configured in 'vanillabp.adapters.*' - they are never used:
                 %s
               Configured adapter ids are: '%s'. Fix the adapter id or add a section 'vanillabp.adapters.<id>'."""
-              .formatted(unusedModuleAdapterEntries, String.join("', '", adapters.keySet())));
+              .formatted(unusedModuleAdapterEntries, configuredAdapterIdsJoinedBy("', '")));
     }
 
     // duplicates in prioritized-adapters lists
@@ -2066,7 +2191,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
               The property '%s.prioritized-adapters' must list all the adapters configured in '%s.adapters.*' to define
               the order in which adapters are addressed to find workflows running.
               Configured adapters are: %s."""
-              .formatted(PREFIX, PREFIX, String.join(", ", adapters.keySet())));
+              .formatted(PREFIX, PREFIX, configuredAdapterIdsJoinedBy(", ")));
     }
     getWorkflowModules()
         .values()
@@ -2100,6 +2225,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
                 .isBlank();
           })
           .map(Map.Entry::getKey)
+          // the map comes from a binder and keeps no order, so the message is sorted to
+          // read the same way on every boot
+          .sorted()
           .toList();
       if (!specificBpmnResources.isEmpty()) {
         final var propPrefix = "%s.workflow-modules.".formatted(PREFIX);
@@ -2168,10 +2296,19 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
               There are VanillaBP adapters referenced not found in any property section 'vanillabp.adapters.*':
                 %s
               """
+              // the keys and the ids below them sit in hash collections, so both are
+              // sorted to read the same way on every boot
               .formatted(notConfiguredAdapters
                   .entrySet()
                   .stream()
-                  .map(entry -> "%s => %s".formatted(entry.getKey(), String.join(",", entry.getValue())))
+                  .sorted(Map.Entry.comparingByKey())
+                  .map(entry -> "%s => %s".formatted(
+                      entry.getKey(),
+                      entry
+                          .getValue()
+                          .stream()
+                          .sorted()
+                          .collect(Collectors.joining(","))))
                   .collect(Collectors.joining("\n  "))));
     }
 
@@ -2248,6 +2385,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     }
 
     if (!violations.isEmpty()) {
+      // the variables arrive in whatever order the platform hands them over, so the
+      // message is sorted to read the same way on every boot
+      violations.sort(String::compareTo);
       throw new IllegalStateException(
           """
               Environment variables addressing the '%s' configuration were NOT taken over by the configuration binding:
@@ -2281,7 +2421,12 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
                   sectionKey,
                   configuredIds.isEmpty()
                       ? "none configured"
-                      : "'%s'".formatted(String.join("', '", configuredIds))));
+                      // the ids come from a binder's map and keep no order
+                      : "'%s'".formatted(
+                          configuredIds
+                              .stream()
+                              .sorted()
+                              .collect(Collectors.joining("', '")))));
     }
 
   }

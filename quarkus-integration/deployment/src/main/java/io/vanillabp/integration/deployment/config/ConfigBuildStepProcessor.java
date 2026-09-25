@@ -2,7 +2,10 @@ package io.vanillabp.integration.deployment.config;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
+
+import org.eclipse.microprofile.config.ConfigProvider;
 
 import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
 import io.quarkus.deployment.Capabilities;
@@ -58,6 +61,8 @@ public class ConfigBuildStepProcessor {
       final BuildProducer<SyntheticBeanBuildItem> syntheticBeanBuildItemBuildProducer,
       final MigrationAdapterPropertiesRecorder migrationAdapterPropertiesRecorder) {
 
+    refuseKeysWhichOnlyExistOnSpringBoot();
+
     final var adapterTypesOfProcessServicesProvidedByAdapters = processServicesProvidedByAdapters
         .stream()
         .map(VanillaBpMigratableProcessServiceBuildItem::getAdapterType)
@@ -80,6 +85,52 @@ public class ConfigBuildStepProcessor {
                 .done());
 
     return new MigrationAdapterPropertiesBuildItem();
+
+  }
+
+  /**
+   * The section of the gruelbox store, which Spring Boot builds and Quarkus does not. The
+   * name is written out here because the class holding it lives in the Spring Boot module,
+   * which this one does not depend on; {@code GruelboxKeyIsRefusedOnQuarkusTest} names the
+   * key as well and fails if the two ever say something different.
+   */
+  private static final String GRUELBOX_SECTION = "vanillabp.outbox.gruelbox.";
+
+  /**
+   * Ends the build of an application which configures something Quarkus does not have.
+   * <p>
+   * Without this, SmallRye answers such a key with <code>SRCFG00050</code> and the name of
+   * the key, which is true and tells nobody what to do: the key is not a typo, it is a
+   * setting which exists and belongs to the other platform. The check runs while the
+   * application is augmented, so it speaks before that validation does.
+   *
+   * @throws IllegalStateException Naming every key found and what to write instead
+   */
+  private static void refuseKeysWhichOnlyExistOnSpringBoot() {
+
+    final var keysOfTheOtherPlatform = new TreeSet<String>();
+    ConfigProvider
+        .getConfig()
+        .getPropertyNames()
+        .forEach(propertyName -> {
+          if (propertyName.startsWith(GRUELBOX_SECTION)) {
+            keysOfTheOtherPlatform.add(propertyName);
+          }
+        });
+    if (keysOfTheOtherPlatform.isEmpty()) {
+      return;
+    }
+    throw new IllegalStateException(
+        """
+            These keys configure the gruelbox outbox store, and Quarkus does not build that \
+            store:
+              %s
+            It runs on Spring Boot alone, because it needs the Spring transaction manager \
+            gruelbox is written against. Remove the keys and let VanillaBP store the phase-two \
+            entries itself: it writes them into the table of 'vanillabp.outbox.jdbc.*' where the \
+            application has a data source, and into the collection of 'vanillabp.outbox.mongo.*' \
+            where it has MongoDB."""
+            .formatted(String.join("\n  ", keysOfTheOtherPlatform)));
 
   }
 

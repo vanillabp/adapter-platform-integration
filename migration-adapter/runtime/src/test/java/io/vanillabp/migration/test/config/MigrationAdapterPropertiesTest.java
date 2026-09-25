@@ -5,8 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,11 +25,14 @@ import ch.qos.logback.core.read.ListAppender;
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.ClasspathFacts;
+import io.vanillabp.integration.adapter.migration.config.DeliveryProperties;
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.config.OutfadedVersionsInUsePolicy;
 import io.vanillabp.integration.adapter.migration.config.TaskAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
+import io.vanillabp.integration.adapter.spi.NameClashAvoidance;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import lombok.extern.slf4j.Slf4j;
 
@@ -366,8 +372,8 @@ public class MigrationAdapterPropertiesTest {
     assertEquals(
         """
             There are VanillaBP adapters referenced not found in any property section 'vanillabp.adapters.*':
-              vanillabp.workflow-modules.test-module.prioritized-adapters => unknown-adapter2
               vanillabp.prioritized-adapters => unknown-adapter1
+              vanillabp.workflow-modules.test-module.prioritized-adapters => unknown-adapter2
             """,
         exception.getMessage());
   }
@@ -915,6 +921,259 @@ public class MigrationAdapterPropertiesTest {
               vanillabp.adapters.<adapter>.resources-location: classpath*:<location>
             VanillaBP loads the BPMN files before it knows which process or which task is in them, so a location below the workflow module is never read.""",
         refusal.getMessage());
+
+  }
+
+  @Nested
+  @DisplayName("A setting about a whole process written at a task ends the startup")
+  class ASettingOfAWholeProcessIsRefusedAtATask {
+
+    @Test
+    @DisplayName("name-clash-avoidance")
+    public void theScopingModeIsRefused() {
+
+      assertEquals(
+          refusalNaming("name-clash-avoidance"),
+          refusalOf(adapter -> adapter.setNameClashAvoidance(NameClashAvoidance.USE_PREFIX)));
+
+    }
+
+    @Test
+    @DisplayName("prefix-task-definitions-per-process")
+    public void theScopingOfTaskDefinitionsIsRefused() {
+
+      assertEquals(
+          refusalNaming("prefix-task-definitions-per-process"),
+          refusalOf(adapter -> adapter.setPrefixTaskDefinitionsPerProcess(Boolean.FALSE)));
+
+    }
+
+    @Test
+    @DisplayName("outfaded-versions")
+    public void theOutfadedVersionsAreRefused() {
+
+      assertEquals(
+          refusalNaming("outfaded-versions"),
+          refusalOf(adapter -> adapter.setOutfadedVersions(List.of("<4"))));
+
+    }
+
+    @Test
+    @DisplayName("outfaded-versions-in-use")
+    public void theOutfadedVersionsInUsePolicyIsRefused() {
+
+      assertEquals(
+          refusalNaming("outfaded-versions-in-use"),
+          refusalOf(adapter -> adapter.setOutfadedVersionsInUse(OutfadedVersionsInUsePolicy.FAIL)));
+
+    }
+
+    @Test
+    @DisplayName("An empty outfaded-versions list says nothing, so nothing is refused")
+    public void anEmptyListOfVersionsIsNotASetting() {
+
+      propertiesWithATaskConfiguring(adapter -> adapter.setOutfadedVersions(List.of()))
+          .validateProperties(List.of("adapter2"), List.of("test-module"));
+
+    }
+
+    @Test
+    @DisplayName("The same keys at the workflow start the application")
+    public void theSameKeysAtTheWorkflowAreRead() {
+
+      final var properties = new MigrationAdapterProperties();
+      properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
+      properties.setPrioritizedAdapters(List.of("adapter-test"));
+      properties.setWorkflowModules(Map.of("test-module", WorkflowModuleAdapterProperties
+          .builder()
+          .workflowModuleId("test-module")
+          .workflows(Map.of("testProcess", WorkflowAdapterProperties
+              .builder()
+              .adapters(Map.of("adapter-test", AdapterProperties
+                  .builder()
+                  .nameClashAvoidance(NameClashAvoidance.USE_PREFIX)
+                  .prefixTaskDefinitionsPerProcess(Boolean.FALSE)
+                  .outfadedVersions(List.of("<4"))
+                  .outfadedVersionsInUse(OutfadedVersionsInUsePolicy.FAIL)
+                  .build()))
+              .build()))
+          .build()));
+
+      properties.validateProperties(List.of("adapter2"), List.of("test-module"));
+
+      assertEquals(
+          NameClashAvoidance.USE_PREFIX,
+          properties.resolveForAdapter(
+              "test-module",
+              "testProcess",
+              null,
+              "adapter-test",
+              AdapterProperties::getNameClashAvoidance));
+
+    }
+
+    private String refusalNaming(
+        final String key) {
+
+      return """
+          A setting about a whole BPMN process is read at the workflow, at the workflow module and at the adapter, but it is configured at:
+            vanillabp.workflow-modules.test-module.workflows.testProcess.tasks.scoreApplicant.adapters.adapter-test.%s
+          Move each of them to the workflow, to its workflow module or to the adapter:
+            vanillabp.workflow-modules.<workflow-module>.workflows.<bpmn-process-id>.adapters.<adapter>.<setting>
+            vanillabp.workflow-modules.<workflow-module>.adapters.<adapter>.<setting>
+            vanillabp.adapters.<adapter>.<setting>
+          VanillaBP scopes the identifiers of a whole process at once, and a version belongs to a process as well, so neither is ever asked for a single task."""
+          .formatted(key);
+
+    }
+
+    private String refusalOf(
+        final Consumer<AdapterProperties> whatTheTaskSays) {
+
+      final var properties = propertiesWithATaskConfiguring(whatTheTaskSays);
+
+      return assertThrowsExactly(
+          IllegalStateException.class,
+          () -> properties.validateProperties(List.of("adapter2"), List.of("test-module")))
+          .getMessage();
+
+    }
+
+    private MigrationAdapterProperties propertiesWithATaskConfiguring(
+        final Consumer<AdapterProperties> whatTheTaskSays) {
+
+      final var task = new AdapterProperties();
+      whatTheTaskSays.accept(task);
+
+      final var properties = new MigrationAdapterProperties();
+      properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
+      properties.setPrioritizedAdapters(List.of("adapter-test"));
+      properties.setWorkflowModules(Map.of("test-module", WorkflowModuleAdapterProperties
+          .builder()
+          .workflowModuleId("test-module")
+          .workflows(Map.of("testProcess", WorkflowAdapterProperties
+              .builder()
+              .tasks(Map.of("scoreApplicant", TaskAdapterProperties
+                  .builder()
+                  .adapters(Map.of("adapter-test", task))
+                  .build()))
+              .build()))
+          .build()));
+      return properties;
+
+    }
+
+  }
+
+  @Nested
+  @DisplayName("A message listing keys reads the same on every boot")
+  class AMessageListingKeysIsSorted {
+
+    @Test
+    @DisplayName("Two misplaced permissions are listed in the same order either way")
+    public void twoMisplacedPermissionsAreListedTheSameWay() {
+
+      final var oneWayRound = refusalOfPermissionsGivenTo("saas", "on-prem");
+
+      assertEquals(oneWayRound, refusalOfPermissionsGivenTo("on-prem", "saas"));
+      assertEquals(
+          """
+              Sharing a whole workflow aggregate is allowed at the workflow and nowhere else, but it is configured at:
+                vanillabp.adapters.on-prem.allow-full-sync-with-bpms
+                vanillabp.adapters.saas.allow-full-sync-with-bpms
+              Move each of them to the workflow it is meant for:
+                vanillabp.workflow-modules.<workflow-module>.workflows.<bpmn-process-id>.allow-full-sync-with-bpms: true
+              An inherited permission would cover the next workflow somebody adds to the module as well, and that is the workflow nobody looked at.""",
+          oneWayRound);
+
+    }
+
+    @Test
+    @DisplayName("Two negative task ages are listed in the same order either way")
+    public void twoNegativeTaskAgesAreListedTheSameWay() {
+
+      final var oneWayRound = refusalOfNegativeTaskAgesIn("second-module", "first-module");
+
+      assertEquals(oneWayRound, refusalOfNegativeTaskAgesIn("first-module", "second-module"));
+      assertEquals(
+          """
+              A negative maximum age was configured for open tasks:
+                vanillabp.workflow-modules.first-module.delivery.max-task-age
+                vanillabp.workflow-modules.second-module.delivery.max-task-age
+              The value says how long a task may wait for its asynchronous completion before VanillaBP reports it, so it has to be positive - the default is P30D. Use '0' to switch the report off for that scope.""",
+          oneWayRound);
+
+    }
+
+    private String refusalOfPermissionsGivenTo(
+        final String firstAdapterId,
+        final String secondAdapterId) {
+
+      final var adapters = new LinkedHashMap<String, AdapterConfigProperties>();
+      adapters.put(firstAdapterId, permissionGivenTo(AdapterConfigProperties.ofType("adapter2")));
+      adapters.put(secondAdapterId, permissionGivenTo(AdapterConfigProperties.ofType("adapter2")));
+
+      final var properties = new MigrationAdapterProperties();
+      properties.setAdapters(adapters);
+      properties.setPrioritizedAdapters(List.of(firstAdapterId, secondAdapterId));
+      properties.setWorkflowModules(Map.of("test-module", WorkflowModuleAdapterProperties
+          .builder()
+          .workflowModuleId("test-module")
+          .build()));
+
+      return refusalOf(properties, List.of("test-module"));
+
+    }
+
+    private String refusalOfNegativeTaskAgesIn(
+        final String firstModuleId,
+        final String secondModuleId) {
+
+      final var modules = new LinkedHashMap<String, WorkflowModuleAdapterProperties>();
+      modules.put(firstModuleId, moduleWaitingForeverOnTasks(firstModuleId));
+      modules.put(secondModuleId, moduleWaitingForeverOnTasks(secondModuleId));
+
+      final var properties = new MigrationAdapterProperties();
+      properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
+      properties.setPrioritizedAdapters(List.of("adapter-test"));
+      properties.setWorkflowModules(modules);
+
+      return refusalOf(properties, List.of(firstModuleId, secondModuleId));
+
+    }
+
+    private String refusalOf(
+        final MigrationAdapterProperties properties,
+        final List<String> workflowModuleIds) {
+
+      return assertThrowsExactly(
+          IllegalStateException.class,
+          () -> properties.validateProperties(List.of("adapter2"), workflowModuleIds))
+          .getMessage();
+
+    }
+
+    private AdapterConfigProperties permissionGivenTo(
+        final AdapterConfigProperties adapter) {
+
+      adapter.setAllowFullSyncWithBpms(Boolean.TRUE);
+      return adapter;
+
+    }
+
+    private WorkflowModuleAdapterProperties moduleWaitingForeverOnTasks(
+        final String workflowModuleId) {
+
+      return WorkflowModuleAdapterProperties
+          .builder()
+          .workflowModuleId(workflowModuleId)
+          .delivery(DeliveryProperties
+              .builder()
+              .maxTaskAge(Duration.ofDays(-1))
+              .build())
+          .build();
+
+    }
 
   }
 

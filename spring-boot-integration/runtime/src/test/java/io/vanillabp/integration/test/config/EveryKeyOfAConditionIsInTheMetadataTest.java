@@ -18,9 +18,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.config.GruelboxOutboxProperties;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
@@ -39,6 +38,11 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * keys below the sections of the core model come from
  * <code>META-INF/additional-spring-configuration-metadata.json</code>, because the
  * processor does not descend into types which arrive as a dependency.
+ * <p>
+ * Only the metadata of VanillaBP's own artifacts answers here. Every framework jar ships a
+ * file of the same name, and one of them describing a <code>vanillabp</code> key would let
+ * this test pass while our own metadata says nothing, which is the weakness
+ * {@link #theMetadataReadIsOursAlone()} keeps out.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class EveryKeyOfAConditionIsInTheMetadataTest {
@@ -48,12 +52,6 @@ public class EveryKeyOfAConditionIsInTheMetadataTest {
    * brings this file, which is why the lines are filtered by package below.
    */
   private static final String AUTO_CONFIGURATIONS = "META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports";
-
-  /**
-   * Where the configuration metadata of a module lies, the one this build generates as
-   * well as the ones the framework ships.
-   */
-  private static final String METADATA = "META-INF/spring-configuration-metadata.json";
 
   /**
    * The section every key of VanillaBP starts with. What a condition names outside it
@@ -78,12 +76,12 @@ public class EveryKeyOfAConditionIsInTheMetadataTest {
   @DisplayName("Every vanillabp key a condition reads is in the configuration metadata")
   public void everyKeyOfAConditionIsInTheMetadata() throws IOException {
 
-    final var metadata = keysOfTheMetadata();
+    final var metadata = keysOfOurMetadata();
     assertFalse(
         metadata.isEmpty(),
         """
-            No configuration metadata on the classpath! It is generated while the main sources \
-            are compiled, so run this test through the build.""");
+            No configuration metadata of VanillaBP on the classpath! It is generated while the \
+            main sources are compiled, so run this test through the build.""");
 
     final var missing = new TreeSet<String>();
     for (final var autoConfiguration : autoConfigurations()) {
@@ -100,9 +98,39 @@ public class EveryKeyOfAConditionIsInTheMetadataTest {
             These keys are read by a condition but unknown to the configuration metadata, so no \
             development environment proposes them: %s
             Add each of them to a properties class - the core model where every platform has the \
-            key, this module where Spring Boot has it alone - and describe it in \
+            key, this module where Spring Boot has it alone. A key this module compiles is \
+            described by the javadoc of its field, a key whose type arrives as a dependency in \
             'META-INF/additional-spring-configuration-metadata.json'."""
             .formatted(missing));
+
+  }
+
+  /**
+   * The counter-check of the test above: it answers from OUR metadata, not from whatever
+   * the classpath holds. Every framework jar ships a file of the same name, and a foreign
+   * file describing a <code>vanillabp</code> key would make the guard pass while our own
+   * metadata is silent.
+   *
+   * @throws IOException If the classpath cannot be read
+   */
+  @Test
+  @DisplayName("The metadata this test reads is ours alone")
+  public void theMetadataReadIsOursAlone() throws IOException {
+
+    final var keys = keysOfOurMetadata();
+
+    assertTrue(
+        keys.contains(GruelboxOutboxProperties.ENABLED),
+        "'%s' is described by this module, so our own metadata has to know it"
+            .formatted(GruelboxOutboxProperties.ENABLED));
+    assertTrue(
+        keys.stream().allMatch(key -> key.startsWith(OUR_SECTION)),
+        """
+            Our metadata describes keys below '%s' and nothing else, so a key from another \
+            section means a foreign file was read: %s"""
+            .formatted(
+                OUR_SECTION,
+                keys.stream().filter(key -> !key.startsWith(OUR_SECTION)).toList()));
 
   }
 
@@ -213,22 +241,15 @@ public class EveryKeyOfAConditionIsInTheMetadataTest {
   }
 
   /**
-   * @return Every key the configuration metadata of the classpath knows, VanillaBP's own
-   *         keys as well as the ones of the framework
+   * @return Every key the configuration metadata of VanillaBP's own artifacts knows
    * @throws IOException If the classpath cannot be read
    */
-  private static Set<String> keysOfTheMetadata() throws IOException {
+  private static Set<String> keysOfOurMetadata() throws IOException {
 
-    final var mapper = new ObjectMapper();
     final var keys = new TreeSet<String>();
-    for (final var resource : resources(METADATA)) {
-      try (var content = resource.openStream()) {
-        mapper
-            .readTree(content)
-            .path("properties")
-            .forEach(property -> keys.add(property.path("name").asText()));
-      }
-    }
+    SpringConfigurationMetadata
+        .propertiesOf(SpringConfigurationMetadata.GENERATED)
+        .forEach(property -> keys.add(property.path("name").asText()));
     return keys;
 
   }

@@ -361,6 +361,45 @@ public class VanillaBpConfigurationBindingTest {
   }
 
   @Test
+  @DisplayName("A setting about a whole process binds at a task and ends the startup there")
+  public void aSettingOfAWholeProcessIsBoundAtATaskAndRefused() {
+
+    contextRunner
+        .withPropertyValues(
+            "vanillabp.adapters.test.type=dummy",
+            "vanillabp.workflow-modules.test-module.prioritized-adapters=test",
+            "vanillabp.workflow-modules.test-module.workflows.MyProcess.tasks.scoreApplicant"
+                + ".adapters.test.name-clash-avoidance=use-prefix",
+            "vanillabp.workflow-modules.test-module.workflows.MyProcess.tasks.scoreApplicant"
+                + ".adapters.test.prefix-task-definitions-per-process=false",
+            "vanillabp.workflow-modules.test-module.workflows.MyProcess.tasks.scoreApplicant"
+                + ".adapters.test.outfaded-versions=<4",
+            "vanillabp.workflow-modules.test-module.workflows.MyProcess.tasks.scoreApplicant"
+                + ".adapters.test.outfaded-versions-in-use=fail")
+        .run(context -> {
+
+          assertNotNull(context.getStartupFailure());
+          // the binder really wrote all four keys into the task's adapter section, which
+          // is why all four are named back
+          assertEquals(
+              """
+                  A setting about a whole BPMN process is read at the workflow, at the workflow module and at the adapter, but it is configured at:
+                    vanillabp.workflow-modules.test-module.workflows.MyProcess.tasks.scoreApplicant.adapters.test.name-clash-avoidance
+                    vanillabp.workflow-modules.test-module.workflows.MyProcess.tasks.scoreApplicant.adapters.test.outfaded-versions
+                    vanillabp.workflow-modules.test-module.workflows.MyProcess.tasks.scoreApplicant.adapters.test.outfaded-versions-in-use
+                    vanillabp.workflow-modules.test-module.workflows.MyProcess.tasks.scoreApplicant.adapters.test.prefix-task-definitions-per-process
+                  Move each of them to the workflow, to its workflow module or to the adapter:
+                    vanillabp.workflow-modules.<workflow-module>.workflows.<bpmn-process-id>.adapters.<adapter>.<setting>
+                    vanillabp.workflow-modules.<workflow-module>.adapters.<adapter>.<setting>
+                    vanillabp.adapters.<adapter>.<setting>
+                  VanillaBP scopes the identifiers of a whole process at once, and a version belongs to a process as well, so neither is ever asked for a single task.""",
+              rootMessage(context.getStartupFailure()));
+
+        });
+
+  }
+
+  @Test
   @DisplayName("The maximum age of an open task binds at all four levels")
   public void maxTaskAgeBindsAtEveryLevel() {
 

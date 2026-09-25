@@ -18,12 +18,11 @@ import lombok.Setter;
  * this key instead of counting as "off", which {@code VanillaBpConfigurationBindingTest}
  * holds.
  * <p>
- * A development environment proposes the key because this class stands in this module:
- * the annotation processor of Spring Boot writes the metadata of what it compiles here.
- * The text it shows comes from
- * <code>META-INF/additional-spring-configuration-metadata.json</code>, where the key is
- * described next to the rest of the outbox family and where a description written by
- * hand wins over the one taken from the field below.
+ * A development environment proposes the key because this class stands in this module: the
+ * annotation processor of Spring Boot writes the metadata of what it compiles here, and the
+ * text it shows is the javadoc of the field below. That javadoc is therefore the
+ * description, and <code>META-INF/additional-spring-configuration-metadata.json</code> does
+ * not repeat it, see {@code AKeyIsDescribedInOnePlaceTest}.
  */
 @Getter
 @Setter
@@ -46,10 +45,11 @@ public class GruelboxOutboxProperties {
 
   /**
    * Whether the gruelbox-based outbox is built in place of the JDBC one VanillaBP writes
-   * itself. It needs gruelbox on the classpath, which VanillaBP stopped bringing along
-   * when that store stopped being the default, and an application which switches it on
-   * without the library is told so at startup by
-   * {@link io.vanillabp.integration.outbox.gruelbox.GruelboxMissingAutoConfiguration}.
+   * itself. It needs 'com.gruelbox:transactionoutbox-core' and
+   * 'com.gruelbox:transactionoutbox-spring' on the classpath, which VanillaBP does not
+   * bring along any more, and an application which switches it on without the library is
+   * told so at startup. Its entries go into gruelbox' own table 'TXNO_OUTBOX'. Spring Boot
+   * is the only platform offering that store.
    */
   private boolean enabled;
 

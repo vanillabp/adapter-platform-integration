@@ -102,9 +102,98 @@
       "defaultValue": "vanillabp-task-deliveries"
     },
     {
-      "name": "vanillabp.outbox.gruelbox.enabled",
+      "name": "vanillabp.conventional-resources-locations",
+      "type": "java.util.Map<java.lang.String,java.util.List<java.lang.String>>",
+      "description": "Where the BPMN files of a workflow module lie when no 'resources-location' names a place. VanillaBP derives it from the classpath while it boots, so it is not a key an application writes.",
+      "deprecation": {
+        "level": "error",
+        "reason": "Derived from the classpath by VanillaBP while it boots, so a value written here is replaced. Write 'vanillabp.resources-location' or 'vanillabp.workflow-modules.<module>.adapters.<adapter>.resources-location' instead."
+      }
+    },
+    {
+      "name": "vanillabp.retired-adapters",
+      "type": "java.util.List<java.lang.String>",
+      "description": "Adapter IDs this application does not serve any more, the last step of a BPMS migration. An outbox entry or a delivery record still naming one of them is reported at startup, because an unserved id usually means the id was renamed and workflows were lost. Naming it here says the leftovers are known and turns that message into a DEBUG line."
+    },
+    {
+      "name": "vanillabp.extensions",
+      "type": "java.util.Map<java.lang.String,java.util.Map<java.lang.String,java.lang.String>>",
+      "description": "What the extensions of the deployment pipeline are configured with, keyed by extension id. What the keys below an extension mean is that extension's own business. Overridable per workflow module, per workflow, per task and per adapter section of each of those levels."
+    },
+    {
+      "name": "vanillabp.allow-full-sync-with-bpms",
       "type": "java.lang.Boolean",
-      "description": "Whether the gruelbox-based outbox is built in place of the JDBC one VanillaBP writes itself. It needs 'com.gruelbox:transactionoutbox-core' and 'com.gruelbox:transactionoutbox-spring' on the classpath, which VanillaBP does not bring along any more. Its entries go into gruelbox' own table 'TXNO_OUTBOX'. Spring Boot is the only platform offering that store.",
+      "description": "Bound so that a line here is answered instead of ignored: the permission to hand a whole workflow aggregate to the BPMS belongs to the single workflow, at 'vanillabp.workflow-modules.<module>.workflows.<bpmn-process-id>.allow-full-sync-with-bpms'. Written here it ends the startup with a message naming that key. A permission taken from above would cover the workflow somebody adds next week."
+    },
+    {
+      "name": "vanillabp.delivery.release-on-workflow-end",
+      "type": "java.lang.Boolean",
+      "description": "Whether the records of a workflow are deleted the moment it ends, instead of waiting for 'vanillabp.delivery.retention' to pass. The end of an instance is the one moment after which nothing of it can be redelivered, so the deletion is safe. It is off by default because the end of a workflow is reported only where the application asked for it, so switching it on makes every deployed model of the module carry the listener reporting that end. Overridable per workflow module.",
+      "defaultValue": false
+    },
+    {
+      "name": "vanillabp.delivery.max-task-age",
+      "type": "java.time.Duration",
+      "description": "How long a task may stay open before VanillaBP reports it, counted from the moment its handler ran. A task left open by a @TaskId handler is a task the application promised to complete later, and nothing else asks whether that promise was kept. '0' switches the report off. Overridable per workflow module, per workflow and per task.",
+      "defaultValue": "30d"
+    },
+    {
+      "name": "vanillabp.delivery.check-open-tasks-on-delivery",
+      "type": "java.lang.Boolean",
+      "description": "Whether a delivery looks at the other tasks VanillaBP believes are open in the same workflow, asks the BPMS whether they still exist and reports the ones which are gone as canceled. Only a method which asked for the event with a @TaskEvent parameter is affected, and on a BPMS which cannot say per element what it took away this is the only way such a method is ever called. Overridable per workflow module, per workflow and per task.",
+      "defaultValue": true
+    },
+    {
+      "name": "vanillabp.delivery.max-open-tasks-checked",
+      "type": "java.lang.Integer",
+      "description": "How many other open tasks one delivery probes at most, oldest record first. What is not reached this time is reached at the next wake-up of that workflow. Each probe is one call to the BPMS on the thread of the delivery, so this is the cap which keeps a workflow with very many open tasks from holding an execution slot for all of them. '0' switches the probing off. Overridable per workflow module, per workflow and per task.",
+      "defaultValue": 10
+    },
+    {
+      "name": "vanillabp.delivery.retention",
+      "type": "java.time.Duration",
+      "description": "How long the record of a processed task delivery is kept, counted from the last redelivery it answered. This is a correctness setting: a delivery arriving later than this finds no record and runs the @WorkflowTask method a second time, so the period has to cover the longest gap between a handler running and the last redelivery of that work, including however long the application is stopped. Unset means 'vanillabp.outbox.retention', which is where this number lived before the two were told apart."
+    },
+    {
+      "name": "vanillabp.election.guessing-adapters",
+      "type": "io.vanillabp.integration.adapter.migration.config.ElectionProperties$GuessingAdapters",
+      "description": "What VanillaBP does about a prioritized adapter which cannot say whether it holds a workflow, next to at least one other adapter: 'rejected' ends the boot with a message naming the adapter and the fix, 'accepted' routes operations on existing workflows by list order instead and logs a warning. Overridable per workflow module.",
+      "defaultValue": "rejected"
+    },
+    {
+      "name": "vanillabp.metrics.gauge-cache",
+      "type": "java.time.Duration",
+      "description": "How long the measurement of a gauge which has to ask somebody is reused before it is taken again. Ten seconds is one collection interval, a little under the fifteen seconds Prometheus scrapes with by default, so every scrape gets a measurement of its own while a dashboard opened next to it reads the number that scrape already paid for. 'PT0S' switches the holding off and every collection measures.",
+      "defaultValue": "10s"
+    },
+    {
+      "name": "vanillabp.transactions.unguarded-aggregate-writes",
+      "type": "io.vanillabp.integration.adapter.migration.config.TransactionsProperties$UnguardedAggregateWrites",
+      "description": "What VanillaBP does about a workflow-aggregate store which its transaction demonstrably does not cover: 'rejected' ends the boot with a message naming the fix, 'accepted' lets the application run with writes which do not commit or roll back together and logs a warning. Overridable per workflow module.",
+      "defaultValue": "rejected"
+    },
+    {
+      "name": "vanillabp.workflow-adapter-cache.max-entries",
+      "type": "java.lang.Integer",
+      "description": "How many workflows the cache remembers the adapter of, so an operation on a known workflow does not ask every BPMS again. The oldest entry goes when the cache is full.",
+      "defaultValue": 10000
+    },
+    {
+      "name": "vanillabp.workflow-adapter-cache.time-to-live",
+      "type": "java.time.Duration",
+      "description": "How long the remembered adapter of a running workflow stays valid. A workflow migrated to another BPMS behind VanillaBP's back is found again after this period at the latest.",
+      "defaultValue": "1h"
+    },
+    {
+      "name": "vanillabp.workflow-adapter-cache.ended-time-to-live",
+      "type": "java.time.Duration",
+      "description": "How long the cache remembers that a workflow has ended. Shorter than the entry of a running one: what an ended workflow saves is the probing of a late call, and nothing about it changes any more.",
+      "defaultValue": "5m"
+    },
+    {
+      "name": "vanillabp.workflow-adapter-cache.release-on-workflow-end",
+      "type": "java.lang.Boolean",
+      "description": "Whether the cache entry of a workflow is dropped the moment the BPMS reports that it ended, instead of waiting for 'vanillabp.workflow-adapter-cache.ended-time-to-live'. Like the delivery records, switching it on makes every deployed model of the application carry the listener reporting that end.",
       "defaultValue": false
     },
     {

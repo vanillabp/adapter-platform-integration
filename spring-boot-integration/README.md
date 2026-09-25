@@ -85,6 +85,17 @@ dynamic keys (`vanillabp.adapters.<id>.*`, `vanillabp.workflow-modules.<id>.*`)
 are declared once with their value type - IDEs drill into the value types on
 the classpath.
 
+A key is described in one place. Where a class of this module declares the
+field, the field's javadoc is the description, because that is what the
+processor writes into the metadata. Where the type carrying the key arrives as
+a dependency, the processor cannot reach it and
+`additional-spring-configuration-metadata.json` describes it instead. Do not
+write both: Spring merges the two files and the hand-written text wins, so the
+javadoc is shown to nobody and is free to say something else.
+`AKeyIsDescribedInOnePlaceTest` fails a key which is described twice, and
+`EveryKeyOfASectionIsDescribedTest` fails a key of a section of the core model
+which nobody described at all.
+
 BPMS adapters contribute their own keys to the same tree (e.g.
 `vanillabp.adapters.<id>.rest-address`) by binding an adapter-owned second
 `@ConfigurationProperties("vanillabp")` overlay class: same-prefix classes
