@@ -3738,6 +3738,41 @@ Every verdict the check can reach is a case of `OldProcessVersionsTest`, from
 `anUnservedVersionWithInstancesIsAnError` and `anUnservedVersionWithoutInstancesWarns` to
 `outfadingTheDeployedVersionFailsTheBoot` and `aMethodServingNoHeldVersionIsReported`.
 
+### A name the current deployment no longer declares
+
+The same models a held version is read out of answer one more question: a message name or
+a signal name which no model of this deployment declares any more. Workflows on that
+version wait at their event for something nothing sends, and nothing else says so, because
+the name lives in a model the BPMS holds and in no file of the application.
+`NameClashAvoidanceService#reportIdentifiersOfHeldVersion` reports it next to the name
+clash it was built for.
+
+Messages and signals only. An error code and an escalation code are thrown by the model
+which carries them, and a task definition nobody serves has its own check which says more
+than this could. A version nobody is on is silent - nothing waits there - and so is an
+adapter which never reported what the current models declare, because then every old name
+would look new.
+
+The line says "look at it" rather than "write this": a rename whose old workflows were
+finished by hand looks exactly like a rename nobody finished.
+`ANameTheCurrentDeploymentNoLongerDeclaresTest` holds every case.
+
+### The multi-instance shape of a held version
+
+An element which iterates without naming the value of a round - a Camunda 7 element without
+`camunda:elementVariable`, a Camunda 8 one without `inputElement` - hands a handler reading its
+item a `null`. While a model is DEPLOYED, the adapter asks
+`WorkflowTaskWiring#multiInstanceElementNames` and refuses that pairing. A version the BPMS only
+still holds is never deployed again, so nobody asked, while the methods of the application serve
+it because their version ranges say so.
+
+`BpmnTaskSpec#multiInstanceElementsWithoutAnItem` closes that: the adapter fills it from the
+model it read for `tasksOfVersion`, and the core holds it against what the methods serving that
+version read. `null` means this adapter does not read the shape, and then nothing is asked at
+all - decision 38. The finding is a warning in the block a start writes at its end, because
+nobody can change a held model any more and a `null` item there may be what the application
+means. `TheMultiInstanceShapeOfAHeldVersionTest` holds every case.
+
 ### A BPMN process nothing was deployed under
 
 Renaming a BPMN process is the one refactoring which reaches into the BPMS: the old
@@ -3934,6 +3969,54 @@ The core answers the part it owns, and only that part:
 (`optimisticLockingIsRecognizedByName`, `conflictIsReportedAndPropagated`,
 `otherFailuresArePassedThroughSilently`, `theWarningIsGivenOncePerProcess`), and each
 platform runs the same conflict through a booted application.
+
+## What a start says about itself
+
+A start used to say each of its findings where it found it, so they stood between the lines of
+every other library. Now a check reports its finding to `StartupFindings` and the whole start
+says it once, at its end, as one block between two rulers:
+
+```
+------------------------------------------------------------------------------------------------------
+VanillaBP 2.0 looked at this application and found 2 things worth a look. None of them stopped the start.
+
+CONFIGURATION (1)
+  vanillabp.outbox.housekeeping
+      The housekeeping of the VanillaBP outbox runs from 04:00 to 05:00 UTC, because this JVM stands
+      on 'Etc/UTC' and no time zone was configured for it. [...]
+
+DEPLOYED VERSIONS (1)
+  process 'loan-approval', adapter 'cloud'
+      Version 2 of BPMN process 'loan-approval' [...]
+------------------------------------------------------------------------------------------------------
+```
+
+A few rules hold it together.
+
+The block is written in ONE call of the logger. Written line by line, the next library writes into
+it.
+
+The headings are the artifact a fix lies in - parts and versions, configuration, code, BPMN models,
+the versions a BPMS still holds, stored state, infrastructure - in the order a developer walks
+them, each with the count a reader skims. `StartupTopic` is that list.
+
+An application with nothing to notice gets nothing. No ruler, no heading, no empty message.
+
+What ENDS a start is collected too and thrown once, grouped and counted the same way, so a
+developer who put two things wrong learns both in one start. What was noticed before the refusal
+fell due is written first: a warning does not become less true because a later check ends the
+start. A check which cannot let the start walk on throws where it stands and says so in its
+javadoc.
+
+The end of a start is the end of `DeploymentService#startWorkflowProcessing`, because nothing a
+start can notice comes later. What Quarkus refuses while it BUILDS never reaches the block, and an
+application which was never built never starts.
+
+A finding carries its scope beside its text rather than inside it, because the same finding arrives
+once per workflow module, per BPMN process, per adapter id and per method: two findings of one
+topic carrying the same text become one entry naming both scopes.
+
+`TheBoxAtTheEndOfAStartTest` holds every word of it, the shape included.
 
 ## What an operator gets to see
 

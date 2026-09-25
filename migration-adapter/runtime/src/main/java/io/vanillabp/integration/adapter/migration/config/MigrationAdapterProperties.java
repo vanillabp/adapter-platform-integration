@@ -178,6 +178,36 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   private MetricsProperties metrics = new MetricsProperties();
 
   /**
+   * Where every startup check leaves what it found, so the whole start says it once, at
+   * its end, instead of a line per check (see
+   * {@link io.vanillabp.integration.adapter.migration.startup.StartupFindings}).
+   * <p>
+   * It sits on the configuration because the configuration is what everything doing a
+   * startup check already holds, and it carries no accessors a binder would take for a
+   * property: nothing below <code>vanillabp</code> configures it.
+   */
+  @Builder.Default
+  @lombok.Getter(lombok.AccessLevel.NONE)
+  @lombok.Setter(lombok.AccessLevel.NONE)
+  private io.vanillabp.integration.adapter.migration.startup.StartupFindings startupFindings = new io.vanillabp.integration.adapter.migration.startup.StartupFindings();
+
+  /**
+   * Where a startup check reports what it found.
+   *
+   * @return The findings of this start, never <code>null</code>
+   */
+  public io.vanillabp.integration.adapter.migration.startup.StartupFindings startupFindings() {
+
+    if (startupFindings == null) {
+      // a builder of an older call site, and a binder which maps what it does not know
+      // onto null: neither must cost a check its place to report to
+      startupFindings = new io.vanillabp.integration.adapter.migration.startup.StartupFindings();
+    }
+    return startupFindings;
+
+  }
+
+  /**
    * Adapter ids this application USED to have and deliberately does not configure any
    * more - the last step of a BPMS migration, once nothing runs in the old BPMS any
    * more.
@@ -1586,6 +1616,122 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
+   * Refuses the retention of the delivery records written below the application. The
+   * delivery section binds at all four levels, and everything in it but this one key is
+   * read at the level it stands at. The retention is not: the records of every workflow
+   * module are removed by one sweep of the housekeeping, so there is one number and it is
+   * read from <code>vanillabp.delivery.retention</code> alone (see
+   * {@link #resolvedDeliveryRetention()}). A line at a workflow module, a workflow or a
+   * task would do nothing at all, so it is answered instead of ignored. It reads like
+   * every other misplaced setting, see {@link MisplacedSettings}.
+   *
+   * @throws IllegalStateException Naming every place a retention was written at and the
+   *           one key it may be written at
+   */
+  private void refuseDeliveryRetentionsBelowTheApplication() {
+
+    final var misplaced = new LinkedList<String>();
+    workflowModules.forEach((
+        moduleId,
+        module) -> {
+      if ((module.getDelivery() != null) && (module.getDelivery().getRetention() != null)) {
+        misplaced.add("%s.workflow-modules.%s.delivery.retention".formatted(PREFIX, moduleId));
+      }
+      module
+          .getWorkflows()
+          .forEach((
+              processId,
+              workflow) -> {
+            if ((workflow.getDelivery() != null) && (workflow.getDelivery().getRetention() != null)) {
+              misplaced
+                  .add("%s.workflow-modules.%s.workflows.%s.delivery.retention"
+                      .formatted(PREFIX, moduleId, processId));
+            }
+            workflow
+                .getTasks()
+                .forEach((
+                    taskId,
+                    task) -> {
+                  if ((task.getDelivery() != null) && (task.getDelivery().getRetention() != null)) {
+                    misplaced
+                        .add("%s.workflow-modules.%s.workflows.%s.tasks.%s.delivery.retention"
+                            .formatted(PREFIX, moduleId, processId, taskId));
+                  }
+                });
+          });
+    });
+    if (misplaced.isEmpty()) {
+      return;
+    }
+    throw MisplacedSettings.refuse(
+        "How long the records of processed task deliveries are kept is read for the whole application",
+        misplaced,
+        "the section of the whole application",
+        List.of("%s.delivery.retention: 7d".formatted(PREFIX)),
+        """
+            One sweep of the housekeeping removes the records of every workflow module, and it \
+            asks for one number before it knows whose records it is about.""");
+
+  }
+
+  /**
+   * Refuses the release of delivery records written below the workflow module. The key is
+   * read at the workflow module and, where the module says nothing, at the application
+   * (see {@link #releasesDeliveryRecordsOnWorkflowEnd(String)}); a workflow or a task
+   * cannot be asked, because what the setting decides is a listener an adapter attaches
+   * to a whole deployed process. A line further down would do nothing at all, so it is
+   * answered instead of ignored. It reads like every other misplaced setting, see
+   * {@link MisplacedSettings}.
+   *
+   * @throws IllegalStateException Naming every place the release was written at and the
+   *           two keys it may be written at
+   */
+  private void refuseDeliveryReleasesBelowTheWorkflowModule() {
+
+    final var misplaced = new LinkedList<String>();
+    workflowModules.forEach((
+        moduleId,
+        module) -> module
+            .getWorkflows()
+            .forEach((
+                processId,
+                workflow) -> {
+              if ((workflow.getDelivery() != null) && (workflow.getDelivery().getReleaseOnWorkflowEnd() != null)) {
+                misplaced
+                    .add("%s.workflow-modules.%s.workflows.%s.delivery.release-on-workflow-end"
+                        .formatted(PREFIX, moduleId, processId));
+              }
+              workflow
+                  .getTasks()
+                  .forEach((
+                      taskId,
+                      task) -> {
+                    if ((task.getDelivery() != null) && (task.getDelivery().getReleaseOnWorkflowEnd() != null)) {
+                      misplaced
+                          .add("%s.workflow-modules.%s.workflows.%s.tasks.%s.delivery.release-on-workflow-end"
+                              .formatted(PREFIX, moduleId, processId, taskId));
+                    }
+                  });
+            }));
+    if (misplaced.isEmpty()) {
+      return;
+    }
+    throw MisplacedSettings.refuse(
+        "Whether an ended workflow releases its delivery records is read at the workflow module "
+            + "and for the whole application",
+        misplaced,
+        "the workflow module the workflows belong to, or to the whole application",
+        List.of(
+            "%s.workflow-modules.<workflow-module>.delivery.release-on-workflow-end: true".formatted(PREFIX),
+            "%s.delivery.release-on-workflow-end: true".formatted(PREFIX)),
+        """
+            What this decides is a listener an adapter attaches to a whole deployed process, \
+            and a process is deployed for its workflow module rather than for one workflow or \
+            one task.""");
+
+  }
+
+  /**
    * An adapter setting which is about a whole BPMN process: the name it is written under,
    * and how to tell that a level wrote it.
    *
@@ -2171,11 +2317,13 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       outbox = new PhaseTwoOutboxProperties();
     }
     outbox.validateStoreNames();
-    outbox.validateHousekeeping();
+    outbox.validateHousekeeping(startupFindings());
     validateMaxTaskAge();
     refuseFullSyncPermissionsOutsideAWorkflow();
     refuseResourcesLocationsBelowTheWorkflowModule();
     refuseSettingsOfAWholeProcessWrittenAtATask();
+    refuseDeliveryRetentionsBelowTheApplication();
+    refuseDeliveryReleasesBelowTheWorkflowModule();
     reportRetentionSplit();
     reportWhatStaysAwake();
 

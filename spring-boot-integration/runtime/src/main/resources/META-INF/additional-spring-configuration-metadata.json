@@ -154,6 +154,11 @@
       "description": "Bound so that a line here is answered instead of ignored: the permission to hand a whole workflow aggregate to the BPMS belongs to the single workflow, at 'vanillabp.workflow-modules.<module>.workflows.<bpmn-process-id>.allow-full-sync-with-bpms'. Written here it ends the startup with a message naming that key. A permission taken from above would cover the workflow somebody adds next week."
     },
     {
+      "name": "vanillabp.declared-task-params",
+      "type": "java.util.List<java.lang.String>",
+      "description": "The '@TaskParam' parameters of the whole application whose type the developer declares, so a value the BPMS reports as text is read as the type the method asks for. The least specific of the four levels this may be written at, and the one to reach for where every task of the application reads the same parameter. Overridable per workflow module, per workflow and per task ('vanillabp.workflow-modules.<module>.workflows.<bpmn-process-id>.tasks.<task>.declared-task-params')."
+    },
+    {
       "name": "vanillabp.delivery.release-on-workflow-end",
       "type": "java.lang.Boolean",
       "description": "Whether the records of a workflow are deleted the moment it ends, instead of waiting for 'vanillabp.delivery.retention' to pass. The end of an instance is the one moment after which nothing of it can be redelivered, so the deletion is safe. It is off by default because the end of a workflow is reported only where the application asked for it, so switching it on makes every deployed model of the module carry the listener reporting that end. Overridable per workflow module.",

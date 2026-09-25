@@ -138,6 +138,34 @@ public class DeployedProcessVersionsCheck {
   }
 
   /**
+   * Which elements a task of one held version iterates without naming the item, although a
+   * method serving that version reads it - answered by the {@link WorkflowTaskRegistry},
+   * which is the only place knowing what a method asks for.
+   */
+  @FunctionalInterface
+  public interface ItemsAHeldVersionNeverNames {
+
+    /**
+     * Judges the multi-instance shape of ONE task of ONE held version.
+     *
+     * @param workflowModuleId The workflow module ID
+     * @param bpmnProcessId The plain BPMN process ID
+     * @param version The version identifier the BPMS reported, which is what the version
+     *          ranges of the methods are matched against
+     * @param task The task, as the model that version holds describes it
+     * @return The element ids whose item a method serving that version reads and that
+     *         version's model never names, empty where nothing is wrong and where the
+     *         adapter does not read the shape at all
+     */
+    Collection<String> of(
+        String workflowModuleId,
+        String bpmnProcessId,
+        String version,
+        BpmnTaskSpec task);
+
+  }
+
+  /**
    * The identifiers a version a BPMS still holds declares - handed to the place which knows
    * what the current deployment scopes them to, so the name a workflow module deployed years
    * ago can be held against the module which uses it today.
@@ -193,6 +221,17 @@ public class DeployedProcessVersionsCheck {
   private final IdentifiersOfHeldVersions identifiersOfHeldVersions;
 
   /**
+   * Where the multi-instance shape of a held version is held against what the methods
+   * serving it read. Absent where no platform wired it.
+   */
+  private final ItemsAHeldVersionNeverNames itemsAHeldVersionNeverNames;
+
+  /**
+   * Where a finding which the start survives is left, so the whole start says it once.
+   */
+  private final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings;
+
+  /**
    * The adapters already reported as unable to answer, so a BPMS which cannot read old
    * models says so once per process instead of once per version.
    */
@@ -244,7 +283,7 @@ public class DeployedProcessVersionsCheck {
       final DeadHandlers deadHandlers,
       final DeclaredBpmnProcesses declaredProcesses) {
 
-    this(processVersions, outfadedVersions, unservedTasks, deadHandlers, declaredProcesses, null, null);
+    this(processVersions, outfadedVersions, unservedTasks, deadHandlers, declaredProcesses, null, null, null, new io.vanillabp.integration.adapter.migration.startup.StartupFindings());
 
   }
 
@@ -267,7 +306,34 @@ public class DeployedProcessVersionsCheck {
       final DeclaredBpmnProcesses declaredProcesses,
       final ConcurrentTokenElementsOfHeldVersions concurrentTokenElements) {
 
-    this(processVersions, outfadedVersions, unservedTasks, deadHandlers, declaredProcesses, concurrentTokenElements, null);
+    this(processVersions, outfadedVersions, unservedTasks, deadHandlers, declaredProcesses, concurrentTokenElements, null, null, new io.vanillabp.integration.adapter.migration.startup.StartupFindings());
+
+  }
+
+  /**
+   * The check with the identifiers of a held version, but without its multi-instance shape
+   * and without a place to leave a finding - what the tests of the name-clash report build.
+   *
+   * @param processVersions What the BPMS reported about their versions
+   * @param outfadedVersions Which versions the operator declared obsolete
+   * @param unservedTasks Which tasks of a held version no method serves
+   * @param deadHandlers Which methods of the module serve nothing worth serving
+   * @param declaredProcesses What the application declared and what was really deployed
+   * @param concurrentTokenElements Where the elements of a held version which can produce a
+   *          second token are judged
+   * @param identifiersOfHeldVersions Where the identifiers of a held version are held against
+   *          what this deployment scopes the same names to
+   */
+  public DeployedProcessVersionsCheck(
+      final ProcessVersions processVersions,
+      final OutfadedProcessVersions outfadedVersions,
+      final UnservedTasks unservedTasks,
+      final DeadHandlers deadHandlers,
+      final DeclaredBpmnProcesses declaredProcesses,
+      final ConcurrentTokenElementsOfHeldVersions concurrentTokenElements,
+      final IdentifiersOfHeldVersions identifiersOfHeldVersions) {
+
+    this(processVersions, outfadedVersions, unservedTasks, deadHandlers, declaredProcesses, concurrentTokenElements, identifiersOfHeldVersions, null, new io.vanillabp.integration.adapter.migration.startup.StartupFindings());
 
   }
 
@@ -288,6 +354,10 @@ public class DeployedProcessVersionsCheck {
    * @param identifiersOfHeldVersions Where the identifiers of a held version are held against
    *          what this deployment scopes the same names to - <code>null</code> where no
    *          platform wired the name-clash check
+   * @param itemsAHeldVersionNeverNames Where the multi-instance shape of a held version is
+   *          held against what the methods serving it read - <code>null</code> switches
+   *          that question off
+   * @param findings Where a finding the start survives is left
    */
   public DeployedProcessVersionsCheck(
       final ProcessVersions processVersions,
@@ -296,7 +366,9 @@ public class DeployedProcessVersionsCheck {
       final DeadHandlers deadHandlers,
       final DeclaredBpmnProcesses declaredProcesses,
       final ConcurrentTokenElementsOfHeldVersions concurrentTokenElements,
-      final IdentifiersOfHeldVersions identifiersOfHeldVersions) {
+      final IdentifiersOfHeldVersions identifiersOfHeldVersions,
+      final ItemsAHeldVersionNeverNames itemsAHeldVersionNeverNames,
+      final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings) {
 
     this.processVersions = processVersions;
     this.outfadedVersions = outfadedVersions;
@@ -305,6 +377,8 @@ public class DeployedProcessVersionsCheck {
     this.declaredProcesses = declaredProcesses;
     this.concurrentTokenElements = concurrentTokenElements;
     this.identifiersOfHeldVersions = identifiersOfHeldVersions;
+    this.itemsAHeldVersionNeverNames = itemsAHeldVersionNeverNames;
+    this.findings = findings;
 
   }
 
@@ -397,6 +471,8 @@ public class DeployedProcessVersionsCheck {
         reportUnableToReadModels(workflowModuleId, bpmnProcessId, adapterId);
         break;
       }
+      reportItemsThisVersionNeverNames(
+          workflowModuleId, bpmnProcessId, adapterId, version, tasks, instanceCounts);
       final var unserved = unservedTasks.of(workflowModuleId, bpmnProcessId, version, tasks);
       if ((unserved == null) || unserved.isEmpty()) {
         continue;
@@ -891,6 +967,115 @@ public class DeployedProcessVersionsCheck {
             ? ", and this BPMS cannot say whether workflows still run on it"
             : ", no workflow runs on it right now",
         remedy);
+
+  }
+
+  /**
+   * Says where a method serving a held version reads the item of an element that version's
+   * model never names.
+   * <p>
+   * While a model is DEPLOYED, the adapter asks the same question and refuses the pairing:
+   * a handler reading an item which the element does not carry gets <code>null</code> and
+   * nothing says why. A version a BPMS only still holds is never deployed again, so nobody
+   * asks - and the methods of the application serve it all the same, because their version
+   * ranges say so. The first news is then a <code>null</code> in a handler running on an
+   * old workflow.
+   * <p>
+   * A WARNING and not a refusal, and the reason is the one every finding about a held
+   * version has: nobody can change that model any more, and the application may have
+   * decided on purpose to let the item be <code>null</code> there. What it must not be is
+   * silent.
+   * <p>
+   * An adapter which does not read the shape of a held version answers <code>null</code>
+   * for it, and then nothing is judged - decision 38 in the repository's DECISIONS.md.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @param adapterId The adapter ID whose BPMS holds the version
+   * @param version The version identifier the BPMS reported
+   * @param tasks The tasks of that version, read from the model the BPMS still holds
+   * @param instanceCounts How many workflows run on a version, asked once per version
+   */
+  private void reportItemsThisVersionNeverNames(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String adapterId,
+      final String version,
+      final Collection<BpmnTaskSpec> tasks,
+      final InstanceCounts instanceCounts) {
+
+    if (itemsAHeldVersionNeverNames == null) {
+      return;
+    }
+    final var unnamed = new java.util.LinkedHashMap<String, java.util.Set<String>>();
+    for (final var task : tasks) {
+      if (task.multiInstanceElementsWithoutAnItem() == null) {
+        // this adapter does not read the shape of a held version, so there is nothing to
+        // hold the methods against
+        continue;
+      }
+      final var elements = itemsAHeldVersionNeverNames
+          .of(workflowModuleId, bpmnProcessId, version, task);
+      if ((elements == null) || elements.isEmpty()) {
+        continue;
+      }
+      unnamed
+          .computeIfAbsent(
+              task.taskDefinition() == null
+                  ? task.activityId()
+                  : task.taskDefinition(),
+              definition -> new java.util.LinkedHashSet<>())
+          .addAll(elements);
+    }
+    if (unnamed.isEmpty()) {
+      return;
+    }
+    final var whatReadsWhat = unnamed
+        .entrySet()
+        .stream()
+        .map(entry -> "'%s' reads the item of %s"
+            .formatted(
+                entry.getKey(),
+                entry
+                    .getValue()
+                    .stream()
+                    .map("'%s'"::formatted)
+                    .collect(Collectors.joining(", "))))
+        .collect(Collectors.joining("; "));
+    findings
+        .warn(
+            io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+            "process '%s' of workflow module '%s', adapter '%s'"
+                .formatted(bpmnProcessId, workflowModuleId, adapterId),
+            """
+                Version '%s' iterates without naming the value of a round, and a @WorkflowTask method \
+                serving that version reads it: %s. The parameter is null on every workflow still \
+                running on that version%s, and nothing else says why. The model of a version a BPMS \
+                holds cannot be changed any more, so the way out is on the side of the code: narrow \
+                the version range of the method and add one for the old version which reads the index \
+                and the total only, or leave it as it is if a null item is what that version is meant \
+                to give.\
+                """
+                .formatted(version, whatReadsWhat, workflowsRunningOn(instanceCounts.of(version))));
+
+  }
+
+  /**
+   * How many workflows a finding about a held version is about, in the words the count
+   * allows - a BPMS which cannot count says that instead of a number.
+   */
+  private static String workflowsRunningOn(
+      final Long running) {
+
+    if (running == null) {
+      return ", and this BPMS cannot say how many that are";
+    }
+    if (running == 0L) {
+      return ", which is no workflow at the moment";
+    }
+    return running == 1L
+        ? ", which is one workflow at the moment"
+        : ", which is %d workflows at the moment".formatted(running);
 
   }
 

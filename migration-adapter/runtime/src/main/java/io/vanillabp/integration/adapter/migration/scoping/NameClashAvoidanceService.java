@@ -124,6 +124,23 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   private final Map<String, Boolean> isolationAnswers = new ConcurrentHashMap<>();
 
   /**
+   * Where a finding the start survives is left, so the whole start says it once.
+   */
+  private final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings;
+
+  /**
+   * The workflow modules whose CURRENT models an adapter read out for
+   * {@link #reportIdentifiersTheModelsDeclare}, keyed by adapter id and module.
+   * <p>
+   * It is what lets a name of a held version be missed rather than merely absent: where
+   * nobody ever said what this deployment declares, every old name looks new and the check
+   * about a name nobody sends any more would report a whole model. An adapter which does
+   * not read identifiers at all therefore silences that check instead of filling it
+   * (decision 38 in the repository's DECISIONS.md).
+   */
+  private final Set<String> modulesWhoseIdentifiersWereRead = ConcurrentHashMap.newKeySet();
+
+  /**
    * Where a scoped identifier was read: the workflow module it belongs to, and the BPMN
    * process for a kind which is scoped per process. For a BPMN process id the process is
    * the identifier itself, which is what lets the collision check tell a process reported
@@ -168,6 +185,11 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
 
     this.properties = properties;
     this.deploymentServices = deploymentServices;
+    this.findings = properties == null
+        // a service built without a configuration is a test fixture, and it has no start
+        // to close either
+        ? new io.vanillabp.integration.adapter.migration.startup.StartupFindings()
+        : properties.startupFindings();
 
   }
 
@@ -980,6 +1002,7 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
     if ((declared == null) || (workflowModuleId == null)) {
       return;
     }
+    modulesWhoseIdentifiersWereRead.add("%s|%s".formatted(adapterId, workflowModuleId));
     final var collisions = new LinkedList<String>();
     final var fixes = new LinkedHashSet<String>();
     final var modes = new LinkedHashSet<NameClashAvoidance>();
@@ -1058,6 +1081,7 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
     final var shared = new LinkedList<String>();
     final var fixes = new LinkedHashSet<String>();
     final var modes = new LinkedHashSet<NameClashAvoidance>();
+    final var waitedFor = new LinkedHashSet<String>();
     for (final var identifier : declared) {
       if ((identifier == null) || (identifier.kind() == null) || (identifier.plainIdentifier() == null)) {
         continue;
@@ -1072,9 +1096,15 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
           adapterId);
       final var deployedNow = moduleDeclaringScopedIdentifier
           .get(declarationKey(adapterId, identifier.kind(), scopedForm));
-      if ((deployedNow == null) || deployedNow.workflowModuleId().equals(workflowModuleId)) {
-        // nothing deploys that name today, or the module which does is the one the held
-        // version belongs to, which is the same model carried forward rather than a clash
+      if (deployedNow == null) {
+        if (nobodySendsItAnyMore(adapterId, workflowModuleId, identifier, activeWorkflows)) {
+          waitedFor.add("%s '%s'".formatted(kindOf(identifier.kind()), identifier.plainIdentifier()));
+        }
+        continue;
+      }
+      if (deployedNow.workflowModuleId().equals(workflowModuleId)) {
+        // the module which declares it today is the one the held version belongs to, which
+        // is the same model carried forward rather than a clash
         continue;
       }
       final var mode = modeFor(deployedNow.workflowModuleId(), null, adapterId);
@@ -1095,6 +1125,7 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
                       deployedNow.workflowModuleId(),
                       processClauseOf(identifier.kind(), deployedNow.bpmnProcessId())));
     }
+    reportNamesNobodySendsAnyMore(adapterId, workflowModuleId, bpmnProcessId, version, activeWorkflows, waitedFor);
     if (shared.isEmpty()) {
       return;
     }
@@ -1117,6 +1148,96 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
             whatTheBpmsOwnIsolationHides(modes),
             asBullets(shared),
             asBullets(fixes));
+
+  }
+
+  /**
+   * Whether a name a held version declares is one nothing sends any more - a message or a
+   * signal which reaches a workflow from outside and which no model of this deployment
+   * declares.
+   * <p>
+   * Only those two kinds. An error code and an escalation code are thrown by the model
+   * itself, so a held version carrying one carries whatever throws it as well. A task
+   * definition nobody serves is the subject of its own check, which says more about it
+   * than this could. A BPMN process id of a held version is the process being asked
+   * about.
+   * <p>
+   * A version nobody is on is not asked about either: nothing waits there, so there is
+   * nothing to look at. A BPMS which cannot count is asked all the same, because "cannot
+   * tell" is not "nobody".
+   *
+   * @param adapterId The adapter ID whose BPMS holds the version
+   * @param workflowModuleId The workflow module of the held version
+   * @param identifier One identifier that version declares
+   * @param activeWorkflows How many workflows still run on it, or <code>null</code>
+   * @return Whether it is worth a look
+   */
+  private boolean nobodySendsItAnyMore(
+      final String adapterId,
+      final String workflowModuleId,
+      final ModelIdentifier identifier,
+      final Long activeWorkflows) {
+
+    if ((identifier.kind() != ScopedIdentifierKind.MESSAGE_NAME) && (identifier
+        .kind() != ScopedIdentifierKind.SIGNAL_NAME)) {
+      return false;
+    }
+    if ((activeWorkflows != null) && (activeWorkflows == 0L)) {
+      return false;
+    }
+    // where nobody said what this deployment declares, every old name looks new
+    return modulesWhoseIdentifiersWereRead.contains("%s|%s".formatted(adapterId, workflowModuleId));
+
+  }
+
+  /**
+   * Says that a held version waits for a name the current deployment does not declare any
+   * more, which is what renaming a message leaves behind.
+   * <p>
+   * The workflows on that version wait for something nobody sends, and nothing else in
+   * VanillaBP would ever say so: the name lives in a model the BPMS holds and in no file
+   * of the application.
+   * <p>
+   * The advice is "look at it" rather than "write this", because the platform can see the
+   * case and cannot know whether it is meant. An application may have renamed the message
+   * on purpose and finished the old workflows by hand, or the old version may be one
+   * nobody waits at. A refusal here would be a blind one - decision 38 in the repository's
+   * DECISIONS.md - so it is a warning, and it goes into the block a start writes at its
+   * end rather than into a paragraph of its own.
+   *
+   * @param adapterId The adapter ID whose BPMS holds the version
+   * @param workflowModuleId The workflow module of the held version
+   * @param bpmnProcessId The plain BPMN process ID of the held version
+   * @param version The version identifier the BPMS reported
+   * @param activeWorkflows How many workflows still run on it, or <code>null</code>
+   * @param waitedFor The names, already worded, empty where there is nothing to say
+   */
+  private void reportNamesNobodySendsAnyMore(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String version,
+      final Long activeWorkflows,
+      final Collection<String> waitedFor) {
+
+    if (waitedFor.isEmpty()) {
+      return;
+    }
+    findings
+        .warn(
+            io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+            "process '%s' of workflow module '%s', adapter '%s'"
+                .formatted(bpmnProcessId, workflowModuleId, adapterId),
+            """
+                Version %s, which this BPMS still holds%s, declares names no model of this \
+                deployment declares any more:%s
+                A workflow waiting at one of them waits for something nothing sends. That may be \
+                what you meant - a name which was renamed and old workflows which were finished by \
+                hand - and it may be a rename nobody finished. Look at the workflows still running \
+                on that version, and where they do wait, correlate the message under its old name \
+                or bring those workflows to an end.\
+                """
+                .formatted(version, workflowsRunningOn(activeWorkflows), asBullets(waitedFor)));
 
   }
 

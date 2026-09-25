@@ -238,15 +238,18 @@ public class PhaseTwoOutboxProperties {
    * and a time zone nobody knows - and warns about the one case where a correct-looking
    * configuration house-keeps at the wrong hour: a JVM on UTC without a zone of its own.
    *
+   * @param findings Where the warning about the zone is noted, so it reaches the reader in
+   *          the box at the end of the start rather than as a line of its own
    * @throws IllegalStateException Naming the key and the way out
    */
-  public void validateHousekeeping() {
+  public void validateHousekeeping(
+      final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings) {
 
     if (housekeeping == null) {
       // a binder mapping an absent section onto null must not cost the defaults
       housekeeping = new HousekeepingProperties();
     }
-    housekeeping.validate();
+    housekeeping.validate(findings);
 
   }
 
@@ -732,9 +735,6 @@ public class PhaseTwoOutboxProperties {
   @SuperBuilder
   public static class HousekeepingProperties {
 
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory
-        .getLogger(HousekeepingProperties.class);
-
     /**
      * The empty section a configuration binder starts from, and the section an application
      * which writes nothing about the housekeeping gets.
@@ -749,6 +749,14 @@ public class PhaseTwoOutboxProperties {
       this(HousekeepingProperties.builder());
 
     }
+
+    /**
+     * What the box calls this section when one of its settings is worth a look:
+     * <code>vanillabp.outbox.housekeeping</code>. It is the scope of the finding, which
+     * is why it stands beside the message rather than inside it.
+     */
+    public static final String HOUSEKEEPING_PREFIX = SECTION
+        + ".housekeeping";
 
     /**
      * The key of {@link #start}: <code>vanillabp.outbox.housekeeping.start</code>.
@@ -826,7 +834,7 @@ public class PhaseTwoOutboxProperties {
      * Written the way {@link ZoneId} spells one, for example <code>Europe/Vienna</code>.
      * <p>
      * A JVM standing on UTC without this key is warned once at the startup, because "four
-     * in the morning" is then four UTC - see {@link #sayWhichZoneTheWindowRunsIn()}.
+     * in the morning" is then four UTC - see {@link #sayWhichZoneTheWindowRunsIn(io.vanillabp.integration.adapter.migration.startup.StartupFindings)}.
      */
     @Builder.Default
     private String zone = null;
@@ -849,13 +857,15 @@ public class PhaseTwoOutboxProperties {
      * Refuses a window which is none and a zone nobody knows, and warns where a JVM
      * stands on UTC and nobody gave the window a zone of its own.
      *
+     * @param findings Where the warning about the zone is noted
      * @throws IllegalStateException Naming the key and the way out
      */
-    public void validate() {
+    public void validate(
+        final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings) {
 
       refuseAWindowWhichIsNone();
       refuseAZoneNobodyKnows();
-      sayWhichZoneTheWindowRunsIn();
+      sayWhichZoneTheWindowRunsIn(findings);
 
     }
 
@@ -909,13 +919,15 @@ public class PhaseTwoOutboxProperties {
      * an hour nobody expected, which is surprise and a little load; what a refused start
      * costs is the deployment. The two are not the same size.
      * <p>
-     * It is one of the notes VanillaBP means to collect into one box at the end of a
-     * startup, so an operator reads what to look at in one place rather than a line per
-     * check.
+     * It goes into the box VanillaBP writes at the end of a start rather than into a line
+     * of its own, because it is exactly the kind of note nobody goes looking for.
      * <p>
      * An application which really wants UTC writes it down, and then this says nothing.
+     *
+     * @param findings Where the note is left
      */
-    private void sayWhichZoneTheWindowRunsIn() {
+    private void sayWhichZoneTheWindowRunsIn(
+        final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings) {
 
       if ((zone != null) && !zone.isBlank()) {
         return;
@@ -924,22 +936,25 @@ public class PhaseTwoOutboxProperties {
       if (!MEANS_UTC.contains(jvmZone.getId().toUpperCase(Locale.ROOT))) {
         return;
       }
-      logger
+      findings
           .warn(
+              io.vanillabp.integration.adapter.migration.startup.StartupTopic.CONFIGURATION,
+              HOUSEKEEPING_PREFIX,
               """
-                  The housekeeping of the VanillaBP outbox runs from {} to {} UTC, because this JVM \
-                  stands on '{}' and no time zone was configured for it. In most places that is the \
+                  The housekeeping of the VanillaBP outbox runs from %s to %s UTC, because this JVM \
+                  stands on '%s' and no time zone was configured for it. In most places that is the \
                   middle of the working day rather than the quiet hour it is meant to be. Say which \
                   zone you mean, in one of two ways, neither of which needs a new build:
                     - set the zone of the container, for example TZ=Europe/Vienna, or
-                    - set the zone of the housekeeping alone, for example {}=Europe/Vienna (property \
-                  '{}').
-                  Write 'UTC' there if UTC is what you mean, and this line goes away.""",
-              start,
-              end,
-              jvmZone.getId(),
-              ZONE_ENVIRONMENT_VARIABLE,
-              ZONE_PROPERTY);
+                    - set the zone of the housekeeping alone, for example %s=Europe/Vienna (property \
+                  '%s').
+                  Write 'UTC' there if UTC is what you mean, and this line goes away."""
+                  .formatted(
+                      start,
+                      end,
+                      jvmZone.getId(),
+                      ZONE_ENVIRONMENT_VARIABLE,
+                      ZONE_PROPERTY));
 
     }
 

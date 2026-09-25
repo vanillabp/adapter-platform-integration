@@ -6,9 +6,10 @@ package io.vanillabp.integration.adapter.spi.workflowtask;
  * {@link WorkflowTaskWiring#validateTaskWiring(String, String, java.util.Collection)}
  * during <code>wireBpmn</code>.
  * <p>
- * The {@link #name()} stands LAST although it belongs next to the activity id: it was
- * added to a record whose three other components every adapter and every test already
- * writes, and appending it keeps the constructor those callers use as it was.
+ * The {@link #name()} and {@link #multiInstanceElementsWithoutAnItem()} stand LAST although
+ * both belong next to the activity id: each was added to a record whose other components
+ * every adapter and every test already writes, and appending keeps the constructors those
+ * callers use as they are.
  *
  * @param activityId The BPMN activity ID (the task element's <code>id</code>
  *          attribute), matched against <code>&#64;WorkflowTask(id = ...)</code>
@@ -29,12 +30,24 @@ package io.vanillabp.integration.adapter.spi.workflowtask;
  *          read one passes none. Nothing VanillaBP decides depends on it - it is
  *          carried because whoever reads the model reads it anyway, and everyone else
  *          would have to parse the same bytes a second time to get it
+ * @param multiInstanceElementsWithoutAnItem The ids of the elements this task iterates in
+ *          which never name the value of a round - a Camunda 7 element without
+ *          <code>camunda:elementVariable</code>, a Camunda 8 one without
+ *          <code>inputElement</code>. A handler reading its item on such an element gets
+ *          <code>null</code>, which an adapter refuses while it DEPLOYS a model and which
+ *          nobody could ask about a version a BPMS only still holds. Answering
+ *          <code>null</code> means that this adapter does not read the shape, and the
+ *          question is then not asked at all rather than answered by a guess (decision 38
+ *          in the repository's DECISIONS.md); an empty list means that every element of
+ *          the chain names its item. See decision &lt;pending: 556&gt; in the repository's
+ *          DECISIONS.md
  */
 public record BpmnTaskSpec(
                            String activityId,
                            String taskDefinition,
                            boolean optional,
-                           String name) {
+                           String name,
+                           java.util.List<String> multiInstanceElementsWithoutAnItem) {
 
   /**
    * A MANDATORY task spec (service-like tasks) whose BPMN name is not read.
@@ -46,7 +59,7 @@ public record BpmnTaskSpec(
       final String activityId,
       final String taskDefinition) {
 
-    this(activityId, taskDefinition, false, null);
+    this(activityId, taskDefinition, false, null, null);
 
   }
 
@@ -63,7 +76,27 @@ public record BpmnTaskSpec(
       final String taskDefinition,
       final boolean optional) {
 
-    this(activityId, taskDefinition, optional, null);
+    this(activityId, taskDefinition, optional, null, null);
+
+  }
+
+  /**
+   * A task spec whose multi-instance shape is not read - what an adapter writes which does
+   * not answer that question.
+   *
+   * @param activityId The BPMN activity ID
+   * @param taskDefinition The task definition (may be <code>null</code>)
+   * @param optional Whether a matching handler method is optional (see
+   *          {@link #optional()})
+   * @param name The BPMN <code>name</code> attribute (may be <code>null</code>)
+   */
+  public BpmnTaskSpec(
+      final String activityId,
+      final String taskDefinition,
+      final boolean optional,
+      final String name) {
+
+    this(activityId, taskDefinition, optional, name, null);
 
   }
 
@@ -78,7 +111,7 @@ public record BpmnTaskSpec(
       final String activityId,
       final String taskDefinition) {
 
-    return new BpmnTaskSpec(activityId, taskDefinition, true, null);
+    return new BpmnTaskSpec(activityId, taskDefinition, true, null, null);
 
   }
 
@@ -96,7 +129,7 @@ public record BpmnTaskSpec(
       final String taskDefinition,
       final String name) {
 
-    return new BpmnTaskSpec(activityId, taskDefinition, true, name);
+    return new BpmnTaskSpec(activityId, taskDefinition, true, name, null);
 
   }
 

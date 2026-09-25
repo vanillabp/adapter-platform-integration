@@ -476,13 +476,85 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
+   * Writes down what a failed dispatch means for the entry, and keeps a write which cannot
+   * get through inside this lane.
+   * <p>
+   * The mark path is guarded the same way: what the store throws there ends as a report
+   * rather than as an exception leaving the runnable of a lane, where it would be printed
+   * as "Exception in thread vanillabp-outbox-dispatch-1" with a stack trace nobody can
+   * place. The failure path used to be the one which was not guarded, and a shutdown
+   * during a dispatch is exactly when it is not.
+   *
+   * @param entry The entry whose dispatch failed
+   * @param e What the dispatch threw
+   */
+  private void reportFailedDispatch(
+      final PhaseTwoOutboxEntry entry,
+      final Exception e) {
+
+    try {
+      writeDownTheFailedDispatch(entry, e);
+    } catch (final RuntimeException whileWritingItDown) {
+      reportAResultWhichWasNotWritten(entry, whileWritingItDown);
+    }
+
+  }
+
+  /**
+   * Says that how an attempt ended was not written down, and says which of the two cases it
+   * is.
+   * <p>
+   * Nothing is lost either way: the entry stays as it was, keeps its lease, and the next
+   * node to pick it up dispatches it again once that lease runs out - the at-least-once the
+   * contract names. What differs is who has to do something. A node being STOPPED is the
+   * ordinary case of {@code JdbcPhaseTwoOutboxDispatcher#reportTheEntryNoLaneTook} and is
+   * said at INFO, because a stack trace there sends an operator looking for a fault where a
+   * deployment was. Everything else keeps the sharpness it had.
+   * <p>
+   * The interrupt flag is set again before the line is written: the work of this lane is
+   * over, and whoever asks the thread next has to see that it was interrupted.
+   *
+   * @param entry The entry this attempt ran on
+   * @param e What the store threw while the result was being written
+   */
+  private void reportAResultWhichWasNotWritten(
+      final PhaseTwoOutboxEntry entry,
+      final RuntimeException e) {
+
+    if (io.vanillabp.integration.adapter.migration.outbox.AStoppingNode.isTheReasonFor(e)) {
+      Thread.currentThread().interrupt();
+      log.info(
+          "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' was "
+              + "interrupted because this node is stopping - the outbox entry '{}' stays as it is and is "
+              + "dispatched once its lease runs out",
+          entry.getOperation(),
+          entry.getBpmnProcessId(),
+          entry.getWorkflowModuleId(),
+          entry.getAggregateId(),
+          entry.getId());
+      return;
+    }
+    log.error(
+        "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
+            + "failed, and how it failed could not be written down either - the outbox entry '{}' stays "
+            + "as it is and is dispatched once its lease runs out!",
+        entry.getOperation(),
+        entry.getBpmnProcessId(),
+        entry.getWorkflowModuleId(),
+        entry.getAggregateId(),
+        entry.getId(),
+        e);
+
+  }
+
+  /**
    * Writes down what a failed dispatch means for the entry: blocked where repeating cannot
    * help or where the attempts are used up, and a new due time otherwise.
    *
    * @param entry The entry whose dispatch failed
    * @param e What the dispatch threw
    */
-  private void reportFailedDispatch(
+  private void writeDownTheFailedDispatch(
       final PhaseTwoOutboxEntry entry,
       final Exception e) {
 

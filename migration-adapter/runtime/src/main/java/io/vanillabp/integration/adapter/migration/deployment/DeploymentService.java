@@ -935,7 +935,12 @@ public class DeploymentService {
   }
 
   /**
-   * Starts to running the workflows of the given BPMN processes.
+   * Starts to running the workflows of the given BPMN processes, and closes the start
+   * with what it found.
+   * <p>
+   * Nothing a start can notice comes later than this, so the box of
+   * {@link io.vanillabp.integration.adapter.migration.startup.StartupFindings} is written
+   * here and a start which has to be refused ends here.
    *
    * @param workflowModuleIds The workflow module IDs to deploy
    * @param <BPMN> The BPMN model type. No model is read here: the parameter carries the type
@@ -991,6 +996,14 @@ public class DeploymentService {
                         processingContext));
               });
         });
+
+    // everything a start can find has been found by now: the checks of the configuration
+    // binding, of the deployment and of the hooks both platforms run once every bean
+    // exists. So this is where the whole start says what it noticed, in one block, and
+    // where it ends if something has to change first
+    properties
+        .startupFindings()
+        .endOfStartup();
 
   }
 

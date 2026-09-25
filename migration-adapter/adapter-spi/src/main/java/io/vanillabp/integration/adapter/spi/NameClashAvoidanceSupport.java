@@ -581,6 +581,16 @@ public interface NameClashAvoidanceSupport {
    * The limit of this check is which models get read at all. The core asks a catalog of a
    * workflow module the application still deploys; a module the application dropped
    * entirely has no catalog, nothing is asked about it, and its names stay invisible.
+   * <p>
+   * What arrives here answers a second question at the same time: a message name or a
+   * signal name which NO model of this deployment declares any more. Workflows on that
+   * version wait for something nothing sends, which is what renaming a message leaves
+   * behind, and the name lives in a model the BPMS holds and in no file of the
+   * application. That finding too is a warning, and it says "look at it" rather than
+   * "write this": a rename whose old workflows were finished by hand looks exactly like a
+   * rename nobody finished. It is silent for a version nobody is on and silent where this
+   * adapter never reported what the current models declare. See decision &lt;pending:
+   * 558&gt; in the repository's DECISIONS.md.
    *
    * @param adapterId The adapter ID
    * @param workflowModuleId The workflow module of the held version
