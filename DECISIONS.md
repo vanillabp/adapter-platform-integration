@@ -2725,6 +2725,37 @@ written at, which is the same answer decision 66 gives for the permission to sha
 aggregate. Both are settings a level binds without reading, and a setting which can be written
 and does nothing is worse than one which cannot be written at all.
 
+### 81. A published class carries no Lombok and no MapStruct annotation
+
+Javadoc does not run Lombok. So the published documentation of every `config/*Properties` class shows a
+class without a single accessor, while the bytecode has one per field. The other direction happens too:
+`PhaseTwoOutboxEntry`, `TaskDeliveryDocument` and `PhaseTwoPayloadDocument` carry `@AllArgsConstructor`
+beside a hand-written constructor, so the jar has two public constructors and the documentation shows
+one. Whoever reads what we publish sees a different API from the one they can call, and that is the
+whole point of publishing javadoc.
+
+MapStruct is the heavier half, because it costs more than a wrong page. `org.mapstruct:mapstruct` sits
+in `quarkus-integration/runtime/pom.xml` with no scope, so it is on the compile classpath of every
+application which pulls our Quarkus integration - a library those applications never asked for, on the
+classpath only because we generate one properties mapper with it. Lombok is `provided` in the root POM
+and never reaches an application, so there the argument is the javadoc alone.
+
+The rule: a class in the `src/main` of a module we publish carries neither a Lombok nor a MapStruct
+annotation. Test code, integration-test modules and the build tools are free to use both. `@Slf4j` is
+included in the rule although it generates no API, because an exception nobody can check by looking at
+the class is an exception which grows.
+
+What this costs is written down rather than guessed: 136 files across the platform and the four adapter
+repositories, 85 of them carrying `@Slf4j` alone, 51 generating API, plus the MapStruct mapper of the
+Quarkus integration, whose generated implementation is 366 lines. The order to convert them in is the
+public API first - the configuration classes and the three MongoDB documents an application's javadoc
+shows - then the internal classes which generate API, then the loggers. The mapper waits for the
+portable-values work to land, because that work changes the same file.
+
+The check which catches the next case belongs beside `PublishedPoms` and `TestClassConventions` in
+`test-utils`, with one caller per repository, and it is switched on per stage rather than all at once:
+a gate which fails on 136 files on the day it is written is a gate nobody can merge.
+
 ### 89. A setting written below the level it is read at ends the startup, and all of them say it the same way
 
 One class carries what an adapter may be told, and all four levels of decision 7 bind that class.

@@ -1005,6 +1005,14 @@ contributor-facing and carries the rationale, the alternatives you considered an
 mechanics. A deliberate mode which conforms fully is not a deviation; document it with the
 configuration which enables it.
 
+One rule about the classes themselves, because it is about what a reader of your documentation sees.
+A class in the `src/main` of a module you publish carries no Lombok and no MapStruct annotation
+(decision 81 of this repository). Javadoc does not run either of them, so a configuration class with
+`@Getter` is published as a class with no accessor at all, and the person reading it cannot call what
+you shipped. The second half costs more than a wrong page: a code generator whose annotations reach
+your published POM puts its runtime library on the classpath of every application which adds your
+adapter, and they never asked for it. Both tools are welcome in your tests and in your build tools.
+
 `DECISIONS.md` holds the numbered decisions several places in your repository rely on, and it is
 the only thing your code is allowed to cite, in the plain form `see decision 7 in the repository's
 DECISIONS.md`. A citation into another repository's log does not resolve; a decision spanning two
