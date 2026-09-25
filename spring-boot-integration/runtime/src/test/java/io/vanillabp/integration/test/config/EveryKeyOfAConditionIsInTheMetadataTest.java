@@ -21,6 +21,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.config.GruelboxOutboxProperties;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
@@ -39,6 +40,11 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * keys below the sections of the core model come from
  * <code>META-INF/additional-spring-configuration-metadata.json</code>, because the
  * processor does not descend into types which arrive as a dependency.
+ * <p>
+ * Only the metadata of VanillaBP's own artifacts answers here. Every framework jar ships a
+ * file of the same name, and one of them describing a <code>vanillabp</code> key would let
+ * this test pass while our own metadata says nothing, which is the weakness
+ * {@link #theMetadataReadIsOursAlone()} keeps out.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class EveryKeyOfAConditionIsInTheMetadataTest {
@@ -78,12 +84,12 @@ public class EveryKeyOfAConditionIsInTheMetadataTest {
   @DisplayName("Every vanillabp key a condition reads is in the configuration metadata")
   public void everyKeyOfAConditionIsInTheMetadata() throws IOException {
 
-    final var metadata = keysOfTheMetadata();
+    final var metadata = keysOfOurMetadata();
     assertFalse(
         metadata.isEmpty(),
         """
-            No configuration metadata on the classpath! It is generated while the main sources \
-            are compiled, so run this test through the build.""");
+            No configuration metadata of VanillaBP on the classpath! It is generated while the \
+            main sources are compiled, so run this test through the build.""");
 
     final var missing = new TreeSet<String>();
     for (final var autoConfiguration : autoConfigurations()) {
@@ -103,6 +109,35 @@ public class EveryKeyOfAConditionIsInTheMetadataTest {
             key, this module where Spring Boot has it alone - and describe it in \
             'META-INF/additional-spring-configuration-metadata.json'."""
             .formatted(missing));
+
+  }
+
+  /**
+   * The counter-check of the test above: it answers from OUR metadata, not from whatever
+   * the classpath holds. Every framework jar ships a file of the same name, and a foreign
+   * file describing a <code>vanillabp</code> key would make the guard pass while our own
+   * metadata is silent.
+   *
+   * @throws IOException If the classpath cannot be read
+   */
+  @Test
+  @DisplayName("The metadata this test reads is ours alone")
+  public void theMetadataReadIsOursAlone() throws IOException {
+
+    final var keys = keysOfOurMetadata();
+
+    assertTrue(
+        keys.contains(GruelboxOutboxProperties.ENABLED),
+        "'%s' is described by this module, so our own metadata has to know it"
+            .formatted(GruelboxOutboxProperties.ENABLED));
+    assertTrue(
+        keys.stream().allMatch(key -> key.startsWith(OUR_SECTION)),
+        """
+            Our metadata describes keys below '%s' and nothing else, so a key from another \
+            section means a foreign file was read: %s"""
+            .formatted(
+                OUR_SECTION,
+                keys.stream().filter(key -> !key.startsWith(OUR_SECTION)).toList()));
 
   }
 
@@ -213,15 +248,17 @@ public class EveryKeyOfAConditionIsInTheMetadataTest {
   }
 
   /**
-   * @return Every key the configuration metadata of the classpath knows, VanillaBP's own
-   *         keys as well as the ones of the framework
+   * @return Every key the configuration metadata of VanillaBP's own artifacts knows
    * @throws IOException If the classpath cannot be read
    */
-  private static Set<String> keysOfTheMetadata() throws IOException {
+  private static Set<String> keysOfOurMetadata() throws IOException {
 
     final var mapper = new ObjectMapper();
     final var keys = new TreeSet<String>();
     for (final var resource : resources(METADATA)) {
+      if (!isOneOfOurArtifacts(resource)) {
+        continue;
+      }
       try (var content = resource.openStream()) {
         mapper
             .readTree(content)
@@ -230,6 +267,26 @@ public class EveryKeyOfAConditionIsInTheMetadataTest {
       }
     }
     return keys;
+
+  }
+
+  /**
+   * Whether the given metadata file belongs to VanillaBP. Every framework jar brings a file
+   * of the same name, and one of them describing a <code>vanillabp</code> key would answer
+   * for us: the test would pass while our own metadata says nothing about that key.
+   * <p>
+   * A module of this build writes its metadata into its own <code>target</code> directory,
+   * and a module which is already released lies below the group's directory in a Maven
+   * repository. Nothing else of ours reaches a classpath.
+   *
+   * @param metadata Where a metadata file was found
+   * @return Whether it is one of ours
+   */
+  private static boolean isOneOfOurArtifacts(
+      final URL metadata) {
+
+    final var location = metadata.toString();
+    return location.contains("/target/classes/") || location.contains("/io/vanillabp/");
 
   }
 
