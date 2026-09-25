@@ -127,7 +127,7 @@
     {
       "name": "vanillabp.outbox.housekeeping.zone",
       "type": "java.lang.String",
-      "description": "The time zone the housekeeping window is read in, written the way ZoneId spells one (e.g. 'Europe/Vienna'). Unset means the zone of the JVM - and a JVM standing on UTC without this key ends the startup, because 'four in the morning' would then mean four UTC. Write 'UTC' here if that is what you mean."
+      "description": "The time zone the housekeeping window is read in, written the way ZoneId spells one (e.g. 'Europe/Vienna'). Unset means the zone of the JVM - and a JVM standing on UTC without this key is warned at the startup, because 'four in the morning' would then mean four UTC. Write 'UTC' here if that is what you mean."
     },
     {
       "name": "vanillabp.conventional-resources-locations",

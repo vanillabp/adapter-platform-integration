@@ -234,9 +234,9 @@ public class PhaseTwoOutboxProperties {
   private HousekeepingProperties housekeeping = new HousekeepingProperties();
 
   /**
-   * Refuses a configuration the housekeeping cannot run on: a window which is no window,
-   * a time zone nobody knows, and the one case where a correct-looking configuration
-   * would house-keep at the wrong hour - a JVM on UTC without a zone of its own.
+   * Refuses a configuration the housekeeping cannot run on - a window which is no window
+   * and a time zone nobody knows - and warns about the one case where a correct-looking
+   * configuration house-keeps at the wrong hour: a JVM on UTC without a zone of its own.
    *
    * @throws IllegalStateException Naming the key and the way out
    */
@@ -732,6 +732,9 @@ public class PhaseTwoOutboxProperties {
   @SuperBuilder
   public static class HousekeepingProperties {
 
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory
+        .getLogger(HousekeepingProperties.class);
+
     /**
      * The empty section a configuration binder starts from, and the section an application
      * which writes nothing about the housekeeping gets.
@@ -761,8 +764,8 @@ public class PhaseTwoOutboxProperties {
 
     /**
      * The key of {@link #zone}: <code>vanillabp.outbox.housekeeping.zone</code>. It is a
-     * constant because the message refusing a JVM on UTC names it, and a test reads the
-     * key from here instead of writing it a second time.
+     * constant because the warning about a JVM on UTC names it, and a test reads the key
+     * from here instead of writing it a second time.
      */
     public static final String ZONE_PROPERTY = SECTION
         + ".housekeeping.zone";
@@ -788,7 +791,7 @@ public class PhaseTwoOutboxProperties {
 
     /**
      * The spellings which all mean UTC. A JVM standing on one of them without a zone
-     * configured here is refused, because "four in the morning" then means four UTC,
+     * configured here is warned, because "four in the morning" then means four UTC,
      * which is almost never what somebody meant.
      */
     private static final List<String> MEANS_UTC = List.of("UTC", "ETC/UTC", "GMT", "ETC/GMT", "Z", "ZULU", "UCT");
@@ -821,6 +824,9 @@ public class PhaseTwoOutboxProperties {
      * zone of the JVM.
      * <p>
      * Written the way {@link ZoneId} spells one, for example <code>Europe/Vienna</code>.
+     * <p>
+     * A JVM standing on UTC without this key is warned once at the startup, because "four
+     * in the morning" is then four UTC - see {@link #sayWhichZoneTheWindowRunsIn()}.
      */
     @Builder.Default
     private String zone = null;
@@ -840,8 +846,8 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * Refuses a window which is none, a zone nobody knows, and a JVM on UTC which was
-     * given no zone of its own.
+     * Refuses a window which is none and a zone nobody knows, and warns where a JVM
+     * stands on UTC and nobody gave the window a zone of its own.
      *
      * @throws IllegalStateException Naming the key and the way out
      */
@@ -849,7 +855,7 @@ public class PhaseTwoOutboxProperties {
 
       refuseAWindowWhichIsNone();
       refuseAZoneNobodyKnows();
-      refuseAnUnsaidUtc();
+      sayWhichZoneTheWindowRunsIn();
 
     }
 
@@ -889,19 +895,27 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * Refuses the one configuration which looks right and is wrong: a JVM standing on UTC
-     * with nobody having said which zone the window is meant in.
+     * Says which zone the window really runs in, where a JVM stands on UTC and nobody
+     * configured one.
      * <p>
      * A container runs on UTC unless somebody sets its zone, so "four in the morning"
      * becomes four UTC, which in most places is the middle of the working day. The
-     * application would house-keep at that hour and nothing would say so. It therefore
-     * does not start, and the message names both ways out, because this is noticed when
-     * somebody installs the application on a server rather than while it is written -
-     * and neither way needs a new build.
+     * application would house-keep at that hour and nothing would say so, which is what
+     * this line is for.
      * <p>
-     * An application which really wants UTC writes it down, and then it starts.
+     * <strong>A warning and not a refusal.</strong> UTC is what a container ships with
+     * and what a Kubernetes deployment normally has, so refusing the start would invent a
+     * precondition rather than uncover a mistake. What the wrong zone costs is a sweep at
+     * an hour nobody expected, which is surprise and a little load; what a refused start
+     * costs is the deployment. The two are not the same size.
+     * <p>
+     * It is one of the notes VanillaBP means to collect into one box at the end of a
+     * startup, so an operator reads what to look at in one place rather than a line per
+     * check.
+     * <p>
+     * An application which really wants UTC writes it down, and then this says nothing.
      */
-    private void refuseAnUnsaidUtc() {
+    private void sayWhichZoneTheWindowRunsIn() {
 
       if ((zone != null) && !zone.isBlank()) {
         return;
@@ -910,22 +924,22 @@ public class PhaseTwoOutboxProperties {
       if (!MEANS_UTC.contains(jvmZone.getId().toUpperCase(Locale.ROOT))) {
         return;
       }
-      throw new IllegalStateException(
-          """
-              This JVM stands on '%s' and no time zone was configured for the housekeeping of the \
-              VanillaBP outbox! It would then run from %s to %s UTC, which is the middle of the \
-              working day in most places, and nothing would say so. Say which zone you mean, in one \
-              of two ways, neither of which needs a new build:
-                - set the zone of the container, for example TZ=Europe/Vienna, or
-                - set the zone of the housekeeping alone, for example \
-              %s=Europe/Vienna (property '%s').
-              Write 'UTC' there if UTC is what you mean."""
-              .formatted(
-                  jvmZone.getId(),
-                  start,
-                  end,
-                  ZONE_ENVIRONMENT_VARIABLE,
-                  ZONE_PROPERTY));
+      logger
+          .warn(
+              """
+                  The housekeeping of the VanillaBP outbox runs from {} to {} UTC, because this JVM \
+                  stands on '{}' and no time zone was configured for it. In most places that is the \
+                  middle of the working day rather than the quiet hour it is meant to be. Say which \
+                  zone you mean, in one of two ways, neither of which needs a new build:
+                    - set the zone of the container, for example TZ=Europe/Vienna, or
+                    - set the zone of the housekeeping alone, for example {}=Europe/Vienna (property \
+                  '{}').
+                  Write 'UTC' there if UTC is what you mean, and this line goes away.""",
+              start,
+              end,
+              jvmZone.getId(),
+              ZONE_ENVIRONMENT_VARIABLE,
+              ZONE_PROPERTY);
 
     }
 

@@ -2833,16 +2833,26 @@ poll, and along the index the retention delete already reads. The orphaned paylo
 with it, because on the stores which cannot index the reference that count is the very scan this
 change took out of the poll.
 
-**A JVM on UTC without a configured zone does not start.** A window without a zone is not an
+**A JVM on UTC without a configured zone is warned, and starts.** A window without a zone is not an
 instruction, so the zone is configurable and otherwise the zone of the JVM. A container runs on UTC
 unless somebody sets its zone, and "four in the morning" then means four UTC, which in most places
 is the middle of the working day - the housekeeping would run at that hour and nothing would say so.
-The refusal is deliberate and hard, and the message names both ways out, because this is noticed
-when somebody installs the application on a server rather than while it is written: set `TZ` on the
-container, or set the environment variable of the property. Neither needs a new build. Every
-spelling which means UTC counts, and an application which really wants UTC writes it down and then
-starts. The test JVMs of this repository are given a zone in the root POM for the same reason a
-server has one.
+So it says so: one warning at the startup, naming the hours the window really runs at, the zone the
+JVM stands in, and both ways to say something else - set `TZ` on the container, or set the
+environment variable of the property. Neither needs a new build. Every spelling which means UTC
+counts, and an application which really wants UTC writes it down, after which the line goes away.
+
+This was a refusal first, and Stephan turned it into a warning on 2026-09-25. The argument for the
+refusal was that a wrong zone is invisible; the argument against it is the stronger one. UTC is what
+a container ships with and what a Kubernetes deployment normally has, so refusing such a start does
+not uncover a mistake, it invents a precondition - every application built against version 1 would
+have had to be told a new thing before it could boot. And the two costs are not the same size: a
+window in the wrong zone sweeps at an hour nobody expected, which is surprise and some load at the
+wrong time, while a refused start costs the deployment. The warning is one of the notes VanillaBP
+means to collect into one box at the end of a startup, so an operator reads them together.
+
+The test JVMs of this repository are given a zone in the root POM, because the window is read in one
+and a test which computes an hour of its own should not depend on the machine it runs on.
 
 A node which is down for the whole window does not house-keep that night, and nothing catches it up.
 A mechanism for that would be a guess; the meters show the night which was missed, and the

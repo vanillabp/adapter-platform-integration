@@ -500,8 +500,8 @@ public interface QuarkusMigrationAdapterProperties {
     /**
      * The zone the two times above are read in, written the way <code>ZoneId</code>
      * spells one, for example <code>Europe/Vienna</code>. Unset means the zone of the
-     * JVM - and a JVM standing on UTC without this key ends the startup, because "four
-     * in the morning" would then mean four UTC.
+     * JVM - and a JVM standing on UTC without this key is warned at the startup, because
+     * "four in the morning" would then mean four UTC.
      *
      * @return The zone of the window
      */

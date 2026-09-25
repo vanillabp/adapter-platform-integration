@@ -692,11 +692,11 @@ used up with something still left over is the sign to widen it. Only one node of
 house-keeps a store per night, and a node which is down for the whole window does not house-keep
 that night.
 
-The window is read in a time zone, and here the upgrade can stop a start: an application whose JVM
-stands on UTC - which is what a container does unless somebody sets its zone - has to say which zone
-it means, because "four in the morning" would otherwise be four UTC. Set `TZ` on the container or
-the environment variable `VANILLABP_OUTBOX_HOUSEKEEPING_ZONE`, write `UTC` there if UTC is what you
-mean, and the startup message names both ways.
+The window is read in a time zone, and an application whose JVM stands on UTC - which is what a
+container does unless somebody sets its zone - is warned about it once while it starts, because
+"four in the morning" is then four UTC. It starts either way. Set `TZ` on the container or the
+environment variable `VANILLABP_OUTBOX_HOUSEKEEPING_ZONE` to say something else, write `UTC` there
+if UTC is what you mean, and the line goes away.
 
 The records of processed task deliveries have a retention of their own,
 `vanillabp.delivery.retention`, which follows the outbox retention where it is not set. The two

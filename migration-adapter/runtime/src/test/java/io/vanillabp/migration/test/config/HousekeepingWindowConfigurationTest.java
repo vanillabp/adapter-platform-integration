@@ -8,24 +8,32 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.TimeZone;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.slf4j.LoggerFactory;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties.HousekeepingProperties;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * What the housekeeping window accepts and what it refuses.
+ * What the housekeeping window accepts, what it refuses and what it only warns about.
  * <p>
- * The refusal which matters most is the one a developer never meets: a container stands
- * on UTC unless somebody sets its zone, so "four in the morning" becomes four UTC, which
- * in most places is the middle of the working day. It is noticed when the application is
- * installed on a server, which is why the message names two ways out and both of them go
- * through an environment variable.
+ * The case a developer never meets is the zone: a container stands on UTC unless somebody
+ * sets its zone, so "four in the morning" becomes four UTC, which in most places is the
+ * middle of the working day. It is noticed when the application is installed on a server,
+ * which is why the message names two ways out and both of them go through an environment
+ * variable. It is a warning and not a refusal, because UTC is the normal case for a
+ * container and a refused start would cost the deployment - see decision 91 in the
+ * repository's DECISIONS.md.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class HousekeepingWindowConfigurationTest {
@@ -41,6 +49,33 @@ public class HousekeepingWindowConfigurationTest {
   public void putTheZoneOfThisJvmBack() {
 
     TimeZone.setDefault(zoneOfThisJvm);
+
+  }
+
+  private ListAppender<ILoggingEvent> logWatcher;
+
+  @BeforeEach
+  public void watchTheLog() {
+
+    logWatcher = new ListAppender<>();
+    logWatcher.start();
+    ((Logger) LoggerFactory.getLogger(HousekeepingProperties.class)).addAppender(logWatcher);
+
+  }
+
+  @AfterEach
+  public void stopWatchingTheLog() {
+
+    ((Logger) LoggerFactory.getLogger(HousekeepingProperties.class)).detachAndStopAllAppenders();
+
+  }
+
+  private String loggedLines() {
+
+    return logWatcher.list
+        .stream()
+        .map(ILoggingEvent::getFormattedMessage)
+        .collect(Collectors.joining("\n"));
 
   }
 
@@ -118,46 +153,76 @@ public class HousekeepingWindowConfigurationTest {
   }
 
   @Test
-  @DisplayName("A JVM on UTC without a configured zone does not start, and the message names both ways out")
-  public void aJvmOnUtcWithoutAZoneDoesNotStart() {
+  @DisplayName("A JVM on UTC without a configured zone is warned, and the message names both ways out")
+  public void aJvmOnUtcWithoutAZoneIsWarned() {
 
     TimeZone.setDefault(TimeZone.getTimeZone("Etc/UTC"));
 
-    final var refused = assertThrows(
-        IllegalStateException.class,
-        () -> outboxWith(new HousekeepingProperties()).validateHousekeeping());
+    outboxWith(new HousekeepingProperties()).validateHousekeeping();
 
-    final var message = refused.getMessage();
-    // what would have happened
-    assertTrue(message.contains("middle of the working day"), message);
+    final var warning = loggedLines();
+    // what is happening, and why
+    assertTrue(warning.contains("middle of the working day"), warning);
     // and the two ways out, neither of which needs a new build
-    assertTrue(message.contains("TZ=Europe/Vienna"), message);
-    assertTrue(message.contains(HousekeepingProperties.ZONE_ENVIRONMENT_VARIABLE), message);
-    assertTrue(message.contains(HousekeepingProperties.ZONE_PROPERTY), message);
+    assertTrue(warning.contains("TZ=Europe/Vienna"), warning);
+    assertTrue(warning.contains(HousekeepingProperties.ZONE_ENVIRONMENT_VARIABLE), warning);
+    assertTrue(warning.contains(HousekeepingProperties.ZONE_PROPERTY), warning);
     // and the way to keep UTC on purpose
-    assertTrue(message.contains("Write 'UTC' there"), message);
+    assertTrue(warning.contains("Write 'UTC' there"), warning);
 
   }
 
   @Test
-  @DisplayName("Every spelling of UTC is refused, not only the one the JVM happens to use")
-  public void everySpellingOfUtcIsRefused() {
+  @DisplayName("It stays a warning: the application which reads it starts")
+  public void theApplicationStartsAnyway() {
+
+    TimeZone.setDefault(TimeZone.getTimeZone("Etc/UTC"));
+
+    // UTC is what a container ships with, so refusing such a start would invent a
+    // precondition rather than uncover a mistake
+    assertDoesNotThrow(() -> outboxWith(new HousekeepingProperties()).validateHousekeeping());
+
+  }
+
+  @Test
+  @DisplayName("The warning names the hours the window really runs at")
+  public void theWarningNamesTheHours() {
+
+    TimeZone.setDefault(TimeZone.getTimeZone("Etc/UTC"));
+    final var housekeeping = new HousekeepingProperties();
+    housekeeping.setStart(LocalTime.of(23, 30));
+    housekeeping.setEnd(LocalTime.of(1, 15));
+
+    outboxWith(housekeeping).validateHousekeeping();
+
+    final var warning = loggedLines();
+    assertTrue(warning.contains("23:30"), warning);
+    assertTrue(warning.contains("01:15"), warning);
+
+  }
+
+  @Test
+  @DisplayName("Every spelling of UTC is warned about, not only the one the JVM happens to use")
+  public void everySpellingOfUtcIsWarnedAbout() {
 
     for (final var spelling : new String[]{
         "UTC", "Etc/UTC", "GMT", "Z", "Etc/GMT"
     }) {
+      logWatcher.list.clear();
       TimeZone.setDefault(TimeZone.getTimeZone(ZoneId.of(spelling)));
-      assertThrows(
-          IllegalStateException.class,
-          () -> outboxWith(new HousekeepingProperties()).validateHousekeeping(),
+
+      outboxWith(new HousekeepingProperties()).validateHousekeeping();
+
+      assertTrue(
+          loggedLines().contains("middle of the working day"),
           "a JVM on '%s' means UTC as much as the others do".formatted(spelling));
     }
 
   }
 
   @Test
-  @DisplayName("A JVM on UTC starts where UTC was configured on purpose")
-  public void utcOnPurposeStarts() {
+  @DisplayName("A JVM on UTC says nothing where UTC was configured on purpose")
+  public void utcOnPurposeSaysNothing() {
 
     TimeZone.setDefault(TimeZone.getTimeZone("Etc/UTC"));
     final var housekeeping = new HousekeepingProperties();
@@ -165,15 +230,19 @@ public class HousekeepingWindowConfigurationTest {
 
     assertDoesNotThrow(() -> outboxWith(housekeeping).validateHousekeeping());
 
+    assertEquals("", loggedLines(), "somebody who wrote UTC down is not told about UTC");
+
   }
 
   @Test
-  @DisplayName("A JVM which stands on a real zone starts without anybody saying anything")
-  public void aJvmWithAZoneStarts() {
+  @DisplayName("A JVM which stands on a real zone is told nothing at all")
+  public void aJvmWithAZoneIsToldNothing() {
 
     TimeZone.setDefault(TimeZone.getTimeZone("Europe/Vienna"));
 
     assertDoesNotThrow(() -> outboxWith(new HousekeepingProperties()).validateHousekeeping());
+
+    assertEquals("", loggedLines());
 
   }
 
