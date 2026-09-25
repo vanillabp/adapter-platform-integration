@@ -66,7 +66,7 @@ where the settings of such an extension live and what it must not do.
 ### Where a snapshot comes from
 
 Snapshots in GitHub Packages are published from `main`, and from nowhere else. There is one
-`2.0.0-SNAPSHOT` per module, so a branch which published would overwrite what `main` published and
+snapshot version per module, so a branch which published would overwrite what `main` published and
 a consumer could end up resolving a set of modules that never existed in any single tree. That is
 not theoretical: eighteen blueprint jobs failed on 2026-08-20 with a `NoSuchMethodError` naming a
 method which existed on one story branch, because one module came from there and another from

@@ -288,7 +288,7 @@ bin/check-decision-numbers.sh
 ```
 
 Two workflows answer a pull request. *Publish to GitHub Packages* builds and tests everything and
-publishes nothing from a branch, which is deliberate: there is one `2.0.0-SNAPSHOT` per module, so a
+publishes nothing from a branch, which is deliberate: there is one snapshot version per module, so a
 branch which published would overwrite what `main` published. *Checks* runs where a Markdown file
 changed and renders every Mermaid block of the repository, because a block which does not parse
 shows an error message where the picture should be. A red check is a finding about your change. Read the
