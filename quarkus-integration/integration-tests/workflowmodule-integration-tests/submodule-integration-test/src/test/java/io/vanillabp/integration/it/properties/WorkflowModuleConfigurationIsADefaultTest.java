@@ -16,7 +16,7 @@ import io.quarkus.test.ProdBuildResults;
 import io.quarkus.test.ProdModeTestResults;
 import io.quarkus.test.QuarkusProdModeTest;
 import io.restassured.RestAssured;
-import io.vanillabp.integration.test.utils.FreePortUtil;
+import io.vanillabp.integration.test.utils.OneFreePortPerJvm;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
@@ -42,7 +42,7 @@ public class WorkflowModuleConfigurationIsADefaultTest {
       .setJVMArgs(testCoverageJavaAgent(quarkusProdModeTestDefaults()))
       // started by this class once the external configuration file is in place
       .setRun(false)
-      .setRuntimeProperties(Map.of("quarkus.http.port", Integer.toString(FreePortUtil.getFreePort())));
+      .setRuntimeProperties(Map.of("quarkus.http.port", Integer.toString(OneFreePortPerJvm.getPort())));
 
   private static boolean started;
 
@@ -84,7 +84,7 @@ public class WorkflowModuleConfigurationIsADefaultTest {
     final Map<String, String> properties = RestAssured
         .given()
         .baseUri("http://localhost")
-        .port(FreePortUtil.getFreePort())
+        .port(OneFreePortPerJvm.getPort())
         .get("introspect/precedence-properties")
         .then()
         .statusCode(200)
@@ -120,7 +120,7 @@ public class WorkflowModuleConfigurationIsADefaultTest {
     final Map<String, Integer> properties = RestAssured
         .given()
         .baseUri("http://localhost")
-        .port(FreePortUtil.getFreePort())
+        .port(OneFreePortPerJvm.getPort())
         .get("introspect/unmodified-properties")
         .then()
         .statusCode(200)

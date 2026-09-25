@@ -10,19 +10,20 @@ import java.net.ServerSocket;
  * The port is asked for once, when this class is loaded, and answered again and again
  * afterwards. Asking the operating system a second time would hand out a second port, and
  * a test which configures one port and connects to the other fails for a reason nobody
- * sees in its code.
+ * sees in its code. The name says so. A test which needs two different ports has to
+ * look elsewhere.
  * <p>
  * The port was free when it was looked up and nothing holds it until the test binds it.
  * That is enough here, because each forked test JVM asks for its own.
  */
-public class FreePortUtil {
+public class OneFreePortPerJvm {
 
-  private final static int httpPort = findFreePort();
+  private final static int port = findFreePort();
 
   /**
    * Nobody builds this class, it only answers a static question.
    */
-  private FreePortUtil() {
+  private OneFreePortPerJvm() {
   }
 
   /**
@@ -30,8 +31,8 @@ public class FreePortUtil {
    *
    * @return A port which was free when this class was loaded
    */
-  public static int getFreePort() {
-    return httpPort;
+  public static int getPort() {
+    return port;
   }
 
   private static int findFreePort() {
