@@ -1,23 +1,24 @@
 package io.vanillabp.integration.adapter.spi.workflowstart;
 
-import java.time.Instant;
 import java.util.Map;
 
 import io.vanillabp.integration.adapter.spi.AggregateSyncMode;
 import io.vanillabp.spi.service.BpmsStartTrigger;
 
 /**
- * All information a BPMS adapter supplies when the BPMS started a workflow on its
- * own and the workflow aggregate has to be built. The adapter creates one context
- * per notification (e.g. a Camunda 7 process-start execution listener or a Camunda 8
- * start execution-listener job) and passes it to
+ * All information a BPMS adapter supplies when a BPMS reports the start of a workflow.
+ * The adapter creates one context per notification (e.g. a Camunda 7 process-start
+ * execution listener or a Camunda 8 start execution-listener job) and passes it to
  * {@link BpmsInitiatedStartInvoker#startWorkflowByBpms(String, String, BpmsInitiatedStartContext)}.
  * The context is deliberately neutral: it carries only values, no BPMS types.
+ * <p>
+ * What a start means, and why an adapter reports every start event of a process, is
+ * {@code DECISIONS.pending/653.md}.
  */
 public interface BpmsInitiatedStartContext {
 
   /**
-   * The BPMN id of the start event which fired - used to resolve the optional
+   * The BPMN id of the start event which fired - used to resolve the
    * <code>&#64;WorkflowStartedByBpms</code> method and reported to it.
    *
    * @return The start event's BPMN id
@@ -26,57 +27,14 @@ public interface BpmsInitiatedStartContext {
 
   /**
    * Which kind of start event fired. It reaches a
-   * <code>&#64;WorkflowStartedByBpms</code> method as part of {@link BpmsStartTrigger},
-   * and it decides how the workflow aggregate's id is derived where
-   * {@link #getNaturalIdentity()} says nothing: only a timer fires at an instant it will
-   * report again, so only there {@link #getStartInstant()} becomes the id and a repeated
-   * notification finds the aggregate instead of building a second one.
+   * <code>&#64;WorkflowStartedByBpms</code> method as part of {@link BpmsStartTrigger}
+   * and decides nothing: what a start means is read from the state of the workflow, which
+   * is why an adapter reports every start event of a process and not only the ones its
+   * BPMS fires on its own.
    *
    * @return Which kind of start event fired
    */
   BpmsStartTrigger.Kind getKind();
-
-  /**
-   * The instant this start is identified by.
-   * <p>
-   * The value an adapter reports IDEALLY is the time the engine scheduled the start
-   * for, because that is stable: a cyclic timer firing the same instant twice
-   * addresses the same workflow aggregate, so a redelivered notification creates
-   * nothing twice. Where the BPMS does not hand that time to the adapter - Camunda 7
-   * does not give it to a listener - the moment of the notification is reported
-   * instead, which is why this is not called a trigger time: an adapter would have to
-   * contradict the name.
-   *
-   * @return The instant, never <code>null</code>
-   */
-  Instant getStartInstant();
-
-  /**
-   * A value identifying THIS start in the BPMS, stable across repeated
-   * notifications of it - a remote BPMS typically reports its process instance key
-   * here. VanillaBP prefers it over everything else when it derives the workflow
-   * aggregate's ID, which is what keeps a redelivered notification from building a
-   * second aggregate for a workflow which already has one.
-   * <p>
-   * An adapter whose notification cannot repeat once the aggregate is committed
-   * (an embedded engine writing both in one transaction) reports nothing here, and
-   * the aggregate's ID becomes the meaningful one: a timer's trigger time.
-   * <p>
-   * There is a second reason to report a value, and a BPMS keeping a business key has
-   * it: the name the instance ALREADY goes by. Where such a key is the place the
-   * workflow aggregate's id lives (Camunda 7 keeps it there and nowhere else), the key
-   * of a workflow somebody started past VanillaBP belongs here, so the aggregate is
-   * built under the name that workflow was started with instead of being renamed. The
-   * value is taken over only where it fits the type of the aggregate's id attribute,
-   * and where it does not, the rules above decide the id.
-   *
-   * @return The BPMS' identity of this start or <code>null</code>
-   */
-  default String getNaturalIdentity() {
-
-    return null;
-
-  }
 
   /**
    * Which signal started the workflow, reported to the application as
@@ -93,11 +51,15 @@ public interface BpmsInitiatedStartContext {
   }
 
   /**
-   * The process variables visible at the moment the workflow started - typically
-   * values a BPMN expression or an input mapping of the start event set. VanillaBP
-   * copies them into equally-named attributes of the workflow aggregate and binds
-   * them to <code>&#64;TaskParam</code> parameters of the
+   * The process variables visible at the moment the workflow started - typically values a
+   * BPMN expression or an input mapping of the start event set. VanillaBP binds them to
+   * <code>&#64;TaskParam</code> parameters of the
    * <code>&#64;WorkflowStartedByBpms</code> method.
+   * <p>
+   * They are read for a second purpose on every BPMS which keeps no business key: the
+   * variable named after the workflow aggregate's id attribute is where the id of the
+   * workflow lives there, so this map is where VanillaBP finds the name the workflow
+   * already has.
    *
    * @return The variables by name - possibly empty, never <code>null</code>
    */
@@ -191,19 +153,19 @@ public interface BpmsInitiatedStartContext {
 
   /**
    * The business key the started instance ALREADY carries, where the BPMS keeps such a
-   * thing at all. The workflow aggregate does not exist yet at this point, so this is
-   * the one value which can contradict the id VanillaBP is about to give it.
+   * thing at all. This is the name the workflow goes by in the BPMS, and the first thing
+   * VanillaBP asks about a reported start.
    * <p>
    * The contract is the one of
    * {@link io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext#getBusinessKey()}:
-   * a business key is only ever a copy of the workflow aggregate's id, and a key which
-   * says something else makes the workflow carry two identities at once. The core
-   * refuses the start rather than building an aggregate the instance does not name.
+   * a business key is only ever a copy of the workflow aggregate's id. A workflow
+   * VanillaBP started carries it, so a key which names no workflow aggregate belongs to a
+   * workflow somebody started under a name of their own, and that start is refused.
    * <p>
-   * The default is <code>null</code>, and on today's BPMS that is what an adapter
-   * reports: a timer, a signal or a condition starts an instance nobody gave a business
-   * key to. The question is asked all the same, because the adapter of a BPMS which
-   * lets a caller schedule a start WITH one has nowhere else to put it.
+   * A BPMS which keeps no business key answers <code>null</code> and keeps the id in the
+   * process variable named after the aggregate's id attribute, which VanillaBP reads from
+   * {@link #getVariables()} instead. Answering here is what an adapter does where its BPMS
+   * has a place of its own for the name.
    *
    * @return The business key the instance already carries or <code>null</code>
    */

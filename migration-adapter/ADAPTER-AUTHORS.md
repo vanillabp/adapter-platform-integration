@@ -652,24 +652,38 @@ the same task twice. The kind of the end plays no part in this on either side: o
 terminate end event ends the instance as COMPLETED while taking an open task with it, so the core
 does not read the kind before it derives (decision 73).
 
-`BpmsInitiatedStartInvoker.startWorkflowByBpms(...)` reports a workflow your BPMS started on its
-own, through a timer, a signal or a conditional start event. The core does NOT build the aggregate:
-it asks the application's `@WorkflowStartedByBpms` method for one and saves what it gets, and a
-process which can be started this way and has no such method never got past the deployment (see
-decision 92).
+`BpmsInitiatedStartInvoker.startWorkflowByBpms(...)` reports the start of a workflow. Report EVERY
+start event of the process, the plain and the message one included, and hang your listener on every
+one of them. What a start means is not read from the kind of its start event but from the state of
+the workflow, and the core does that reading:
 
-`getStartInstant()` is what the application usually turns into the aggregate's id, so report the
-instant the engine scheduled the start for where your BPMS hands it to a listener. A cyclic timer
-firing the same instant twice then addresses the same aggregate, and a repeated notification saves
-nothing twice. Where your BPMS does not hand that time over, report the moment of the notification
-instead; that is the whole reason the method is not called a trigger time.
+- the BPMS holds a name for the workflow and a workflow aggregate carries it: the workflow is
+  already ours, nothing is built, and `BpmsInitiatedStartResult#created()` says `false`. That is the
+  application's own start, and it is also what keeps a second delivery of the same notification from
+  building a second aggregate.
+- the BPMS holds no name: somebody started the workflow past VanillaBP. The application's
+  `@WorkflowStartedByBpms` method builds the aggregate and gives it its id, and your adapter writes
+  that id into the BPMS.
+- the BPMS holds a name no workflow aggregate carries: the start is refused. VanillaBP names a
+  workflow and nobody else.
 
-`getNaturalIdentity()` and `getBusinessKey()` keep their meaning for the check which refuses a
-delivery whose business key is not the aggregate's id. Report the key where your BPMS keeps one. It
-no longer becomes the aggregate's id, because the id is the application's choice now, so a workflow
-somebody started past VanillaBP under a key of their own fails at its first delivery like any
-other. Your adapter learns whether the notification created an aggregate or found one from
-`BpmsInitiatedStartResult#created()`.
+Tell the core where the name is. `getBusinessKey()` is the answer of a BPMS which keeps a business
+key of its own, and the core reads it first. A BPMS without one keeps the name in the process
+variable called after the workflow aggregate's id attribute, which the core reads from
+`getVariables()`, so there is nothing extra to report there.
+
+Writing the name back is your adapter's work: Camunda 7 sets the business key of the instance,
+Camunda 8 completes the listener job with `BpmsInitiatedStartResult#variables()`, which already
+carries the id under `workflowAggregateIdName()`.
+
+There is no start instant to report. The time a start event fired is the application's own value: it
+models a process variable, fills it by an expression and reads it as a `@TaskParam`. Report none and
+invent none.
+
+A process whose BPMS fires a start event by itself - a timer, a signal, a condition - and which has
+no `@WorkflowStartedByBpms` method never gets past the deployment (see decision 92). A process with
+only plain or message start events needs no such method until somebody starts it past VanillaBP, and
+that start says so when it happens.
 
 ### 3.4 Letting the core work cancellations out for you
 

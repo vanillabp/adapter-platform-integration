@@ -252,11 +252,6 @@ public class BpmsInitiatedStartTest {
       }
 
       @Override
-      public Instant getStartInstant() {
-        return TRIGGER_TIME;
-      }
-
-      @Override
       public String getSignalName() {
         return kind == BpmsStartTrigger.Kind.SIGNAL
             ? "OrderReceived"
@@ -286,7 +281,7 @@ public class BpmsInitiatedStartTest {
           .getBean("DummyAdapter_DeploymentService_test", DummyDeploymentService.class);
 
       // (a) a timer start: the method serving that start event builds the aggregate,
-      // takes the trigger time as its ID and reads the variables the model set
+      // names it after a value of the application's own and reads what the model set
       final var timerStart = dummyAdapter
           .startWorkflowByBpms(
               MODULE,
@@ -294,7 +289,16 @@ public class BpmsInitiatedStartTest {
               context(
                   BpmsStartTrigger.Kind.TIMER,
                   TIMER_EVENT,
-                  Map.of("region", "north", "amount", 42, "notModelled", "ignored")));
+                  Map
+                      .of(
+                          "startedAt",
+                          TRIGGER_TIME.toString(),
+                          "region",
+                          "north",
+                          "amount",
+                          42,
+                          "notModelled",
+                          "ignored")));
 
       Assertions.assertTrue(timerStart.created());
       Assertions.assertEquals(TRIGGER_TIME.toString(), timerStart.workflowAggregateId());
@@ -308,13 +312,18 @@ public class BpmsInitiatedStartTest {
       Assertions.assertEquals(42, timerAggregate.getAmount());
       Assertions.assertEquals("TIMER", timerAggregate.getStartedBy());
 
-      // (b) the same timer time reported again (a retried notification): nothing is
-      // created twice and business data written meanwhile survives
+      // (b) the same start reported again, now carrying the name the adapter wrote into
+      // the BPMS: nothing is created twice and business data written meanwhile survives
       timerAggregate.setRegion("changed meanwhile");
       WorkflowStartConfiguration.AGGREGATES.put(TRIGGER_TIME.toString(), timerAggregate);
       final var repeated = dummyAdapter
           .startWorkflowByBpms(
-              MODULE, PROCESS, context(BpmsStartTrigger.Kind.TIMER, TIMER_EVENT, Map.of("region", "north")));
+              MODULE,
+              PROCESS,
+              context(
+                  BpmsStartTrigger.Kind.TIMER,
+                  TIMER_EVENT,
+                  Map.of("id", TRIGGER_TIME.toString(), "region", "north")));
       Assertions.assertFalse(repeated.created());
       Assertions.assertEquals(TRIGGER_TIME.toString(), repeated.workflowAggregateId());
       Assertions.assertEquals(1, WorkflowStartConfiguration.AGGREGATES.size());
@@ -330,7 +339,7 @@ public class BpmsInitiatedStartTest {
               MODULE, PROCESS, context(BpmsStartTrigger.Kind.SIGNAL, SIGNAL_EVENT, Map.of("region", "south")));
 
       Assertions.assertTrue(signalStart.created());
-      // the signal has no natural identity, so the method built one of its own
+      // nothing named this workflow, so the method named it
       Assertions.assertEquals("signal-south", signalStart.workflowAggregateId());
       final var signalAggregate = WorkflowStartConfiguration.AGGREGATES
           .get(signalStart.workflowAggregateId());
@@ -441,7 +450,7 @@ public class BpmsInitiatedStartTest {
       final var message = rootCauseMessage(failure);
       Assertions.assertTrue(message.contains(WorkflowStartWorkflowService.class.getName()), message);
       Assertions.assertTrue(message.contains(PROCESS), message);
-      Assertions.assertTrue(message.contains("startWorkflow"), message);
+      Assertions.assertTrue(message.contains("no adapter reported a start event"), message);
 
     }
 

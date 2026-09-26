@@ -103,11 +103,6 @@ public class BpmsInitiatedStartTest {
       }
 
       @Override
-      public Instant getStartInstant() {
-        return TRIGGER_TIME;
-      }
-
-      @Override
       public String getSignalName() {
         return kind == BpmsStartTrigger.Kind.SIGNAL
             ? "OrderReceived"
@@ -139,7 +134,16 @@ public class BpmsInitiatedStartTest {
             context(
                 BpmsStartTrigger.Kind.TIMER,
                 "DailyTimer",
-                Map.of("region", "north", "amount", 42, "notModelled", "ignored")));
+                Map
+                    .of(
+                        "startedAt",
+                        TRIGGER_TIME.toString(),
+                        "region",
+                        "north",
+                        "amount",
+                        42,
+                        "notModelled",
+                        "ignored")));
 
     assertTrue(timerStart.created());
     assertEquals(TRIGGER_TIME.toString(), timerStart.workflowAggregateId());
@@ -151,13 +155,18 @@ public class BpmsInitiatedStartTest {
     assertEquals(42, timerAggregate.getAmount());
     assertEquals("TIMER", timerAggregate.getStartedBy());
 
-    // (b) the same timer time reported again: nothing is created twice and business
-    // data written meanwhile survives
+    // (b) the same start reported again, now carrying the name the adapter wrote into
+    // the BPMS: nothing is created twice and business data written meanwhile survives
     timerAggregate.setRegion("changed meanwhile");
     persistence.put(timerAggregate);
     final var repeated = dummyAdapter
         .startWorkflowByBpms(
-            MODULE, PROCESS, context(BpmsStartTrigger.Kind.TIMER, "DailyTimer", Map.of("region", "north")));
+            MODULE,
+            PROCESS,
+            context(
+                BpmsStartTrigger.Kind.TIMER,
+                "DailyTimer",
+                Map.of("id", TRIGGER_TIME.toString(), "region", "north")));
     assertFalse(repeated.created());
     assertEquals(aggregatesBefore + 1, persistence.count(), "nothing may be created twice");
     assertEquals("changed meanwhile", persistence.stored(TRIGGER_TIME.toString()).getRegion());

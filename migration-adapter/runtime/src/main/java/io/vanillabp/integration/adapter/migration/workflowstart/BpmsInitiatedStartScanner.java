@@ -32,9 +32,8 @@ import io.vanillabp.spi.service.WorkflowStartedByBpms;
 public final class BpmsInitiatedStartScanner {
 
   /**
-   * A workflow the BPMS started has no task around it, so no multi-instance scope
-   * either, and no aggregate yet - what such a method may take is the process variables
-   * the model set.
+   * A started workflow has no task around it, so no multi-instance scope either, and no
+   * aggregate yet - what such a method may take is the process variables the model set.
    */
   private static final java.util.Set<CoreHandlerParameter> CORE_PARAMETERS = java.util.Set
       .of(CoreHandlerParameter.TASK_PARAM);
@@ -137,8 +136,8 @@ public final class BpmsInitiatedStartScanner {
     throw new IllegalStateException(
         """
             The @WorkflowStartedByBpms method '%s' returns '%s' instead of the workflow aggregate \
-            of class '%s'! The workflow the BPMS started has no aggregate until this method \
-            builds one, so the method has to return it."""
+            of class '%s'! The workflow has no aggregate until this method builds one, so the \
+            method has to return it."""
             .formatted(location, method.getReturnType().getName(), workflowAggregateClass.getName()));
 
   }
@@ -154,7 +153,7 @@ public final class BpmsInitiatedStartScanner {
       return context -> {
         final var start = context.payload(BpmsInitiatedStartContext.class);
         return new BpmsStartTrigger(
-            start.getKind(), start.getStartInstant(), start.getSignalName(), start.getStartEventId());
+            start.getKind(), start.getSignalName(), start.getStartEventId());
       };
     }
 
@@ -167,7 +166,7 @@ public final class BpmsInitiatedStartScanner {
     throw new IllegalStateException(
         """
             The %s is neither annotated with @TaskParam nor of type '%s'! A method building the \
-            aggregate of a BPMS-initiated start may ask for the trigger and for process variables \
+            aggregate of a started workflow may ask for the trigger and for process variables \
             - nothing else exists at that moment, the aggregate included, which is what this \
             method is there to build."""
             .formatted(location, BpmsStartTrigger.class.getName()));
