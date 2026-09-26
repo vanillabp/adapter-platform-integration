@@ -29,7 +29,6 @@ import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.SimpleMongoClientDatabaseFactory;
-import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mongodb.MongoDBContainer;
@@ -96,10 +95,10 @@ public class MongoEntriesOfOneAggregateKeepTheirOrderTest {
    */
   private static final String ARG_POSITION = "position";
 
+  // no wait strategy of its own: the one the container brings waits until the MAPPED port
+  // accepts a connection, while a log line only says that mongod listens inside the container
   @Container
-  static MongoDBContainer mongoDb = new MongoDBContainer(DockerImageName.parse(ContainerImages.MONGODB))
-      .waitingFor(Wait.forLogMessage(".*Waiting for connections.*", 1))
-      .withExposedPorts(27017);
+  static MongoDBContainer mongoDb = new MongoDBContainer(DockerImageName.parse(ContainerImages.MONGODB));
 
   @Mock
   private MigrationProcessService<Object> node;
