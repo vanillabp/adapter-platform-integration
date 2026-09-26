@@ -1,5 +1,8 @@
 package io.vanillabp.integration.health;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.boot.health.contributor.Status;
@@ -57,10 +60,10 @@ public class VanillaBpHealthIndicator implements HealthIndicator {
 
   }
 
-  private static java.util.Map<String, Object> detailsOf(
+  private static Map<String, Object> detailsOf(
       final AdapterHealth health) {
 
-    final var detail = new java.util.LinkedHashMap<String, Object>();
+    final var detail = new LinkedHashMap<String, Object>();
     detail.put("status", statusOf(health.status()).getCode());
     detail.put("type", health.adapterType());
     if (health.description() != null) {

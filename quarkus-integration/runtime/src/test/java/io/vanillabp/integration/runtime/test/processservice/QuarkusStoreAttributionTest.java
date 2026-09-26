@@ -20,6 +20,7 @@ import io.vanillabp.integration.runtime.persistence.PanacheMongoActiveRecordAggr
 import io.vanillabp.integration.runtime.processservice.QuarkusPersistenceTechnology;
 import io.vanillabp.integration.runtime.processservice.QuarkusPhaseTwoOutboxResolver;
 import io.vanillabp.integration.runtime.processservice.QuarkusTaskDeliveryLogResolver;
+import io.vanillabp.integration.runtime.test.InstanceDouble;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.PhaseTwoOutboxAware;

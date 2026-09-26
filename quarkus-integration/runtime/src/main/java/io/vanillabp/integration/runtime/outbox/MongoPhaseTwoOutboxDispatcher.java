@@ -1,12 +1,14 @@
 package io.vanillabp.integration.runtime.outbox;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.OptionalLong;
 
 import org.bson.Document;
+import org.bson.conversions.Bson;
 import org.eclipse.microprofile.config.ConfigProvider;
 
 import com.mongodb.client.MongoClient;
@@ -14,6 +16,7 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.FindOneAndUpdateOptions;
 import com.mongodb.client.model.Indexes;
+import com.mongodb.client.model.Projections;
 import com.mongodb.client.model.Sorts;
 import com.mongodb.client.model.Updates;
 
@@ -21,7 +24,9 @@ import io.quarkus.runtime.StartupEvent;
 import io.smallrye.config.SmallRyeConfig;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.mongo.MongoSchema;
+import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DispatchOutcome;
+import io.vanillabp.integration.adapter.migration.outbox.AStoppingNode;
 import io.vanillabp.integration.adapter.migration.outbox.DispatchLanes;
 import io.vanillabp.integration.adapter.migration.outbox.DispatchLease;
 import io.vanillabp.integration.adapter.migration.outbox.DueEntryPoller;
@@ -31,13 +36,18 @@ import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterPropertiesMapper;
 import io.vanillabp.integration.runtime.deployment.VanillaBpDeploymentRunner;
 import io.vanillabp.integration.runtime.mongo.MongoIndexes;
+import io.vanillabp.integration.runtime.processservice.PhaseTwoRouterProducer;
 import io.vanillabp.integration.spi.PhaseTwoCall;
+import io.vanillabp.integration.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.PhaseTwoPermanentFailure;
+import io.vanillabp.integration.spi.PhaseTwoRetryLater;
 import jakarta.annotation.PreDestroy;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+import jakarta.transaction.TransactionSynchronizationRegistry;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -103,10 +113,10 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    * rather than injected directly.
    */
   @Inject
-  Instance<io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics> vanillaBpMetrics;
+  Instance<VanillaBpMetrics> vanillaBpMetrics;
 
   @Inject
-  jakarta.transaction.TransactionSynchronizationRegistry txRegistry;
+  TransactionSynchronizationRegistry txRegistry;
 
   private volatile PhaseTwoOutboxProperties properties;
 
@@ -209,7 +219,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
         "vanillabp-outbox", properties.getPollInterval(), this::poll, this::earliestDueAt);
     poller.start();
     housekeeping = new OutboxHousekeeping(
-        this, properties, () -> io.vanillabp.integration.runtime.processservice.PhaseTwoRouterProducer
+        this, properties, () -> PhaseTwoRouterProducer
             .vanillaBpMetricsOf(vanillaBpMetrics));
     housekeeping.start();
 
@@ -333,7 +343,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    */
   Instant earliest(
       final MongoCollection<Document> collection,
-      final org.bson.conversions.Bson filter,
+      final Bson filter,
       final String field) {
 
     final var entry = collection
@@ -691,7 +701,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       final Document entry,
       final RuntimeException e) {
 
-    if (io.vanillabp.integration.adapter.migration.outbox.AStoppingNode.isTheReasonFor(e)) {
+    if (AStoppingNode.isTheReasonFor(e)) {
       Thread.currentThread().interrupt();
       log.info(
           "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' was "
@@ -733,7 +743,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
     final var entryId = entry.getString("_id");
     // the adapter said that repeating cannot help - blocked right away
     // instead of after the configured attempts
-    if (io.vanillabp.integration.spi.PhaseTwoPermanentFailure.isPermanent(e)) {
+    if (PhaseTwoPermanentFailure.isPermanent(e)) {
       if (!writeAsTheHolder(collection, entry, blockEntry(entryId))) {
         return;
       }
@@ -767,7 +777,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
           e);
       return;
     }
-    final var retryAfter = io.vanillabp.integration.spi.PhaseTwoRetryLater.retryAfter(e);
+    final var retryAfter = PhaseTwoRetryLater.retryAfter(e);
     if (retryAfter != null) {
       // the dispatch knows when asking again can help - a workflow the BPMS has not
       // made searchable yet is the case - so the entry waits that long instead of the
@@ -828,7 +838,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   private boolean writeAsTheHolder(
       final MongoCollection<Document> collection,
       final Document entry,
-      final org.bson.conversions.Bson update) {
+      final Bson update) {
 
     final var written = collection.updateOne(
         Filters
@@ -929,12 +939,12 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
     if (writtenAt == null) {
       return;
     }
-    io.vanillabp.integration.runtime.processservice.PhaseTwoRouterProducer
+    PhaseTwoRouterProducer
         .vanillaBpMetricsOf(vanillaBpMetrics)
         .outboxDispatchEnded(
             MongoPhaseTwoOutbox.class.getSimpleName(),
             outcome,
-            io.vanillabp.integration.spi.PhaseTwoOutbox
+            PhaseTwoOutbox
                 .waitedSince(writtenAt.toInstant())
                 .toNanos());
 
@@ -952,7 +962,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       final String operation,
       final boolean permanent) {
 
-    io.vanillabp.integration.runtime.processservice.PhaseTwoRouterProducer
+    PhaseTwoRouterProducer
         .vanillaBpMetricsOf(vanillaBpMetrics)
         .outboxEntryBlocked(MongoPhaseTwoOutbox.class.getSimpleName(), operation, permanent);
 
@@ -966,7 +976,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    * @param nextAttempt When it is to be read again
    * @return The update to apply
    */
-  private static org.bson.conversions.Bson dueAgainAt(
+  private static Bson dueAgainAt(
       final Instant nextAttempt) {
 
     return Updates
@@ -990,7 +1000,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    * @param entryId The id of the entry to block
    * @return The update to apply
    */
-  private static org.bson.conversions.Bson blockEntry(
+  private static Bson blockEntry(
       final String entryId) {
 
     return Updates
@@ -1050,10 +1060,10 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
         .and(
             Filters.eq("status", MongoPhaseTwoOutbox.STATUS_DONE),
             Filters.lt("doneAt", Date.from(threshold)));
-    final var ids = new java.util.ArrayList<Object>();
+    final var ids = new ArrayList<Object>();
     collection
         .find(expired)
-        .projection(com.mongodb.client.model.Projections.include("_id"))
+        .projection(Projections.include("_id"))
         .limit(maxRows)
         .forEach(document -> ids.add(document.get("_id")));
     if (ids.isEmpty()) {

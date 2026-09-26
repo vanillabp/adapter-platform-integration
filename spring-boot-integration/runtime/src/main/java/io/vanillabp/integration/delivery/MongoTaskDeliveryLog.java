@@ -2,9 +2,13 @@ package io.vanillabp.integration.delivery;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.BulkOperations;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -17,6 +21,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import io.vanillabp.integration.adapter.migration.delivery.OpenTaskTouches;
 import io.vanillabp.integration.adapter.migration.delivery.TaskDeliveryRetentionCleanup;
+import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.spi.TaskDeliveryLog;
 import lombok.extern.slf4j.Slf4j;
@@ -47,7 +52,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
    * The outcome of a delivery which left its task open - the only records the questions
    * about open tasks are interested in.
    */
-  private static final String COMPLETION_PENDING = io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome.Kind.COMPLETION_PENDING
+  private static final String COMPLETION_PENDING = WorkflowTaskOutcome.Kind.COMPLETION_PENDING
       .name();
 
   private final MongoTemplate mongoTemplate;
@@ -169,13 +174,13 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
    * while the configuration does not know it any more can be named.
    */
   @Override
-  public java.util.Set<String> adapterIdsOfOpenTasks(
+  public Set<String> adapterIdsOfOpenTasks(
       final String workflowModuleId,
       final String bpmnProcessId) {
 
-    final var query = org.springframework.data.mongodb.core.query.Query
+    final var query = Query
         .query(
-            org.springframework.data.mongodb.core.query.Criteria
+            Criteria
                 .where("workflowModuleId")
                 .is(workflowModuleId)
                 .and("bpmnProcessId")
@@ -184,7 +189,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
                 .is(COMPLETION_PENDING)
                 .and("adapterId")
                 .ne(null));
-    return new java.util.LinkedHashSet<>(
+    return new LinkedHashSet<>(
         mongoTemplate.findDistinct(query, "adapterId", collection, String.class));
 
   }
@@ -217,7 +222,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
                 .and("outcome")
                 .is(COMPLETION_PENDING))
         .with(
-            org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "recordedAt"))
+            Sort.by(Sort.Direction.DESC, "recordedAt"))
         .limit(1);
     return Optional
         .ofNullable(mongoTemplate.findOne(query, TaskDeliveryDocument.class, collection))
@@ -233,7 +238,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
    * <code>aggregateId</code> the startup creates.
    */
   @Override
-  public java.util.List<TaskDelivery> openTasksOfAggregate(
+  public List<TaskDelivery> openTasksOfAggregate(
       final String workflowModuleId,
       final String bpmnProcessId,
       final String workflowAggregateId) {
@@ -252,7 +257,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
                 .and("taskClosedAt")
                 .is(null))
         .with(
-            org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.ASC, "recordedAt"));
+            Sort.by(Sort.Direction.ASC, "recordedAt"));
     return mongoTemplate
         .find(query, TaskDeliveryDocument.class, collection)
         .stream()
@@ -268,7 +273,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
    * creates.
    */
   @Override
-  public java.util.List<TaskDelivery> openTasksOfWorkflow(
+  public List<TaskDelivery> openTasksOfWorkflow(
       final String workflowModuleId,
       final String workflowId) {
 
@@ -284,7 +289,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
                 .and("taskClosedAt")
                 .is(null))
         .with(
-            org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.ASC, "recordedAt"));
+            Sort.by(Sort.Direction.ASC, "recordedAt"));
     return mongoTemplate
         .find(query, TaskDeliveryDocument.class, collection)
         .stream()
@@ -357,9 +362,9 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
 
     return mongoTemplate
         .exists(
-            org.springframework.data.mongodb.core.query.Query
+            Query
                 .query(
-                    org.springframework.data.mongodb.core.query.Criteria
+                    Criteria
                         .where("workflowModuleId")
                         .is(workflowModuleId)
                         .and("bpmnProcessId")
@@ -492,7 +497,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
    * @param deliveryKeys The keys of one block
    */
   private void refreshLastSeen(
-      final java.util.List<String> deliveryKeys) {
+      final List<String> deliveryKeys) {
 
     final var now = Instant.now();
     mongoTemplate

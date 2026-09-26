@@ -208,6 +208,8 @@ public class JpaSpringDataUtil implements SpringDataUtil {
 
   }
 
+  // both annotations are called Id, so neither can be imported: whichever one was would
+  // read like the other and the second would have to be written out anyway
   private boolean isIdAnnotationPresent(
       Field field) {
 
@@ -216,6 +218,8 @@ public class JpaSpringDataUtil implements SpringDataUtil {
 
   }
 
+  // both annotations are called Id, so neither can be imported: whichever one was would
+  // read like the other and the second would have to be written out anyway
   private boolean isIdAnnotationPresent(
       Method getter) {
 

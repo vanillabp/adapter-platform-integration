@@ -6,12 +6,15 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.io.ResourceLoader;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.deployment.DeploymentService;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
+import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring;
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
+import io.vanillabp.integration.processservice.WorkflowServicesWhichAreNoBeans;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.integration.workflowmodule.WorkflowModules;
 import io.vanillabp.spi.process.ProcessService;
@@ -74,8 +77,8 @@ public class DeploymentAutoConfiguration {
       final ObjectProvider<AdapterDeploymentService<?, ?>> deploymentServiceProvider,
       final ObjectProvider<ExtensionWiringService<?, ?>> wiringServiceProvider,
       final ObjectProvider<ProcessService<?>> processServices,
-      final io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring workflowTaskWiring,
-      final org.springframework.core.io.ResourceLoader resourceLoader) {
+      final WorkflowTaskWiring workflowTaskWiring,
+      final ResourceLoader resourceLoader) {
 
     final List<AdapterDeploymentService<?, ?>> deploymentServices = deploymentServiceProvider
         .stream()
@@ -94,7 +97,7 @@ public class DeploymentAutoConfiguration {
     // without one is invisible to the discovery and only a scan of class resources can name
     // it. That scan runs where such a process is being reported and nowhere else
     final var deploymentService = new DeploymentService(
-        properties, deploymentServices, wiringServices, workflowTaskWiring, new io.vanillabp.integration.processservice.WorkflowServicesWhichAreNoBeans(
+        properties, deploymentServices, wiringServices, workflowTaskWiring, new WorkflowServicesWhichAreNoBeans(
             resourceLoader, allWorkflowModules));
 
     return new SpringBootDeploymentService(

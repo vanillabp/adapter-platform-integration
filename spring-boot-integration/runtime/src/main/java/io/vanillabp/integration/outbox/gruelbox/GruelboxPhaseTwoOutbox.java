@@ -1,7 +1,9 @@
 package io.vanillabp.integration.outbox.gruelbox;
 
+import java.io.StringReader;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.OptionalLong;
 
@@ -335,7 +337,7 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
     try (var connection = dataSource.getConnection(); var statement = connection.prepareStatement(countExpired)) {
       statement.setBoolean(1, true);
       statement.setBoolean(2, false);
-      statement.setTimestamp(3, java.sql.Timestamp.from(Instant.now()));
+      statement.setTimestamp(3, Timestamp.from(Instant.now()));
       try (var resultSet = statement.executeQuery()) {
         return resultSet.next()
             ? OptionalLong.of(resultSet.getLong(1))
@@ -582,7 +584,7 @@ public class GruelboxPhaseTwoOutbox implements PhaseTwoOutbox {
     if (invocation == null) {
       return null;
     }
-    try (var reader = new java.io.StringReader(invocation)) {
+    try (var reader = new StringReader(invocation)) {
       final var args = INVOCATION_SERIALIZER.deserializeInvocation(reader).getArgs();
       if ((args == null) || (args.length < 6) || !(args[5] instanceof final String serializedArgs)) {
         return null;

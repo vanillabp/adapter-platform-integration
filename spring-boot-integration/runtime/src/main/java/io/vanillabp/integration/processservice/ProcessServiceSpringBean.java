@@ -1,5 +1,7 @@
 package io.vanillabp.integration.processservice;
 
+import java.io.InputStream;
+import java.util.Collection;
 import java.util.List;
 
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -9,9 +11,13 @@ import io.vanillabp.integration.adapter.migration.processservice.MigrationProces
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxResolver;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.adapter.migration.processservice.ProcessServiceBase;
+import io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver;
+import io.vanillabp.integration.adapter.migration.processservice.TransactionRunnerResolver;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.WorkflowAdapterCache;
+import io.vanillabp.spi.process.ProcessDefinition;
+import io.vanillabp.spi.process.WorkflowHistory;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -95,7 +101,7 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
       final PhaseTwoOutboxResolver phaseTwoOutboxResolver,
       final PhaseTwoRouter phaseTwoRouter,
       final WorkflowAdapterCache workflowAdapterCache,
-      final io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver taskDeliveryLogResolver) {
+      final TaskDeliveryLogResolver taskDeliveryLogResolver) {
 
     this(
         workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, aggregatePersistenceAware, migratableProcessServices, phaseTwoOutboxResolver, phaseTwoRouter, workflowAdapterCache, taskDeliveryLogResolver, null);
@@ -142,8 +148,8 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
       final PhaseTwoOutboxResolver phaseTwoOutboxResolver,
       final PhaseTwoRouter phaseTwoRouter,
       final WorkflowAdapterCache workflowAdapterCache,
-      final io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver taskDeliveryLogResolver,
-      final io.vanillabp.integration.adapter.migration.processservice.TransactionRunnerResolver transactionRunnerResolver) {
+      final TaskDeliveryLogResolver taskDeliveryLogResolver,
+      final TransactionRunnerResolver transactionRunnerResolver) {
 
     migrationProcessService = MigrationProcessService
         .<A>forBpmnProcess(workflowModuleId, bpmnProcessId, workflowAggregateClass)
@@ -174,7 +180,7 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
    *          id, the primary one first
    */
   public void setProcessServicesOfDeclaredIds(
-      final java.util.Collection<MigrationProcessService<A>> processServicesOfDeclaredIds) {
+      final Collection<MigrationProcessService<A>> processServicesOfDeclaredIds) {
 
     this.processServicesOfDeclaredIds = (processServicesOfDeclaredIds == null) || processServicesOfDeclaredIds.isEmpty()
         ? null
@@ -398,7 +404,7 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
    * {@link MigrationProcessService#getProcessDefinitions(Object, String)}.
    */
   @Override
-  public List<io.vanillabp.spi.process.ProcessDefinition> getProcessDefinitions(
+  public List<ProcessDefinition> getProcessDefinitions(
       final A workflowAggregate,
       final String historyContext) {
 
@@ -407,7 +413,7 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
   }
 
   @Override
-  public java.io.InputStream getBpmnXml(
+  public InputStream getBpmnXml(
       final String processDefinitionId) {
 
     return migrationProcessService.getBpmnXml(processDefinitionId);
@@ -415,7 +421,7 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
   }
 
   @Override
-  public io.vanillabp.spi.process.WorkflowHistory getWorkflowHistory(
+  public WorkflowHistory getWorkflowHistory(
       final A workflowAggregate,
       final String historyContext) {
 

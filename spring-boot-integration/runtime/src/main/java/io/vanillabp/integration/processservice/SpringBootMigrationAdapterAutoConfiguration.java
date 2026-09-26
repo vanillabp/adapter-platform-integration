@@ -3,36 +3,63 @@ package io.vanillabp.integration.processservice;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.SmartInitializingSingleton;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.ConfigurationPropertiesBinding;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.core.env.AbstractEnvironment;
 import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.env.Environment;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.util.ClassUtils;
 
 import io.vanillabp.integration.adapter.AdapterConfigurationBase;
 import io.vanillabp.integration.adapter.migration.config.ClasspathFacts;
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.health.AdapterHealthReport;
+import io.vanillabp.integration.adapter.migration.observability.MicrometerVanillaBpMetrics;
+import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
+import io.vanillabp.integration.adapter.migration.processservice.ExtensionWorkflowElection;
+import io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCache;
+import io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCacheMeters;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
+import io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheMeters;
+import io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics;
+import io.vanillabp.integration.adapter.migration.scoping.NameClashAvoidanceService;
+import io.vanillabp.integration.adapter.migration.sync.AggregateSyncSupport;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
+import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
+import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
+import io.vanillabp.integration.adapter.spi.PreCommitRegistrar;
+import io.vanillabp.integration.adapter.spi.WorkflowAggregateSync;
 import io.vanillabp.integration.config.GruelboxOutboxProperties;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
+import io.vanillabp.integration.extension.spi.election.WorkflowElection;
+import io.vanillabp.integration.extension.spi.handler.ExtensionHandlers;
+import io.vanillabp.integration.health.VanillaBpHealthIndicator;
+import io.vanillabp.integration.spi.PhaseOperationRegistry;
+import io.vanillabp.integration.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.WorkflowAdapterCache;
 import io.vanillabp.integration.support.BpmsAdapters;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.integration.workflowmodule.WorkflowModules;
+import io.vanillabp.integration.workflowtask.SpringTransactionAnnotations;
 import io.vanillabp.integration.workflowtask.SpringTransactionRunner;
+import io.vanillabp.spi.process.ProcessService;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -186,9 +213,9 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    */
   @Bean
   @ConditionalOnMissingBean
-  public static io.vanillabp.integration.adapter.spi.WorkflowAggregateSync vanillaBpWorkflowAggregateSync() {
+  public static WorkflowAggregateSync vanillaBpWorkflowAggregateSync() {
 
-    return new io.vanillabp.integration.adapter.migration.sync.AggregateSyncSupport();
+    return new AggregateSyncSupport();
 
   }
 
@@ -213,10 +240,10 @@ public class SpringBootMigrationAdapterAutoConfiguration {
     return Arrays
         .stream(applicationContext.getBeanNamesForAnnotation(SpringBootApplication.class))
         .map(applicationContext::getType)
-        .filter(java.util.Objects::nonNull)
+        .filter(Objects::nonNull)
         .map(ClassUtils::getUserClass)
         .map(WorkflowModuleAutoConfiguration::determineClasspathRootPrefix)
-        .filter(java.util.Objects::nonNull)
+        .filter(Objects::nonNull)
         .findFirst()
         .orElse(null);
 
@@ -262,7 +289,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   @Bean
   @ConditionalOnMissingBean(PhaseTwoRouter.class)
   public PhaseTwoRouter vanillaBpPhaseTwoRouter(
-      final org.springframework.beans.factory.ObjectProvider<io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics> metrics) {
+      final ObjectProvider<VanillaBpMetrics> metrics) {
 
     final var router = new PhaseTwoRouter();
     router.setMetrics(vanillaBpMetricsOf(metrics));
@@ -279,12 +306,12 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    * @param metrics The provider of the metrics bean
    * @return What to record into, never <code>null</code>
    */
-  public static io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics vanillaBpMetricsOf(
-      final org.springframework.beans.factory.ObjectProvider<io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics> metrics) {
+  public static VanillaBpMetrics vanillaBpMetricsOf(
+      final ObjectProvider<VanillaBpMetrics> metrics) {
 
     return metrics
         .getIfAvailable(
-            () -> io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.NONE);
+            () -> VanillaBpMetrics.NONE);
 
   }
 
@@ -302,7 +329,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    * @return The operation registry
    */
   @Bean
-  public io.vanillabp.integration.spi.PhaseOperationRegistry vanillaBpPhaseOperationRegistry(
+  public PhaseOperationRegistry vanillaBpPhaseOperationRegistry(
       final PhaseTwoRouter phaseTwoRouter) {
 
     return phaseTwoRouter.getOperations();
@@ -329,11 +356,11 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    * @return The default in-memory cache
    */
   @Bean
-  @ConditionalOnMissingBean(io.vanillabp.integration.spi.WorkflowAdapterCache.class)
-  public io.vanillabp.integration.spi.WorkflowAdapterCache vanillaBpWorkflowAdapterCache(
+  @ConditionalOnMissingBean(WorkflowAdapterCache.class)
+  public WorkflowAdapterCache vanillaBpWorkflowAdapterCache(
       final MigrationAdapterProperties properties) {
 
-    return new io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCache(
+    return new InMemoryWorkflowAdapterCache(
         properties.getWorkflowAdapterCache());
 
   }
@@ -349,9 +376,9 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    */
   @Bean
   @ConditionalOnMissingBean
-  public io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics vanillaBpWorkflowAdapterCacheStatistics() {
+  public WorkflowAdapterCacheStatistics vanillaBpWorkflowAdapterCacheStatistics() {
 
-    return new io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics();
+    return new WorkflowAdapterCacheStatistics();
 
   }
 
@@ -362,11 +389,11 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    * registry, so no endpoint of our own is needed; an application without
    * Micrometer boots unchanged and reports no metrics.
    */
-  @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
+  @Configuration(proxyBeanMethods = false)
   // by NAME, not by class literal: the annotation of a nested configuration class is
   // read reflectively, so a class literal of an absent optional dependency would
   // fail before the condition is ever evaluated
-  @org.springframework.boot.autoconfigure.condition.ConditionalOnClass(
+  @ConditionalOnClass(
       name = "io.micrometer.core.instrument.MeterRegistry")
   public static class WorkflowAdapterCacheMetricsConfiguration {
 
@@ -388,10 +415,10 @@ public class SpringBootMigrationAdapterAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
-    public io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheMeters vanillaBpWorkflowAdapterCacheMeters(
-        final io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics statistics) {
+    public WorkflowAdapterCacheMeters vanillaBpWorkflowAdapterCacheMeters(
+        final WorkflowAdapterCacheStatistics statistics) {
 
-      return new io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheMeters(
+      return new WorkflowAdapterCacheMeters(
           statistics);
 
     }
@@ -411,10 +438,10 @@ public class SpringBootMigrationAdapterAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
-    public io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCacheMeters vanillaBpInMemoryWorkflowAdapterCacheMeters(
-        final ObjectProvider<io.vanillabp.integration.spi.WorkflowAdapterCache> caches) {
+    public InMemoryWorkflowAdapterCacheMeters vanillaBpInMemoryWorkflowAdapterCacheMeters(
+        final ObjectProvider<WorkflowAdapterCache> caches) {
 
-      return new io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCacheMeters(
+      return new InMemoryWorkflowAdapterCacheMeters(
           WorkflowAdapterCacheSelection
               .theCacheInUse(caches
                   .orderedStream()
@@ -434,10 +461,10 @@ public class SpringBootMigrationAdapterAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
-    public io.vanillabp.integration.adapter.migration.observability.MicrometerVanillaBpMetrics vanillaBpMetrics(
-        final io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties properties) {
+    public MicrometerVanillaBpMetrics vanillaBpMetrics(
+        final MigrationAdapterProperties properties) {
 
-      return new io.vanillabp.integration.adapter.migration.observability.MicrometerVanillaBpMetrics(
+      return new MicrometerVanillaBpMetrics(
           properties
               .getMetrics()
               .resolvedGaugeCache());
@@ -463,9 +490,9 @@ public class SpringBootMigrationAdapterAutoConfiguration {
      * @return The registration, run once the context is ready
      */
     @Bean
-    public org.springframework.beans.factory.SmartInitializingSingleton vanillaBpOutboxBacklogGauges(
-        final io.vanillabp.integration.adapter.migration.observability.MicrometerVanillaBpMetrics metrics,
-        final org.springframework.beans.factory.ObjectProvider<io.vanillabp.integration.spi.PhaseTwoOutbox> outboxes) {
+    public SmartInitializingSingleton vanillaBpOutboxBacklogGauges(
+        final MicrometerVanillaBpMetrics metrics,
+        final ObjectProvider<PhaseTwoOutbox> outboxes) {
 
       return () -> outboxes
           .stream()
@@ -500,10 +527,10 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    */
   @Bean
   @ConditionalOnMissingBean
-  public io.vanillabp.integration.adapter.migration.health.AdapterHealthReport vanillaBpAdapterHealthReport(
-      final org.springframework.beans.factory.ObjectProvider<io.vanillabp.integration.adapter.spi.AdapterDeploymentService<?, ?>> deploymentServices) {
+  public AdapterHealthReport vanillaBpAdapterHealthReport(
+      final ObjectProvider<AdapterDeploymentService<?, ?>> deploymentServices) {
 
-    return new io.vanillabp.integration.adapter.migration.health.AdapterHealthReport(
+    return new AdapterHealthReport(
         () -> deploymentServices
             .stream()
             .toList());
@@ -515,10 +542,10 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    * Spring Boot's health endpoint, where the application brings the health support.
    * An application without it boots unchanged and publishes nothing.
    */
-  @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
+  @Configuration(proxyBeanMethods = false)
   // by NAME for the same reason the metrics configuration uses names: the annotation
   // of a nested configuration class is read reflectively
-  @org.springframework.boot.autoconfigure.condition.ConditionalOnClass(
+  @ConditionalOnClass(
       name = "org.springframework.boot.health.contributor.HealthIndicator")
   public static class AdapterHealthConfiguration {
 
@@ -539,10 +566,10 @@ public class SpringBootMigrationAdapterAutoConfiguration {
      */
     @Bean("vanillabpHealthIndicator")
     @ConditionalOnMissingBean(name = "vanillabpHealthIndicator")
-    public io.vanillabp.integration.health.VanillaBpHealthIndicator vanillabpHealthIndicator(
-        final io.vanillabp.integration.adapter.migration.health.AdapterHealthReport report) {
+    public VanillaBpHealthIndicator vanillabpHealthIndicator(
+        final AdapterHealthReport report) {
 
-      return new io.vanillabp.integration.health.VanillaBpHealthIndicator(report);
+      return new VanillaBpHealthIndicator(report);
 
     }
 
@@ -564,11 +591,11 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    */
   @Bean
   @ConditionalOnMissingBean
-  public io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport vanillaBpNameClashAvoidanceSupport(
-      final io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties properties,
-      final org.springframework.beans.factory.ObjectProvider<io.vanillabp.integration.adapter.spi.AdapterDeploymentService<?, ?>> deploymentServices) {
+  public NameClashAvoidanceSupport vanillaBpNameClashAvoidanceSupport(
+      final MigrationAdapterProperties properties,
+      final ObjectProvider<AdapterDeploymentService<?, ?>> deploymentServices) {
 
-    return new io.vanillabp.integration.adapter.migration.scoping.NameClashAvoidanceService(
+    return new NameClashAvoidanceService(
         properties, () -> deploymentServices
             .stream()
             .toList());
@@ -599,13 +626,13 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   @Bean
   public WorkflowTaskRegistry vanillaBpWorkflowTaskRegistry(
       final SpringTransactionRunner platformTransactionRunner,
-      final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync,
-      @org.springframework.beans.factory.annotation.Qualifier(
+      final WorkflowAggregateSync aggregateSync,
+      @Qualifier(
         BEANNAME_MIGRATIONADAPERPROPERTIES) final MigrationAdapterProperties properties,
-      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping) {
+      final NameClashAvoidanceSupport scoping) {
 
     return new WorkflowTaskRegistry(
-        platformTransactionRunner, aggregateSync, io.vanillabp.integration.workflowtask.SpringTransactionAnnotations
+        platformTransactionRunner, aggregateSync, SpringTransactionAnnotations
             .specs(), properties, scoping);
 
   }
@@ -620,7 +647,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    * @return The extension-facing handler service
    */
   @Bean
-  public io.vanillabp.integration.extension.spi.handler.ExtensionHandlers vanillaBpExtensionHandlers(
+  public ExtensionHandlers vanillaBpExtensionHandlers(
       final WorkflowTaskRegistry workflowTaskRegistry) {
 
     return workflowTaskRegistry.getExtensionHandlers();
@@ -636,10 +663,10 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    * @return The extension-facing election
    */
   @Bean
-  public io.vanillabp.integration.extension.spi.election.WorkflowElection vanillaBpWorkflowElection(
+  public WorkflowElection vanillaBpWorkflowElection(
       final PhaseTwoRouter phaseTwoRouter) {
 
-    return new io.vanillabp.integration.adapter.migration.processservice.ExtensionWorkflowElection(phaseTwoRouter);
+    return new ExtensionWorkflowElection(phaseTwoRouter);
 
   }
 
@@ -656,7 +683,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    */
   @Bean
   public SpringTransactionRunner vanillaBpPlatformTransactionRunner(
-      final org.springframework.beans.factory.ObjectProvider<org.springframework.transaction.PlatformTransactionManager> transactionManager) {
+      final ObjectProvider<PlatformTransactionManager> transactionManager) {
 
     return new SpringTransactionRunner(transactionManager);
 
@@ -675,7 +702,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    */
   @Bean
   public SpringTransactionRunnerResolver vanillaBpTransactionRunnerResolver(
-      final org.springframework.context.ApplicationContext applicationContext,
+      final ApplicationContext applicationContext,
       final SpringTransactionRunner platformTransactionRunner) {
 
     return new SpringTransactionRunnerResolver(applicationContext, platformTransactionRunner);
@@ -693,8 +720,8 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    * @return The pre-commit hook
    */
   @Bean
-  @ConditionalOnMissingBean(io.vanillabp.integration.adapter.spi.PreCommitRegistrar.class)
-  public io.vanillabp.integration.adapter.spi.PreCommitRegistrar vanillaBpPreCommitRegistrar(
+  @ConditionalOnMissingBean(PreCommitRegistrar.class)
+  public PreCommitRegistrar vanillaBpPreCommitRegistrar(
       final SpringTransactionRunnerResolver transactionRunnerResolver) {
 
     return new SpringPreCommitRegistrar(transactionRunnerResolver);
@@ -711,7 +738,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    */
   @Bean
   public SpringPhaseTwoOutboxResolver vanillaBpPhaseTwoOutboxResolver(
-      final org.springframework.context.ApplicationContext applicationContext) {
+      final ApplicationContext applicationContext) {
 
     return new SpringPhaseTwoOutboxResolver(applicationContext);
 
@@ -727,7 +754,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    */
   @Bean
   public SpringTaskDeliveryLogResolver vanillaBpTaskDeliveryLogResolver(
-      final org.springframework.context.ApplicationContext applicationContext) {
+      final ApplicationContext applicationContext) {
 
     return new SpringTaskDeliveryLogResolver(applicationContext);
 
@@ -750,7 +777,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
       final ConfigurableListableBeanFactory beanFactory) {
 
     return () -> beanFactory
-        .getBeanProvider(io.vanillabp.spi.process.ProcessService.class)
+        .getBeanProvider(ProcessService.class)
         .stream()
         .filter(ProcessServiceSpringBean.class::isInstance)
         .map(processServiceBean -> (ProcessServiceSpringBean<?>) processServiceBean)

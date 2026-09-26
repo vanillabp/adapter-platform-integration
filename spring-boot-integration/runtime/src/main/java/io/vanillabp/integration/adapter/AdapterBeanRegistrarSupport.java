@@ -2,6 +2,7 @@ package io.vanillabp.integration.adapter;
 
 import java.util.function.Consumer;
 
+import org.springframework.beans.factory.BeanRegistry;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.core.env.Environment;
@@ -95,7 +96,7 @@ public final class AdapterBeanRegistrarSupport {
    * @see AdapterCollaborators
    */
   public static AdapterCollaborators collaborators(
-      final org.springframework.beans.factory.BeanRegistry.SupplierContext supplierContext,
+      final BeanRegistry.SupplierContext supplierContext,
       final String adapterId) {
 
     return AdapterCollaborators
