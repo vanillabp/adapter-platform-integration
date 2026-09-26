@@ -74,7 +74,7 @@ public class TextValueRoundTripTest {
 
   }
 
-  private static final AggregateSyncSupport WAY_OUT = new AggregateSyncSupport();
+  private static final AggregateSyncSupport WAY_OUT = new AggregateSyncSupport(new io.vanillabp.integration.adapter.migration.startup.StartupFindings());
 
   /**
    * @return What the BPMS is given for that value

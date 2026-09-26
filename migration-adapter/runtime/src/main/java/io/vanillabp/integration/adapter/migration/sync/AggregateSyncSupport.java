@@ -156,13 +156,24 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   }
 
   /**
+   * Where a finding about an aggregate class goes, so the whole start says it once.
+   */
+  private final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings;
+
+  /**
    * Built by the platform integration, once per application.
    * <p>
    * Nothing is read here. What an aggregate class shares is derived the first time that class
    * turns up and kept afterwards, because a sync point is a hot path and reflection is not
    * free.
+   *
+   * @param findings Where a finding about an aggregate class is left
    */
-  public AggregateSyncSupport() {
+  public AggregateSyncSupport(
+      final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings) {
+
+    this.findings = findings;
+
   }
 
   /**
@@ -899,15 +910,15 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
           .filter(AggregateSyncSupport::isTextNothingReadsBack)
           .filter(type -> !TextValueTypes.isRefusedOnTheWayOut(type))
           .distinct()
-          .forEach(type -> log.warn(
-              """
-                  The attribute '{}' of '{}' is a '{}'. Nothing reads its text back, so a \
-                  @TaskParam and an attribute of an aggregate the BPMS starts fail when they are \
-                  declared as one. {}""",
-              property.name(),
-              clazz.getName(),
-              type.getName(),
-              TextValueTypes.adviceFor(type)));
+          .forEach(type -> findings
+              .warn(
+                  io.vanillabp.integration.adapter.migration.startup.StartupTopic.CODE,
+                  "attribute '%s' of '%s'".formatted(property.name(), clazz.getName()),
+                  """
+                      This attribute is a '%s'. Nothing reads its text back, so a @TaskParam and \
+                      an attribute of an aggregate the BPMS starts fail when they are declared as \
+                      one. %s"""
+                      .formatted(type.getName(), TextValueTypes.adviceFor(type))));
     }
 
   }

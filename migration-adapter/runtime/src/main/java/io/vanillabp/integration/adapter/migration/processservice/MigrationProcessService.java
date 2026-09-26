@@ -147,6 +147,21 @@ public class MigrationProcessService<A> {
   private final MigrationAdapterProperties properties;
 
   /**
+   * The leftovers of an adapter id which is gone from the configuration, as far as they
+   * were named already. The box folds what a start finds, but a dispatch meeting a stale
+   * entry reports after the box was written, and there it is a line of its own: a
+   * backlog of a thousand entries is owed one message per adapter id and store, not a
+   * thousand.
+   */
+  private final Set<String> leftoversAlreadyNamed = ConcurrentHashMap.newKeySet();
+
+  /**
+   * Where a startup check of this process service reports what it found, so the whole
+   * start says it once instead of a line per BPMN process.
+   */
+  private final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings;
+
+  /**
    * The reading half - what a viewer shows about a workflow: the process definitions it
    * uses, their BPMN XML, and its execution history.
    */
@@ -182,14 +197,6 @@ public class MigrationProcessService<A> {
    * until then and for an application without a metrics backend.
    */
   private volatile VanillaBpMetrics metrics = VanillaBpMetrics.NONE;
-
-  /**
-   * The leftovers of an adapter id which is gone from the configuration, as far as they
-   * were named already: what a start found, and what a dispatch found afterwards. An
-   * application with a backlog of stale entries is owed one message per adapter id and
-   * store, not one per entry.
-   */
-  private final Set<String> leftoversAlreadyNamed = ConcurrentHashMap.newKeySet();
 
   /**
    * Hands over what to count into, called by the platform integration once the metrics of
@@ -291,6 +298,8 @@ public class MigrationProcessService<A> {
     this.aggregateIdType = aggregatePersistenceSupport.getAggregateIdType();
     AggregateIdRoundTrip.validateIdTypeConvertible(workflowAggregateClass, aggregateIdType);
 
+    this.findings = MigrationAdapterProperties.startupFindingsOf(properties);
+
     this.workflowLocator = new WorkflowLocator(workflowModuleId, bpmnProcessId, builder.workflowAdapterCache);
 
     this.deliveryRecords = new DeliveryRecords(
@@ -314,11 +323,14 @@ public class MigrationProcessService<A> {
   public void validatePhaseTwoOutboxAtStartup() {
 
     if (resolvePhaseTwoOutbox() == null) {
-      throw new IllegalStateException(
-          buildNoOutboxMessage(
-              adapterProcessServices
-                  .getFirst()
-                  .getAdapterId()));
+      findings
+          .refuse(
+              io.vanillabp.integration.adapter.migration.startup.StartupTopic.CODE,
+              "process '%s' of workflow module '%s'".formatted(bpmnProcessId, workflowModuleId),
+              buildNoOutboxMessage(
+                  adapterProcessServices
+                      .getFirst()
+                      .getAdapterId()));
     }
 
   }
@@ -391,11 +403,12 @@ public class MigrationProcessService<A> {
             prioritizedAdapters,
             MigrationAdapterProperties.guessingAdaptersProperty(workflowModuleId));
 
+    final var scope = "process '%s' of workflow module '%s'".formatted(bpmnProcessId, workflowModuleId);
     if (properties.acceptsGuessingAdapters(workflowModuleId)) {
-      log.warn("{}", message);
+      findings.warn(io.vanillabp.integration.adapter.migration.startup.StartupTopic.CONFIGURATION, scope, message);
       return;
     }
-    throw new IllegalStateException(message);
+    findings.refuse(io.vanillabp.integration.adapter.migration.startup.StartupTopic.CONFIGURATION, scope, message);
 
   }
 
@@ -449,7 +462,14 @@ public class MigrationProcessService<A> {
     }
     final var runner = getTransactionRunner(null);
     if (runner == null) {
-      throw new IllegalStateException(buildNoTransactionRunnerMessage());
+      findings
+          .refuse(
+              io.vanillabp.integration.adapter.migration.startup.StartupTopic.CODE,
+              aggregateScope(),
+              buildNoTransactionRunnerMessage());
+      // nothing below can be answered without a runner, and the refusal ends this start
+      // at its end anyway
+      return;
     }
     log.info(
         "Workflow aggregate '{}' (BPMN process '{}' of workflow module '{}') is processed in the "
@@ -463,28 +483,57 @@ public class MigrationProcessService<A> {
     switch (coverage.verdict()) {
       case COVERED, UNKNOWN -> {
       }
-      case UNGUARDED -> log.warn("{}", coverage.message());
+      // where the aggregate's store is the trouble the fix is a machine (a MongoDB which
+      // is no replica set), and where the two stores cannot be held together the fix is a
+      // bean of the application
+      case UNGUARDED -> findings
+          .warn(
+              io.vanillabp.integration.adapter.migration.startup.StartupTopic.INFRASTRUCTURE,
+              aggregateScope(),
+              coverage.message());
       case UNCOVERABLE -> {
         if (properties.acceptsUnguardedAggregateWrites(workflowModuleId)) {
-          log.warn(
-              "{} This was accepted by setting '{}' - VanillaBP does not stop the application, and "
-                  + "the guarantees named above are the ones you have.",
-              coverage.message(),
-              MigrationAdapterProperties.unguardedAggregateWritesProperty(workflowModuleId));
+          findings
+              .warn(
+                  io.vanillabp.integration.adapter.migration.startup.StartupTopic.CODE,
+                  aggregateScope(),
+                  """
+                      %s This was accepted by setting '%s' - VanillaBP does not stop the \
+                      application, and the guarantees named above are the ones you have."""
+                      .formatted(
+                          coverage.message(),
+                          MigrationAdapterProperties
+                              .unguardedAggregateWritesProperty(workflowModuleId)));
         } else {
-          throw new IllegalStateException(
-              """
-                  %s
-                  If this is what you want, state it by setting '%s' to 'accepted' (or \
-                  '%s.transactions.unguarded-aggregate-writes' for the whole application) - the \
-                  message stays as a warning then."""
-                  .formatted(
-                      coverage.message(),
-                      MigrationAdapterProperties.unguardedAggregateWritesProperty(workflowModuleId),
-                      MigrationAdapterProperties.PREFIX));
+          findings
+              .refuse(
+                  io.vanillabp.integration.adapter.migration.startup.StartupTopic.CODE,
+                  aggregateScope(),
+                  """
+                      %s
+                      If this is what you want, state it by setting '%s' to 'accepted' (or \
+                      '%s.transactions.unguarded-aggregate-writes' for the whole application) - \
+                      the message stays as a warning then."""
+                      .formatted(
+                          coverage.message(),
+                          MigrationAdapterProperties
+                              .unguardedAggregateWritesProperty(workflowModuleId),
+                          MigrationAdapterProperties.PREFIX));
         }
       }
     }
+
+  }
+
+  /**
+   * How a finding about the transaction of this workflow aggregate names its subject.
+   *
+   * @return The scope of such a finding
+   */
+  private String aggregateScope() {
+
+    return "workflow aggregate '%s' of process '%s' of workflow module '%s'"
+        .formatted(workflowAggregateClass.getName(), bpmnProcessId, workflowModuleId);
 
   }
 
@@ -997,8 +1046,9 @@ public class MigrationProcessService<A> {
    * costs nothing: what is read was going to be read.
    * <p>
    * Said once per adapter id, however many entries name it, which is what keeps a backlog
-   * of a thousand stale entries from writing a thousand messages. The memory is shared with
-   * the start, so the three stores which do answer a start do not say it twice.
+   * of a thousand stale entries from writing a thousand messages. The box folds the
+   * repetitions of the start; a dispatch after the box was written writes its line where
+   * it stands, because there is no box left to fold it into.
    */
   private void reportUnconfiguredAdapterIdOfADispatch(
       final String adapterId) {
@@ -1033,8 +1083,8 @@ public class MigrationProcessService<A> {
         .stream()
         .filter(Objects::nonNull)
         .filter(adapterId -> !configuredAdapterIds.contains(adapterId))
-        // the add answers whether nobody has named this leftover yet, which is what turns a
-        // backlog of entries naming one adapter id into a single message
+        // the add answers whether nobody has named this leftover yet, which is what turns
+        // a backlog of entries naming one adapter id into a single message
         .filter(adapterId -> leftoversAlreadyNamed.add(whatIsLeftOver
             + " of "
             + adapterId))
@@ -1052,28 +1102,30 @@ public class MigrationProcessService<A> {
                     MigrationAdapterProperties.PREFIX);
             return;
           }
-          log
+          findings
               .warn(
+                  io.vanillabp.integration.adapter.migration.startup.StartupTopic.STORED_STATE,
+                  "adapter id '%s', process '%s' of workflow module '%s'"
+                      .formatted(adapterId, bpmnProcessId, workflowModuleId),
                   """
-                      The adapter id '{}' is NOT configured any more, but it still has {} of BPMN \
-                      process '{}' (workflow module '{}'). VanillaBP persists the adapter id to know \
-                      what belongs to which BPMS, so there are two readings and both cost you \
-                      something: the id was RENAMED - then {} - or it was removed while its BPMS \
-                      still had work left. To solve this either
-                        - configure '{}.adapters.{}.*' again (a rename: put the old name back; a \
+                      The adapter id '%s' is NOT configured any more, but it still has %s. \
+                      VanillaBP persists the adapter id to know what belongs to which BPMS, so \
+                      there are two readings and both cost you something: the id was RENAMED - \
+                      then %s - or it was removed while its BPMS still had work left. To solve \
+                      this either
+                        - configure '%s.adapters.%s.*' again (a rename: put the old name back; a \
                       migration: keep the old BPMS until nothing of it is left), or
-                        - state that you know about the leftovers: {}.retired-adapters: [{}]
+                        - state that you know about the leftovers: %s.retired-adapters: [%s]
                       An adapter id is a name to choose once: see the wiki, 'BPMS migration' - \
-                      'Naming adapter ids, and never renaming them'.""",
-                  adapterId,
-                  whatIsLeftOver,
-                  bpmnProcessId,
-                  workflowModuleId,
-                  whatItCosts,
-                  MigrationAdapterProperties.PREFIX,
-                  adapterId,
-                  MigrationAdapterProperties.PREFIX,
-                  adapterId);
+                      'Naming adapter ids, and never renaming them'."""
+                      .formatted(
+                          adapterId,
+                          whatIsLeftOver,
+                          whatItCosts,
+                          MigrationAdapterProperties.PREFIX,
+                          adapterId,
+                          MigrationAdapterProperties.PREFIX,
+                          adapterId));
         });
 
   }
@@ -2339,19 +2391,23 @@ public class MigrationProcessService<A> {
     if (missing.isEmpty()) {
       return;
     }
-    throw new IllegalStateException(
-        """
-            The VanillaBP adapter '%s' cannot serve the operations %s of BPMN process '%s' of \
-            workflow module '%s', although every adapter has to: its '%s' contributes no handler \
-            for them. Add a PhaseOperationHandler per missing operation - see the javadoc of \
-            io.vanillabp.integration.adapter.spi.PhaseOperationHandler - or remove the adapter \
-            from the prioritized adapters of this workflow module."""
-            .formatted(
-                adapter.getAdapterId(),
-                missing,
-                bpmnProcessId,
-                workflowModuleId,
-                adapter.getClass().getSimpleName()));
+    findings
+        .refuse(
+            io.vanillabp.integration.adapter.migration.startup.StartupTopic.PARTS_AND_VERSIONS,
+            "process '%s' of workflow module '%s', adapter '%s'"
+                .formatted(bpmnProcessId, workflowModuleId, adapter.getAdapterId()),
+            """
+                The VanillaBP adapter '%s' cannot serve the operations %s of BPMN process '%s' of \
+                workflow module '%s', although every adapter has to: its '%s' contributes no \
+                handler for them. Add a PhaseOperationHandler per missing operation - see the \
+                javadoc of io.vanillabp.integration.adapter.spi.PhaseOperationHandler - or remove \
+                the adapter from the prioritized adapters of this workflow module."""
+                .formatted(
+                    adapter.getAdapterId(),
+                    missing,
+                    bpmnProcessId,
+                    workflowModuleId,
+                    adapter.getClass().getSimpleName()));
 
   }
 

@@ -17,7 +17,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
-import io.vanillabp.integration.adapter.migration.transaction.ConcurrentTokenCheck;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
 import io.vanillabp.integration.adapter.spi.version.DeployedProcessVersion;
 import io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog;
@@ -208,7 +207,7 @@ public class ConcurrentTokensOfHeldVersionsTest {
 
     assertEquals(1, messages.size(), messages.toString());
     final var message = messages.getFirst();
-    assertTrue(message.contains("Version(s) '1', '2'"), message);
+    assertTrue(message.contains("version(s) '1', '2'"), message);
     assertTrue(message.contains("the BPMS still holds"), message);
     assertTrue(message.contains("Gateway_Fork"), message);
     assertTrue(message.contains("Event_Reminder"), message);
@@ -262,17 +261,39 @@ public class ConcurrentTokensOfHeldVersionsTest {
   }
 
   @Test
-  @DisplayName("The deployed model speaks first, and the held versions add no second warning")
+  @DisplayName("The deployed model and the held versions become ONE entry of the box")
   public void theWarningStaysOnePerBpmnProcess() {
 
     final var registry = registryServing(Aggregate.class);
-    final var messages = loggedByTheCheck(() -> {
+    loggedByTheCheck(() -> {
       theAdapterWired(registry, List.of("Gateway_Fork"));
       registry.resolveProcessVersions(MODULE);
     });
 
-    assertEquals(1, messages.size(), messages.toString());
-    assertTrue(messages.getFirst().contains("The BPMN process '%s'".formatted(PROCESS)), messages.getFirst());
+    // two models carry the same finding about one aggregate, so they carry the same
+    // message and differ in their scope - which is what lets the box fold them
+    final var aboutTwoTokens = properties
+        .startupFindings()
+        .findings()
+        .stream()
+        .filter(finding -> finding.message().contains("hold more than one token"))
+        .toList();
+    assertEquals(2, aboutTwoTokens.size(), aboutTwoTokens.toString());
+    assertEquals(
+        1,
+        aboutTwoTokens
+            .stream()
+            .map(finding -> finding.message())
+            .distinct()
+            .count(),
+        "one message, so the box makes one entry naming both models");
+    final var box = properties.startupFindings().theBox();
+    assertEquals(
+        1,
+        box.split("hold more than one token", -1).length - 1,
+        box);
+    assertTrue(box.contains("process '%s'".formatted(PROCESS)), box);
+    assertTrue(box.contains("version(s) '1', '2'"), box);
 
   }
 
@@ -327,26 +348,17 @@ public class ConcurrentTokensOfHeldVersionsTest {
   }
 
   /**
-   * The messages the concurrent-token check wrote while the work ran ("normal" logging is
-   * switched off during tests).
+   * What the concurrent-token check reported while the work ran - the scope of a finding
+   * beside its message, because the scope names the model the finding was drawn from.
    */
   private List<String> loggedByTheCheck(
       final Runnable work) {
 
-    final var logWatcher = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
-    logWatcher.start();
-    final var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory
-        .getLogger(ConcurrentTokenCheck.class);
-    logger.addAppender(logWatcher);
-    try {
-      work.run();
-    } finally {
-      logger.detachAndStopAllAppenders();
-    }
-    return logWatcher.list
+    work.run();
+    return io.vanillabp.migration.test.startup.WhatWasFound
+        .entries(properties.startupFindings())
         .stream()
-        .filter(event -> event.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.WARN))
-        .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
+        .filter(entry -> entry.contains("hold more than one token"))
         .toList();
 
   }

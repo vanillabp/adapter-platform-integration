@@ -1,5 +1,6 @@
 package io.vanillabp.migration.test.processservice;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -110,6 +111,12 @@ public class AdapterOperationsAtStartupTest {
 
   }
 
+  /**
+   * The configuration the last process service was built on - a refusal is collected
+   * there and thrown once, at the end of the start.
+   */
+  private MigrationAdapterProperties lastProperties;
+
   private MigrationProcessService<Object> processService(
       final MigratableProcessService<Object> adapter) {
 
@@ -119,6 +126,7 @@ public class AdapterOperationsAtStartupTest {
         .prioritizedAdapters(List.of("first-adapter"))
         .build();
     properties.validateAndLink();
+    lastProperties = properties;
 
     return MigrationProcessService
         .<Object>forBpmnProcess(MODULE, PROCESS, Object.class)
@@ -151,11 +159,11 @@ public class AdapterOperationsAtStartupTest {
   @DisplayName("An adapter serving neither way is refused, naming it and what is missing")
   public void anAdapterWithoutOperationsIsRefused() {
 
-    final var exception = assertThrowsExactly(
-        IllegalStateException.class,
-        () -> processService(new HandlerAdapter(List.of()))
-            .validateAdapterOperationsAtStartup());
+    processService(new HandlerAdapter(List.of())).validateAdapterOperationsAtStartup();
 
+    // the reason is collected and thrown once, at the end of the start
+    final var exception = lastProperties.startupFindings().theRefusal();
+    assertNotNull(exception, "the start has to be refused");
     assertTrue(exception.getMessage().contains("first-adapter"), exception.getMessage());
     assertTrue(exception.getMessage().contains("COMPLETE_TASK"), exception.getMessage());
     assertTrue(exception.getMessage().contains("START_WORKFLOW"), exception.getMessage());

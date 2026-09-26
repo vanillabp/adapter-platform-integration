@@ -10,15 +10,12 @@ import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.slf4j.LoggerFactory;
 
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.scoping.NameClashAvoidanceService;
+import io.vanillabp.integration.adapter.migration.startup.StartupFindings;
+import io.vanillabp.integration.adapter.migration.startup.StartupFindings.Finding;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidance;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.ModelIdentifier;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.ScopedIdentifierKind;
@@ -39,6 +36,12 @@ public class CollidingIdentifiersOfWorkflowModulesTest {
 
   private static final String ADAPTER = "c7";
 
+  /**
+   * The configuration the service built last runs on - what a check reports into hangs
+   * on it, so this is where a test reads what was reported.
+   */
+  private static MigrationAdapterProperties lastProperties;
+
   private static NameClashAvoidanceService serviceWith(
       final NameClashAvoidance mode) {
 
@@ -51,6 +54,7 @@ public class CollidingIdentifiersOfWorkflowModulesTest {
         .prioritizedAdapters(List.of(ADAPTER))
         .build();
     properties.validateAndLink();
+    lastProperties = properties;
     return new NameClashAvoidanceService(properties);
 
   }
@@ -63,34 +67,32 @@ public class CollidingIdentifiersOfWorkflowModulesTest {
   }
 
   /**
-   * Everything logged while the given block runs - the message is the whole feature, so it
-   * is read rather than mocked.
+   * Everything the checks reported while the given block ran - the message is the whole
+   * feature, so it is read rather than mocked.
    */
-  private static List<ILoggingEvent> recorded(
+  private static List<Finding> recorded(
       final Runnable reporting) {
 
-    final var root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
-    final var recorded = new ListAppender<ILoggingEvent>();
-    recorded.start();
-    root.addAppender(recorded);
-    try {
-      reporting.run();
-    } finally {
-      root.detachAppender(recorded);
-    }
-    return recorded.list;
+    reporting.run();
+    return lastProperties
+        .startupFindings()
+        .findings();
 
   }
 
   private static String theOnlyWarning(
-      final List<ILoggingEvent> events) {
+      final List<Finding> findings) {
 
-    assertEquals(1, events.size(), () -> "one warning, but was "
-        + events);
-    assertEquals(Level.WARN, events.getFirst().getLevel(), "an application may have arranged the sharing");
-    return events
-        .getFirst()
-        .getFormattedMessage();
+    assertEquals(1, findings.size(), () -> "one warning, but was "
+        + findings);
+    assertEquals(
+        StartupFindings.Severity.WARNING,
+        findings.getFirst().severity(),
+        "an application may have arranged the sharing");
+    final var finding = findings.getFirst();
+    // the scope says what the finding is about and the message says what to do, so a
+    // test reading the whole warning reads both
+    return "%s: %s".formatted(finding.scope(), finding.message());
 
   }
 
@@ -367,7 +369,7 @@ public class CollidingIdentifiersOfWorkflowModulesTest {
                     3L,
                     List.of(message("PaymentReceived")))));
 
-    assertTrue(reported.contains("Version 7"), reported);
+    assertTrue(reported.contains("version 7"), reported);
     assertTrue(reported.contains("'Settlement'"), reported);
     assertTrue(reported.contains("'"
         + PAYMENTS

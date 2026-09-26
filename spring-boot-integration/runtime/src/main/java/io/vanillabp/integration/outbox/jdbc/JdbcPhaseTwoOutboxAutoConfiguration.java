@@ -56,7 +56,7 @@ import lombok.extern.slf4j.Slf4j;
  * <p>
  * An application which ran the gruelbox store before this one gets a message about what
  * that store still holds, see
- * {@link #reportWhatTheFormerStoreStillHolds(DataSource, String)}. Gruelbox itself is
+ * {@link #reportWhatTheFormerStoreStillHolds(DataSource, String, VanillaBpConfigurationProperties)}. Gruelbox itself is
  * still available: setting <code>vanillabp.outbox.gruelbox.enabled</code> to
  * <code>true</code> switches this default off and
  * {@link io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfiguration}
@@ -164,7 +164,7 @@ public class JdbcPhaseTwoOutboxAutoConfiguration {
 
     final var outbox = new JdbcPhaseTwoOutbox(
         dataSource, vanillaBpProperties.getOutbox(), payloadStore, phaseTwoRouter, metrics);
-    reportWhatTheFormerStoreStillHolds(dataSource, outbox.getTableName());
+    reportWhatTheFormerStoreStillHolds(dataSource, outbox.getTableName(), vanillaBpProperties);
     return outbox;
 
   }
@@ -184,35 +184,42 @@ public class JdbcPhaseTwoOutboxAutoConfiguration {
    * @param dataSource The data source the tables live in
    * @param tableName The table this store writes into, named in the message so the two
    *          are not mixed up
+   * @param vanillaBpProperties The bound tree, which carries the collection the whole
+   *          start reports into
    */
   private static void reportWhatTheFormerStoreStillHolds(
       final DataSource dataSource,
-      final String tableName) {
+      final String tableName,
+      final VanillaBpConfigurationProperties vanillaBpProperties) {
 
     final var waiting = entriesWaitingInFormerStore(dataSource);
     if (waiting <= 0) {
       return;
     }
-    log
+    vanillaBpProperties
+        .startupFindings()
         .warn(
+            io.vanillabp.integration.adapter.migration.startup.StartupTopic.STORED_STATE,
+            "table '%s'".formatted(FORMER_OUTBOX_TABLE_NAME),
             """
-                The table '{}' of the former gruelbox store holds {} entry/entries which were never \
-                dispatched, and this application now writes its phase-two entries into '{}'. Nothing \
-                reads '{}' any more, so every workflow waiting for one of those entries waits \
+                The table '%s' of the former gruelbox store holds %d entry/entries which were never \
+                dispatched, and this application now writes its phase-two entries into '%s'. Nothing \
+                reads '%s' any more, so every workflow waiting for one of those entries waits \
                 forever. Either
                 - start the previous version of this application once and let it dispatch what is \
                 left, or
-                - set '{}' to 'true' to keep using gruelbox.
-                Once '{}' holds nothing undispatched, this message is gone and the table can be \
-                dropped.""",
-            FORMER_OUTBOX_TABLE_NAME,
-            waiting,
-            tableName,
-            FORMER_OUTBOX_TABLE_NAME,
-            // the key comes from the constant the condition of this class reads, so a
-            // rename cannot leave this line naming a key which is gone
-            GruelboxOutboxProperties.ENABLED,
-            FORMER_OUTBOX_TABLE_NAME);
+                - set '%s' to 'true' to keep using gruelbox.
+                Once '%s' holds nothing undispatched, this message is gone and the table can be \
+                dropped."""
+                .formatted(
+                    FORMER_OUTBOX_TABLE_NAME,
+                    waiting,
+                    tableName,
+                    FORMER_OUTBOX_TABLE_NAME,
+                    // the key comes from the constant the condition of this class reads,
+                    // so a rename cannot leave this line naming a key which is gone
+                    GruelboxOutboxProperties.ENABLED,
+                    FORMER_OUTBOX_TABLE_NAME));
 
   }
 

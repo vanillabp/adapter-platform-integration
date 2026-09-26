@@ -10,17 +10,14 @@ import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.slf4j.LoggerFactory;
 
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
 import io.vanillabp.integration.adapter.migration.scoping.NameClashAvoidanceService;
+import io.vanillabp.integration.adapter.migration.startup.StartupFindings;
+import io.vanillabp.integration.adapter.migration.startup.StartupFindings.Finding;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidance;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.IdentifierHeldElsewhere;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.ScopedIdentifierKind;
@@ -42,6 +39,12 @@ public class IdentifiersTheBpmsAlreadyHoldsTest {
 
   private static final String ADAPTER = "c7";
 
+  /**
+   * The configuration the service built last runs on - what a check reports into hangs
+   * on it, so this is where a test reads what was reported.
+   */
+  private static MigrationAdapterProperties lastProperties;
+
   private static NameClashAvoidanceService serviceWith(
       final NameClashAvoidance adapterLevel,
       final NameClashAvoidance moduleLevel) {
@@ -61,6 +64,7 @@ public class IdentifiersTheBpmsAlreadyHoldsTest {
         .workflowModules(Map.of(MODULE, module))
         .build();
     properties.validateAndLink();
+    lastProperties = properties;
     return new NameClashAvoidanceService(properties);
 
   }
@@ -69,20 +73,14 @@ public class IdentifiersTheBpmsAlreadyHoldsTest {
    * Everything logged while the given findings are reported - the message is the whole
    * feature, so it is read rather than mocked.
    */
-  private static List<ILoggingEvent> reportOf(
+  private static List<Finding> reportOf(
       final NameClashAvoidanceService testee,
       final List<IdentifierHeldElsewhere> found) {
 
-    final var root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
-    final var recorded = new ListAppender<ILoggingEvent>();
-    recorded.start();
-    root.addAppender(recorded);
-    try {
-      testee.reportIdentifiersTheBpmsAlreadyHolds(ADAPTER, MODULE, found);
-    } finally {
-      root.detachAppender(recorded);
-    }
-    return recorded.list;
+    testee.reportIdentifiersTheBpmsAlreadyHolds(ADAPTER, MODULE, found);
+    return lastProperties
+        .startupFindings()
+        .findings();
 
   }
 
@@ -94,8 +92,11 @@ public class IdentifiersTheBpmsAlreadyHoldsTest {
     assertEquals(1, recorded.size(), () -> "one warning per workflow module and adapter, but was "
         + recorded);
     final var warning = recorded.getFirst();
-    assertEquals(Level.WARN, warning.getLevel(), "a holder may be an application which runs correctly");
-    return warning.getFormattedMessage();
+    assertEquals(
+        StartupFindings.Severity.WARNING,
+        warning.severity(),
+        "a holder may be an application which runs correctly");
+    return warning.message();
 
   }
 
@@ -234,7 +235,8 @@ public class IdentifiersTheBpmsAlreadyHoldsTest {
         perModule);
 
     // ... and where nothing is configured at all it says which default applies
-    final var unconfigured = warningOf(new NameClashAvoidanceService(null), found);
+    lastProperties = new MigrationAdapterProperties();
+    final var unconfigured = warningOf(new NameClashAvoidanceService(lastProperties), found);
     assertTrue(unconfigured.contains("nothing is configured"), unconfigured);
 
   }
@@ -258,10 +260,13 @@ public class IdentifiersTheBpmsAlreadyHoldsTest {
 
     assertEquals(1, recorded.size(), () -> "the findings which can be worded are, the others are dropped: "
         + recorded);
-    assertEquals(Level.WARN, recorded.getFirst().getLevel(), "a finding is never an error");
+    assertEquals(
+        StartupFindings.Severity.WARNING,
+        recorded.getFirst().severity(),
+        "a finding is never an error");
     final var reported = recorded
         .getFirst()
-        .getFormattedMessage();
+        .message();
     assertTrue(reported.contains("task definition 'scoreApplicant'"), reported);
     assertTrue(reported.contains("cannot describe any further"), reported);
 

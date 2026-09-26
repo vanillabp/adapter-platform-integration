@@ -2,12 +2,8 @@ package io.vanillabp.integration.adapter.migration.workflowtask;
 
 import java.util.Collection;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import io.vanillabp.integration.adapter.migration.config.OutfadedVersionsInUsePolicy;
 import io.vanillabp.integration.adapter.spi.version.DeployedProcessVersion;
@@ -53,8 +49,6 @@ import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
  * application, which change when somebody edits them.
  */
 public class DeployedProcessVersionsCheck {
-
-  private static final Logger log = LoggerFactory.getLogger(DeployedProcessVersionsCheck.class);
 
   /**
    * Which of the given tasks no <code>&#64;WorkflowTask</code> method serves in that
@@ -232,12 +226,6 @@ public class DeployedProcessVersionsCheck {
   private final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings;
 
   /**
-   * The adapters already reported as unable to answer, so a BPMS which cannot read old
-   * models says so once per process instead of once per version.
-   */
-  private final Set<String> reportedAsUnableToTell = ConcurrentHashMap.newKeySet();
-
-  /**
    * What every BPMN process of a workflow module can be served with, collected while the
    * processes are checked one by one - see {@link #reportDeadHandlers(String)}, whose
    * verdict belongs to the whole module.
@@ -275,15 +263,17 @@ public class DeployedProcessVersionsCheck {
    *          <code>null</code> switches that report off, and nothing is then remembered for it
    * @param declaredProcesses What the application declared and what was really deployed,
    *          which is what tells the two readings of "older version" apart
+   * @param findings Where a finding the start survives is left
    */
   public DeployedProcessVersionsCheck(
       final ProcessVersions processVersions,
       final OutfadedProcessVersions outfadedVersions,
       final UnservedTasks unservedTasks,
       final DeadHandlers deadHandlers,
-      final DeclaredBpmnProcesses declaredProcesses) {
+      final DeclaredBpmnProcesses declaredProcesses,
+      final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings) {
 
-    this(processVersions, outfadedVersions, unservedTasks, deadHandlers, declaredProcesses, null, null, null, new io.vanillabp.integration.adapter.migration.startup.StartupFindings());
+    this(processVersions, outfadedVersions, unservedTasks, deadHandlers, declaredProcesses, null, null, null, findings);
 
   }
 
@@ -297,6 +287,7 @@ public class DeployedProcessVersionsCheck {
    * @param declaredProcesses What the application declared and what was really deployed
    * @param concurrentTokenElements Where the elements of a held version which can produce a
    *          second token are judged - <code>null</code> leaves those models unread
+   * @param findings Where a finding the start survives is left
    */
   public DeployedProcessVersionsCheck(
       final ProcessVersions processVersions,
@@ -304,15 +295,16 @@ public class DeployedProcessVersionsCheck {
       final UnservedTasks unservedTasks,
       final DeadHandlers deadHandlers,
       final DeclaredBpmnProcesses declaredProcesses,
-      final ConcurrentTokenElementsOfHeldVersions concurrentTokenElements) {
+      final ConcurrentTokenElementsOfHeldVersions concurrentTokenElements,
+      final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings) {
 
-    this(processVersions, outfadedVersions, unservedTasks, deadHandlers, declaredProcesses, concurrentTokenElements, null, null, new io.vanillabp.integration.adapter.migration.startup.StartupFindings());
+    this(processVersions, outfadedVersions, unservedTasks, deadHandlers, declaredProcesses, concurrentTokenElements, null, null, findings);
 
   }
 
   /**
-   * The check with the identifiers of a held version, but without its multi-instance shape
-   * and without a place to leave a finding - what the tests of the name-clash report build.
+   * The check with the identifiers of a held version, but without its multi-instance shape -
+   * what the tests of the name-clash report build.
    *
    * @param processVersions What the BPMS reported about their versions
    * @param outfadedVersions Which versions the operator declared obsolete
@@ -323,6 +315,7 @@ public class DeployedProcessVersionsCheck {
    *          second token are judged
    * @param identifiersOfHeldVersions Where the identifiers of a held version are held against
    *          what this deployment scopes the same names to
+   * @param findings Where a finding the start survives is left
    */
   public DeployedProcessVersionsCheck(
       final ProcessVersions processVersions,
@@ -331,9 +324,10 @@ public class DeployedProcessVersionsCheck {
       final DeadHandlers deadHandlers,
       final DeclaredBpmnProcesses declaredProcesses,
       final ConcurrentTokenElementsOfHeldVersions concurrentTokenElements,
-      final IdentifiersOfHeldVersions identifiersOfHeldVersions) {
+      final IdentifiersOfHeldVersions identifiersOfHeldVersions,
+      final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings) {
 
-    this(processVersions, outfadedVersions, unservedTasks, deadHandlers, declaredProcesses, concurrentTokenElements, identifiersOfHeldVersions, null, new io.vanillabp.integration.adapter.migration.startup.StartupFindings());
+    this(processVersions, outfadedVersions, unservedTasks, deadHandlers, declaredProcesses, concurrentTokenElements, identifiersOfHeldVersions, null, findings);
 
   }
 
@@ -633,50 +627,48 @@ public class DeployedProcessVersionsCheck {
       // runs on is not news
       return;
     }
-    if (!reportedAsUnableToTell.add(adapterId
-        + "|older|"
-        + workflowModuleId
-        + "|"
-        + bpmnProcessId)) {
-      return;
-    }
     final var missing = catalog.whatOlderVersionsMiss(workflowModuleId, bpmnProcessId);
     final var whatThoseWorkflowsMiss = (missing == null) || missing.isBlank()
         ? ""
         : ": ".concat(missing);
+    final var scope = "process '%s' of workflow module '%s', adapter '%s'"
+        .formatted(bpmnProcessId, workflowModuleId, adapterId);
     if (nothingDeployedUnderThatId) {
-      log.info(
-          """
-              {} workflow(s) still run on BPMN process '{}' (workflow module '{}'), which this \
-              application does not deploy any more - adapter '{}' holds {} version(s) of it: {}. They \
-              keep being served because a @WorkflowService declares that id (secondaryBpmnProcesses), \
-              which is how a renamed BPMN process stays served, so this is not a defect. Whatever a \
-              newer model added reaches the version it was deployed as and no earlier one, so those \
-              workflows never get it{}. The number falls to zero as they end, and it is what tells \
-              you when the declaration and the methods serving it can go.""",
-          total,
-          bpmnProcessId,
-          workflowModuleId,
-          adapterId,
-          olderVersions.size(),
-          String.join(", ", olderVersions),
-          whatThoseWorkflowsMiss);
+      findings
+          .notice(
+              io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+              scope,
+              """
+                  %d workflow(s) still run on this BPMN process, which this application does not \
+                  deploy any more - the adapter holds %d version(s) of it: %s. They keep being \
+                  served because a @WorkflowService declares that id (secondaryBpmnProcesses), \
+                  which is how a renamed BPMN process stays served, so this is not a defect. \
+                  Whatever a newer model added reaches the version it was deployed as and no \
+                  earlier one, so those workflows never get it%s. The number falls to zero as \
+                  they end, and it is what tells you when the declaration and the methods serving \
+                  it can go."""
+                  .formatted(
+                      total,
+                      olderVersions.size(),
+                      String.join(", ", olderVersions),
+                      whatThoseWorkflowsMiss));
       return;
     }
-    log.info(
-        """
-            {} workflow(s) of BPMN process '{}' (workflow module '{}') still run on {} version(s) \
-            older than the one adapter '{}' deployed during this boot: {}. They keep being served - \
-            this is not a defect - but whatever this version added TO THE MODEL reaches the version \
-            it deployed and no earlier one, so those workflows never get it{}. The number falls to \
-            zero as they end, and it is what tells you when the difference is gone.""",
-        total,
-        bpmnProcessId,
-        workflowModuleId,
-        olderVersions.size(),
-        adapterId,
-        String.join(", ", olderVersions),
-        whatThoseWorkflowsMiss);
+    findings
+        .notice(
+            io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+            scope,
+            """
+                %d workflow(s) of this BPMN process still run on %d version(s) older than the \
+                one the adapter deployed during this boot: %s. They keep being served - this is \
+                not a defect - but whatever this version added TO THE MODEL reaches the version it \
+                deployed and no earlier one, so those workflows never get it%s. The number falls \
+                to zero as they end, and it is what tells you when the difference is gone."""
+                .formatted(
+                    total,
+                    olderVersions.size(),
+                    String.join(", ", olderVersions),
+                    whatThoseWorkflowsMiss));
 
   }
 
@@ -694,25 +686,19 @@ public class DeployedProcessVersionsCheck {
       final String bpmnProcessId,
       final String adapterId) {
 
-    if (!reportedAsUnableToTell.add(adapterId
-        + "|nothing-held|"
-        + workflowModuleId
-        + "|"
-        + bpmnProcessId)) {
-      return;
-    }
-    log.warn(
-        """
-            A @WorkflowService of workflow module '{}' declares BPMN process '{}' \
-            (secondaryBpmnProcesses), but this application deploys no model under that id and \
-            adapter '{}' holds no version of it either - nothing this application does reaches that \
-            id. Where the process was renamed, this is what the old id looks like once its last \
-            workflow has ended: the declaration and the methods kept for it can go. Otherwise check \
-            the spelling against the BPMN process ids this workflow module deploys: {}.""",
-        workflowModuleId,
-        bpmnProcessId,
-        adapterId,
-        deployedProcessIdsOf(workflowModuleId));
+    findings
+        .warn(
+            io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+            "process '%s' of workflow module '%s', adapter '%s'"
+                .formatted(bpmnProcessId, workflowModuleId, adapterId),
+            """
+                A @WorkflowService declares this BPMN process (secondaryBpmnProcesses), but this \
+                application deploys no model under that id and the adapter holds no version of it \
+                either - nothing this application does reaches that id. Where the process was \
+                renamed, this is what the old id looks like once its last workflow has ended: the \
+                declaration and the methods kept for it can go. Otherwise check the spelling \
+                against the BPMN process ids this workflow module deploys: %s."""
+                .formatted(deployedProcessIdsOf(workflowModuleId)));
 
   }
 
@@ -823,27 +809,28 @@ public class DeployedProcessVersionsCheck {
         .forEach(versions -> deadHandlers
             .of(workflowModuleId, versions.bpmnProcessId(), servableVersionsByProcess)
             .stream()
-            .filter(handler -> reportedAsUnableToTell.add(versions.adapterId()
-                + "|dead|"
-                + handler))
-            .forEach(handler -> log.warn(
-                """
-                    The {} of BPMN process '{}' (workflow module '{}') matches no version adapter '{}' \
-                    holds{} - the method never runs. Widen its version range, remove the method, or deploy \
-                    a version it serves.""",
-                handler,
-                versions.bpmnProcessId(),
-                workflowModuleId,
-                versions.adapterId(),
-                versions.outfaded().isEmpty()
-                    ? " (held: %s)".formatted(String.join(", ", versions.all()))
-                    : " (held: %s, of which %s %s faded out by '%s')".formatted(
-                        String.join(", ", versions.all()),
-                        String.join(", ", versions.outfaded()),
-                        versions.outfaded().size() == 1
-                            ? "is"
-                            : "are",
-                        OutfadedProcessVersions.propertyName(versions.adapterId())))));
+            .forEach(handler -> findings
+                .warn(
+                    io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+                    "process '%s' of workflow module '%s', adapter '%s'".formatted(
+                        versions.bpmnProcessId(),
+                        workflowModuleId,
+                        versions.adapterId()),
+                    """
+                        The %s matches no version this adapter holds%s - the method never runs. \
+                        Widen its version range, remove the method, or deploy a version it \
+                        serves."""
+                        .formatted(
+                            handler,
+                            versions.outfaded().isEmpty()
+                                ? " (held: %s)".formatted(String.join(", ", versions.all()))
+                                : " (held: %s, of which %s %s faded out by '%s')".formatted(
+                                    String.join(", ", versions.all()),
+                                    String.join(", ", versions.outfaded()),
+                                    versions.outfaded().size() == 1
+                                        ? "is"
+                                        : "are",
+                                    OutfadedProcessVersions.propertyName(versions.adapterId()))))));
 
   }
 
@@ -938,35 +925,33 @@ public class DeployedProcessVersionsCheck {
         obsolete by adding e.g. '%s' to '%s'."""
         .formatted(version, version, OutfadedProcessVersions.propertyName(adapterId));
 
+    final var scope = "version '%s' of process '%s' of workflow module '%s', adapter '%s'"
+        .formatted(version, bpmnProcessId, workflowModuleId, adapterId);
     if ((running != null) && (running > 0)) {
-      log.error(
-          """
-              {} workflow(s) still run on version '{}' of BPMN process '{}' (workflow module '{}', \
-              adapter '{}'), whose task definition(s) {} are served by NO @WorkflowTask method of this \
-              application - each of them will fail with an incident at its next such task! {}""",
-          running,
-          version,
-          bpmnProcessId,
-          workflowModuleId,
-          adapterId,
-          definitions,
-          remedy);
+      findings
+          .error(
+              io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+              scope,
+              """
+                  %d workflow(s) still run on this version, whose task definition(s) %s are \
+                  served by NO @WorkflowTask method of this application - each of them will fail \
+                  with an incident at its next such task! %s"""
+                  .formatted(running, definitions, remedy));
       return;
     }
-    log.warn(
-        """
-            Version '{}' of BPMN process '{}' (workflow module '{}') is still deployed at adapter '{}' \
-            and its task definition(s) {} are served by NO @WorkflowTask method of this application{}. \
-            {}""",
-        version,
-        bpmnProcessId,
-        workflowModuleId,
-        adapterId,
-        definitions,
-        running == null
-            ? ", and this BPMS cannot say whether workflows still run on it"
-            : ", no workflow runs on it right now",
-        remedy);
+    findings
+        .warn(
+            io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+            scope,
+            """
+                This version is still deployed at the adapter and its task definition(s) %s are \
+                served by NO @WorkflowTask method of this application%s. %s"""
+                .formatted(
+                    definitions,
+                    running == null
+                        ? ", and this BPMS cannot say whether workflows still run on it"
+                        : ", no workflow runs on it right now",
+                    remedy));
 
   }
 
@@ -1110,9 +1095,20 @@ public class DeployedProcessVersionsCheck {
             OutfadedProcessVersions.propertyName(adapterId),
             adapterId);
     if (outfadedVersions.policyFor(workflowModuleId, bpmnProcessId, adapterId) == OutfadedVersionsInUsePolicy.FAIL) {
-      throw new IllegalStateException(message);
+      findings
+          .refuse(
+              io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+              "version '%s' of process '%s' of workflow module '%s', adapter '%s'"
+                  .formatted(version, bpmnProcessId, workflowModuleId, adapterId),
+              message);
+      return;
     }
-    log.error(message);
+    findings
+        .error(
+            io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+            "version '%s' of process '%s' of workflow module '%s', adapter '%s'"
+                .formatted(version, bpmnProcessId, workflowModuleId, adapterId),
+            message);
 
   }
 
@@ -1121,23 +1117,17 @@ public class DeployedProcessVersionsCheck {
       final String bpmnProcessId,
       final String adapterId) {
 
-    if (!reportedAsUnableToTell.add(adapterId
-        + "|models|"
-        + workflowModuleId
-        + "|"
-        + bpmnProcessId)) {
-      return;
-    }
-    log.warn(
-        """
-            Adapter '{}' cannot read the models of the older versions of BPMN process '{}' (workflow \
-            module '{}') its BPMS still holds, so VanillaBP cannot tell whether this application still \
-            serves them - the adapter's own log says why. Workflows running on such a version fail with \
-            an incident at a task no @WorkflowTask method serves, which is what this check exists to \
-            report before it happens.""",
-        adapterId,
-        bpmnProcessId,
-        workflowModuleId);
+    findings
+        .warn(
+            io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+            "process '%s' of workflow module '%s', adapter '%s'"
+                .formatted(bpmnProcessId, workflowModuleId, adapterId),
+            """
+                This adapter cannot read the models of the older versions of this BPMN process its \
+                BPMS still holds, so VanillaBP cannot tell whether this application still serves \
+                them - the adapter's own log says why. Workflows running on such a version fail \
+                with an incident at a task no @WorkflowTask method serves, which is what this \
+                check exists to report before it happens.""");
 
   }
 
@@ -1146,23 +1136,17 @@ public class DeployedProcessVersionsCheck {
       final String bpmnProcessId,
       final String adapterId) {
 
-    if (!reportedAsUnableToTell.add(adapterId
-        + "|instances|"
-        + workflowModuleId
-        + "|"
-        + bpmnProcessId)) {
-      return;
-    }
-    log.warn(
-        """
-            Adapter '{}' cannot say how many workflows of BPMN process '{}' (workflow module '{}') still \
-            run on the versions '{}' fades out - the adapter's own log says why. The versions stay faded \
-            out; workflows still running on one of them fail with an incident at a task no @WorkflowTask \
-            method serves.""",
-        adapterId,
-        bpmnProcessId,
-        workflowModuleId,
-        OutfadedProcessVersions.propertyName(adapterId));
+    findings
+        .warn(
+            io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+            "process '%s' of workflow module '%s', adapter '%s'"
+                .formatted(bpmnProcessId, workflowModuleId, adapterId),
+            """
+                This adapter cannot say how many workflows of this BPMN process still run on the \
+                versions '%s' fades out - the adapter's own log says why. The versions stay faded \
+                out; workflows still running on one of them fail with an incident at a task no \
+                @WorkflowTask method serves."""
+                .formatted(OutfadedProcessVersions.propertyName(adapterId)));
 
   }
 

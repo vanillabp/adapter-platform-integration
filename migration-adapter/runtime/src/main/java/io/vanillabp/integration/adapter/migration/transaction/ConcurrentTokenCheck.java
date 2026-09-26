@@ -1,11 +1,10 @@
 package io.vanillabp.integration.adapter.migration.transaction;
 
 import java.util.Collection;
-import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import io.vanillabp.integration.adapter.migration.startup.StartupFindings;
+import io.vanillabp.integration.adapter.migration.startup.StartupTopic;
 
 /**
  * The startup hint about two writers on one workflow aggregate: a BPMN
@@ -23,8 +22,9 @@ import org.slf4j.LoggerFactory;
  * the BPMS still holds with workflows running on them
  * ({@link io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog#concurrentTokenElementsOfVersion}),
  * because an older version with a parallel gateway the new model dropped keeps forking every
- * workflow started before it. The warning names the versions it was drawn from and stays one
- * per BPMN process either way.
+ * workflow started before it. The warning names the models it was drawn from beside its text,
+ * so the box folds what belongs to one aggregate into one entry however many models lead to
+ * it.
  * <p>
  * A persistence which notices the collision silences the hint - it then raises an
  * exception instead of overwriting, which is what {@link AggregateWrite} reports, and
@@ -37,21 +37,21 @@ import org.slf4j.LoggerFactory;
  */
 public class ConcurrentTokenCheck {
 
-  private static final Logger log = LoggerFactory.getLogger(ConcurrentTokenCheck.class);
-
   /**
-   * The (workflow module, BPMN process) pairs already reported - the hint is a design
-   * message, not a linter running per deployed file.
+   * Where the hint goes.
    */
-  private final Set<String> reported = java.util.concurrent.ConcurrentHashMap.newKeySet();
+  private final StartupFindings findings;
 
   /**
    * Built by the registry which wires the workflow tasks, once per application.
-   * <p>
-   * What it remembers is which BPMN processes were already reported, so the hint stays one
-   * per process however many files and held versions it is drawn from.
+   *
+   * @param findings Where the hint is reported
    */
-  public ConcurrentTokenCheck() {
+  public ConcurrentTokenCheck(
+      final StartupFindings findings) {
+
+    this.findings = findings;
+
   }
 
   /**
@@ -77,11 +77,9 @@ public class ConcurrentTokenCheck {
       return;
     }
     report(
-        workflowModuleId,
-        bpmnProcessId,
         workflowAggregateClass,
         aggregateNoticesASecondWriter,
-        "The BPMN process '%s' of workflow module '%s' can hold more than one token at a time (%s)"
+        "process '%s' of workflow module '%s' (%s)"
             .formatted(bpmnProcessId, workflowModuleId, describe(elementIds)));
 
   }
@@ -127,13 +125,9 @@ public class ConcurrentTokenCheck {
         .flatMap(version -> version.getValue().stream())
         .toList();
     report(
-        workflowModuleId,
-        bpmnProcessId,
         workflowAggregateClass,
         aggregateNoticesASecondWriter,
-        """
-            Version(s) %s of BPMN process '%s' of workflow module '%s', which the BPMS still holds \
-            and workflows still run on, can hold more than one token at a time (%s)"""
+        "version(s) %s of process '%s' of workflow module '%s', which the BPMS still holds (%s)"
             .formatted(
                 carryingVersions
                     .stream()
@@ -146,19 +140,20 @@ public class ConcurrentTokenCheck {
   }
 
   /**
-   * The warning itself, once per BPMN process, given the clause saying WHICH model can hold
-   * two tokens - the model of this boot or the versions the BPMS still holds.
+   * The warning itself, given the scope saying WHICH model can hold two tokens - the model
+   * of this boot or the versions the BPMS still holds.
+   * <p>
+   * The scope carries what differs and the message carries the aggregate, so a process
+   * whose deployed model and whose held versions both fork becomes ONE entry of the box
+   * naming both. The message is about an aggregate which cannot survive two writers, and
+   * that is one thing to change however many models lead to it.
    *
-   * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The BPMN process ID
    * @param workflowAggregateClass The workflow aggregate's class
    * @param aggregateNoticesASecondWriter What the aggregate's persistence answers about
    *          noticing a concurrent change
-   * @param whatCanHoldTwoTokens The clause the warning opens with
+   * @param whatCanHoldTwoTokens Which model it was drawn from, as the entry names it
    */
   private void report(
-      final String workflowModuleId,
-      final String bpmnProcessId,
       final Class<?> workflowAggregateClass,
       final boolean aggregateNoticesASecondWriter,
       final String whatCanHoldTwoTokens) {
@@ -169,26 +164,23 @@ public class ConcurrentTokenCheck {
     if (aggregateNoticesASecondWriter) {
       return;
     }
-    if (!reported.add(workflowModuleId
-        + "#"
-        + bpmnProcessId)) {
-      return;
-    }
 
-    log
+    findings
         .warn(
-            """
-                {}, but its workflow aggregate '{}' has no version attribute (@Version): two \
-                branches load the aggregate, change different things and save it - and since the \
-                persistence layer writes the whole record, whatever the branch committing first \
-                changed is lost without any error. Ways out: one entity per phase of the workflow, \
-                @DynamicUpdate where the branches write different attributes, a version attribute \
-                plus a retry in the transaction your application opens, or an additive relation \
-                instead of a mutated attribute. The wiki page 'Workflow aggregates' compares them. \
-                A version attribute turns the collision into an exception VanillaBP reports and the \
-                BPMS retries, which is why this message is about its absence.""",
+            StartupTopic.CODE,
             whatCanHoldTwoTokens,
-            workflowAggregateClass.getName());
+            """
+                A BPMN process can hold more than one token at a time, but its workflow aggregate \
+                '%s' has no version attribute (@Version): two branches load the aggregate, change \
+                different things and save it - and since the persistence layer writes the whole \
+                record, whatever the branch committing first changed is lost without any error. \
+                Ways out: one entity per phase of the workflow, @DynamicUpdate where the branches \
+                write different attributes, a version attribute plus a retry in the transaction \
+                your application opens, or an additive relation instead of a mutated attribute. \
+                The wiki page 'Workflow aggregates' compares them. A version attribute turns the \
+                collision into an exception VanillaBP reports and the BPMS retries, which is why \
+                this message is about its absence."""
+                .formatted(workflowAggregateClass.getName()));
 
   }
 

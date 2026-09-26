@@ -24,7 +24,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
-import io.vanillabp.integration.adapter.migration.workflowtask.ProcessVersions;
 import io.vanillabp.integration.adapter.migration.workflowtask.VersionRange;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
@@ -182,6 +181,38 @@ public class ProcessVersionMatchingTest {
 
   }
 
+  /**
+   * The configuration the registry built last runs on - what a check reports into hangs
+   * on it, so this is where a test reads what the start said.
+   */
+  private MigrationAdapterProperties lastProperties;
+
+  /**
+   * A registry reporting into a configuration this test can read again.
+   */
+  private WorkflowTaskRegistry registryReportingHere() {
+
+    lastProperties = MigrationAdapterProperties
+        .builder()
+        .adapters(Map.of(ADAPTER, AdapterConfigProperties.ofType("dummy")))
+        .prioritizedAdapters(List.of(ADAPTER))
+        .build();
+    lastProperties.validateAndLink();
+    return new WorkflowTaskRegistry(new TransactionRunnerStub(), null, List.of(), lastProperties);
+
+  }
+
+  /**
+   * What the checks reported while the given work ran.
+   */
+  private List<String> reportedWhile(
+      final Runnable work) {
+
+    work.run();
+    return io.vanillabp.migration.test.startup.WhatWasFound.entries(lastProperties.startupFindings());
+
+  }
+
   private MigrationProcessService<Aggregate> processService(
       final String bpmnProcessId) {
 
@@ -209,7 +240,7 @@ public class ProcessVersionMatchingTest {
       final Class<?> workflowServiceClass,
       final Supplier<Object> bean) {
 
-    final var registry = new WorkflowTaskRegistry(new TransactionRunnerStub());
+    final var registry = registryReportingHere();
     registry
         .registerWorkflowService(MODULE, PROCESS, workflowServiceClass, bean, type -> null, processService());
     return registry;
@@ -226,7 +257,7 @@ public class ProcessVersionMatchingTest {
       final Class<?> otherClass,
       final Supplier<Object> otherBean) {
 
-    final var registry = new WorkflowTaskRegistry(new TransactionRunnerStub());
+    final var registry = registryReportingHere();
     final var processService = processService();
     registry.registerWorkflowService(MODULE, PROCESS, oneClass, oneBean, type -> null, processService);
     registry.registerWorkflowService(MODULE, PROCESS, otherClass, otherBean, type -> null, processService);
@@ -628,7 +659,7 @@ public class ProcessVersionMatchingTest {
     final var catalog = new RecordingCatalog();
     catalog.versions.add(DeployedProcessVersion.of("1", "v1.0"));
     testee.registerProcessVersions(ADAPTER, MODULE, PROCESS, catalog);
-    final var messages = loggedBy(ProcessVersions.class, () -> testee.resolveProcessVersions(MODULE));
+    final var messages = reportedWhile(() -> testee.resolveProcessVersions(MODULE));
     storeAggregate("4711");
 
     assertTrue(
@@ -860,7 +891,7 @@ public class ProcessVersionMatchingTest {
     final var testee = registry(UnknownTagService.class, UnknownTagService::new);
     storeAggregate("4711");
 
-    final var messages = loggedBy(ProcessVersions.class, () -> {
+    final var messages = reportedWhile(() -> {
       assertThrows(
           IllegalStateException.class,
           () -> testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", "1")));
@@ -1214,7 +1245,7 @@ public class ProcessVersionMatchingTest {
     @DisplayName("Each declared process contributes its own range, secondary processes included")
     public void aSecondaryProcessCarriesItsOwnRange() {
 
-      final var testee = new WorkflowTaskRegistry(new TransactionRunnerStub());
+      final var testee = registryReportingHere();
       testee
           .registerWorkflowService(
               MODULE, PROCESS, TwoProcessesService.class, TwoProcessesService::new, type -> null, processService());
@@ -1285,7 +1316,7 @@ public class ProcessVersionMatchingTest {
       final var testee = registry(MixedVersionsService.class, MixedVersionsService::new);
       testee.reportNoProcessVersionCatalog(ADAPTER, MODULE, PROCESS, ReportedProcessVersion.VERSION_TAG);
 
-      final var messages = loggedBy(ProcessVersions.class, () -> testee.resolveProcessVersions(MODULE));
+      final var messages = reportedWhile(() -> testee.resolveProcessVersions(MODULE));
       final var reported = oneMessageAbout(messages, "keeps no catalog");
 
       assertTrue(reported.contains("byRange"), reported);
@@ -1308,7 +1339,7 @@ public class ProcessVersionMatchingTest {
       final var testee = registry(MixedVersionsService.class, MixedVersionsService::new);
       testee.reportNoProcessVersionCatalog(ADAPTER, MODULE, PROCESS, ReportedProcessVersion.NONE);
 
-      final var messages = loggedBy(ProcessVersions.class, () -> testee.resolveProcessVersions(MODULE));
+      final var messages = reportedWhile(() -> testee.resolveProcessVersions(MODULE));
       final var reported = oneMessageAbout(messages, "keeps no catalog");
 
       assertTrue(reported.contains("byTag"), "no delivery carries a tag either: "
@@ -1326,7 +1357,7 @@ public class ProcessVersionMatchingTest {
       final var testee = registry(MixedVersionsService.class, MixedVersionsService::new);
       testee.reportNoProcessVersionCatalog(ADAPTER, MODULE, PROCESS, ReportedProcessVersion.VERSION_TAG);
 
-      final var messages = loggedBy(ProcessVersions.class, () -> testee.resolveProcessVersions(MODULE));
+      final var messages = reportedWhile(() -> testee.resolveProcessVersions(MODULE));
 
       assertTrue(
           messages.stream().noneMatch(message -> message.contains("names a version tag no BPMS knows")),
@@ -1343,11 +1374,9 @@ public class ProcessVersionMatchingTest {
       testee.resolveProcessVersions(MODULE);
       storeAggregate("4711");
 
-      final var messages = loggedBy(
-          ProcessVersions.class,
-          () -> assertThrows(
-              IllegalStateException.class,
-              () -> testee.invokeWorkflowTask(MODULE, PROCESS, rangedTask("4711", "release-2030"))));
+      final var messages = reportedWhile(() -> assertThrows(
+          IllegalStateException.class,
+          () -> testee.invokeWorkflowTask(MODULE, PROCESS, rangedTask("4711", "release-2030"))));
 
       assertTrue(
           messages.stream().noneMatch(message -> message.contains("can be asked")),
@@ -1367,7 +1396,7 @@ public class ProcessVersionMatchingTest {
       catalog.versions.add(DeployedProcessVersion.of("2", "release-2024"));
       testee.registerProcessVersions("counting-adapter", MODULE, PROCESS, catalog);
 
-      final var messages = loggedBy(ProcessVersions.class, () -> testee.resolveProcessVersions(MODULE));
+      final var messages = reportedWhile(() -> testee.resolveProcessVersions(MODULE));
 
       assertTrue(
           messages.stream().noneMatch(message -> message.contains("keeps no catalog")),
@@ -1382,7 +1411,7 @@ public class ProcessVersionMatchingTest {
 
       final var testee = registry(MixedVersionsService.class, MixedVersionsService::new);
 
-      final var messages = loggedBy(ProcessVersions.class, () -> testee.resolveProcessVersions(MODULE));
+      final var messages = reportedWhile(() -> testee.resolveProcessVersions(MODULE));
 
       assertTrue(
           messages.stream().noneMatch(message -> message.contains("keeps no catalog")),
@@ -1418,7 +1447,7 @@ public class ProcessVersionMatchingTest {
       final var testee = registry(MixedVersionsService.class, MixedVersionsService::new);
       testee.reportNoProcessVersionCatalog(ADAPTER, MODULE, PROCESS, ReportedProcessVersion.VERSION_TAG);
 
-      final var messages = loggedBy(ProcessVersions.class, () -> {
+      final var messages = reportedWhile(() -> {
         testee.resolveProcessVersions(MODULE);
         testee.resolveProcessVersions(MODULE);
       });

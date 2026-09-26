@@ -1530,7 +1530,7 @@ public class WorkflowTaskRegistryTest {
         .build();
     properties.validateAndLink();
     final var registryWithSync = new WorkflowTaskRegistry(
-        transactionRunner, new io.vanillabp.integration.adapter.migration.sync.AggregateSyncSupport());
+        transactionRunner, new io.vanillabp.integration.adapter.migration.sync.AggregateSyncSupport(new io.vanillabp.integration.adapter.migration.startup.StartupFindings()));
     registryWithSync.registerWorkflowService(
         MODULE,
         "SharingProcess",
@@ -1892,7 +1892,7 @@ public class WorkflowTaskRegistryTest {
     private WorkflowTaskRegistry registryWithSync() {
 
       final var withSync = new WorkflowTaskRegistry(
-          transactionRunner, new io.vanillabp.integration.adapter.migration.sync.AggregateSyncSupport());
+          transactionRunner, new io.vanillabp.integration.adapter.migration.sync.AggregateSyncSupport(new io.vanillabp.integration.adapter.migration.startup.StartupFindings()));
       withSync.registerWorkflowService(
           MODULE,
           PROCESS,

@@ -15,11 +15,7 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.slf4j.LoggerFactory;
 
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore;
 import io.vanillabp.integration.adapter.migration.scoping.NameClashAvoidanceService;
@@ -235,10 +231,13 @@ public class StartupQuestionCostTest {
                     .formatted(number), null, "a definition deployed earlier", true))
         .toList();
 
-    return whileRecording(() -> new NameClashAvoidanceService(null).reportIdentifiersTheBpmsAlreadyHolds(
-        "c7",
-        MODULE,
-        found));
+    final var properties = new io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties();
+    return whileRecording(
+        properties,
+        () -> new NameClashAvoidanceService(properties).reportIdentifiersTheBpmsAlreadyHolds(
+            "c7",
+            MODULE,
+            found));
 
   }
 
@@ -265,6 +264,7 @@ public class StartupQuestionCostTest {
     final var scoping = new NameClashAvoidanceService(properties);
 
     return whileRecording(
+        properties,
         () -> {
           scoping.reportIdentifiersTheModelsDeclare("c7", MODULE, declared);
           scoping.reportIdentifiersTheModelsDeclare("c7", "another-module", declared);
@@ -307,8 +307,10 @@ public class StartupQuestionCostTest {
     // hundred thousand: what the message costs is the version, and the count travels as a
     // number the check around it already asked for
     final var aQuietVersion = whileRecording(
+        properties,
         () -> scoping.reportIdentifiersOfHeldVersion("c7", "another-module", PROCESS, "2", 2L, declared));
     final var aBusyVersion = whileRecording(
+        properties,
         () -> scoping.reportIdentifiersOfHeldVersion("c7", "another-module", PROCESS, "3", 100_000L, declared));
 
     assertEquals(1, aQuietVersion);
@@ -391,21 +393,22 @@ public class StartupQuestionCostTest {
   }
 
   /**
-   * How many records the given reporting wrote.
+   * How many findings the given reporting added - a check of the start reports instead of
+   * writing a line, so what a message costs is counted where it is collected.
    */
   private static int whileRecording(
+      final io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties properties,
       final Runnable reporting) {
 
-    final var root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
-    final var recorded = new ListAppender<ILoggingEvent>();
-    recorded.start();
-    root.addAppender(recorded);
-    try {
-      reporting.run();
-    } finally {
-      root.detachAppender(recorded);
-    }
-    return recorded.list.size();
+    final var before = properties
+        .startupFindings()
+        .findings()
+        .size();
+    reporting.run();
+    return properties
+        .startupFindings()
+        .findings()
+        .size() - before;
 
   }
 

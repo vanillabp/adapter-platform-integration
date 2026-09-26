@@ -16,7 +16,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
-import io.vanillabp.integration.adapter.migration.processservice.DeliveryRecords;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxResolver;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
@@ -263,8 +262,7 @@ public class PersistedAdapterIdTest {
   }
 
   /**
-   * The WARNings the check logged. "Normal" logging is off during tests, so the appender is
-   * attached to the class which logs (the same pattern the delivery tests use).
+   * What the check reported as a notice.
    */
   private static List<String> infoLoggedBy(
       final Runnable work) {
@@ -280,37 +278,51 @@ public class PersistedAdapterIdTest {
 
   }
 
+  /**
+   * What the checks reported while the work ran, and only what THIS run added: a check
+   * of the start leaves its findings in one collection, and a test asking twice wants
+   * to see what the second ask produced.
+   * <p>
+   * The levels of the old log lines map onto the severities of a finding. A notice is
+   * asked for on its own, because the check under test reports there and a warning of a
+   * neighbouring check would otherwise count as its output.
+   */
   private static List<String> loggedBy(
       final Runnable work,
       final ch.qos.logback.classic.Level level) {
 
-    // INFO is asked for on its own: the check under test logs there, and a WARN of a
-    // neighbouring check would otherwise count as its output
-    final var onlyThatLevel = level == ch.qos.logback.classic.Level.INFO;
-
-    final var logWatcher = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
-    logWatcher.start();
-    // the process service says some of this itself and lets its collaborator say the rest,
-    // so both are listened to - which class a message comes from is not what is under test
-    final var loggers = java.util.List
-        .of(
-            (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(MigrationProcessService.class),
-            (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(DeliveryRecords.class));
-    loggers.forEach(logger -> logger.addAppender(logWatcher));
-    try {
-      work.run();
-    } finally {
-      loggers.forEach(ch.qos.logback.classic.Logger::detachAndStopAllAppenders);
-    }
-    return logWatcher.list
+    final var before = lastProperties
+        .startupFindings()
+        .findings()
+        .size();
+    work.run();
+    final var wanted = level == ch.qos.logback.classic.Level.INFO
+        ? java.util.Set
+            .of(io.vanillabp.integration.adapter.migration.startup.StartupFindings.Severity.NOTICE)
+        : java.util.Set
+            .of(
+                io.vanillabp.integration.adapter.migration.startup.StartupFindings.Severity.WARNING,
+                io.vanillabp.integration.adapter.migration.startup.StartupFindings.Severity.ERROR,
+                io.vanillabp.integration.adapter.migration.startup.StartupFindings.Severity.REFUSAL);
+    final var found = lastProperties
+        .startupFindings()
+        .findings();
+    return found
+        .subList(before, found.size())
         .stream()
-        .filter(event -> onlyThatLevel
-            ? (event.getLevel() == level)
-            : event.getLevel().isGreaterOrEqual(level))
-        .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
+        .filter(finding -> wanted.contains(finding.severity()))
+        .map(finding -> finding.scope() == null
+            ? finding.message()
+            : "%s: %s".formatted(finding.scope(), finding.message()))
         .toList();
 
   }
+
+  /**
+   * The configuration the last process service was built on - the collection a check
+   * reports into hangs on it.
+   */
+  private static MigrationAdapterProperties lastProperties;
 
   /**
    * A process service whose stores are already resolved - which is the state the check
@@ -332,6 +344,7 @@ public class PersistedAdapterIdTest {
       final TaskDeliveryLog deliveryLog,
       final MigratableProcessService<Object> adapter) {
 
+    lastProperties = properties;
     final var service = MigrationProcessService
         .<Object>forBpmnProcess(MODULE, PROCESS, Object.class)
         .properties(properties)

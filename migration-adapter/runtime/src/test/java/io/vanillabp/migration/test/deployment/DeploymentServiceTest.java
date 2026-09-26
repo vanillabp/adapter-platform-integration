@@ -26,7 +26,6 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -35,12 +34,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.slf4j.LoggerFactory;
 
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
@@ -56,7 +50,45 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 @ExtendWith(MockitoExtension.class)
 public class DeploymentServiceTest {
 
-  private ListAppender<ILoggingEvent> logWatcher;
+  /**
+   * The configuration the last deployment of this test ran on. A check reports what it
+   * finds into the collection that configuration carries, so this is where the test
+   * reads what the deployment said.
+   */
+  private MigrationAdapterProperties lastProperties;
+
+  /**
+   * Remembers the configuration a test built, so the assertions can read what the
+   * deployment reported into it.
+   */
+  private MigrationAdapterProperties remember(
+      final MigrationAdapterProperties properties) {
+
+    lastProperties = properties;
+    return properties;
+
+  }
+
+  /**
+   * Every message the last deployment reported, whatever its severity.
+   */
+  private java.util.List<String> reported() {
+
+    return io.vanillabp.migration.test.startup.WhatWasFound.messages(lastProperties.startupFindings());
+
+  }
+
+  /**
+   * What the last deployment reported as a warning.
+   */
+  private java.util.List<String> reportedWarnings() {
+
+    return io.vanillabp.migration.test.startup.WhatWasFound
+        .messages(
+            lastProperties.startupFindings(),
+            io.vanillabp.integration.adapter.migration.startup.StartupFindings.Severity.WARNING);
+
+  }
 
   @Mock
   private AdapterDeploymentService<Integer, Integer> adapter1DeploymentService;
@@ -79,24 +111,12 @@ public class DeploymentServiceTest {
   @BeforeEach
   public void initializeTests() {
 
-    // Initialize log watcher to capture log output
-    logWatcher = new ListAppender<>();
-    logWatcher.start();
-    ((Logger) LoggerFactory.getLogger(DeploymentService.class)).addAppender(logWatcher);
-
     // extension matching uses the adapters' DECLARED types - stub them for all
     // tests (real adapters always provide them)
     org.mockito.Mockito.lenient().when(adapter1DeploymentService.getModelType()).thenReturn(Integer.class);
     org.mockito.Mockito.lenient().when(adapter1DeploymentService.getProcessContextType()).thenReturn(Integer.class);
     org.mockito.Mockito.lenient().when(adapter2DeploymentService.getModelType()).thenReturn(Long.class);
     org.mockito.Mockito.lenient().when(adapter2DeploymentService.getProcessContextType()).thenReturn(Long.class);
-
-  }
-
-  @AfterEach
-  public void stopLogWatcher() {
-
-    ((Logger) LoggerFactory.getLogger(DeploymentService.class)).detachAndStopAllAppenders();
 
   }
 
@@ -216,14 +236,16 @@ public class DeploymentServiceTest {
       testee.deployResources(List.of("test-module"), resourcesLoader);
 
       // Verify that a warning was logged
-      final var warningLogs = logWatcher.list
+      final var reportedScopes = lastProperties
+          .startupFindings()
+          .findings()
           .stream()
-          .filter(event -> event.getLevel() == Level.WARN)
-          .filter(event -> event.getFormattedMessage().contains("did not contain any executable processes"))
+          .filter(finding -> finding.message().contains("contains no executable process"))
+          .map(finding -> finding.scope())
           .toList();
 
-      assertEquals(1, warningLogs.size());
-      assertTrue(warningLogs.getFirst().getFormattedMessage().contains("empty-process.bpmn"));
+      assertEquals(1, reportedScopes.size());
+      assertTrue(reportedScopes.getFirst().contains("empty-process.bpmn"));
 
     }
 
@@ -332,11 +354,7 @@ public class DeploymentServiceTest {
 
       testee.deployResources(List.of("test-module"), resourcesLoader);
 
-      final var warnings = logWatcher.list
-          .stream()
-          .filter(event -> event.getLevel() == Level.WARN)
-          .map(ILoggingEvent::getFormattedMessage)
-          .toList();
+      final var warnings = reportedWarnings();
 
       assertTrue(
           warnings.stream().anyMatch(message -> message.contains("DMN")),
@@ -610,7 +628,7 @@ public class DeploymentServiceTest {
     public void vanillaBpBpmnFlagIsPassedCorrectly() {
 
       // Create properties with VanillaBP resources location (not adapter-specific)
-      final var properties = MigrationAdapterProperties
+      final var properties = remember(MigrationAdapterProperties
           .builder()
           .adapters(Map.of("adapter-test1", AdapterConfigProperties.ofType("dummy")))
           .prioritizedAdapters(List.of("adapter-test1"))
@@ -621,7 +639,7 @@ public class DeploymentServiceTest {
                   .builder()
                   .workflowModuleId("test-module")
                   .build()))
-          .build();
+          .build());
       properties.validateAndLink();
 
       // Configure adapter1DeploymentService
@@ -1015,11 +1033,10 @@ public class DeploymentServiceTest {
       verify(adapter1DeploymentService).deployResources(eq("test-module"), eq(100));
 
       // Verify: a warning naming the failing adapter was logged
-      final var warningLogs = logWatcher.list
+      final var warningLogs = reportedWarnings()
           .stream()
-          .filter(event -> event.getLevel() == Level.WARN)
-          .filter(event -> event.getFormattedMessage().contains("adapter-test2"))
-          .filter(event -> event.getFormattedMessage().contains("deployment-failure"))
+          .filter(message -> message.contains("adapter-test2"))
+          .filter(message -> message.contains("deployment-failure"))
           .toList();
       assertEquals(1, warningLogs.size());
 
@@ -1209,10 +1226,8 @@ public class DeploymentServiceTest {
       // only a WARN - the BPMN may arrive later (e.g. during a BPMS migration)
       testee.deployResources(List.of("test-module"), resourcesLoader);
 
-      final var warningLogs = logWatcher.list
+      final var warningLogs = reportedWarnings()
           .stream()
-          .filter(event -> event.getLevel() == Level.WARN)
-          .map(ILoggingEvent::getFormattedMessage)
           .filter(msg -> msg.contains("vanillabp.workflow-modules.test-module.workflows.NoSuchProcess"))
           .toList();
       assertEquals(1, warningLogs.size());
@@ -1245,10 +1260,8 @@ public class DeploymentServiceTest {
 
       testee.deployResources(List.of("test-module"), resourcesLoader);
 
-      assertTrue(logWatcher.list
+      assertTrue(reportedWarnings()
           .stream()
-          .filter(event -> event.getLevel() == Level.WARN)
-          .map(ILoggingEvent::getFormattedMessage)
           .noneMatch(msg -> msg.contains("workflows.TestProcess")));
 
     }
@@ -1330,10 +1343,8 @@ public class DeploymentServiceTest {
 
       deployTwoProcessesOfOneFile(wiringReporting("Unclaimed"));
 
-      final var warnings = logWatcher.list
+      final var warnings = reportedWarnings()
           .stream()
-          .filter(event -> event.getLevel() == Level.WARN)
-          .map(ILoggingEvent::getFormattedMessage)
           .filter(message -> message.contains("no @WorkflowService class"))
           .toList();
       assertEquals(1, warnings.size(), "one report per workflow module, whatever it lists: "
@@ -1356,9 +1367,8 @@ public class DeploymentServiceTest {
       deployTwoProcessesOfOneFile(wiringReporting());
 
       assertTrue(
-          logWatcher.list
+          reported()
               .stream()
-              .map(ILoggingEvent::getFormattedMessage)
               .noneMatch(message -> message.contains("no @WorkflowService class")),
           "nothing to report where every deployed process is served");
 
@@ -1383,9 +1393,8 @@ public class DeploymentServiceTest {
           .deployResources(List.of("test-module"), resourcesLoader);
 
       assertTrue(
-          logWatcher.list
+          reported()
               .stream()
-              .map(ILoggingEvent::getFormattedMessage)
               .noneMatch(message -> message.contains("no @WorkflowService class")),
           "no wiring interface, nothing to ask");
 
@@ -1462,7 +1471,7 @@ public class DeploymentServiceTest {
         .build();
     // Link back-references (workflowModuleId etc.)
     properties.validateAndLink();
-    return properties;
+    return remember(properties);
 
   }
 
@@ -1509,7 +1518,7 @@ public class DeploymentServiceTest {
         .build();
     // Link back-references (workflowModuleId etc.)
     properties.validateAndLink();
-    return properties;
+    return remember(properties);
 
   }
 
@@ -1544,7 +1553,7 @@ public class DeploymentServiceTest {
         .build();
     // Link back-references (workflowModuleId etc.)
     properties.validateAndLink();
-    return properties;
+    return remember(properties);
 
   }
 
@@ -1634,9 +1643,8 @@ public class DeploymentServiceTest {
       verify(adapter1DeploymentService, never()).stopWorkflowProcessing(anyString(), any());
 
       // the warning names the location and the property key to change
-      assertTrue(logWatcher.list
+      assertTrue(reported()
           .stream()
-          .map(ILoggingEvent::getFormattedMessage)
           .anyMatch(msg -> msg.contains("No executable BPMN processes found") && msg.contains("test-module") && msg
               .contains("resources-location")));
 
@@ -1847,7 +1855,7 @@ public class DeploymentServiceTest {
                 .build());
       }
 
-      final var properties = MigrationAdapterProperties
+      final var properties = remember(MigrationAdapterProperties
           .builder()
           .prioritizedAdapters(prioritizedAdapters)
           .adapters(adapters)
@@ -1859,7 +1867,7 @@ public class DeploymentServiceTest {
                   .prioritizedAdapters(prioritizedAdapters)
                   .adapters(adapterProperties)
                   .build()))
-          .build();
+          .build());
       properties.validateAndLink();
       return properties;
 

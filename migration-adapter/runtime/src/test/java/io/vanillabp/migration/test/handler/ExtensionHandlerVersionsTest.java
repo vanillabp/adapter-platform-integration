@@ -90,12 +90,24 @@ public class ExtensionHandlerVersionsTest {
 
   private String reported() {
 
-    return logWatcher.list
-        .stream()
-        .map(ILoggingEvent::getFormattedMessage)
+    return java.util.stream.Stream
+        .concat(
+            logWatcher.list
+                .stream()
+                .map(ILoggingEvent::getFormattedMessage),
+            // what a check of the start found goes into the collection of the start
+            // rather than into a line of its own
+            io.vanillabp.migration.test.startup.WhatWasFound
+                .entries(lastProperties.startupFindings())
+                .stream())
         .collect(java.util.stream.Collectors.joining("\n"));
 
   }
+
+  /**
+   * The configuration the registry built last reports into.
+   */
+  private static MigrationAdapterProperties lastProperties;
 
   /**
    * The annotation of an extension which lets a method name the versions it serves.
@@ -483,7 +495,14 @@ public class ExtensionHandlerVersionsTest {
       final Supplier<Object> workflowServiceBean,
       final boolean callsCarryTheProcessVersion) {
 
-    final var registry = new WorkflowTaskRegistry(new TransactionRunnerStub());
+    lastProperties = MigrationAdapterProperties
+        .builder()
+        .adapters(Map.of(ADAPTER, AdapterConfigProperties.ofType("dummy")))
+        .prioritizedAdapters(List.of(ADAPTER))
+        .build();
+    lastProperties.validateAndLink();
+    final var registry = new WorkflowTaskRegistry(
+        new TransactionRunnerStub(), null, List.of(), lastProperties);
     final var persistence = new InMemoryPersistence();
     final var aggregate = new Aggregate();
     aggregate.setId("4711");

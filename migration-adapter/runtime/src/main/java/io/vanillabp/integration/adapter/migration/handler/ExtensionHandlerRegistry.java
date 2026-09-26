@@ -11,9 +11,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.transaction.AggregateWrite;
 import io.vanillabp.integration.adapter.migration.transaction.SavingHandlerCheck;
@@ -43,7 +40,12 @@ import io.vanillabp.integration.spi.TransactionRunner;
  */
 public class ExtensionHandlerRegistry implements ExtensionHandlers {
 
-  private static final Logger log = LoggerFactory.getLogger(ExtensionHandlerRegistry.class);
+  /**
+   * What the wiring report goes to. A report of what was wired is no finding, so it is
+   * written where it is made and not collected into the box.
+   */
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory
+      .getLogger(ExtensionHandlerRegistry.class);
 
   private record RegistryKey(
                              String workflowModuleId,
@@ -88,7 +90,12 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
    * handlers are found rather than later: nothing after the boot knows any more whether a
    * save is allowed.
    */
-  private final SavingHandlerCheck savingHandlerCheck = new SavingHandlerCheck();
+  private final SavingHandlerCheck savingHandlerCheck;
+
+  /**
+   * Where a finding of this registry is left, so the whole start says it once.
+   */
+  private final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings;
 
   /**
    * What one report about the handler methods nobody sees is about.
@@ -144,13 +151,17 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
    * @param transactionRunner The platform's transaction runner, which wraps every
    *          invocation the way it wraps a workflow task
    * @param processVersions What the BPMS know about the versions of the BPMN processes
+   * @param findings Where a finding of this registry is left
    */
   public ExtensionHandlerRegistry(
       final TransactionRunner transactionRunner,
-      final ProcessVersions processVersions) {
+      final ProcessVersions processVersions,
+      final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings) {
 
     this.transactionRunner = transactionRunner;
     this.processVersions = processVersions;
+    this.findings = findings;
+    this.savingHandlerCheck = new SavingHandlerCheck(findings);
 
   }
 
@@ -282,7 +293,11 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
     final var report = HandlerMethodsNobodySees
         .reportFor(workflowServiceClass, List.of(contract.getAnnotationType()));
     if (report != null) {
-      log.warn(report);
+      findings
+          .warn(
+              io.vanillabp.integration.adapter.migration.startup.StartupTopic.CODE,
+              "workflow service '%s'".formatted(workflowServiceClass.getName()),
+              report);
     }
 
   }
@@ -484,19 +499,22 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
                     key.bpmnProcessId(),
                     key.annotationType().getName(),
                     method.describe())))
-        .forEach(method -> log
+        .forEach(method -> findings
             .warn(
+                io.vanillabp.integration.adapter.migration.startup.StartupTopic.CODE,
+                "method '%s' of process '%s' of workflow module '%s'".formatted(
+                    method.describe(),
+                    key.bpmnProcessId(),
+                    key.workflowModuleId()),
                 """
-                    The {} method '{}' of BPMN process '{}' (workflow module '{}') serves version {}, \
-                    but extension '{}' reports no process version with its calls - the method never \
-                    runs. Drop the version from the annotation, or ask the extension to report the \
-                    version of the process its events are about.""",
-                method.describeAnnotation(),
-                method.describe(),
-                key.bpmnProcessId(),
-                key.workflowModuleId(),
-                method.describeVersions(),
-                contract.getExtensionId()));
+                    This %s method serves version %s, but extension '%s' reports no process version \
+                    with its calls - the method never runs. Drop the version from the annotation, \
+                    or ask the extension to report the version of the process its events are \
+                    about."""
+                    .formatted(
+                        method.describeAnnotation(),
+                        method.describeVersions(),
+                        contract.getExtensionId())));
 
   }
 

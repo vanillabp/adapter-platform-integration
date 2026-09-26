@@ -1,8 +1,8 @@
 package io.vanillabp.migration.test.transaction;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
@@ -198,14 +198,14 @@ public class TransactionRunnerResolutionTest {
 
     // the aggregate and the outbox entry have to be written in one transaction, so an
     // application without one cannot start a single workflow
-    final var testee = processService(
-        properties(null, null),
-        new StubResolver(null, TransactionCoverage.unknown()));
+    final var properties = properties(null, null);
+    processService(properties, new StubResolver(null, TransactionCoverage.unknown()))
+        .validateTransactionRunnerAtStartup();
 
-    final var failure = assertThrowsExactly(
-        IllegalStateException.class,
-        testee::validateTransactionRunnerAtStartup);
-
+    // the reason is collected and thrown at the end of the start, so every workflow of
+    // the application is named in one exception instead of one per restart
+    final var failure = properties.startupFindings().theRefusal();
+    assertNotNull(failure, "the start has to be refused");
     assertTrue(failure.getMessage().contains("test-module"), failure.getMessage());
     assertTrue(failure.getMessage().contains("TestProcess"), failure.getMessage());
     assertTrue(failure.getMessage().contains("do what the platform suggests"), failure.getMessage());
@@ -217,14 +217,14 @@ public class TransactionRunnerResolutionTest {
   @DisplayName("A store which cannot be covered ends the startup and says how to accept it")
   public void uncoverableEndsTheStartup() {
 
-    final var testee = processService(
-        properties(null, null),
-        new StubResolver(NO_TRANSACTION_AT_ALL, TransactionCoverage.uncoverable("the aggregate is unguarded")));
+    final var properties = properties(null, null);
+    processService(
+        properties,
+        new StubResolver(NO_TRANSACTION_AT_ALL, TransactionCoverage.uncoverable("the aggregate is unguarded")))
+        .validateTransactionRunnerAtStartup();
 
-    final var failure = assertThrowsExactly(
-        IllegalStateException.class,
-        testee::validateTransactionRunnerAtStartup);
-
+    final var failure = properties.startupFindings().theRefusal();
+    assertNotNull(failure, "the start has to be refused");
     assertTrue(failure.getMessage().contains("the aggregate is unguarded"), failure.getMessage());
     assertTrue(
         failure
@@ -252,11 +252,13 @@ public class TransactionRunnerResolutionTest {
         .validateTransactionRunnerAtStartup();
 
     // and the module's rejection wins over a global acceptance
-    final var moduleRejects = processService(
-        properties(TransactionsProperties.UnguardedAggregateWrites.ACCEPTED,
-            TransactionsProperties.UnguardedAggregateWrites.REJECTED),
-        new StubResolver(NO_TRANSACTION_AT_ALL, TransactionCoverage.uncoverable("unguarded")));
-    assertThrowsExactly(IllegalStateException.class, moduleRejects::validateTransactionRunnerAtStartup);
+    final var rejectingProperties = properties(TransactionsProperties.UnguardedAggregateWrites.ACCEPTED,
+        TransactionsProperties.UnguardedAggregateWrites.REJECTED);
+    processService(
+        rejectingProperties,
+        new StubResolver(NO_TRANSACTION_AT_ALL, TransactionCoverage.uncoverable("unguarded")))
+        .validateTransactionRunnerAtStartup();
+    assertNotNull(rejectingProperties.startupFindings().theRefusal());
 
   }
 

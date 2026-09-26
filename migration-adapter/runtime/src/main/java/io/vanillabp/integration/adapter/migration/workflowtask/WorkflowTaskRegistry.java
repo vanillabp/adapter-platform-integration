@@ -101,18 +101,18 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
    * order. Shared by all three handler kinds, since all three annotations
    * carry that attribute.
    */
-  private final ProcessVersions processVersions = new ProcessVersions();
+  private final ProcessVersions processVersions;
 
   /**
    * The <code>&#64;WorkflowStartedByBpms</code> methods of the same workflow service
    * classes - what a workflow started by the BPMS itself needs.
    */
-  private final BpmsInitiatedStarts bpmsInitiatedStarts = new BpmsInitiatedStarts(processVersions, this);
+  private final BpmsInitiatedStarts bpmsInitiatedStarts;
 
   /**
    * The <code>&#64;WorkflowEnded</code> methods of the same workflow service classes.
    */
-  private final WorkflowEndedHandlers workflowEndedHandlers = new WorkflowEndedHandlers(processVersions);
+  private final WorkflowEndedHandlers workflowEndedHandlers;
 
   /**
    * The methods of the same workflow service classes which belong to an extension's own
@@ -142,7 +142,12 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
    * The hint about BPMN processes producing concurrent tokens while their workflow
    * aggregate has no version attribute.
    */
-  private final io.vanillabp.integration.adapter.migration.transaction.ConcurrentTokenCheck concurrentTokenCheck = new io.vanillabp.integration.adapter.migration.transaction.ConcurrentTokenCheck();
+  private final io.vanillabp.integration.adapter.migration.transaction.ConcurrentTokenCheck concurrentTokenCheck;
+
+  /**
+   * Where a finding of this registry is left, so the whole start says it once.
+   */
+  private final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings;
 
   /**
    * The bound <code>vanillabp.*</code> tree - needed to answer whether a workflow module
@@ -271,8 +276,17 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
       final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping) {
 
     this.transactionRunner = transactionRunner;
+    this.findings = io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties
+        .startupFindingsOf(properties);
+    // built here rather than beside their declaration: each of them reports into the
+    // box, and where the box is only follows from the configuration handed in
+    this.processVersions = new ProcessVersions(findings);
+    this.bpmsInitiatedStarts = new BpmsInitiatedStarts(processVersions, this);
+    this.workflowEndedHandlers = new WorkflowEndedHandlers(processVersions);
+    this.concurrentTokenCheck = new io.vanillabp.integration.adapter.migration.transaction.ConcurrentTokenCheck(
+        findings);
     this.extensionHandlers = new io.vanillabp.integration.adapter.migration.handler.ExtensionHandlerRegistry(
-        transactionRunner, processVersions);
+        transactionRunner, processVersions, findings);
     this.aggregateSync = aggregateSync;
     this.transactionAnnotations = transactionAnnotations;
     this.properties = properties;
@@ -388,18 +402,20 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
       // later classes are skipped with a warning (same-aggregate classes merge)
       if ((entry.processService != null) && !entry.processService.getWorkflowAggregateClass()
           .equals(processService.getWorkflowAggregateClass())) {
-        log.warn(
-            """
-                The @WorkflowService class '{}' (aggregate '{}') declares BPMN process '{}' of \
-                workflow module '{}' which is already served by '{}' (aggregate '{}') - the class \
-                found first wins, '{}' is ignored for this BPMN process.""",
-            workflowServiceClass.getName(),
-            processService.getWorkflowAggregateClass().getName(),
-            bpmnProcessId,
-            workflowModuleId,
-            entry.workflowServiceClasses.getFirst().getName(),
-            entry.processService.getWorkflowAggregateClass().getName(),
-            workflowServiceClass.getName());
+        findings
+            .warn(
+                io.vanillabp.integration.adapter.migration.startup.StartupTopic.CODE,
+                "process '%s' of workflow module '%s'".formatted(bpmnProcessId, workflowModuleId),
+                """
+                    The @WorkflowService class '%s' (aggregate '%s') declares this BPMN process, \
+                    which is already served by '%s' (aggregate '%s') - the class found first wins, \
+                    '%s' is ignored for this BPMN process."""
+                    .formatted(
+                        workflowServiceClass.getName(),
+                        processService.getWorkflowAggregateClass().getName(),
+                        entry.workflowServiceClasses.getFirst().getName(),
+                        entry.processService.getWorkflowAggregateClass().getName(),
+                        workflowServiceClass.getName()));
         return;
       }
       final var handlers = WorkflowTaskScanner.scan(
@@ -408,7 +424,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
           workflowServiceBean,
           beanResolver,
           transactionAnnotations,
-          inherited);
+          inherited,
+          findings);
       // one by one, so two methods of the SAME class wired to one task definition are
       // compared against each other as well
       handlers
@@ -486,7 +503,11 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     final var report = HandlerMethodsNobodySees
         .reportFor(workflowServiceClass, HandlerMethodsNobodySees.CORE_HANDLER_ANNOTATIONS);
     if (report != null) {
-      log.warn(report);
+      findings
+          .warn(
+              io.vanillabp.integration.adapter.migration.startup.StartupTopic.CODE,
+              "workflow service '%s'".formatted(workflowServiceClass.getName()),
+              report);
     }
 
   }

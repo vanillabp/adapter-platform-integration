@@ -40,6 +40,21 @@ import org.slf4j.LoggerFactory;
  * native image. An application which was never built never starts, so those are not
  * missing here - they are in the log of the build.
  *
+ * <h2>When the start ends on something else</h2>
+ *
+ * An exception which is none of this object's business ends a start too, and everything
+ * found until then would go down with it.
+ * {@link #sayWhatWasFoundBeforeTheStartFailed()} is the other end for that case: it
+ * writes the box and throws nothing, so what was known stands next to the exception a
+ * developer is about to read.
+ *
+ * <h2>A finding which arrives too late</h2>
+ *
+ * Once the box is written a finding can no longer go into it, so it is logged where it
+ * was found, the way every finding was logged before the box existed. Two checks report
+ * that late on purpose: what a dispatch learns about an adapter id nobody configures any
+ * more, and what an adapter notices while it runs.
+ *
  * <h2>Counting and folding</h2>
  *
  * The same finding arrives once per workflow module, per BPMN process, per adapter id or
@@ -186,6 +201,10 @@ public class StartupFindings {
    * A check which cannot let the start walk on - because the next check would ask a
    * question this one just proved unanswerable - throws where it stands instead and says
    * so in its javadoc.
+   * <p>
+   * Reported after the box was written it is only logged, at error level: the start it
+   * was meant to stop is over, and throwing then would end a running application on a
+   * finding about its start.
    *
    * @param topic Where its fix lies
    * @param scope What it is about
@@ -211,12 +230,39 @@ public class StartupFindings {
     }
     final var finding = new Finding(severity, topic, scope, message);
     synchronized (findings) {
-      // the same check runs again on a second workflow module, and a platform may
-      // validate one configuration object twice: the same sentence about the same scope
-      // is one finding
-      if (!findings.contains(finding)) {
-        findings.add(finding);
+      if (!written) {
+        // the same check runs again on a second workflow module, and a platform may
+        // validate one configuration object twice: the same sentence about the same
+        // scope is one finding
+        if (!findings.contains(finding)) {
+          findings.add(finding);
+        }
+        return;
       }
+    }
+    sayItWhereItWasFound(finding);
+
+  }
+
+  /**
+   * Says a finding which arrives after the box was written.
+   * <p>
+   * The box is gone by then, so the finding goes into the log on its own, the way every
+   * finding did before the box existed. Two checks report that late on purpose: the
+   * message about the leftovers of an adapter id nobody configured any more is written
+   * again when a dispatch meets one, and an adapter may notice something while it runs.
+   * Dropping such a finding would be the worst of the three answers.
+   */
+  private void sayItWhereItWasFound(
+      final Finding finding) {
+
+    final var text = finding.scope() == null
+        ? finding.message()
+        : "%s: %s".formatted(finding.scope(), finding.message());
+    switch (finding.severity()) {
+      case NOTICE -> log.info(text);
+      case WARNING -> log.warn(text);
+      case ERROR, REFUSAL -> log.error(text);
     }
 
   }
@@ -244,6 +290,21 @@ public class StartupFindings {
   public boolean nothingToSay() {
 
     return findings().isEmpty();
+
+  }
+
+  /**
+   * Whether a reason not to start was found already.
+   * <p>
+   * Asked before the adapters are told to begin. A refusal is collected and thrown at the
+   * end of the start, and an adapter which started its workers in between would hand out
+   * tasks to an application which is about to end.
+   *
+   * @return Whether the start has to be refused
+   */
+  public boolean somethingWasRefused() {
+
+    return containsAnything(Severity.REFUSAL);
 
   }
 
@@ -286,6 +347,49 @@ public class StartupFindings {
     if (refusal != null) {
       throw refusal;
     }
+
+  }
+
+  /**
+   * The other end of a start: something else ended it, so the box is written here and
+   * nothing is thrown.
+   * <p>
+   * A start can end on an exception which is none of this object's business - a database
+   * which is not there, a bean which cannot be built, a check which has to throw where it
+   * stands. Everything found until then would go down with it, and that is the moment a
+   * developer needs it most: the warning about the workflow module nobody configured is
+   * often the reason for the exception one line below.
+   * <p>
+   * So this writes what was found, refusals included. They are part of the box here
+   * rather than an exception of their own, because the exception ending this start is the
+   * one the developer is about to read and a second one would only compete with it.
+   * <p>
+   * Called after {@link #endOfStartup()} it does nothing: the box was written already.
+   */
+  public void sayWhatWasFoundBeforeTheStartFailed() {
+
+    synchronized (findings) {
+      if (written) {
+        return;
+      }
+      written = true;
+    }
+    final var entries = entriesOf(finding -> true);
+    if (entries.isEmpty()) {
+      return;
+    }
+    final var total = total(entries);
+    log
+        .warn(
+            render(
+                "%s looked at this application and found %d %s worth a look. The start ended on something else, so this is what was known by then."
+                    .formatted(
+                        WHO_LOOKED,
+                        total,
+                        total == 1
+                            ? "thing"
+                            : "things"),
+                entries));
 
   }
 

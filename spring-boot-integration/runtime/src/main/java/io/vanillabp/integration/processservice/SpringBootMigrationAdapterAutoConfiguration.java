@@ -182,13 +182,18 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    * the values (push them as process variables, or write them as operator context
    * only).
    *
+   * @param properties The VanillaBP configuration, which carries the collection every
+   *          startup check reports into
    * @return The sync support
    */
   @Bean
   @ConditionalOnMissingBean
-  public static io.vanillabp.integration.adapter.spi.WorkflowAggregateSync vanillaBpWorkflowAggregateSync() {
+  public static io.vanillabp.integration.adapter.spi.WorkflowAggregateSync vanillaBpWorkflowAggregateSync(
+      @org.springframework.beans.factory.annotation.Qualifier(
+        BEANNAME_MIGRATIONADAPERPROPERTIES) final MigrationAdapterProperties properties) {
 
-    return new io.vanillabp.integration.adapter.migration.sync.AggregateSyncSupport();
+    return new io.vanillabp.integration.adapter.migration.sync.AggregateSyncSupport(
+        properties.startupFindings());
 
   }
 

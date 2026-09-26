@@ -4028,7 +4028,21 @@ application which was never built never starts.
 
 A finding carries its scope beside its text rather than inside it, because the same finding arrives
 once per workflow module, per BPMN process, per adapter id and per method: two findings of one
-topic carrying the same text become one entry naming both scopes.
+topic carrying the same text become one entry naming both scopes. That is also what replaced the
+memories the checks used to keep so that they would not repeat themselves. A check which reports
+after the start is over keeps its own memory, because there is no block left to fold its lines
+into.
+
+A start which ends on something else writes the block too, from
+`sayWhatWasFoundBeforeTheStartFailed`, and throws nothing: a database which is not there ends a
+start as surely as a check does, and what was found by then is what a developer needs beside that
+exception. A reason not to start which was found before the workflow processing begins ends the
+start right there, so no adapter is told to begin and hands out tasks to an application which is
+about to end.
+
+A finding which arrives after the block was written goes into the log where it was found. Two
+checks report that late on purpose: what a dispatch learns about an adapter id nobody configures
+any more, and what an adapter notices while it runs.
 
 `TheBoxAtTheEndOfAStartTest` holds every word of it, the shape included.
 

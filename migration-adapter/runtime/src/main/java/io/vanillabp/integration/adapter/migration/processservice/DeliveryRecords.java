@@ -106,6 +106,11 @@ public final class DeliveryRecords {
   private final AtomicBoolean missingDeliveryLogReported = new AtomicBoolean();
 
   /**
+   * Where a finding of these records goes, so the whole start says it once.
+   */
+  private final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings;
+
+  /**
    * What the application counts about its deliveries, handed over by the process service
    * once the platform integration knows it.
    */
@@ -152,6 +157,7 @@ public final class DeliveryRecords {
     this.workflowAggregateClass = workflowAggregateClass;
     this.properties = properties;
     this.resolver = resolver;
+    this.findings = MigrationAdapterProperties.startupFindingsOf(properties);
 
   }
 
@@ -265,25 +271,27 @@ public final class DeliveryRecords {
     if (!missingDeliveryLogReported.compareAndSet(false, true)) {
       return;
     }
-    log.warn(
-        """
-            Adapter '{}' may deliver a task of BPMN process '{}' of workflow module '{}' more than \
-            once, but no TaskDeliveryLog is available for aggregate '{}' - a repeated delivery will \
-            run the @WorkflowTask method again. To solve this either
-            {}
-            - define your own bean implementing io.vanillabp.integration.spi.TaskDeliveryLog \
-            (assign it to specific aggregates via a io.vanillabp.integration.spi.TaskDeliveryLogAware \
-            bean), or
-            - set 'vanillabp.adapters.{}.deduplicate-deliveries' to 'false' to state that the \
-            handlers of this application are idempotent themselves.""",
-        adapterId,
-        bpmnProcessId,
-        workflowModuleId,
-        workflowAggregateClass.getName(),
-        resolver == null
-            ? "- provide a TaskDeliveryLogResolver (platform integration), or"
-            : resolver.remediesDescription(),
-        adapterId);
+    findings
+        .warn(
+            io.vanillabp.integration.adapter.migration.startup.StartupTopic.CODE,
+            "process '%s' of workflow module '%s', adapter '%s'"
+                .formatted(bpmnProcessId, workflowModuleId, adapterId),
+            """
+                This adapter may deliver a task of this BPMN process more than once, but no \
+                TaskDeliveryLog is available for aggregate '%s' - a repeated delivery will run \
+                the @WorkflowTask method again. To solve this either
+                %s
+                - define your own bean implementing io.vanillabp.integration.spi.TaskDeliveryLog \
+                (assign it to specific aggregates via a \
+                io.vanillabp.integration.spi.TaskDeliveryLogAware bean), or
+                - set 'vanillabp.adapters.%s.deduplicate-deliveries' to 'false' to state that \
+                the handlers of this application are idempotent themselves."""
+                .formatted(
+                    workflowAggregateClass.getName(),
+                    resolver == null
+                        ? "- provide a TaskDeliveryLogResolver (platform integration), or"
+                        : resolver.remediesDescription(),
+                    adapterId));
 
   }
 
@@ -640,20 +648,24 @@ public final class DeliveryRecords {
     if (implementsRelease(storeClass)) {
       return;
     }
-    log.warn(
-        """
-            The TaskDeliveryLog '{}' does not implement 'releaseRecordsOf', but '{}' is switched on \
-            for BPMN process '{}' of workflow module '{}' - the records of an ended workflow are \
-            NOT deleted when it ends but once 'vanillabp.delivery.retention' passed. To solve this \
-            either
-            - implement io.vanillabp.integration.spi.TaskDeliveryLog#releaseRecordsOf in '{}', or
-            - set '{}' to 'false' to state that the retention is what cleans up the records.""",
-        storeClass.getName(),
-        MigrationAdapterProperties.releaseOnWorkflowEndProperty(workflowModuleId),
-        bpmnProcessId,
-        workflowModuleId,
-        storeClass.getName(),
-        MigrationAdapterProperties.releaseOnWorkflowEndProperty(workflowModuleId));
+    findings
+        .warn(
+            io.vanillabp.integration.adapter.migration.startup.StartupTopic.CODE,
+            "process '%s' of workflow module '%s'".formatted(bpmnProcessId, workflowModuleId),
+            """
+                The TaskDeliveryLog '%s' does not implement 'releaseRecordsOf', but '%s' is \
+                switched on for this BPMN process - the records of an ended workflow are NOT \
+                deleted when it ends but once 'vanillabp.delivery.retention' passed. To solve this \
+                either
+                - implement io.vanillabp.integration.spi.TaskDeliveryLog#releaseRecordsOf in \
+                '%s', or
+                - set '%s' to 'false' to state that the retention is what cleans up the \
+                records."""
+                .formatted(
+                    storeClass.getName(),
+                    MigrationAdapterProperties.releaseOnWorkflowEndProperty(workflowModuleId),
+                    storeClass.getName(),
+                    MigrationAdapterProperties.releaseOnWorkflowEndProperty(workflowModuleId)));
 
   }
 
@@ -754,23 +766,23 @@ public final class DeliveryRecords {
           if ((open == null) || (open == 0)) {
             return;
           }
-          log
-              .info(
+          findings
+              .notice(
+                  io.vanillabp.integration.adapter.migration.startup.StartupTopic.STORED_STATE,
+                  "process '%s' of workflow module '%s', adapter '%s'"
+                      .formatted(bpmnProcessId, workflowModuleId, adapter.getAdapterId()),
                   """
-                      Adapter '{}' holds {} open task(s) of BPMN process '{}' (workflow module '{}') \
-                      which VanillaBP has no record of. It remembers a delivery from the moment your \
-                      handler ran, so tasks which were already open before this application first ran \
-                      are not in that memory: the next delivery of each of them runs the \
-                      @WorkflowTask method a SECOND time, which is what happens without the record \
-                      and what VanillaBP 1 did for every delivery. Nothing can be repaired here - a \
-                      record would have to claim your handler ran, and an activated job which is \
-                      still there may just as well be a handler which crashed halfway. So keep the \
-                      guards in your handlers until this number is zero, which it becomes as each of \
-                      those tasks is delivered once.""",
-                  adapter.getAdapterId(),
-                  open,
-                  bpmnProcessId,
-                  workflowModuleId);
+                      This adapter holds %d open task(s) of this BPMN process which VanillaBP has \
+                      no record of. It remembers a delivery from the moment your handler ran, so \
+                      tasks which were already open before this application first ran are not in \
+                      that memory: the next delivery of each of them runs the @WorkflowTask method \
+                      a SECOND time, which is what happens without the record and what VanillaBP 1 \
+                      did for every delivery. Nothing can be repaired here - a record would have \
+                      to claim your handler ran, and an activated job which is still there may \
+                      just as well be a handler which crashed halfway. So keep the guards in your \
+                      handlers until this number is zero, which it becomes as each of those tasks \
+                      is delivered once."""
+                      .formatted(open));
         });
 
   }

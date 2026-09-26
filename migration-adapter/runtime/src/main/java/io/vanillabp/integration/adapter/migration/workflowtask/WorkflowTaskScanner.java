@@ -35,8 +35,6 @@ import io.vanillabp.spi.service.WorkflowTask;
  */
 class WorkflowTaskScanner {
 
-  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(WorkflowTaskScanner.class);
-
   /**
    * A workflow task is the handler with the widest binding surface: everything the core
    * knows how to bind may stand in its parameter list, plus the two parameters only a
@@ -57,7 +55,8 @@ class WorkflowTaskScanner {
       final Supplier<Object> workflowServiceBean,
       final Function<Class<?>, Object> beanResolver,
       final List<TransactionAnnotationSpec> transactionAnnotations,
-      final InheritedVersions inherited) {
+      final InheritedVersions inherited,
+      final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings) {
 
     final var handlers = new LinkedList<WorkflowTaskHandler>();
     // transaction annotations of the application covering a handler break the
@@ -76,7 +75,8 @@ class WorkflowTaskScanner {
           method,
           transactionAnnotations,
           transactionDefects,
-          transactionRemedies);
+          transactionRemedies,
+          findings);
       final var binders = buildParameterBinders(
           workflowServiceClass,
           method,
@@ -149,29 +149,31 @@ class WorkflowTaskScanner {
       final Method method,
       final List<TransactionAnnotationSpec> transactionAnnotations,
       final List<String> defects,
-      final Set<String> remedies) {
+      final Set<String> remedies,
+      final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings) {
 
-    final var findings = ApplicationTransactionCheck.inspect(
+    final var inspected = ApplicationTransactionCheck.inspect(
         workflowServiceClass,
         method,
         transactionAnnotations);
-    if (findings.defect() != null) {
-      defects.add(findings.defect());
-      if (findings.remedy() != null) {
-        remedies.add(findings.remedy());
+    if (inspected.defect() != null) {
+      defects.add(inspected.defect());
+      if (inspected.remedy() != null) {
+        remedies.add(inspected.remedy());
       }
     }
-    if (findings.notHonored() != null) {
-      log.warn(
-          """
-              The @WorkflowTask method '{}#{}' carries a transaction annotation this platform does \
-              NOT honor: {} So the transaction boundary it declares does not exist. On a workflow \
-              task method you want none anyway, since VanillaBP runs the method in a transaction of \
-              its own - but check the rest of your application for the same annotation, where it \
-              silently does nothing as well.""",
-          workflowServiceClass.getName(),
-          method.getName(),
-          findings.notHonored());
+    if (inspected.notHonored() != null) {
+      findings
+          .warn(
+              io.vanillabp.integration.adapter.migration.startup.StartupTopic.CODE,
+              "method '%s#%s'".formatted(workflowServiceClass.getName(), method.getName()),
+              """
+                  This @WorkflowTask method carries a transaction annotation this platform does \
+                  NOT honor: %s So the transaction boundary it declares does not exist. On a \
+                  workflow task method you want none anyway, since VanillaBP runs the method in a \
+                  transaction of its own - but check the rest of your application for the same \
+                  annotation, where it silently does nothing as well."""
+                  .formatted(inspected.notHonored()));
     }
 
   }

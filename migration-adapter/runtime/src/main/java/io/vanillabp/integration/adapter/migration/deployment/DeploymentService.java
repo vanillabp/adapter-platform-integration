@@ -15,6 +15,7 @@ import java.util.stream.Stream;
 
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.startup.StartupTopic;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
 import io.vanillabp.integration.spi.parts.PartKind;
@@ -221,8 +222,33 @@ public class DeploymentService {
    *     the file's input stream as the value.
    * @param <PC> The processing context, used to store all information needed by the adapter to deploy the process.
    */
-  @SuppressWarnings("unchecked")
   public <PC> void deployResources(
+      final List<String> workflowModuleIds,
+      final BiFunction<String, String, Map<String, InputStream>> resourcesLoader) {
+
+    try {
+      deployResourcesOfEachModule(workflowModuleIds, resourcesLoader);
+    } catch (final RuntimeException e) {
+      // this start ends here, so the box is written now and what was found stands next
+      // to the exception a developer is about to read
+      properties
+          .startupFindings()
+          .sayWhatWasFoundBeforeTheStartFailed();
+      throw e;
+    }
+
+  }
+
+  /**
+   * The deployment itself, of every workflow module, the way
+   * {@link #deployResources(List, BiFunction)} describes it.
+   *
+   * @param workflowModuleIds The workflow module IDs to deploy
+   * @param resourcesLoader Loads the resources of one location
+   * @param <PC> The processing context of the adapter being deployed to
+   */
+  @SuppressWarnings("unchecked")
+  private <PC> void deployResourcesOfEachModule(
       final List<String> workflowModuleIds,
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader) {
 
@@ -272,18 +298,25 @@ public class DeploymentService {
             final var policy = properties.getDeploymentFailureFor(adapterId);
             if ((policy == DeploymentFailurePolicy.WARN) && !properties.isFirstPriorityFor(workflowModuleId,
                 adapterId)) {
-              log.warn(
-                  "Deployment of workflow module '{}' failed for adapter '{}'! Since "
-                      + "'{}.adapters.{}.deployment-failure' is set to 'warn' and the adapter is not "
-                      + "the first-priority adapter of the workflow module or of any of its workflows, "
-                      + "the application starts anyway. Workflows of this "
-                      + "workflow module are not processed by adapter '{}'!",
-                  workflowModuleId,
-                  adapterId,
-                  MigrationAdapterProperties.PREFIX,
-                  adapterId,
-                  adapterId,
-                  e);
+              properties
+                  .startupFindings()
+                  .warn(
+                      StartupTopic.INFRASTRUCTURE,
+                      "workflow module '%s', adapter '%s'".formatted(workflowModuleId, adapterId),
+                      """
+                          Deployment of workflow module '%s' failed for adapter '%s'! Since \
+                          '%s.adapters.%s.deployment-failure' is set to 'warn' and the adapter is \
+                          not the first-priority adapter of the workflow module or of any of its \
+                          workflows, the application starts anyway. Workflows of this workflow \
+                          module are not processed by adapter '%s'! What went wrong:
+                          %s"""
+                          .formatted(
+                              workflowModuleId,
+                              adapterId,
+                              MigrationAdapterProperties.PREFIX,
+                              adapterId,
+                              adapterId,
+                              whatWentWrong(e)));
             } else {
               throw e;
             }
@@ -396,25 +429,31 @@ public class DeploymentService {
     workflowModuleIds
         .stream()
         .filter(workflowModuleId -> !bpmsProcessingContexts.containsKey(workflowModuleId))
-        .forEach(workflowModuleId -> log.error(
-            "No BPMN resources were found for workflow module '{}' - by NONE of its adapters ({}). "
-                + "No workflow of this module can be started; the BPMS would report an unknown "
-                + "process. Locations searched: {}. Check where the module's BPMN files are packaged, "
-                + "or name the location explicitly in "
-                + "'{}.workflow-modules.{}.adapters.<adapter>.resources-location'.",
-            workflowModuleId,
-            String.join(", ", properties.getDeploymentAdaptersFor(workflowModuleId)),
-            properties
-                .getDeploymentAdaptersFor(workflowModuleId)
-                .stream()
-                .flatMap(adapterId -> properties
-                    .getAdapterResourcesLocationsFor(workflowModuleId, adapterId)
-                    .stream())
-                .map(location -> "'%s'".formatted(location.location()))
-                .distinct()
-                .collect(java.util.stream.Collectors.joining(", ")),
-            MigrationAdapterProperties.PREFIX,
-            workflowModuleId));
+        .forEach(workflowModuleId -> properties
+            .startupFindings()
+            .error(
+                StartupTopic.BPMN_MODELS,
+                "workflow module '%s'".formatted(workflowModuleId),
+                """
+                    No BPMN resources were found for workflow module '%s' - by NONE of its \
+                    adapters (%s). No workflow of this module can be started; the BPMS would \
+                    report an unknown process. Locations searched: %s. Check where the module's \
+                    BPMN files are packaged, or name the location explicitly in \
+                    '%s.workflow-modules.%s.adapters.<adapter>.resources-location'."""
+                    .formatted(
+                        workflowModuleId,
+                        String.join(", ", properties.getDeploymentAdaptersFor(workflowModuleId)),
+                        properties
+                            .getDeploymentAdaptersFor(workflowModuleId)
+                            .stream()
+                            .flatMap(adapterId -> properties
+                                .getAdapterResourcesLocationsFor(workflowModuleId, adapterId)
+                                .stream())
+                            .map(location -> "'%s'".formatted(location.location()))
+                            .distinct()
+                            .collect(java.util.stream.Collectors.joining(", ")),
+                        MigrationAdapterProperties.PREFIX,
+                        workflowModuleId)));
 
   }
 
@@ -475,6 +514,14 @@ public class DeploymentService {
    * ({@link ExtensionWiringService#getExtensionName()}). An extension which does not is
    * left alone: the only thing the boot could say about it is the name of a class, and
    * the application developer reading the log cannot do anything with that.
+   * <p>
+   * The refusal is thrown here and not collected with the others. A part built against
+   * another platform integration is the one failure which makes every later check
+   * unreliable: the next call into that part may end in a
+   * <code>NoSuchMethodError</code>, and a box full of findings drawn from a classpath
+   * which does not hold together would send a developer after the wrong thing. The
+   * warnings found here do go into the box, because they say nothing about whether the
+   * rest can be trusted.
    */
   private void checkPartsBelongTogether() {
 
@@ -500,7 +547,12 @@ public class DeploymentService {
           if (verdict.stopsTheBoot()) {
             reasonsNotToBoot.add(verdict.message());
           } else {
-            log.warn(verdict.message());
+            properties
+                .startupFindings()
+                .warn(
+                    StartupTopic.PARTS_AND_VERSIONS,
+                    null,
+                    verdict.message());
           }
         });
 
@@ -549,23 +601,29 @@ public class DeploymentService {
       final var propPrefix = "\n  %s.workflow-modules.%s.workflows.".formatted(
           MigrationAdapterProperties.PREFIX,
           workflowModuleId);
-      log.warn(
-          """
-              Found properties for BPMN processes
-                {}.workflow-modules.{}.workflows.{}
-              which were not found in any BPMN resource of workflow module '{}'! Fix the BPMN process ID
-              or add the BPMN file. Two cases are intended: the BPMN arrives later (e.g. during a BPMS
-              migration), and the id belongs to a BPMN process this application declares without
-              deploying one - a renamed process, whose old id keeps the versions of it a BPMS still
-              holds and which 'outfaded-versions' is configured for right here. Executable BPMN process
-              IDs known for this workflow module are: {}.""",
-          MigrationAdapterProperties.PREFIX,
-          workflowModuleId,
-          String.join(propPrefix, unknownConfiguredWorkflows),
-          workflowModuleId,
-          knownProcessIds.isEmpty()
-              ? "none"
-              : "'%s'".formatted(String.join("', '", knownProcessIds.stream().sorted().toList())));
+      properties
+          .startupFindings()
+          .warn(
+              StartupTopic.CONFIGURATION,
+              "workflow module '%s'".formatted(workflowModuleId),
+              """
+                  Found properties for BPMN processes
+                    %s.workflow-modules.%s.workflows.%s
+                  which were not found in any BPMN resource of workflow module '%s'! Fix the BPMN process ID
+                  or add the BPMN file. Two cases are intended: the BPMN arrives later (e.g. during a BPMS
+                  migration), and the id belongs to a BPMN process this application declares without
+                  deploying one - a renamed process, whose old id keeps the versions of it a BPMS still
+                  holds and which 'outfaded-versions' is configured for right here. Executable BPMN process
+                  IDs known for this workflow module are: %s."""
+                  .formatted(
+                      MigrationAdapterProperties.PREFIX,
+                      workflowModuleId,
+                      String.join(propPrefix, unknownConfiguredWorkflows),
+                      workflowModuleId,
+                      knownProcessIds.isEmpty()
+                          ? "none"
+                          : "'%s'".formatted(
+                              String.join("', '", knownProcessIds.stream().sorted().toList()))));
     });
 
   }
@@ -600,26 +658,31 @@ public class DeploymentService {
         return;
       }
       final var filesByProcessId = bpmnFilesByProcessId.getOrDefault(workflowModuleId, Map.of());
-      log.warn(
-          """
-              Workflow module '{}' deploys BPMN processes which no @WorkflowService class of this \
-              application claims:{}
-              They are deployed because a BPMN file travels to the BPMS as a whole, so a process \
-              modelled next to the one you asked for goes with it. A workflow of such a process can \
-              still be started, by a call activity of another process or by the BPMS itself, and it \
-              will not get past its first task, because no @WorkflowTask method of this application \
-              serves it. Either serve the process, by a class annotated with \
-              @WorkflowService(bpmnProcess = @BpmnProcess(bpmnProcessId = "<the process>")) holding a \
-              @WorkflowTask method per task, or take the process out of its file. Nothing to do here \
-              if another application serves it.{}""",
-          workflowModuleId,
-          unclaimedProcessIds
-              .stream()
-              .map(bpmnProcessId -> "\n  - process '%s' of file '%s'".formatted(
-                  bpmnProcessId,
-                  filesByProcessId.getOrDefault(bpmnProcessId, "unknown")))
-              .collect(java.util.stream.Collectors.joining()),
-          whatElseIsWorthSaying(workflowModuleId, unclaimedProcessIds));
+      properties
+          .startupFindings()
+          .warn(
+              StartupTopic.CODE,
+              "workflow module '%s'".formatted(workflowModuleId),
+              """
+                  Workflow module '%s' deploys BPMN processes which no @WorkflowService class of this \
+                  application claims:%s
+                  They are deployed because a BPMN file travels to the BPMS as a whole, so a process \
+                  modelled next to the one you asked for goes with it. A workflow of such a process can \
+                  still be started, by a call activity of another process or by the BPMS itself, and it \
+                  will not get past its first task, because no @WorkflowTask method of this application \
+                  serves it. Either serve the process, by a class annotated with \
+                  @WorkflowService(bpmnProcess = @BpmnProcess(bpmnProcessId = "<the process>")) holding a \
+                  @WorkflowTask method per task, or take the process out of its file. Nothing to do here \
+                  if another application serves it.%s"""
+                  .formatted(
+                      workflowModuleId,
+                      unclaimedProcessIds
+                          .stream()
+                          .map(bpmnProcessId -> "\n  - process '%s' of file '%s'".formatted(
+                              bpmnProcessId,
+                              filesByProcessId.getOrDefault(bpmnProcessId, "unknown")))
+                          .collect(java.util.stream.Collectors.joining()),
+                      whatElseIsWorthSaying(workflowModuleId, unclaimedProcessIds)));
     });
 
   }
@@ -714,10 +777,16 @@ public class DeploymentService {
               bpmnFilesByProcessId)
               .ifPresentOrElse(
                   bpmsProcessingContext::setBpmsProcessingContext,
-                  () -> log.warn(
-                      "File '{}' of workflow module '{}' did not contain any executable processes. Skipping deployment of this file!",
-                      bpmnFileEntry.getKey(),
-                      workflowModuleId)));
+                  () -> properties
+                      .startupFindings()
+                      .warn(
+                          StartupTopic.BPMN_MODELS,
+                          "file '%s' of workflow module '%s'".formatted(
+                              bpmnFileEntry.getKey(),
+                              workflowModuleId),
+                          "This BPMN file contains no executable process, so it was not deployed. "
+                              + "Mark the process executable in the model, or take the file out of "
+                              + "the workflow module.")));
     } finally {
       // streams are opened by the platform's resources loader and owned by this
       // pipeline: close ALL of them regardless of the processing outcome - also
@@ -742,26 +811,34 @@ public class DeploymentService {
     // BPMN): warn with the key to change and skip this adapter for this module -
     // the adapter must never be called with a null processing context
     if (bpmsProcessingContext.getBpmsProcessingContext() == null) {
-      log.warn(
-          "No executable BPMN processes found for workflow module '{}' at location {}! "
-              + "Adapter '{}' is skipped for this workflow module, so none of its workflows can be "
-              + "started by that adapter, and any DMN file at that location is not deployed either "
-              + "(a decision table travels with the processes calling it, never on its own). If "
-              + "this is unintended, check property "
-              + "'{}.workflow-modules.{}.adapters.{}.resources-location' (or '{}.resources-location') "
-              + "and the BPMN files at that location.",
-          workflowModuleId,
-          candidateLocations.size() == 1
-              ? "'%s'".formatted(resourcesLocation.location())
-              : candidateLocations
-                  .stream()
-                  .map(candidate -> "'%s'".formatted(candidate.location()))
-                  .collect(java.util.stream.Collectors.joining(" and ")),
-          deploymentService.getAdapterId(),
-          MigrationAdapterProperties.PREFIX,
-          workflowModuleId,
-          deploymentService.getAdapterId(),
-          MigrationAdapterProperties.PREFIX);
+      properties
+          .startupFindings()
+          .warn(
+              StartupTopic.BPMN_MODELS,
+              "workflow module '%s', adapter '%s'".formatted(
+                  workflowModuleId,
+                  deploymentService.getAdapterId()),
+              """
+                  No executable BPMN processes found for workflow module '%s' at location %s! \
+                  Adapter '%s' is skipped for this workflow module, so none of its workflows can be \
+                  started by that adapter, and any DMN file at that location is not deployed either \
+                  (a decision table travels with the processes calling it, never on its own). If \
+                  this is unintended, check property \
+                  '%s.workflow-modules.%s.adapters.%s.resources-location' (or '%s.resources-location') \
+                  and the BPMN files at that location."""
+                  .formatted(
+                      workflowModuleId,
+                      candidateLocations.size() == 1
+                          ? "'%s'".formatted(resourcesLocation.location())
+                          : candidateLocations
+                              .stream()
+                              .map(candidate -> "'%s'".formatted(candidate.location()))
+                              .collect(java.util.stream.Collectors.joining(" and ")),
+                      deploymentService.getAdapterId(),
+                      MigrationAdapterProperties.PREFIX,
+                      workflowModuleId,
+                      deploymentService.getAdapterId(),
+                      MigrationAdapterProperties.PREFIX));
       return;
     }
 
@@ -947,9 +1024,47 @@ public class DeploymentService {
    *          an extension's wiring service is cast to, which the deployment already matched.
    * @param <PC> The processing context, used to store all information needed by the adapter to deploy the process.
    */
-  @SuppressWarnings("unchecked")
   public <BPMN, PC> void startWorkflowProcessing(
       final List<String> workflowModuleIds) {
+
+    try {
+      this.<BPMN, PC>startWorkflowProcessingOfEachModule(workflowModuleIds);
+    } catch (final RuntimeException e) {
+      // the box is written unless it was written already: a check which had to throw
+      // where it stands, or an adapter which cannot start, ends this start, and what was
+      // found until then is what a developer needs beside that exception
+      properties
+          .startupFindings()
+          .sayWhatWasFoundBeforeTheStartFailed();
+      throw e;
+    }
+
+  }
+
+  /**
+   * Starting the workflow processing itself, the way
+   * {@link #startWorkflowProcessing(List)} describes it, closed by the box and by the
+   * collected refusal.
+   *
+   * @param workflowModuleIds The workflow module IDs to start
+   * @param <BPMN> The BPMN model type an extension's wiring service is cast to
+   * @param <PC> The processing context of the adapter being started
+   */
+  @SuppressWarnings("unchecked")
+  private <BPMN, PC> void startWorkflowProcessingOfEachModule(
+      final List<String> workflowModuleIds) {
+
+    // a reason not to start which was found before this point ends the start HERE, and
+    // not at the end of this method: an adapter told to begin hands tasks to an
+    // application which is about to end, and it would do so for as long as the remaining
+    // checks take
+    if (properties
+        .startupFindings()
+        .somethingWasRefused()) {
+      properties
+          .startupFindings()
+          .endOfStartup();
+    }
 
     // walk through all workflow modules...
     workflowModuleIds
@@ -1072,6 +1187,29 @@ public class DeploymentService {
                         processingContext);
               });
         });
+
+  }
+
+  /**
+   * Writes an exception into a finding, with its whole stack trace.
+   * <p>
+   * The box is one call of the logger, so an exception cannot be handed to the logger
+   * beside it. Naming only the message would lose what a developer opens a stack trace
+   * for, and writing the trace on a line of its own would put back the single line this
+   * box replaced. So it goes into the finding, and the finding is as long as the trouble
+   * was.
+   *
+   * @param cause What went wrong
+   * @return The stack trace, as the logger would have written it
+   */
+  private static String whatWentWrong(
+      final Throwable cause) {
+
+    final var trace = new java.io.StringWriter();
+    try (var writer = new java.io.PrintWriter(trace)) {
+      cause.printStackTrace(writer);
+    }
+    return trace.toString().strip();
 
   }
 

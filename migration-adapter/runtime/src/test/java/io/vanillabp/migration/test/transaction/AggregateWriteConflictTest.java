@@ -25,7 +25,6 @@ import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.transaction.AggregateWrite;
-import io.vanillabp.integration.adapter.migration.transaction.ConcurrentTokenCheck;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
@@ -280,8 +279,7 @@ public class AggregateWriteConflictTest {
     final var registry = registry(new FailingCommitTransactionRunner(new IllegalStateException(), false));
 
     final var messages = new java.util.ArrayList<String>();
-    loggedBy(
-        ConcurrentTokenCheck.class,
+    reportedWhile(
         messages,
         () -> registry
             .reportConcurrentTokenElements(MODULE, PROCESS, List.of("Event_Reminder", "Gateway_Fork")));
@@ -303,8 +301,7 @@ public class AggregateWriteConflictTest {
     final var registry = registry(new FailingCommitTransactionRunner(new IllegalStateException(), false));
 
     final var messages = new java.util.ArrayList<String>();
-    loggedBy(
-        ConcurrentTokenCheck.class,
+    reportedWhile(
         messages,
         () -> {
           registry.reportConcurrentTokenElements(MODULE, PROCESS, List.of("Event_Reminder"));
@@ -322,8 +319,7 @@ public class AggregateWriteConflictTest {
     final var registry = registry(new FailingCommitTransactionRunner(new IllegalStateException(), false));
 
     final var messages = new java.util.ArrayList<String>();
-    loggedBy(
-        ConcurrentTokenCheck.class,
+    reportedWhile(
         messages,
         () -> {
           // an adapter which cannot read models reports nothing
@@ -376,10 +372,23 @@ public class AggregateWriteConflictTest {
 
   }
 
+  /**
+   * The configuration the last registry of this test was built on - the collection a
+   * check reports into hangs on it.
+   */
+  private MigrationAdapterProperties lastProperties;
+
   private WorkflowTaskRegistry registry(
       final TransactionRunner transactionRunner) {
 
-    final var registry = new WorkflowTaskRegistry(transactionRunner);
+    lastProperties = MigrationAdapterProperties
+        .builder()
+        .adapters(Map.of("test-adapter", AdapterConfigProperties.ofType("dummy")))
+        .prioritizedAdapters(List.of("test-adapter"))
+        .build();
+    lastProperties.validateAndLink();
+    final var registry = new WorkflowTaskRegistry(
+        transactionRunner, null, List.of(), lastProperties);
     registry
         .registerWorkflowService(MODULE, PROCESS, Service.class, Service::new, type -> null, processService());
     return registry;
@@ -417,7 +426,8 @@ public class AggregateWriteConflictTest {
 
   /**
    * Collects the messages the given class logged at WARN or above while the work ran
-   * ("normal" logging is switched off during tests).
+   * ("normal" logging is switched off during tests). What a check of the START says does
+   * not come this way any more - see {@link #reportedWhile(List, Runnable)}.
    */
   private void loggedBy(
       final Class<?> loggingClass,
@@ -438,6 +448,23 @@ public class AggregateWriteConflictTest {
           .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
           .forEach(messages::add);
     }
+
+  }
+
+  /**
+   * Runs the work and collects what the checks of the registry reported while it ran.
+   *
+   * @param messages Where the findings are collected
+   * @param work What makes the checks run
+   */
+  private void reportedWhile(
+      final List<String> messages,
+      final Runnable work) {
+
+    work.run();
+    messages
+        .addAll(
+            io.vanillabp.migration.test.startup.WhatWasFound.entries(lastProperties.startupFindings()));
 
   }
 

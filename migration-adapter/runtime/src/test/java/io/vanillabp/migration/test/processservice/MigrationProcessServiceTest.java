@@ -3,6 +3,7 @@ package io.vanillabp.migration.test.processservice;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -533,18 +534,21 @@ public class MigrationProcessServiceTest {
     when(phaseTwoOutboxResolver.resolveFor(Object.class)).thenReturn(null);
     when(phaseTwoOutboxResolver.remediesDescription()).thenReturn("- add the platform's outbox starter, or");
 
+    final var properties = createProperties();
     final var testee = MigrationProcessService
         .forBpmnProcess("test-module", "TestProcess", Object.class)
-        .properties(createProperties())
+        .properties(properties)
         .aggregatePersistence(aggregatePersistence)
         .processServices(List
             .of(processService))
         .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
         .build();
 
-    final var exception = assertThrowsExactly(
-        IllegalStateException.class,
-        testee::validatePhaseTwoOutboxAtStartup);
+    testee.validatePhaseTwoOutboxAtStartup();
+
+    // the reason is collected and thrown once, at the end of the start
+    final var exception = properties.startupFindings().theRefusal();
+    assertNotNull(exception, "the start has to be refused");
 
     // the message names the adapter, process, module, aggregate, the platform's
     // remedies and the SPI escape hatches
@@ -555,7 +559,14 @@ public class MigrationProcessServiceTest {
     assertTrue(exception.getMessage().contains("add the platform's outbox starter"));
     assertTrue(exception.getMessage().contains("PhaseTwoOutbox"));
     assertTrue(exception.getMessage().contains("PhaseTwoOutboxAware"));
-    assertFalse(exception.getMessage().contains("  "), "message must not contain consecutive spaces");
+    // the box indents what it renders, so the rule about consecutive spaces is about the
+    // message a check reported rather than about the block it ends up in
+    final var reported = properties
+        .startupFindings()
+        .findings()
+        .getFirst()
+        .message();
+    assertFalse(reported.contains("  "), "message must not contain consecutive spaces");
 
   }
 

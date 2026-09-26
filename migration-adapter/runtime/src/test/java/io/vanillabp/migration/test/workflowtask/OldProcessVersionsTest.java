@@ -1,6 +1,7 @@
 package io.vanillabp.migration.test.workflowtask;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -18,6 +19,7 @@ import ch.qos.logback.classic.Level;
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.OutfadedVersionsInUsePolicy;
+import io.vanillabp.integration.adapter.migration.startup.StartupFindings;
 import io.vanillabp.integration.adapter.migration.workflowtask.DeployedProcessVersionsCheck;
 import io.vanillabp.integration.adapter.migration.workflowtask.OutfadedProcessVersions;
 import io.vanillabp.integration.adapter.migration.workflowtask.ProcessVersions;
@@ -228,10 +230,11 @@ public class OldProcessVersionsTest {
             type -> null,
             processService());
     registry.registerDeployedVersion(ADAPTER, MODULE, PROCESS, "3");
-    processVersions = new ProcessVersions();
+    processVersions = new ProcessVersions(properties.startupFindings());
     processVersions.recordDeployedVersion(ADAPTER, MODULE, PROCESS, "3");
     deployedVersionsCheck = new DeployedProcessVersionsCheck(
-        processVersions, new OutfadedProcessVersions(properties), registry::tasksNotServedInVersion, registry::handlersNotServingAnyVersion, registry);
+        processVersions, new OutfadedProcessVersions(properties), registry::tasksNotServedInVersion, registry::handlersNotServingAnyVersion, registry, properties
+            .startupFindings());
 
     catalog = new CatalogStub();
     catalog.versions = List
@@ -309,7 +312,8 @@ public class OldProcessVersionsTest {
     final var infos = check(Level.INFO);
     assertEquals(1, infos.size(), infos.toString());
     assertTrue(infos.get(0).contains("3 workflow(s)"), infos.get(0));
-    assertTrue(infos.get(0).contains("older than the one adapter 'c7' deployed"), infos.get(0));
+    assertTrue(infos.get(0).contains("adapter 'c7'"), infos.get(0));
+    assertTrue(infos.get(0).contains("older than the one the adapter deployed"), infos.get(0));
     assertTrue(infos.get(0).contains("falls to zero"), infos.get(0));
 
   }
@@ -391,7 +395,8 @@ public class OldProcessVersionsTest {
     final var errors = check(Level.ERROR);
 
     assertEquals(1, errors.size(), errors.toString());
-    assertTrue(errors.get(0).contains("7 workflow(s) still run on version '1'"), errors.get(0));
+    assertTrue(errors.get(0).contains("version '1'"), errors.get(0));
+    assertTrue(errors.get(0).contains("7 workflow(s) still run on this version"), errors.get(0));
     assertTrue(errors.get(0).contains("incident"), errors.get(0));
 
   }
@@ -494,7 +499,10 @@ public class OldProcessVersionsTest {
         .getAdapters()
         .get(ADAPTER)
         .setOutfadedVersionsInUse(OutfadedVersionsInUsePolicy.FAIL);
-    final var failure = assertThrows(IllegalStateException.class, this::runCheck);
+    runCheck();
+    // the reason is collected and thrown once, at the end of the start
+    final var failure = properties.startupFindings().theRefusal();
+    assertNotNull(failure, "the start has to be refused");
     assertTrue(failure.getMessage().contains("still run on version"), failure.getMessage());
 
   }
@@ -524,7 +532,7 @@ public class OldProcessVersionsTest {
 
     assertEquals(1, first.size(), first.toString());
     assertTrue(first.get(0).contains("cannot read the models"), first.get(0));
-    assertEquals(List.of(), second, "the same adapter does not repeat itself");
+    assertEquals(first, second, "the same adapter does not say it a second time");
 
   }
 
@@ -621,7 +629,7 @@ public class OldProcessVersionsTest {
             bpmnProcessId,
             version,
             activeWorkflows,
-            declared) -> reported.put(version, activeWorkflows));
+            declared) -> reported.put(version, activeWorkflows), properties.startupFindings());
 
     check();
 
@@ -649,7 +657,7 @@ public class OldProcessVersionsTest {
             bpmnProcessId,
             version,
             activeWorkflows,
-            declared) -> reported.put(version, activeWorkflows));
+            declared) -> reported.put(version, activeWorkflows), properties.startupFindings());
 
     check();
 
@@ -685,20 +693,26 @@ public class OldProcessVersionsTest {
       final String bpmnProcessId) {
 
     checkedProcess = bpmnProcessId;
-    final var logWatcher = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
-    logWatcher.start();
-    final var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory
-        .getLogger(DeployedProcessVersionsCheck.class);
-    logger.addAppender(logWatcher);
-    try {
-      runCheck();
-    } finally {
-      logger.detachAndStopAllAppenders();
-    }
-    return logWatcher.list
+    runCheck();
+    // the levels of the old log lines map onto the severities of a finding: a check no
+    // longer writes a line, it reports, and the start says it once at its end
+    final var atLeast = Level.ERROR.equals(level)
+        ? java.util.Set.of(StartupFindings.Severity.ERROR, StartupFindings.Severity.REFUSAL)
+        : Level.WARN.equals(level)
+            ? java.util.Set
+                .of(
+                    StartupFindings.Severity.WARNING,
+                    StartupFindings.Severity.ERROR,
+                    StartupFindings.Severity.REFUSAL)
+            : java.util.Set.of(StartupFindings.Severity.values());
+    return properties
+        .startupFindings()
+        .findings()
         .stream()
-        .filter(event -> event.getLevel().isGreaterOrEqual(level))
-        .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
+        .filter(finding -> atLeast.contains(finding.severity()))
+        .map(finding -> finding.scope() == null
+            ? finding.message()
+            : "%s: %s".formatted(finding.scope(), finding.message()))
         .toList();
 
   }

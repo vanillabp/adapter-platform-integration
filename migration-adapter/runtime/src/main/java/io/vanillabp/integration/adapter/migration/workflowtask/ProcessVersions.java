@@ -91,13 +91,24 @@ public class ProcessVersions {
   private final java.util.Set<String> reportedAsUnknown = ConcurrentHashMap.newKeySet();
 
   /**
+   * Where a finding goes, so the whole start says it once.
+   */
+  private final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings;
+
+  /**
    * Builds an empty registry - the {@link WorkflowTaskRegistry} keeps one of these, and a
    * test which only needs the version answers builds one of its own.
    * <p>
    * Nothing is known at this point. Everything in here arrives while the adapters wire their
    * BPMN, so the answers below are worth asking for only after the deployment.
+   *
+   * @param findings Where a finding of this registry is left
    */
-  public ProcessVersions() {
+  public ProcessVersions(
+      final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings) {
+
+    this.findings = findings;
+
   }
 
   /**
@@ -387,17 +398,17 @@ public class ProcessVersions {
       // needs to hear is said by reportMethodsWhichNeverRun, in its own words
       return;
     }
-    log.warn(
-        """
-            The version specification '{}' of {} names a version tag no BPMS knows for BPMN \
-            process '{}' of workflow module '{}'! Until a version tagged that way is deployed, \
-            that method serves no workflow. Check the tag against the BPMN model (Camunda 7: \
-            'camunda:versionTag', Camunda 8: 'zeebe:versionTag') - a version specification made \
-            of numbers (e.g. '>2') needs no tag at all.""",
-        versionTag,
-        describedLocation,
-        bpmnProcessId,
-        workflowModuleId);
+    findings
+        .warn(
+            io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+            "process '%s' of workflow module '%s'".formatted(bpmnProcessId, workflowModuleId),
+            """
+                The version specification '%s' of %s names a version tag no BPMS knows for this \
+                BPMN process! Until a version tagged that way is deployed, that method serves no \
+                workflow. Check the tag against the BPMN model (Camunda 7: 'camunda:versionTag', \
+                Camunda 8: 'zeebe:versionTag') - a version specification made of numbers (e.g. \
+                '>2') needs no tag at all."""
+                .formatted(versionTag, describedLocation));
 
   }
 
@@ -415,16 +426,18 @@ public class ProcessVersions {
       // the BPMS answered this while it was wired: there is no catalog to ask. Saying
       // that nobody can be asked would send the developer looking for an adapter which
       // was never missing
-      log.warn(
-          """
-              The version specifications of the methods serving BPMN process '{}' of workflow \
-              module '{}' name '{}', and the BPMS of adapter {} keeps no catalog of the versions \
-              of that process. {}""",
-          bpmnProcessId,
-          workflowModuleId,
-          versionOrVersionTag,
-          adapterIdsOf(declared),
-          whatSuchADeliveryCarries(widestOf(declared)));
+      findings
+          .warn(
+              io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+              "process '%s' of workflow module '%s'".formatted(bpmnProcessId, workflowModuleId),
+              """
+                  The version specifications of the methods serving this BPMN process name '%s', \
+                  and the BPMS of adapter %s keeps no catalog of the versions of that process. \
+                  %s"""
+                  .formatted(
+                      versionOrVersionTag,
+                      adapterIdsOf(declared),
+                      whatSuchADeliveryCarries(widestOf(declared))));
       return;
     }
     final var registered = catalogs.get(new RegistryKey(workflowModuleId, bpmnProcessId));
@@ -432,26 +445,28 @@ public class ProcessVersions {
       // saying "no versions are deployed" here would be wrong: the BPMS may well hold
       // versions of this process - what is missing is an adapter able to ASK about
       // them, which is a different defect with a different remedy
-      log.warn(
-          """
-              The version specifications of the methods serving BPMN process '{}' of workflow \
-              module '{}' name '{}', but no adapter of this application can be asked which \
-              versions of that process its BPMS holds! Version specifications made of numbers \
-              (e.g. '1-3', '>2') work on every BPMS which reports the version of a process - \
-              version TAGS need a BPMS which can be asked about them.""",
-          bpmnProcessId,
-          workflowModuleId,
-          versionOrVersionTag);
+      findings
+          .warn(
+              io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+              "process '%s' of workflow module '%s'".formatted(bpmnProcessId, workflowModuleId),
+              """
+                  The version specifications of the methods serving this BPMN process name '%s', \
+                  but no adapter of this application can be asked which versions of that process \
+                  its BPMS holds! Version specifications made of numbers (e.g. '1-3', '>2') work \
+                  on every BPMS which reports the version of a process - version TAGS need a BPMS \
+                  which can be asked about them."""
+                  .formatted(versionOrVersionTag));
       return;
     }
-    log.warn(
-        """
-            Neither a deployed version nor a version tag '{}' of BPMN process '{}' of workflow \
-            module '{}' is known to any BPMS - version specifications naming it match nothing \
-            until it is deployed.""",
-        versionOrVersionTag,
-        bpmnProcessId,
-        workflowModuleId);
+    findings
+        .warn(
+            io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+            "process '%s' of workflow module '%s'".formatted(bpmnProcessId, workflowModuleId),
+            """
+                Neither a deployed version nor a version tag '%s' of this BPMN process is known to \
+                any BPMS - version specifications naming it match nothing until it is \
+                deployed."""
+                .formatted(versionOrVersionTag));
 
   }
 
@@ -517,21 +532,23 @@ public class ProcessVersions {
     if (!reportedAsUnknown.add("%s|%s|no-catalog".formatted(workflowModuleId, bpmnProcessId))) {
       return;
     }
-    log.warn(
-        """
-            The BPMS of adapter {} keeps no catalog of the deployed versions of BPMN process '{}' \
-            (workflow module '{}'), and no other BPMS of that process has one either. So {} never \
-            run there: {}. {} A method naming no version serves every delivery, which is the short \
-            way out. Keep the method where this application also runs on a BPMS counting versions: \
-            it runs there, and this line stays a warning rather than the end of the boot.""",
-        adapterIdsOf(declared),
-        bpmnProcessId,
-        workflowModuleId,
-        neverRunning.size() == 1
-            ? "this method does"
-            : "these %d methods do".formatted(neverRunning.size()),
-        String.join(", ", neverRunning),
-        whatSuchADeliveryCarries(reported));
+    findings
+        .warn(
+            io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+            "process '%s' of workflow module '%s'".formatted(bpmnProcessId, workflowModuleId),
+            """
+                The BPMS of adapter %s keeps no catalog of the deployed versions of this BPMN \
+                process, and no other BPMS of that process has one either. So %s never run there: \
+                %s. %s A method naming no version serves every delivery, which is the short way \
+                out. Keep the method where this application also runs on a BPMS counting versions: \
+                it runs there, and this line stays a warning rather than the end of the boot."""
+                .formatted(
+                    adapterIdsOf(declared),
+                    neverRunning.size() == 1
+                        ? "this method does"
+                        : "these %d methods do".formatted(neverRunning.size()),
+                    String.join(", ", neverRunning),
+                    whatSuchADeliveryCarries(reported)));
 
   }
 
