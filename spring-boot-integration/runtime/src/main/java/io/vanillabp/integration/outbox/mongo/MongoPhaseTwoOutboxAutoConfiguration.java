@@ -12,6 +12,7 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.repository.MongoRepository;
 
 import io.vanillabp.integration.adapter.migration.mongo.MongoSchema;
+import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 import io.vanillabp.integration.mongo.MongoIndexes;
@@ -93,7 +94,7 @@ public class MongoPhaseTwoOutboxAutoConfiguration {
       final MongoTemplate mongoTemplate,
       final ObjectProvider<PhaseTwoRouter> phaseTwoRouter,
       final VanillaBpConfigurationProperties vanillaBpProperties,
-      final ObjectProvider<io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics> metrics) {
+      final ObjectProvider<VanillaBpMetrics> metrics) {
 
     return new MongoPhaseTwoOutboxDispatcher(
         mongoTemplate, phaseTwoRouter, vanillaBpProperties.getOutbox(), vanillaBpProperties

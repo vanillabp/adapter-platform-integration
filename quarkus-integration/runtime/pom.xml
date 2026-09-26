@@ -94,6 +94,19 @@
       <scope>test</scope>
     </dependency>
     <dependency>
+      <!-- the MongoDB-based outbox is tested against a real MongoDB -->
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-mongodb</artifactId>
+      <version>${testcontainers.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-junit-jupiter</artifactId>
+      <version>${testcontainers.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
       <!-- optional: the JPA-backed aggregate persistence defaults and the tests
            of the JDBC outbox (an application gets it from its Hibernate extension) -->
       <groupId>jakarta.persistence</groupId>

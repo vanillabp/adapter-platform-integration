@@ -16,12 +16,20 @@ import org.springframework.core.ResolvableType;
 import org.springframework.core.env.Environment;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.processservice.AwareSelection;
+import io.vanillabp.integration.adapter.migration.processservice.ExtensionAggregateServiceContext;
+import io.vanillabp.integration.adapter.migration.processservice.InstrumentedWorkflowAdapterCache;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
+import io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
+import io.vanillabp.integration.extension.spi.election.WorkflowElection;
+import io.vanillabp.integration.extension.spi.handler.ExtensionHandlers;
+import io.vanillabp.integration.extension.spi.service.AggregateServiceFactory;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.WorkflowAdapterCache;
 import io.vanillabp.integration.utils.SpringDataUtil;
 import io.vanillabp.integration.utils.impl.SpringDataUtilBasedAggregatePersistenceSupport;
 import io.vanillabp.integration.workflowmodule.WorkflowModule;
@@ -390,15 +398,15 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
 
               // the election cache (in-memory default or the application's own
               // bean, e.g. cluster-shared), counted by the application's statistics
-              final var workflowAdapterCache = io.vanillabp.integration.adapter.migration.processservice.InstrumentedWorkflowAdapterCache
+              final var workflowAdapterCache = InstrumentedWorkflowAdapterCache
                   .instrument(
                       selectWorkflowAdapterCache(
                           supplierContext
-                              .beanProvider(io.vanillabp.integration.spi.WorkflowAdapterCache.class)
+                              .beanProvider(WorkflowAdapterCache.class)
                               .stream()
                               .toList()),
                       supplierContext.bean(
-                          io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics.class));
+                          WorkflowAdapterCacheStatistics.class));
 
               // what deliveries of this process are counted into; absent
               // where the application brings no metrics backend
@@ -406,7 +414,7 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                   .vanillaBpMetricsOf(
                       supplierContext
                           .beanProvider(
-                              io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.class));
+                              VanillaBpMetrics.class));
 
               final var processServiceBean = new ProcessServiceSpringBean<A>(
                   workflowModuleId, bpmnProcessId, workflowAggregateType, properties, aggregatePersistenceAware, migratableProcessServices, phaseTwoOutboxResolver, phaseTwoRouter, workflowAdapterCache, taskDeliveryLogResolver, transactionRunnerResolver);
@@ -438,11 +446,11 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
               // of the same @WorkflowService runs on the same workflow, so an instance of
               // it is a legitimate answer. Collected while the services are registered,
               // because this is the only place which sees all declaring classes at once.
-              final var processIdsByModule = new java.util.LinkedHashMap<String, java.util.List<String>>();
-              final var moduleOfProcessService = new java.util.LinkedHashMap<MigrationProcessService<A>, String>();
+              final var processIdsByModule = new LinkedHashMap<String, List<String>>();
+              final var moduleOfProcessService = new LinkedHashMap<MigrationProcessService<A>, String>();
               moduleOfProcessService.put(processServiceBean.getMigrationProcessService(), workflowModuleId);
               processIdsByModule
-                  .computeIfAbsent(workflowModuleId, module -> new java.util.LinkedList<>())
+                  .computeIfAbsent(workflowModuleId, module -> new LinkedList<>())
                   .add(bpmnProcessId);
               for (final var declaringClass : serviceClasses) {
                 final var declaringModuleId = workflowModuleOf(allWorkflowModules, declaringClass);
@@ -468,7 +476,7 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                       });
                   moduleOfProcessService.put(processService, declaringModuleId);
                   final var declaredIds = processIdsByModule
-                      .computeIfAbsent(declaringModuleId, module -> new java.util.LinkedList<>());
+                      .computeIfAbsent(declaringModuleId, module -> new LinkedList<>());
                   if (!declaredIds.contains(declaredProcessId)) {
                     declaredIds.add(declaredProcessId);
                   }
@@ -535,7 +543,7 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                 .supplier(supplierContext -> {
 
                   final var factory = supplierContext
-                      .beanProvider(io.vanillabp.integration.extension.spi.service.AggregateServiceFactory.class)
+                      .beanProvider(AggregateServiceFactory.class)
                       .stream()
                       .filter(candidate -> serviceInterface.equals(candidate.getServiceInterface()))
                       .findFirst()
@@ -547,7 +555,7 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                               .formatted(serviceInterface.getName())));
 
                   final var processService = supplierContext
-                      .beanProvider(io.vanillabp.spi.process.ProcessService.class)
+                      .beanProvider(ProcessService.class)
                       .stream()
                       .filter(ProcessServiceSpringBean.class::isInstance)
                       .map(ProcessServiceSpringBean.class::cast)
@@ -561,10 +569,10 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                               extension cannot be built either!"""
                               .formatted(workflowAggregateType.getName(), serviceInterface.getName())));
 
-                  final var context = new io.vanillabp.integration.adapter.migration.processservice.ExtensionAggregateServiceContext(
+                  final var context = new ExtensionAggregateServiceContext(
                       processService.getMigrationProcessService(), supplierContext
-                          .bean(io.vanillabp.integration.extension.spi.handler.ExtensionHandlers.class), supplierContext
-                              .bean(io.vanillabp.integration.extension.spi.election.WorkflowElection.class));
+                          .bean(ExtensionHandlers.class), supplierContext
+                              .bean(WorkflowElection.class));
 
                   return serviceInterface.cast(factory.createService(context));
 
@@ -580,8 +588,8 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
    * @return The cache to use or <code>null</code> if none exists (elections then
    *         probe every time)
    */
-  private static io.vanillabp.integration.spi.WorkflowAdapterCache selectWorkflowAdapterCache(
-      final List<io.vanillabp.integration.spi.WorkflowAdapterCache> candidates) {
+  private static WorkflowAdapterCache selectWorkflowAdapterCache(
+      final List<WorkflowAdapterCache> candidates) {
 
     return WorkflowAdapterCacheSelection.theCacheInUse(candidates);
 

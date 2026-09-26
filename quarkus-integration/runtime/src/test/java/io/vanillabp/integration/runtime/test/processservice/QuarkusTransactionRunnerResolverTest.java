@@ -17,6 +17,7 @@ import io.vanillabp.integration.adapter.migration.processservice.TransactionCove
 import io.vanillabp.integration.runtime.persistence.PanacheMongoActiveRecordAggregatePersistence;
 import io.vanillabp.integration.runtime.processservice.MongoDeploymentProbe;
 import io.vanillabp.integration.runtime.processservice.QuarkusTransactionRunnerResolver;
+import io.vanillabp.integration.runtime.test.InstanceDouble;
 import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.spi.TransactionRunnerAware;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;

@@ -3,7 +3,10 @@ package io.vanillabp.integration.delivery;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import javax.sql.DataSource;
 
@@ -34,7 +37,7 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
 
   private final JdbcTaskDeliveryStore store;
 
-  private final java.time.Duration retention;
+  private final Duration retention;
 
   private final TaskDeliveryRetentionCleanup retentionCleanup;
 
@@ -145,7 +148,7 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
    * shared store answers it with one query over the columns it indexes anyway.
    */
   @Override
-  public java.util.Set<String> adapterIdsOfOpenTasks(
+  public Set<String> adapterIdsOfOpenTasks(
       final String workflowModuleId,
       final String bpmnProcessId) {
 
@@ -182,7 +185,7 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
    * through the connection bound to it.
    */
   @Override
-  public java.util.List<TaskDelivery> openTasksOfAggregate(
+  public List<TaskDelivery> openTasksOfAggregate(
       final String workflowModuleId,
       final String bpmnProcessId,
       final String workflowAggregateId) {
@@ -196,7 +199,7 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
    * through the connection bound to it.
    */
   @Override
-  public java.util.List<TaskDelivery> openTasksOfWorkflow(
+  public List<TaskDelivery> openTasksOfWorkflow(
       final String workflowModuleId,
       final String workflowId) {
 
@@ -220,7 +223,7 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
       final String workflowModuleId,
       final String bpmnProcessId,
       final String workflowAggregateId,
-      final java.time.Instant recordedBefore) {
+      final Instant recordedBefore) {
 
     return store
         .deleteRecordsOf(workflowModuleId, bpmnProcessId, workflowAggregateId, recordedBefore);

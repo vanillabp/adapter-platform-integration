@@ -342,13 +342,18 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    * or later name something the other does not. Every one of them filters STATUS and then reads a
    * moment, in that order, and every moment gets an index of its own: one index over two of them
    * would serve neither question.
+   * <p>
+   * The list is public because a test asks the database whether the indexes are really there, and
+   * a test writing their names down again would keep its own answer while this one moved (see
+   * {@code OutboxSleepsWhileNothingIsDueTest#theQuestionsOfThePollerAreIndexed} of the Quarkus
+   * integration tests).
    */
-  private static final List<TableIndex> INDEXES = List
+  public static final List<TableIndex> INDEXES = List
       .of(
-          new TableIndex("_DUE", "STATUS, NEXT_ATTEMPT_AT"),
-          new TableIndex("_AGE", "STATUS, DONE_AT"),
-          new TableIndex("_OLDEST", "STATUS, CREATED_AT"),
-          new TableIndex("_PAYLOAD_REF", PAYLOAD_REFERENCE_COLUMN));
+          new TableIndex("_DUE", List.of("STATUS", "NEXT_ATTEMPT_AT")),
+          new TableIndex("_AGE", List.of("STATUS", "DONE_AT")),
+          new TableIndex("_OLDEST", List.of("STATUS", "CREATED_AT")),
+          new TableIndex("_PAYLOAD_REF", List.of(PAYLOAD_REFERENCE_COLUMN)));
 
   /**
    * One index of the outbox table, named after that table so two outboxes on one schema keep
@@ -357,13 +362,15 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    * @param suffix What is appended to the table name to name the index
    * @param columns The columns it spans, in the order the statements read them
    */
-  private record TableIndex(String suffix, String columns) {
+  public record TableIndex(String suffix, List<String> columns) {
 
     /**
+     * The name this index carries on a table.
+     *
      * @param tableName The table this outbox writes into
      * @return The name the index carries on that table
      */
-    private String nameOn(
+    public String nameOn(
         final String tableName) {
 
       return tableName + suffix;
@@ -371,13 +378,16 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
     }
 
     /**
+     * The statement which adds this index to a table.
+     *
      * @param tableName The table this outbox writes into
      * @return The statement which creates the index on that table
      */
-    private String createOn(
+    public String createOn(
         final String tableName) {
 
-      return "CREATE INDEX %s ON %s (%s)".formatted(nameOn(tableName), tableName, columns);
+      return "CREATE INDEX %s ON %s (%s)"
+          .formatted(nameOn(tableName), tableName, String.join(", ", columns));
 
     }
 
@@ -717,7 +727,7 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
         return;
       }
       try (var statement = connection.createStatement()) {
-        statement.executeUpdate(buildCreateTable(connection, tableName));
+        statement.executeUpdate(createTableStatement(connection, tableName));
         for (final var index : INDEXES) {
           statement.executeUpdate(index.createOn(tableName));
         }
@@ -875,11 +885,16 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    * with utf8mb4) to stay below MySQL's unique-index key-length limit of 3072
    * bytes.
    *
+   * It is public for the same reason {@link #INDEXES} is: a test which needs the table before the
+   * application boots builds it from here, so it cannot describe a table this store stopped
+   * writing (see {@code OutboxRecoveryOrderingTest} of the Quarkus integration tests).
+   *
    * @param connection The connection used to detect the database
    * @param tableName The table to create
    * @return The CREATE TABLE statement
+   * @throws SQLException If the database cannot be asked what it is
    */
-  private static String buildCreateTable(
+  public static String createTableStatement(
       final Connection connection,
       final String tableName) throws SQLException {
 
