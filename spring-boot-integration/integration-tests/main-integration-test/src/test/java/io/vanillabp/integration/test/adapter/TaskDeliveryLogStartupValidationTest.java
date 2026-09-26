@@ -107,9 +107,6 @@ public class TaskDeliveryLogStartupValidationTest {
   private final ApplicationContextRunner contextRunner = new ApplicationContextRunner();
 
   /**
-   * The messages the core logged while the given work ran.
-   */
-  /**
    * What the started application reported, filled while the context of {@link #bootWith}
    * is up. A check no longer writes a line of its own: it reports, and the whole start
    * says it once at its end, so this is where the test reads what it said.
