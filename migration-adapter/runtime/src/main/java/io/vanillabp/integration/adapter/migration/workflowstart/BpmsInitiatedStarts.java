@@ -16,6 +16,7 @@ import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartCont
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartResult;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartSpec;
 import io.vanillabp.integration.spi.TransactionRunner;
+import io.vanillabp.spi.service.BpmsStartTrigger;
 
 /**
  * The <code>&#64;WorkflowStartedByBpms</code> methods of the application per
@@ -599,6 +600,25 @@ public class BpmsInitiatedStarts {
   }
 
   /**
+   * Whether the BPMS fires this kind of start event by itself, which is what makes such a
+   * start certain to arrive without a name. A none or message start event is the shape the
+   * application's own start has, so a process carrying only those needs no
+   * <code>&#64;WorkflowStartedByBpms</code> method until somebody starts it past VanillaBP -
+   * and that start says so when it happens.
+   *
+   * @param kind The kind of start event an adapter reported
+   * @return Whether the BPMS fires it without anybody asking
+   */
+  private static boolean firedWithoutTheApplication(
+      final BpmsStartTrigger.Kind kind) {
+
+    return (kind == BpmsStartTrigger.Kind.TIMER)
+        || (kind == BpmsStartTrigger.Kind.SIGNAL)
+        || (kind == BpmsStartTrigger.Kind.CONDITIONAL);
+
+  }
+
+  /**
    * Ends the boot where the BPMS can start the process and the application did not say
    * how. The message names the process, the start event and the method to write, so a
    * developer can copy it out of the log.
@@ -620,23 +640,6 @@ public class BpmsInitiatedStarts {
    * @param workflowAggregateClass The aggregate the method has to return, or
    *          <code>null</code> where it is not known here
    */
-  /**
-   * Whether the BPMS fires this kind of start event by itself, which is what makes such a
-   * start certain to arrive without a name. A none or message start event is the shape the
-   * application's own start has, so a process carrying only those needs no
-   * <code>&#64;WorkflowStartedByBpms</code> method until somebody starts it past VanillaBP -
-   * and that start says so when it happens.
-   *
-   * @param kind The kind of start event an adapter reported
-   * @return Whether the BPMS fires it without anybody asking
-   */
-  private static boolean firedWithoutTheApplication(
-      final io.vanillabp.spi.service.BpmsStartTrigger.Kind kind) {
-
-    return (kind == io.vanillabp.spi.service.BpmsStartTrigger.Kind.TIMER) || (kind == io.vanillabp.spi.service.BpmsStartTrigger.Kind.SIGNAL) || (kind == io.vanillabp.spi.service.BpmsStartTrigger.Kind.CONDITIONAL);
-
-  }
-
   private static void refuseStartEventsWithoutAMethod(
       final String workflowModuleId,
       final String bpmnProcessId,
