@@ -3,11 +3,15 @@ package io.vanillabp.integration.workflowtask;
 import java.util.function.Supplier;
 
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import io.vanillabp.integration.adapter.migration.transaction.AggregateWrite;
 import io.vanillabp.integration.spi.TransactionRunner;
 
 /**
@@ -89,14 +93,14 @@ public class SpringTransactionRunner implements TransactionRunner {
   public void beforeCommit(
       final Runnable check) {
 
-    if (!org.springframework.transaction.support.TransactionSynchronizationManager
+    if (!TransactionSynchronizationManager
         .isSynchronizationActive()) {
       check.run();
       return;
     }
-    org.springframework.transaction.support.TransactionSynchronizationManager
+    TransactionSynchronizationManager
         .registerSynchronization(
-            new org.springframework.transaction.support.TransactionSynchronization() {
+            new TransactionSynchronization() {
 
               @Override
               public void beforeCommit(
@@ -174,7 +178,7 @@ public class SpringTransactionRunner implements TransactionRunner {
   @Override
   public boolean isTransactionActive() {
 
-    return org.springframework.transaction.support.TransactionSynchronizationManager
+    return TransactionSynchronizationManager
         .isActualTransactionActive();
 
   }
@@ -201,7 +205,7 @@ public class SpringTransactionRunner implements TransactionRunner {
     // what the persistence provider threw while flushing.
     var candidate = failure;
     while (candidate != null) {
-      if (candidate instanceof org.springframework.dao.OptimisticLockingFailureException) {
+      if (candidate instanceof OptimisticLockingFailureException) {
         return true;
       }
       candidate = candidate.getCause() == candidate
@@ -210,7 +214,7 @@ public class SpringTransactionRunner implements TransactionRunner {
     }
     // a provider exception which never passed Spring's translation (e.g. thrown by
     // an application's own repository code) means the same thing
-    return io.vanillabp.integration.adapter.migration.transaction.AggregateWrite
+    return AggregateWrite
         .causedByOptimisticLocking(failure);
 
   }

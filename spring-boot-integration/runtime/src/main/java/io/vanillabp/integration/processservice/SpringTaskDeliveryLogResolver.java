@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import org.springframework.aop.framework.AopProxyUtils;
 import org.springframework.context.ApplicationContext;
 
 import io.vanillabp.integration.adapter.migration.processservice.AwareSelection;
@@ -130,7 +131,7 @@ public class SpringTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
   public Class<?> storeClassOf(
       final TaskDeliveryLog deliveryLog) {
 
-    return org.springframework.aop.framework.AopProxyUtils.ultimateTargetClass(deliveryLog);
+    return AopProxyUtils.ultimateTargetClass(deliveryLog);
 
   }
 

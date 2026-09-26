@@ -6,6 +6,8 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
@@ -96,14 +98,14 @@ public class WorkflowServicesWhichAreNoBeans implements UnclaimedBpmnProcessHint
         .getWorkflowModules()
         .stream()
         .map(WorkflowModule::getSourceUri)
-        .filter(java.util.Objects::nonNull)
+        .filter(Objects::nonNull)
         .toList();
     final var ownRoot = allWorkflowModules
         .getWorkflowModules()
         .stream()
         .filter(module -> module.getId().equals(workflowModuleId))
         .map(WorkflowModule::getSourceUri)
-        .filter(java.util.Objects::nonNull)
+        .filter(Objects::nonNull)
         .findFirst()
         .orElse(null);
 
@@ -290,7 +292,7 @@ public class WorkflowServicesWhichAreNoBeans implements UnclaimedBpmnProcessHint
             className,
             declaredProcessIds
                 .stream()
-                .collect(java.util.stream.Collectors.joining("', '", "'", "'")));
+                .collect(Collectors.joining("', '", "'", "'")));
 
   }
 

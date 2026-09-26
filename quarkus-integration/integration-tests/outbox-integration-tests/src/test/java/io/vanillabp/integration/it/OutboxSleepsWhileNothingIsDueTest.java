@@ -3,6 +3,10 @@ package io.vanillabp.integration.it;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+
 import javax.sql.DataSource;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -12,6 +16,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusExtensionTest;
+import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.test.Aggregate;
 import io.vanillabp.integration.test.AggregatePersistence;
 import io.vanillabp.integration.test.CountingPoolInterceptor;
@@ -190,8 +195,10 @@ public class OutboxSleepsWhileNothingIsDueTest {
   public void theQuestionsOfThePollerAreIndexed() throws Exception {
 
     // without these the aggregate asking when the next entry is due reads the whole table, and
-    // that cost grows with everything the table ever held while the wake-ups stay as rare
-    final var indexed = new java.util.LinkedHashMap<String, java.util.List<String>>();
+    // that cost grows with everything the table ever held while the wake-ups stay as rare. Which
+    // indexes those are is the store's word, not this test's: it asks the database for the ones
+    // the store declares, so a renamed or dropped index shows up here and not much later
+    final var indexed = new LinkedHashMap<String, List<String>>();
     try (var connection = dataSource.getConnection(); var resultSet = connection
         .getMetaData()
         .getIndexInfo(null, null, PhaseTwoOutboxReader.defaultOutboxTableName(), false, true)) {
@@ -199,24 +206,19 @@ public class OutboxSleepsWhileNothingIsDueTest {
         final var name = resultSet.getString("INDEX_NAME");
         if (name != null) {
           indexed
-              .computeIfAbsent(name.toUpperCase(), index -> new java.util.ArrayList<>())
+              .computeIfAbsent(name.toUpperCase(), index -> new ArrayList<>())
               .add(resultSet.getString("COLUMN_NAME"));
         }
       }
     }
 
-    assertEquals(
-        java.util.List.of("STATUS", "NEXT_ATTEMPT_AT"),
-        indexed.get(PhaseTwoOutboxReader.defaultOutboxTableName()
-            + "_DUE"),
-        "the due question and the select which picks the entries up read these two: "
-            + indexed);
-    assertEquals(
-        java.util.List.of("STATUS", "DONE_AT"),
-        indexed.get(PhaseTwoOutboxReader.defaultOutboxTableName()
-            + "_AGE"),
-        "the retention question and its delete read these two: "
-            + indexed);
+    for (final var index : JdbcPhaseTwoOutboxDispatcher.INDEXES) {
+      assertEquals(
+          index.columns(),
+          indexed.get(index.nameOn(PhaseTwoOutboxReader.defaultOutboxTableName())),
+          "the store reads its table by '%s' and the database does not carry it that way: %s"
+              .formatted(index.nameOn(PhaseTwoOutboxReader.defaultOutboxTableName()), indexed));
+    }
 
   }
 

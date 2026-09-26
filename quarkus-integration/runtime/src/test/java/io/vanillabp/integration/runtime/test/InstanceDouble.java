@@ -1,4 +1,4 @@
-package io.vanillabp.integration.runtime.test.processservice;
+package io.vanillabp.integration.runtime.test;
 
 import java.util.Iterator;
 import java.util.List;
@@ -17,7 +17,7 @@ import jakarta.enterprise.util.TypeLiteral;
  *
  * @param <T> The bean type
  */
-final class InstanceDouble<T> implements Instance<T> {
+public final class InstanceDouble<T> implements Instance<T> {
 
   private final List<T> beans;
 
@@ -43,7 +43,7 @@ final class InstanceDouble<T> implements Instance<T> {
    * @param beans The beans
    * @return The instance
    */
-  static <T> Instance<T> of(
+  public static <T> Instance<T> of(
       final List<T> beans) {
 
     return new InstanceDouble<>(
@@ -63,7 +63,7 @@ final class InstanceDouble<T> implements Instance<T> {
    * @param declaredClasses The class each bean was declared as, in the order of the beans
    * @return The instance
    */
-  static <T> Instance<T> ofDeclaredAs(
+  public static <T> Instance<T> ofDeclaredAs(
       final List<T> beans,
       final List<Class<?>> declaredClasses) {
 
@@ -79,7 +79,7 @@ final class InstanceDouble<T> implements Instance<T> {
    * @param beans The beans
    * @return The instance
    */
-  static <T> Instance<T> ofWithoutMetadata(
+  public static <T> Instance<T> ofWithoutMetadata(
       final List<T> beans) {
 
     return new InstanceDouble<>(beans, null);

@@ -1,7 +1,13 @@
 package io.vanillabp.integration.runtime.delivery;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.bson.Document;
 import org.eclipse.microprofile.config.ConfigProvider;
@@ -17,13 +23,16 @@ import com.mongodb.client.model.WriteModel;
 
 import io.quarkus.runtime.StartupEvent;
 import io.smallrye.config.SmallRyeConfig;
+import io.vanillabp.integration.adapter.migration.config.DeliveryProperties;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.delivery.OpenTaskTouches;
 import io.vanillabp.integration.adapter.migration.delivery.TaskDeliveryRetentionCleanup;
 import io.vanillabp.integration.adapter.migration.mongo.MongoSchema;
+import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterPropertiesMapper;
 import io.vanillabp.integration.runtime.mongo.MongoIndexes;
+import io.vanillabp.integration.runtime.mongo.MongoSessions;
 import io.vanillabp.integration.runtime.processservice.PlatformDefaultStore;
 import io.vanillabp.integration.runtime.processservice.QuarkusPersistenceTechnology;
 import io.vanillabp.integration.spi.TaskDelivery;
@@ -65,7 +74,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
    * The outcome of a delivery which left its task open - the only records the questions
    * about open tasks are interested in.
    */
-  private static final String COMPLETION_PENDING = io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome.Kind.COMPLETION_PENDING
+  private static final String COMPLETION_PENDING = WorkflowTaskOutcome.Kind.COMPLETION_PENDING
       .name();
 
   @Inject
@@ -76,7 +85,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
 
   private volatile PhaseTwoOutboxProperties properties;
 
-  private volatile java.time.Duration deliveryRetention;
+  private volatile Duration deliveryRetention;
 
   private volatile TaskDeliveryRetentionCleanup retentionCleanup;
 
@@ -173,10 +182,10 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
    *
    * @return The retention of delivery records
    */
-  public java.time.Duration getDeliveryRetention() {
+  public Duration getDeliveryRetention() {
 
     if (deliveryRetention == null) {
-      deliveryRetention = io.vanillabp.integration.adapter.migration.config.DeliveryProperties
+      deliveryRetention = DeliveryProperties
           .resolveRetention(
               QuarkusMigrationAdapterPropertiesMapper.INSTANCE
                   .toCore(
@@ -239,7 +248,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
         .deleteMany(
             new Document(
                 "lastSeenAt", new Document("$lt", Date
-                    .from(java.time.Instant.now().minus(getDeliveryRetention())))))
+                    .from(Instant.now().minus(getDeliveryRetention())))))
         .getDeletedCount();
 
   }
@@ -276,7 +285,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
    * @param deliveryKeys The keys of one block
    */
   private void refreshLastSeen(
-      final java.util.List<String> deliveryKeys) {
+      final List<String> deliveryKeys) {
 
     final var now = new Date();
     deliveryCollection()
@@ -306,7 +315,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
 
     // read through the session of the running transaction where there is one, so the
     // answer is consistent with what this transaction wrote
-    final var session = io.vanillabp.integration.runtime.mongo.MongoSessions
+    final var session = MongoSessions
         .activeSession(txRegistry);
     final var collection = deliveryCollection();
     return Optional
@@ -333,10 +342,10 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
     // the session of the running transaction where MongoDB Panache provides one: the
     // record then commits with the aggregate instead of being written immediately
     //
-    final var session = io.vanillabp.integration.runtime.mongo.MongoSessions
+    final var session = MongoSessions
         .activeSession(txRegistry);
     final var recordedAt = Date.from(delivery.recordedAt() == null
-        ? java.time.Instant.now()
+        ? Instant.now()
         : delivery.recordedAt());
     final var record = new Document()
         .append("_id", delivery.deliveryKey())
@@ -442,7 +451,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
       final String workflowAggregateId,
       final String taskId) {
 
-    final var session = io.vanillabp.integration.runtime.mongo.MongoSessions
+    final var session = MongoSessions
         .activeSession(txRegistry);
     final var collection = deliveryCollection();
     final var filter = new Document("taskId", taskId)
@@ -474,12 +483,12 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
    * index over <code>aggregateId</code> the startup creates.
    */
   @Override
-  public java.util.List<TaskDelivery> openTasksOfAggregate(
+  public List<TaskDelivery> openTasksOfAggregate(
       final String workflowModuleId,
       final String bpmnProcessId,
       final String workflowAggregateId) {
 
-    final var session = io.vanillabp.integration.runtime.mongo.MongoSessions
+    final var session = MongoSessions
         .activeSession(txRegistry);
     final var collection = deliveryCollection();
     final var filter = new Document("workflowModuleId", workflowModuleId)
@@ -488,13 +497,13 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
         .append("outcome", COMPLETION_PENDING)
         .append("taskClosedAt", null);
     final var oldestFirst = new Document("recordedAt", 1);
-    final var records = new java.util.ArrayList<TaskDelivery>();
+    final var records = new ArrayList<TaskDelivery>();
     (session != null
         ? collection.find(session, filter)
         : collection.find(filter))
         .sort(oldestFirst)
         .forEach(document -> records.add(recordOf(document)));
-    return java.util.List.copyOf(records);
+    return List.copyOf(records);
 
   }
 
@@ -505,11 +514,11 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
    * <code>workflowId</code> the startup creates.
    */
   @Override
-  public java.util.List<TaskDelivery> openTasksOfWorkflow(
+  public List<TaskDelivery> openTasksOfWorkflow(
       final String workflowModuleId,
       final String workflowId) {
 
-    final var session = io.vanillabp.integration.runtime.mongo.MongoSessions
+    final var session = MongoSessions
         .activeSession(txRegistry);
     final var collection = deliveryCollection();
     final var filter = new Document("workflowModuleId", workflowModuleId)
@@ -517,13 +526,13 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
         .append("outcome", COMPLETION_PENDING)
         .append("taskClosedAt", null);
     final var oldestFirst = new Document("recordedAt", 1);
-    final var records = new java.util.ArrayList<TaskDelivery>();
+    final var records = new ArrayList<TaskDelivery>();
     (session != null
         ? collection.find(session, filter)
         : collection.find(filter))
         .sort(oldestFirst)
         .forEach(document -> records.add(recordOf(document)));
-    return java.util.List.copyOf(records);
+    return List.copyOf(records);
 
   }
 
@@ -544,7 +553,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
       final String workflowAggregateId,
       final String taskId) {
 
-    final var session = io.vanillabp.integration.runtime.mongo.MongoSessions
+    final var session = MongoSessions
         .activeSession(txRegistry);
     final var collection = deliveryCollection();
     final var filter = new Document("taskId", taskId)
@@ -584,7 +593,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
    * @param date A moment the document holds or <code>null</code>
    * @return The same moment, or <code>null</code>
    */
-  private static java.time.Instant instantOf(
+  private static Instant instantOf(
       final Date date) {
 
     return date == null
@@ -598,7 +607,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
    * per BPMN process at startup.
    */
   @Override
-  public java.util.Set<String> adapterIdsOfOpenTasks(
+  public Set<String> adapterIdsOfOpenTasks(
       final String workflowModuleId,
       final String bpmnProcessId) {
 
@@ -606,7 +615,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
         .append("bpmnProcessId", bpmnProcessId)
         .append("outcome", COMPLETION_PENDING)
         .append("adapterId", new Document("$ne", null));
-    final var adapterIds = new java.util.LinkedHashSet<String>();
+    final var adapterIds = new LinkedHashSet<String>();
     deliveryCollection()
         .distinct("adapterId", filter, String.class)
         .forEach(adapterIds::add);
@@ -631,13 +640,13 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
       final String workflowModuleId,
       final String bpmnProcessId,
       final String workflowAggregateId,
-      final java.time.Instant recordedBefore) {
+      final Instant recordedBefore) {
 
     final var collection = deliveryCollection();
     // through the session of the running transaction where MongoDB Panache provides one:
     // the deletion then commits with the end notification instead of being written
     // immediately
-    final var session = io.vanillabp.integration.runtime.mongo.MongoSessions
+    final var session = MongoSessions
         .activeSession(txRegistry);
     final var filter = new Document()
         .append("workflowModuleId", workflowModuleId)

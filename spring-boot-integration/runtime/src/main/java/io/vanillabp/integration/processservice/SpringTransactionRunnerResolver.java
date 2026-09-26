@@ -1,9 +1,12 @@
 package io.vanillabp.integration.processservice;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 import org.springframework.context.ApplicationContext;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.util.ClassUtils;
 
 import io.vanillabp.integration.adapter.migration.processservice.AwareSelection;
@@ -45,7 +48,7 @@ public class SpringTransactionRunnerResolver implements TransactionRunnerResolve
 
   private final SpringTransactionRunner platformRunner;
 
-  private final java.util.function.Function<Class<?>, SpringPersistenceTechnology.Technology> persistenceTechnology;
+  private final Function<Class<?>, SpringPersistenceTechnology.Technology> persistenceTechnology;
 
   private final Map<Class<?>, Resolution> resolutions = new ConcurrentHashMap<>();
 
@@ -88,7 +91,7 @@ public class SpringTransactionRunnerResolver implements TransactionRunnerResolve
   SpringTransactionRunnerResolver(
       final ApplicationContext applicationContext,
       final SpringTransactionRunner platformRunner,
-      final java.util.function.Function<Class<?>, SpringPersistenceTechnology.Technology> persistenceTechnology) {
+      final Function<Class<?>, SpringPersistenceTechnology.Technology> persistenceTechnology) {
 
     this.applicationContext = applicationContext;
     this.platformRunner = platformRunner;
@@ -116,7 +119,7 @@ public class SpringTransactionRunnerResolver implements TransactionRunnerResolve
   public String remediesDescription() {
 
     final var managers = applicationContext.getBeanNamesForType(
-        org.springframework.transaction.PlatformTransactionManager.class);
+        PlatformTransactionManager.class);
     if (managers.length > 1) {
       // the mixed-persistence case: managers exist, but none of them is THE one
       return """
@@ -195,7 +198,7 @@ public class SpringTransactionRunnerResolver implements TransactionRunnerResolve
 
   private String mongoAggregateWithoutMongoManager(
       final Class<?> workflowAggregateClass,
-      final org.springframework.transaction.PlatformTransactionManager manager) {
+      final PlatformTransactionManager manager) {
 
     return """
         The workflow aggregate '%s' is managed by MongoDB, but the only transaction manager of this \
@@ -274,7 +277,7 @@ public class SpringTransactionRunnerResolver implements TransactionRunnerResolve
 
     // 2. a plain TransactionRunner bean of the application - VanillaBP's own platform
     // runner is a bean as well, and it is not the application's answer
-    final var runners = new java.util.LinkedHashMap<>(
+    final var runners = new LinkedHashMap<>(
         applicationContext.getBeansOfType(TransactionRunner.class));
     runners
         .values()
