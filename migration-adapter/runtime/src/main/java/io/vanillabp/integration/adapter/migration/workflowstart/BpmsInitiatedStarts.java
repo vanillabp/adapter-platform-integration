@@ -612,9 +612,7 @@ public class BpmsInitiatedStarts {
   private static boolean firedWithoutTheApplication(
       final BpmsStartTrigger.Kind kind) {
 
-    return (kind == BpmsStartTrigger.Kind.TIMER)
-        || (kind == BpmsStartTrigger.Kind.SIGNAL)
-        || (kind == BpmsStartTrigger.Kind.CONDITIONAL);
+    return (kind == BpmsStartTrigger.Kind.TIMER) || (kind == BpmsStartTrigger.Kind.SIGNAL) || (kind == BpmsStartTrigger.Kind.CONDITIONAL);
 
   }
 
