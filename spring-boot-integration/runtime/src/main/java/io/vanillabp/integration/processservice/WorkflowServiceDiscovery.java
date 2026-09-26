@@ -18,6 +18,7 @@ import org.springframework.beans.factory.support.BeanDefinitionRegistryPostProce
 import org.springframework.beans.factory.support.BeanRegistryAdapter;
 import org.springframework.context.EnvironmentAware;
 import org.springframework.core.Ordered;
+import org.springframework.core.ResolvableType;
 import org.springframework.core.annotation.AnnotationUtils;
 import org.springframework.core.env.Environment;
 import org.springframework.util.ClassUtils;
@@ -245,7 +246,7 @@ public class WorkflowServiceDiscovery implements BeanDefinitionRegistryPostProce
         .resolve();
     return fromDefinition != null
         ? fromDefinition
-        : org.springframework.core.ResolvableType
+        : ResolvableType
             .forClass(beanClass)
             .as(AggregateServiceFactory.class)
             .getGeneric(0)

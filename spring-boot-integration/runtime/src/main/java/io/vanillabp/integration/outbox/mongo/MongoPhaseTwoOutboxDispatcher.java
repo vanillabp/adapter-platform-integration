@@ -16,12 +16,18 @@ import org.springframework.data.mongodb.core.query.Update;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DispatchOutcome;
+import io.vanillabp.integration.adapter.migration.outbox.AStoppingNode;
 import io.vanillabp.integration.adapter.migration.outbox.DispatchLanes;
 import io.vanillabp.integration.adapter.migration.outbox.DispatchLease;
 import io.vanillabp.integration.adapter.migration.outbox.DueEntryPoller;
 import io.vanillabp.integration.adapter.migration.outbox.OutboxHousekeeping;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
+import io.vanillabp.integration.deployment.SpringBootDeploymentService;
+import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.spi.PhaseTwoCall;
+import io.vanillabp.integration.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.PhaseTwoPermanentFailure;
+import io.vanillabp.integration.spi.PhaseTwoRetryLater;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 
@@ -84,7 +90,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    * What a blocked entry is counted into. A provider and not the bean itself, because
    * Micrometer is optional and the application may bring no metrics at all.
    */
-  private final ObjectProvider<io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics> metrics;
+  private final ObjectProvider<VanillaBpMetrics> metrics;
 
   private final DueEntryPoller poller;
 
@@ -132,7 +138,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       final ObjectProvider<PhaseTwoRouter> phaseTwoRouter,
       final PhaseTwoOutboxProperties properties,
       final String collection,
-      final ObjectProvider<io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics> metrics) {
+      final ObjectProvider<VanillaBpMetrics> metrics) {
 
     this.mongoTemplate = mongoTemplate;
     this.phaseTwoRouter = phaseTwoRouter;
@@ -230,7 +236,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    * dispatched (see
    * {@link io.vanillabp.integration.deployment.SpringBootDeploymentService#OUTBOX_DISPATCHER_LISTENER_ORDER}).
    */
-  @Order(io.vanillabp.integration.deployment.SpringBootDeploymentService.OUTBOX_DISPATCHER_LISTENER_ORDER)
+  @Order(SpringBootDeploymentService.OUTBOX_DISPATCHER_LISTENER_ORDER)
   @EventListener(ApplicationReadyEvent.class)
   public void startPolling() {
 
@@ -521,7 +527,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       final PhaseTwoOutboxEntry entry,
       final RuntimeException e) {
 
-    if (io.vanillabp.integration.adapter.migration.outbox.AStoppingNode.isTheReasonFor(e)) {
+    if (AStoppingNode.isTheReasonFor(e)) {
       Thread.currentThread().interrupt();
       log.info(
           "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' was "
@@ -560,7 +566,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
 
     // the adapter said that repeating cannot help - blocked right away
     // instead of after the configured attempts
-    if (io.vanillabp.integration.spi.PhaseTwoPermanentFailure.isPermanent(e)) {
+    if (PhaseTwoPermanentFailure.isPermanent(e)) {
       if (!writeAsTheHolder(entry, blockEntry(entry.getId()))) {
         return;
       }
@@ -594,7 +600,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
           e);
       return;
     }
-    final var retryAfter = io.vanillabp.integration.spi.PhaseTwoRetryLater.retryAfter(e);
+    final var retryAfter = PhaseTwoRetryLater.retryAfter(e);
     if (retryAfter != null) {
       // the dispatch knows when asking again can help - a workflow the BPMS has not
       // made searchable yet is the case - so the entry waits that long instead of the
@@ -757,12 +763,12 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
     if (writtenAt == null) {
       return;
     }
-    io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration
+    SpringBootMigrationAdapterAutoConfiguration
         .vanillaBpMetricsOf(metrics)
         .outboxDispatchEnded(
             MongoPhaseTwoOutbox.class.getSimpleName(),
             outcome,
-            io.vanillabp.integration.spi.PhaseTwoOutbox
+            PhaseTwoOutbox
                 .waitedSince(writtenAt)
                 .toNanos());
 
@@ -780,7 +786,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       final String operation,
       final boolean permanent) {
 
-    io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration
+    SpringBootMigrationAdapterAutoConfiguration
         .vanillaBpMetricsOf(metrics)
         .outboxEntryBlocked(MongoPhaseTwoOutbox.class.getSimpleName(), operation, permanent);
 

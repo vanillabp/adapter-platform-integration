@@ -1,13 +1,25 @@
 package io.vanillabp.integration.runtime.outbox;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.util.Date;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Optional;
+import java.util.OptionalLong;
+import java.util.Set;
 import java.util.UUID;
 
 import org.bson.Document;
 
 import com.mongodb.MongoWriteException;
+import com.mongodb.client.ClientSession;
 import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.Updates;
 
+import io.vanillabp.integration.runtime.mongo.MongoSessions;
 import io.vanillabp.integration.runtime.processservice.PlatformDefaultStore;
 import io.vanillabp.integration.runtime.processservice.QuarkusPersistenceTechnology;
 import io.vanillabp.integration.spi.PhaseTwoCall;
@@ -144,18 +156,18 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
    * and both leave the workflow of a START entry unstarted.
    */
   @Override
-  public java.util.Set<String> adapterIdsOfPendingCalls(
+  public Set<String> adapterIdsOfPendingCalls(
       final String workflowModuleId,
       final String bpmnProcessId) {
 
     if (!isAvailable()) {
-      return java.util.Set.of();
+      return Set.of();
     }
     final var filter = new Document("workflowModuleId", workflowModuleId)
         .append("bpmnProcessId", bpmnProcessId)
         .append("status", STATUS_OPEN)
         .append("adapterId", new Document("$ne", null));
-    final var adapterIds = new java.util.LinkedHashSet<String>();
+    final var adapterIds = new LinkedHashSet<String>();
     dispatcher
         .outboxCollection()
         .distinct("adapterId", filter, String.class)
@@ -169,20 +181,20 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
    * collection the dispatcher polls.
    */
   @Override
-  public java.util.OptionalLong pendingCalls() {
+  public OptionalLong pendingCalls() {
 
     if (!mongoClient.isResolvable()) {
-      return java.util.OptionalLong.empty();
+      return OptionalLong.empty();
     }
     try {
-      return java.util.OptionalLong
+      return OptionalLong
           .of(dispatcher
               .outboxCollection()
               .countDocuments(new Document("status", STATUS_OPEN)));
     } catch (final RuntimeException e) {
       // a metric must never be the reason an application fails
       log.debug("Could not count the pending entries of the MongoDB phase-two outbox", e);
-      return java.util.OptionalLong.empty();
+      return OptionalLong.empty();
     }
 
   }
@@ -194,26 +206,26 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
    * along the index this store creates over the status and that moment.
    */
   @Override
-  public java.util.Optional<java.time.Duration> ageOfOldestPendingCall() {
+  public Optional<Duration> ageOfOldestPendingCall() {
 
     if (!mongoClient.isResolvable()) {
-      return java.util.Optional.empty();
+      return Optional.empty();
     }
     try {
       final var oldest = dispatcher
           .earliest(
               dispatcher.outboxCollection(),
-              com.mongodb.client.model.Filters.eq("status", STATUS_OPEN),
+              Filters.eq("status", STATUS_OPEN),
               "createdAt");
       // nothing waiting means nothing is owed, and that zero is a measurement
-      return java.util.Optional
+      return Optional
           .of(oldest == null
-              ? java.time.Duration.ZERO
+              ? Duration.ZERO
               : PhaseTwoOutbox.waitedSince(oldest));
     } catch (final RuntimeException e) {
       // a metric must never be the reason an application fails
       log.debug("Could not read the oldest pending entry of the MongoDB phase-two outbox", e);
-      return java.util.Optional.empty();
+      return Optional.empty();
     }
 
   }
@@ -230,7 +242,7 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
     // the session of the running transaction where MongoDB Panache provides one: the
     // entry then commits with the aggregate instead of being written immediately
     //
-    final var session = io.vanillabp.integration.runtime.mongo.MongoSessions
+    final var session = MongoSessions
         .activeSession(txRegistry);
     // within a MongoDB transaction a duplicate-key error would abort the whole
     // transaction (the aggregate included), so a duplicate is detected by a read - the
@@ -266,13 +278,13 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
         .append("operation", call.operation())
         .append("aggregateId", call.workflowAggregateId())
         .append("adapterId", call.adapterId())
-        .append("args", new Document(new java.util.LinkedHashMap<String, Object>(call.args())))
+        .append("args", new Document(new LinkedHashMap<String, Object>(call.args())))
         .append("idempotencyKey", idempotencyKey)
         .append("dedupKey", dedupKey)
         .append("status", STATUS_OPEN)
-        .append("createdAt", java.util.Date.from(now))
+        .append("createdAt", Date.from(now))
         .append("attempts", 0)
-        .append("nextAttemptAt", java.util.Date.from(now));
+        .append("nextAttemptAt", Date.from(now));
     try {
       if (session != null) {
         collection.insertOne(session, entry);
@@ -334,8 +346,8 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
    *         it in the meantime, which makes the call an entry of its own
    */
   private boolean replacePendingEntry(
-      final com.mongodb.client.MongoCollection<Document> collection,
-      final com.mongodb.client.ClientSession session,
+      final MongoCollection<Document> collection,
+      final ClientSession session,
       final Document waiting,
       final PhaseTwoCall call,
       final Instant now) {
@@ -343,23 +355,23 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
     if (waiting.getInteger("attempts", 0) > 0) {
       return false;
     }
-    final var replacement = com.mongodb.client.model.Updates
+    final var replacement = Updates
         .combine(
-            com.mongodb.client.model.Updates.set("operation", call.operation()),
-            com.mongodb.client.model.Updates.set("aggregateId", call.workflowAggregateId()),
-            com.mongodb.client.model.Updates.set("adapterId", call.adapterId()),
-            com.mongodb.client.model.Updates
-                .set("args", new Document(new java.util.LinkedHashMap<String, Object>(call.args()))),
-            com.mongodb.client.model.Updates.set("createdAt", java.util.Date.from(now)),
-            com.mongodb.client.model.Updates.set("nextAttemptAt", java.util.Date.from(now)));
-    final var filter = com.mongodb.client.model.Filters
+            Updates.set("operation", call.operation()),
+            Updates.set("aggregateId", call.workflowAggregateId()),
+            Updates.set("adapterId", call.adapterId()),
+            Updates
+                .set("args", new Document(new LinkedHashMap<String, Object>(call.args()))),
+            Updates.set("createdAt", Date.from(now)),
+            Updates.set("nextAttemptAt", Date.from(now)));
+    final var filter = Filters
         .and(
-            com.mongodb.client.model.Filters.eq("_id", waiting.getString("_id")),
-            com.mongodb.client.model.Filters.eq("attempts", 0),
-            com.mongodb.client.model.Filters
+            Filters.eq("_id", waiting.getString("_id")),
+            Filters.eq("attempts", 0),
+            Filters
                 .or(
-                    com.mongodb.client.model.Filters.eq("leasedUntil", null),
-                    com.mongodb.client.model.Filters.lte("leasedUntil", java.util.Date.from(now))));
+                    Filters.eq("leasedUntil", null),
+                    Filters.lte("leasedUntil", Date.from(now))));
     final var replaced = (session == null
         ? collection.updateOne(filter, replacement)
         : collection.updateOne(session, filter, replacement)).getModifiedCount() == 1;
@@ -393,7 +405,7 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
    *        without a transaction is not something a store can promise
    */
   private void triggerPollAfterCommit(
-      final com.mongodb.client.ClientSession session,
+      final ClientSession session,
       final PhaseTwoCall call,
       final String entryId,
       final boolean replacedAnEntry) {

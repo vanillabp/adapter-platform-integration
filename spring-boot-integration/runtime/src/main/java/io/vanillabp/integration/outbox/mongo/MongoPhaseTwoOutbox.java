@@ -1,12 +1,19 @@
 package io.vanillabp.integration.outbox.mongo;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashSet;
+import java.util.Optional;
+import java.util.OptionalLong;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -93,7 +100,7 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
    * and both leave the workflow of a START entry unstarted.
    */
   @Override
-  public java.util.Set<String> adapterIdsOfPendingCalls(
+  public Set<String> adapterIdsOfPendingCalls(
       final String workflowModuleId,
       final String bpmnProcessId) {
 
@@ -108,7 +115,7 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
                 .is(PhaseTwoOutboxEntry.STATUS_OPEN)
                 .and("adapterId")
                 .ne(null));
-    return new java.util.LinkedHashSet<>(
+    return new LinkedHashSet<>(
         mongoTemplate.findDistinct(query, "adapterId", collection, String.class));
 
   }
@@ -118,10 +125,10 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
    * collection the dispatcher polls.
    */
   @Override
-  public java.util.OptionalLong pendingCalls() {
+  public OptionalLong pendingCalls() {
 
     try {
-      return java.util.OptionalLong
+      return OptionalLong
           .of(mongoTemplate
               .count(
                   Query.query(Criteria.where("status").is(PhaseTwoOutboxEntry.STATUS_OPEN)),
@@ -129,7 +136,7 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
     } catch (final RuntimeException e) {
       // a metric must never be the reason an application fails
       log.debug("Could not count the pending entries of the MongoDB phase-two outbox", e);
-      return java.util.OptionalLong.empty();
+      return OptionalLong.empty();
     }
 
   }
@@ -141,7 +148,7 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
    * along the index over the status and that moment.
    */
   @Override
-  public java.util.Optional<java.time.Duration> ageOfOldestPendingCall() {
+  public Optional<Duration> ageOfOldestPendingCall() {
 
     try {
       final var oldest = mongoTemplate
@@ -150,19 +157,19 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
                   .query(Criteria
                       .where("status")
                       .is(PhaseTwoOutboxEntry.STATUS_OPEN))
-                  .with(org.springframework.data.domain.Sort.by("createdAt"))
+                  .with(Sort.by("createdAt"))
                   .limit(1),
               PhaseTwoOutboxEntry.class,
               collection);
       // nothing waiting means nothing is owed, and that zero is a measurement
-      return java.util.Optional
+      return Optional
           .of(((oldest == null) || (oldest.getCreatedAt() == null))
-              ? java.time.Duration.ZERO
+              ? Duration.ZERO
               : PhaseTwoOutbox.waitedSince(oldest.getCreatedAt()));
     } catch (final RuntimeException e) {
       // a metric must never be the reason an application fails
       log.debug("Could not read the oldest pending entry of the MongoDB phase-two outbox", e);
-      return java.util.Optional.empty();
+      return Optional.empty();
     }
 
   }
@@ -281,7 +288,7 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
                     .orOperator(
                         Criteria.where("leasedUntil").is(null),
                         Criteria.where("leasedUntil").lte(now))),
-            new org.springframework.data.mongodb.core.query.Update()
+            new Update()
                 .set("operation", call.operation())
                 .set("aggregateId", call.workflowAggregateId())
                 .set("adapterId", call.adapterId())
