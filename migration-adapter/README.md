@@ -4028,9 +4028,34 @@ application which was never built never starts.
 
 A finding carries its scope beside its text rather than inside it, because the same finding arrives
 once per workflow module, per BPMN process, per adapter id and per method: two findings of one
-topic carrying the same text become one entry naming both scopes.
+topic carrying the same text become one entry naming both scopes. That is also what replaced the
+memories the checks used to keep so that they would not repeat themselves. A check which reports
+after the start is over keeps its own memory, because there is no block left to fold its lines
+into.
 
-`TheBoxAtTheEndOfAStartTest` holds every word of it, the shape included.
+A start which ends on something else writes the block too, from
+`sayWhatWasFoundBeforeTheStartFailed`, and throws nothing: a database which is not there ends a
+start as surely as a check does, and what was found by then is what a developer needs beside that
+exception.
+
+A reason not to start which is known already ends the start before the deployment and before the
+workflow processing, the two steps which reach outside this application. Nothing is deployed to a
+BPMS for an application which is about to end, and no adapter is told to hand out tasks for one.
+It is also what decides which message a developer reads where both would speak: the one which
+named a gap in their application, not the one the deployment runs into afterwards.
+
+A finding which arrives after the block was written goes into the log where it was found. Two
+checks report that late on purpose: what a dispatch learns about an adapter id nobody configures
+any more, and what an adapter notices while it runs.
+
+An adapter reports into the same block. `StartupReport` in the integration SPI is the reporting
+half of `StartupFindings` and nothing else, both platform integrations publish one instance per
+application, and an adapter asks for that bean like any other. Why a bean and not the adapter SPI
+is decision &lt;pending: 648&gt;; what an adapter has to know about the two strings it hands over
+is in `ADAPTER-AUTHORS.md`, section "Saying what a start found".
+
+`TheBoxAtTheEndOfAStartTest` holds every word of it, the shape included, and
+`AnAdapterReportsIntoTheSameBoxTest` holds the half an adapter sees.
 
 ## What an operator gets to see
 

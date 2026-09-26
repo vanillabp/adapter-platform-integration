@@ -37,7 +37,12 @@ import lombok.Getter;
 @ExtendWith(SuppressOutputExtension.class)
 public class AggregateSyncSupportTest {
 
-  private final AggregateSyncSupport testee = new AggregateSyncSupport();
+  /**
+   * Where the checks of the sync model report - a test reads it instead of the log.
+   */
+  private final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings = new io.vanillabp.integration.adapter.migration.startup.StartupFindings();
+
+  private final AggregateSyncSupport testee = new AggregateSyncSupport(findings);
 
   private Map<String, Object> full(
       final Object aggregate) {
@@ -302,7 +307,8 @@ public class AggregateSyncSupportTest {
 
     final var exception = assertThrowsExactly(
         IllegalStateException.class,
-        () -> new AggregateSyncSupport().validateSyncModel(AmbiguousAggregate.class));
+        () -> new AggregateSyncSupport(new io.vanillabp.integration.adapter.migration.startup.StartupFindings())
+            .validateSyncModel(AmbiguousAggregate.class));
 
     final var message = exception.getMessage();
     assertTrue(message.contains(AmbiguousAggregate.class.getName()), () -> message);
@@ -334,7 +340,8 @@ public class AggregateSyncSupportTest {
 
     final var exception = assertThrowsExactly(
         IllegalStateException.class,
-        () -> new AggregateSyncSupport().validateSyncModel(HoldingAmbiguousItems.class));
+        () -> new AggregateSyncSupport(new io.vanillabp.integration.adapter.migration.startup.StartupFindings())
+            .validateSyncModel(HoldingAmbiguousItems.class));
 
     assertTrue(exception.getMessage().contains(AmbiguousAggregate.class.getName()), exception::getMessage);
 
@@ -344,7 +351,7 @@ public class AggregateSyncSupportTest {
   @DisplayName("A valid model - and no model at all - passes the startup validation")
   public void validModelsPassTheValidation() {
 
-    final var testee = new AggregateSyncSupport();
+    final var testee = new AggregateSyncSupport(new io.vanillabp.integration.adapter.migration.startup.StartupFindings());
     testee.validateSyncModel(PlainAggregate.class);
     testee.validateSyncModel(OptInByAttributeAggregate.class);
     testee.validateSyncModel(NestedAggregate.class);
@@ -1102,17 +1109,8 @@ public class AggregateSyncSupportTest {
   private List<String> whatIsSaidWhileValidating(
       final Class<?> workflowAggregateClass) {
 
-    final var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory
-        .getLogger(AggregateSyncSupport.class);
-    final var recorded = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
-    recorded.start();
-    logger.addAppender(recorded);
-    try {
-      testee.validateSyncModel(workflowAggregateClass);
-    } finally {
-      logger.detachAppender(recorded);
-    }
-    return recorded.list.stream().map(event -> event.getFormattedMessage()).toList();
+    testee.validateSyncModel(workflowAggregateClass);
+    return io.vanillabp.migration.test.startup.WhatWasFound.entries(findings);
 
   }
 

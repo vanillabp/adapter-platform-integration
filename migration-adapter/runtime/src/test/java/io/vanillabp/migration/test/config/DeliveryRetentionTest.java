@@ -5,16 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.slf4j.LoggerFactory;
 
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import io.vanillabp.integration.adapter.migration.config.DeliveryProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
@@ -35,30 +29,15 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 @ExtendWith(SuppressOutputExtension.class)
 public class DeliveryRetentionTest {
 
-  private ListAppender<ILoggingEvent> logWatcher;
-
-  @BeforeEach
-  public void watchTheLog() {
-
-    logWatcher = new ListAppender<>();
-    logWatcher.start();
-    ((Logger) LoggerFactory.getLogger(MigrationAdapterProperties.class)).addAppender(logWatcher);
-
-  }
-
-  @AfterEach
-  public void stopWatchingTheLog() {
-
-    ((Logger) LoggerFactory.getLogger(MigrationAdapterProperties.class)).detachAndStopAllAppenders();
-
-  }
+  /**
+   * What the validated configurations of one test reported, which is where this message
+   * goes instead of into a line of its own.
+   */
+  private final StringBuilder reported = new StringBuilder();
 
   private String loggedLines() {
 
-    return logWatcher.list
-        .stream()
-        .map(ILoggingEvent::getFormattedMessage)
-        .collect(java.util.stream.Collectors.joining("\n"));
+    return reported.toString();
 
   }
 
@@ -212,7 +191,7 @@ public class DeliveryRetentionTest {
    * Runs the startup validation of an otherwise minimal application, which is where the
    * message about the two retentions is written.
    */
-  private static void validated(
+  private void validated(
       final MigrationAdapterProperties properties) {
 
     properties
@@ -231,6 +210,9 @@ public class DeliveryRetentionTest {
                         .build()));
     properties.setPrioritizedAdapters(java.util.List.of("dummy"));
     properties.validateProperties(java.util.List.of("dummy"), java.util.List.of("test-module"));
+    reported
+        .append(io.vanillabp.migration.test.startup.WhatWasFound.text(properties.startupFindings()))
+        .append('\n');
 
   }
 

@@ -14,11 +14,9 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import io.vanillabp.integration.extension.spi.settings.SettingsLevel;
 import io.vanillabp.integration.extension.spi.settings.SettingsResolution;
+import io.vanillabp.integration.spi.startup.StartupTopic;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
@@ -44,8 +42,6 @@ import lombok.experimental.SuperBuilder;
 @Setter
 @SuperBuilder
 public class MigrationAdapterProperties extends AdaptersConfigurationProperties {
-
-  private static final Logger logger = LoggerFactory.getLogger(MigrationAdapterProperties.class);
 
   /**
    * The root of every property VanillaBP reads: <code>vanillabp</code>. Every message
@@ -190,6 +186,25 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   @lombok.Getter(lombok.AccessLevel.NONE)
   @lombok.Setter(lombok.AccessLevel.NONE)
   private io.vanillabp.integration.adapter.migration.startup.StartupFindings startupFindings = new io.vanillabp.integration.adapter.migration.startup.StartupFindings();
+
+  /**
+   * Where a check reports what it found, also where it runs without a configuration.
+   * <p>
+   * A check built in a test has no bound <code>vanillabp.*</code> tree and no start to
+   * close either, so it gets a collection of its own and reports into it. Which keeps
+   * the null check out of every check that has one.
+   *
+   * @param properties The bound configuration, or <code>null</code>
+   * @return Where to report, never <code>null</code>
+   */
+  public static io.vanillabp.integration.adapter.migration.startup.StartupFindings startupFindingsOf(
+      final MigrationAdapterProperties properties) {
+
+    return properties == null
+        ? new io.vanillabp.integration.adapter.migration.startup.StartupFindings()
+        : properties.startupFindings();
+
+  }
 
   /**
    * Where a startup check reports what it found.
@@ -513,22 +528,29 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       return;
     }
     if (deliveryRetention == null) {
-      logger.info(
-          RETENTION_FOLLOWS_THE_OUTBOX,
-          PhaseTwoOutboxProperties.RETENTION_PROPERTY,
-          outboxRetention,
-          DeliveryProperties.RETENTION_PROPERTY,
-          outboxRetention,
-          DeliveryProperties.RETENTION_PROPERTY);
+      startupFindings()
+          .notice(
+              StartupTopic.CONFIGURATION,
+              PhaseTwoOutboxProperties.RETENTION_PROPERTY,
+              RETENTION_FOLLOWS_THE_OUTBOX
+                  .formatted(
+                      PhaseTwoOutboxProperties.RETENTION_PROPERTY,
+                      outboxRetention,
+                      DeliveryProperties.RETENTION_PROPERTY,
+                      outboxRetention,
+                      DeliveryProperties.RETENTION_PROPERTY));
       return;
     }
-    logger
-        .info(
-            RETENTION_STANDS_ON_ITS_OWN,
+    startupFindings()
+        .notice(
+            StartupTopic.CONFIGURATION,
             DeliveryProperties.RETENTION_PROPERTY,
-            deliveryRetention,
-            PhaseTwoOutboxProperties.RETENTION_PROPERTY,
-            outboxRetention);
+            RETENTION_STANDS_ON_ITS_OWN
+                .formatted(
+                    DeliveryProperties.RETENTION_PROPERTY,
+                    deliveryRetention,
+                    PhaseTwoOutboxProperties.RETENTION_PROPERTY,
+                    outboxRetention));
 
   }
 
@@ -560,15 +582,19 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
         .map(Map.Entry::getKey)
         .sorted()
         .forEach(adapterId -> stillAwake.append(WHAT_STAYS_AWAKE_ON_CAMUNDA_7.formatted(adapterId)));
-    logger
-        .info(
-            "'{}.outbox.poll-interval' is {} instead of the default {}, so an outbox sleeps until "
-                + "its next entry is due and an application with nothing to do sends it no "
-                + "statement at all. What is still awake:{}",
-            PREFIX,
-            pollInterval,
-            PhaseTwoOutboxProperties.DEFAULT_POLL_INTERVAL,
-            stillAwake);
+    startupFindings()
+        .notice(
+            io.vanillabp.integration.spi.startup.StartupTopic.CONFIGURATION,
+            "%s.outbox.poll-interval".formatted(PREFIX),
+            """
+                '%s.outbox.poll-interval' is %s instead of the default %s, so an outbox sleeps until \
+                its next entry is due and an application with nothing to do sends it no statement at \
+                all. What is still awake:%s"""
+                .formatted(
+                    PREFIX,
+                    pollInterval,
+                    PhaseTwoOutboxProperties.DEFAULT_POLL_INTERVAL,
+                    stillAwake));
 
   }
 
@@ -607,11 +633,11 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * upgrade case, since this number used to govern both windows.
    */
   private static final String RETENTION_FOLLOWS_THE_OUTBOX = """
-      '{}' is set to {} while '{}' is not, so the records of \
-      processed task deliveries are kept for {} as well. Those two numbers used to be one and are no \
+      '%s' is set to %s while '%s' is not, so the records of \
+      processed task deliveries are kept for %s as well. Those two numbers used to be one and are no \
       longer the same kind of setting: the outbox one decides how long a dispatched entry stays \
       readable during support, the delivery one decides whether a late redelivery runs your \
-      @WorkflowTask method a second time. Set '{}' explicitly where the second \
+      @WorkflowTask method a second time. Set '%s' explicitly where the second \
       one has to outlive the first.""";
 
   /**
@@ -619,8 +645,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * outbox followed the other way round.
    */
   private static final String RETENTION_STANDS_ON_ITS_OWN = """
-      '{}' is set to {}, so the records of processed task deliveries are kept for \
-      that long, while dispatched outbox entries keep '{}' ({}).""";
+      '%s' is set to %s, so the records of processed task deliveries are kept for \
+      that long, while dispatched outbox entries keep '%s' (%s).""";
 
   /**
    * Links child properties back to their parents (e.g. the workflow module ID into
@@ -2292,6 +2318,15 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * Validates the configuration, having derived everything derivable from the
    * classpath facts before (see {@link #normalize(ClasspathFacts)}) - the
    * validation rules are identical for configured and derived entries.
+   * <p>
+   * What this refuses is thrown where it is found, not collected into
+   * {@link io.vanillabp.integration.adapter.migration.startup.StartupFindings}. This runs
+   * while the configuration is bound, which is before there is an adapter, a workflow
+   * module or a deployment, and every later check reads the very object this one just
+   * called unusable. A start walking on from here would answer the next hundred
+   * questions out of a configuration nobody can trust, and the box at its end would
+   * name a hundred things a developer does not have to change. What the validation
+   * NOTICES rather than refuses does go into the box.
    *
    * @param facts What the platform knows about the application without any
    *          property
@@ -2405,14 +2440,19 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     workflowModulesConfiguredButNotInClasspath.sort(String::compareTo);
     if (!workflowModulesConfiguredButNotInClasspath.isEmpty()) {
       final var propPrefix = "\n  %s.workflow-modules.".formatted(PREFIX);
-      logger.warn(
-          """
-              Found properties for workflow modules
-                {}.workflow-modules.{}
-              which were not found in the class-path! These properties are never used - remove them
-              or add the workflow module (a dependency having a 'META-INF/workflow-module' marker
-              file with that ID) to the application.""",
-          PREFIX, String.join(propPrefix, workflowModulesConfiguredButNotInClasspath));
+      startupFindings()
+          .warn(
+              io.vanillabp.integration.spi.startup.StartupTopic.CONFIGURATION,
+              "%s.workflow-modules".formatted(PREFIX),
+              """
+                  Found properties for workflow modules
+                    %s.workflow-modules.%s
+                  which were not found in the class-path! These properties are never used - remove them
+                  or add the workflow module (a dependency having a 'META-INF/workflow-module' marker
+                  file with that ID) to the application."""
+                  .formatted(
+                      PREFIX,
+                      String.join(propPrefix, workflowModulesConfiguredButNotInClasspath)));
     }
 
     // adapter entries which are never used (V1-style check): every key under an
@@ -2510,18 +2550,21 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
             adapterId,
             propPrefix);
         final var propPostfix = ".adapters.%s.resources-location".formatted(adapterId);
-        logger.info(
-            """
-                Found only one VanillaBP adapter '%s' configured. Please ensure the properties
-                  %s%s%s
-                are specific to this adapter in order to avoid future-problems once you wish to migrate to another adapter."""
-                .formatted(
-                    adapterId,
-                    propPrefix,
-                    String.join(
-                        propInfix,
-                        specificBpmnResources),
-                    propPostfix));
+        startupFindings()
+            .notice(
+                io.vanillabp.integration.spi.startup.StartupTopic.CONFIGURATION,
+                "adapter '%s'".formatted(adapterId),
+                """
+                    Found only one VanillaBP adapter '%s' configured. Please ensure the properties
+                      %s%s%s
+                    are specific to this adapter in order to avoid future-problems once you wish to migrate to another adapter."""
+                    .formatted(
+                        adapterId,
+                        propPrefix,
+                        String.join(
+                            propInfix,
+                            specificBpmnResources),
+                        propPostfix));
       }
     }
 

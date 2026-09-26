@@ -19,7 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties.HousekeepingProperties;
 import io.vanillabp.integration.adapter.migration.startup.StartupFindings;
-import io.vanillabp.integration.adapter.migration.startup.StartupTopic;
+import io.vanillabp.integration.spi.startup.StartupTopic;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**

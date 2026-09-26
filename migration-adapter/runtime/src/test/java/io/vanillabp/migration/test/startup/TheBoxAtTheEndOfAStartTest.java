@@ -2,6 +2,7 @@ package io.vanillabp.migration.test.startup;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -18,7 +19,7 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import io.vanillabp.integration.adapter.migration.startup.StartupFindings;
-import io.vanillabp.integration.adapter.migration.startup.StartupTopic;
+import io.vanillabp.integration.spi.startup.StartupTopic;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
@@ -312,6 +313,82 @@ public class TheBoxAtTheEndOfAStartTest {
     findings.endOfStartup();
 
     assertEquals(1, logWatcher.list.size());
+
+  }
+
+  @Test
+  @DisplayName("A start which ends on something else still writes what was found")
+  public void aStartWhichFailsElsewhereStillSaysWhatItFound() {
+
+    findings.warn(StartupTopic.CONFIGURATION, "vanillabp.outbox.housekeeping", "The window runs at four UTC.");
+    findings.refuse(StartupTopic.CODE, "class 'io.example.Loans'", "Two methods serve version 3.");
+
+    assertDoesNotThrow(() -> findings.sayWhatWasFoundBeforeTheStartFailed());
+
+    assertEquals(1, logWatcher.list.size());
+    final var box = logWatcher.list.get(0).getFormattedMessage();
+    assertTrue(box.contains("The window runs at four UTC."), box);
+    // the refusal is part of the block here: it will never be thrown, and the exception
+    // ending this start is the one the developer is about to read
+    assertTrue(box.contains("Two methods serve version 3."), box);
+    assertTrue(box.contains("The start ended on something else"), box);
+
+  }
+
+  @Test
+  @DisplayName("Nothing found and a failed start is still no box")
+  public void aFailedStartWithNothingFoundIsSilent() {
+
+    findings.sayWhatWasFoundBeforeTheStartFailed();
+
+    assertEquals(0, logWatcher.list.size());
+
+  }
+
+  @Test
+  @DisplayName("A finding which arrives after the box goes into the log where it was found")
+  public void aLateFindingIsLoggedWhereItWasFound() {
+
+    findings.endOfStartup();
+
+    findings.warn(StartupTopic.STORED_STATE, "adapter id 'old-bpms'", "An entry still waits for it.");
+
+    assertEquals(1, logWatcher.list.size());
+    final var line = logWatcher.list.get(0).getFormattedMessage();
+    assertTrue(line.contains("adapter id 'old-bpms'"), line);
+    assertTrue(line.contains("An entry still waits for it."), line);
+    assertTrue(findings.findings().isEmpty(), "a box which was written collects nothing more");
+
+  }
+
+  @Test
+  @DisplayName("A refusal which arrives too late is written, not thrown")
+  public void aLateRefusalDoesNotEndARunningApplication() {
+
+    findings.endOfStartup();
+
+    assertDoesNotThrow(
+        () -> findings.refuse(StartupTopic.CODE, "class 'io.example.Loans'", "Two methods serve version 3."));
+
+    assertEquals(1, logWatcher.list.size());
+    assertEquals(
+        Level.ERROR,
+        logWatcher.list.get(0).getLevel(),
+        "the start it should have stopped is over, so it is as loud as a log line can be");
+
+  }
+
+  @Test
+  @DisplayName("A collected reason not to start is known before the box is written")
+  public void aRefusalIsKnownBeforeTheEnd() {
+
+    assertFalse(findings.somethingWasRefused());
+
+    findings.warn(StartupTopic.CONFIGURATION, "vanillabp.outbox.housekeeping", "The window runs at four UTC.");
+    assertFalse(findings.somethingWasRefused(), "a warning is no reason not to start");
+
+    findings.refuse(StartupTopic.CODE, "class 'io.example.Loans'", "Two methods serve version 3.");
+    assertTrue(findings.somethingWasRefused());
 
   }
 

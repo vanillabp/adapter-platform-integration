@@ -24,7 +24,6 @@ import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties
 import io.vanillabp.integration.adapter.migration.config.DeliveryProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
-import io.vanillabp.integration.adapter.migration.processservice.DeliveryRecords;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
@@ -388,27 +387,15 @@ public class DeliveryRecordReleaseTest {
   }
 
   /**
-   * The messages the given class logged at WARN or above while the work ran.
+   * What the checks reported while the work ran - a check of the start leaves its
+   * finding in the collection the configuration carries.
    */
   private List<String> warningsOf(
-      final Class<?> loggingClass,
+      final MigrationAdapterProperties properties,
       final Runnable work) {
 
-    final var logWatcher = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
-    logWatcher.start();
-    final var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(loggingClass);
-    logger.addAppender(logWatcher);
-    try {
-      work.run();
-    } finally {
-      logger.detachAppender(logWatcher);
-      logWatcher.stop();
-    }
-    return logWatcher.list
-        .stream()
-        .filter(event -> event.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.WARN))
-        .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
-        .toList();
+    work.run();
+    return io.vanillabp.migration.test.startup.WhatWasFound.entries(properties.startupFindings());
 
   }
 
@@ -511,7 +498,7 @@ public class DeliveryRecordReleaseTest {
     final var processService = processService(properties, new LegacyDeliveryLog());
 
     final var messages = warningsOf(
-        DeliveryRecords.class,
+        properties,
         processService::validateTaskDeliveryLogAtStartup);
 
     final var message = messages
@@ -529,10 +516,11 @@ public class DeliveryRecordReleaseTest {
   @DisplayName("With the option off a store which cannot release is not reported")
   public void aStoreWithoutTheReleaseIsSilentWhereNobodyAskedForIt() {
 
-    final var processService = processService(properties(false, null), new LegacyDeliveryLog());
+    final var properties = properties(false, null);
+    final var processService = processService(properties, new LegacyDeliveryLog());
 
     final var messages = warningsOf(
-        DeliveryRecords.class,
+        properties,
         processService::validateTaskDeliveryLogAtStartup);
 
     assertTrue(

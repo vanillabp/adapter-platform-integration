@@ -11,9 +11,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
@@ -76,8 +73,6 @@ import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
  * repository's DECISIONS.md.
  */
 public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
-
-  private static final Logger log = LoggerFactory.getLogger(NameClashAvoidanceService.class);
 
   private final MigrationAdapterProperties properties;
 
@@ -793,21 +788,22 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
       describedHoldings.add(describe(held, workflowModuleId, adapterId, mode));
     }
 
-    log
+    findings
         .warn(
+            io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
+            "workflow module '%s', adapter '%s'".formatted(workflowModuleId, adapterId),
             """
-                Adapter '{}' asked its BPMS which identifiers of workflow module '{}' it already \
-                holds, and got {} of them back. Both sides deploy the same name, so \
-                the BPMS alone decides which of them a start or a message reaches. \
-                This does not stop the boot: whoever holds the name may be an application which runs \
-                correctly, and ending this boot would not help it.
-                What this application deploys, and who holds it already:{}
-                What to change:{}""",
-            adapterId,
-            workflowModuleId,
-            holdings.size(),
-            asBullets(describedHoldings),
-            asBullets(fixes));
+                The adapter asked its BPMS which identifiers of this workflow module it already \
+                holds, and got %d of them back. Both sides deploy the same name, so the BPMS \
+                alone decides which of them a start or a message reaches. This does not stop the \
+                boot: whoever holds the name may be an application which runs correctly, and \
+                ending this boot would not help it.
+                What this application deploys, and who holds it already:%s
+                What to change:%s"""
+                .formatted(
+                    holdings.size(),
+                    asBullets(describedHoldings),
+                    asBullets(fixes)));
 
   }
 
@@ -1049,20 +1045,22 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
       return;
     }
 
-    log
+    findings
         .warn(
+            io.vanillabp.integration.spi.startup.StartupTopic.BPMN_MODELS,
+            "adapter '%s'".formatted(adapterId),
             """
-                Two workflow modules of this application declare identifiers which adapter '{}' cannot \
-                keep apart, so the BPMS sees one name where the application means two. A message \
-                correlated for one module can reach a workflow of the other, and a signal broadcast \
-                reaches both. The deployment is not stopped for it, because both models stay as they \
-                are and two modules may share a name on purpose.{}
-                What collides:{}
-                What to change:{}""",
-            adapterId,
-            whatTheBpmsOwnIsolationHides(modes),
-            asBullets(collisions),
-            asBullets(fixes));
+                Two workflow modules of this application declare identifiers which this adapter \
+                cannot keep apart, so the BPMS sees one name where the application means two. A \
+                message correlated for one module can reach a workflow of the other, and a signal \
+                broadcast reaches both. The deployment is not stopped for it, because both models \
+                stay as they are and two modules may share a name on purpose.%s
+                What collides:%s
+                What to change:%s"""
+                .formatted(
+                    whatTheBpmsOwnIsolationHides(modes),
+                    asBullets(collisions),
+                    asBullets(fixes)));
 
   }
 
@@ -1130,24 +1128,27 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
       return;
     }
 
-    log
+    findings
         .warn(
+            io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
+            "version %s of process '%s' of workflow module '%s', adapter '%s'".formatted(
+                version,
+                bpmnProcessId,
+                workflowModuleId,
+                adapterId),
             """
-                Version {} of BPMN process '{}' of workflow module '{}', which adapter '{}' still \
-                holds{}, declares identifiers another workflow module of this deployment uses. The BPMS \
-                cannot tell the two apart, so a message or a signal meant for one of them can reach the \
-                other. Nobody can change the held model any more, so the name has to move on the side \
-                being deployed - or the modules have to be scoped apart.{}
-                What the held version shares:{}
-                What to change:{}""",
-            version,
-            bpmnProcessId,
-            workflowModuleId,
-            adapterId,
-            workflowsRunningOn(activeWorkflows),
-            whatTheBpmsOwnIsolationHides(modes),
-            asBullets(shared),
-            asBullets(fixes));
+                This version, which the adapter still holds%s, declares identifiers another \
+                workflow module of this deployment uses. The BPMS cannot tell the two apart, so a \
+                message or a signal meant for one of them can reach the other. Nobody can change \
+                the held model any more, so the name has to move on the side being deployed - or \
+                the modules have to be scoped apart.%s
+                What the held version shares:%s
+                What to change:%s"""
+                .formatted(
+                    workflowsRunningOn(activeWorkflows),
+                    whatTheBpmsOwnIsolationHides(modes),
+                    asBullets(shared),
+                    asBullets(fixes)));
 
   }
 
@@ -1225,7 +1226,7 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
     }
     findings
         .warn(
-            io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+            io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
             "process '%s' of workflow module '%s', adapter '%s'"
                 .formatted(bpmnProcessId, workflowModuleId, adapterId),
             """

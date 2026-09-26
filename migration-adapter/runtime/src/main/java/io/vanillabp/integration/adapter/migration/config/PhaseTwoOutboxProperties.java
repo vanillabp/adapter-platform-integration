@@ -978,7 +978,7 @@ public class PhaseTwoOutboxProperties {
       }
       findings
           .warn(
-              io.vanillabp.integration.adapter.migration.startup.StartupTopic.CONFIGURATION,
+              io.vanillabp.integration.spi.startup.StartupTopic.CONFIGURATION,
               HOUSEKEEPING_PREFIX,
               """
                   The housekeeping of the VanillaBP outbox runs from %s to %s UTC, because this JVM \

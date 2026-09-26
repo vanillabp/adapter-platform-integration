@@ -179,6 +179,20 @@ public class VanillaBpDeploymentRunner {
     deploymentService = new DeploymentService(
         properties, deploymentServices, wiringServices, workflowTaskWiring);
 
+    // what the BUILD found out about the workflow modules' configuration files: the
+    // recorder saying it runs before there are beans, so it kept the sentence and this
+    // is the first moment it can go into the box of the start
+    final var configFilesReport = io.vanillabp.integration.runtime.config.WorkflowModuleConfigFilesRecorder
+        .takeReport();
+    if (configFilesReport != null) {
+      properties
+          .startupFindings()
+          .warn(
+              io.vanillabp.integration.spi.startup.StartupTopic.CONFIGURATION,
+              null,
+              configFilesReport);
+    }
+
     log.info("Deploying BPMN resources of workflow modules: {}", workflowModuleIds);
     deploymentService.deployResources(
         workflowModuleIds,

@@ -31,7 +31,26 @@ public class WorkflowTaskRegistryProducer {
    * class at startup and answers the shared values of aggregates an adapter does
    * not hold).
    */
-  private final io.vanillabp.integration.adapter.migration.sync.AggregateSyncSupport aggregateSync = new io.vanillabp.integration.adapter.migration.sync.AggregateSyncSupport();
+  private io.vanillabp.integration.adapter.migration.sync.AggregateSyncSupport aggregateSync;
+
+  /**
+   * The one sync model, built on the first ask. It reports what it finds about an
+   * aggregate class into the collection the configuration carries, and the configuration
+   * arrives as a parameter of a producer method rather than beside the field.
+   *
+   * @param properties The VanillaBP configuration
+   * @return The sync model of this application
+   */
+  private synchronized io.vanillabp.integration.adapter.migration.sync.AggregateSyncSupport aggregateSync(
+      final io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties properties) {
+
+    if (aggregateSync == null) {
+      aggregateSync = new io.vanillabp.integration.adapter.migration.sync.AggregateSyncSupport(
+          properties.startupFindings());
+    }
+    return aggregateSync;
+
+  }
 
   /**
    * Builds the one registry of the application. The platform's runner goes in as the
@@ -61,7 +80,7 @@ public class WorkflowTaskRegistryProducer {
       final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping) {
 
     return new WorkflowTaskRegistry(
-        platformTransactionRunner, aggregateSync, QuarkusTransactionAnnotations
+        platformTransactionRunner, aggregateSync(properties), QuarkusTransactionAnnotations
             .specs(springTransactionSupport.honored()), properties, scoping);
 
   }
@@ -127,17 +146,40 @@ public class WorkflowTaskRegistryProducer {
   }
 
   /**
+   * Where an adapter says what it found while the application starts.
+   * <p>
+   * It is the collection the checks of the core report into as well, so an adapter's
+   * finding stands in the same block as the platform's. The collection hangs on the
+   * configuration, because that is what every check already holds; this bean is the way
+   * to it for everything which does not.
+   *
+   * @param properties The VanillaBP configuration, which carries the collection
+   * @return Where a startup check of an adapter reports
+   */
+  @jakarta.enterprise.inject.Produces
+  @jakarta.inject.Singleton
+  @Unremovable
+  public io.vanillabp.integration.spi.startup.StartupReport startupReport(
+      final io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties properties) {
+
+    return properties.startupFindings();
+
+  }
+
+  /**
    * The core-owned sync model: turns a workflow aggregate into the
    * values shared with the BPMS, honoring
    * {@code @SyncWithBPMS}/{@code @NoSyncWithBPMS} and the adapter's default.
    *
+   * @param properties The VanillaBP configuration
    * @return The sync support
    */
   @jakarta.enterprise.inject.Produces
   @jakarta.inject.Singleton
-  public io.vanillabp.integration.adapter.spi.WorkflowAggregateSync workflowAggregateSync() {
+  public io.vanillabp.integration.adapter.spi.WorkflowAggregateSync workflowAggregateSync(
+      final io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties properties) {
 
-    return aggregateSync;
+    return aggregateSync(properties);
 
   }
 

@@ -11,17 +11,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.slf4j.LoggerFactory;
 
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.ClasspathFacts;
@@ -40,8 +34,6 @@ import lombok.extern.slf4j.Slf4j;
 @ExtendWith(SuppressOutputExtension.class)
 public class MigrationAdapterPropertiesTest {
 
-  private ListAppender<ILoggingEvent> logWatcher;
-
   private final List<String> adaptersLoaded = List.of("adapter1", "adapter2");
 
   private final WorkflowModuleAdapterProperties testModule = WorkflowModuleAdapterProperties
@@ -53,21 +45,6 @@ public class MigrationAdapterPropertiesTest {
           .build()))
       .build();
 
-  @BeforeEach
-  public void initLogWatcher() {
-
-    logWatcher = new ListAppender<>();
-    logWatcher.start();
-    ((Logger) LoggerFactory.getLogger(MigrationAdapterProperties.class)).addAppender(logWatcher);
-
-  }
-
-  @AfterEach
-  public void stopLogWatcher() {
-
-    ((Logger) LoggerFactory.getLogger(MigrationAdapterProperties.class)).detachAndStopAllAppenders();
-
-  }
 
   @Test
   public void testAdapterTypesNotInClasspath() {
@@ -257,13 +234,14 @@ public class MigrationAdapterPropertiesTest {
 
     properties.validateProperties(adaptersLoaded, List.of("test-module"));
 
-    assertTrue(logWatcher.list
-        .stream()
-        .map(ILoggingEvent::getFormattedMessage)
-        .anyMatch(msg -> msg.startsWith("""
-            Found properties for workflow modules
-              vanillabp.workflow-modules.fake-module
-            which were not found in the class-path!""")));
+    assertTrue(
+        io.vanillabp.migration.test.startup.WhatWasFound
+            .messages(properties.startupFindings())
+            .stream()
+            .anyMatch(message -> message.startsWith("""
+                Found properties for workflow modules
+                  vanillabp.workflow-modules.fake-module
+                which were not found in the class-path!""")));
 
   }
 
@@ -315,14 +293,14 @@ public class MigrationAdapterPropertiesTest {
 
     properties.validateProperties(List.of("adapter2"), List.of("test-module"));
 
-    assertTrue(logWatcher.list
-        .stream()
-        .map(ILoggingEvent::getFormattedMessage)
-        .anyMatch(msg -> msg.equals(
-            """
-                Found only one VanillaBP adapter 'adapter-test' configured. Please ensure the properties
-                  vanillabp.workflow-modules.test-module.adapters.adapter-test.resources-location
-                are specific to this adapter in order to avoid future-problems once you wish to migrate to another adapter.""")));
+    assertTrue(
+        io.vanillabp.migration.test.startup.WhatWasFound
+            .messages(properties.startupFindings())
+            .contains(
+                """
+                    Found only one VanillaBP adapter 'adapter-test' configured. Please ensure the properties
+                      vanillabp.workflow-modules.test-module.adapters.adapter-test.resources-location
+                    are specific to this adapter in order to avoid future-problems once you wish to migrate to another adapter."""));
 
   }
 
@@ -345,7 +323,7 @@ public class MigrationAdapterPropertiesTest {
 
     properties.validateProperties(List.of("adapter2"), List.of("test-module"));
 
-    assertTrue(logWatcher.list.isEmpty());
+    assertTrue(properties.startupFindings().nothingToSay());
 
   }
 

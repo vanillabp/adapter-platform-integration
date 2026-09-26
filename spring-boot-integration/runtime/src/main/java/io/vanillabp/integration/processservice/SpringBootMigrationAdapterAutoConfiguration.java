@@ -202,6 +202,27 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   }
 
   /**
+   * Where an adapter says what it found while the application starts.
+   * <p>
+   * It is the collection the checks of the core report into as well, so an adapter's
+   * finding stands in the same block as the platform's. The collection hangs on the
+   * configuration, because that is what every check already holds; this bean is the way
+   * to it for everything which does not.
+   *
+   * @param properties The VanillaBP configuration, which carries the collection
+   * @return Where a startup check of an adapter reports
+   */
+  @Bean
+  @ConditionalOnMissingBean
+  public static io.vanillabp.integration.spi.startup.StartupReport vanillaBpStartupReport(
+      @org.springframework.beans.factory.annotation.Qualifier(
+        BEANNAME_MIGRATIONADAPERPROPERTIES) final MigrationAdapterProperties properties) {
+
+    return properties.startupFindings();
+
+  }
+
+  /**
    * The core-owned sync model: turns a workflow aggregate into the
    * values shared with the BPMS, honoring
    * {@code @SyncWithBPMS}/{@code @NoSyncWithBPMS} and the adapter's default. One
@@ -209,13 +230,16 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    * the values (push them as process variables, or write them as operator context
    * only).
    *
+   * @param properties The VanillaBP configuration, which carries the collection every
+   *          startup check reports into
    * @return The sync support
    */
   @Bean
   @ConditionalOnMissingBean
-  public static WorkflowAggregateSync vanillaBpWorkflowAggregateSync() {
+  public static WorkflowAggregateSync vanillaBpWorkflowAggregateSync(
+      @Qualifier(BEANNAME_MIGRATIONADAPERPROPERTIES) final MigrationAdapterProperties properties) {
 
-    return new AggregateSyncSupport();
+    return new AggregateSyncSupport(properties.startupFindings());
 
   }
 

@@ -15,10 +15,10 @@ import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.scoping.NameClashAvoidanceService;
 import io.vanillabp.integration.adapter.migration.startup.StartupFindings;
-import io.vanillabp.integration.adapter.migration.startup.StartupTopic;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidance;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.ModelIdentifier;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.ScopedIdentifierKind;
+import io.vanillabp.integration.spi.startup.StartupTopic;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**

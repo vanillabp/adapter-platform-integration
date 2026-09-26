@@ -1,15 +1,20 @@
 package io.vanillabp.integration.runtime.config;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 import io.quarkus.runtime.annotations.Recorder;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * Says at startup what the build found out about the configuration files of the workflow
  * modules. Which files a workflow module ships can only be seen while the application is
  * built, and a developer reads the log of a start far more often than the log of a build,
  * so the sentence is written there.
+ * <p>
+ * A recorder runs before the beans of the application exist, so it cannot reach the
+ * collection the whole start reports into. It keeps the report instead, and the
+ * deployment runner hands it over once it has that collection - see
+ * {@link #takeReport()}.
  */
-@Slf4j
 @Recorder
 public class WorkflowModuleConfigFilesRecorder {
 
@@ -22,15 +27,33 @@ public class WorkflowModuleConfigFilesRecorder {
   }
 
   /**
-   * Writes the report as a warning, because every line of it names a file whose
-   * settings nobody reads.
+   * What the build found out and nobody has picked up yet. Static because a recorder is
+   * built by Quarkus and read by a bean, and the two never meet.
+   */
+  private static final AtomicReference<String> WAITING_REPORT = new AtomicReference<>();
+
+  /**
+   * Keeps the report until the start has somewhere to put it. Every line of it names a
+   * file whose settings nobody reads.
    *
    * @param report What the build has to say about those files
    */
   public void report(
       final String report) {
 
-    log.warn(report);
+    WAITING_REPORT.set(report);
+
+  }
+
+  /**
+   * Hands the report over, once, to whoever can report it into the box of the start.
+   *
+   * @return What the build found out, or <code>null</code> where it found nothing or
+   *         where the report was taken already
+   */
+  public static String takeReport() {
+
+    return WAITING_REPORT.getAndSet(null);
 
   }
 

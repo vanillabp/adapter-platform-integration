@@ -11,8 +11,6 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import io.vanillabp.bpmsdouble.springboot.DummyAdapterConfiguration;
 import io.vanillabp.bpmsdouble.springboot.DummyAdapterProcessServiceConfiguration;
-import io.vanillabp.integration.adapter.migration.processservice.DeliveryRecords;
-import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.test.TestPersistenceConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
@@ -109,31 +107,18 @@ public class TaskDeliveryLogStartupValidationTest {
   private final ApplicationContextRunner contextRunner = new ApplicationContextRunner();
 
   /**
-   * The messages the core logged while the given work ran.
+   * What the started application reported, filled while the context of {@link #bootWith}
+   * is up. A check no longer writes a line of its own: it reports, and the whole start
+   * says it once at its end, so this is where the test reads what it said.
    */
+  private final List<String> reportedByCore = new java.util.ArrayList<>();
+
   private List<String> loggedByCore(
       final Runnable work) {
 
-    final var logWatcher = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
-    logWatcher.start();
-    // the core says some of this in the process service and the rest in its delivery
-    // records, so both are listened to - which class a message comes from is not the test
-    final var loggers = List
-        .of(
-            (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(MigrationProcessService.class),
-            (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(DeliveryRecords.class));
-    loggers.forEach(logger -> logger.addAppender(logWatcher));
-    try {
-      work.run();
-    } finally {
-      loggers.forEach(logger -> logger.detachAppender(logWatcher));
-      logWatcher.stop();
-    }
-    return logWatcher.list
-        .stream()
-        .filter(event -> event.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.WARN))
-        .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
-        .toList();
+    reportedByCore.clear();
+    work.run();
+    return List.copyOf(reportedByCore);
 
   }
 
@@ -173,6 +158,16 @@ public class TaskDeliveryLogStartupValidationTest {
           Assertions.assertNull(
               context.getStartupFailure(),
               "a missing delivery log must never fail the boot");
+          context
+              .getBean(io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties.class)
+              .startupFindings()
+              .findings()
+              .stream()
+              .filter(
+                  finding -> finding
+                      .severity() != io.vanillabp.integration.adapter.migration.startup.StartupFindings.Severity.NOTICE)
+              .map(finding -> "%s: %s".formatted(finding.scope(), finding.message()))
+              .forEach(reportedByCore::add);
           assertions.run();
         });
 
@@ -199,7 +194,7 @@ public class TaskDeliveryLogStartupValidationTest {
         .orElseThrow(() -> new AssertionError("no warning about repeated deliveries, logged: "
             + messages));
     // it names the BPMS, the SPI to implement and the property to set instead
-    Assertions.assertTrue(message.contains("Adapter 'test'"));
+    Assertions.assertTrue(message.contains("adapter 'test'"), message);
     Assertions.assertTrue(message.contains("TaskDeliveryLog"));
     Assertions.assertTrue(message.contains("TaskDeliveryLogAware"));
     Assertions.assertTrue(message.contains("vanillabp.adapters.test.deduplicate-deliveries"));

@@ -2,6 +2,7 @@ package io.vanillabp.migration.test.workflowtask;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -21,7 +22,6 @@ import ch.qos.logback.classic.Level;
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.OutfadedVersionsInUsePolicy;
-import io.vanillabp.integration.adapter.migration.workflowtask.DeployedProcessVersionsCheck;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
 import io.vanillabp.integration.adapter.spi.version.DeployedProcessVersion;
 import io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog;
@@ -399,7 +399,8 @@ public class RenamedBpmnProcessTest {
     final var errors = theModuleFinishedDeploying(Level.ERROR);
 
     assertEquals(1, errors.size(), errors.toString());
-    assertTrue(errors.get(0).contains("7 workflow(s) still run on version '1'"), errors.get(0));
+    assertTrue(errors.get(0).contains("version '1'"), errors.get(0));
+    assertTrue(errors.get(0).contains("7 workflow(s) still run on this version"), errors.get(0));
     assertTrue(errors.get(0).contains("'checkCredit'"), errors.get(0));
     assertTrue(errors.get(0).contains("incident"), errors.get(0));
 
@@ -418,8 +419,11 @@ public class RenamedBpmnProcessTest {
     theAdapterDeployed(NEW_ID, "1");
     catalog.instances.put("%s|2".formatted(OLD_ID), 3L);
 
-    final var failure = assertThrows(IllegalStateException.class, () -> theModuleFinishedDeploying(Level.ERROR));
+    theModuleFinishedDeploying(Level.ERROR);
 
+    // the reason is collected and thrown once, at the end of the start
+    final var failure = properties.startupFindings().theRefusal();
+    assertNotNull(failure, "the start has to be refused");
     assertTrue(failure.getMessage().contains("3 workflow(s) still run on version '2'"), failure.getMessage());
     assertTrue(failure.getMessage().contains(OLD_ID), failure.getMessage());
 
@@ -756,21 +760,31 @@ public class RenamedBpmnProcessTest {
       final Level level,
       final BiFunction<String, String, ProcessVersionCatalog> catalogOfProcess) {
 
-    final var logWatcher = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
-    logWatcher.start();
-    final var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory
-        .getLogger(DeployedProcessVersionsCheck.class);
-    logger.addAppender(logWatcher);
-    try {
-      registry.registerVersionsOfProcessesNobodyDeployed(MODULE, ADAPTER, catalogOfProcess);
-      registry.resolveProcessVersions(MODULE);
-    } finally {
-      logger.detachAndStopAllAppenders();
-    }
-    return logWatcher.list
+    registry.registerVersionsOfProcessesNobodyDeployed(MODULE, ADAPTER, catalogOfProcess);
+    registry.resolveProcessVersions(MODULE);
+    // the levels of the old log lines map onto the severities of a finding: a check no
+    // longer writes a line, it reports, and the start says it once at its end
+    final var wanted = Level.ERROR.equals(level)
+        ? java.util.Set
+            .of(
+                io.vanillabp.integration.adapter.migration.startup.StartupFindings.Severity.ERROR,
+                io.vanillabp.integration.adapter.migration.startup.StartupFindings.Severity.REFUSAL)
+        : Level.WARN.equals(level)
+            ? java.util.Set
+                .of(
+                    io.vanillabp.integration.adapter.migration.startup.StartupFindings.Severity.WARNING,
+                    io.vanillabp.integration.adapter.migration.startup.StartupFindings.Severity.ERROR,
+                    io.vanillabp.integration.adapter.migration.startup.StartupFindings.Severity.REFUSAL)
+            : java.util.Set
+                .of(io.vanillabp.integration.adapter.migration.startup.StartupFindings.Severity.values());
+    return properties
+        .startupFindings()
+        .findings()
         .stream()
-        .filter(event -> event.getLevel().isGreaterOrEqual(level))
-        .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
+        .filter(finding -> wanted.contains(finding.severity()))
+        .map(finding -> finding.scope() == null
+            ? finding.message()
+            : "%s: %s".formatted(finding.scope(), finding.message()))
         .toList();
 
   }

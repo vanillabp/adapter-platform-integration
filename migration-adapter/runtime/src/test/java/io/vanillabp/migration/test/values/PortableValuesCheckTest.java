@@ -144,7 +144,7 @@ public class PortableValuesCheckTest {
   private static PortableValuesCheck checkWith(
       final MigrationAdapterProperties properties) {
 
-    return new PortableValuesCheck(new AggregateSyncSupport(), properties);
+    return new PortableValuesCheck(new AggregateSyncSupport(new io.vanillabp.integration.adapter.migration.startup.StartupFindings()), properties);
 
   }
 

@@ -7,20 +7,15 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.slf4j.LoggerFactory;
 
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.migration.test.startup.WhatWasFound;
 
 /**
  * An application which lets its outbox sleep watches its database next, and this is the
@@ -31,32 +26,11 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 @ExtendWith(SuppressOutputExtension.class)
 public class WhatStaysAwakeTest {
 
-  private ListAppender<ILoggingEvent> logWatcher;
-
-  @BeforeEach
-  public void watchTheLog() {
-
-    logWatcher = new ListAppender<>();
-    logWatcher.start();
-    ((Logger) LoggerFactory.getLogger(MigrationAdapterProperties.class)).addAppender(logWatcher);
-
-  }
-
-  @AfterEach
-  public void stopWatchingTheLog() {
-
-    ((Logger) LoggerFactory.getLogger(MigrationAdapterProperties.class)).detachAndStopAllAppenders();
-
-  }
-
-  private String loggedLines() {
-
-    return logWatcher.list
-        .stream()
-        .map(ILoggingEvent::getFormattedMessage)
-        .collect(java.util.stream.Collectors.joining("\n"));
-
-  }
+  /**
+   * What the last validated configuration reported, which is where this message goes
+   * instead of into a line of its own.
+   */
+  private String reported;
 
   /**
    * A configuration which validates, with one adapter of the given type and one workflow
@@ -66,7 +40,7 @@ public class WhatStaysAwakeTest {
    * @param pollInterval What the cap on the outbox sleep is set to, or <code>null</code> to
    *          leave the default alone
    */
-  private static void validate(
+  private void validate(
       final String adapterType,
       final Duration pollInterval) {
 
@@ -81,6 +55,7 @@ public class WhatStaysAwakeTest {
       properties.getOutbox().setPollInterval(pollInterval);
     }
     properties.validateProperties(List.of(adapterType), List.of("a-module"));
+    reported = WhatWasFound.text(properties.startupFindings());
 
   }
 
@@ -91,9 +66,9 @@ public class WhatStaysAwakeTest {
     validate("camunda7", null);
 
     assertFalse(
-        loggedLines().contains("is still awake"),
+        reported.contains("is still awake"),
         "an application which changed nothing asked no question and gets no answer: "
-            + loggedLines());
+            + reported);
 
   }
 
@@ -103,7 +78,7 @@ public class WhatStaysAwakeTest {
 
     validate("dummy", Duration.ofMinutes(10));
 
-    final var logged = loggedLines();
+    final var logged = reported;
     assertTrue(logged.contains("'vanillabp.outbox.poll-interval' is PT10M"), logged);
     assertTrue(logged.contains("instead of the default PT10S"), logged);
     assertTrue(
@@ -131,7 +106,7 @@ public class WhatStaysAwakeTest {
 
     validate("camunda7", Duration.ofMinutes(10));
 
-    final var logged = loggedLines();
+    final var logged = reported;
     assertTrue(
         logged.contains("the Camunda 7 engine of adapter 'the-engine'"),
         "the message names the adapter id, because a migration setup has more than one: "
@@ -151,7 +126,7 @@ public class WhatStaysAwakeTest {
 
     validate("dummy", Duration.ofMinutes(10));
 
-    assertFalse(loggedLines().contains("Camunda 7 engine"), loggedLines());
+    assertFalse(reported.contains("Camunda 7 engine"), reported);
 
   }
 

@@ -38,7 +38,11 @@ public class OutboxStartupValidationTest {
         .withPropertyValues("spring.config.location=classpath:application.yaml")
         .withInitializer(new ConfigDataApplicationContextInitializer())
         .withUserConfiguration(
-            WorkflowModuleConfiguration.class, TestPersistenceConfiguration.class, SampleWorkflowService.class)
+            WorkflowModuleConfiguration.class, TestPersistenceConfiguration.class, SampleWorkflowService.class,
+            // brings the deployment service: a reason not to start is collected and
+            // ends the start where the deployment would begin, so a context without
+            // one never reaches the moment this test is about
+            io.vanillabp.integration.test.deployment.DeploymentTest.TestConfig.class)
         .withConfiguration(
             AutoConfigurations.of(
                 DummyAdapterConfiguration.class, DummyAdapterProcessServiceConfiguration.class,
@@ -81,7 +85,8 @@ public class OutboxStartupValidationTest {
         .withUserConfiguration(
             WorkflowModuleConfiguration.class, TestPersistenceConfiguration.class,
             TestPhaseTwoOutboxConfiguration.class, TestTransactionRunnerConfiguration.class,
-            SampleWorkflowService.class)
+            SampleWorkflowService.class,
+            io.vanillabp.integration.test.deployment.DeploymentTest.TestConfig.class)
         .withConfiguration(
             AutoConfigurations.of(
                 DummyAdapterConfiguration.class, DummyAdapterProcessServiceConfiguration.class,

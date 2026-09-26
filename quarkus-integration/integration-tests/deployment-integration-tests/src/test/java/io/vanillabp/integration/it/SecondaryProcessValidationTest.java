@@ -79,7 +79,9 @@ public class SecondaryProcessValidationTest {
             () -> "the leftovers of the secondary BPMN process were not reported: "
                 + messages);
         final var warning = reports.getFirst();
-        assertTrue(warning.contains("BPMN process '%s'".formatted(OLD_PROCESS)), warning);
+        // the block names what a finding is about beside its text, so the process id
+        // stands above the message rather than inside it
+        assertTrue(warning.contains("process '%s'".formatted(OLD_PROCESS)), warning);
         assertTrue(warning.contains("waiting phase-two outbox entries"), warning);
       });
 

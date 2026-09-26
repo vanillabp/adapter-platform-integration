@@ -495,9 +495,10 @@ public class InboundIdempotencyTest {
   @DisplayName("An adapter repeating deliveries without a log is reported at startup")
   public void aMissingDeliveryLogIsReportedAtStartup() {
 
-    final var testee = processService(properties(null, null, null), null);
+    final var properties = properties(null, null, null);
+    final var testee = processService(properties, null);
 
-    final var messages = loggedBy(DeliveryRecords.class, testee::validateTaskDeliveryLogAtStartup);
+    final var messages = reportedWhile(properties, testee::validateTaskDeliveryLogAtStartup);
 
     assertEquals(1, messages.size());
     final var message = messages.getFirst();
@@ -509,8 +510,10 @@ public class InboundIdempotencyTest {
         "names the property to state that the handlers are idempotent themselves");
 
     // the message names a configuration gap - it must not be repeated per delivery
-    assertTrue(
-        loggedBy(DeliveryRecords.class, testee::validateTaskDeliveryLogAtStartup).isEmpty());
+    assertEquals(
+        messages,
+        reportedWhile(properties, testee::validateTaskDeliveryLogAtStartup),
+        "the same gap is not reported a second time");
 
   }
 
@@ -523,15 +526,16 @@ public class InboundIdempotencyTest {
     lenient().when(embedded.getAdapterId()).thenReturn(ADAPTER);
     lenient().when(embedded.deliversTasksAtLeastOnce()).thenReturn(false);
 
+    final var properties = properties(null, null, null);
     final var testee = MigrationProcessService
         .forBpmnProcess(MODULE, PROCESS, Aggregate.class)
-        .properties(properties(null, null, null))
+        .properties(properties)
         .aggregatePersistence(persistence)
         .processServices(List
             .of(embedded))
         .build();
 
-    assertTrue(loggedBy(DeliveryRecords.class, testee::validateTaskDeliveryLogAtStartup).isEmpty());
+    assertTrue(reportedWhile(properties, testee::validateTaskDeliveryLogAtStartup).isEmpty());
 
   }
 
@@ -585,6 +589,19 @@ public class InboundIdempotencyTest {
         .filter(event -> event.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.WARN))
         .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
         .toList();
+
+  }
+
+  /**
+   * What the checks of the start reported while the work ran - a check leaves its
+   * finding in the collection the configuration carries instead of writing a line.
+   */
+  private List<String> reportedWhile(
+      final MigrationAdapterProperties properties,
+      final Runnable work) {
+
+    work.run();
+    return io.vanillabp.migration.test.startup.WhatWasFound.entries(properties.startupFindings());
 
   }
 

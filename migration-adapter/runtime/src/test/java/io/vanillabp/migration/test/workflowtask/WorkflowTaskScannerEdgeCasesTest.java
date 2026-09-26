@@ -57,14 +57,21 @@ public class WorkflowTaskScannerEdgeCasesTest {
 
   private WorkflowTaskRegistry registry;
 
+  /**
+   * The configuration the registry reports into - a check leaves its finding there
+   * instead of writing a line, so this is where a test reads what the scanner said.
+   */
+  private io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties properties;
+
   private final Map<String, Aggregate> aggregates = new HashMap<>();
 
   @BeforeEach
   public void setUpRegistry() {
 
+    properties = new io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties();
     registry = new WorkflowTaskRegistry(
         new WorkflowTaskRegistryTest.RecordingTransactionRunner(), null, TransactionAnnotationSpecs
-            .ofATypicalPlatform());
+            .ofATypicalPlatform(), properties);
     final var aggregate = new Aggregate();
     aggregate.id = "4711";
     aggregates.put("4711", aggregate);
@@ -784,27 +791,15 @@ public class WorkflowTaskScannerEdgeCasesTest {
   class ApplicationTransactions {
 
     /**
-     * Registers the workflow service and returns the warnings the scanner logged while
-     * doing so (the module's logback-test.xml has no appender on purpose).
+     * Registers the workflow service and returns what the scanner reported while doing
+     * so - a check leaves its finding in the collection of the start.
      */
     private List<String> registerCollectingWarnings(
         final Class<?> serviceClass,
         final Object bean) {
 
-      final var logWatcher = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
-      logWatcher.start();
-      final var scannerLog = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory
-          .getLogger("io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskScanner");
-      scannerLog.addAppender(logWatcher);
-      try {
-        register(serviceClass, bean);
-      } finally {
-        scannerLog.detachAndStopAllAppenders();
-      }
-      return logWatcher.list
-          .stream()
-          .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
-          .toList();
+      register(serviceClass, bean);
+      return io.vanillabp.migration.test.startup.WhatWasFound.entries(properties.startupFindings());
 
     }
 
@@ -1233,9 +1228,10 @@ public class WorkflowTaskScannerEdgeCasesTest {
       // the platform reports Spring's annotation as ineffective, e.g. Quarkus without
       // the extension quarkus-spring-tx: failing the boot over an annotation that does
       // nothing would be wrong
+      properties = new io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties();
       registry = new WorkflowTaskRegistry(
           new WorkflowTaskRegistryTest.RecordingTransactionRunner(), null, TransactionAnnotationSpecs
-              .ofAPlatformWithoutSpringSupport());
+              .ofAPlatformWithoutSpringSupport(), properties);
 
       final var warnings = registerCollectingWarnings(Service.class, new Service());
 

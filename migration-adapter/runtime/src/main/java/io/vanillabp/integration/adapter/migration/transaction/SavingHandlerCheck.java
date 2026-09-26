@@ -1,11 +1,9 @@
 package io.vanillabp.integration.adapter.migration.transaction;
 
 import java.lang.annotation.Annotation;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import io.vanillabp.integration.adapter.migration.startup.StartupFindings;
+import io.vanillabp.integration.spi.startup.StartupTopic;
 
 /**
  * The startup hint about the second writer an extension brings: a handler method of the
@@ -38,22 +36,21 @@ import org.slf4j.LoggerFactory;
  */
 public class SavingHandlerCheck {
 
-  private static final Logger log = LoggerFactory.getLogger(SavingHandlerCheck.class);
-
   /**
-   * The (workflow module, BPMN process) pairs already reported. An extension scans a
-   * workflow service once per BPMN process it serves, and a process served by two
-   * extensions says it once - the advice is the same whichever of them is named.
+   * Where the hint goes.
    */
-  private final Set<String> reported = ConcurrentHashMap.newKeySet();
+  private final StartupFindings findings;
 
   /**
    * Built by the registry which wires the handlers of the extensions, once per application.
-   * <p>
-   * What it remembers is which BPMN processes were already reported, so a process served by
-   * two extensions is said once.
+   *
+   * @param findings Where the hint is reported
    */
-  public SavingHandlerCheck() {
+  public SavingHandlerCheck(
+      final StartupFindings findings) {
+
+    this.findings = findings;
+
   }
 
   /**
@@ -79,32 +76,30 @@ public class SavingHandlerCheck {
     if ((workflowAggregateClass == null) || aggregateNoticesASecondWriter) {
       return;
     }
-    if (!reported.add(workflowModuleId
-        + "#"
-        + bpmnProcessId)) {
-      return;
-    }
 
-    log
+    findings
         .warn(
+            StartupTopic.CODE,
+            "extension '%s', process '%s' of workflow module '%s'".formatted(
+                extensionId,
+                bpmnProcessId,
+                workflowModuleId),
             """
-                Extension '{}' has @{} method(s) for BPMN process '{}' of workflow module '{}' which \
-                may change the workflow aggregate '{}', and that aggregate has nothing which would \
-                notice a second writer (a version attribute: @Version with JPA as well as with \
-                Spring Data). Such a method reads the aggregate, writes what it reported and is \
-                saved - so a change your own code made to the same aggregate in between is written \
-                over without any error. Ways out: a version attribute plus a retry in the \
-                transaction your application opens, an attribute only the handler writes, or an own \
-                entity for what the extension notes down. The wiki page 'Workflow aggregates' shows \
-                them in its section 'Two writers on one aggregate', together with the other pairs of \
-                writers which meet this way. VanillaBP neither checks for the conflict nor repeats \
-                the report - a version attribute is what turns the silent loss into an exception it \
-                can report.""",
-            extensionId,
-            annotationType.getSimpleName(),
-            bpmnProcessId,
-            workflowModuleId,
-            workflowAggregateClass.getName());
+                An extension has @%s method(s) for this BPMN process which may change the workflow \
+                aggregate '%s', and that aggregate has nothing which would notice a second writer \
+                (a version attribute: @Version with JPA as well as with Spring Data). Such a \
+                method reads the aggregate, writes what it reported and is saved - so a change \
+                your own code made to the same aggregate in between is written over without any \
+                error. Ways out: a version attribute plus a retry in the transaction your \
+                application opens, an attribute only the handler writes, or an own entity for what \
+                the extension notes down. The wiki page 'Workflow aggregates' shows them in its \
+                section 'Two writers on one aggregate', together with the other pairs of writers \
+                which meet this way. VanillaBP neither checks for the conflict nor repeats the \
+                report - a version attribute is what turns the silent loss into an exception it \
+                can report."""
+                .formatted(
+                    annotationType.getSimpleName(),
+                    workflowAggregateClass.getName()));
 
   }
 

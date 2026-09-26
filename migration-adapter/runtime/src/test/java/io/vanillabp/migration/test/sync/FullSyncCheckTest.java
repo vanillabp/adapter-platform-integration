@@ -67,7 +67,7 @@ public class FullSyncCheckTest {
                         .workflowModuleId(MODULE)
                         .workflows(Map.of(PROCESS, workflow))
                         .build()));
-    return new FullSyncCheck(new AggregateSyncSupport(), properties);
+    return new FullSyncCheck(new AggregateSyncSupport(new io.vanillabp.integration.adapter.migration.startup.StartupFindings()), properties);
 
   }
 

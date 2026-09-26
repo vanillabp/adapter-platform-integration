@@ -16,12 +16,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.startup.StartupFindings;
-import io.vanillabp.integration.adapter.migration.startup.StartupTopic;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
 import io.vanillabp.integration.adapter.spi.version.DeployedProcessVersion;
 import io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog;
 import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import io.vanillabp.integration.spi.TransactionRunner;
+import io.vanillabp.integration.spi.startup.StartupTopic;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.service.MultiInstanceElement;
 import io.vanillabp.spi.service.MultiInstanceIndex;
@@ -183,10 +183,10 @@ public class TheMultiInstanceShapeOfAHeldVersionTest {
   @DisplayName("A held version which names no item is reported, with its version and its count")
   public void aHeldVersionWithoutAnItemIsReported() {
 
-    final var findings = theModuleFinishedDeploying(Service.class);
+    final var findings = aboutTheShape(theModuleFinishedDeploying(Service.class));
 
-    assertEquals(1, findings.findings().size(), findings.findings().toString());
-    final var finding = findings.findings().get(0);
+    assertEquals(1, findings.size(), findings.toString());
+    final var finding = findings.get(0);
     assertEquals(StartupFindings.Severity.WARNING, finding.severity());
     // the fix is in the code, but what a reader has to look at first is the version the
     // BPMS still holds
@@ -209,7 +209,7 @@ public class TheMultiInstanceShapeOfAHeldVersionTest {
 
     assertEquals(
         List.of(),
-        theModuleFinishedDeploying(ServiceReadingTheIndexOnly.class).findings());
+        aboutTheShape(theModuleFinishedDeploying(ServiceReadingTheIndexOnly.class)));
 
   }
 
@@ -219,7 +219,7 @@ public class TheMultiInstanceShapeOfAHeldVersionTest {
 
     catalog.withoutAnItemPerVersion.clear();
 
-    assertEquals(List.of(), theModuleFinishedDeploying(Service.class).findings());
+    assertEquals(List.of(), aboutTheShape(theModuleFinishedDeploying(Service.class)));
 
   }
 
@@ -230,7 +230,7 @@ public class TheMultiInstanceShapeOfAHeldVersionTest {
     catalog.readsTheShape = false;
 
     // a check which cannot answer for sure stays silent rather than refusing - decision 38
-    assertEquals(List.of(), theModuleFinishedDeploying(Service.class).findings());
+    assertEquals(List.of(), aboutTheShape(theModuleFinishedDeploying(Service.class)));
 
   }
 
@@ -240,12 +240,30 @@ public class TheMultiInstanceShapeOfAHeldVersionTest {
 
     catalog.instancesPerVersion.clear();
 
-    final var message = theModuleFinishedDeploying(Service.class)
-        .findings()
+    final var message = aboutTheShape(theModuleFinishedDeploying(Service.class))
         .get(0)
         .message();
 
     assertTrue(message.contains("this BPMS cannot say how many that are"), message);
+
+  }
+
+  /**
+   * What the check of this test reported, out of everything the deployment noticed. The
+   * versions a BPMS holds are read by several checks at once, and only one of them is
+   * the subject here.
+   *
+   * @param findings Everything the deployment noticed
+   * @return The findings about a method reading an item no model names
+   */
+  private static List<StartupFindings.Finding> aboutTheShape(
+      final StartupFindings findings) {
+
+    return findings
+        .findings()
+        .stream()
+        .filter(finding -> finding.message().contains("reads the item of"))
+        .toList();
 
   }
 
