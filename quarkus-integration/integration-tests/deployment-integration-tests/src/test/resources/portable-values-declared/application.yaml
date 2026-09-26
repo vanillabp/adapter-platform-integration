@@ -2,7 +2,7 @@ quarkus:
   datasource:
     db-kind: h2
     jdbc:
-      url: jdbc:h2:mem:bpms-initiated-start;DB_CLOSE_DELAY=-1
+      url: jdbc:h2:mem:portable-values-declared;DB_CLOSE_DELAY=-1
 vanillabp:
   adapters:
     demo1:
@@ -14,6 +14,10 @@ vanillabp:
         demo1:
           resources-location: classpath:processes/dummy
       workflows:
-        StartProcess:
+        LoanApprovalProcess:
           declared-aggregate-values:
             - amount
+          tasks:
+            assessRisk:
+              declared-task-params:
+                - riskReport

@@ -152,8 +152,8 @@ public class DeliveryRetentionTest {
     validated(properties(Duration.ofDays(2), null));
 
     final var log = loggedLines();
-    assertTrue(log.contains("vanillabp.outbox.retention"), log);
-    assertTrue(log.contains("vanillabp.delivery.retention"), log);
+    assertTrue(log.contains(PhaseTwoOutboxProperties.RETENTION_PROPERTY), log);
+    assertTrue(log.contains(DeliveryProperties.RETENTION_PROPERTY), log);
     assertTrue(log.contains("PT48H"), log);
     // the sentence which makes the difference actionable
     assertTrue(log.contains("@WorkflowTask method a second time"), log);
@@ -167,9 +167,9 @@ public class DeliveryRetentionTest {
     validated(properties(null, Duration.ofDays(30)));
 
     final var log = loggedLines();
-    assertTrue(log.contains("vanillabp.delivery.retention"), log);
+    assertTrue(log.contains(DeliveryProperties.RETENTION_PROPERTY), log);
     assertTrue(log.contains("P30D") || log.contains("PT720H"), log);
-    assertTrue(log.contains("vanillabp.outbox.retention"), log);
+    assertTrue(log.contains(PhaseTwoOutboxProperties.RETENTION_PROPERTY), log);
 
   }
 

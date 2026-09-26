@@ -11,6 +11,7 @@ import com.gruelbox.transactionoutbox.TransactionManager;
 import com.gruelbox.transactionoutbox.TransactionOutboxEntry;
 import com.gruelbox.transactionoutbox.TransactionOutboxListener;
 
+import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.spi.PhaseTwoPermanentFailure;
 import io.vanillabp.integration.spi.PhaseTwoRetryLater;
@@ -174,8 +175,9 @@ public class GruelboxPhaseTwoFailureListener implements TransactionOutboxListene
       entry.setNextAttemptTime(gruelboxWrote);
       log.debug(
           "Could not write the due time the dispatch of the outbox entry '{}' asked for - it is "
-              + "dispatched again after 'vanillabp.outbox.attempt-frequency' instead",
+              + "dispatched again after '{}' instead",
           entry.getId(),
+          PhaseTwoOutboxProperties.ATTEMPT_FREQUENCY_PROPERTY,
           e);
       return;
     }
@@ -214,9 +216,10 @@ public class GruelboxPhaseTwoFailureListener implements TransactionOutboxListene
       entry.setBlocked(false);
       log.warn(
           "Could not block the outbox entry '{}' although the adapter said that repeating cannot "
-              + "fix its failure - it is attempted again until 'vanillabp.outbox.block-after-attempts' "
+              + "fix its failure - it is attempted again until '{}' "
               + "are used up",
           entry.getId(),
+          PhaseTwoOutboxProperties.BLOCK_AFTER_ATTEMPTS_PROPERTY,
           e);
       return false;
     }

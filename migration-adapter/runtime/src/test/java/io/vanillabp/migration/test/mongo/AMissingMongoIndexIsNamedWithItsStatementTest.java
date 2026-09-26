@@ -15,6 +15,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.mongo.MongoIndex;
 import io.vanillabp.integration.adapter.migration.mongo.MongoSchema;
 import io.vanillabp.integration.adapter.migration.mongo.MongoSchema.IndexInPlace;
@@ -49,7 +50,7 @@ public class AMissingMongoIndexIsNamedWithItsStatementTest {
     final var text = message.getFormattedMessage();
     assertTrue(text.contains(COLLECTION), text);
     assertTrue(
-        text.contains("'vanillabp.outbox.create-schema'"),
+        text.contains("'%s'".formatted(PhaseTwoOutboxProperties.CREATE_SCHEMA_PROPERTY)),
         "the message names the property which would have created them: "
             + text);
     MongoSchema.OUTBOX_INDEXES

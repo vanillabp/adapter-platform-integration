@@ -26,6 +26,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import io.vanillabp.bpmsdouble.springboot.DummyAdapterConfiguration;
 import io.vanillabp.bpmsdouble.springboot.DummyAdapterProcessServiceConfiguration;
+import io.vanillabp.integration.adapter.migration.config.DeliveryProperties;
 import io.vanillabp.integration.adapter.migration.delivery.TaskDeliveryRetentionCleanup;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 import io.vanillabp.integration.delivery.JdbcTaskDeliveryLogAutoConfiguration;
@@ -155,7 +156,7 @@ public class DeliveryRetentionWiringTest {
           Assertions.assertTrue(line.contains("PT720H") || line.contains("P30D"), line);
           Assertions
               .assertTrue(
-                  line.contains("vanillabp.delivery.retention"),
+                  line.contains(DeliveryProperties.RETENTION_PROPERTY),
                   "the line names the property somebody would change: "
                       + line);
         });

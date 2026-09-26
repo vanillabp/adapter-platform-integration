@@ -48,7 +48,7 @@
   </distributionManagement>
 
   <properties>
-    <!-- Keep in sync with the property 'vanillabp.version' of the aggregator pom. The
+    <!-- Keep in sync with the property of the same name in the aggregator pom. The
          BOM cannot inherit it (see the comment on the parent above). -->
     <spi-for-java.version>2.0.0-SNAPSHOT</spi-for-java.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

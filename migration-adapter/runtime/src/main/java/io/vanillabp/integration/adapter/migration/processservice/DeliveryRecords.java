@@ -24,6 +24,7 @@ import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.spi.TaskDeliveryLog;
+import io.vanillabp.integration.spi.startup.StartupTopic;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -650,12 +651,12 @@ public final class DeliveryRecords {
     }
     findings
         .warn(
-            io.vanillabp.integration.spi.startup.StartupTopic.CODE,
+            StartupTopic.CODE,
             "process '%s' of workflow module '%s'".formatted(bpmnProcessId, workflowModuleId),
             """
                 The TaskDeliveryLog '%s' does not implement 'releaseRecordsOf', but '%s' is \
                 switched on for this BPMN process - the records of an ended workflow are NOT \
-                deleted when it ends but once 'vanillabp.delivery.retention' passed. To solve this \
+                deleted when it ends but once '%s' passed. To solve this \
                 either
                 - implement io.vanillabp.integration.spi.TaskDeliveryLog#releaseRecordsOf in \
                 '%s', or
@@ -664,6 +665,7 @@ public final class DeliveryRecords {
                 .formatted(
                     storeClass.getName(),
                     MigrationAdapterProperties.releaseOnWorkflowEndProperty(workflowModuleId),
+                    DeliveryProperties.RETENTION_PROPERTY,
                     storeClass.getName(),
                     MigrationAdapterProperties.releaseOnWorkflowEndProperty(workflowModuleId)));
 

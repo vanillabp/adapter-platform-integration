@@ -51,6 +51,14 @@ public class DeliveryProperties {
   }
 
   /**
+   * The section an application writes these keys below: <code>vanillabp.delivery</code>.
+   * Built from the prefix rather than written out, so a message names the section the way
+   * the application has to spell it.
+   */
+  public static final String SECTION = MigrationAdapterProperties.PREFIX
+      + ".delivery";
+
+  /**
    * Whether the records of a workflow are deleted the moment it ends, instead of waiting
    * for {@link #retention} to pass (see
    * {@link io.vanillabp.integration.spi.TaskDeliveryLog#releaseRecordsOf}). The end of an
@@ -85,6 +93,13 @@ public class DeliveryProperties {
    * tasks have no upper bound says so deliberately.
    */
   private Duration maxTaskAge;
+
+  /**
+   * The key of {@link #maxTaskAge}: <code>vanillabp.delivery.max-task-age</code>. It is a
+   * constant because the message about too many open tasks points to it.
+   */
+  public static final String MAX_TASK_AGE_PROPERTY = SECTION
+      + ".max-task-age";
 
   /**
    * Whether a delivery looks at the other tasks VanillaBP believes are open in the same
@@ -140,6 +155,14 @@ public class DeliveryProperties {
    * repository's DECISIONS.md.
    */
   private Duration retention;
+
+  /**
+   * The key of {@link #retention}: <code>vanillabp.delivery.retention</code>. It is a
+   * constant because several messages name it and a test reads the key from here instead
+   * of writing it a second time.
+   */
+  public static final String RETENTION_PROPERTY = SECTION
+      + ".retention";
 
   /**
    * Resolves the retention of delivery records: what this section says, or the outbox

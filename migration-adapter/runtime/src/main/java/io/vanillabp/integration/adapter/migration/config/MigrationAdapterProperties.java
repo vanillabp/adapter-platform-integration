@@ -16,6 +16,7 @@ import java.util.stream.Stream;
 
 import io.vanillabp.integration.extension.spi.settings.SettingsLevel;
 import io.vanillabp.integration.extension.spi.settings.SettingsResolution;
+import io.vanillabp.integration.spi.startup.StartupTopic;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
@@ -529,18 +530,27 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     if (deliveryRetention == null) {
       startupFindings()
           .notice(
-              io.vanillabp.integration.spi.startup.StartupTopic.CONFIGURATION,
-              "%s.outbox.retention".formatted(PREFIX),
+              StartupTopic.CONFIGURATION,
+              PhaseTwoOutboxProperties.RETENTION_PROPERTY,
               RETENTION_FOLLOWS_THE_OUTBOX
-                  .formatted(PREFIX, outboxRetention, PREFIX, outboxRetention, PREFIX));
+                  .formatted(
+                      PhaseTwoOutboxProperties.RETENTION_PROPERTY,
+                      outboxRetention,
+                      DeliveryProperties.RETENTION_PROPERTY,
+                      outboxRetention,
+                      DeliveryProperties.RETENTION_PROPERTY));
       return;
     }
     startupFindings()
         .notice(
-            io.vanillabp.integration.spi.startup.StartupTopic.CONFIGURATION,
-            "%s.delivery.retention".formatted(PREFIX),
+            StartupTopic.CONFIGURATION,
+            DeliveryProperties.RETENTION_PROPERTY,
             RETENTION_STANDS_ON_ITS_OWN
-                .formatted(PREFIX, deliveryRetention, PREFIX, outboxRetention));
+                .formatted(
+                    DeliveryProperties.RETENTION_PROPERTY,
+                    deliveryRetention,
+                    PhaseTwoOutboxProperties.RETENTION_PROPERTY,
+                    outboxRetention));
 
   }
 
@@ -623,11 +633,11 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * upgrade case, since this number used to govern both windows.
    */
   private static final String RETENTION_FOLLOWS_THE_OUTBOX = """
-      '%s.outbox.retention' is set to %s while '%s.delivery.retention' is not, so the records of \
+      '%s' is set to %s while '%s' is not, so the records of \
       processed task deliveries are kept for %s as well. Those two numbers used to be one and are no \
       longer the same kind of setting: the outbox one decides how long a dispatched entry stays \
       readable during support, the delivery one decides whether a late redelivery runs your \
-      @WorkflowTask method a second time. Set '%s.delivery.retention' explicitly where the second \
+      @WorkflowTask method a second time. Set '%s' explicitly where the second \
       one has to outlive the first.""";
 
   /**
@@ -635,8 +645,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * outbox followed the other way round.
    */
   private static final String RETENTION_STANDS_ON_ITS_OWN = """
-      '%s.delivery.retention' is set to %s, so the records of processed task deliveries are kept for \
-      that long, while dispatched outbox entries keep '%s.outbox.retention' (%s).""";
+      '%s' is set to %s, so the records of processed task deliveries are kept for \
+      that long, while dispatched outbox entries keep '%s' (%s).""";
 
   /**
    * Links child properties back to their parents (e.g. the workflow module ID into
@@ -1689,7 +1699,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
         "How long the records of processed task deliveries are kept is read for the whole application",
         misplaced,
         "the section of the whole application",
-        List.of("%s.delivery.retention: 7d".formatted(PREFIX)),
+        List.of("%s: 7d".formatted(DeliveryProperties.RETENTION_PROPERTY)),
         """
             One sweep of the housekeeping removes the records of every workflow module, and it \
             asks for one number before it knows whose records it is about.""");

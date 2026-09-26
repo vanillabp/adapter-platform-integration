@@ -17,4 +17,7 @@ vanillabp:
       workflows:
         Calling:
           declared-aggregate-values:
-            - '*'
+            - element
+            - event
+            - index
+            - total

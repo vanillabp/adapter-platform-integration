@@ -913,11 +913,11 @@ public class JdbcTaskDeliveryStore {
       }
       throw new IllegalStateException(
           """
-              Could not create the task-delivery table '%s'! Set 'vanillabp.outbox.create-schema' to \
+              Could not create the task-delivery table '%s'! Set '%s' to \
               'false' and manage the schema manually if the DDL is not suitable for your database - \
               the table needs a unique DELIVERY_KEY and is described in the platform integration's \
               README."""
-              .formatted(tableName), e);
+              .formatted(tableName, PhaseTwoOutboxProperties.CREATE_SCHEMA_PROPERTY), e);
     } finally {
       release(connection);
     }
@@ -984,9 +984,9 @@ public class JdbcTaskDeliveryStore {
               - apply the schema of VanillaBP with your migration tool: the artifact \
               'io.vanillabp:vanillabp-schema' ships the Liquibase changelog \
               'vanillabp/schema/changelog.xml' and the SQL generated from it for Flyway, or
-              - let VanillaBP create the table by setting 'vanillabp.outbox.create-schema' to \
+              - let VanillaBP create the table by setting '%s' to \
               'true' (the default)."""
-              .formatted(tableName));
+              .formatted(tableName, PhaseTwoOutboxProperties.CREATE_SCHEMA_PROPERTY));
     } catch (final SQLException e) {
       throw new IllegalStateException(
           "Could not check whether the task-delivery table '%s' exists!".formatted(tableName), e);

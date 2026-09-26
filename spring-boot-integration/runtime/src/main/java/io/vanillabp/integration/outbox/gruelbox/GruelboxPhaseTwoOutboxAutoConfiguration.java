@@ -31,6 +31,7 @@ import com.gruelbox.transactionoutbox.TransactionOutboxListener;
 import com.gruelbox.transactionoutbox.spring.SpringInstantiator;
 import com.gruelbox.transactionoutbox.spring.SpringTransactionManager;
 
+import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
 import io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
@@ -542,11 +543,11 @@ public class GruelboxPhaseTwoOutboxAutoConfiguration {
             - apply gruelbox's schema with your migration tool: \
             'com.gruelbox.transactionoutbox.DefaultPersistor.writeSchema(Writer)' writes the \
             statements for the database you configure, or
-            - let gruelbox create the table by setting 'vanillabp.outbox.create-schema' to \
+            - let gruelbox create the table by setting '%s' to \
             'true' (the default).
             The wiki page 'Spring Boot integration', section 'Creating the tables with Liquibase or \
             Flyway', describes the whole procedure."""
-            .formatted(DEFAULT_OUTBOX_TABLE_NAME));
+            .formatted(DEFAULT_OUTBOX_TABLE_NAME, PhaseTwoOutboxProperties.CREATE_SCHEMA_PROPERTY));
 
   }
 

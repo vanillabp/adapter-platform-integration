@@ -205,7 +205,6 @@ public class DerivedCancelationTest {
             workflows:
               CancelProcess:
                 allow-full-sync-with-bpms: true
-                declared-aggregate-values: [ "*" ]
       """;
 
   private ConfigurableApplicationContext runTestApplication(

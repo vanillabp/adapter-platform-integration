@@ -72,7 +72,6 @@ public class ApplicationTransactionTest {
             workflows:
               TransactionProcess:
                 allow-full-sync-with-bpms: true
-                declared-aggregate-values: [ "*" ]
       """;
 
   @Configuration
