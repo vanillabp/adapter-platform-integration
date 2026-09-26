@@ -381,8 +381,8 @@ public class ApplicationOwnedStoresTest {
                 resources-location: classpath*:test-module/processes/apptransaction
             workflows:
               AppTxProcess:
+                declared-aggregate-values: [ invocations ]
                 allow-full-sync-with-bpms: true
-                declared-aggregate-values: [ "*" ]
       """;
 
   private ConfigurableApplicationContext runTestApplication(

@@ -184,8 +184,8 @@ public class InboundIdempotencyTest {
                 resources-location: classpath*:test-module/processes/delivery
             workflows:
               DeliveryProcess:
+                declared-aggregate-values: [ invocations ]
                 allow-full-sync-with-bpms: true
-                declared-aggregate-values: [ "*" ]
                 tasks:
                   undeduplicatedTask:
                     adapters:

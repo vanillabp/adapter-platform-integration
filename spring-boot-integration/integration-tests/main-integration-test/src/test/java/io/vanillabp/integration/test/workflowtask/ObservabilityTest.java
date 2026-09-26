@@ -94,7 +94,7 @@ public class ObservabilityTest {
                 resources-location: classpath*:test-module/processes/workflowtask
             workflows:
               TaskProcess:
-                declared-aggregate-values: [ "*" ]
+                declared-aggregate-values: [ element, event, index, total ]
       """;
 
   private ConfigurableApplicationContext runTestApplication(

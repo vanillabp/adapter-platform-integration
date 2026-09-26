@@ -73,7 +73,7 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
   @Mapping(target = "prioritizedAdapters", qualifiedByName = "unwrapStringList")
   @Mapping(target = "retiredAdapters", qualifiedByName = "unwrapStringList")
   @Mapping(target = "allowFullSyncWithBpms", qualifiedByName = "unwrapBoolean")
-  @Mapping(target = "declaredTaskParams", qualifiedByName = "unwrapStringList")
+  @Mapping(target = "declaredTaskParams", qualifiedByName = "unwrapStringListOrNull")
   // derived from the classpath facts by MigrationAdapterProperties#normalize, not
   // bound from properties (the resources-location convention)
   @Mapping(target = "conventionalResourcesLocations", ignore = true)
@@ -249,7 +249,7 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
   @Mapping(target = "workflowModuleId", ignore = true)
   @Mapping(target = "prioritizedAdapters", qualifiedByName = "unwrapStringList")
   @Mapping(target = "allowFullSyncWithBpms", qualifiedByName = "unwrapBoolean")
-  @Mapping(target = "declaredTaskParams", qualifiedByName = "unwrapStringList")
+  @Mapping(target = "declaredTaskParams", qualifiedByName = "unwrapStringListOrNull")
   WorkflowModuleAdapterProperties toCore(
       QuarkusMigrationAdapterProperties.WorkflowModuleProperties workflowModuleProperties);
 
@@ -268,7 +268,7 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
   @Mapping(target = "prioritizedAdapters", qualifiedByName = "unwrapStringList")
   @Mapping(target = "allowFullSyncWithBpms", qualifiedByName = "unwrapBoolean")
   @Mapping(target = "declaredAggregateValues", qualifiedByName = "unwrapStringList")
-  @Mapping(target = "declaredTaskParams", qualifiedByName = "unwrapStringList")
+  @Mapping(target = "declaredTaskParams", qualifiedByName = "unwrapStringListOrNull")
   WorkflowAdapterProperties toCore(
       QuarkusMigrationAdapterProperties.WorkflowProperties workflowProperties);
 
@@ -281,7 +281,7 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
    *          of a workflow
    * @return The core's section of that task
    */
-  @Mapping(target = "declaredTaskParams", qualifiedByName = "unwrapStringList")
+  @Mapping(target = "declaredTaskParams", qualifiedByName = "unwrapStringListOrNull")
   TaskAdapterProperties toCore(
       QuarkusMigrationAdapterProperties.TaskProperties taskProperties);
 
@@ -410,6 +410,29 @@ public interface QuarkusMigrationAdapterPropertiesMapper {
     return value
         .map(List::copyOf)
         .orElse(List.of());
+
+  }
+
+  /**
+   * Unwraps optional lists of a setting the core resolves over several levels, where
+   * <code>null</code> is what says "this level says nothing" and an empty list would say
+   * "this level declares none", which stops the walk one level too early.
+   * <p>
+   * <code>vanillabp.declared-task-params</code> is such a setting. Every workflow module
+   * writes a section of its own, so an empty list there would hide what the application
+   * declared, and the same holds for a workflow and for a task (see
+   * {@code QuarkusDeclaredTaskParamsLevelsTest}).
+   *
+   * @param value The optional list
+   * @return The unwrapped list, or <code>null</code> where the level wrote nothing
+   */
+  @Named("unwrapStringListOrNull")
+  default List<String> unwrapListOrNull(
+      final Optional<List<String>> value) {
+
+    return value
+        .map(List::copyOf)
+        .orElse(null);
 
   }
 

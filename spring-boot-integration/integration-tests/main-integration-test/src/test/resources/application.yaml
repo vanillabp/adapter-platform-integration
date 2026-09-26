@@ -12,50 +12,32 @@ vanillabp:
         AppTxProcess:
           allow-full-sync-with-bpms: true
           declared-aggregate-values:
-            - '*'
+            - invocations
         ClassVersionedProcess:
           allow-full-sync-with-bpms: true
-          declared-aggregate-values:
-            - '*'
         DeliveryProcess:
           allow-full-sync-with-bpms: true
           declared-aggregate-values:
-            - '*'
+            - invocations
         DummyProcess:
           allow-full-sync-with-bpms: true
-          declared-aggregate-values:
-            - '*'
         InheritedProcess:
           allow-full-sync-with-bpms: true
-          declared-aggregate-values:
-            - '*'
         InheritingWorkflowService:
           allow-full-sync-with-bpms: true
-          declared-aggregate-values:
-            - '*'
         InvisibleHandlers:
           allow-full-sync-with-bpms: true
-          declared-aggregate-values:
-            - '*'
         LibraryProcess:
           allow-full-sync-with-bpms: true
-          declared-aggregate-values:
-            - '*'
         SharedProcess:
           allow-full-sync-with-bpms: true
-          declared-aggregate-values:
-            - '*'
         TimerProcess:
           allow-full-sync-with-bpms: true
           declared-aggregate-values:
-            - '*'
+            - amount
         TransactionProcess:
           allow-full-sync-with-bpms: true
-          declared-aggregate-values:
-            - '*'
         VersionedProcess:
           allow-full-sync-with-bpms: true
-          declared-aggregate-values:
-            - '*'
 test-module:
   nothing: there

@@ -223,8 +223,8 @@ public class ActivationIdentityTest {
                 resources-location: classpath*:activation-module/processes
             workflows:
               ActivationProcess:
+                declared-aggregate-values: [ correlations ]
                 allow-full-sync-with-bpms: true
-                declared-aggregate-values: [ "*" ]
       """;
 
   private ConfigurableApplicationContext runTestApplication(

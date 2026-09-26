@@ -14,6 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
@@ -55,7 +56,9 @@ public class JdbcTaskDeliverySchemaTest {
         () -> storeOn("missing").validateSchemaExists());
 
     assertTrue(failure.getMessage().contains("VANILLABP_TASK_DELIVERY"), failure.getMessage());
-    assertTrue(failure.getMessage().contains("vanillabp.outbox.create-schema"), failure.getMessage());
+    assertTrue(
+        failure.getMessage().contains(PhaseTwoOutboxProperties.CREATE_SCHEMA_PROPERTY),
+        failure.getMessage());
     assertTrue(failure.getMessage().contains("io.vanillabp:vanillabp-schema"), failure.getMessage());
     assertTrue(
         failure.getMessage().contains("vanillabp/schema/changelog.xml"),

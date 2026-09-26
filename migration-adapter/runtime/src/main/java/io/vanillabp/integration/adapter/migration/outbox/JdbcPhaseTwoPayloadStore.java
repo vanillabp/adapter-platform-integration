@@ -5,6 +5,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 
+import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
 import io.vanillabp.integration.adapter.migration.jdbc.JdbcDialect;
 import io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema;
@@ -378,9 +379,9 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
       throw new IllegalStateException(
           """
               Could not create the phase-two payload table '%s'! Set \
-              'vanillabp.outbox.create-schema' to 'false' and manage the schema manually if the DDL \
+              '%s' to 'false' and manage the schema manually if the DDL \
               is not suitable for your database."""
-              .formatted(tableName), e);
+              .formatted(tableName, PhaseTwoOutboxProperties.CREATE_SCHEMA_PROPERTY), e);
     } finally {
       release(connection);
     }
@@ -437,9 +438,9 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
               - apply the schema of VanillaBP with your migration tool: the artifact \
               'io.vanillabp:vanillabp-schema' ships the Liquibase changelog \
               'vanillabp/schema/changelog.xml' and the SQL generated from it for Flyway, or
-              - let VanillaBP create the table by setting 'vanillabp.outbox.create-schema' to \
+              - let VanillaBP create the table by setting '%s' to \
               'true' (the default)."""
-              .formatted(tableName));
+              .formatted(tableName, PhaseTwoOutboxProperties.CREATE_SCHEMA_PROPERTY));
     } catch (final SQLException e) {
       throw new IllegalStateException(
           "Could not check whether the phase-two payload table '%s' exists!".formatted(tableName), e);
