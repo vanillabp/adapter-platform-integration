@@ -178,8 +178,8 @@ public class DeliveryRecordReleaseTest {
                 resources-location: classpath*:test-module/processes/delivery
             workflows:
               DeliveryProcess:
+                declared-aggregate-values: [ invocations ]
                 allow-full-sync-with-bpms: true
-                declared-aggregate-values: [ "*" ]
       """;
 
   private ConfigurableApplicationContext runTestApplication(

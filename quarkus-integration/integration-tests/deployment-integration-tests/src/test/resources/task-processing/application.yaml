@@ -16,7 +16,10 @@ vanillabp:
       workflows:
         TaskProcess:
           declared-aggregate-values:
-            - '*'
+            - element
+            - event
+            - index
+            - total
           tasks:
             processTask:
               adapters:
