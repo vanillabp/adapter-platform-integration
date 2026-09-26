@@ -253,6 +253,8 @@ public class DeploymentService {
       final List<String> workflowModuleIds,
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader) {
 
+    endTheStartIfSomethingWasRefused();
+
     // artifacts of several release cycles meet in one application, and a pair which was
     // never built together has to be found before anything runs
     checkPartsBelongTogether();
@@ -1055,17 +1057,7 @@ public class DeploymentService {
   private <BPMN, PC> void startWorkflowProcessingOfEachModule(
       final List<String> workflowModuleIds) {
 
-    // a reason not to start which was found before this point ends the start HERE, and
-    // not at the end of this method: an adapter told to begin hands tasks to an
-    // application which is about to end, and it would do so for as long as the remaining
-    // checks take
-    if (properties
-        .startupFindings()
-        .somethingWasRefused()) {
-      properties
-          .startupFindings()
-          .endOfStartup();
-    }
+    endTheStartIfSomethingWasRefused();
 
     // walk through all workflow modules...
     workflowModuleIds
@@ -1188,6 +1180,33 @@ public class DeploymentService {
                         processingContext);
               });
         });
+
+  }
+
+  /**
+   * Ends the start where a reason not to start is known already, before this step runs.
+   * <p>
+   * A refusal is collected and thrown at the end of the start, so a developer who put two
+   * things wrong learns both at once. What must not happen while it waits is work on a
+   * system outside this application. The checks which run before the deployment ask the
+   * application about itself, and once one of them has refused, deploying BPMN files to a
+   * BPMS and telling adapters to hand out tasks are both done for an application which is
+   * about to end.
+   * <p>
+   * So the two steps which reach outside look first, and what was collected until then is
+   * written and thrown here. It is also the answer to which message a developer reads in
+   * this case: the one which named a gap in their application, not the one the deployment
+   * runs into afterwards.
+   */
+  private void endTheStartIfSomethingWasRefused() {
+
+    if (properties
+        .startupFindings()
+        .somethingWasRefused()) {
+      properties
+          .startupFindings()
+          .endOfStartup();
+    }
 
   }
 

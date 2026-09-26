@@ -39,11 +39,14 @@ public class HandlerMethodsNobodySeesTest {
           .addAsResource("inheritance-module-descriptor/workflow-module", "META-INF/workflow-module"))
       .setLogRecordPredicate(record -> record.getLevel().intValue() >= Level.WARNING.intValue())
       .assertLogRecords(records -> {
+        // both reports stand in the block the whole start writes, which is ONE record,
+        // so they are told apart by the words each of them opens with
         final var reports = records
             .stream()
             .map(record -> record.getMessage() == null
                 ? ""
                 : record.getMessage())
+            .flatMap(message -> java.util.Arrays.stream(message.split("(?=Handler methods of the workflow service)")))
             .filter(message -> message.contains("which VanillaBP does not see"))
             .toList();
         assertEquals(2, reports.size(), "one report per workflow service class and handler annotation: "

@@ -14,6 +14,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayInputStream;
@@ -149,6 +150,34 @@ public class DeploymentServiceTest {
   @Nested
   @DisplayName("deployResources Tests")
   class DeployResourcesTests {
+
+    @Test
+    @DisplayName("A reason not to start which was found earlier ends the start before anything is deployed")
+    public void aRefusalFoundEarlierEndsTheStartBeforeTheDeployment() {
+
+      final var properties = createPropertiesWithAdapter("adapter-test1");
+      // what the checks running before the deployment found: they ask the application
+      // about itself, and the deployment is the first step which reaches a BPMS
+      properties
+          .startupFindings()
+          .refuse(
+              io.vanillabp.integration.spi.startup.StartupTopic.CODE,
+              "process 'TestProcess' of workflow module 'test-module'",
+              "Nothing can dispatch what this workflow sends to its BPMS.");
+
+      final var failure = assertThrows(
+          IllegalStateException.class,
+          () -> new DeploymentService(properties, List.of(adapter1DeploymentService), List.of())
+              .deployResources(List.of("test-module"), bpmnFilesOnly(location -> Map.of())));
+
+      // the developer reads the message which named the gap in their application, not
+      // whatever the deployment would have run into afterwards
+      assertTrue(
+          failure.getMessage().contains("Nothing can dispatch what this workflow sends to its BPMS."),
+          failure.getMessage());
+      verifyNoInteractions(adapter1DeploymentService);
+
+    }
 
     @Test
     @DisplayName("Correct deployment service is found for configured adapter")

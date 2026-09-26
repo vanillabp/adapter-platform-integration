@@ -4036,9 +4036,13 @@ into.
 A start which ends on something else writes the block too, from
 `sayWhatWasFoundBeforeTheStartFailed`, and throws nothing: a database which is not there ends a
 start as surely as a check does, and what was found by then is what a developer needs beside that
-exception. A reason not to start which was found before the workflow processing begins ends the
-start right there, so no adapter is told to begin and hands out tasks to an application which is
-about to end.
+exception.
+
+A reason not to start which is known already ends the start before the deployment and before the
+workflow processing, the two steps which reach outside this application. Nothing is deployed to a
+BPMS for an application which is about to end, and no adapter is told to hand out tasks for one.
+It is also what decides which message a developer reads where both would speak: the one which
+named a gap in their application, not the one the deployment runs into afterwards.
 
 A finding which arrives after the block was written goes into the log where it was found. Two
 checks report that late on purpose: what a dispatch learns about an adapter id nobody configures
