@@ -515,14 +515,20 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     if (deliveryRetention == null) {
       logger.info(
           RETENTION_FOLLOWS_THE_OUTBOX,
-          PREFIX,
+          PhaseTwoOutboxProperties.RETENTION_PROPERTY,
           outboxRetention,
-          PREFIX,
+          DeliveryProperties.RETENTION_PROPERTY,
           outboxRetention,
-          PREFIX);
+          DeliveryProperties.RETENTION_PROPERTY);
       return;
     }
-    logger.info(RETENTION_STANDS_ON_ITS_OWN, PREFIX, deliveryRetention, PREFIX, outboxRetention);
+    logger
+        .info(
+            RETENTION_STANDS_ON_ITS_OWN,
+            DeliveryProperties.RETENTION_PROPERTY,
+            deliveryRetention,
+            PhaseTwoOutboxProperties.RETENTION_PROPERTY,
+            outboxRetention);
 
   }
 
@@ -601,11 +607,11 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * upgrade case, since this number used to govern both windows.
    */
   private static final String RETENTION_FOLLOWS_THE_OUTBOX = """
-      '{}.outbox.retention' is set to {} while '{}.delivery.retention' is not, so the records of \
+      '{}' is set to {} while '{}' is not, so the records of \
       processed task deliveries are kept for {} as well. Those two numbers used to be one and are no \
       longer the same kind of setting: the outbox one decides how long a dispatched entry stays \
       readable during support, the delivery one decides whether a late redelivery runs your \
-      @WorkflowTask method a second time. Set '{}.delivery.retention' explicitly where the second \
+      @WorkflowTask method a second time. Set '{}' explicitly where the second \
       one has to outlive the first.""";
 
   /**
@@ -613,8 +619,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * outbox followed the other way round.
    */
   private static final String RETENTION_STANDS_ON_ITS_OWN = """
-      '{}.delivery.retention' is set to {}, so the records of processed task deliveries are kept for \
-      that long, while dispatched outbox entries keep '{}.outbox.retention' ({}).""";
+      '{}' is set to {}, so the records of processed task deliveries are kept for \
+      that long, while dispatched outbox entries keep '{}' ({}).""";
 
   /**
    * Links child properties back to their parents (e.g. the workflow module ID into
@@ -1667,7 +1673,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
         "How long the records of processed task deliveries are kept is read for the whole application",
         misplaced,
         "the section of the whole application",
-        List.of("%s.delivery.retention: 7d".formatted(PREFIX)),
+        List.of("%s: 7d".formatted(DeliveryProperties.RETENTION_PROPERTY)),
         """
             One sweep of the housekeeping removes the records of every workflow module, and it \
             asks for one number before it knows whose records it is about.""");

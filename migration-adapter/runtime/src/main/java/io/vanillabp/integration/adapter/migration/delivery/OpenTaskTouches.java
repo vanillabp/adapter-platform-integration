@@ -6,6 +6,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
+import io.vanillabp.integration.adapter.migration.config.DeliveryProperties;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -90,13 +91,15 @@ public class OpenTaskTouches {
             """
                 More than {} open tasks of '{}' were redelivered since the last refresh of their \
                 delivery records - the keys beyond that are dropped, and a record which is not \
-                refreshed for a whole 'vanillabp.delivery.retention' is deleted although its task is \
+                refreshed for a whole '{}' is deleted although its task is \
                 still open, so its next redelivery reaches the @WorkflowTask method again. Either \
                 that many tasks are open at once and the retention should be raised, or tasks are \
-                waiting which nobody will ever complete - 'vanillabp.delivery.max-task-age' reports \
+                waiting which nobody will ever complete - '{}' reports \
                 those.""",
             MAX_REMEMBERED,
-            name);
+            name,
+            DeliveryProperties.RETENTION_PROPERTY,
+            DeliveryProperties.MAX_TASK_AGE_PROPERTY);
       }
       return;
     }

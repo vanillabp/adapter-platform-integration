@@ -6,6 +6,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import io.vanillabp.integration.adapter.migration.config.DeliveryProperties;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -84,10 +85,10 @@ public class TaskDeliveryRetentionCleanup {
     // the first question a support case about a handler running twice asks
     log
         .info(
-            "Records of processed task deliveries in '{}' are kept for {} "
-                + "('vanillabp.delivery.retention')",
+            "Records of processed task deliveries in '{}' are kept for {} ('{}')",
             name,
-            retention);
+            retention,
+            DeliveryProperties.RETENTION_PROPERTY);
     executor = Executors.newSingleThreadScheduledExecutor(runnable -> {
       final var thread = new Thread(runnable, "vanillabp-task-deliveries");
       thread.setDaemon(true);

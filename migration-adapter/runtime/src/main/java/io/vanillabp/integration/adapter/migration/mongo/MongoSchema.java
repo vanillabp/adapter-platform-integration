@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import lombok.extern.slf4j.Slf4j;
 
@@ -129,12 +130,13 @@ public final class MongoSchema {
         .warn(
             """
                 The MongoDB collection '{}' is missing {} of the indexes VanillaBP reads it by, \
-                and 'vanillabp.outbox.create-schema' is 'false', so nothing creates them. Run:
+                and '{}' is 'false', so nothing creates them. Run:
                   {}
                 A question without its index reads the whole collection, and that costs more the \
                 longer the application has been running.{}""",
             collection,
             missing.size(),
+            PhaseTwoOutboxProperties.CREATE_SCHEMA_PROPERTY,
             missing
                 .stream()
                 .map(index -> index.createIndexOn(collection))

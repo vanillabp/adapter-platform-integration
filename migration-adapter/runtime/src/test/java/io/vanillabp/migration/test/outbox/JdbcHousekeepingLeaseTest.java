@@ -138,7 +138,9 @@ public class JdbcHousekeepingLeaseTest {
         () -> new JdbcHousekeepingLease(h2("housekeeping-missing"), TABLE).validateSchemaExists());
 
     assertTrue(failure.getMessage().contains(TABLE), failure.getMessage());
-    assertTrue(failure.getMessage().contains("vanillabp.outbox.create-schema"), failure.getMessage());
+    assertTrue(
+        failure.getMessage().contains(PhaseTwoOutboxProperties.CREATE_SCHEMA_PROPERTY),
+        failure.getMessage());
     assertTrue(failure.getMessage().contains("io.vanillabp:vanillabp-schema"), failure.getMessage());
     // what is lost while it is missing
     assertTrue(failure.getMessage().contains("both tables grow"), failure.getMessage());

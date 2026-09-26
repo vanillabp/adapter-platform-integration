@@ -97,6 +97,14 @@ public class PhaseTwoOutboxProperties {
   private Duration attemptFrequency = Duration.ofSeconds(30);
 
   /**
+   * The key of {@link #attemptFrequency}:
+   * <code>vanillabp.outbox.attempt-frequency</code>. It is a constant because the
+   * message about an entry which is dispatched again names it.
+   */
+  public static final String ATTEMPT_FREQUENCY_PROPERTY = SECTION
+      + ".attempt-frequency";
+
+  /**
    * The longest distance the growing backoff reaches. Five minutes, so a BPMS which
    * comes back is noticed within five minutes however long it was away.
    * <p>
@@ -116,6 +124,14 @@ public class PhaseTwoOutboxProperties {
    */
   @Builder.Default
   private int blockAfterAttempts = 50;
+
+  /**
+   * The key of {@link #blockAfterAttempts}:
+   * <code>vanillabp.outbox.block-after-attempts</code>. It is a constant because the
+   * message about an entry which could not be blocked names it.
+   */
+  public static final String BLOCK_AFTER_ATTEMPTS_PROPERTY = SECTION
+      + ".block-after-attempts";
 
   /**
    * The distance to the next attempt after a dispatch which failed, doubling per
@@ -169,6 +185,14 @@ public class PhaseTwoOutboxProperties {
   private int dispatchThreads = 4;
 
   /**
+   * The key of {@link #dispatchThreads}:
+   * <code>vanillabp.outbox.dispatch-threads</code>. It is a constant because the message
+   * about fewer than one thread names it.
+   */
+  public static final String DISPATCH_THREADS_PROPERTY = SECTION
+      + ".dispatch-threads";
+
+  /**
    * Whether the schema (table/collection) used to store outbox entries is created
    * automatically. Disable this if the database schema is managed manually (e.g. by
    * Flyway or Liquibase).
@@ -179,6 +203,14 @@ public class PhaseTwoOutboxProperties {
    */
   @Builder.Default
   private boolean createSchema = true;
+
+  /**
+   * The key of {@link #createSchema}: <code>vanillabp.outbox.create-schema</code>. It is
+   * a constant because every message about a table or a collection which is missing
+   * names it, and a test reads the key from here instead of writing it a second time.
+   */
+  public static final String CREATE_SCHEMA_PROPERTY = SECTION
+      + ".create-schema";
 
   /**
    * How long successfully dispatched entries (marked as DONE) are retained before
@@ -200,6 +232,14 @@ public class PhaseTwoOutboxProperties {
    */
   @Builder.Default
   private Duration retention = DEFAULT_RETENTION;
+
+  /**
+   * The key of {@link #retention}: <code>vanillabp.outbox.retention</code>. It is a
+   * constant because the two messages telling the retentions apart name it next to
+   * {@link DeliveryProperties#RETENTION_PROPERTY}.
+   */
+  public static final String RETENTION_PROPERTY = SECTION
+      + ".retention";
 
   /**
    * The default of {@link #retention}, and therefore the default of

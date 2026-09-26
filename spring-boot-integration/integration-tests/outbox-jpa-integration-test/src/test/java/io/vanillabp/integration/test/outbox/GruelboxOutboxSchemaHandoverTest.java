@@ -17,6 +17,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import com.gruelbox.transactionoutbox.TransactionOutbox;
 
+import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema;
 import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfiguration;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
@@ -79,7 +80,7 @@ public class GruelboxOutboxSchemaHandoverTest {
           final var message = bootFailureOf(context);
 
           assertTrue(message.contains(GruelboxPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_TABLE_NAME), message);
-          assertTrue(message.contains("vanillabp.outbox.create-schema"), message);
+          assertTrue(message.contains(PhaseTwoOutboxProperties.CREATE_SCHEMA_PROPERTY), message);
           // the statements are gruelbox's, so the message must not send anybody to
           // VanillaBP's schema artifact for them
           assertTrue(message.contains("gruelbox"), message);

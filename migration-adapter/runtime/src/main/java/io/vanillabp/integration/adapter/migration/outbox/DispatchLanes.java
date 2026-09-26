@@ -7,6 +7,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
+import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -79,10 +80,10 @@ public class DispatchLanes {
     if (count < 1) {
       throw new IllegalArgumentException(
           """
-              'vanillabp.outbox.dispatch-threads' is %d! The outbox dispatches on at least one \
+              '%s' is %d! The outbox dispatches on at least one \
               thread, so set it to one or more. One thread is what every VanillaBP release before \
               2.0 did."""
-              .formatted(count));
+              .formatted(PhaseTwoOutboxProperties.DISPATCH_THREADS_PROPERTY, count));
     }
     this.lanes = new ArrayList<>(count);
     for (var lane = 0; lane < count; lane++) {
