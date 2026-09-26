@@ -529,7 +529,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     if (deliveryRetention == null) {
       startupFindings()
           .notice(
-              io.vanillabp.integration.adapter.migration.startup.StartupTopic.CONFIGURATION,
+              io.vanillabp.integration.spi.startup.StartupTopic.CONFIGURATION,
               "%s.outbox.retention".formatted(PREFIX),
               RETENTION_FOLLOWS_THE_OUTBOX
                   .formatted(PREFIX, outboxRetention, PREFIX, outboxRetention, PREFIX));
@@ -537,7 +537,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     }
     startupFindings()
         .notice(
-            io.vanillabp.integration.adapter.migration.startup.StartupTopic.CONFIGURATION,
+            io.vanillabp.integration.spi.startup.StartupTopic.CONFIGURATION,
             "%s.delivery.retention".formatted(PREFIX),
             RETENTION_STANDS_ON_ITS_OWN
                 .formatted(PREFIX, deliveryRetention, PREFIX, outboxRetention));
@@ -574,7 +574,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
         .forEach(adapterId -> stillAwake.append(WHAT_STAYS_AWAKE_ON_CAMUNDA_7.formatted(adapterId)));
     startupFindings()
         .notice(
-            io.vanillabp.integration.adapter.migration.startup.StartupTopic.CONFIGURATION,
+            io.vanillabp.integration.spi.startup.StartupTopic.CONFIGURATION,
             "%s.outbox.poll-interval".formatted(PREFIX),
             """
                 '%s.outbox.poll-interval' is %s instead of the default %s, so an outbox sleeps until \
@@ -2432,7 +2432,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       final var propPrefix = "\n  %s.workflow-modules.".formatted(PREFIX);
       startupFindings()
           .warn(
-              io.vanillabp.integration.adapter.migration.startup.StartupTopic.CONFIGURATION,
+              io.vanillabp.integration.spi.startup.StartupTopic.CONFIGURATION,
               "%s.workflow-modules".formatted(PREFIX),
               """
                   Found properties for workflow modules
@@ -2542,7 +2542,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
         final var propPostfix = ".adapters.%s.resources-location".formatted(adapterId);
         startupFindings()
             .notice(
-                io.vanillabp.integration.adapter.migration.startup.StartupTopic.CONFIGURATION,
+                io.vanillabp.integration.spi.startup.StartupTopic.CONFIGURATION,
                 "adapter '%s'".formatted(adapterId),
                 """
                     Found only one VanillaBP adapter '%s' configured. Please ensure the properties

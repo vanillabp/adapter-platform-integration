@@ -19,7 +19,7 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import io.vanillabp.integration.adapter.migration.startup.StartupFindings;
-import io.vanillabp.integration.adapter.migration.startup.StartupTopic;
+import io.vanillabp.integration.spi.startup.StartupTopic;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**

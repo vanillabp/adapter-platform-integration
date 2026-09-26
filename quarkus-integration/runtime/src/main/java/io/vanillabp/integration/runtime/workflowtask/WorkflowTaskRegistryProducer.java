@@ -146,6 +146,27 @@ public class WorkflowTaskRegistryProducer {
   }
 
   /**
+   * Where an adapter says what it found while the application starts.
+   * <p>
+   * It is the collection the checks of the core report into as well, so an adapter's
+   * finding stands in the same block as the platform's. The collection hangs on the
+   * configuration, because that is what every check already holds; this bean is the way
+   * to it for everything which does not.
+   *
+   * @param properties The VanillaBP configuration, which carries the collection
+   * @return Where a startup check of an adapter reports
+   */
+  @jakarta.enterprise.inject.Produces
+  @jakarta.inject.Singleton
+  @Unremovable
+  public io.vanillabp.integration.spi.startup.StartupReport startupReport(
+      final io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties properties) {
+
+    return properties.startupFindings();
+
+  }
+
+  /**
    * The core-owned sync model: turns a workflow aggregate into the
    * values shared with the BPMS, honoring
    * {@code @SyncWithBPMS}/{@code @NoSyncWithBPMS} and the adapter's default.

@@ -295,7 +295,7 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
     if (report != null) {
       findings
           .warn(
-              io.vanillabp.integration.adapter.migration.startup.StartupTopic.CODE,
+              io.vanillabp.integration.spi.startup.StartupTopic.CODE,
               "workflow service '%s'".formatted(workflowServiceClass.getName()),
               report);
     }
@@ -501,7 +501,7 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
                     method.describe())))
         .forEach(method -> findings
             .warn(
-                io.vanillabp.integration.adapter.migration.startup.StartupTopic.CODE,
+                io.vanillabp.integration.spi.startup.StartupTopic.CODE,
                 "method '%s' of process '%s' of workflow module '%s'".formatted(
                     method.describe(),
                     key.bpmnProcessId(),

@@ -404,7 +404,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
           .equals(processService.getWorkflowAggregateClass())) {
         findings
             .warn(
-                io.vanillabp.integration.adapter.migration.startup.StartupTopic.CODE,
+                io.vanillabp.integration.spi.startup.StartupTopic.CODE,
                 "process '%s' of workflow module '%s'".formatted(bpmnProcessId, workflowModuleId),
                 """
                     The @WorkflowService class '%s' (aggregate '%s') declares this BPMN process, \
@@ -505,7 +505,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     if (report != null) {
       findings
           .warn(
-              io.vanillabp.integration.adapter.migration.startup.StartupTopic.CODE,
+              io.vanillabp.integration.spi.startup.StartupTopic.CODE,
               "workflow service '%s'".formatted(workflowServiceClass.getName()),
               report);
     }

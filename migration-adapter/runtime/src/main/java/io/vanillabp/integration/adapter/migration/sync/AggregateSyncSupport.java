@@ -912,7 +912,7 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
           .distinct()
           .forEach(type -> findings
               .warn(
-                  io.vanillabp.integration.adapter.migration.startup.StartupTopic.CODE,
+                  io.vanillabp.integration.spi.startup.StartupTopic.CODE,
                   "attribute '%s' of '%s'".formatted(property.name(), clazz.getName()),
                   """
                       This attribute is a '%s'. Nothing reads its text back, so a @TaskParam and \

@@ -400,7 +400,7 @@ public class ProcessVersions {
     }
     findings
         .warn(
-            io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+            io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
             "process '%s' of workflow module '%s'".formatted(bpmnProcessId, workflowModuleId),
             """
                 The version specification '%s' of %s names a version tag no BPMS knows for this \
@@ -428,7 +428,7 @@ public class ProcessVersions {
       // was never missing
       findings
           .warn(
-              io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+              io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
               "process '%s' of workflow module '%s'".formatted(bpmnProcessId, workflowModuleId),
               """
                   The version specifications of the methods serving this BPMN process name '%s', \
@@ -447,7 +447,7 @@ public class ProcessVersions {
       // them, which is a different defect with a different remedy
       findings
           .warn(
-              io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+              io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
               "process '%s' of workflow module '%s'".formatted(bpmnProcessId, workflowModuleId),
               """
                   The version specifications of the methods serving this BPMN process name '%s', \
@@ -460,7 +460,7 @@ public class ProcessVersions {
     }
     findings
         .warn(
-            io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+            io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
             "process '%s' of workflow module '%s'".formatted(bpmnProcessId, workflowModuleId),
             """
                 Neither a deployed version nor a version tag '%s' of this BPMN process is known to \
@@ -534,7 +534,7 @@ public class ProcessVersions {
     }
     findings
         .warn(
-            io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+            io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
             "process '%s' of workflow module '%s'".formatted(bpmnProcessId, workflowModuleId),
             """
                 The BPMS of adapter %s keeps no catalog of the deployed versions of this BPMN \

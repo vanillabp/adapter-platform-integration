@@ -636,7 +636,7 @@ public class DeployedProcessVersionsCheck {
     if (nothingDeployedUnderThatId) {
       findings
           .notice(
-              io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+              io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
               scope,
               """
                   %d workflow(s) still run on this BPMN process, which this application does not \
@@ -656,7 +656,7 @@ public class DeployedProcessVersionsCheck {
     }
     findings
         .notice(
-            io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+            io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
             scope,
             """
                 %d workflow(s) of this BPMN process still run on %d version(s) older than the \
@@ -688,7 +688,7 @@ public class DeployedProcessVersionsCheck {
 
     findings
         .warn(
-            io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+            io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
             "process '%s' of workflow module '%s', adapter '%s'"
                 .formatted(bpmnProcessId, workflowModuleId, adapterId),
             """
@@ -811,7 +811,7 @@ public class DeployedProcessVersionsCheck {
             .stream()
             .forEach(handler -> findings
                 .warn(
-                    io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+                    io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
                     "process '%s' of workflow module '%s', adapter '%s'".formatted(
                         versions.bpmnProcessId(),
                         workflowModuleId,
@@ -930,7 +930,7 @@ public class DeployedProcessVersionsCheck {
     if ((running != null) && (running > 0)) {
       findings
           .error(
-              io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+              io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
               scope,
               """
                   %d workflow(s) still run on this version, whose task definition(s) %s are \
@@ -941,7 +941,7 @@ public class DeployedProcessVersionsCheck {
     }
     findings
         .warn(
-            io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+            io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
             scope,
             """
                 This version is still deployed at the adapter and its task definition(s) %s are \
@@ -1029,7 +1029,7 @@ public class DeployedProcessVersionsCheck {
         .collect(Collectors.joining("; "));
     findings
         .warn(
-            io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+            io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
             "process '%s' of workflow module '%s', adapter '%s'"
                 .formatted(bpmnProcessId, workflowModuleId, adapterId),
             """
@@ -1097,7 +1097,7 @@ public class DeployedProcessVersionsCheck {
     if (outfadedVersions.policyFor(workflowModuleId, bpmnProcessId, adapterId) == OutfadedVersionsInUsePolicy.FAIL) {
       findings
           .refuse(
-              io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+              io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
               "version '%s' of process '%s' of workflow module '%s', adapter '%s'"
                   .formatted(version, bpmnProcessId, workflowModuleId, adapterId),
               message);
@@ -1105,7 +1105,7 @@ public class DeployedProcessVersionsCheck {
     }
     findings
         .error(
-            io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+            io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
             "version '%s' of process '%s' of workflow module '%s', adapter '%s'"
                 .formatted(version, bpmnProcessId, workflowModuleId, adapterId),
             message);
@@ -1119,7 +1119,7 @@ public class DeployedProcessVersionsCheck {
 
     findings
         .warn(
-            io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+            io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
             "process '%s' of workflow module '%s', adapter '%s'"
                 .formatted(bpmnProcessId, workflowModuleId, adapterId),
             """
@@ -1138,7 +1138,7 @@ public class DeployedProcessVersionsCheck {
 
     findings
         .warn(
-            io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+            io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
             "process '%s' of workflow module '%s', adapter '%s'"
                 .formatted(bpmnProcessId, workflowModuleId, adapterId),
             """

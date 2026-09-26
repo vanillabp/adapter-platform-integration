@@ -15,11 +15,11 @@ import java.util.stream.Stream;
 
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
-import io.vanillabp.integration.adapter.migration.startup.StartupTopic;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
 import io.vanillabp.integration.spi.parts.PartKind;
 import io.vanillabp.integration.spi.parts.VanillaBpParts;
+import io.vanillabp.integration.spi.startup.StartupTopic;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
@@ -202,7 +202,8 @@ public class DeploymentService {
    * <code>vanillabp.adapters.&lt;id&gt;.deployment-failure</code> is set to
    * <code>warn</code> for the failing adapter <i>and</i> the adapter is not the
    * first-priority adapter of the workflow module or of any of the module's
-   * workflows: in this case the failure is logged and the application still starts
+   * workflows: in this case the failure goes into the block of the start and the
+   * application still starts
    * (e.g. the old BPMS during a migration being temporarily unreachable). A failure
    * of an adapter being first priority for the module or for a single workflow
    * always fails the boot - new workflows could not be started otherwise.
@@ -567,7 +568,7 @@ public class DeploymentService {
    * Reports configured workflow IDs
    * (<code>vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;bpmnProcessId&gt;</code>)
    * matching no executable BPMN process found in the module's resources. Only a
-   * WARN, consistent with the handling of configured workflow modules missing in the
+   * warning, consistent with the handling of configured workflow modules missing in the
    * classpath: the BPMN may arrive later (e.g. during a BPMS migration), so booting
    * must not be prevented. Runs after {@link #deployResources(List, BiFunction)}
    * processed all adapters because BPMN process IDs are known only after the
@@ -636,7 +637,7 @@ public class DeploymentService {
    * tasks and asked for a workflow service, which is the right sentence for a process
    * the application means to serve and the wrong one for a process it does not.
    * <p>
-   * Only a WARN, because the boot cannot tell a forgotten workflow service from a
+   * Only a warning, because the boot cannot tell a forgotten workflow service from a
    * process which belongs to somebody else. What it costs is in the message, together
    * with the two ways out.
    *
@@ -689,7 +690,7 @@ public class DeploymentService {
 
   /**
    * What the platform integration has to add about the processes just reported, as lines of the
-   * same WARN - a reader gets one report per workflow module instead of two which have to be
+   * same finding - a reader gets one report per workflow module instead of two which have to be
    * read together.
    * <p>
    * Asked here and nowhere else, so the price of the answer is paid on a boot which is already

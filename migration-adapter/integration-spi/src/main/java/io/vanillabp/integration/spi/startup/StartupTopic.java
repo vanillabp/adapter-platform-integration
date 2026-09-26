@@ -1,4 +1,4 @@
-package io.vanillabp.integration.adapter.migration.startup;
+package io.vanillabp.integration.spi.startup;
 
 /**
  * What a startup finding is about, which is the same as where its fix lies.

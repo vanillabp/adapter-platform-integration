@@ -188,7 +188,7 @@ public class VanillaBpDeploymentRunner {
       properties
           .startupFindings()
           .warn(
-              io.vanillabp.integration.adapter.migration.startup.StartupTopic.CONFIGURATION,
+              io.vanillabp.integration.spi.startup.StartupTopic.CONFIGURATION,
               null,
               configFilesReport);
     }

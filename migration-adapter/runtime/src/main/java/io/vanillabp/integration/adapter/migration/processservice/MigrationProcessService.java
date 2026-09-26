@@ -317,15 +317,17 @@ public class MigrationProcessService<A> {
    * DECISIONS.md). Called by the platform integration once the application context is
    * ready (not mid-bean-construction, so no persistence infrastructure is materialized
    * early).
-   *
-   * @throws IllegalStateException If no outbox can be resolved, naming the remedies
+   * <p>
+   * A missing outbox is reported rather than thrown: it is collected with every other
+   * reason not to start and thrown once, at the end of the start, so an application
+   * with ten workflows learns about all ten of them in one start.
    */
   public void validatePhaseTwoOutboxAtStartup() {
 
     if (resolvePhaseTwoOutbox() == null) {
       findings
           .refuse(
-              io.vanillabp.integration.adapter.migration.startup.StartupTopic.CODE,
+              io.vanillabp.integration.spi.startup.StartupTopic.CODE,
               "process '%s' of workflow module '%s'".formatted(bpmnProcessId, workflowModuleId),
               buildNoOutboxMessage(
                   adapterProcessServices
@@ -362,9 +364,10 @@ public class MigrationProcessService<A> {
    * finds out about the query API from the first query which fails. It still runs before
    * workflow processing starts, so nothing has touched a workflow when the message
    * arrives.
-   *
-   * @throws IllegalStateException If an adapter has to guess and the module does not
-   *           accept it
+   * <p>
+   * Where the module does not accept the guessing, the reason is reported rather than
+   * thrown: it is collected with every other reason not to start and thrown once, at the
+   * end of the start.
    */
   public void validateElectionCapabilityAfterDeployment() {
 
@@ -405,10 +408,10 @@ public class MigrationProcessService<A> {
 
     final var scope = "process '%s' of workflow module '%s'".formatted(bpmnProcessId, workflowModuleId);
     if (properties.acceptsGuessingAdapters(workflowModuleId)) {
-      findings.warn(io.vanillabp.integration.adapter.migration.startup.StartupTopic.CONFIGURATION, scope, message);
+      findings.warn(io.vanillabp.integration.spi.startup.StartupTopic.CONFIGURATION, scope, message);
       return;
     }
-    findings.refuse(io.vanillabp.integration.adapter.migration.startup.StartupTopic.CONFIGURATION, scope, message);
+    findings.refuse(io.vanillabp.integration.spi.startup.StartupTopic.CONFIGURATION, scope, message);
 
   }
 
@@ -446,14 +449,15 @@ public class MigrationProcessService<A> {
    * Three outcomes. No runner at all ends the boot: such an application cannot start a
    * single workflow (the aggregate and the outbox entry have to be written in one
    * transaction), so booting green would only move the failure to the first workflow.
-   * A store the platform can tell is not covered gets a WARN naming what is given up. A
-   * combination the platform can name a fix for ends the boot as well, unless the
+   * A store the platform can tell is not covered gets a warning naming what is given up.
+   * A combination the platform can name a fix for ends the boot as well, unless the
    * application accepts unguarded writes
-   * (<code>vanillabp.transactions.unguarded-aggregate-writes</code>) - the message is
-   * then logged as a WARN, because a decision like this has to stay visible.
-   *
-   * @throws IllegalStateException If no runner is available, or the coverage cannot work
-   *           and unguarded writes are not accepted
+   * (<code>vanillabp.transactions.unguarded-aggregate-writes</code>) - the message stays
+   * a warning then, because a decision like this has to stay visible.
+   * <p>
+   * What ends the boot is reported rather than thrown: it is collected with the other
+   * reasons and thrown once, at the end of the start, so an application with ten
+   * workflows learns about all ten of them in one start.
    */
   public void validateTransactionRunnerAtStartup() {
 
@@ -464,7 +468,7 @@ public class MigrationProcessService<A> {
     if (runner == null) {
       findings
           .refuse(
-              io.vanillabp.integration.adapter.migration.startup.StartupTopic.CODE,
+              io.vanillabp.integration.spi.startup.StartupTopic.CODE,
               aggregateScope(),
               buildNoTransactionRunnerMessage());
       // nothing below can be answered without a runner, and the refusal ends this start
@@ -488,14 +492,14 @@ public class MigrationProcessService<A> {
       // bean of the application
       case UNGUARDED -> findings
           .warn(
-              io.vanillabp.integration.adapter.migration.startup.StartupTopic.INFRASTRUCTURE,
+              io.vanillabp.integration.spi.startup.StartupTopic.INFRASTRUCTURE,
               aggregateScope(),
               coverage.message());
       case UNCOVERABLE -> {
         if (properties.acceptsUnguardedAggregateWrites(workflowModuleId)) {
           findings
               .warn(
-                  io.vanillabp.integration.adapter.migration.startup.StartupTopic.CODE,
+                  io.vanillabp.integration.spi.startup.StartupTopic.CODE,
                   aggregateScope(),
                   """
                       %s This was accepted by setting '%s' - VanillaBP does not stop the \
@@ -507,7 +511,7 @@ public class MigrationProcessService<A> {
         } else {
           findings
               .refuse(
-                  io.vanillabp.integration.adapter.migration.startup.StartupTopic.CODE,
+                  io.vanillabp.integration.spi.startup.StartupTopic.CODE,
                   aggregateScope(),
                   """
                       %s
@@ -1104,7 +1108,7 @@ public class MigrationProcessService<A> {
           }
           findings
               .warn(
-                  io.vanillabp.integration.adapter.migration.startup.StartupTopic.STORED_STATE,
+                  io.vanillabp.integration.spi.startup.StartupTopic.STORED_STATE,
                   "adapter id '%s', process '%s' of workflow module '%s'"
                       .formatted(adapterId, bpmnProcessId, workflowModuleId),
                   """
@@ -1137,8 +1141,8 @@ public class MigrationProcessService<A> {
    * switched on. Unlike the outbox this does NOT fail the boot: without a log
    * VanillaBP behaves exactly as it did before the feature existed (at-least-once, the
    * rule to key business decisions on the aggregate's state carries the case), so a
-   * guiding WARN naming both remedies is the honest answer - and it is logged at
-   * startup instead of surfacing per delivery.
+   * guiding warning naming both remedies is the honest answer - and it goes into the
+   * block of the start instead of surfacing per delivery.
    * <p>
    * Nothing is resolved where no adapter can repeat a delivery: an application using
    * an embedded BPMS only must not be pushed towards a store it does not need.
@@ -2369,6 +2373,9 @@ public class MigrationProcessService<A> {
    * something would mean reflection, and reflection is a lie in a native image: a method
    * nobody registered looks like a method nobody wrote, so every adapter of a native
    * application would be refused.
+   * <p>
+   * An adapter which cannot serve an operation is reported rather than thrown: the
+   * reason is collected with the others and thrown once, at the end of the start.
    */
   public void validateAdapterOperationsAtStartup() {
 
@@ -2393,7 +2400,7 @@ public class MigrationProcessService<A> {
     }
     findings
         .refuse(
-            io.vanillabp.integration.adapter.migration.startup.StartupTopic.PARTS_AND_VERSIONS,
+            io.vanillabp.integration.spi.startup.StartupTopic.PARTS_AND_VERSIONS,
             "process '%s' of workflow module '%s', adapter '%s'"
                 .formatted(bpmnProcessId, workflowModuleId, adapter.getAdapterId()),
             """

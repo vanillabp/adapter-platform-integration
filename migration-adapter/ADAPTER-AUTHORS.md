@@ -739,6 +739,57 @@ sends the next operation of a migration to the wrong BPMS.
 Do not call it from an adapter whose BPMS cancels each element by itself. The application would
 hear about the same task twice.
 
+### 3.9 Saying what a start found
+
+What your adapter notices while the application starts does not go into a line of its own any
+more. VanillaBP collects every startup finding and says it once, at the end of the start, as one
+block grouped by topic. A start with a finding of the platform and one of yours writes one block,
+not two, and a start with nothing to notice writes nothing at all.
+
+Ask for a bean of `io.vanillabp.integration.spi.startup.StartupReport` wherever you need it. It is
+there on both platforms, one instance per application, and it has four methods:
+
+```java
+report.warn(
+    StartupTopic.CONFIGURATION,
+    "camunda8 adapter '%s'".formatted(adapterId),
+    """
+        Camunda 8 adapter '%s' has 'request-timeout: %s'. That value is the deadline of every \
+        request this adapter sends. Raise it to at least PT1S; the default is PT10S."""
+        .formatted(adapterId, timeout));
+```
+
+`notice` is for something the start survives and which still asks the developer for something,
+`warn` for something which is wrong, `error` for something wrong enough to be written at error
+level, and `refuse` for a reason the start cannot go on with. A refusal is collected: VanillaBP
+throws it at the end of the start together with every other reason, so a developer who put two
+things wrong learns both in one start. A check of yours which cannot let the start walk on, because
+its next question depends on the one it just proved unanswerable, throws where it stands and says
+so in its javadoc.
+
+Three rules make the block work, and all three are about the two strings you hand over.
+
+The SCOPE is what the finding is about, written the way the developer knows it: a workflow module,
+a BPMN process, your adapter id, a property key. Never write it into the message. The same finding
+arrives once per workflow module, per BPMN process and per adapter id, and the block folds two
+findings of one topic carrying the same text into ONE entry naming both scopes. A message which
+carries the adapter id inside it cannot be folded, and an application with three adapter instances
+then reads the same paragraph three times.
+
+The MESSAGE is the whole sentence, ending with what to do. It is not formatted for a width and it
+carries no placeholders: what the block does with it is the block's business.
+
+The TOPIC is the artifact the fix lies in, out of `StartupTopic`. That is what the developer scans
+for, because it tells them which file to open.
+
+What does NOT belong here is a report about your adapter doing its work: which BPMS it reached,
+how many workers it started, which listeners it set up. Those stay where they are, and the three
+framed reports of the existing adapters are of that kind.
+
+Reported after the block was written, a finding goes into the log where it was found, and a
+refusal is written rather than thrown. The start it was meant to stop is over by then. See decision
+<pending: 648> in the repository's `DECISIONS.md`.
+
 ## 4. The promises a probe makes
 
 The election walks the prioritized adapters and stops at the first `ACTIVE`, so it is exactly as

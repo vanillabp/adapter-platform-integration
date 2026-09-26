@@ -10,6 +10,9 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.vanillabp.integration.spi.startup.StartupReport;
+import io.vanillabp.integration.spi.startup.StartupTopic;
+
 /**
  * Where every startup check says what it found, instead of writing a line of its own.
  * <p>
@@ -62,10 +65,17 @@ import org.slf4j.LoggerFactory;
  * text, and two findings carrying the same text under the same topic become ONE entry
  * naming both scopes. Which is why a check hands over the scope separately instead of
  * writing it into the sentence.
+ *
+ * <h2>Who reports here</h2>
+ *
+ * The checks of the platform hold this class. An adapter holds
+ * {@link StartupReport}, which is the reporting half of it and nothing else: when a start
+ * is over and what happens to a reason not to start are the core's decisions.
  * <p>
- * See decision &lt;pending: 579&gt; in the repository's DECISIONS.md.
+ * See decision &lt;pending: 579&gt; and decision &lt;pending: 648&gt; in the repository's
+ * DECISIONS.md.
  */
-public class StartupFindings {
+public class StartupFindings implements StartupReport {
 
   private static final Logger log = LoggerFactory.getLogger(StartupFindings.class);
 
@@ -151,6 +161,7 @@ public class StartupFindings {
    * @param scope What it is about
    * @param message The whole message, ending with what to do
    */
+  @Override
   public void notice(
       final StartupTopic topic,
       final String scope,
@@ -167,6 +178,7 @@ public class StartupFindings {
    * @param scope What it is about
    * @param message The whole message, ending with what to do
    */
+  @Override
   public void warn(
       final StartupTopic topic,
       final String scope,
@@ -184,6 +196,7 @@ public class StartupFindings {
    * @param scope What it is about
    * @param message The whole message, ending with what to do
    */
+  @Override
   public void error(
       final StartupTopic topic,
       final String scope,
@@ -210,6 +223,7 @@ public class StartupFindings {
    * @param scope What it is about
    * @param message The whole message, ending with what to do
    */
+  @Override
   public void refuse(
       final StartupTopic topic,
       final String scope,

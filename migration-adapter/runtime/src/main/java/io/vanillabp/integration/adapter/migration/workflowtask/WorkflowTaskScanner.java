@@ -165,7 +165,7 @@ class WorkflowTaskScanner {
     if (inspected.notHonored() != null) {
       findings
           .warn(
-              io.vanillabp.integration.adapter.migration.startup.StartupTopic.CODE,
+              io.vanillabp.integration.spi.startup.StartupTopic.CODE,
               "method '%s#%s'".formatted(workflowServiceClass.getName(), method.getName()),
               """
                   This @WorkflowTask method carries a transaction annotation this platform does \

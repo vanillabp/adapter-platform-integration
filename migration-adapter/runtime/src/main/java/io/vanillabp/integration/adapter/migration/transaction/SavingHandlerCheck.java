@@ -3,7 +3,7 @@ package io.vanillabp.integration.adapter.migration.transaction;
 import java.lang.annotation.Annotation;
 
 import io.vanillabp.integration.adapter.migration.startup.StartupFindings;
-import io.vanillabp.integration.adapter.migration.startup.StartupTopic;
+import io.vanillabp.integration.spi.startup.StartupTopic;
 
 /**
  * The startup hint about the second writer an extension brings: a handler method of the

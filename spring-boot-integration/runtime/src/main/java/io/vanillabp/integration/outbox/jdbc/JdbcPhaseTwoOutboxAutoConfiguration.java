@@ -199,7 +199,7 @@ public class JdbcPhaseTwoOutboxAutoConfiguration {
     vanillaBpProperties
         .startupFindings()
         .warn(
-            io.vanillabp.integration.adapter.migration.startup.StartupTopic.STORED_STATE,
+            io.vanillabp.integration.spi.startup.StartupTopic.STORED_STATE,
             "table '%s'".formatted(FORMER_OUTBOX_TABLE_NAME),
             """
                 The table '%s' of the former gruelbox store holds %d entry/entries which were never \

@@ -273,7 +273,7 @@ public final class DeliveryRecords {
     }
     findings
         .warn(
-            io.vanillabp.integration.adapter.migration.startup.StartupTopic.CODE,
+            io.vanillabp.integration.spi.startup.StartupTopic.CODE,
             "process '%s' of workflow module '%s', adapter '%s'"
                 .formatted(bpmnProcessId, workflowModuleId, adapterId),
             """
@@ -591,8 +591,8 @@ public final class DeliveryRecords {
    * deduplication is switched on. Unlike the outbox this does NOT fail the boot: without a
    * store VanillaBP behaves exactly as it did before the feature existed (at-least-once,
    * the rule to key business decisions on the aggregate's state carries the case), so a
-   * guiding WARN naming both remedies is the honest answer - and it is logged at startup
-   * instead of surfacing per delivery.
+   * guiding warning naming both remedies is the honest answer - and it goes into the
+   * block of the start instead of surfacing per delivery.
    * <p>
    * Nothing is resolved where no adapter can repeat a delivery: an application using an
    * embedded BPMS only must not be pushed towards a store it does not need.
@@ -650,7 +650,7 @@ public final class DeliveryRecords {
     }
     findings
         .warn(
-            io.vanillabp.integration.adapter.migration.startup.StartupTopic.CODE,
+            io.vanillabp.integration.spi.startup.StartupTopic.CODE,
             "process '%s' of workflow module '%s'".formatted(bpmnProcessId, workflowModuleId),
             """
                 The TaskDeliveryLog '%s' does not implement 'releaseRecordsOf', but '%s' is \
@@ -768,7 +768,7 @@ public final class DeliveryRecords {
           }
           findings
               .notice(
-                  io.vanillabp.integration.adapter.migration.startup.StartupTopic.STORED_STATE,
+                  io.vanillabp.integration.spi.startup.StartupTopic.STORED_STATE,
                   "process '%s' of workflow module '%s', adapter '%s'"
                       .formatted(bpmnProcessId, workflowModuleId, adapter.getAdapterId()),
                   """

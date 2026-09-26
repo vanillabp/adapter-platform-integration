@@ -790,7 +790,7 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
 
     findings
         .warn(
-            io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+            io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
             "workflow module '%s', adapter '%s'".formatted(workflowModuleId, adapterId),
             """
                 The adapter asked its BPMS which identifiers of this workflow module it already \
@@ -1047,7 +1047,7 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
 
     findings
         .warn(
-            io.vanillabp.integration.adapter.migration.startup.StartupTopic.BPMN_MODELS,
+            io.vanillabp.integration.spi.startup.StartupTopic.BPMN_MODELS,
             "adapter '%s'".formatted(adapterId),
             """
                 Two workflow modules of this application declare identifiers which this adapter \
@@ -1130,7 +1130,7 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
 
     findings
         .warn(
-            io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+            io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
             "version %s of process '%s' of workflow module '%s', adapter '%s'".formatted(
                 version,
                 bpmnProcessId,
@@ -1226,7 +1226,7 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
     }
     findings
         .warn(
-            io.vanillabp.integration.adapter.migration.startup.StartupTopic.DEPLOYED_VERSIONS,
+            io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
             "process '%s' of workflow module '%s', adapter '%s'"
                 .formatted(bpmnProcessId, workflowModuleId, adapterId),
             """

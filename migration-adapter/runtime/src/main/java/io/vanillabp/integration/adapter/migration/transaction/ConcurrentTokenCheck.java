@@ -4,7 +4,7 @@ import java.util.Collection;
 import java.util.stream.Collectors;
 
 import io.vanillabp.integration.adapter.migration.startup.StartupFindings;
-import io.vanillabp.integration.adapter.migration.startup.StartupTopic;
+import io.vanillabp.integration.spi.startup.StartupTopic;
 
 /**
  * The startup hint about two writers on one workflow aggregate: a BPMN

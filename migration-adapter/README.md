@@ -4044,7 +4044,14 @@ A finding which arrives after the block was written goes into the log where it w
 checks report that late on purpose: what a dispatch learns about an adapter id nobody configures
 any more, and what an adapter notices while it runs.
 
-`TheBoxAtTheEndOfAStartTest` holds every word of it, the shape included.
+An adapter reports into the same block. `StartupReport` in the integration SPI is the reporting
+half of `StartupFindings` and nothing else, both platform integrations publish one instance per
+application, and an adapter asks for that bean like any other. Why a bean and not the adapter SPI
+is decision &lt;pending: 648&gt;; what an adapter has to know about the two strings it hands over
+is in `ADAPTER-AUTHORS.md`, section "Saying what a start found".
+
+`TheBoxAtTheEndOfAStartTest` holds every word of it, the shape included, and
+`AnAdapterReportsIntoTheSameBoxTest` holds the half an adapter sees.
 
 ## What an operator gets to see
 
