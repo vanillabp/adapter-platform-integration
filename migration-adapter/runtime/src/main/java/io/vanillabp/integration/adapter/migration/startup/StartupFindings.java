@@ -72,8 +72,7 @@ import io.vanillabp.integration.spi.startup.StartupTopic;
  * {@link StartupReport}, which is the reporting half of it and nothing else: when a start
  * is over and what happens to a reason not to start are the core's decisions.
  * <p>
- * See decision &lt;pending: 579&gt; and decision &lt;pending: 648&gt; in the repository's
- * DECISIONS.md.
+ * See decision 96 and decision 97 in the repository's DECISIONS.md.
  */
 public class StartupFindings implements StartupReport {
 

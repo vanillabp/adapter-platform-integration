@@ -23,6 +23,8 @@ package io.vanillabp.integration.adapter.spi.workflowtask;
  * deliberately writes no delivery record: the record would be written by the
  * application which wrongly received the task, while whoever investigates reads the records
  * of the application which owns the workflow, and there it would be missing.
+ * <p>
+ * Why the refusal stays loud is decision 99 in the repository's DECISIONS.md.
  */
 public class DeliveryOfAnUnknownWorkflowException extends RuntimeException {
 

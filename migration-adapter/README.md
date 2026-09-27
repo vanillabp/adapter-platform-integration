@@ -4058,7 +4058,7 @@ any more, and what an adapter notices while it runs.
 An adapter reports into the same block. `StartupReport` in the integration SPI is the reporting
 half of `StartupFindings` and nothing else, both platform integrations publish one instance per
 application, and an adapter asks for that bean like any other. Why a bean and not the adapter SPI
-is decision &lt;pending: 648&gt;; what an adapter has to know about the two strings it hands over
+is decision 97; what an adapter has to know about the two strings it hands over
 is in `ADAPTER-AUTHORS.md`, section "Saying what a start found".
 
 `TheBoxAtTheEndOfAStartTest` holds every word of it, the shape included, and

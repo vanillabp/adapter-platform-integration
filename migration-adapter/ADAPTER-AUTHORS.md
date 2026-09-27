@@ -798,7 +798,7 @@ framed reports of the existing adapters are of that kind.
 
 Reported after the block was written, a finding goes into the log where it was found, and a
 refusal is written rather than thrown. The start it was meant to stop is over by then. See decision
-<pending: 648> in the repository's `DECISIONS.md`.
+97 in the repository's `DECISIONS.md`.
 
 ## 4. The promises a probe makes
 
