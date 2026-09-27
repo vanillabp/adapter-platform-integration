@@ -126,7 +126,8 @@ public class GuessingAdapterStartupTest {
             SampleWorkflowService.class,
             WorkflowModuleConfiguration.class,
             GuessingAdapterConfiguration.class,
-            // brings the deployment service: the check runs once the adapters deployed
+            // brings the deployment service: the check runs once the adapters deployed,
+            // and the end of the start right behind it
             DeploymentTest.TestConfig.class);
 
   }
@@ -137,13 +138,20 @@ public class GuessingAdapterStartupTest {
 
     try (var testApp = testApplication(APPLICATION_YAML)) {
 
+      // the refusal is thrown at the end of the start, which is inside the lifecycle, and
+      // Spring wraps what a lifecycle bean throws while the context is refreshed
       final var failure = Assertions.assertThrows(
-          IllegalStateException.class,
+          org.springframework.context.ApplicationContextException.class,
           () -> applicationOf(testApp)
               .run()
               .close());
 
-      final var message = failure.getMessage();
+      var refusal = (Throwable) failure;
+      while (refusal.getCause() != null) {
+        refusal = refusal.getCause();
+      }
+      Assertions.assertInstanceOf(IllegalStateException.class, refusal, String.valueOf(refusal));
+      final var message = refusal.getMessage();
       Assertions.assertTrue(message.contains("test"), message);
       Assertions.assertTrue(message.contains("test-module"), message);
       Assertions.assertTrue(message.contains("SampleWorkflowService"), message);

@@ -4024,9 +4024,14 @@ fell due is written first: a warning does not become less true because a later c
 start. A check which cannot let the start walk on throws where it stands and says so in its
 javadoc.
 
-The end of a start is the end of `DeploymentService#startWorkflowProcessing`, because nothing a
-start can notice comes later. What Quarkus refuses while it BUILDS never reaches the block, and an
-application which was never built never starts.
+The end of a start is `DeploymentService#endOfStartup`, and the platform integration says when that
+moment has come. On Quarkus it is right after `startWorkflowProcessing`, in the same observer of
+the startup event, because nothing a start can notice comes later there. On Spring Boot it is the
+end of the deployment, inside the lifecycle: the start of the workflow processing waits for
+`ApplicationReadyEvent`, and a context which is only refreshed never fires it, so a block hanging
+on that event would never be written at all. What the start of the workflow processing notices on
+Spring Boot is therefore a late finding. What Quarkus refuses while it BUILDS never
+reaches the block, and an application which was never built never starts.
 
 A finding carries its scope beside its text rather than inside it, because the same finding arrives
 once per workflow module, per BPMN process, per adapter id and per method: two findings of one
