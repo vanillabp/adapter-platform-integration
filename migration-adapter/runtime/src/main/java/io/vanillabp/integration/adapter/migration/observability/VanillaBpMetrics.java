@@ -69,6 +69,20 @@ public interface VanillaBpMetrics {
   String TASK_REDELIVERIES_CONCURRENT = "vanillabp.task.redeliveries.concurrent";
 
   /**
+   * Task deliveries this application refused because it has no workflow aggregate of the ID
+   * the BPMS named
+   * ({@link io.vanillabp.integration.adapter.spi.workflowtask.DeliveryOfAnUnknownWorkflowException}).
+   * Every one of them raises an incident at the BPMS as well, and this counter is what
+   * answers the question the second incident asks: does this happen often. A steady rate on
+   * one BPMN process is two applications sharing a BPMS and taking each other's work.
+   * <p>
+   * There is deliberately no delivery record beside it. The record would be written by the
+   * application which wrongly received the task, while whoever investigates reads the
+   * records of the application which owns the workflow, and there it would be missing.
+   */
+  String TASK_DELIVERIES_UNKNOWN_WORKFLOW = "vanillabp.task.deliveries.unknown.workflow";
+
+  /**
    * Elections which the delivery record of a task answered, so no BPMS was asked which
    * of them holds it. Counted for every operation whose call names a task, the push of
    * a changed aggregate into the scope of one included.
@@ -365,6 +379,23 @@ public interface VanillaBpMetrics {
    * @param taskDefinition The task definition delivered
    */
   default void taskRedeliveryRanConcurrently(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String taskDefinition) {
+
+  }
+
+  /**
+   * A task delivery was refused because this application has no workflow aggregate of the ID
+   * the BPMS named.
+   *
+   * @param adapterId The id of the adapter which delivered the task
+   * @param workflowModuleId The workflow module of the BPMN process
+   * @param bpmnProcessId The BPMN process the task belongs to
+   * @param taskDefinition The task definition delivered
+   */
+  default void taskDeliveredForAnUnknownWorkflow(
       final String adapterId,
       final String workflowModuleId,
       final String bpmnProcessId,

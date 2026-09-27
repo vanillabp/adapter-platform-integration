@@ -626,6 +626,16 @@ conflict on the aggregate was already logged once by the core with a guiding mes
 deliberately not retried inside VanillaBP: a handler may have called a remote API before the
 commit failed.
 
+One of those exceptions has a type of its own, because it is not about the application which got
+it. `DeliveryOfAnUnknownWorkflowException` says the application holds no workflow aggregate of the
+id your delivery named, and where a BPMS serves more than one application, the usual reason is that
+the workflow belongs to another one of them. Its message explains that to whoever reads your BPMS,
+so put the message where such a reader looks: an incident, an error text, whatever your BPMS shows.
+Its getters carry the same facts separately, for an adapter which wants to log or count them
+without parsing a sentence. Do not raise the retries for it. A refusal nobody notices is how two
+applications keep taking each other's work for months, and the core counts every one of them as
+`vanillabp.task.deliveries.unknown.workflow` for exactly that reason.
+
 A user task is the one delivery you may have to finish yourself. Its handler is optional, so ask
 `workflowTaskHandlerExists(module, process, taskDefinition)` before you deliver, and where the
 answer is no, complete the notification in your BPMS and say so at TRACE. Do not deliver it

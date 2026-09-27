@@ -807,5 +807,215 @@ public class MigrationProcessServiceTest {
 
   }
 
+  /**
+   * Runs the work handed to it, right here. A delivery which reaches the workflow
+   * aggregate needs a transaction, and this test has no platform to open one.
+   */
+  private static class RunItRightHere implements io.vanillabp.integration.spi.TransactionRunner {
+
+    @Override
+    public <T> T requireNew(
+        final java.util.function.Supplier<T> work) {
+      return work.get();
+    }
+
+    @Override
+    public <T> T inCurrent(
+        final java.util.function.Supplier<T> work) {
+      return work.get();
+    }
+
+    @Override
+    public boolean isRollbackOnly() {
+      return false;
+    }
+
+  }
+
+  /**
+   * A delivery of the task 'someTask' of workflow aggregate '42', as an adapter hands it
+   * in.
+   *
+   * @param workflowId What the BPMS calls the workflow, or <code>null</code> for a
+   *          delivery which carries no such id
+   */
+  private static io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext deliveryOfAggregate42(
+      final String workflowId) {
+
+    return new io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext() {
+
+      @Override
+      public String getAdapterId() {
+        return "test-adapter";
+      }
+
+      @Override
+      public String getTaskDefinition() {
+        return "someTask";
+      }
+
+      @Override
+      public String getWorkflowAggregateId() {
+        return "42";
+      }
+
+      @Override
+      public String getWorkflowId() {
+        return workflowId;
+      }
+
+    };
+
+  }
+
+  /**
+   * The process service of this test, ready to take a delivery.
+   */
+  private MigrationProcessService<Object> serviceTakingDeliveries() {
+
+    when(processService.getAdapterId()).thenReturn("test-adapter");
+    return MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(processService))
+        .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+        .build();
+
+  }
+
+  /**
+   * A handler which subscribes to whatever is delivered, so the delivery reaches the
+   * workflow aggregate.
+   */
+  private static io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskHandler aHandlerTakingEverything() {
+
+    final var handler = org.mockito.Mockito
+        .mock(io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskHandler.class);
+    when(handler.acceptsEvent(any())).thenReturn(true);
+    return handler;
+
+  }
+
+  @Test
+  @DisplayName("A delivery for a workflow aggregate this application does not have is refused, and the message says why without blaming anybody")
+  public void aDeliveryOfAnUnknownWorkflowIsRefusedWithAMessageWhichExplainsIt() {
+
+    // no workflow aggregate '42' here: either it belongs to another application on the
+    // same BPMS, or it was deleted here - and nothing can tell the two apart
+    when(aggregatePersistence.loadById(any())).thenReturn(null);
+
+    final var testee = serviceTakingDeliveries();
+
+    final var exception = assertThrowsExactly(
+        io.vanillabp.integration.adapter.spi.workflowtask.DeliveryOfAnUnknownWorkflowException.class,
+        () -> testee
+            .executeWorkflowTask(
+                aHandlerTakingEverything(),
+                deliveryOfAggregate42("2251799813685249"),
+                new RunItRightHere(),
+                List.of()));
+
+    final var message = exception.getMessage();
+
+    // what happened, in the words of somebody who knows it may be neither side's fault
+    assertTrue(
+        message.startsWith("This application was given a task of a workflow it does not own."),
+        message);
+    assertFalse(
+        message.contains("must not be deleted while the workflow is active"),
+        "the message must not read as if the developer had deleted the aggregate: "
+            + message);
+
+    // what the BPMS named, so the reader can search for it on the other side
+    assertTrue(message.contains("workflow aggregate '42'"), message);
+    assertTrue(message.contains("'"
+        + Object.class.getName()
+        + "'"), message);
+    assertTrue(message.contains("adapter 'test-adapter'"), message);
+    assertTrue(message.contains("task 'someTask'"), message);
+    assertTrue(message.contains("BPMN process 'TestProcess'"), message);
+    assertTrue(message.contains("workflow module 'test-module'"), message);
+    assertTrue(message.contains("workflow '2251799813685249'"), message);
+
+    // both readings of what happened, and a next step for the one which has one
+    assertTrue(message.contains("Another application shares this BPMS and owns this workflow"), message);
+    assertTrue(
+        message
+            .contains(
+                "'vanillabp.workflow-modules.test-module.adapters.test-adapter.name-clash-avoidance: use-prefix'"),
+        message);
+    assertTrue(message.contains("the workflow aggregate was deleted while the workflow was still running"), message);
+    assertTrue(message.contains("the BPMS still holds the task"), message);
+
+    // the facts an adapter reads off the refusal instead of off its text
+    assertEquals("test-adapter", exception.getAdapterId());
+    assertEquals("test-module", exception.getWorkflowModuleId());
+    assertEquals("TestProcess", exception.getBpmnProcessId());
+    assertEquals("someTask", exception.getTaskDefinition());
+    assertEquals("42", exception.getWorkflowAggregateId());
+    assertEquals("2251799813685249", exception.getWorkflowId());
+
+  }
+
+  @Test
+  @DisplayName("A refused delivery is counted, so the second one has an answer to 'does this happen often'")
+  public void aRefusedDeliveryIsCounted() {
+
+    when(aggregatePersistence.loadById(any())).thenReturn(null);
+
+    final var counted = new java.util.ArrayList<String>();
+    final var testee = serviceTakingDeliveries();
+    testee.setMetrics(new io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics() {
+
+      @Override
+      public void taskDeliveredForAnUnknownWorkflow(
+          final String adapterId,
+          final String workflowModuleId,
+          final String bpmnProcessId,
+          final String taskDefinition) {
+
+        counted.add(String.join("/", adapterId, workflowModuleId, bpmnProcessId, taskDefinition));
+
+      }
+
+    });
+
+    assertThrowsExactly(
+        io.vanillabp.integration.adapter.spi.workflowtask.DeliveryOfAnUnknownWorkflowException.class,
+        () -> testee
+            .executeWorkflowTask(
+                aHandlerTakingEverything(),
+                deliveryOfAggregate42(null),
+                new RunItRightHere(),
+                List.of()));
+
+    assertEquals(List.of("test-adapter/test-module/TestProcess/someTask"), counted);
+
+  }
+
+  @Test
+  @DisplayName("A delivery carrying no workflow id of the BPMS leaves that out instead of naming 'null'")
+  public void aRefusalWithoutAWorkflowIdSaysNothingAboutIt() {
+
+    when(aggregatePersistence.loadById(any())).thenReturn(null);
+
+    final var testee = serviceTakingDeliveries();
+
+    final var exception = assertThrowsExactly(
+        io.vanillabp.integration.adapter.spi.workflowtask.DeliveryOfAnUnknownWorkflowException.class,
+        () -> testee
+            .executeWorkflowTask(
+                aHandlerTakingEverything(),
+                deliveryOfAggregate42(null),
+                new RunItRightHere(),
+                List.of()));
+
+    assertTrue(exception.getMessage().contains("workflow module 'test-module'."), exception.getMessage());
+    assertFalse(exception.getMessage().contains("null"), exception.getMessage());
+
+  }
+
 
 }

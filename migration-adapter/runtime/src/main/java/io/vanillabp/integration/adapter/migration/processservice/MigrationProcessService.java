@@ -27,6 +27,7 @@ import io.vanillabp.integration.adapter.spi.PhaseTwoRequest;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import io.vanillabp.integration.adapter.spi.WorkflowScope;
 import io.vanillabp.integration.adapter.spi.WorkflowVisibilityDelay;
+import io.vanillabp.integration.adapter.spi.workflowtask.DeliveryOfAnUnknownWorkflowException;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
@@ -893,16 +894,18 @@ public class MigrationProcessService<A> {
       final var aggregateId = convertAggregateId(context.getWorkflowAggregateId());
       final var workflowAggregate = aggregatePersistenceSupport.loadById(aggregateId);
       if (workflowAggregate == null) {
-        throw new IllegalStateException(
-            """
-                No workflow aggregate of class '%s' having the ID '%s' was found processing a task \
-                of BPMN process '%s' of workflow module '%s'! The aggregate has a 1:1 relation to \
-                the workflow - it must not be deleted while the workflow is active."""
-                .formatted(
-                    workflowAggregateClass.getName(),
-                    context.getWorkflowAggregateId(),
-                    bpmnProcessId,
-                    workflowModuleId));
+        // the delivery is refused, and no record of it is written: the record would sit in
+        // the application which wrongly received the task, while whoever investigates reads
+        // the records of the application which owns the workflow
+        metrics
+            .taskDeliveredForAnUnknownWorkflow(
+                context.getAdapterId(),
+                workflowModuleId,
+                bpmnProcessId,
+                context.getTaskDefinition());
+        throw new DeliveryOfAnUnknownWorkflowException(
+            context.getAdapterId(), workflowModuleId, bpmnProcessId, context.getTaskDefinition(), workflowAggregateClass
+                .getName(), context.getWorkflowAggregateId(), context.getWorkflowId());
       }
       try {
         handler.invoke(workflowAggregate, context);
