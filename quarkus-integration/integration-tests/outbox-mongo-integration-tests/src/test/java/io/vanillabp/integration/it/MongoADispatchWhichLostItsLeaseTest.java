@@ -1,14 +1,11 @@
 package io.vanillabp.integration.it;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.time.Duration;
 import java.time.Instant;
-import java.util.Date;
 import java.util.UUID;
 
-import org.bson.Document;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -17,9 +14,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.mongodb.client.MongoClient;
-import com.mongodb.client.MongoCollection;
-import com.mongodb.client.model.Filters;
-import com.mongodb.client.model.Updates;
 
 import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.bpmsdouble.DummyPermanentFailure;
@@ -28,6 +22,7 @@ import io.vanillabp.integration.test.AggregatePersistence;
 import io.vanillabp.integration.test.RecordingPhaseTwoListener;
 import io.vanillabp.integration.test.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
 import jakarta.inject.Inject;
 
 /**
@@ -85,11 +80,13 @@ public class MongoADispatchWhichLostItsLeaseTest {
   @Inject
   MongoClient mongoClient;
 
-  private MongoCollection<Document> outbox() {
+  /**
+   * The outbox of the application, asked through the reader so that neither a collection
+   * nor a field is named here.
+   */
+  private MongoPhaseTwoOutboxReader outbox() {
 
-    return mongoClient
-        .getDatabase(DATABASE)
-        .getCollection("vanillabp-phase-two-outbox");
+    return MongoPhaseTwoOutboxReader.ofTheVanillaBpOutbox(mongoClient.getDatabase(DATABASE));
 
   }
 
@@ -97,7 +94,7 @@ public class MongoADispatchWhichLostItsLeaseTest {
   public void startFromAnEmptyCollection() {
 
     listener.reset();
-    outbox().deleteMany(new Document());
+    outbox().removeAllEntries();
 
   }
 
@@ -119,24 +116,18 @@ public class MongoADispatchWhichLostItsLeaseTest {
       final String aggregateId) {
 
     final var id = UUID.randomUUID().toString();
-    final var now = Date.from(Instant.now());
-    final var key = "START_WORKFLOW|%s|%s|%s".formatted(MODULE, PROCESS, aggregateId);
+    final var now = Instant.now();
     outbox()
-        .insertOne(new Document()
-            .append("_id", id)
-            .append("workflowModuleId", MODULE)
-            .append("bpmnProcessId", PROCESS)
-            .append("operation", "START_WORKFLOW")
-            .append("aggregateId", aggregateId)
-            .append("adapterId", "test")
-            .append("idempotencyKey", key)
-            .append("dedupKey", key)
-            .append("status", "OPEN")
-            .append("createdAt", now)
-            .append("attempts", 0)
-            .append("nextAttemptAt", now)
-            .append("leasedBy", null)
-            .append("leasedUntil", null));
+        .writeWaitingEntry(
+            id,
+            MODULE,
+            PROCESS,
+            "START_WORKFLOW",
+            aggregateId,
+            "test",
+            "START_WORKFLOW|%s|%s|%s".formatted(MODULE, PROCESS, aggregateId),
+            now,
+            now);
     return id;
 
   }
@@ -151,39 +142,16 @@ public class MongoADispatchWhichLostItsLeaseTest {
   private void anotherNodeTakesTheEntryAndDispatchesIt(
       final String id) {
 
-    final var claimed = outbox()
-        .updateOne(
-            Filters.eq("_id", id),
-            Updates
-                .combine(
-                    Updates.set("leasedBy", THE_NODE_TAKING_THE_ENTRY),
-                    Updates.set("leasedUntil", Date.from(Instant.now().plus(Duration.ofHours(1))))));
-    assertEquals(1, claimed.getMatchedCount(), "the entry which was to change hands is gone");
-    outbox()
-        .updateOne(
-            Filters
-                .and(
-                    Filters.eq("_id", id),
-                    Filters.eq("leasedBy", THE_NODE_TAKING_THE_ENTRY)),
-            Updates
-                .combine(
-                    Updates.set("status", "DONE"),
-                    Updates.set("doneAt", Date.from(Instant.now())),
-                    Updates.set("dedupKey", id),
-                    Updates.inc("attempts", 1),
-                    Updates.unset("leasedBy"),
-                    Updates.unset("leasedUntil")));
+    outbox().anotherNodeTakesTheEntryAndDispatchesIt(id, THE_NODE_TAKING_THE_ENTRY);
 
   }
 
-  private Document entryOf(
+  private MongoPhaseTwoOutboxReader.Entry entryOf(
       final String id) {
 
-    final var entry = outbox()
-        .find(Filters.eq("_id", id))
-        .first();
-    assertNotNull(entry, "the entry is gone");
-    return entry;
+    return outbox()
+        .entryById(id)
+        .orElseThrow(() -> new AssertionError("the entry is gone"));
 
   }
 
@@ -197,7 +165,7 @@ public class MongoADispatchWhichLostItsLeaseTest {
    *          it succeeds
    * @return The entry as the collection shows it after the held dispatch ended
    */
-  private Document theEntryChangesHands(
+  private MongoPhaseTwoOutboxReader.Entry theEntryChangesHands(
       final String aggregateId,
       final RuntimeException theHeldDispatchEndsWith) throws Exception {
 
@@ -236,7 +204,7 @@ public class MongoADispatchWhichLostItsLeaseTest {
 
     assertEquals(
         1,
-        afterTheHeldDispatch.getInteger("attempts"),
+        afterTheHeldDispatch.attempts(),
         "one attempt ended on the entry of the node which held it, so one is what it counts");
 
   }
@@ -251,9 +219,8 @@ public class MongoADispatchWhichLostItsLeaseTest {
         "lost-entry-blocked-aggregate", new DummyPermanentFailure(
             "the adapter says repeating cannot help"));
 
-    assertEquals(
-        "DONE",
-        afterTheHeldDispatch.getString("status"),
+    assertTrue(
+        afterTheHeldDispatch.wasDispatched(),
         "the entry the other node dispatched was blocked by the one which lost it");
 
   }

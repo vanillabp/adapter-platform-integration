@@ -123,7 +123,12 @@ Top-level modules (by directory name) are:
    entry which waits, and every entry opened again the way an operator repairs one. Every table
    name and every state it uses comes from the platform class which declares it, so a rename is
    followed in that one module instead of in every test which reads the outbox. A test which
-   spells a table or a column itself is the thing this class exists to prevent.
+   spells a table or a column itself is the thing this class exists to prevent.<br>
+   `MongoPhaseTwoOutboxReader` is the same thing for an application on MongoDB, over the
+   database a Spring Boot template or a Quarkus client hands it. It answers the same
+   questions about entries and payloads, it writes the entries a test has to plant, and it
+   takes the collection names and the three status values from the platform classes which
+   declare them.
 7. **bpms-double:**<br>
    The BPMS double, published so that a repository outside this one can boot a VanillaBP application in a test
    without a real BPMS. It is the adapter the platform's own tests run against, which is what proves it for

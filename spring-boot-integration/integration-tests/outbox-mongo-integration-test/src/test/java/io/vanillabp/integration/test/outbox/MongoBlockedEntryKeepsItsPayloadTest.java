@@ -36,6 +36,7 @@ import io.vanillabp.integration.outbox.mongo.PhaseTwoPayloadDocument;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.test.utils.ContainerImages;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
 
 /**
  * What the housekeeping of the MongoDB store removes and what it leaves: the retention
@@ -57,10 +58,13 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 @Testcontainers
 public class MongoBlockedEntryKeepsItsPayloadTest {
 
-  private static final String OUTBOX_COLLECTION = "vanillabp-phase-two-outbox";
+  /**
+   * The two collections the application writes, asked of the reader rather than written
+   * down here, so a rename of the platform is followed in one place.
+   */
+  private static final String OUTBOX_COLLECTION = MongoPhaseTwoOutboxReader.defaultOutboxCollectionName();
 
-  private static final String PAYLOAD_COLLECTION = OUTBOX_COLLECTION
-      + "-payloads";
+  private static final String PAYLOAD_COLLECTION = MongoPhaseTwoOutboxReader.defaultPayloadCollectionName();
 
   /**
    * Older than the default retention of seven days, so everything written here is old

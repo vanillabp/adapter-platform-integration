@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
-import java.util.Date;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +29,7 @@ import com.mongodb.ConnectionString;
 
 import io.vanillabp.integration.test.utils.ContainerImages;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
@@ -68,7 +68,6 @@ public class MongoOutboxDispatchTest {
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
-  private static final String OUTBOX_COLLECTION = "vanillabp-phase-two-outbox";
 
   @Container
   static MongoDBContainer mongoDb = new MongoDBContainer(DockerImageName.parse(ContainerImages.MONGODB))
@@ -108,21 +107,29 @@ public class MongoOutboxDispatchTest {
 
     listener.reset();
     // remove entries possibly left over from previous tests
-    mongoTemplate.getCollection(OUTBOX_COLLECTION).deleteMany(new org.bson.Document());
+    store().removeAllEntries();
+
+  }
+
+  /**
+   * The store of the application, asked through the reader so that neither a collection
+   * nor a field is named here.
+   */
+  private MongoPhaseTwoOutboxReader store() {
+
+    return MongoPhaseTwoOutboxReader.ofTheVanillaBpOutbox(mongoTemplate.getDb());
 
   }
 
   private long countOutboxEntries() {
 
-    return mongoTemplate.getCollection(OUTBOX_COLLECTION).countDocuments();
+    return store().entriesAtAll();
 
   }
 
   private long countDoneOutboxEntries() {
 
-    return mongoTemplate
-        .getCollection(OUTBOX_COLLECTION)
-        .countDocuments(new org.bson.Document("status", "DONE"));
+    return store().entriesDispatched();
 
   }
 
@@ -180,19 +187,16 @@ public class MongoOutboxDispatchTest {
       final String id,
       final Instant writtenAt) {
 
-    mongoTemplate
-        .getCollection(OUTBOX_COLLECTION)
-        .insertOne(new org.bson.Document()
-            .append("_id", id)
-            .append("workflowModuleId", "test-module")
-            .append("bpmnProcessId", "Test")
-            .append("operation", "START_WORKFLOW")
-            .append("aggregateId", "4711")
-            .append("dedupKey", id)
-            .append("status", "OPEN")
-            .append("createdAt", Date.from(writtenAt))
-            .append("attempts", 0)
-            .append("nextAttemptAt", Date.from(Instant.now().plus(java.time.Duration.ofHours(1)))));
+    store()
+        .writeWaitingEntry(
+            id,
+            "test-module",
+            "Test",
+            "START_WORKFLOW",
+            "4711",
+            "test",
+            writtenAt,
+            Instant.now().plus(java.time.Duration.ofHours(1)));
 
   }
 
@@ -318,20 +322,17 @@ public class MongoOutboxDispatchTest {
     // simulate an entry committed by a crashed instance: this JVM's outbox never saw
     // it being scheduled, so only the poller can pick it up
     final var now = Instant.now();
-    final var entry = new org.bson.Document()
-        .append("_id", UUID.randomUUID().toString())
-        .append("workflowModuleId", "test-module")
-        .append("bpmnProcessId", "SampleWorkflowService")
-        .append("operation", "START_WORKFLOW")
-        .append("aggregateId", "left-over-aggregate")
-        .append("adapterId", "test")
-        .append("idempotencyKey", "START_WORKFLOW|test-module|SampleWorkflowService|left-over-aggregate")
-        .append("dedupKey", "START_WORKFLOW|test-module|SampleWorkflowService|left-over-aggregate")
-        .append("status", "OPEN")
-        .append("createdAt", Date.from(now))
-        .append("attempts", 0)
-        .append("nextAttemptAt", Date.from(now));
-    mongoTemplate.getCollection(OUTBOX_COLLECTION).insertOne(entry);
+    store()
+        .writeWaitingEntry(
+            UUID.randomUUID().toString(),
+            "test-module",
+            "SampleWorkflowService",
+            "START_WORKFLOW",
+            "left-over-aggregate",
+            "test",
+            "START_WORKFLOW|test-module|SampleWorkflowService|left-over-aggregate",
+            now,
+            now);
 
     final var invocations = listener.awaitInvocations(1, 10000);
     assertEquals("left-over-aggregate", invocations.getFirst());

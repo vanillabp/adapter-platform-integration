@@ -31,6 +31,7 @@ import com.mongodb.ConnectionString;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.test.utils.ContainerImages;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
@@ -59,17 +60,6 @@ public class MongoPhaseTwoPayloadTest {
    * did not grow.
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
-
-  private static final String OUTBOX_COLLECTION = "vanillabp-phase-two-outbox";
-
-  /**
-   * The payload collection is named after the outbox it belongs to: VanillaBP appends
-   * <code>-payloads</code> to the name of the outbox collection where the application
-   * configures no name of its own. This test configures none, so the name is written
-   * here the way the rule builds it.
-   */
-  private static final String PAYLOAD_COLLECTION = OUTBOX_COLLECTION
-      + "-payloads";
 
   @Container
   static MongoDBContainer mongoDb = new MongoDBContainer(DockerImageName.parse(ContainerImages.MONGODB))
@@ -120,27 +110,41 @@ public class MongoPhaseTwoPayloadTest {
 
   }
 
+  /**
+   * The store of the application, asked through the reader so that neither a collection
+   * nor a field is named here.
+   */
+  private MongoPhaseTwoOutboxReader store() {
+
+    return MongoPhaseTwoOutboxReader.ofTheVanillaBpOutbox(mongoTemplate.getDb());
+
+  }
+
   private long countPayloads() {
 
-    return mongoTemplate.getCollection(PAYLOAD_COLLECTION).countDocuments();
+    return store().payloadsAtAll();
 
   }
 
   private long countPayloadsOf(
       final String reference) {
 
-    return mongoTemplate
-        .getCollection(PAYLOAD_COLLECTION)
-        .countDocuments(new org.bson.Document("_id", reference));
+    return store()
+        .payloadOf(reference)
+        .isPresent()
+            ? 1L
+            : 0L;
 
   }
 
   private long countEntriesOf(
       final String dedupKey) {
 
-    return mongoTemplate
-        .getCollection(OUTBOX_COLLECTION)
-        .countDocuments(new org.bson.Document("dedupKey", dedupKey));
+    return store()
+        .entryOf(dedupKey)
+        .isPresent()
+            ? 1L
+            : 0L;
 
   }
 

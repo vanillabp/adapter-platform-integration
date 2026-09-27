@@ -1,14 +1,10 @@
 package io.vanillabp.integration.it;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
-import java.util.Date;
 import java.util.UUID;
 
-import org.bson.Document;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,8 +12,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.mongodb.client.MongoClient;
-import com.mongodb.client.MongoCollection;
-import com.mongodb.client.model.Filters;
 
 import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.integration.test.Aggregate;
@@ -25,6 +19,7 @@ import io.vanillabp.integration.test.AggregatePersistence;
 import io.vanillabp.integration.test.RecordingPhaseTwoListener;
 import io.vanillabp.integration.test.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
 import jakarta.inject.Inject;
 
 /**
@@ -72,11 +67,13 @@ public class MongoAMarkWhichDidNotGetThroughIsPlannedAgainTest {
   @Inject
   MongoClient mongoClient;
 
-  private MongoCollection<Document> outbox() {
+  /**
+   * The outbox of the application, asked through the reader so that neither a collection
+   * nor a field is named here.
+   */
+  private MongoPhaseTwoOutboxReader outbox() {
 
-    return mongoClient
-        .getDatabase(DATABASE)
-        .getCollection("vanillabp-phase-two-outbox");
+    return MongoPhaseTwoOutboxReader.ofTheVanillaBpOutbox(mongoClient.getDatabase(DATABASE));
 
   }
 
@@ -84,7 +81,7 @@ public class MongoAMarkWhichDidNotGetThroughIsPlannedAgainTest {
   public void startFromAnEmptyCollection() {
 
     listener.reset();
-    outbox().deleteMany(new Document());
+    outbox().removeAllEntries();
 
   }
 
@@ -98,50 +95,32 @@ public class MongoAMarkWhichDidNotGetThroughIsPlannedAgainTest {
   private String anEntryWhoseMarkCannotBeWritten() {
 
     final var id = UUID.randomUUID().toString();
-    final var now = Date.from(Instant.now());
+    final var now = Instant.now();
     outbox()
-        .insertOne(new Document()
-            .append("_id", UUID.randomUUID().toString())
-            .append("workflowModuleId", MODULE)
-            .append("bpmnProcessId", PROCESS)
-            .append("operation", "START_WORKFLOW")
-            .append("aggregateId", "another-aggregate")
-            .append("adapterId", "test")
-            .append("dedupKey", id)
-            .append("status", "DONE")
-            .append("createdAt", now)
-            .append("doneAt", now)
-            .append("attempts", 1));
+        .writeDispatchedEntry(
+            UUID.randomUUID().toString(), MODULE, PROCESS, "START_WORKFLOW", "another-aggregate", "test", id, now);
     outbox()
-        .insertOne(new Document()
-            .append("_id", id)
-            .append("workflowModuleId", MODULE)
-            .append("bpmnProcessId", PROCESS)
-            .append("operation", "START_WORKFLOW")
-            .append("aggregateId", "failed-mark-aggregate")
-            .append("adapterId", "test")
-            .append("idempotencyKey", "the-key-of-"
-                + id)
-            .append("dedupKey", "the-key-of-"
-                + id)
-            .append("status", "OPEN")
-            .append("createdAt", now)
-            .append("attempts", 0)
-            .append("nextAttemptAt", now)
-            .append("leasedBy", null)
-            .append("leasedUntil", null));
+        .writeWaitingEntry(
+            id,
+            MODULE,
+            PROCESS,
+            "START_WORKFLOW",
+            "failed-mark-aggregate",
+            "test",
+            "the-key-of-"
+                + id,
+            now,
+            now);
     return id;
 
   }
 
-  private Document entryOf(
+  private MongoPhaseTwoOutboxReader.Entry entryOf(
       final String id) {
 
-    final var entry = outbox()
-        .find(Filters.eq("_id", id))
-        .first();
-    assertNotNull(entry, "the entry is gone");
-    return entry;
+    return outbox()
+        .entryById(id)
+        .orElseThrow(() -> new AssertionError("the entry is gone"));
 
   }
 
@@ -166,15 +145,14 @@ public class MongoAMarkWhichDidNotGetThroughIsPlannedAgainTest {
     listener.awaitInvocations(1, UNTIL_IT_HAPPENED);
     waitUntil(
         "the entry whose mark could not be written was never planned again",
-        () -> entryOf(entry).getInteger("attempts") == 1);
+        () -> entryOf(entry).attempts() == 1);
 
     final var afterTheAttempt = entryOf(entry);
-    assertEquals(
-        "OPEN",
-        afterTheAttempt.getString("status"),
+    assertTrue(
+        afterTheAttempt.isWaiting(),
         "an entry whose mark did not get through is still waiting for one");
     assertTrue(
-        afterTheAttempt.getDate("nextAttemptAt").toInstant().isAfter(Instant.now()),
+        afterTheAttempt.nextAttemptAt().isAfter(Instant.now()),
         "the entry was not planned for a later moment");
 
   }

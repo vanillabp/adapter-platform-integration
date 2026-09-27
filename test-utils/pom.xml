@@ -67,6 +67,14 @@
       <version>4.1.1</version>
       <optional>true</optional>
     </dependency>
+    <!-- optional: only the reader of the MongoDB outbox needs the driver, and a module
+         which tests against a relational database must not get it on its test classpath -->
+    <dependency>
+      <groupId>org.mongodb</groupId>
+      <artifactId>mongodb-driver-sync</artifactId>
+      <version>5.6.5</version>
+      <optional>true</optional>
+    </dependency>
     <!-- optional: only the reader of the schema changelog needs Liquibase, and a module
          which does not read a changelog must not get it on its test classpath -->
     <dependency>

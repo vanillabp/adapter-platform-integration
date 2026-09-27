@@ -29,6 +29,7 @@ import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.spi.TaskDeliveryLog;
 import io.vanillabp.integration.test.utils.ContainerImages;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
@@ -54,7 +55,11 @@ import io.vanillabp.spi.process.ProcessService;
 @Testcontainers
 public class MongoOneTransactionTest {
 
-  private static final String OUTBOX_COLLECTION = "vanillabp-phase-two-outbox";
+  /**
+   * The collection the application writes its outbox into, asked of the reader rather
+   * than written down here.
+   */
+  private static final String OUTBOX_COLLECTION = MongoPhaseTwoOutboxReader.defaultOutboxCollectionName();
 
   private static final String DELIVERY_COLLECTION = "vanillabp-task-deliveries";
 

@@ -9,7 +9,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
 
-import org.bson.Document;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,7 +16,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.mongodb.client.MongoClient;
-import com.mongodb.client.MongoCollection;
 
 import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
@@ -27,6 +25,7 @@ import io.vanillabp.integration.test.PayloadExtension;
 import io.vanillabp.integration.test.RecordingPhaseTwoListener;
 import io.vanillabp.integration.test.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
 import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
@@ -51,17 +50,6 @@ public class MongoPhaseTwoPayloadTest {
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
   private static final String DATABASE = "outbox-payload-it";
-
-  private static final String OUTBOX_COLLECTION = "vanillabp-phase-two-outbox";
-
-  /**
-   * The payload collection is named after the outbox it belongs to: VanillaBP appends
-   * <code>-payloads</code> to the name of the outbox collection where the application
-   * configures no name of its own. This test configures none, so the name is written
-   * here the way the rule builds it.
-   */
-  private static final String PAYLOAD_COLLECTION = OUTBOX_COLLECTION
-      + "-payloads";
 
   @RegisterExtension
   static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
@@ -90,19 +78,24 @@ public class MongoPhaseTwoPayloadTest {
   @Inject
   MongoClient mongoClient;
 
-  private MongoCollection<Document> payloads() {
+  /**
+   * The store of the application, asked through the reader so that neither a collection
+   * nor a field is named here.
+   */
+  private MongoPhaseTwoOutboxReader store() {
 
-    return mongoClient
-        .getDatabase(DATABASE)
-        .getCollection(PAYLOAD_COLLECTION);
+    return MongoPhaseTwoOutboxReader.ofTheVanillaBpOutbox(mongoClient.getDatabase(DATABASE));
 
   }
 
-  private MongoCollection<Document> entries() {
+  private long payloadsOf(
+      final String reference) {
 
-    return mongoClient
-        .getDatabase(DATABASE)
-        .getCollection(OUTBOX_COLLECTION);
+    return store()
+        .payloadOf(reference)
+        .isPresent()
+            ? 1L
+            : 0L;
 
   }
 
@@ -137,8 +130,8 @@ public class MongoPhaseTwoPayloadTest {
     userTransaction.commit();
 
     // one entry under that key, and the bytes of the replaced call are gone
-    assertEquals(1L, entries().countDocuments(new Document("dedupKey", first.idempotencyKey().orElseThrow())));
-    assertEquals(0L, payloads().countDocuments(new Document("_id", first.payloadReference())));
+    assertTrue(store().entryOf(first.idempotencyKey().orElseThrow()).isPresent());
+    assertEquals(0L, payloadsOf(first.payloadReference()));
 
     final var dispatched = extension.awaitDispatched(1, 20000);
     assertArrayEquals(payloadOf("{\"amount\":2}"), dispatched.getFirst().payload());
@@ -163,7 +156,7 @@ public class MongoPhaseTwoPayloadTest {
     userTransaction.commit();
 
     // a schedule which was discarded leaves nothing behind
-    assertEquals(0L, payloads().countDocuments(new Document("_id", second.payloadReference())));
+    assertEquals(0L, payloadsOf(second.payloadReference()));
 
     final var dispatched = extension.awaitDispatched(1, 20000);
     assertArrayEquals(payloadOf("{\"amount\":1}"), dispatched.getFirst().payload());
@@ -190,7 +183,7 @@ public class MongoPhaseTwoPayloadTest {
     assertArrayEquals(state, call.payload());
 
     final var deadline = System.currentTimeMillis() + 20000;
-    while (payloads().countDocuments(new Document("_id", scheduled.payloadReference())) > 0) {
+    while (payloadsOf(scheduled.payloadReference()) > 0) {
       assertTrue(
           System.currentTimeMillis() < deadline,
           "the payload '%s' was never removed".formatted(scheduled.payloadReference()));
@@ -203,7 +196,7 @@ public class MongoPhaseTwoPayloadTest {
   @DisplayName("A call without a payload writes no document into the payload collection")
   public void aCallWithoutAPayloadStoresNothing() throws Exception {
 
-    final var before = payloads().countDocuments();
+    final var before = store().payloadsAtAll();
 
     userTransaction.begin();
     final var aggregate = workflowService.startWorkflow("no-payload");
@@ -213,7 +206,7 @@ public class MongoPhaseTwoPayloadTest {
 
     final var dispatched = extension.awaitDispatched(1, 20000);
     assertNull(dispatched.getFirst().payloadReference());
-    assertEquals(before, payloads().countDocuments());
+    assertEquals(before, store().payloadsAtAll());
 
   }
 
