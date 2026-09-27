@@ -996,6 +996,73 @@ public class MigrationProcessServiceTest {
   }
 
   @Test
+  @DisplayName("A delivery refused because the workflow is not ours leaves no note about it behind")
+  public void aRefusedDeliveryTakesItsNoteBack() {
+
+    // the note which adapter holds a workflow is written when the delivery arrives,
+    // because it has to hold for a delivery the handler does not subscribe to as well -
+    // and only reading the aggregate tells whether this application owns the workflow
+    when(aggregatePersistence.loadById(any())).thenReturn(null);
+    when(processService.getAdapterId()).thenReturn("test-adapter");
+
+    final var cache = new io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCache();
+    final var testee = MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List.of(processService))
+        .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+        .workflowAdapterCache(cache)
+        .build();
+
+    assertThrowsExactly(
+        io.vanillabp.integration.adapter.spi.workflowtask.DeliveryOfAnUnknownWorkflowException.class,
+        () -> testee
+            .executeWorkflowTask(
+                aHandlerTakingEverything(),
+                deliveryOfAggregate42("2251799813685249"),
+                new RunItRightHere(),
+                List.of()));
+
+    assertTrue(
+        cache.hintOf("test-module", "TestProcess", "42").isEmpty(),
+        "a delivery this application refused must leave no note about an aggregate id it never had");
+
+  }
+
+  @Test
+  @DisplayName("A delivery this application takes leaves the note the next operation reads")
+  public void anAcceptedDeliveryLeavesItsNote() {
+
+    when(aggregatePersistence.loadById(any())).thenReturn(new Object());
+    when(processService.getAdapterId()).thenReturn("test-adapter");
+
+    final var cache = new io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCache();
+    final var testee = MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List.of(processService))
+        .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+        .workflowAdapterCache(cache)
+        .build();
+
+    testee
+        .executeWorkflowTask(
+            aHandlerTakingEverything(),
+            deliveryOfAggregate42("2251799813685249"),
+            new RunItRightHere(),
+            List.of());
+
+    // the counterpart of the test above: withdrawing on a refusal must not withdraw on
+    // the ordinary delivery, which is the one the note exists for
+    final var hint = cache.hintOf("test-module", "TestProcess", "42");
+    assertTrue(hint.isPresent(), "an accepted delivery has to leave its note");
+    assertEquals("test-adapter", hint.get().adapterId());
+
+  }
+
+  @Test
   @DisplayName("A delivery carrying no workflow id of the BPMS leaves that out instead of naming 'null'")
   public void aRefusalWithoutAWorkflowIdSaysNothingAboutIt() {
 

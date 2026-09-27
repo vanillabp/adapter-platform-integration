@@ -894,6 +894,10 @@ public class MigrationProcessService<A> {
       final var aggregateId = convertAggregateId(context.getWorkflowAggregateId());
       final var workflowAggregate = aggregatePersistenceSupport.loadById(aggregateId);
       if (workflowAggregate == null) {
+        // the hint written when this delivery arrived is taken back: it says which adapter
+        // holds an aggregate id this application never had, and the next caller asking for
+        // that id would wait out a BPMS on the strength of it
+        forgetWorkflowAdapter(context.getWorkflowAggregateId());
         // the delivery is refused, and no record of it is written: the record would sit in
         // the application which wrongly received the task, while whoever investigates reads
         // the records of the application which owns the workflow
@@ -1201,6 +1205,21 @@ public class MigrationProcessService<A> {
       final String workflowId) {
 
     workflowLocator.remember(workflowAggregateId, adapterId, workflowId);
+
+  }
+
+  /**
+   * Takes back the hint of a delivery which turned out to be about a workflow of another
+   * application. The hint is written before the aggregate is read, because it has to hold
+   * for a delivery the handler does not subscribe to as well, and only the read tells
+   * whether this application owns the workflow at all.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate the delivery named
+   */
+  public void forgetWorkflowAdapter(
+      final Object workflowAggregateId) {
+
+    workflowLocator.forget(workflowAggregateId);
 
   }
 
