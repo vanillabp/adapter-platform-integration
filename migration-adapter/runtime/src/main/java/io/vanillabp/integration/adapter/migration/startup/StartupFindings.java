@@ -344,6 +344,13 @@ public class StartupFindings implements StartupReport {
    * startup event and ends the start after both. Spring Boot ends it with the deployment,
    * inside the lifecycle, because the start of the workflow processing waits for the
    * application to be ready and a context which is only refreshed never gets there.
+   * <p>
+   * So the same application does not write the same box on the two platforms, and that is
+   * meant. Everything the start of the workflow processing notices is inside the box on
+   * Quarkus and a late finding on Spring Boot, written into the log where it was found.
+   * Moving the end of a Spring Boot start behind the ready event would cost every
+   * refreshed context its box, and a second, smaller box after the event would leave a
+   * reader with two of them and the question which finding belongs in which.
    *
    * @throws IllegalStateException Carrying every reason the start cannot go on, grouped
    *           the way the box is grouped
